@@ -1,0 +1,24 @@
+{
+  "name": "BengoBox POS",
+  "short_name": "POS",
+  "description": "Point of Sale for the BengoBox ecosystem.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#09090b",
+  "theme_color": "#f43f5e",
+  "categories": ["business", "productivity"],
+  "icons": [
+    {
+      "src": "/logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}
