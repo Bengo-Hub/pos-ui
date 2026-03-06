@@ -3,7 +3,7 @@
 **Timeline**: March 3 - March 17, 2026
 **Goal**: Scaffold pos-ui and deliver a functional touch-optimized POS terminal for order entry, cash payments, and cash drawer management. Ship as part of BengoBox MVP.
 
-**Progress (March 6, 2026):** Full Next.js 16 app scaffold complete. SSO/PKCE, [orgSlug] routes, dashboard, order entry (touch-optimized 44px targets), orders list, tables, cash drawer, settings, platform admin. Production domain pos.codevertexitsolutions.com; values.yaml already existed. **Remaining:** Wire to posapi; deploy.
+**Progress (March 6, 2026):** **RBAC & TanStack Query:** Roles/permissions from auth-api GET /me (SSO URL) with TanStack Query (useMe hook, 5 min TTL). AuthProvider and nav use useMe; `/unauthorized` page added. fetchProfile now calls auth-api; pos-api has local RBAC (in-memory roles) and documents auth-api as identity source in plan.md. Redis/events documented in pos-api plan. — Full Next.js 16 app scaffold complete. SSO/PKCE, [orgSlug] routes, dashboard, order entry (touch-optimized 44px targets), orders list, tables, cash drawer, settings, platform admin. Production domain pos.codevertexitsolutions.com; values.yaml already existed. **Tenant/brand:** TenantBrandingProvider in [orgSlug] layout; fetches tenant from auth-api GET /api/v1/tenants/by-slug/{slug} (NEXT_PUBLIC_SSO_URL); applies theme (--primary, --tenant-*); Settings page has "Tenant & Branding" card. **Remaining:** Wire to posapi; deploy.
 
 ---
 

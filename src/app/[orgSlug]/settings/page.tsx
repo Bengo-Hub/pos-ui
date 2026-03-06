@@ -1,7 +1,9 @@
 'use client';
 
 import { Button, Card, CardContent, CardHeader } from '@/components/ui/base';
+import { useTenantBranding } from '@/providers/tenant-branding-provider';
 import {
+  Palette,
   Printer,
   Receipt,
   Save,
@@ -11,6 +13,7 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 
 export default function SettingsPage() {
+  const { tenant, logoUrl, primaryColor, isLoading } = useTenantBranding();
   const [settings, setSettings] = useState({
     receiptHeader: 'BengoBox Restaurant',
     receiptFooter: 'Thank you! Visit again.',
@@ -38,6 +41,31 @@ export default function SettingsPage() {
         <h1 className="text-3xl font-bold tracking-tight">POS Settings</h1>
         <p className="text-muted-foreground mt-1">Configure receipt format, printer, and POS behavior.</p>
       </div>
+
+      {/* Tenant branding (from auth-api) */}
+      {!isLoading && (tenant || logoUrl || primaryColor) && (
+        <Card>
+          <CardHeader className="border-b border-border/50 py-4">
+            <div className="flex items-center gap-2">
+              <Palette className="h-4 w-4 text-primary" />
+              <h3 className="font-bold text-sm uppercase tracking-tight">Tenant & Branding</h3>
+            </div>
+          </CardHeader>
+          <CardContent className="p-6 space-y-4">
+            {tenant && (
+              <p className="text-sm text-muted-foreground">
+                <strong>{tenant.name}</strong> ({tenant.slug}). Branding is loaded from auth-api tenant metadata (primary_color, logo_url). Update tenant in auth portal to change.
+              </p>
+            )}
+            {(logoUrl || primaryColor) && (
+              <div className="flex items-center gap-4">
+                {logoUrl && <img src={logoUrl} alt="Logo" className="h-10 object-contain" />}
+                {primaryColor && <div className="h-8 w-24 rounded border" style={{ backgroundColor: primaryColor }} title="Primary" />}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader className="border-b border-border/50 py-4">

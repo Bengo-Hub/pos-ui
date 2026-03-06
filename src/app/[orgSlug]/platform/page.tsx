@@ -57,7 +57,7 @@ export default function PlatformPage() {
 
   useEffect(() => {
     if (user && !user.roles?.includes('super_admin')) {
-      router.replace(`/${orgSlug}`);
+      router.replace(`/${orgSlug}/unauthorized`);
     }
   }, [user, orgSlug, router]);
 
@@ -66,8 +66,7 @@ export default function PlatformPage() {
       <div className="min-h-[60vh] flex items-center justify-center">
         <div className="text-center space-y-3">
           <Shield className="h-12 w-12 text-muted-foreground mx-auto opacity-30" />
-          <h2 className="text-xl font-bold">Access Restricted</h2>
-          <p className="text-sm text-muted-foreground">This section requires super_admin privileges.</p>
+          <p className="text-sm text-muted-foreground">Redirecting...</p>
         </div>
       </div>
     );

@@ -36,6 +36,7 @@ interface AuthState {
   handleSSOCallback: (orgSlug: string, code: string, callbackUrl: string) => Promise<void>;
   logout: () => Promise<void>;
   fetchUser: () => Promise<void>;
+  setUser: (user: UserProfile | null) => void;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -57,7 +58,7 @@ export const useAuthStore = create<AuthState>()(
         set({ status: 'loading' });
 
         try {
-          const user = await fetchProfile();
+          const user = await fetchProfile(session.accessToken);
           set({ user, status: 'authenticated' });
         } catch {
           set({ status: 'idle', session: null, user: null });
@@ -119,7 +120,7 @@ export const useAuthStore = create<AuthState>()(
           let attempts = 0;
           while (attempts < 5) {
             try {
-              const user = await fetchProfile();
+              const user = await fetchProfile(session.accessToken);
               set({ user, status: 'authenticated' });
               return;
             } catch {
@@ -141,13 +142,17 @@ export const useAuthStore = create<AuthState>()(
       },
 
       fetchUser: async () => {
+        const { session } = get();
+        if (!session) return;
         try {
-          const user = await fetchProfile();
+          const user = await fetchProfile(session.accessToken);
           set({ user });
         } catch (error) {
           console.error('Fetch user failed:', error);
         }
       },
+
+      setUser: (user) => set({ user }),
     }),
     {
       name: 'pos-auth-storage',
@@ -156,6 +161,11 @@ export const useAuthStore = create<AuthState>()(
         session: state.session,
         user: state.user,
       }),
+      onRehydrateStorage: () => (state) => {
+        if (state?.session?.accessToken) {
+          apiClient.setAccessToken(state.session.accessToken);
+        }
+      },
     }
   )
 );
