@@ -44,9 +44,11 @@
 ## Roadmap
 
 ### Sprint 1: Foundation & Offline Core
-- [ ] Project scaffolding with Next.js 15.
-- [ ] SSO integration with `auth-ui`.
+- [x] Project scaffolding with Next.js 15/16 (App Router).
+- [x] SSO integration with auth-api (PKCE, token exchange).
+- [x] useMe (TanStack Query, 5 min TTL), hasRole/hasPermission, 403/404 pages, permission-based nav (platform section).
 - [ ] IndexedDB setup for offline order persistence.
+- [ ] Wire orders/tables/drawer/catalog to pos-api via TanStack Query when endpoints exist (see sprint-1-mvp-foundation.md "In place vs gaps").
 
 ### Sprint 2: Order Entry & Menu
 - [ ] Touch-optimized menu grid.
@@ -57,3 +59,9 @@
 - [ ] Visual floor plan editor and viewer.
 - [ ] Shift open/close workflows.
 - [ ] Cash drawer reconciliation.
+
+---
+
+## DevOps
+
+- **pos-ui** Helm/ArgoCD config: `devops-k8s/apps/pos-ui/` (`values.yaml`, `app.yaml`). Not modified by pos-service doc updates.

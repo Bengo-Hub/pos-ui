@@ -3,7 +3,19 @@
 **Timeline**: March 3 - March 17, 2026
 **Goal**: Scaffold pos-ui and deliver a functional touch-optimized POS terminal for order entry, cash payments, and cash drawer management. Ship as part of BengoBox MVP.
 
-**Progress (March 6, 2026):** **RBAC & TanStack Query:** Roles/permissions from auth-api GET /me (SSO URL) with TanStack Query (useMe hook, 5 min TTL). AuthProvider and nav use useMe; `/unauthorized` page added. fetchProfile now calls auth-api; pos-api has local RBAC (in-memory roles) and documents auth-api as identity source in plan.md. Redis/events documented in pos-api plan. — Full Next.js 16 app scaffold complete. SSO/PKCE, [orgSlug] routes, dashboard, order entry (touch-optimized 44px targets), orders list, tables, cash drawer, settings, platform admin. Production domain pos.codevertexitsolutions.com; values.yaml already existed. **Tenant/brand:** TenantBrandingProvider in [orgSlug] layout; fetches tenant from auth-api GET /api/v1/tenants/by-slug/{slug} (NEXT_PUBLIC_SSO_URL); applies theme (--primary, --tenant-*); Settings page has "Tenant & Branding" card. **Remaining:** Wire to posapi; deploy.
+**Progress (March 7, 2026):** **RBAC & TanStack Query:** Current user (roles + permissions) from auth-api GET /me cached with TanStack Query (useMe, 5 min TTL, gcTime); hasRole/hasPermission for RBAC; sidebar uses useMe().hasRole for platform section; AuthProvider redirects unauthenticated to SSO and 403 from /me to `/[orgSlug]/unauthorized`; 404 not-found page added. fetchProfile attaches status to errors for 403 handling. pos-api documents auth-api as identity source. — Full Next.js 16 app scaffold complete. SSO/PKCE, [orgSlug] routes, dashboard, order entry (touch-optimized 44px targets), orders list, tables, cash drawer, settings, platform admin. Production domain pos.codevertexitsolutions.com; values.yaml already existed. **Tenant/brand:** TenantBrandingProvider in [orgSlug] layout; fetches tenant from auth-api GET /api/v1/tenants/by-slug/{slug} (NEXT_PUBLIC_SSO_URL); applies theme (--primary, --tenant-*); Settings page has "Tenant & Branding" card. **Remaining:** Wire to posapi; deploy.
+
+### RBAC & data fetching — in place vs gaps (March 2026)
+
+| Area | In place | Gaps |
+|------|----------|------|
+| **useMe** | TanStack Query with 5 min TTL and gcTime; fetches auth-api GET /me; returns user, hasRole, hasPermission | — |
+| **hasRole / hasPermission** | Implemented in useMe; super_admin/admin bypass | Sidebar/platform uses hasRole only; no hasPermission-based nav item visibility |
+| **Permission-based nav** | Platform section (Devices, Licenses) gated by hasRole('super_admin') | Individual routes (Orders, Drawer, Tables, etc.) not gated by permission |
+| **Route protection** | AuthProvider: unauthenticated → SSO; 403 from /me → `/[orgSlug]/unauthorized` | No per-route permission checks (e.g. require drawer:read for /drawer) |
+| **403 page** | `/[orgSlug]/unauthorized` with "Access denied" and link back | — |
+| **404 page** | Root `not-found.tsx` with "Page not found" and link home | — |
+| **Data fetches** | useMe is the only TanStack Query consumer (auth-api) | Orders, tables, drawer, catalog still use mock/local state; wire to pos-api with useQuery/useMutation when APIs exist |
 
 ---
 

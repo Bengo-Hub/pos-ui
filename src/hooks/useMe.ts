@@ -29,7 +29,8 @@ export function useMe() {
     },
     enabled: !!accessToken,
     staleTime: ME_STALE_TIME_MS,
-    retry: false,
+    gcTime: ME_STALE_TIME_MS * 2,
+    retry: (_, error: any) => (error?.response?.status === 401 || error?.response?.status === 403 ? false : true),
   });
 
   const user = query.data ?? useAuthStore.getState().user;

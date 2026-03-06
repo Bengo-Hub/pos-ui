@@ -70,6 +70,10 @@ export async function fetchProfile(accessToken: string) {
   const response = await fetch(`${SSO_BASE_URL}/api/v1/auth/me`, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
-  if (!response.ok) throw new Error('Failed to fetch profile');
+  if (!response.ok) {
+    const err = new Error('Failed to fetch profile') as Error & { status?: number };
+    err.status = response.status;
+    throw err;
+  }
   return response.json();
 }
