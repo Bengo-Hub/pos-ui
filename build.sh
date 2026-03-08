@@ -67,10 +67,18 @@ fi
 # =============================================================================
 # BUILD
 # =============================================================================
+# When run from repo root (CI): use -f pos-service/pos-ui/Dockerfile and context pos-service/pos-ui
+# When run from pos-service/pos-ui: use . as context
 info "Building Docker image"
-DOCKER_BUILDKIT=1 docker build . -t "${IMAGE_REPO}:${GIT_COMMIT_ID}" \
-  --build-arg NEXT_PUBLIC_API_URL="$NEXT_PUBLIC_API_URL" \
-  --build-arg NEXT_PUBLIC_NOTIFICATIONS_URL="$NEXT_PUBLIC_NOTIFICATIONS_URL"
+if [[ -f "pos-service/pos-ui/Dockerfile" ]]; then
+  DOCKER_BUILDKIT=1 docker build -f pos-service/pos-ui/Dockerfile -t "${IMAGE_REPO}:${GIT_COMMIT_ID}" pos-service/pos-ui \
+    --build-arg NEXT_PUBLIC_API_URL="$NEXT_PUBLIC_API_URL" \
+    --build-arg NEXT_PUBLIC_NOTIFICATIONS_URL="$NEXT_PUBLIC_NOTIFICATIONS_URL"
+else
+  DOCKER_BUILDKIT=1 docker build . -t "${IMAGE_REPO}:${GIT_COMMIT_ID}" \
+    --build-arg NEXT_PUBLIC_API_URL="$NEXT_PUBLIC_API_URL" \
+    --build-arg NEXT_PUBLIC_NOTIFICATIONS_URL="$NEXT_PUBLIC_NOTIFICATIONS_URL"
+fi
 success "Docker build complete"
 
 # =============================================================================
