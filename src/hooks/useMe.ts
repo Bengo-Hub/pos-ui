@@ -24,8 +24,19 @@ export function useMe() {
     queryFn: async () => {
       if (!accessToken) return null;
       const user = await fetchProfile(accessToken);
-      setUser(user as MeProfile);
-      return user as MeProfile;
+      const profile = user as MeProfile;
+      setUser(
+        profile
+          ? {
+              id: profile.id,
+              email: profile.email ?? '',
+              fullName: profile.fullName ?? '',
+              roles: profile.roles ?? [],
+              organizationId: profile.organizationId ?? '',
+            }
+          : null,
+      );
+      return profile;
     },
     enabled: !!accessToken,
     staleTime: ME_STALE_TIME_MS,

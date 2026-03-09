@@ -9,7 +9,7 @@ import { ReactNode, useEffect } from 'react';
 export function AuthProvider({ children }: { children: ReactNode }) {
   const { status, initialize } = useAuthStore();
   const session = useAuthStore((s) => s.session);
-  const { isLoading: meLoading, isError, error } = useMe(!!session);
+  const { isLoading: meLoading, isError, error } = useMe();
   const pathname = usePathname();
   const params = useParams();
   const router = useRouter();
