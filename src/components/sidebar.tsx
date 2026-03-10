@@ -20,8 +20,7 @@ export function Sidebar() {
   const pathname = usePathname();
   const params = useParams();
   const orgSlug = params?.orgSlug as string;
-  const { hasRole } = useMe();
-  const isSuperAdmin = hasRole('super_admin');
+  const isPlatformOwner = orgSlug === 'codevertex';
 
   const routes = [
     {
@@ -104,7 +103,7 @@ export function Sidebar() {
           ))}
         </div>
 
-        {isSuperAdmin && (
+        {isPlatformOwner && (
           <div className="mt-8">
             <div className="px-3 mb-2 text-[10px] text-muted-foreground uppercase tracking-widest font-bold">
               Platform
