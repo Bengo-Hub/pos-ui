@@ -103,6 +103,26 @@ if [[ ${DEPLOY} == "true" ]]; then
     export KUBECONFIG=~/.kube/config
   fi
 
+  # Ensure namespace exists
+  kubectl get ns "$NAMESPACE" >/dev/null 2>&1 || kubectl create ns "$NAMESPACE"
+  # Ensure registry pull secret exists (for image pull in cluster)
+  if [[ -n ${REGISTRY_USERNAME:-} && -n ${REGISTRY_PASSWORD:-} ]]; then
+    kubectl -n "$NAMESPACE" create secret docker-registry registry-credentials \
+      --docker-server="$REGISTRY_SERVER" \
+      --docker-username="$REGISTRY_USERNAME" \
+      --docker-password="$REGISTRY_PASSWORD" \
+      --dry-run=client -o yaml | kubectl apply -f - || warn "registry-credentials creation failed"
+  fi
+  # Ensure pos-ui-secrets exists (values expect mapboxToken, sentryDsn)
+  SECRET_NAME="${APP_NAME}-secrets"
+  if ! kubectl get secret "$SECRET_NAME" -n "$NAMESPACE" >/dev/null 2>&1; then
+    info "Creating secret $SECRET_NAME in namespace $NAMESPACE (mapboxToken, sentryDsn)..."
+    kubectl create secret generic "$SECRET_NAME" -n "$NAMESPACE" \
+      --from-literal=mapboxToken="${MAPBOX_TOKEN:-}" \
+      --from-literal=sentryDsn="${SENTRY_DSN:-}" \
+      --dry-run=client -o yaml | kubectl apply -f - || warn "Failed to create $SECRET_NAME"
+  fi
+
   # Ensure devops-k8s is available
   if [[ ! -d "$DEVOPS_DIR" ]]; then
     info "DevOps directory not found. Cloning ${DEVOPS_REPO}..."
