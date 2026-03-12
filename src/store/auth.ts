@@ -1,12 +1,12 @@
 import { apiClient } from '@/lib/api/client';
 import { buildAuthorizeUrl, buildLogoutUrl, exchangeCodeForTokens, fetchProfile } from '@/lib/auth/api';
 import {
-  consumeVerifier,
-  generateCodeChallenge,
-  generateCodeVerifier,
-  generateState,
-  storeState,
-  storeVerifier
+    consumeVerifier,
+    generateCodeChallenge,
+    generateCodeVerifier,
+    generateState,
+    storeState,
+    storeVerifier
 } from '@/lib/auth/pkce';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
@@ -84,6 +84,7 @@ export const useAuthStore = create<AuthState>()(
             codeChallenge: challenge,
             state,
             redirectUri: callbackUrl,
+            tenant: orgSlug,
           });
 
           window.location.href = authorizeUrl;

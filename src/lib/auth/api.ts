@@ -1,4 +1,3 @@
-import { apiClient } from '@/lib/api/client';
 
 const SSO_BASE_URL = process.env.NEXT_PUBLIC_SSO_URL || 'https://sso.codevertexitsolutions.com';
 const SSO_CLIENT_ID = process.env.NEXT_PUBLIC_SSO_CLIENT_ID || 'pos-ui';
@@ -8,6 +7,8 @@ export interface AuthorizeParams {
   state: string;
   redirectUri: string;
   scope?: string;
+  /** Pass explicitly so token is minted for this tenant (e.g. orgSlug from route). */
+  tenant?: string;
 }
 
 export interface TokenExchangeParams {
@@ -16,7 +17,7 @@ export interface TokenExchangeParams {
   redirectUri: string;
 }
 
-export function buildAuthorizeUrl({ codeChallenge, state, redirectUri, scope }: AuthorizeParams): string {
+export function buildAuthorizeUrl({ codeChallenge, state, redirectUri, scope, tenant: tenantParam }: AuthorizeParams): string {
   const url = new URL('/api/v1/authorize', SSO_BASE_URL);
   url.searchParams.set('response_type', 'code');
   url.searchParams.set('client_id', SSO_CLIENT_ID);
@@ -26,7 +27,7 @@ export function buildAuthorizeUrl({ codeChallenge, state, redirectUri, scope }: 
   url.searchParams.set('code_challenge', codeChallenge);
   url.searchParams.set('code_challenge_method', 'S256');
 
-  const tenant = typeof window !== 'undefined' ? localStorage.getItem('tenantSlug') : null;
+  const tenant = tenantParam ?? (typeof window !== 'undefined' ? localStorage.getItem('tenantSlug') : null);
   if (tenant) {
     url.searchParams.set('tenant', tenant);
   }

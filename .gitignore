@@ -10,6 +10,17 @@
 
 # testing
 /coverage
+/playwright-report/
+/test-results/
+/cypress/
+/cypress/videos/
+/cypress/screenshots/
+/cypress/downloads/
+/cypress/logs/
+/cypress/reports/
+/cypress/fixtures/
+/cypress/plugins/
+/cypress/support/
 
 # next.js
 /.next/
