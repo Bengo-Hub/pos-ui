@@ -22,11 +22,13 @@ export function PWARegistration() {
   const promptRef = useRef<any>(null);
 
   useEffect(() => {
+    if (typeof window !== 'undefined' && (window.matchMedia('(display-mode: standalone)').matches || ('standalone' in navigator && (navigator as { standalone?: boolean }).standalone === true))) return;
+
     window.addEventListener('beforeinstallprompt', (e) => {
       e.preventDefault();
       promptRef.current = e;
       setDeferredPrompt(e);
-      if (!wasDismissedRecently()) setShowInstall(true);
+      if (!wasDismissedRecently()) setTimeout(() => setShowInstall(true), 2000);
     });
 
     window.addEventListener('appinstalled', () => {

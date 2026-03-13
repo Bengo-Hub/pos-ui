@@ -19,15 +19,16 @@ export default function OrgLayout({ children }: { children: ReactNode }) {
         },
       })
   );
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
     <QueryClientProvider client={queryClient}>
     <AuthProvider>
       <TenantBrandingProvider>
       <div className="flex h-screen overflow-hidden bg-background">
-        <Sidebar />
+        <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-          <Header />
+          <Header onMenuClick={() => setSidebarOpen(true)} />
           <main className="flex-1 overflow-y-auto bg-accent/5">
             {children}
           </main>
