@@ -1,64 +1,75 @@
-'use client';
-
-import { getBrandFromMetadata, getTenantBySlug, type PublicTenant } from '@/lib/tenant-api';
+import { fetchTenantBySlug, type TenantBrand } from '@/lib/tenant-api';
 import { useParams } from 'next/navigation';
-import { createContext, ReactNode, useContext, useEffect, useState } from 'react';
+import { createContext, ReactNode, useContext, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 
 type TenantBrandingContextType = {
-  tenant: PublicTenant | null;
-  logoUrl: string;
-  primaryColor: string;
-  secondaryColor: string;
+  slug: string;
+  tenant: TenantBrand | null;
   isLoading: boolean;
+  error: Error | null;
+  getServiceTitle: (appName: string) => string;
 };
 
 const TenantBrandingContext = createContext<TenantBrandingContextType | undefined>(undefined);
 
-const DEFAULT_PRIMARY = '#0ea5e9';
-const DEFAULT_SECONDARY = '#6366f1';
+const DEFAULT_BRAND: TenantBrand = {
+  id: 'platform',
+  name: 'Codevertex',
+  slug: 'codevertex',
+  logoUrl: '/images/logo/codevertex.png',
+  primaryColor: '#5B1C4D',
+  secondaryColor: '#ea8022',
+  orgName: 'Codevertex IT Solutions',
+};
 
 export function TenantBrandingProvider({ children }: { children: ReactNode }) {
   const params = useParams();
-  const orgSlug = (params?.orgSlug as string) || '';
-  const [tenant, setTenant] = useState<PublicTenant | null>(null);
-  const [logoUrl, setLogoUrl] = useState('');
-  const [primaryColor, setPrimaryColor] = useState(DEFAULT_PRIMARY);
-  const [secondaryColor, setSecondaryColor] = useState(DEFAULT_SECONDARY);
-  const [isLoading, setIsLoading] = useState(true);
+  const slug = (params?.orgSlug as string) || '';
 
-  useEffect(() => {
-    if (!orgSlug) {
-      setIsLoading(false);
-      return;
+  const { data: tenant, isLoading, error } = useQuery({
+    queryKey: ['tenant', slug],
+    queryFn: () => fetchTenantBySlug(slug),
+    staleTime: 1000 * 60 * 10,
+    enabled: !!slug,
+  });
+
+  const effectiveBrand = useMemo(() => {
+    if (tenant) return tenant;
+    if (!isLoading && !tenant && slug) {
+      return { ...DEFAULT_BRAND, slug, name: slug, orgName: slug };
     }
-    let cancelled = false;
-    getTenantBySlug(orgSlug).then((t) => {
-      if (cancelled) return;
-      setTenant(t || null);
-      if (t) {
-        const brand = getBrandFromMetadata(t.metadata);
-        setLogoUrl(brand.logoUrl);
-        setPrimaryColor(brand.primaryColor);
-        setSecondaryColor(brand.secondaryColor);
-        document.documentElement.style.setProperty('--primary', brand.primaryColor);
-        document.documentElement.style.setProperty('--tenant-primary', brand.primaryColor);
-        document.documentElement.style.setProperty('--tenant-secondary', brand.secondaryColor);
-        document.documentElement.style.setProperty('--tenant-logo-url', brand.logoUrl ? `url(${brand.logoUrl})` : 'none');
-      }
-      setIsLoading(false);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [orgSlug]);
+    return DEFAULT_BRAND;
+  }, [tenant, isLoading, slug]);
 
-  const value: TenantBrandingContextType = {
-    tenant,
-    logoUrl,
-    primaryColor,
-    secondaryColor,
-    isLoading,
+  useMemo(() => {
+    if (typeof window !== 'undefined') {
+      const primary = effectiveBrand?.primaryColor || DEFAULT_BRAND.primaryColor!;
+      const secondary = effectiveBrand?.secondaryColor || DEFAULT_BRAND.secondaryColor!;
+      const logo = effectiveBrand?.logoUrl || DEFAULT_BRAND.logoUrl!;
+      
+      document.documentElement.style.setProperty('--tenant-primary', primary);
+      document.documentElement.style.setProperty('--tenant-secondary', secondary);
+      document.documentElement.style.setProperty('--tenant-logo-url', `url(${logo})`);
+    }
+  }, [effectiveBrand]);
+
+  const getServiceTitle = (appName: string) => {
+    const tenantName = effectiveBrand?.orgName || effectiveBrand?.name || '';
+    const firstWord = tenantName.split(' ')[0] || 'Codevertex';
+    return `${firstWord} ${appName}`;
   };
+
+  const value = useMemo(
+    () => ({
+      slug,
+      tenant: effectiveBrand,
+      isLoading,
+      error: error as Error | null,
+      getServiceTitle,
+    }),
+    [slug, effectiveBrand, isLoading, error]
+  );
 
   return (
     <TenantBrandingContext.Provider value={value}>
@@ -68,7 +79,15 @@ export function TenantBrandingProvider({ children }: { children: ReactNode }) {
 }
 
 export function useTenantBranding() {
-  const ctx = useContext(TenantBrandingContext);
-  if (ctx === undefined) throw new Error('useTenantBranding must be used within TenantBrandingProvider');
-  return ctx;
+  const context = useContext(TenantBrandingContext);
+  if (!context) {
+    return {
+      slug: '',
+      tenant: null,
+      isLoading: false,
+      error: null,
+      getServiceTitle: (s: string) => s,
+    };
+  }
+  return context;
 }

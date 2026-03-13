@@ -13,7 +13,9 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 
 export default function SettingsPage() {
-  const { tenant, logoUrl, primaryColor, isLoading } = useTenantBranding();
+  const { tenant, isLoading } = useTenantBranding();
+  const logoUrl = tenant?.logoUrl;
+  const primaryColor = tenant?.primaryColor;
   const [settings, setSettings] = useState({
     receiptHeader: 'BengoBox Restaurant',
     receiptFooter: 'Thank you! Visit again.',

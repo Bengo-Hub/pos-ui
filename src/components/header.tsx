@@ -7,6 +7,8 @@ import { useParams } from 'next/navigation';
 import { useRef, useState } from 'react';
 import { ThemeToggle } from './theme-toggle';
 
+import { useTenantBranding } from '@/providers/tenant-branding-provider';
+
 function displayName(user: { fullName?: string; name?: string; email?: string } | null): string {
   if (!user) return 'Account';
   return user.fullName ?? user.name ?? user.email?.split('@')[0] ?? 'Account';
@@ -22,6 +24,7 @@ export function Header({ onMenuClick }: HeaderProps) {
   const user = useAuthStore((state) => state.user);
   const status = useAuthStore((state) => state.status);
   const logout = useAuthStore((state) => state.logout);
+  const { getServiceTitle } = useTenantBranding();
   const [profileOpen, setProfileOpen] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
   const isAuthenticated = !!user && status === 'authenticated';
@@ -34,12 +37,17 @@ export function Header({ onMenuClick }: HeaderProps) {
         <button type="button" onClick={onMenuClick} className="lg:hidden p-2 rounded-lg hover:bg-accent transition" aria-label="Open menu">
           <Menu className="h-5 w-5 text-muted-foreground" />
         </button>
-        <div className="relative max-w-sm w-full group hidden md:block">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
-          <input
-            placeholder="Search orders, tables..."
-            className="w-full bg-accent/50 border-none rounded-lg py-2 pl-10 pr-4 text-sm focus:ring-1 focus:ring-primary transition-all bg-transparent border border-muted"
-          />
+        <div className="flex items-center gap-4">
+            <h1 className="text-lg font-black tracking-tight text-foreground uppercase bg-gradient-to-r from-brand-orange to-brand-gold bg-clip-text text-transparent">
+                {getServiceTitle('POS')}
+            </h1>
+            <div className="relative max-w-xs w-full group hidden lg:block">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
+              <input
+                placeholder="Search orders, tables..."
+                className="w-full bg-accent/30 border border-border/50 rounded-lg py-1.5 pl-10 pr-4 text-sm focus:ring-1 focus:ring-primary transition-all"
+              />
+            </div>
         </div>
       </div>
 
