@@ -29,7 +29,7 @@ export function Button({
   children: ReactNode;
   className?: string;
   variant?: 'primary' | 'secondary' | 'outline' | 'ghost' | 'destructive';
-  size?: 'default' | 'sm' | 'lg';
+  size?: 'default' | 'sm' | 'lg' | 'icon';
   [key: string]: any;
 }) {
   const variants = {
@@ -44,6 +44,7 @@ export function Button({
     default: 'px-4 py-2',
     sm: 'px-3 py-1.5 text-xs',
     lg: 'px-6 py-3',
+    icon: 'h-10 w-10 p-0',
   };
 
   return (

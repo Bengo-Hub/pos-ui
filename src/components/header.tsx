@@ -32,78 +32,91 @@ export function Header({ onMenuClick }: HeaderProps) {
   const role = user?.roles?.[0];
 
   return (
-    <header className="h-16 border-b border-border bg-card/50 backdrop-blur-xl sticky top-0 z-50 flex items-center justify-between px-6">
+    <header className="h-20 border-b border-slate-200 dark:border-white/5 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md sticky top-0 z-30 px-4 sm:px-8 flex items-center justify-between">
       <div className="flex items-center gap-4 flex-1">
-        <button type="button" onClick={onMenuClick} className="lg:hidden p-2 rounded-lg hover:bg-accent transition" aria-label="Open menu">
-          <Menu className="h-5 w-5 text-muted-foreground" />
+        <button type="button" onClick={onMenuClick} className="lg:hidden p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-white/10 transition-colors" aria-label="Open menu">
+          <Menu className="h-5 w-5 text-slate-500" />
         </button>
-        <div className="flex items-center gap-4">
-            <h1 className="text-lg font-black tracking-tight text-foreground uppercase bg-gradient-to-r from-brand-orange to-brand-gold bg-clip-text text-transparent">
+        <div className="flex items-center gap-6">
+            <h1 className="text-lg sm:text-xl font-black tracking-tight text-slate-900 dark:text-white uppercase truncate max-w-[150px] sm:max-w-none">
                 {getServiceTitle('POS')}
             </h1>
-            <div className="relative max-w-xs w-full group hidden lg:block">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
+            <div className="hidden lg:flex relative w-80 max-w-full group">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 group-focus-within:text-primary transition-colors" />
               <input
                 placeholder="Search orders, tables..."
-                className="w-full bg-accent/30 border border-border/50 rounded-lg py-1.5 pl-10 pr-4 text-sm focus:ring-1 focus:ring-primary transition-all"
+                className="w-full h-10 bg-slate-50 dark:bg-white/5 border-none rounded-xl py-1.5 pl-10 pr-4 text-sm focus:ring-1 focus:ring-primary/30 transition-all outline-none"
               />
             </div>
         </div>
       </div>
 
-      <div className="flex items-center gap-4">
-        <button className="relative h-9 w-9 flex items-center justify-center rounded-md hover:bg-accent transition">
-          <Bell className="h-5 w-5 text-muted-foreground" />
-          <span className="absolute top-2 right-2 w-2 h-2 bg-primary rounded-full border-2 border-card"></span>
+      <div className="flex items-center gap-1 sm:gap-3">
+        <button className="relative group p-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-white/5 transition-all">
+          <Bell className="h-5 w-5 text-slate-500 group-hover:text-primary transition-colors" />
+          <span className="absolute top-2.5 right-2.5 w-2 h-2 bg-rose-500 rounded-full border-2 border-white dark:border-slate-950" />
         </button>
 
         <ThemeToggle />
 
-        <div className="h-8 w-[1px] bg-border mx-1"></div>
+        <div className="h-8 w-[1px] bg-slate-200 dark:bg-white/10 mx-1 hidden sm:block"></div>
 
-        <div className="relative flex items-center gap-3 pl-2" ref={profileRef}>
+        <div className="relative" ref={profileRef}>
           {isAuthenticated ? (
             <button
               type="button"
               onClick={() => setProfileOpen((v) => !v)}
-              className="flex items-center gap-3 rounded-lg hover:bg-accent/50 p-1.5 transition-colors"
+              className="flex items-center gap-3 rounded-2xl hover:bg-slate-100 dark:hover:bg-white/5 p-1 transition-all group"
               aria-expanded={profileOpen}
               aria-haspopup="true"
               aria-label="Open profile menu"
             >
-              <div className="text-right hidden sm:block">
-                <p className="text-sm font-semibold leading-none">{name}</p>
-                {role ? <p className="text-xs text-muted-foreground mt-1 capitalize">{role}</p> : null}
-              </div>
-              <div className="h-9 w-9 rounded-full bg-primary flex items-center justify-center text-primary-foreground font-bold border border-border shadow-sm">
+              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br from-primary to-orange-400 flex items-center justify-center text-white font-bold text-xs shadow-lg shadow-primary/20 transition-transform group-hover:scale-105">
                 {name[0]?.toUpperCase() ?? <User className="h-5 w-5" />}
               </div>
-              <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${profileOpen ? 'rotate-180' : ''}`} />
+              <div className="hidden md:block text-left mr-1">
+                <p className="text-xs font-black text-slate-900 dark:text-white truncate max-w-[120px]">{name}</p>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{role || 'Member'}</p>
+              </div>
+              <ChevronDown className={`h-4 w-4 text-slate-400 transition-transform duration-300 ${profileOpen ? 'rotate-180' : ''}`} />
             </button>
           ) : null}
           {isAuthenticated && profileOpen && (
             <>
               <div className="fixed inset-0 z-40" aria-hidden="true" onClick={() => setProfileOpen(false)} />
-              <div className="absolute right-0 top-full mt-2 z-50 min-w-[180px] py-1 rounded-lg border border-border bg-card shadow-lg">
-                <Link
-                  href={`/${orgSlug}/settings`}
-                  onClick={() => setProfileOpen(false)}
-                  className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-foreground hover:bg-accent transition-colors"
-                >
-                  <Settings className="h-4 w-4" />
-                  Settings
-                </Link>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setProfileOpen(false);
-                    void logout();
-                  }}
-                  className="flex w-full items-center gap-2 px-4 py-2.5 text-sm font-medium text-foreground hover:bg-accent transition-colors text-red-600 hover:text-red-700"
-                >
-                  <LogOut className="h-4 w-4" />
-                  Logout
-                </button>
+              <div className="absolute right-0 top-full mt-2 z-50 w-64 rounded-[1.5rem] p-3 shadow-2xl border border-slate-100 dark:border-white/5 bg-white dark:bg-slate-900 overflow-hidden">
+                <div className="mb-2 px-3 py-2">
+                  <p className="text-sm font-black text-slate-900 dark:text-white">{name}</p>
+                  <p className="text-[10px] text-slate-400 truncate font-bold uppercase tracking-widest mt-0.5">{role || 'Member'}</p>
+                </div>
+                
+                <div className="h-[1px] bg-slate-100 dark:bg-white/5 my-2 mx-1" />
+
+                <div className="grid gap-1">
+                  <Link
+                    href={`/${orgSlug}/settings`}
+                    onClick={() => setProfileOpen(false)}
+                    className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5 transition-all group"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-white/10 flex items-center justify-center group-hover:text-primary transition-colors">
+                      <Settings className="h-4 w-4" />
+                    </div>
+                    Settings
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setProfileOpen(false);
+                      void logout();
+                    }}
+                    className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition-all group"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-rose-50 dark:bg-rose-500/10 flex items-center justify-center transition-colors">
+                      <LogOut className="h-4 w-4" />
+                    </div>
+                    Logout
+                  </button>
+                </div>
               </div>
             </>
           )}
