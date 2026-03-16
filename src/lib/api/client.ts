@@ -4,40 +4,53 @@ const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'https://posapi.codevertex
 
 class ApiClient {
   private instance: AxiosInstance;
-  private accessToken: string | null = null;
+    private accessToken: string | null = null;
+    private tenantId: string | null = null;
+    private tenantSlug: string | null = null;
 
-  constructor() {
-    this.instance = axios.create({
-      baseURL: apiBaseUrl,
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      timeout: 15000,
-    });
+    constructor() {
+        this.instance = axios.create({
+            baseURL: apiBaseUrl,
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            timeout: 15000,
+        });
 
-    this.instance.interceptors.request.use(this.handleRequest);
-    this.instance.interceptors.response.use(this.handleResponse, this.handleError);
-  }
-
-  private handleRequest = (config: InternalAxiosRequestConfig) => {
-    if (this.accessToken) {
-      config.headers.Authorization = `Bearer ${this.accessToken}`;
+        this.instance.interceptors.request.use(this.handleRequest);
+        this.instance.interceptors.response.use(this.handleResponse, this.handleError);
     }
-    return config;
-  };
 
-  private handleResponse = (response: AxiosResponse) => response;
+    private handleRequest = (config: InternalAxiosRequestConfig) => {
+        if (this.accessToken) {
+            config.headers.Authorization = `Bearer ${this.accessToken}`;
+        }
+        if (this.tenantId) {
+            config.headers['X-Tenant-ID'] = this.tenantId;
+        }
+        if (this.tenantSlug) {
+            config.headers['X-Tenant-Slug'] = this.tenantSlug;
+        }
+        return config;
+    };
 
-  private handleError = (error: any) => {
-    if (error.response?.status === 401) {
-      console.warn('API Unauthorized access');
+    private handleResponse = (response: AxiosResponse) => response;
+
+    private handleError = (error: any) => {
+        if (error.response?.status === 401) {
+            console.warn('API Unauthorized access');
+        }
+        return Promise.reject(error);
+    };
+
+    public setAccessToken(token: string | null) {
+        this.accessToken = token;
     }
-    return Promise.reject(error);
-  };
 
-  public setAccessToken(token: string | null) {
-    this.accessToken = token;
-  }
+    public setTenantInfo(id: string | null, slug: string | null) {
+        this.tenantId = id;
+        this.tenantSlug = slug;
+    }
 
   public get<T>(url: string, params?: any): Promise<T> {
     return this.instance.get<T>(url, { params }).then((res: AxiosResponse<T>) => res.data);

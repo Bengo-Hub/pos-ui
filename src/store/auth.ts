@@ -16,7 +16,8 @@ interface UserProfile {
   email: string;
   fullName: string;
   roles: string[];
-  organizationId: string;
+  tenant_id: string;
+  tenant_slug: string;
 }
 
 interface Session {
@@ -48,17 +49,21 @@ export const useAuthStore = create<AuthState>()(
       error: null,
 
       initialize: async () => {
-        const { session } = get();
+        const { session, user } = get();
         if (!session) {
           set({ status: 'idle' });
           return;
         }
 
         apiClient.setAccessToken(session.accessToken);
+        if (user) {
+          apiClient.setTenantInfo(user.tenant_id, user.tenant_slug);
+        }
         set({ status: 'loading' });
 
         try {
           const user = await fetchProfile(session.accessToken);
+          apiClient.setTenantInfo(user.tenant_id, user.tenant_slug);
           set({ user, status: 'authenticated' });
         } catch {
           set({ status: 'idle', session: null, user: null });
@@ -122,6 +127,7 @@ export const useAuthStore = create<AuthState>()(
           while (attempts < 5) {
             try {
               const user = await fetchProfile(session.accessToken);
+              apiClient.setTenantInfo(user.tenant_id, user.tenant_slug);
               set({ user, status: 'authenticated' });
               return;
             } catch {
@@ -139,6 +145,7 @@ export const useAuthStore = create<AuthState>()(
       logout: async () => {
         set({ status: 'idle', user: null, session: null });
         apiClient.setAccessToken(null);
+        apiClient.setTenantInfo(null, null);
         window.location.href = buildLogoutUrl(window.location.origin);
       },
 
@@ -165,6 +172,9 @@ export const useAuthStore = create<AuthState>()(
       onRehydrateStorage: () => (state) => {
         if (state?.session?.accessToken) {
           apiClient.setAccessToken(state.session.accessToken);
+        }
+        if (state?.user?.tenant_id) {
+          apiClient.setTenantInfo(state.user.tenant_id, state.user.tenant_slug);
         }
       },
     }
