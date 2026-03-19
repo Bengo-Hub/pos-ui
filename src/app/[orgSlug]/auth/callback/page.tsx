@@ -23,6 +23,13 @@ function AuthCallbackContent() {
   }, [code, orgSlug, handleSSOCallback]);
 
   useEffect(() => {
+    if (status === 'subscription_required') {
+      const subsUrl = process.env.NEXT_PUBLIC_SUBSCRIPTIONS_UI_URL || 'https://pricing.codevertexitsolutions.com';
+      window.location.href = `${subsUrl}/subscribe`;
+    }
+  }, [status]);
+
+  useEffect(() => {
     if (status === 'authenticated') {
       const returnTo = sessionStorage.getItem('sso_return_to') || `/${orgSlug}`;
       sessionStorage.removeItem('sso_return_to');

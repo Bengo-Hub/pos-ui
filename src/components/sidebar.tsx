@@ -4,6 +4,7 @@ import {
     Grid3x3,
     Key,
     LayoutDashboard,
+    LogOut,
     Monitor,
     Plus,
     Settings,
@@ -14,6 +15,7 @@ import {
 import Link from 'next/link';
 import { useParams, usePathname } from 'next/navigation';
 import { useTenantBranding } from '@/providers/tenant-branding-provider';
+import { useAuthStore } from '@/store/auth';
 
 interface SidebarProps {
   open?: boolean;
@@ -26,6 +28,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
   const orgSlug = params?.orgSlug as string;
   const isPlatformOwner = orgSlug === 'codevertex';
   const { tenant } = useTenantBranding();
+  const logout = useAuthStore((s) => s.logout);
 
   const routes = [
     {
@@ -155,10 +158,17 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
           <div className="w-10 h-10 rounded-xl bg-primary/20 flex items-center justify-center text-xs font-black text-primary uppercase shadow-inner">
             {tenant?.name?.[0] || orgSlug?.[0]}
           </div>
-          <div className="flex flex-col min-w-0">
+          <div className="flex flex-col min-w-0 flex-1">
             <span className="font-black text-[10px] uppercase tracking-widest truncate">{tenant?.name || orgSlug}</span>
             <span className="text-[9px] font-bold opacity-50 uppercase tracking-tighter">Active Tenant</span>
           </div>
+          <button
+            onClick={() => logout()}
+            className="p-2 rounded-xl hover:bg-white/5 transition-colors text-white/50 hover:text-rose-400"
+            title="Sign out"
+          >
+            <LogOut className="h-5 w-5" />
+          </button>
         </div>
       </div>
     </div>

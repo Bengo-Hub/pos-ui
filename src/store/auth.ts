@@ -1,5 +1,6 @@
 import { apiClient } from '@/lib/api/client';
 import { buildAuthorizeUrl, buildLogoutUrl, exchangeCodeForTokens, fetchProfile } from '@/lib/auth/api';
+import { checkSubscription } from '@/lib/auth/subscription';
 import {
     consumeVerifier,
     generateCodeChallenge,
@@ -27,7 +28,7 @@ interface Session {
 }
 
 interface AuthState {
-  status: 'idle' | 'loading' | 'authenticated' | 'error' | 'syncing';
+  status: 'idle' | 'loading' | 'authenticated' | 'error' | 'syncing' | 'subscription_required';
   user: UserProfile | null;
   session: Session | null;
   error: string | null;
@@ -127,6 +128,13 @@ export const useAuthStore = create<AuthState>()(
           while (attempts < 5) {
             try {
               const user = await fetchProfile(session.accessToken);
+              if (user.tenant_slug !== 'codevertex' && user.tenant_id) {
+                const active = await checkSubscription(user.tenant_id, user.tenant_slug ?? '', session.accessToken);
+                if (!active) {
+                  set({ status: 'subscription_required' });
+                  return;
+                }
+              }
               apiClient.setTenantInfo(user.tenant_id, user.tenant_slug);
               set({ user, status: 'authenticated' });
               return;
