@@ -7,6 +7,7 @@ class ApiClient {
     private accessToken: string | null = null;
     private tenantId: string | null = null;
     private tenantSlug: string | null = null;
+    private platformOwner = false;
 
     constructor() {
         this.instance = axios.create({
@@ -25,11 +26,13 @@ class ApiClient {
         if (this.accessToken) {
             config.headers.Authorization = `Bearer ${this.accessToken}`;
         }
-        if (this.tenantId) {
-            config.headers['X-Tenant-ID'] = this.tenantId;
-        }
-        if (this.tenantSlug) {
-            config.headers['X-Tenant-Slug'] = this.tenantSlug;
+        if (!this.platformOwner) {
+            if (this.tenantId) {
+                config.headers['X-Tenant-ID'] = this.tenantId;
+            }
+            if (this.tenantSlug) {
+                config.headers['X-Tenant-Slug'] = this.tenantSlug;
+            }
         }
         return config;
     };
@@ -50,6 +53,10 @@ class ApiClient {
     public setTenantInfo(id: string | null, slug: string | null) {
         this.tenantId = id;
         this.tenantSlug = slug;
+    }
+
+    public setPlatformOwner(isPlatformOwner: boolean) {
+        this.platformOwner = isPlatformOwner;
     }
 
   public get<T>(url: string, params?: any): Promise<T> {
