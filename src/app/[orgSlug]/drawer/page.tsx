@@ -1,180 +1,172 @@
 'use client';
 
-import { Badge, Button, Card, CardContent, CardHeader } from '@/components/ui/base';
+import { Badge, Button, Card, CardContent } from '@/components/ui/base';
+import { useCurrentDrawer, useOpenDrawer, useCloseDrawer, useDrawerHistory } from '@/hooks/usePOS';
 import {
-  ArrowDownLeft,
-  ArrowUpRight,
-  Clock,
+  Banknote,
   DollarSign,
+  Loader2,
   Lock,
   Unlock,
-  Wallet
 } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 
-interface Shift {
-  id: string;
-  cashier: string;
-  openedAt: string;
-  closedAt: string | null;
-  openingBalance: number;
-  closingBalance: number | null;
-  cashSales: number;
-  cashIn: number;
-  cashOut: number;
-  status: 'open' | 'closed';
-}
-
-const mockShifts: Shift[] = [
-  { id: '1', cashier: 'Alice K.', openedAt: '2026-03-06 08:00', closedAt: null, openingBalance: 5000, closingBalance: null, cashSales: 12400, cashIn: 0, cashOut: 2000, status: 'open' },
-  { id: '2', cashier: 'James M.', openedAt: '2026-03-05 08:00', closedAt: '2026-03-05 20:00', openingBalance: 5000, closingBalance: 18200, cashSales: 15200, cashIn: 0, cashOut: 2000, status: 'closed' },
-  { id: '3', cashier: 'Brian O.', openedAt: '2026-03-04 08:00', closedAt: '2026-03-04 20:00', openingBalance: 5000, closingBalance: 22500, cashSales: 19500, cashIn: 0, cashOut: 2000, status: 'closed' },
-];
-
 export default function DrawerPage() {
-  const currentShift = mockShifts.find((s) => s.status === 'open');
-  const [countAmount, setCountAmount] = useState('');
+  const [openingAmount, setOpeningAmount] = useState('5000');
+  const [closingAmount, setClosingAmount] = useState('');
 
-  const expectedBalance = currentShift
-    ? currentShift.openingBalance + currentShift.cashSales + currentShift.cashIn - currentShift.cashOut
-    : 0;
+  const { data: currentData, isLoading } = useCurrentDrawer();
+  const { data: historyData } = useDrawerHistory();
+  const openDrawer = useOpenDrawer();
+  const closeDrawer = useCloseDrawer();
 
-  const handleCloseShift = () => {
-    if (!countAmount) {
-      toast.error('Please enter the counted cash amount');
-      return;
-    }
-    const counted = parseInt(countAmount.replace(/,/g, ''));
-    const variance = counted - expectedBalance;
-    toast.success(`Shift closed. Variance: KES ${variance >= 0 ? '+' : ''}${variance.toLocaleString()}`);
-    setCountAmount('');
+  const isOpen = currentData?.isOpen ?? false;
+  const drawer = currentData?.drawer;
+  const history = historyData?.data ?? [];
+
+  const handleOpen = () => {
+    openDrawer.mutate(
+      { outletId: '', startingCash: parseFloat(openingAmount) || 0 },
+      {
+        onSuccess: () => toast.success('Drawer opened!'),
+        onError: () => toast.error('Failed to open drawer'),
+      }
+    );
   };
 
+  const handleClose = () => {
+    if (!drawer?.id) return;
+    closeDrawer.mutate(
+      { drawerId: drawer.id, endingCash: parseFloat(closingAmount) || 0 },
+      {
+        onSuccess: () => {
+          toast.success('Drawer closed!');
+          setClosingAmount('');
+        },
+        onError: () => toast.error('Failed to close drawer'),
+      }
+    );
+  };
+
+  const formatDate = (d: string) => {
+    if (!d) return '-';
+    return new Date(d).toLocaleString('en-US', {
+      month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+    });
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex justify-center py-20">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
   return (
-    <div className="p-8 space-y-8 max-w-5xl mx-auto">
+    <div className="p-8 space-y-8 max-w-4xl mx-auto">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Cash Drawer</h1>
-        <p className="text-muted-foreground mt-1">Manage shift openings, closings, and cash counts.</p>
+        <p className="text-muted-foreground mt-1">Manage your cash drawer sessions.</p>
       </div>
 
-      {currentShift ? (
-        <Card className="border-green-500/20 bg-green-500/5">
-          <CardHeader className="flex flex-row items-center justify-between py-4 border-b border-green-500/20">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-xl bg-green-500/10 flex items-center justify-center">
-                <Unlock className="h-5 w-5 text-green-500" />
-              </div>
-              <div>
-                <h3 className="font-bold">Active Shift</h3>
-                <p className="text-xs text-muted-foreground">{currentShift.cashier} &middot; Since {currentShift.openedAt}</p>
-              </div>
+      <Card>
+        <CardContent className="p-8">
+          <div className="flex items-center gap-4 mb-6">
+            <div className={`h-12 w-12 rounded-xl flex items-center justify-center ${isOpen ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500'}`}>
+              {isOpen ? <Unlock className="h-6 w-6" /> : <Lock className="h-6 w-6" />}
             </div>
-            <Badge variant="success">Open</Badge>
-          </CardHeader>
-          <CardContent className="p-6">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-6">
-              <div className="space-y-1">
-                <div className="flex items-center gap-1 text-xs text-muted-foreground font-bold uppercase tracking-wider">
-                  <Wallet className="h-3 w-3" /> Opening
-                </div>
-                <p className="text-xl font-bold">KES {currentShift.openingBalance.toLocaleString()}</p>
-              </div>
-              <div className="space-y-1">
-                <div className="flex items-center gap-1 text-xs text-green-500 font-bold uppercase tracking-wider">
-                  <ArrowUpRight className="h-3 w-3" /> Cash Sales
-                </div>
-                <p className="text-xl font-bold">KES {currentShift.cashSales.toLocaleString()}</p>
-              </div>
-              <div className="space-y-1">
-                <div className="flex items-center gap-1 text-xs text-orange-500 font-bold uppercase tracking-wider">
-                  <ArrowDownLeft className="h-3 w-3" /> Cash Out
-                </div>
-                <p className="text-xl font-bold">KES {currentShift.cashOut.toLocaleString()}</p>
-              </div>
-              <div className="space-y-1">
-                <div className="flex items-center gap-1 text-xs text-primary font-bold uppercase tracking-wider">
-                  <DollarSign className="h-3 w-3" /> Expected
-                </div>
-                <p className="text-xl font-bold">KES {expectedBalance.toLocaleString()}</p>
-              </div>
+            <div>
+              <h2 className="text-xl font-bold">{isOpen ? 'Drawer Open' : 'Drawer Closed'}</h2>
+              <p className="text-sm text-muted-foreground">
+                {isOpen && drawer ? `Opened at ${formatDate(drawer.opened_at)}` : 'No active session'}
+              </p>
             </div>
+            <Badge variant={isOpen ? 'success' : 'error'} className="ml-auto">
+              {isOpen ? 'ACTIVE' : 'CLOSED'}
+            </Badge>
+          </div>
 
-            <div className="border-t border-green-500/20 pt-6 space-y-4">
-              <h4 className="text-sm font-bold">Close Shift</h4>
-              <div className="flex gap-4 items-end">
-                <div className="flex-1 space-y-2">
-                  <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Counted Cash Amount</label>
+          {isOpen && drawer ? (
+            <div className="space-y-6">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="p-4 rounded-xl bg-accent/30">
+                  <p className="text-xs text-muted-foreground font-bold uppercase tracking-wider">Opening Balance</p>
+                  <p className="text-2xl font-bold mt-1">KES {(drawer.starting_cash || 0).toLocaleString()}</p>
+                </div>
+                <div className="p-4 rounded-xl bg-accent/30">
+                  <p className="text-xs text-muted-foreground font-bold uppercase tracking-wider">Expected Balance</p>
+                  <p className="text-2xl font-bold mt-1">KES {(drawer.starting_cash || 0).toLocaleString()}</p>
+                </div>
+              </div>
+              <div className="border-t pt-6">
+                <p className="text-sm font-bold mb-3">Close Drawer</p>
+                <div className="flex gap-3">
+                  <div className="relative flex-1">
+                    <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <input
+                      type="number"
+                      placeholder="Counted cash amount"
+                      value={closingAmount}
+                      onChange={(e) => setClosingAmount(e.target.value)}
+                      className="w-full bg-accent/30 border-none rounded-lg py-3 pl-10 pr-4 text-sm focus:ring-1 focus:ring-primary"
+                    />
+                  </div>
+                  <Button onClick={handleClose} disabled={closeDrawer.isPending} className="min-h-[48px] px-6 gap-2" variant="destructive">
+                    <Lock className="h-4 w-4" /> Close Drawer
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">Enter your opening float to start a new session.</p>
+              <div className="flex gap-3">
+                <div className="relative flex-1">
+                  <Banknote className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <input
-                    value={countAmount}
-                    onChange={(e) => setCountAmount(e.target.value)}
-                    placeholder="Enter amount..."
-                    className="w-full bg-card border border-border rounded-xl py-3 px-4 text-sm focus:ring-1 focus:ring-primary outline-none font-mono min-h-[44px]"
+                    type="number"
+                    placeholder="Opening float (KES)"
+                    value={openingAmount}
+                    onChange={(e) => setOpeningAmount(e.target.value)}
+                    className="w-full bg-accent/30 border-none rounded-lg py-3 pl-10 pr-4 text-sm focus:ring-1 focus:ring-primary"
                   />
                 </div>
-                <Button
-                  onClick={handleCloseShift}
-                  variant="destructive"
-                  className="gap-2 min-h-[44px] px-6"
-                >
-                  <Lock className="h-4 w-4" /> Close Shift
+                <Button onClick={handleOpen} disabled={openDrawer.isPending} className="min-h-[48px] px-6 gap-2">
+                  <Unlock className="h-4 w-4" /> Open Drawer
                 </Button>
               </div>
             </div>
-          </CardContent>
-        </Card>
-      ) : (
-        <Card className="border-dashed">
-          <CardContent className="p-12 text-center space-y-4">
-            <Lock className="h-12 w-12 text-muted-foreground/20 mx-auto" />
-            <h3 className="font-bold text-lg">No Active Shift</h3>
-            <p className="text-sm text-muted-foreground max-w-sm mx-auto">Open a new shift to start accepting cash payments and managing the drawer.</p>
-            <Button className="gap-2 min-h-[44px] px-8">
-              <Unlock className="h-4 w-4" /> Open Shift
-            </Button>
-          </CardContent>
-        </Card>
-      )}
+          )}
+        </CardContent>
+      </Card>
 
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between py-4">
-          <div className="flex items-center gap-2">
-            <Clock className="h-4 w-4 text-primary" />
-            <h3 className="font-bold text-sm uppercase tracking-tight">Shift History</h3>
-          </div>
-        </CardHeader>
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border bg-accent/5">
-                  <th className="text-left px-6 py-3 font-bold text-xs uppercase tracking-wider text-muted-foreground">Cashier</th>
-                  <th className="text-left px-6 py-3 font-bold text-xs uppercase tracking-wider text-muted-foreground">Opened</th>
-                  <th className="text-left px-6 py-3 font-bold text-xs uppercase tracking-wider text-muted-foreground">Closed</th>
-                  <th className="text-right px-6 py-3 font-bold text-xs uppercase tracking-wider text-muted-foreground">Opening</th>
-                  <th className="text-right px-6 py-3 font-bold text-xs uppercase tracking-wider text-muted-foreground">Closing</th>
-                  <th className="text-center px-6 py-3 font-bold text-xs uppercase tracking-wider text-muted-foreground">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {mockShifts.map((shift) => (
-                  <tr key={shift.id} className="hover:bg-accent/5 transition-colors">
-                    <td className="px-6 py-4 text-xs font-medium">{shift.cashier}</td>
-                    <td className="px-6 py-4 text-xs text-muted-foreground">{shift.openedAt}</td>
-                    <td className="px-6 py-4 text-xs text-muted-foreground">{shift.closedAt ?? '-'}</td>
-                    <td className="px-6 py-4 text-right text-xs">KES {shift.openingBalance.toLocaleString()}</td>
-                    <td className="px-6 py-4 text-right text-xs font-bold">{shift.closingBalance ? `KES ${shift.closingBalance.toLocaleString()}` : '-'}</td>
-                    <td className="px-6 py-4 text-center">
-                      <Badge variant={shift.status === 'open' ? 'success' : 'outline'}>
-                        {shift.status}
-                      </Badge>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
+        <div className="px-6 py-4 border-b border-border">
+          <h3 className="font-bold">Session History</h3>
+        </div>
+        <div className="divide-y divide-border">
+          {history.length === 0 ? (
+            <div className="p-8 text-center text-muted-foreground text-sm">No previous sessions.</div>
+          ) : (
+            history.map((d: any) => (
+              <div key={d.id} className="px-6 py-4 flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-semibold">{formatDate(d.opened_at)}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {d.closed_at ? `Closed ${formatDate(d.closed_at)}` : 'Still open'}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm font-bold">KES {(d.starting_cash || 0).toLocaleString()}</p>
+                  <p className="text-xs text-muted-foreground">opening float</p>
+                </div>
+                <Badge variant={d.status === 'open' ? 'success' : 'default'}>{d.status}</Badge>
+              </div>
+            ))
+          )}
+        </div>
       </Card>
     </div>
   );

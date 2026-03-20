@@ -2,7 +2,9 @@
 
 import { Badge, Button } from '@/components/ui/base';
 import { cn } from '@/lib/utils';
+import { useMenuItems, useCreateOrder } from '@/hooks/usePOS';
 import {
+  Loader2,
   Minus,
   Plus,
   Search,
@@ -10,12 +12,13 @@ import {
   Trash2,
   X
 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { toast } from 'sonner';
 
 interface MenuItem {
   id: string;
   name: string;
+  sku: string;
   price: number;
   category: string;
   image?: string;
@@ -26,36 +29,34 @@ interface CartItem extends MenuItem {
   modifiers?: string[];
 }
 
-const categories = ['All', 'Mains', 'Starters', 'Drinks', 'Desserts', 'Sides'];
-
-const menuItems: MenuItem[] = [
-  { id: '1', name: 'Nyama Choma', price: 1200, category: 'Mains' },
-  { id: '2', name: 'Ugali & Sukuma', price: 350, category: 'Mains' },
-  { id: '3', name: 'Pilau Rice', price: 500, category: 'Mains' },
-  { id: '4', name: 'Grilled Chicken', price: 850, category: 'Mains' },
-  { id: '5', name: 'Fish & Chips', price: 750, category: 'Mains' },
-  { id: '6', name: 'Beef Stew', price: 600, category: 'Mains' },
-  { id: '7', name: 'Samosas (4pc)', price: 250, category: 'Starters' },
-  { id: '8', name: 'Soup of the Day', price: 300, category: 'Starters' },
-  { id: '9', name: 'Spring Rolls', price: 350, category: 'Starters' },
-  { id: '10', name: 'Chicken Wings', price: 550, category: 'Starters' },
-  { id: '11', name: 'Fresh Juice', price: 200, category: 'Drinks' },
-  { id: '12', name: 'Soda', price: 100, category: 'Drinks' },
-  { id: '13', name: 'Water', price: 80, category: 'Drinks' },
-  { id: '14', name: 'Milkshake', price: 350, category: 'Drinks' },
-  { id: '15', name: 'Tea / Coffee', price: 150, category: 'Drinks' },
-  { id: '16', name: 'Ice Cream', price: 250, category: 'Desserts' },
-  { id: '17', name: 'Cake Slice', price: 300, category: 'Desserts' },
-  { id: '18', name: 'Fruit Salad', price: 200, category: 'Desserts' },
-  { id: '19', name: 'Chips', price: 200, category: 'Sides' },
-  { id: '20', name: 'Coleslaw', price: 100, category: 'Sides' },
-  { id: '21', name: 'Kachumbari', price: 80, category: 'Sides' },
-];
-
 export default function OrderPage() {
   const [activeCategory, setActiveCategory] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [cart, setCart] = useState<CartItem[]>([]);
+
+  const { data: catalogData, isLoading: menuLoading } = useMenuItems({
+    category: activeCategory !== 'All' ? activeCategory : undefined,
+    search: searchQuery || undefined,
+  });
+  const createOrder = useCreateOrder();
+
+  // Map catalog items to MenuItem format
+  const menuItems: MenuItem[] = useMemo(() => {
+    const items = catalogData?.data ?? [];
+    return items.map((item: any) => ({
+      id: item.id,
+      name: item.name,
+      sku: item.sku,
+      price: 0, // POS items don't have price in catalog — use price book or default
+      category: item.category || 'Uncategorized',
+    }));
+  }, [catalogData]);
+
+  // Extract unique categories from data
+  const categories = useMemo(() => {
+    const cats = new Set(menuItems.map((i) => i.category));
+    return ['All', ...Array.from(cats).sort()];
+  }, [menuItems]);
 
   const filteredItems = menuItems.filter((item) => {
     const matchesCategory = activeCategory === 'All' || item.category === activeCategory;
@@ -93,8 +94,28 @@ export default function OrderPage() {
 
   const handlePlaceOrder = () => {
     if (cart.length === 0) return;
-    toast.success(`Order placed! Total: KES ${total.toLocaleString()}`);
-    clearCart();
+    createOrder.mutate(
+      {
+        outletId: '', // Will be set from outlet context
+        lines: cart.map((item) => ({
+          catalog_item_id: item.id,
+          sku: item.sku || '',
+          name: item.name,
+          quantity: item.quantity,
+          unit_price: item.price,
+          total_price: item.price * item.quantity,
+        })),
+      },
+      {
+        onSuccess: () => {
+          toast.success(`Order placed! Total: KES ${total.toLocaleString()}`);
+          clearCart();
+        },
+        onError: () => {
+          toast.error('Failed to place order. Please try again.');
+        },
+      }
+    );
   };
 
   return (
