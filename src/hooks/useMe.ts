@@ -34,8 +34,11 @@ export function useMe() {
               email: profile.email ?? '',
               fullName: profile.fullName ?? '',
               roles: profile.roles ?? [],
+              permissions: profile.permissions ?? [],
               tenant_id: profile.tenant_id ?? '',
               tenant_slug: profile.tenant_slug ?? '',
+              isPlatformOwner: profile.is_platform_owner ?? false,
+              isSuperUser: (profile.roles ?? []).includes('superuser'),
             }
           : null,
       );

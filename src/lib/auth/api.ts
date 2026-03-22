@@ -67,7 +67,17 @@ export async function exchangeCodeForTokens(params: TokenExchangeParams) {
 }
 
 /** Fetches current user profile from auth-api (SSO). Use for /me with TanStack Query + TTL. */
-export async function fetchProfile(accessToken: string) {
+export async function fetchProfile(accessToken: string): Promise<{
+  id: string;
+  email: string;
+  fullName: string;
+  roles: string[];
+  permissions: string[];
+  tenant_id: string;
+  tenant_slug: string;
+  isPlatformOwner: boolean;
+  isSuperUser: boolean;
+}> {
   const response = await fetch(`${SSO_BASE_URL}/api/v1/auth/me`, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
@@ -76,5 +86,18 @@ export async function fetchProfile(accessToken: string) {
     err.status = response.status;
     throw err;
   }
-  return response.json();
+  const data = await response.json();
+  const slug = data.tenant_slug ?? data.tenant?.slug ?? '';
+  const roles: string[] = data.roles ?? [];
+  return {
+    id: data.id ?? '',
+    email: data.email ?? '',
+    fullName: data.profile?.name ?? data.full_name ?? data.email ?? '',
+    roles,
+    permissions: data.permissions ?? [],
+    tenant_id: data.tenant_id ?? data.primary_tenant ?? '',
+    tenant_slug: slug,
+    isPlatformOwner: data.is_platform_owner === true || slug === 'codevertex',
+    isSuperUser: roles.includes('superuser'),
+  };
 }
