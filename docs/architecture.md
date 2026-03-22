@@ -38,7 +38,7 @@
 
 | Feature | Target | URL |
 |---------|--------|-----|
-| Online ordering | ordering-service | ordering.codevertexitsolutions.com |
+| Online ordering | ordering-service | ordersapp.codevertexitsolutions.com |
 | Staff portal | cafe-website | theurbanloftcafe.com/staff |
 | SSO login | auth-ui | accounts.codevertexitsolutions.com |
 

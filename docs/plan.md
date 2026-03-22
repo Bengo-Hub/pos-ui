@@ -36,7 +36,7 @@
 - Local hardware integration.
 
 ### ❌ Online Ordering → **ordering-service**
-- **Redirects To**: `https://ordering.codevertexitsolutions.com`
+- **Redirects To**: `https://ordersapp.codevertexitsolutions.com`
 - **Why**: Online customer orders are managed by the ordering service.
 
 ---
