@@ -30,7 +30,7 @@ export function TenantBrandingProvider({ children }: { children: ReactNode }) {
   const { data: tenant, isLoading, error } = useQuery({
     queryKey: ['tenant', slug],
     queryFn: () => fetchTenantBySlug(slug),
-    staleTime: 1000 * 60 * 10,
+    staleTime: 6 * 60 * 60 * 1000, // 6 hours — aligned with JWT TTL
     enabled: !!slug,
   });
 

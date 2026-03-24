@@ -39,9 +39,16 @@ class ApiClient {
 
     private handleResponse = (response: AxiosResponse) => response;
 
+    private on401Callback: (() => void) | null = null;
+
+    /** Register a callback to run when any API response is 401 (e.g. clear session / redirect to auth). */
+    public setOn401(callback: (() => void) | null) {
+        this.on401Callback = callback;
+    }
+
     private handleError = (error: any) => {
-        if (error.response?.status === 401) {
-            console.warn('API Unauthorized access');
+        if (error.response?.status === 401 && this.on401Callback) {
+            this.on401Callback();
         }
         return Promise.reject(error);
     };
