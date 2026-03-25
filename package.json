@@ -10,12 +10,14 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
+    "@bengo-hub/shared-ui-lib": "github:Bengo-Hub/shared-ui-lib#v0.1.0",
     "@ducanh2912/next-pwa": "^10.2.9",
     "next": "16.1.6",
     "react": "19.2.3",
     "react-dom": "19.2.3"
   },
   "devDependencies": {
+    "@playwright/test": "^1.49.0",
     "@tailwindcss/postcss": "^4",
     "@tanstack/react-query": "^5.90.21",
     "@tanstack/react-query-devtools": "^5.91.3",
@@ -34,8 +36,7 @@
     "tailwind-merge": "^3.5.0",
     "tailwindcss": "^4",
     "typescript": "^5",
-    "zustand": "^5.0.11",
-    "@playwright/test": "^1.49.0"
+    "zustand": "^5.0.11"
   },
   "engines": {
     "node": ">=20.0.0",
