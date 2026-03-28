@@ -1,11 +1,13 @@
 import { cn } from '@/lib/utils';
 import {
+    Calendar,
     ClipboardList,
     Grid3x3,
     Key,
     LayoutDashboard,
     LogOut,
     Monitor,
+    MonitorPlay,
     Plus,
     Settings,
     ShoppingCart,
@@ -16,6 +18,7 @@ import Link from 'next/link';
 import { useParams, usePathname } from 'next/navigation';
 import { useTenantBranding } from '@/providers/tenant-branding-provider';
 import { useAuthStore } from '@/store/auth';
+import { useModuleAccess } from '@/hooks/use-module-access';
 
 interface SidebarProps {
   open?: boolean;
@@ -29,45 +32,68 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
   const isPlatformOwner = orgSlug === 'codevertex';
   const { tenant } = useTenantBranding();
   const logout = useAuthStore((s) => s.logout);
+  const { hasModule } = useModuleAccess();
 
-  const routes = [
+  const allRoutes = [
     {
       label: 'Dashboard',
       icon: LayoutDashboard,
       href: `/${orgSlug}`,
       active: pathname === `/${orgSlug}`,
+      moduleKey: 'dashboard',
     },
     {
       label: 'New Order',
       icon: Plus,
       href: `/${orgSlug}/order`,
       active: pathname.startsWith(`/${orgSlug}/order`) && !pathname.startsWith(`/${orgSlug}/orders`),
+      moduleKey: 'new_order',
     },
     {
       label: 'Orders',
       icon: ClipboardList,
       href: `/${orgSlug}/orders`,
       active: pathname.startsWith(`/${orgSlug}/orders`),
+      moduleKey: 'orders',
     },
     {
       label: 'Tables',
       icon: Grid3x3,
       href: `/${orgSlug}/tables`,
       active: pathname.startsWith(`/${orgSlug}/tables`),
+      moduleKey: 'tables',
+    },
+    {
+      label: 'KDS',
+      icon: MonitorPlay,
+      href: `/${orgSlug}/kds`,
+      active: pathname.startsWith(`/${orgSlug}/kds`),
+      moduleKey: 'kds',
+    },
+    {
+      label: 'Appointments',
+      icon: Calendar,
+      href: `/${orgSlug}/appointments`,
+      active: pathname.startsWith(`/${orgSlug}/appointments`),
+      moduleKey: 'appointments',
     },
     {
       label: 'Cash Drawer',
       icon: Wallet,
       href: `/${orgSlug}/drawer`,
       active: pathname.startsWith(`/${orgSlug}/drawer`),
+      moduleKey: 'cash_drawer',
     },
     {
       label: 'Settings',
       icon: Settings,
       href: `/${orgSlug}/settings`,
       active: pathname.startsWith(`/${orgSlug}/settings`),
+      moduleKey: 'settings',
     },
   ];
+
+  const routes = allRoutes.filter((r) => hasModule(r.moduleKey));
 
   const platformRoutes = [
     {

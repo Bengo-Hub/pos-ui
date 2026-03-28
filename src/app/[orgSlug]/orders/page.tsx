@@ -4,17 +4,23 @@ import { Badge, Button, Card, CardContent, CardHeader } from '@/components/ui/ba
 import { cn } from '@/lib/utils';
 import { useOrders } from '@/hooks/usePOS';
 import {
+  ChevronRight,
   Download,
   Eye,
   Filter,
   Loader2,
-  Search
+  Map,
+  Search,
+  X
 } from 'lucide-react';
 import { useState } from 'react';
+import { TrackingIframeModal } from '@bengo-hub/shared-ui-lib';
 
 export default function OrdersPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [selectedOrder, setSelectedOrder] = useState<any>(null);
+  const [trackingOpen, setTrackingOpen] = useState(false);
 
   const { data: ordersData, isLoading } = useOrders(
     statusFilter !== 'all' ? { status: statusFilter } : undefined
@@ -34,6 +40,9 @@ export default function OrdersPage() {
     return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
   };
 
+  const isDeliveryOrder = (order: any) =>
+    order.order_type === 'delivery' || order.fulfillment_type === 'delivery';
+
   return (
     <div className="p-8 space-y-8 max-w-7xl mx-auto">
       <div className="flex items-center justify-between">
@@ -46,82 +55,192 @@ export default function OrdersPage() {
         </Button>
       </div>
 
-      <Card>
-        <CardHeader className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between py-4">
-          <div className="relative w-full max-w-sm group">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
-            <input
-              placeholder="Search by order #..."
-              className="w-full bg-accent/30 border-none rounded-lg py-2 pl-10 pr-4 text-sm focus:ring-1 focus:ring-primary transition-all"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-          </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <Filter className="h-3.5 w-3.5 text-muted-foreground" />
-            {['all', 'completed', 'draft', 'pending', 'cancelled'].map((s) => (
-              <button
-                key={s}
-                onClick={() => setStatusFilter(s)}
-                className={cn("px-3 py-1 rounded-full text-xs font-bold capitalize transition-all",
-                  statusFilter === s ? "bg-primary text-primary-foreground" : "bg-accent/30 text-muted-foreground hover:text-foreground"
-                )}
-              >
-                {s}
-              </button>
-            ))}
-          </div>
-        </CardHeader>
-        <CardContent className="p-0">
-          {isLoading ? (
-            <div className="flex justify-center py-16">
-              <Loader2 className="h-6 w-6 animate-spin text-primary" />
+      <div className="flex gap-6">
+        {/* Orders table */}
+        <Card className={cn("transition-all", selectedOrder ? "flex-1" : "w-full")}>
+          <CardHeader className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between py-4">
+            <div className="relative w-full max-w-sm group">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
+              <input
+                placeholder="Search by order #..."
+                className="w-full bg-accent/30 border-none rounded-lg py-2 pl-10 pr-4 text-sm focus:ring-1 focus:ring-primary transition-all"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
             </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border bg-accent/5">
-                    <th className="text-left px-6 py-3 font-bold text-xs uppercase tracking-wider text-muted-foreground">Order #</th>
-                    <th className="text-center px-6 py-3 font-bold text-xs uppercase tracking-wider text-muted-foreground">Items</th>
-                    <th className="text-right px-6 py-3 font-bold text-xs uppercase tracking-wider text-muted-foreground">Total</th>
-                    <th className="text-center px-6 py-3 font-bold text-xs uppercase tracking-wider text-muted-foreground">Status</th>
-                    <th className="text-right px-6 py-3 font-bold text-xs uppercase tracking-wider text-muted-foreground">Time</th>
-                    <th className="px-6 py-3"></th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {filtered.map((order: any) => (
-                    <tr key={order.id} className="hover:bg-accent/5 transition-colors">
-                      <td className="px-6 py-4 font-mono text-xs font-bold">{order.order_number}</td>
-                      <td className="px-6 py-4 text-center text-xs">{order.edges?.lines?.length ?? 0}</td>
-                      <td className="px-6 py-4 text-right font-bold text-xs">KES {(order.total_amount || 0).toLocaleString()}</td>
-                      <td className="px-6 py-4 text-center">
-                        <Badge variant={
-                          order.status === 'completed' ? 'success' :
-                            order.status === 'draft' ? 'warning' :
-                              order.status === 'cancelled' ? 'error' : 'default'
-                        }>
-                          {order.status}
-                        </Badge>
-                      </td>
-                      <td className="px-6 py-4 text-right text-xs text-muted-foreground">{formatTime(order.created_at)}</td>
-                      <td className="px-6 py-4">
-                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                          <Eye className="h-3.5 w-3.5" />
-                        </Button>
-                      </td>
+            <div className="flex items-center gap-2 flex-wrap">
+              <Filter className="h-3.5 w-3.5 text-muted-foreground" />
+              {['all', 'completed', 'draft', 'pending', 'cancelled'].map((s) => (
+                <button
+                  key={s}
+                  onClick={() => setStatusFilter(s)}
+                  className={cn("px-3 py-1 rounded-full text-xs font-bold capitalize transition-all",
+                    statusFilter === s ? "bg-primary text-primary-foreground" : "bg-accent/30 text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+          </CardHeader>
+          <CardContent className="p-0">
+            {isLoading ? (
+              <div className="flex justify-center py-16">
+                <Loader2 className="h-6 w-6 animate-spin text-primary" />
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-border bg-accent/5">
+                      <th className="text-left px-6 py-3 font-bold text-xs uppercase tracking-wider text-muted-foreground">Order #</th>
+                      <th className="text-center px-6 py-3 font-bold text-xs uppercase tracking-wider text-muted-foreground">Items</th>
+                      <th className="text-right px-6 py-3 font-bold text-xs uppercase tracking-wider text-muted-foreground">Total</th>
+                      <th className="text-center px-6 py-3 font-bold text-xs uppercase tracking-wider text-muted-foreground">Status</th>
+                      <th className="text-right px-6 py-3 font-bold text-xs uppercase tracking-wider text-muted-foreground">Time</th>
+                      <th className="px-6 py-3"></th>
                     </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {filtered.map((order: any) => (
+                      <tr
+                        key={order.id}
+                        className={cn(
+                          "hover:bg-accent/5 transition-colors cursor-pointer",
+                          selectedOrder?.id === order.id && "bg-accent/10"
+                        )}
+                        onClick={() => setSelectedOrder(order)}
+                      >
+                        <td className="px-6 py-4 font-mono text-xs font-bold">{order.order_number}</td>
+                        <td className="px-6 py-4 text-center text-xs">{order.edges?.lines?.length ?? 0}</td>
+                        <td className="px-6 py-4 text-right font-bold text-xs">KES {(order.total_amount || 0).toLocaleString()}</td>
+                        <td className="px-6 py-4 text-center">
+                          <Badge variant={
+                            order.status === 'completed' ? 'success' :
+                              order.status === 'draft' ? 'warning' :
+                                order.status === 'cancelled' ? 'error' : 'default'
+                          }>
+                            {order.status}
+                          </Badge>
+                        </td>
+                        <td className="px-6 py-4 text-right text-xs text-muted-foreground">{formatTime(order.created_at)}</td>
+                        <td className="px-6 py-4">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 w-8 p-0"
+                            onClick={(e: React.MouseEvent) => {
+                              e.stopPropagation();
+                              setSelectedOrder(order);
+                            }}
+                          >
+                            <Eye className="h-3.5 w-3.5" />
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {filtered.length === 0 && (
+                  <div className="p-12 text-center text-muted-foreground">No orders match your filters.</div>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Order detail side panel */}
+        {selectedOrder && (
+          <Card className="w-96 shrink-0 self-start sticky top-8">
+            <CardHeader className="flex flex-row items-center justify-between py-4">
+              <div>
+                <h2 className="text-sm font-bold">Order {selectedOrder.order_number}</h2>
+                <Badge
+                  variant={
+                    selectedOrder.status === 'completed' ? 'success' :
+                      selectedOrder.status === 'draft' ? 'warning' :
+                        selectedOrder.status === 'cancelled' ? 'error' : 'default'
+                  }
+                  className="mt-1"
+                >
+                  {selectedOrder.status}
+                </Badge>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 w-8 p-0"
+                onClick={() => setSelectedOrder(null)}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Line items */}
+              {selectedOrder.edges?.lines && selectedOrder.edges.lines.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Items</p>
+                  {selectedOrder.edges.lines.map((line: any, i: number) => (
+                    <div key={line.id ?? i} className="flex items-center justify-between text-xs">
+                      <span className="text-foreground">
+                        {line.quantity}x {line.name ?? line.item_name ?? 'Item'}
+                      </span>
+                      <span className="text-muted-foreground">
+                        KES {(line.line_total ?? line.total ?? 0).toLocaleString()}
+                      </span>
+                    </div>
                   ))}
-                </tbody>
-              </table>
-              {filtered.length === 0 && (
-                <div className="p-12 text-center text-muted-foreground">No orders match your filters.</div>
+                  <div className="flex items-center justify-between border-t pt-2 text-xs font-bold">
+                    <span>Total</span>
+                    <span>KES {(selectedOrder.total_amount || 0).toLocaleString()}</span>
+                  </div>
+                </div>
               )}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+
+              {/* Order meta */}
+              <div className="space-y-1 text-xs text-muted-foreground">
+                <p>Created: {formatTime(selectedOrder.created_at)}</p>
+                {selectedOrder.currency && <p>Currency: {selectedOrder.currency}</p>}
+              </div>
+
+              {/* Track Delivery button — uses order ID as tracking code */}
+              {isDeliveryOrder(selectedOrder) && (
+                <Button
+                  variant="outline"
+                  className="w-full gap-2"
+                  onClick={() => setTrackingOpen(true)}
+                >
+                  <Map className="h-4 w-4" />
+                  Track Delivery
+                </Button>
+              )}
+
+              {/* Always show Track button for non-terminal orders as fallback
+                  (order_type may not always be present in response) */}
+              {!isDeliveryOrder(selectedOrder) &&
+                !['completed', 'cancelled', 'draft'].includes(selectedOrder.status) && (
+                <Button
+                  variant="outline"
+                  className="w-full gap-2"
+                  onClick={() => setTrackingOpen(true)}
+                >
+                  <Map className="h-4 w-4" />
+                  Track Delivery
+                </Button>
+              )}
+            </CardContent>
+          </Card>
+        )}
+      </div>
+
+      {/* Tracking modal */}
+      {selectedOrder && (
+        <TrackingIframeModal
+          open={trackingOpen}
+          onOpenChange={setTrackingOpen}
+          trackingCode={selectedOrder.tracking_code ?? selectedOrder.id}
+        />
+      )}
     </div>
   );
 }
