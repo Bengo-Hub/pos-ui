@@ -152,14 +152,15 @@ export const useAuthStore = create<AuthState>()(
       },
 
       logout: async () => {
-        set({ status: 'idle', user: null, session: null });
+        set({ status: 'idle', user: null, session: null, subscriptionInfo: undefined });
         apiClient.setAccessToken(null);
         apiClient.setTenantInfo(null, null);
         if (typeof window !== 'undefined') {
-          localStorage.removeItem('tenantId');
-          localStorage.removeItem('tenantSlug');
-          localStorage.removeItem('pos-auth-storage');
-          window.location.href = buildLogoutUrl(window.location.origin);
+          try { localStorage.removeItem('tenantId'); } catch { /* no-op */ }
+          try { localStorage.removeItem('tenantSlug'); } catch { /* no-op */ }
+          try { localStorage.removeItem('pos-auth-storage'); } catch { /* no-op */ }
+          try { sessionStorage.clear(); } catch { /* no-op */ }
+          window.location.href = buildLogoutUrl('https://accounts.codevertexitsolutions.com');
         }
       },
 
