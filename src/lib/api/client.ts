@@ -54,7 +54,11 @@ class ApiClient {
 
     private handleError = (error: any) => {
         if (error.response?.status === 401 && this.on401Callback) {
-            this.on401Callback();
+            // Skip auto-logout for /auth/me — may 401 before JIT sync completes
+            const url: string = error.config?.url ?? '';
+            if (!url.includes('/auth/me')) {
+                this.on401Callback();
+            }
         }
         if (error.response?.status === 403 && this.onSubscription403Callback) {
             const data = error.response?.data;
