@@ -47,7 +47,10 @@ export function useMe() {
     enabled: !!accessToken,
     staleTime: ME_STALE_TIME_MS,
     gcTime: ME_STALE_TIME_MS * 2,
-    retry: (_, error: any) => (error?.response?.status === 401 || error?.response?.status === 403 ? false : true),
+    retry: (failureCount, error: any) => {
+      if (error?.response?.status === 401 || error?.response?.status === 403) return false;
+      return failureCount < 2;
+    },
   });
 
   const user = query.data ?? useAuthStore.getState().user;
