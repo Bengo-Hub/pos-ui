@@ -40,15 +40,27 @@ class ApiClient {
     private handleResponse = (response: AxiosResponse) => response;
 
     private on401Callback: (() => void) | null = null;
+    private onSubscription403Callback: ((data: any) => void) | null = null;
 
     /** Register a callback to run when any API response is 401 (e.g. clear session / redirect to auth). */
     public setOn401(callback: (() => void) | null) {
         this.on401Callback = callback;
     }
 
+    /** Register a callback for subscription-related 403 errors (code=subscription_inactive, upgrade=true). */
+    public setOnSubscription403(callback: ((data: any) => void) | null) {
+        this.onSubscription403Callback = callback;
+    }
+
     private handleError = (error: any) => {
         if (error.response?.status === 401 && this.on401Callback) {
             this.on401Callback();
+        }
+        if (error.response?.status === 403 && this.onSubscription403Callback) {
+            const data = error.response?.data;
+            if (data?.code === 'subscription_inactive' || data?.upgrade === true) {
+                this.onSubscription403Callback(data);
+            }
         }
         return Promise.reject(error);
     };
