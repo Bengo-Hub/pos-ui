@@ -54,9 +54,11 @@ class ApiClient {
 
     private handleError = async (error: any) => {
         if (error.response?.status === 401) {
+            // If token is already cleared (explicit logout in progress), skip entirely
+            if (!this.accessToken) return Promise.reject(error);
+
             const url: string = error.config?.url ?? '';
             if (!url.includes('/auth/me') && !error.config?._retried) {
-                // Attempt token refresh before triggering logout
                 const { refreshAccessToken } = await import('@/lib/auth/token-refresh');
                 const newToken = await refreshAccessToken();
 
@@ -67,7 +69,6 @@ class ApiClient {
                     return this.instance.request(error.config);
                 }
 
-                // Refresh failed — fire logout callback
                 this.on401Callback?.();
             }
         }
