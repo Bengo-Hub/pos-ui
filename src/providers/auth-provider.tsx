@@ -26,9 +26,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     initialize();
   }, [initialize]);
 
-  // Register 401 handler: clear all caches and redirect to SSO
+  // Register 401 handler: clear all caches and redirect to SSO.
+  // Skip during syncing/loading to avoid clearing session during JIT sync.
+  // Also skip within 15s of authentication (tokens may still be propagating).
+  // Note: the primary defense is token refresh in client.ts — this callback
+  // only fires after refresh has already failed.
   useEffect(() => {
     apiClient.setOn401(() => {
+      const { status, lastAuthenticatedAt } = useAuthStore.getState();
+      if (status === 'syncing' || status === 'loading') return;
+      if (lastAuthenticatedAt && Date.now() - lastAuthenticatedAt < 15_000) return;
       queryClient.clear();
       void logout();
     });

@@ -52,12 +52,23 @@ class ApiClient {
         this.onSubscription403Callback = callback;
     }
 
-    private handleError = (error: any) => {
-        if (error.response?.status === 401 && this.on401Callback) {
-            // Skip auto-logout for /auth/me — may 401 before JIT sync completes
+    private handleError = async (error: any) => {
+        if (error.response?.status === 401) {
             const url: string = error.config?.url ?? '';
-            if (!url.includes('/auth/me')) {
-                this.on401Callback();
+            if (!url.includes('/auth/me') && !error.config?._retried) {
+                // Attempt token refresh before triggering logout
+                const { refreshAccessToken } = await import('@/lib/auth/token-refresh');
+                const newToken = await refreshAccessToken();
+
+                if (newToken) {
+                    this.accessToken = newToken;
+                    error.config._retried = true;
+                    error.config.headers.Authorization = `Bearer ${newToken}`;
+                    return this.instance.request(error.config);
+                }
+
+                // Refresh failed — fire logout callback
+                this.on401Callback?.();
             }
         }
         if (error.response?.status === 403 && this.onSubscription403Callback) {

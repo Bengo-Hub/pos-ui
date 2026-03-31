@@ -66,6 +66,20 @@ export async function exchangeCodeForTokens(params: TokenExchangeParams) {
   return response.json();
 }
 
+export async function refreshTokens(refreshToken: string): Promise<{
+  access_token: string;
+  refresh_token?: string;
+  expires_in?: number;
+}> {
+  const response = await fetch(`${SSO_BASE_URL}/api/v1/auth/refresh`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ refresh_token: refreshToken, client_id: SSO_CLIENT_ID }),
+  });
+  if (!response.ok) throw new Error('Token refresh failed');
+  return response.json();
+}
+
 /** Fetches current user profile from auth-api (SSO). Use for /me with TanStack Query + TTL. */
 export async function fetchProfile(accessToken: string): Promise<{
   id: string;
