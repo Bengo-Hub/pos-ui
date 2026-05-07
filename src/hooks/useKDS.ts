@@ -1,31 +1,38 @@
 'use client';
 
 import { apiClient } from '@/lib/api/client';
-import { useAuthStore } from '@/store/auth';
+import { useParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 function useTenantID() {
-  return useAuthStore((s) => s.user?.tenant_id ?? '');
+  const params = useParams<{ orgSlug: string }>();
+  return params?.orgSlug ?? '';
 }
 
 function basePath(tenantID: string) {
-  return `/api/v1/${tenantID}/kds`;
+  return `/api/v1/${tenantID}/pos/kds`;
 }
 
-// ─── Types ──────────────────────────────────────────────────────────────────
+// ─── Types ───────────────────────────────────────────────────────────────────
+
+export type KDSTicketStatus = 'pending' | 'in_progress' | 'ready' | 'served' | 'voided';
+
+export type OrderSource = 'pos' | 'online';
 
 export interface KDSStation {
   id: string;
   name: string;
-  display_order: number;
+  sort_order: number;
   is_active: boolean;
+  category_filter: string[];
 }
 
 export interface KDSTicketItem {
-  id: string;
+  line_id: string;
+  sku: string;
   name: string;
-  quantity: number;
-  modifiers?: string[];
+  qty: number;
+  kds_status?: string;
 }
 
 export interface KDSTicket {
@@ -33,13 +40,19 @@ export interface KDSTicket {
   order_id: string;
   order_number: string;
   station_id: string;
-  status: string; // 'pending' | 'in_progress' | 'ready' | 'bumped'
+  status: KDSTicketStatus;
+  /** Source of the order: 'pos' for in-restaurant, 'online' for ordering-backend orders */
+  order_source?: OrderSource;
+  /** Table number or online channel label (e.g. "Table 5", "Online - Uber Eats") */
+  order_label?: string;
   items: KDSTicketItem[];
-  created_at: string;
-  bumped_at?: string;
+  received_at: string;
+  started_at?: string;
+  completed_at?: string;
+  priority: number;
 }
 
-// ─── Stations ───────────────────────────────────────────────────────────────
+// ─── Stations ────────────────────────────────────────────────────────────────
 
 export function useKDSStations() {
   const tenantID = useTenantID();
@@ -52,30 +65,113 @@ export function useKDSStations() {
   });
 }
 
-// ─── Tickets ────────────────────────────────────────────────────────────────
+// ─── Kitchen Queue ────────────────────────────────────────────────────────────
 
-export function useKDSTickets(stationId?: string) {
+export function useKitchenQueue() {
   const tenantID = useTenantID();
   return useQuery({
-    queryKey: ['kds-tickets', tenantID, stationId],
+    queryKey: ['kds-kitchen', tenantID],
     queryFn: () =>
-      apiClient.get<{ data: KDSTicket[] }>(`${basePath(tenantID)}/tickets`, {
-        station_id: stationId,
-      }),
+      apiClient.get<{ data: KDSTicket[] }>(`${basePath(tenantID)}/kitchen`),
     enabled: !!tenantID,
     staleTime: 5_000,
-    refetchInterval: 10_000, // Auto-refresh for live KDS
+    refetchInterval: 5_000,
   });
 }
 
-// ─── Bump (mark ready) ─────────────────────────────────────────────────────
+// ─── Bar Queue ───────────────────────────────────────────────────────────────
 
-export function useBumpTicket() {
+export function useBarQueue() {
+  const tenantID = useTenantID();
+  return useQuery({
+    queryKey: ['kds-bar', tenantID],
+    queryFn: () =>
+      apiClient.get<{ data: KDSTicket[] }>(`${basePath(tenantID)}/bar`),
+    enabled: !!tenantID,
+    staleTime: 5_000,
+    refetchInterval: 5_000,
+  });
+}
+
+// ─── All Tickets (with station + source filter) ───────────────────────────────
+
+export interface KDSTicketsFilter {
+  stationId?: string;
+  status?: KDSTicketStatus;
+  source?: OrderSource;
+}
+
+export function useKDSTickets(filter?: KDSTicketsFilter) {
+  const tenantID = useTenantID();
+  return useQuery({
+    queryKey: ['kds-tickets', tenantID, filter],
+    queryFn: () =>
+      apiClient.get<{ data: KDSTicket[] }>(`${basePath(tenantID)}/tickets`, {
+        params: {
+          ...(filter?.stationId ? { station_id: filter.stationId } : {}),
+          ...(filter?.status ? { status: filter.status } : {}),
+          ...(filter?.source ? { order_source: filter.source } : {}),
+        },
+      }),
+    enabled: !!tenantID,
+    staleTime: 5_000,
+    refetchInterval: 5_000,
+  });
+}
+
+// ─── Ticket Actions ───────────────────────────────────────────────────────────
+
+export function useStartTicket() {
   const tenantID = useTenantID();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (ticketId: string) =>
-      apiClient.put(`${basePath(tenantID)}/tickets/${ticketId}/bump`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['kds-tickets'] }),
+      apiClient.post(`${basePath(tenantID)}/tickets/${ticketId}/start`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['kds-tickets'] });
+      qc.invalidateQueries({ queryKey: ['kds-kitchen'] });
+      qc.invalidateQueries({ queryKey: ['kds-bar'] });
+    },
   });
+}
+
+export function useReadyTicket() {
+  const tenantID = useTenantID();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (ticketId: string) =>
+      apiClient.post(`${basePath(tenantID)}/tickets/${ticketId}/ready`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['kds-tickets'] });
+      qc.invalidateQueries({ queryKey: ['kds-kitchen'] });
+      qc.invalidateQueries({ queryKey: ['kds-bar'] });
+    },
+  });
+}
+
+export function useServeTicket() {
+  const tenantID = useTenantID();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (ticketId: string) =>
+      apiClient.post(`${basePath(tenantID)}/tickets/${ticketId}/serve`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['kds-tickets'] });
+      qc.invalidateQueries({ queryKey: ['kds-kitchen'] });
+      qc.invalidateQueries({ queryKey: ['kds-bar'] });
+    },
+  });
+}
+
+export function useCallWaiter() {
+  const tenantID = useTenantID();
+  return useMutation({
+    mutationFn: (ticketId: string) =>
+      apiClient.post(`${basePath(tenantID)}/tickets/${ticketId}/call-waiter`),
+  });
+}
+
+/** @deprecated Use useReadyTicket instead */
+export function useBumpTicket() {
+  return useReadyTicket();
 }
