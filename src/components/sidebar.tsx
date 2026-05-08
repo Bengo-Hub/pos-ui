@@ -1,7 +1,10 @@
 import { cn } from '@/lib/utils';
 import {
+    BarChart3,
+    BedDouble,
     Calendar,
     ClipboardList,
+    Clock,
     Grid3x3,
     Key,
     LayoutDashboard,
@@ -12,6 +15,7 @@ import {
     Settings,
     ShoppingCart,
     Wallet,
+    Wine,
     X,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -78,11 +82,39 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
       moduleKey: 'appointments',
     },
     {
+      label: 'Bar Display',
+      icon: Wine,
+      href: `/${orgSlug}/bar`,
+      active: pathname.startsWith(`/${orgSlug}/bar`),
+      moduleKey: 'kds',
+    },
+    {
+      label: 'Hotel',
+      icon: BedDouble,
+      href: `/${orgSlug}/hotel`,
+      active: pathname.startsWith(`/${orgSlug}/hotel`),
+      moduleKey: 'hotel',
+    },
+    {
+      label: 'Shifts',
+      icon: Clock,
+      href: `/${orgSlug}/shifts`,
+      active: pathname.startsWith(`/${orgSlug}/shifts`),
+      moduleKey: 'shifts',
+    },
+    {
       label: 'Cash Drawer',
       icon: Wallet,
       href: `/${orgSlug}/drawer`,
       active: pathname.startsWith(`/${orgSlug}/drawer`),
       moduleKey: 'cash_drawer',
+    },
+    {
+      label: 'Reports',
+      icon: BarChart3,
+      href: `/${orgSlug}/reports`,
+      active: pathname.startsWith(`/${orgSlug}/reports`),
+      moduleKey: 'reports',
     },
     {
       label: 'Settings',

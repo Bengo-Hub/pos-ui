@@ -26,7 +26,10 @@ export type ModuleKey =
   | 'appointments'
   | 'cash_drawer'
   | 'settings'
-  | 'platform';
+  | 'platform'
+  | 'hotel'
+  | 'shifts'
+  | 'reports';
 
 // ─── Use-case types ─────────────────────────────────────────────────────────
 export type UseCaseType =
@@ -47,11 +50,11 @@ const COMMON_MODULES: ModuleKey[] = [
 ];
 
 const USE_CASE_MODULES: Record<UseCaseType, ModuleKey[]> = {
-  hospitality: [...COMMON_MODULES, 'tables', 'kds', 'appointments'],
-  retail: [...COMMON_MODULES],
-  services: [...COMMON_MODULES, 'appointments'],
-  quick_service: [...COMMON_MODULES, 'kds'],
-  pharmacy: [...COMMON_MODULES],
+  hospitality: [...COMMON_MODULES, 'tables', 'kds', 'appointments', 'hotel', 'shifts', 'reports'],
+  retail: [...COMMON_MODULES, 'shifts', 'reports'],
+  services: [...COMMON_MODULES, 'appointments', 'shifts', 'reports'],
+  quick_service: [...COMMON_MODULES, 'kds', 'shifts', 'reports'],
+  pharmacy: [...COMMON_MODULES, 'shifts', 'reports'],
 };
 
 // ─── Hook ───────────────────────────────────────────────────────────────────

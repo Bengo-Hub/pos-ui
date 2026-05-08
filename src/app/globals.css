@@ -1,33 +1,37 @@
 @import "tailwindcss";
 
-@import "tailwindcss";
-
 @theme {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-card: var(--card);
-  --color-card-foreground: var(--card-foreground);
-  --color-popover: var(--popover);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-primary: var(--primary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-secondary: var(--secondary);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-muted: var(--muted);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-accent: var(--accent);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-destructive: var(--destructive);
-  --color-destructive-foreground: var(--destructive-foreground);
-  --color-border: var(--border);
-  --color-input: var(--input);
-  --color-ring: var(--ring);
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-primary-dark: hsl(var(--primary-dark));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
 
   /* Brand Colors */
-  --color-brand-orange: #ea8022;
-  --color-brand-gold: #ae6221;
-  --color-brand-dark: #2c1a02;
-  --color-brand-light: #f5f1ec;
+  --color-brand-primary: rgb(var(--brand-primary));
+  --color-brand-emphasis: rgb(var(--brand-emphasis));
+  --color-brand-contrast: rgb(var(--brand-contrast));
+  --color-brand-muted: rgb(var(--brand-muted));
+  --color-brand-surface: rgb(var(--brand-surface));
+  --color-brand-dark: rgb(var(--brand-dark));
+
+  --font-sans: var(--font-geist-sans), system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
 
   --radius-lg: var(--radius);
   --radius-md: calc(var(--radius) - 2px);
@@ -48,14 +52,14 @@
   position: relative;
   overflow: hidden;
   border-radius: 1rem;
-  background-color: color-mix(in srgb, var(--color-brand-light), transparent 90%);
+  background-color: color-mix(in srgb, white, transparent 90%);
   backdrop-filter: blur(12px);
-  border: 1px solid color-mix(in srgb, var(--color-brand-orange), transparent 80%);
+  border: 1px solid color-mix(in srgb, #ea8022, transparent 80%);
   transition: all 0.5s ease;
 
   &:hover {
-    border-color: color-mix(in srgb, var(--color-brand-orange), transparent 50%);
-    box-shadow: 0 0 30px color-mix(in srgb, var(--color-brand-orange), transparent 70%);
+    border-color: color-mix(in srgb, #ea8022, transparent 50%);
+    box-shadow: 0 0 30px color-mix(in srgb, #ea8022, transparent 70%);
   }
 }
 
@@ -86,56 +90,105 @@
 
 @utility glass-morphism {
   backdrop-filter: blur(12px);
-  background-color: color-mix(in srgb, var(--color-brand-light), transparent 90%);
-  border: 1px solid color-mix(in srgb, var(--color-brand-orange), transparent 90%);
+  background-color: color-mix(in srgb, white, transparent 90%);
+  border: 1px solid color-mix(in srgb, #ea8022, transparent 90%);
   transition: all 0.5s ease;
 }
 
 :root {
-  --background: #fbfcf9;
-  --foreground: #2c1a02;
-  --card: #ffffff;
-  --card-foreground: #2c1a02;
-  --popover: #ffffff;
-  --popover-foreground: #2c1a02;
-  --primary: #ea8022;
-  --primary-dark: #ae6221;
-  --primary-foreground: #ffffff;
-  --secondary: #f5f1ec;
-  --secondary-foreground: #2c1a02;
-  --muted: #f5f1ec;
-  --muted-foreground: #584c3d;
-  --accent: #f5f1ec;
-  --accent-foreground: #2c1a02;
-  --destructive: #ef4444;
-  --destructive-foreground: #ffffff;
-  --border: #d1ccc2;
-  --input: #d1ccc2;
-  --ring: #ea8022;
-  --radius: 1rem;
+  color-scheme: light dark;
+  font-feature-settings: "liga" 1, "kern" 1;
+  text-rendering: optimizeLegibility;
+  --brand-primary: 107 42 27;
+  --brand-emphasis: 234 128 34;
+  --brand-contrast: 255 255 255;
+  --brand-muted: 249 237 229;
+  --brand-surface: 245 241 236;
+  --brand-dark: 44 26 2;
 }
 
-.dark {
-  --background: #1a0f01;
-  --foreground: #fbfcf9;
-  --card: #1a0f01;
-  --card-foreground: #fbfcf9;
-  --popover: #1a0f01;
-  --popover-foreground: #fbfcf9;
-  --primary: #ea8022;
-  --primary-dark: #ae6221;
-  --primary-foreground: #ffffff;
-  --secondary: #2c1a02;
-  --secondary-foreground: #fbfcf9;
-  --muted: #2c1a02;
-  --muted-foreground: #d1ccc2;
-  --accent: #2c1a02;
-  --accent-foreground: #fbfcf9;
-  --destructive: #dc2626;
-  --destructive-foreground: #ffffff;
-  --border: #584c3d;
-  --input: #584c3d;
-  --ring: #ea8022;
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+*,
+*::before,
+*::after {
+  @apply box-border;
+}
+
+html {
+  scroll-behavior: smooth;
+  min-height: 100%;
+}
+
+a:focus-visible,
+button:focus-visible {
+  @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+}
+
+::selection {
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+}
+
+@layer base {
+  :root {
+    --background: 24 62% 94%;
+    --foreground: 18 36% 18%;
+    --card: 24 62% 96%;
+    --card-foreground: 18 36% 18%;
+    --popover: 24 62% 96%;
+    --popover-foreground: 18 36% 18%;
+    --primary: 24 91% 50%;
+    --primary-dark: 24 68% 40%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 24 45% 88%;
+    --secondary-foreground: 18 36% 18%;
+    --muted: 24 40% 86%;
+    --muted-foreground: 18 20% 40%;
+    --accent: 24 62% 94%;
+    --accent-foreground: 18 36% 18%;
+    --destructive: 4 84% 48%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 24 35% 82%;
+    --input: 24 35% 82%;
+    --ring: 24 91% 50%;
+    --chart-1: 24 91% 50%;
+    --chart-2: 12 68% 35%;
+    --chart-3: 34 70% 55%;
+    --chart-4: 18 40% 65%;
+    --chart-5: 42 78% 60%;
+    --radius: 0.75rem;
+  }
+
+  .dark {
+    --background: 18 42% 13%;
+    --foreground: 24 82% 95%;
+    --card: 18 38% 17%;
+    --card-foreground: 24 82% 95%;
+    --popover: 18 38% 17%;
+    --popover-foreground: 24 82% 95%;
+    --primary: 24 88% 65%;
+    --primary-dark: 24 68% 50%;
+    --primary-foreground: 16 40% 10%;
+    --secondary: 18 34% 24%;
+    --secondary-foreground: 24 82% 95%;
+    --muted: 18 28% 28%;
+    --muted-foreground: 24 46% 82%;
+    --accent: 18 32% 26%;
+    --accent-foreground: 24 82% 95%;
+    --destructive: 3 68% 46%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 18 32% 32%;
+    --input: 18 32% 32%;
+    --ring: 24 88% 65%;
+    --chart-1: 24 88% 65%;
+    --chart-2: 12 68% 45%;
+    --chart-3: 34 70% 55%;
+    --chart-4: 18 45% 70%;
+    --chart-5: 42 78% 60%;
+  }
 }
 
 @layer base {
@@ -143,16 +196,16 @@
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground;
-    font-family: system-ui, sans-serif;
+    @apply bg-background text-foreground min-h-screen antialiased transition-colors duration-150 ease-out;
   }
 }
 
-@layer base {
-  * {
-    @apply border-border;
-  }
-  body {
-    @apply bg-background text-foreground;
-  }
+/* Scrollbar hiding for carousels */
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
 }

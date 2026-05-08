@@ -25,10 +25,10 @@ export function Footer() {
                 rel="noopener noreferrer"
                 className="group flex items-center gap-2 px-4 py-1.5 rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 transition-all hover:ring-4 hover:ring-primary/20"
               >
-                <img 
-                  src="/images/logo/codevertex.png" 
-                  alt="Codevertex" 
-                  className="h-3.5 w-auto brightness-0 invert dark:brightness-100 dark:invert-0" 
+                <img
+                  src="/logo.jpeg"
+                  alt="Codevertex"
+                  className="h-3.5 w-auto brightness-0 invert dark:brightness-100 dark:invert-0"
                 />
                 <span className="text-[10px] font-black tracking-tight uppercase">
                   Powered by <span className="text-primary">Codevertex IT Solutions</span>

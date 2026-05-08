@@ -3,6 +3,31 @@ import { useParams } from 'next/navigation';
 import { createContext, ReactNode, useContext, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 
+function hexToRgbTriplet(hex: string): string {
+  const t = hex.replace(/^#/, '').trim();
+  if (!/^[0-9a-fA-F]{6}$/.test(t)) return '107 42 27';
+  return `${parseInt(t.slice(0, 2), 16)} ${parseInt(t.slice(2, 4), 16)} ${parseInt(t.slice(4, 6), 16)}`;
+}
+
+function hexToHslTriplet(hex: string): string {
+  const t = hex.replace(/^#/, '').trim();
+  if (!/^[0-9a-fA-F]{6}$/.test(t)) return '24 91% 50%';
+  const r = parseInt(t.slice(0, 2), 16) / 255;
+  const g = parseInt(t.slice(2, 4), 16) / 255;
+  const b = parseInt(t.slice(4, 6), 16) / 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  let h = 0, s = 0;
+  const l = (max + min) / 2;
+  if (max !== min) {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    if (max === r) h = ((g - b) / d + (g < b ? 6 : 0)) / 6;
+    else if (max === g) h = ((b - r) / d + 2) / 6;
+    else h = ((r - g) / d + 4) / 6;
+  }
+  return `${Math.round(h * 360)} ${Math.round(s * 100)}% ${Math.round(l * 100)}%`;
+}
+
 type TenantBrandingContextType = {
   slug: string;
   tenant: TenantBrand | null;
@@ -17,10 +42,11 @@ const DEFAULT_BRAND: TenantBrand = {
   id: 'platform',
   name: 'Codevertex',
   slug: 'codevertex',
-  logoUrl: '/images/logo/codevertex.png',
-  primaryColor: '#5B1C4D',
-  secondaryColor: '#ea8022',
+  logoUrl: '/logo.jpeg',
+  primaryColor: '#ea8022',
+  secondaryColor: '#ae6221',
   orgName: 'Codevertex IT Solutions',
+  useCase: 'other',
 };
 
 export function TenantBrandingProvider({ children }: { children: ReactNode }) {
@@ -47,10 +73,17 @@ export function TenantBrandingProvider({ children }: { children: ReactNode }) {
       const primary = effectiveBrand?.primaryColor || DEFAULT_BRAND.primaryColor!;
       const secondary = effectiveBrand?.secondaryColor || DEFAULT_BRAND.secondaryColor!;
       const logo = effectiveBrand?.logoUrl || DEFAULT_BRAND.logoUrl!;
-      
-      document.documentElement.style.setProperty('--tenant-primary', primary);
-      document.documentElement.style.setProperty('--tenant-secondary', secondary);
-      document.documentElement.style.setProperty('--tenant-logo-url', `url(${logo})`);
+      const root = document.documentElement;
+
+      root.style.setProperty('--tenant-primary', primary);
+      root.style.setProperty('--tenant-secondary', secondary);
+      root.style.setProperty('--tenant-logo-url', `url(${logo})`);
+      // Drive Tailwind semantic tokens from tenant brand color
+      root.style.setProperty('--primary', hexToHslTriplet(primary));
+      root.style.setProperty('--ring', hexToHslTriplet(primary));
+      // Drive brand RGB triplets for bg-brand-primary / bg-brand-emphasis
+      root.style.setProperty('--brand-primary', hexToRgbTriplet(primary));
+      root.style.setProperty('--brand-emphasis', hexToRgbTriplet(secondary));
     }
   }, [effectiveBrand]);
 
