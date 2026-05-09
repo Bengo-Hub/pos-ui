@@ -13,11 +13,19 @@ import { InstallPrompt } from '@/components/pwa/install-prompt';
 import { useSyncOfflineOrders } from '@/hooks/use-sync-offline-orders';
 import { useEffect } from 'react';
 import { registerBackgroundSync } from '@/lib/sw/register-sync';
+import { usePathname } from 'next/navigation';
 
 function OfflineSyncWorker() {
   useSyncOfflineOrders();
   useEffect(() => { registerBackgroundSync(); }, []);
   return null;
+}
+
+/** Paths that bypass the full app shell (no header/sidebar/footer). */
+const KIOSK_PATHS = ['/pin-login'];
+
+function isKioskRoute(pathname: string | null): boolean {
+  return KIOSK_PATHS.some(p => pathname?.endsWith(p) || pathname?.includes(`${p}/`));
 }
 
 export default function OrgLayout({ children }: { children: ReactNode }) {
@@ -26,8 +34,8 @@ export default function OrgLayout({ children }: { children: ReactNode }) {
       new QueryClient({
         defaultOptions: {
           queries: {
-            staleTime: 5 * 60 * 1000,     // 5 min — most data is reference/moderate
-            gcTime: 10 * 60 * 1000,        // 10 min garbage collection
+            staleTime: 5 * 60 * 1000,
+            gcTime: 10 * 60 * 1000,
             retry: 2,
             refetchOnWindowFocus: false,
           },
@@ -35,29 +43,40 @@ export default function OrgLayout({ children }: { children: ReactNode }) {
       })
   );
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const pathname = usePathname();
+  const kiosk = isKioskRoute(pathname);
 
   return (
     <QueryClientProvider client={queryClient}>
-    <AuthProvider>
-      <TenantBrandingProvider>
-      <OfflineBanner />
-      <OfflineSyncWorker />
-      <InstallPrompt />
-      <div className="flex h-screen overflow-hidden bg-background">
-        <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-          <Header onMenuClick={() => setSidebarOpen(true)} />
-          <SubscriptionBanner />
-          <main className="flex-1 overflow-y-auto bg-accent/5">
-            <div className="min-h-full flex flex-col">
-              <div className="flex-1">{children}</div>
-              <Footer />
+      <AuthProvider>
+        <TenantBrandingProvider>
+          <OfflineBanner />
+          <OfflineSyncWorker />
+          <InstallPrompt />
+
+          {kiosk ? (
+            // Fullscreen kiosk layout — no nav chrome
+            <div className="h-screen w-screen overflow-hidden bg-background">
+              {children}
             </div>
-          </main>
-        </div>
-      </div>
-      </TenantBrandingProvider>
-    </AuthProvider>
+          ) : (
+            // Standard app shell
+            <div className="flex h-screen overflow-hidden bg-background">
+              <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+              <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+                <Header onMenuClick={() => setSidebarOpen(true)} />
+                <SubscriptionBanner />
+                <main className="flex-1 overflow-y-auto bg-accent/5">
+                  <div className="min-h-full flex flex-col">
+                    <div className="flex-1">{children}</div>
+                    <Footer />
+                  </div>
+                </main>
+              </div>
+            </div>
+          )}
+        </TenantBrandingProvider>
+      </AuthProvider>
     </QueryClientProvider>
   );
 }

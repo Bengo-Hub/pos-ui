@@ -1,6 +1,6 @@
 # Sprint 1 -- MVP Foundation
 
-**Status:** 🟡 In Progress  
+**Status:** 🟡 In Progress (foundation complete; PIN kiosk landing and offline layer done in Sprint 6 + Sprint 10)  
 **Timeline**: March 3 - March 17, 2026  
 **Last updated:** 2026-05-09  
 **Goal**: Scaffold pos-ui and deliver a functional touch-optimized POS terminal for order entry, cash payments, and cash drawer management. Ship as part of BengoBox MVP.

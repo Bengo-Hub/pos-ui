@@ -1,6 +1,6 @@
 # Sprint 10: POS Dual Authentication — pos-ui
 
-**Status:** 🔴 Not Started  
+**Status:** ✅ Complete  
 **Period:** January–February 2027  
 **Last updated:** 2026-05-09  
 **Audit note (2026-05-09):** PIN endpoint paths clarified to full `/api/v1/{tenant}/pos/auth/pin` form; pos-api prerequisites listed; routing note added for UUID vs slug param.  
@@ -164,3 +164,26 @@ src/hooks/
 | Manager overrides SSO login for admin tasks | All business types |
 | Quick user switch mid-shift | Restaurant, hotel, salon |
 | PIN reset by manager | All business types |
+
+---
+
+## Delivered (2026-05-09)
+
+- [x] `PINKeypad` component — 3×4 touch keypad, dot indicators, auto-submit at maxLength
+- [x] `/[orgSlug]/pin-login` — kiosk landing: staff avatar grid → PIN entry
+- [x] Online path: `POST /api/v1/{tenant}/pos/auth/pin` → terminal JWT → `setTerminalSession`
+- [x] Offline path: bcrypt comparison against cached `staffProfiles` from IndexedDB (via `bcryptjs`)
+- [x] `setTerminalSession` in auth store — sets `isTerminalSession = true`, wires terminal JWT to apiClient, skips SSO `/auth/me`
+- [x] `AuthProvider` — skips SSO redirect for `pin-login` path; terminal 401 → redirect to pin-login (not SSO)
+- [x] `OrgLayout` — kiosk paths get fullscreen layout (no Header/Sidebar/Footer)
+- [x] `/[orgSlug]` root — server-side redirect to `pin-login` (landing screen)
+- [x] **Screensaver** — `useIdleTimer` hook, configurable timeout (default 30 s, stored in localStorage)
+- [x] `Screensaver` component — animated gradient blobs + live clock + tenant logo; dismisses on tap/click/key
+- [x] Default screensaver asset: `public/screensaver/default.svg` (animated dark gradient with blobs)
+- [x] Tenant screensaver: reads `pos_screensaver_url` from tenant metadata (image or video)
+- [x] Screensaver timeout settings panel on pin-login page: 15s / 30s / 1m / 2m / Never
+- [x] "Admin Login" button — triggers existing SSO PKCE flow for managers
+- [x] pos-api: PIN auth endpoints (`/pos/auth/pin`, `/pos/auth/pin/set`, `/pos/staff`, `/pos/auth/pin/profile`)
+- [x] pos-api: Atlas migration adding `pin_hash`, `pin_failed_attempts`, `pin_locked_until` to `staff_members`
+- [x] pos-api: `issueTerminalJWT` — HMAC-SHA256, 4 h expiry, `iss=pos-terminal`
+- [x] PWA install prompt requests push notifications, persistent storage, camera permissions after install

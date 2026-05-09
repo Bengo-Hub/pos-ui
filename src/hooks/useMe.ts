@@ -18,7 +18,7 @@ export interface MeProfile {
 }
 
 export function useMe() {
-  const { session, setUser } = useAuthStore();
+  const { session, setUser, isTerminalSession } = useAuthStore();
   const accessToken = session?.accessToken ?? null;
 
   const query = useQuery({
@@ -44,7 +44,8 @@ export function useMe() {
       );
       return profile;
     },
-    enabled: !!accessToken,
+    // Never hit /auth/me for terminal sessions — the JWT is not an SSO token
+    enabled: !!accessToken && !isTerminalSession,
     staleTime: ME_STALE_TIME_MS,
     gcTime: ME_STALE_TIME_MS * 2,
     retry: (failureCount, error: any) => {

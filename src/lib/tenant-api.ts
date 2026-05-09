@@ -14,6 +14,8 @@ export interface TenantBrandMetadata {
   secondaryColor?: string;
   org_name?: string;
   orgName?: string;
+  /** Optional image or video URL shown on the POS terminal screensaver. */
+  pos_screensaver_url?: string;
 }
 
 export interface TenantBrandColors {
@@ -46,6 +48,8 @@ export interface TenantBrand {
   secondaryColor: string | null;
   orgName: string;
   useCase: string;
+  /** Image or video URL for the POS terminal screensaver. Null = use default. */
+  posScreensaverUrl: string | null;
 }
 
 export function parseBrandFromTenant(t: TenantResponse): TenantBrand {
@@ -56,6 +60,8 @@ export function parseBrandFromTenant(t: TenantResponse): TenantBrand {
   const secondaryColor = t.brand_colors?.secondary ?? (meta.secondary_color ?? meta.secondaryColor) ?? null;
   const orgName = (meta.org_name ?? meta.orgName) ?? t.name ?? '';
 
+  const posScreensaverUrl = meta.pos_screensaver_url ?? null;
+
   return {
     id: t.id,
     name: t.name ?? '',
@@ -65,6 +71,7 @@ export function parseBrandFromTenant(t: TenantResponse): TenantBrand {
     secondaryColor: typeof secondaryColor === 'string' ? secondaryColor : null,
     orgName: typeof orgName === 'string' ? orgName : (t.name ?? ''),
     useCase: t.use_case ?? 'other',
+    posScreensaverUrl: typeof posScreensaverUrl === 'string' ? posScreensaverUrl : null,
   };
 }
 

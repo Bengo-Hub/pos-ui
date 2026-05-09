@@ -35,6 +35,8 @@ interface AuthState {
   session: Session | null;
   error: string | null;
   lastAuthenticatedAt: number | null;
+  /** True when authenticated via terminal PIN JWT (not SSO). useMe() is skipped for terminal sessions. */
+  isTerminalSession: boolean;
 
   /** Subscription info fetched lazily after login (undefined = not started, null = loading). */
   subscriptionInfo: Record<string, unknown> | null | undefined;
@@ -43,6 +45,12 @@ interface AuthState {
   initialize: () => Promise<void>;
   redirectToSSO: (orgSlug: string, returnTo?: string) => Promise<void>;
   handleSSOCallback: (orgSlug: string, code: string, callbackUrl: string) => Promise<void>;
+  /**
+   * Set a terminal PIN session after successful PIN login.
+   * Stores the JWT in apiClient and marks the session as terminal
+   * (bypasses SSO /auth/me check).
+   */
+  setTerminalSession: (token: string, user: UserProfile) => void;
   logout: () => Promise<void>;
   fetchUser: () => Promise<void>;
   setUser: (user: UserProfile | null) => void;
@@ -58,6 +66,7 @@ export const useAuthStore = create<AuthState>()(
       session: null,
       error: null,
       lastAuthenticatedAt: null,
+      isTerminalSession: false,
 
       initialize: async () => {
         const { session, user } = get();
@@ -153,8 +162,19 @@ export const useAuthStore = create<AuthState>()(
         }
       },
 
+      setTerminalSession: (token: string, user: UserProfile) => {
+        const session: Session = {
+          accessToken: token,
+          refreshToken: '',
+          expiresAt: new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString(),
+        };
+        apiClient.setAccessToken(token);
+        apiClient.setTenantInfo(user.tenant_id, user.tenant_slug);
+        set({ session, user, status: 'authenticated', isTerminalSession: true, lastAuthenticatedAt: Date.now() });
+      },
+
       logout: async () => {
-        set({ status: 'idle', user: null, session: null, subscriptionInfo: undefined, lastAuthenticatedAt: null });
+        set({ status: 'idle', user: null, session: null, subscriptionInfo: undefined, lastAuthenticatedAt: null, isTerminalSession: false });
         apiClient.setAccessToken(null);
         apiClient.setTenantInfo(null, null);
         if (typeof window !== 'undefined') {

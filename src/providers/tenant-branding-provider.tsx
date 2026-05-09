@@ -47,6 +47,7 @@ const DEFAULT_BRAND: TenantBrand = {
   secondaryColor: '#ae6221',
   orgName: 'Codevertex IT Solutions',
   useCase: 'other',
+  posScreensaverUrl: null,
 };
 
 export function TenantBrandingProvider({ children }: { children: ReactNode }) {

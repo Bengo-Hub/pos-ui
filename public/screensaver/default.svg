@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" width="1920" height="1080">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="50%" r="70%">
+      <stop offset="0%" stop-color="#1c1230"/>
+      <stop offset="100%" stop-color="#090910"/>
+    </radialGradient>
+    <radialGradient id="orb1" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#ea8022" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#ea8022" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="orb2" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#6d40c4" stop-opacity="0.3"/>
+      <stop offset="100%" stop-color="#6d40c4" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="orb3" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#1e88e5" stop-opacity="0.2"/>
+      <stop offset="100%" stop-color="#1e88e5" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="blur1">
+      <feGaussianBlur stdDeviation="60"/>
+    </filter>
+  </defs>
+
+  <!-- Dark base -->
+  <rect width="1920" height="1080" fill="url(#bg)"/>
+
+  <!-- Animated blobs -->
+  <g filter="url(#blur1)">
+    <ellipse cx="480" cy="320" rx="380" ry="320" fill="url(#orb1)">
+      <animate attributeName="cx" values="480;620;380;480" dur="12s" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1"/>
+      <animate attributeName="cy" values="320;460;280;320" dur="9s" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1"/>
+    </ellipse>
+    <ellipse cx="1440" cy="760" rx="420" ry="340" fill="url(#orb2)">
+      <animate attributeName="cx" values="1440;1300;1520;1440" dur="15s" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1"/>
+      <animate attributeName="cy" values="760;620;800;760" dur="11s" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1"/>
+    </ellipse>
+    <ellipse cx="960" cy="180" rx="300" ry="260" fill="url(#orb3)">
+      <animate attributeName="cy" values="180;300;160;180" dur="10s" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1"/>
+    </ellipse>
+  </g>
+
+  <!-- Subtle grid lines -->
+  <g stroke="white" stroke-opacity="0.03" stroke-width="1">
+    <line x1="0" y1="216" x2="1920" y2="216"/>
+    <line x1="0" y1="432" x2="1920" y2="432"/>
+    <line x1="0" y1="648" x2="1920" y2="648"/>
+    <line x1="0" y1="864" x2="1920" y2="864"/>
+    <line x1="384" y1="0" x2="384" y2="1080"/>
+    <line x1="768" y1="0" x2="768" y2="1080"/>
+    <line x1="1152" y1="0" x2="1152" y2="1080"/>
+    <line x1="1536" y1="0" x2="1536" y2="1080"/>
+  </g>
+</svg>

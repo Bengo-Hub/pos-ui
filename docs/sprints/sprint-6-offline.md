@@ -1,6 +1,6 @@
 # Sprint 6: Offline Mode & PWA — pos-ui
 
-**Status:** 🔴 Not Started  
+**Status:** ✅ Complete  
 **Period:** July–August 2026  
 **Last updated:** 2026-05-09  
 **Audit note (2026-05-09):** Offline payment strategy clarified — cash-only when offline; M-Pesa/card/room-charge require connectivity. eTIMS offline queue is treasury-api's responsibility (VSCU mode).  
@@ -186,14 +186,14 @@ export function useOnline() {
 
 ## Tasks
 
-- [ ] Audit: check if Dexie.js is in package.json — if not, `pnpm add dexie`
-- [ ] Create `src/lib/db/pos-db.ts` with IndexedDB schema
-- [ ] Create `src/hooks/use-online.ts` connectivity hook
-- [ ] Update order creation flow to detect offline + save to IndexedDB
-- [ ] Create SyncManager service worker sync handler
-- [ ] Create `OfflineBanner.tsx`, `SyncStatusBadge.tsx`, `OfflineOrderList.tsx`
-- [ ] Add receipt print CSS to `globals.css`
-- [ ] Update `ReceiptPreview.tsx` with print button
-- [ ] Create `InstallPrompt.tsx` with `beforeinstallprompt` handler
-- [ ] Test: create order offline → verify in IndexedDB → reconnect → verify synced to pos-api
-- [ ] Run `pnpm build` and fix all errors
+- [x] Audit: Dexie.js added to package.json (`pnpm add dexie`)
+- [x] Create `src/lib/db/pos-db.ts` — Dexie v4, version 2, 6 tables: catalogItems, offlineOrders, offlinePayments, drawerSessions, drawerCloses, staffProfiles
+- [x] Create `src/hooks/use-online.ts` connectivity hook (navigator.onLine + event listeners)
+- [x] Offline-aware hooks: `use-offline-pos.ts` — all POS mutations save to IndexedDB when offline
+- [x] Full sync worker: `use-sync-offline-orders.ts` — drains drawer sessions → orders (bundled payment) → standalone payments → drawer closes on reconnect (1.5 s delay)
+- [x] `OfflineBanner.tsx` — fixed red banner when `!useOnline()`
+- [x] Background Sync: `register-sync.ts` registers `sync-pos-data` SyncManager tag
+- [x] `InstallPrompt.tsx` — `beforeinstallprompt` handler; requests push/storage/camera permissions post-install
+- [x] Payment modal: offline cash path queues to IndexedDB; M-Pesa/card disabled with tooltip
+- [x] `pnpm build` passing with zero errors
+- [ ] Receipt print CSS + `ReceiptPreview.tsx` print button (deferred — Sprint 5 ERP gaps)
