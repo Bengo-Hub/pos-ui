@@ -10,11 +10,13 @@ import {
   Loader2,
   Smartphone,
   Wallet,
+  WifiOff,
   X,
   XCircle,
 } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { useCreatePaymentIntent } from '@/hooks/usePOS';
+import { useOnline } from '@/hooks/use-online';
 
 interface POSPaymentModalProps {
   open: boolean;
@@ -43,6 +45,7 @@ export function POSPaymentModal({
   const [initiateUrl, setInitiateUrl] = useState('');
 
   const createIntent = useCreatePaymentIntent();
+  const isOnline = useOnline();
 
   useEffect(() => {
     if (open) {
@@ -128,47 +131,54 @@ export function POSPaymentModal({
               {/* M-Pesa */}
               <button
                 onClick={() => handleDigital('mpesa')}
-                disabled={createIntent.isPending}
-                className="w-full flex items-center gap-4 px-5 py-4 rounded-xl border-2 border-border hover:border-primary/30 transition-all min-h-15 disabled:opacity-50"
+                disabled={createIntent.isPending || !isOnline}
+                className="w-full flex items-center gap-4 px-5 py-4 rounded-xl border-2 border-border hover:border-primary/30 transition-all min-h-15 disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 <div className="h-10 w-10 rounded-lg bg-emerald-500/10 flex items-center justify-center">
                   <Smartphone className="h-5 w-5 text-emerald-600" />
                 </div>
                 <div className="text-left">
                   <p className="font-bold text-sm">M-Pesa / Mobile Money</p>
-                  <p className="text-xs text-muted-foreground">STK Push or till payment</p>
+                  <p className="text-xs text-muted-foreground">{isOnline ? 'STK Push or till payment' : 'Requires internet connection'}</p>
                 </div>
               </button>
 
               {/* Card */}
               <button
                 onClick={() => handleDigital('card')}
-                disabled={createIntent.isPending}
-                className="w-full flex items-center gap-4 px-5 py-4 rounded-xl border-2 border-border hover:border-primary/30 transition-all min-h-15 disabled:opacity-50"
+                disabled={createIntent.isPending || !isOnline}
+                className="w-full flex items-center gap-4 px-5 py-4 rounded-xl border-2 border-border hover:border-primary/30 transition-all min-h-15 disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 <div className="h-10 w-10 rounded-lg bg-blue-500/10 flex items-center justify-center">
                   <CreditCard className="h-5 w-5 text-blue-600" />
                 </div>
                 <div className="text-left">
                   <p className="font-bold text-sm">Card Payment</p>
-                  <p className="text-xs text-muted-foreground">Debit or credit card</p>
+                  <p className="text-xs text-muted-foreground">{isOnline ? 'Debit or credit card' : 'Requires internet connection'}</p>
                 </div>
               </button>
 
               {/* Other (wallet, airtel, etc.) */}
               <button
                 onClick={() => handleDigital('pending')}
-                disabled={createIntent.isPending}
-                className="w-full flex items-center gap-4 px-5 py-4 rounded-xl border-2 border-border hover:border-primary/30 transition-all min-h-15 disabled:opacity-50"
+                disabled={createIntent.isPending || !isOnline}
+                className="w-full flex items-center gap-4 px-5 py-4 rounded-xl border-2 border-border hover:border-primary/30 transition-all min-h-15 disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 <div className="h-10 w-10 rounded-lg bg-purple-500/10 flex items-center justify-center">
                   <Wallet className="h-5 w-5 text-purple-600" />
                 </div>
                 <div className="text-left">
                   <p className="font-bold text-sm">Other Payment Methods</p>
-                  <p className="text-xs text-muted-foreground">Wallet, Airtel Money, and more</p>
+                  <p className="text-xs text-muted-foreground">{isOnline ? 'Wallet, Airtel Money, and more' : 'Requires internet connection'}</p>
                 </div>
               </button>
+
+              {!isOnline && (
+                <div className="flex items-center gap-2 rounded-xl bg-destructive/10 px-4 py-3 text-xs text-destructive font-medium">
+                  <WifiOff className="h-4 w-4 shrink-0" />
+                  You are offline. Only cash payments are available.
+                </div>
+              )}
 
               {createIntent.isPending && (
                 <div className="flex items-center justify-center py-2 gap-2 text-sm text-muted-foreground">
