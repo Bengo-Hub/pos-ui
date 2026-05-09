@@ -223,6 +223,41 @@ export function useTenders() {
 
 // ─── Payments ───────────────────────────────────────────────────────────────
 
+export interface PaymentIntentResult {
+  payment_intent_id: string;
+  initiate_url: string;
+  is_cash: boolean;
+}
+
+export function useCreatePaymentIntent() {
+  const tenantID = useTenantID();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      orderId,
+      tenderMethod,
+      amount,
+      tenderId,
+      currency,
+    }: {
+      orderId: string;
+      tenderMethod: string;
+      amount: number;
+      tenderId?: string;
+      currency?: string;
+    }) =>
+      apiClient.post<PaymentIntentResult>(`${basePath(tenantID)}/orders/${orderId}/payments/intent`, {
+        tenderMethod,
+        tenderId: tenderId ?? '00000000-0000-0000-0000-000000000000',
+        amount,
+        currency: currency ?? 'KES',
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['pos-orders'] });
+    },
+  });
+}
+
 export function useRecordPayment() {
   const tenantID = useTenantID();
   const qc = useQueryClient();

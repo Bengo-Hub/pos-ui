@@ -4,7 +4,7 @@ import { Badge, Button } from '@/components/ui/base';
 import { ModifierModal, type ModifierGroup } from '@/components/pos/modifier-modal';
 import { POSPaymentModal } from '@/components/pos/payment-modal';
 import { cn } from '@/lib/utils';
-import { useMenuItems, useCreateOrder, useRecordPayment } from '@/hooks/usePOS';
+import { useMenuItems, useCreateOrder } from '@/hooks/usePOS';
 import { useAuthStore } from '@/store/auth';
 import {
   AlertTriangle,
@@ -62,7 +62,6 @@ export default function OrderPage() {
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [currentOrderId, setCurrentOrderId] = useState('');
   const [currentOrderNumber, setCurrentOrderNumber] = useState('');
-  const [paymentIntentId, setPaymentIntentId] = useState<string | null>(null);
 
   // Serial number prompt
   const [serialPrompt, setSerialPrompt] = useState<{ item: MenuItem; callback: (sn: string) => void } | null>(null);
@@ -80,7 +79,6 @@ export default function OrderPage() {
     search: searchQuery || undefined,
   });
   const createOrder = useCreateOrder();
-  const recordPayment = useRecordPayment();
 
   const menuItems: MenuItem[] = useMemo(() => {
     const items = catalogData?.data ?? [];
@@ -242,7 +240,6 @@ export default function OrderPage() {
         onSuccess: (data: any) => {
           setCurrentOrderId(data.id || data.order_id || '');
           setCurrentOrderNumber(data.order_number || '');
-          setPaymentIntentId(data.payment_intent_id || null);
           setPaymentOpen(true);
         },
         onError: () => {
@@ -535,13 +532,7 @@ export default function OrderPage() {
         orderNumber={currentOrderNumber}
         total={total}
         tenantSlug={user?.tenant_slug ?? ''}
-        paymentIntentId={paymentIntentId}
         onPaymentConfirmed={handlePaymentConfirmed}
-        onCashPayment={(amount) => {
-          if (currentOrderId) {
-            recordPayment.mutate({ orderId: currentOrderId, tenderId: 'cash', amount });
-          }
-        }}
       />
 
       {/* Age Verification */}

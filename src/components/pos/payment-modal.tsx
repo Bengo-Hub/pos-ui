@@ -1,5 +1,6 @@
 'use client';
 
+import { TreasuryPaymentModal } from '@bengo-hub/shared-ui-lib';
 import { Button } from '@/components/ui/base';
 import { cn } from '@/lib/utils';
 import {
@@ -12,14 +13,8 @@ import {
   X,
   XCircle,
 } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
-
-interface PaymentResult {
-  intentId: string;
-  amount: number;
-  reference?: string;
-  channel?: string;
-}
+import { useCallback, useEffect, useState } from 'react';
+import { useCreatePaymentIntent } from '@/hooks/usePOS';
 
 interface POSPaymentModalProps {
   open: boolean;
@@ -28,16 +23,10 @@ interface POSPaymentModalProps {
   orderNumber: string;
   total: number;
   tenantSlug: string;
-  /** If null, renders quick cash/manual payment without treasury iframe */
-  paymentIntentId: string | null;
-  onPaymentConfirmed: (result: PaymentResult) => void;
-  onCashPayment?: (amount: number) => void;
+  onPaymentConfirmed: () => void;
 }
 
-type PaymentStep = 'select' | 'iframe' | 'processing' | 'confirmed' | 'failed';
-type QuickMethod = 'cash' | 'card' | 'mpesa' | 'treasury';
-
-const TREASURY_UI_URL = process.env.NEXT_PUBLIC_TREASURY_UI_URL || 'https://books.codevertexitsolutions.com';
+type ModalStep = 'select' | 'cash' | 'treasury' | 'confirmed' | 'failed';
 
 export function POSPaymentModal({
   open,
@@ -46,65 +35,56 @@ export function POSPaymentModal({
   orderNumber,
   total,
   tenantSlug,
-  paymentIntentId,
   onPaymentConfirmed,
-  onCashPayment,
 }: POSPaymentModalProps) {
-  const [step, setStep] = useState<PaymentStep>('select');
-  const [iframeLoaded, setIframeLoaded] = useState(false);
+  const [step, setStep] = useState<ModalStep>('select');
   const [cashTendered, setCashTendered] = useState('');
-  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const [intentId, setIntentId] = useState('');
+  const [initiateUrl, setInitiateUrl] = useState('');
 
-  // Reset when modal opens
+  const createIntent = useCreatePaymentIntent();
+
   useEffect(() => {
     if (open) {
       setStep('select');
-      setIframeLoaded(false);
       setCashTendered('');
+      setIntentId('');
+      setInitiateUrl('');
     }
   }, [open]);
 
-  // Listen for treasury postMessage events
-  useEffect(() => {
-    if (!open || step !== 'iframe') return;
+  const handleCashConfirm = useCallback(() => {
+    const tendered = parseFloat(cashTendered) || total;
+    if (tendered < total) return;
 
-    const handler = (event: MessageEvent) => {
-      const data = event.data;
-      if (!data?.type?.startsWith('treasury:')) return;
-
-      if (data.type === 'treasury:payment_confirmed') {
-        setStep('confirmed');
-        onPaymentConfirmed({
-          intentId: data.intentId,
-          amount: data.amount,
-          reference: data.reference,
-          channel: data.channel,
-        });
-      } else if (data.type === 'treasury:payment_failed') {
-        setStep('failed');
+    createIntent.mutate(
+      { orderId, tenderMethod: 'cash', amount: total },
+      {
+        onSuccess: () => {
+          setStep('confirmed');
+          onPaymentConfirmed();
+        },
+        onError: () => setStep('failed'),
       }
-    };
+    );
+  }, [cashTendered, total, orderId, createIntent, onPaymentConfirmed]);
 
-    window.addEventListener('message', handler);
-    return () => window.removeEventListener('message', handler);
-  }, [open, step, onPaymentConfirmed]);
-
-  const handleCashPayment = useCallback(() => {
-    const amount = parseFloat(cashTendered) || total;
-    onCashPayment?.(amount);
-    onPaymentConfirmed({ intentId: '', amount, channel: 'cash' });
-    setStep('confirmed');
-  }, [cashTendered, total, onCashPayment, onPaymentConfirmed]);
-
-  const handleMethodSelect = useCallback((method: QuickMethod) => {
-    if (method === 'cash') {
-      // Show cash tendered input, no iframe needed
-      setCashTendered(String(total));
-    } else {
-      // Open treasury iframe for digital payments
-      setStep('iframe');
-    }
-  }, [total]);
+  const handleDigital = useCallback(
+    (method: string) => {
+      createIntent.mutate(
+        { orderId, tenderMethod: method, amount: total },
+        {
+          onSuccess: (data) => {
+            setIntentId(data.payment_intent_id);
+            setInitiateUrl(data.initiate_url);
+            setStep('treasury');
+          },
+          onError: () => setStep('failed'),
+        }
+      );
+    },
+    [orderId, total, createIntent]
+  );
 
   const change = (parseFloat(cashTendered) || 0) - total;
 
@@ -119,7 +99,10 @@ export function POSPaymentModal({
             <h3 className="font-bold text-lg">Payment — {orderNumber}</h3>
             <p className="text-2xl font-bold text-primary mt-1">KES {total.toLocaleString()}</p>
           </div>
-          <button onClick={onClose} className="h-10 w-10 rounded-xl flex items-center justify-center hover:bg-accent">
+          <button
+            onClick={onClose}
+            className="h-10 w-10 rounded-xl flex items-center justify-center hover:bg-accent"
+          >
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -128,55 +111,25 @@ export function POSPaymentModal({
           {/* Payment method selection */}
           {step === 'select' && (
             <div className="p-5 space-y-3">
-              {/* Cash option with tendered amount */}
-              <div className="space-y-3">
-                <button
-                  onClick={() => handleMethodSelect('cash')}
-                  className="w-full flex items-center gap-4 px-5 py-4 rounded-xl border-2 border-border hover:border-primary/30 transition-all min-h-[60px]"
-                >
-                  <div className="h-10 w-10 rounded-lg bg-green-500/10 flex items-center justify-center">
-                    <Banknote className="h-5 w-5 text-green-600" />
-                  </div>
-                  <div className="text-left">
-                    <p className="font-bold text-sm">Cash</p>
-                    <p className="text-xs text-muted-foreground">Accept cash payment</p>
-                  </div>
-                </button>
-
-                {cashTendered !== '' && (
-                  <div className="ml-14 space-y-3 animate-in slide-in-from-top-2">
-                    <div>
-                      <label className="text-xs font-medium text-muted-foreground mb-1 block">Cash Tendered</label>
-                      <input
-                        type="number"
-                        value={cashTendered}
-                        onChange={(e) => setCashTendered(e.target.value)}
-                        className="w-full bg-background border border-border rounded-xl py-3 px-4 text-lg font-bold focus:ring-1 focus:ring-primary"
-                        autoFocus
-                      />
-                    </div>
-                    {change >= 0 && (
-                      <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">Change</span>
-                        <span className="font-bold text-green-600">KES {change.toLocaleString()}</span>
-                      </div>
-                    )}
-                    <Button
-                      onClick={handleCashPayment}
-                      disabled={parseFloat(cashTendered) < total}
-                      className={cn('w-full min-h-[48px] font-bold', parseFloat(cashTendered) < total && 'opacity-50')}
-                    >
-                      <CheckCircle2 className="h-5 w-5 mr-2" />
-                      Confirm Cash Payment
-                    </Button>
-                  </div>
-                )}
-              </div>
-
-              {/* Digital payment methods → Treasury iframe */}
+              {/* Cash */}
               <button
-                onClick={() => handleMethodSelect('mpesa')}
-                className="w-full flex items-center gap-4 px-5 py-4 rounded-xl border-2 border-border hover:border-primary/30 transition-all min-h-[60px]"
+                onClick={() => { setCashTendered(String(total)); setStep('cash'); }}
+                className="w-full flex items-center gap-4 px-5 py-4 rounded-xl border-2 border-border hover:border-primary/30 transition-all min-h-15"
+              >
+                <div className="h-10 w-10 rounded-lg bg-green-500/10 flex items-center justify-center">
+                  <Banknote className="h-5 w-5 text-green-600" />
+                </div>
+                <div className="text-left">
+                  <p className="font-bold text-sm">Cash</p>
+                  <p className="text-xs text-muted-foreground">Accept cash payment</p>
+                </div>
+              </button>
+
+              {/* M-Pesa */}
+              <button
+                onClick={() => handleDigital('mpesa')}
+                disabled={createIntent.isPending}
+                className="w-full flex items-center gap-4 px-5 py-4 rounded-xl border-2 border-border hover:border-primary/30 transition-all min-h-15 disabled:opacity-50"
               >
                 <div className="h-10 w-10 rounded-lg bg-emerald-500/10 flex items-center justify-center">
                   <Smartphone className="h-5 w-5 text-emerald-600" />
@@ -187,9 +140,11 @@ export function POSPaymentModal({
                 </div>
               </button>
 
+              {/* Card */}
               <button
-                onClick={() => handleMethodSelect('card')}
-                className="w-full flex items-center gap-4 px-5 py-4 rounded-xl border-2 border-border hover:border-primary/30 transition-all min-h-[60px]"
+                onClick={() => handleDigital('card')}
+                disabled={createIntent.isPending}
+                className="w-full flex items-center gap-4 px-5 py-4 rounded-xl border-2 border-border hover:border-primary/30 transition-all min-h-15 disabled:opacity-50"
               >
                 <div className="h-10 w-10 rounded-lg bg-blue-500/10 flex items-center justify-center">
                   <CreditCard className="h-5 w-5 text-blue-600" />
@@ -200,61 +155,102 @@ export function POSPaymentModal({
                 </div>
               </button>
 
+              {/* Other (wallet, airtel, etc.) */}
               <button
-                onClick={() => handleMethodSelect('treasury')}
-                className="w-full flex items-center gap-4 px-5 py-4 rounded-xl border-2 border-border hover:border-primary/30 transition-all min-h-[60px]"
+                onClick={() => handleDigital('pending')}
+                disabled={createIntent.isPending}
+                className="w-full flex items-center gap-4 px-5 py-4 rounded-xl border-2 border-border hover:border-primary/30 transition-all min-h-15 disabled:opacity-50"
               >
                 <div className="h-10 w-10 rounded-lg bg-purple-500/10 flex items-center justify-center">
                   <Wallet className="h-5 w-5 text-purple-600" />
                 </div>
                 <div className="text-left">
                   <p className="font-bold text-sm">Other Payment Methods</p>
-                  <p className="text-xs text-muted-foreground">Wallet, Airtel Money, PayPal, etc.</p>
+                  <p className="text-xs text-muted-foreground">Wallet, Airtel Money, and more</p>
                 </div>
               </button>
+
+              {createIntent.isPending && (
+                <div className="flex items-center justify-center py-2 gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Creating payment intent...
+                </div>
+              )}
             </div>
           )}
 
-          {/* Treasury iframe for digital payments */}
-          {step === 'iframe' && paymentIntentId && (
-            <div className="relative">
-              {!iframeLoaded && (
-                <div className="absolute inset-0 flex items-center justify-center bg-card z-10">
-                  <div className="flex flex-col items-center gap-3">
-                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                    <p className="text-sm text-muted-foreground">Loading payment page...</p>
-                  </div>
+          {/* Cash tendered UI */}
+          {step === 'cash' && (
+            <div className="p-5 space-y-4">
+              <label className="block">
+                <span className="text-sm font-medium text-foreground">Cash Tendered (KES)</span>
+                <input
+                  type="number"
+                  value={cashTendered}
+                  onChange={(e) => setCashTendered(e.target.value)}
+                  className="mt-1 w-full bg-background border border-border rounded-xl py-3 px-4 text-lg font-bold focus:ring-1 focus:ring-primary"
+                  autoFocus
+                />
+              </label>
+              {change >= 0 && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Change</span>
+                  <span className="font-bold text-green-600">KES {change.toLocaleString()}</span>
                 </div>
               )}
-              <iframe
-                ref={iframeRef}
-                src={`${TREASURY_UI_URL}/pay?intent_id=${paymentIntentId}&tenant=${tenantSlug}&embed=true`}
-                className="w-full h-[500px] border-0"
-                title="Payment"
-                onLoad={() => setIframeLoaded(true)}
-                sandbox="allow-scripts allow-forms allow-same-origin allow-popups"
+              <Button
+                onClick={handleCashConfirm}
+                disabled={parseFloat(cashTendered) < total || createIntent.isPending}
+                className={cn('w-full min-h-12 font-bold', parseFloat(cashTendered) < total && 'opacity-50')}
+              >
+                {createIntent.isPending ? (
+                  <Loader2 className="h-5 w-5 animate-spin mr-2" />
+                ) : (
+                  <CheckCircle2 className="h-5 w-5 mr-2" />
+                )}
+                Confirm Cash Payment
+              </Button>
+              <Button variant="outline" onClick={() => setStep('select')} className="w-full">
+                Back
+              </Button>
+            </div>
+          )}
+
+          {/* Treasury payment modal for digital payments */}
+          {step === 'treasury' && intentId && (
+            <div className="p-2">
+              <TreasuryPaymentModal
+                open={step === 'treasury'}
+                onOpenChange={(isOpen) => { if (!isOpen) setStep('select'); }}
+                paymentIntentId={intentId}
+                tenantSlug={tenantSlug}
+                initiateUrl={initiateUrl}
+                amount={total}
+                onPaymentConfirmed={() => {
+                  setStep('confirmed');
+                  onPaymentConfirmed();
+                }}
+                onPaymentFailed={() => setStep('failed')}
               />
             </div>
           )}
 
-          {/* Confirmed state */}
+          {/* Confirmed */}
           {step === 'confirmed' && (
             <div className="flex flex-col items-center justify-center py-12 px-6 text-center">
               <CheckCircle2 className="h-16 w-16 text-green-500 mb-4" />
               <h3 className="text-lg font-bold mb-2">Payment Successful</h3>
               <p className="text-sm text-muted-foreground">Order {orderNumber} has been paid.</p>
-              <Button className="mt-6" onClick={onClose}>
-                Done
-              </Button>
+              <Button className="mt-6" onClick={onClose}>Done</Button>
             </div>
           )}
 
-          {/* Failed state */}
+          {/* Failed */}
           {step === 'failed' && (
             <div className="flex flex-col items-center justify-center py-12 px-6 text-center">
               <XCircle className="h-16 w-16 text-destructive mb-4" />
               <h3 className="text-lg font-bold mb-2">Payment Failed</h3>
-              <p className="text-sm text-muted-foreground">Please try again or use a different method.</p>
+              <p className="text-sm text-muted-foreground">Please try again or choose a different method.</p>
               <Button className="mt-6" variant="outline" onClick={() => setStep('select')}>
                 Try Again
               </Button>
