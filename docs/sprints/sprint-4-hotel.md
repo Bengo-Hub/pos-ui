@@ -1,7 +1,8 @@
 # Sprint 4: Hotel Module — pos-ui
 
-**Status:** 🔴 Not Started  
-**Period:** June–July 2026  
+**Status:** 🟡 Scaffold done — API hooks not wired  
+**Period:** April–May 2026  
+**Last updated:** 2026-05-09  
 **Goal:** Rooms grid, check-in/out, room folio, facilities booking — role-gated to receptionist and admin
 
 ---
@@ -134,12 +135,26 @@ When creating a POS order for a room service item:
 
 ## Tasks
 
-- [ ] Create `hotel/page.tsx` with OccupancySummary + RoomGrid
-- [ ] Create `hotel/rooms/page.tsx` with status filter tabs
-- [ ] Create `hotel/rooms/[id]/page.tsx` with folio and check-in/out actions
-- [ ] Create `hotel/facilities/page.tsx` and `hotel/facilities/[id]/page.tsx`
-- [ ] Create all hotel components
-- [ ] Create TanStack Query hooks for all hotel endpoints
-- [ ] Gate hotel nav items behind `pos.hotel.view` permission
-- [ ] Test check-in → folio charge → check-out flow
-- [ ] Run `pnpm build` and fix all errors
+- [x] Create `hotel/page.tsx` with OccupancySummary + RoomGrid
+- [x] Create `hotel/rooms/page.tsx` with status filter tabs
+- [x] Create `hotel/rooms/[id]/page.tsx` with folio and check-in/out actions
+- [x] Create `hotel/facilities/page.tsx` and `hotel/facilities/[id]/page.tsx`
+- [x] Create all hotel components (scaffold — using mock data)
+- [ ] Create TanStack Query hooks for all hotel endpoints (`useHotelRooms`, `useRoom`, `useCheckIn`, `useCheckOut`, `useFacilities`, `useBookFacility` — not yet implemented)
+- [x] Gate hotel nav items behind `pos.hotel.view` permission
+- [ ] Test check-in → folio charge → check-out flow (blocked by hook wiring)
+- [ ] Run `pnpm build` and fix all errors (pending after hooks wired)
+
+## Remaining Work (as of 2026-05-09)
+
+Pages exist at `hotel/page.tsx`, `hotel/rooms/page.tsx`, `hotel/rooms/[roomId]/page.tsx`, `hotel/facilities/page.tsx` but are scaffolded with mock data. The following hooks must be implemented and wired:
+
+- [ ] `useHotelRooms(status?, floor?)` → `GET /{t}/hotel/rooms`
+- [ ] `useRoom(roomId)` → `GET /{t}/hotel/rooms/{id}`
+- [ ] `useCheckIn(roomId)` → `POST /{t}/hotel/rooms/{id}/check-in`
+- [ ] `useCheckOut(roomId)` → `POST /{t}/hotel/rooms/{id}/check-out`
+- [ ] `useRoomFolio(roomId)` → `GET /{t}/hotel/rooms/{id}/folio`
+- [ ] `usePostFolioCharge(roomId)` → `POST /{t}/hotel/rooms/{id}/folio`
+- [ ] `useFacilities()` → `GET /{t}/hotel/facilities`
+- [ ] `useBookFacility(facilityId)` → `POST /{t}/hotel/facilities/{id}/book`
+- [ ] `useFacilityBookings(date?)` → `GET /{t}/hotel/facilities/bookings`

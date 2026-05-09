@@ -2,6 +2,7 @@
 
 **Status:** 🔴 Not Started  
 **Period:** September–October 2026  
+**Last updated:** 2026-05-09  
 **Goal:** Appointment calendar, walk-in queue board, staff commission dashboard, service package management, and client lookup for service-based businesses
 
 ---

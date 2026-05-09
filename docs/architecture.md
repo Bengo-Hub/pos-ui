@@ -1,9 +1,9 @@
-# pos-ui -- Architecture
+# pos-ui — Architecture
 
-**Service**: pos-ui (Next.js 15 PWA)
-**Purpose**: Touch-optimized point-of-sale terminal interface for over-the-counter orders, payments, cash management, and table service
-**Canonical tenant**: `urban-loft` | **Active outlet**: Busia
-**Status**: Planning only (no app scaffold yet)
+**Service**: pos-ui (Next.js 15 PWA)  
+**Last updated**: 2026-05-09  
+**Purpose**: Touch-optimized, offline-capable Point of Sale terminal — multi-vertical (hospitality, retail, pharmacy, services)  
+**Status**: Core pages live; hotel/reports/shifts scaffolded; offline mode and payment flow partially implemented
 
 ---
 
@@ -12,156 +12,182 @@
 | Layer | Technology |
 |-------|-----------|
 | Framework | Next.js 15 (App Router), React 19, TypeScript |
-| Styling | Tailwind CSS + Shadcn UI |
-| State | Zustand (global: cart, drawer, session) + TanStack Query (server: catalog, orders) |
-| API client | Axios with auth interceptors |
-| PWA | @ducanh2912/next-pwa (offline capability) |
+| Styling | Tailwind CSS 4 + Shadcn UI + custom `@theme` tokens |
+| State | Zustand (global: cart, drawer, session) + TanStack Query (server state) |
+| API client | Axios with auth interceptors + tenant/outlet headers |
+| PWA | `@ducanh2912/next-pwa` (offline capability) |
 | Forms | React Hook Form + Zod |
-| Offline DB | Dexie.js / IndexedDB (offline order queue) |
-| Auth | SSO via auth-ui (OIDC/OAuth2 PKCE) |
+| Offline DB | Dexie.js / IndexedDB (offline order queue) — not yet wired |
+| Auth | SSO via auth-api OIDC/OAuth2 PKCE; PIN terminal login planned (Sprint 10) |
+| Toast | Sonner |
 
 ---
 
-## Service boundaries
-
-### Owned by pos-ui
-
-- Order entry (menu browsing, cart, modifiers, notes)
-- Payment processing (cash, card, mobile money)
-- Cash drawer management (open, close, skim, drop)
-- Table management (floor view, assign, release)
-- Shift management (open/close shift)
-- Kitchen ticket display (order status updates)
-- Receipt generation (on-screen, print-ready)
-
-### Redirects elsewhere
-
-| Feature | Target | URL |
-|---------|--------|-----|
-| Online ordering | ordering-service | ordersapp.codevertexitsolutions.com |
-| Staff portal | cafe-website | theurbanloftcafe.com/staff |
-| SSO login | auth-ui | accounts.codevertexitsolutions.com |
-
----
-
-## Planned route structure
+## Current Route Structure
 
 ```
 src/app/
-  (auth)/
-    login/page.tsx              -- SSO redirect
-    callback/page.tsx           -- OAuth callback
-  (pos)/
-    layout.tsx                  -- POS shell (header bar, outlet context)
-    page.tsx                    -- Main POS screen (menu + cart split)
-    orders/
-      page.tsx                  -- Order history / open orders
-      [orderId]/page.tsx        -- Order detail
-    tables/
-      page.tsx                  -- Floor plan view
-    drawer/
-      page.tsx                  -- Cash drawer management
-    shifts/
-      page.tsx                  -- Shift open/close
-    settings/
-      page.tsx                  -- Device and outlet settings
+  page.tsx                          ← Root redirect to /[orgSlug]
+  [orgSlug]/
+    page.tsx                        ← Dashboard / analytics overview
+    auth/callback/page.tsx          ← SSO OAuth2 callback
+    unauthorized/page.tsx           ← 403 access denied
+    order/page.tsx                  ← ✅ Main POS terminal (menu grid + cart + payment)
+    orders/page.tsx                 ← Orders list (open, completed)
+    tables/page.tsx                 ← ✅ Floor plan (sections, table status, release)
+    kds/page.tsx                    ← ✅ Kitchen Display System (polling, ticket management)
+    bar/page.tsx                    ← ✅ Bar Display (KDS filtered to bar station)
+    drawer/page.tsx                 ← Cash drawer management
+    shifts/page.tsx                 ← Shift open/close + float entry
+    hotel/
+      page.tsx                      ← Hotel overview (occupancy KPIs + quick links)
+      rooms/page.tsx                ← Rooms grid with status filter
+      rooms/[roomId]/page.tsx       ← Room detail (folio, check-in/out)
+      facilities/page.tsx           ← Facilities + inline booking
+    appointments/page.tsx           ← Appointments (service businesses)
+    reports/page.tsx                ← Sales reports (KPI cards, payment breakdown)
+    settings/page.tsx               ← Outlet and device settings
+    platform/page.tsx               ← Platform admin (superuser only)
 ```
 
 ---
 
-## Multi-tenancy model
+## Multi-Tenancy Model
 
 | Concept | Implementation |
 |---------|---------------|
-| Tenant context | `NEXT_PUBLIC_TENANT_SLUG` env var (default `urban-loft`) |
-| Outlet context | `NEXT_PUBLIC_OUTLET_ID` env var (Busia outlet UUID) |
-| API scoping | All API calls include `{tenantID}` in path + `X-Outlet-ID` header |
-| Headers | `X-Tenant-Slug`, `X-Tenant-ID`, `X-Outlet-ID` on every request |
-| SSO | Tenant claim in JWT |
+| Tenant context | Dynamic route `[orgSlug]` — also resolved from JWT `tenant_slug` claim |
+| Outlet context | Resolved from auth context (`outlet_id` claim) |
+| API scoping | All calls include `/{orgSlug}/` in path |
+| Request headers | `Authorization: Bearer {token}`, `X-Tenant-Slug`, `X-Outlet-ID` |
+| SSO | Auth-api OIDC PKCE flow; tokens stored in Zustand (persisted to localStorage) |
 
-### Platform admin vs tenant admin vs cashier
+### Access Tiers
 
 | Role | Access | UI scope |
 |------|--------|----------|
-| Platform admin | System config, feature overrides | Settings only (POS not primary interface) |
-| Tenant admin / Manager | Full POS + reporting + drawer management | All sections |
-| Supervisor | Void/refund authority, drawer close | POS + drawer + void actions |
-| Cashier | Order entry, cash payment | POS screen + own shift only |
+| `pos_admin` | Full access to all modules | All sections |
+| `store_manager` | Orders, tables, drawer, KDS, reports | All except platform |
+| `cashier` | Order entry, payment, own shift | POS + shifts + drawer |
+| `waiter` | Order entry, KDS (view), tables | POS + tables + KDS |
+| `receptionist` | Hotel module + orders | Hotel + orders |
+| `kitchen` | KDS terminal view only | KDS |
+| `bar` | Bar display only | Bar |
+| `viewer` | Read-only across all modules | View only |
+
+Module-level access gated via `useModuleAccess()` hook (`src/hooks/use-module-access.ts`).
 
 ---
 
-## Multi-outlet awareness
+## Module Access System
 
-Current MVP: single outlet (Busia). Outlet ID passed as header on all requests.
+```typescript
+// src/hooks/use-module-access.ts
+const USE_CASE_MODULES = {
+  hospitality: ['dashboard','orders','new_order','tables','kds','appointments','hotel','shifts','reports','cash_drawer','settings','platform'],
+  retail:      ['dashboard','orders','new_order','shifts','reports','cash_drawer','settings','platform'],
+  services:    ['dashboard','orders','new_order','appointments','shifts','reports','cash_drawer','settings','platform'],
+  quick_service: ['dashboard','orders','new_order','kds','shifts','reports','cash_drawer','settings','platform'],
+  pharmacy:    ['dashboard','orders','new_order','shifts','reports','cash_drawer','settings','platform'],
+}
+```
 
-Post-MVP: outlet selector on login (cashier selects which terminal/outlet they are working from). Device-outlet binding via `pos_devices` table.
+`useCase` resolved from JWT claims: `outlet_use_case` → `tenant_use_case` → `'hospitality'` fallback.
 
 ---
 
-## Offline architecture
+## Offline Architecture
 
 ```
-[Online]                          [Offline]
-  pos-api  <---  Axios  <---  pos-ui  --->  Dexie.js (IndexedDB)
-                                              |
-                                              +-- offline_orders queue
-                                              +-- catalog_cache
-                                              +-- pending_payments
+[Online]
+  pos-api  ←── TanStack Query ←── pos-ui  ──→  Dexie.js (IndexedDB)
+                                                  ├── catalog_items (offline menu)
+                                                  ├── offline_orders (queued orders)
+                                                  └── pending_payments (cash only)
 
 [Reconnect]
-  Dexie.js  --->  SyncManager  --->  pos-api (bulk POST)
+  Dexie.js  ──→  SyncManager  ──→  pos-api (bulk POST)
 ```
 
-### Offline capabilities (MVP stretch)
-
-- Catalog cached in IndexedDB on first load
-- Orders created offline stored in `offline_orders` table
-- On reconnect, SyncManager pushes queued orders to pos-api
-- Conflict resolution: server order number takes precedence; offline orders get `offline_` prefix until synced
-- Cash-only payments offline (card/mobile require network)
+**Status:** ❌ IndexedDB not yet wired (Sprint 6).  
+Catalog is served from TanStack Query cache (in-memory, not persisted).  
+**Offline banner**: Yellow "Offline mode — cash payments only" should appear when `navigator.onLine` is false.
 
 ---
 
-## Auth flow
+## Auth Flow
 
-1. Cashier opens pos-ui on tablet/terminal
-2. If no session, redirect to auth-ui for login
-3. Auth-ui handles OIDC PKCE flow
-4. Callback stores tokens in Zustand (persisted to localStorage)
-5. Axios interceptor attaches Bearer token + outlet headers
-6. Session timeout: 8 hours (shift-length), refresh silently
-7. Supervisor override: secondary auth prompt for void/refund actions
+1. User opens pos-ui on tablet/terminal
+2. If no valid session: redirect to auth-api OAuth2 PKCE endpoint
+3. Auth-api handles login (SSO/email) and issues access token (15 min) + refresh (30 days)
+4. Callback stores tokens in Zustand, persisted to `localStorage['pos-ui-auth']`
+5. Axios interceptor attaches `Authorization: Bearer {token}` + tenant/outlet headers
+6. Session auto-refresh on 401; terminal session = 8 hours (shift-aligned)
+
+**Planned (Sprint 10):** PIN terminal login — touchscreen 4–6 digit PIN for kitchen, bar, and cashier terminals. Issues short-lived `pos_terminal` JWT scoped to device + outlet. Enables quick staff hand-off without full OAuth redirect.
 
 ---
 
-## MVP scope (March 17, 2026)
+## Branding & Theming
 
-### Must-have
+- Tenant brand colors fetched from auth-api v2 `TenantResponse` (`logo_url`, `brand_colors: {primary, secondary, accent}`)
+- Provider: `src/providers/tenant-branding-provider.tsx`
+- CSS: `--primary` (HSL triplet), `--ring`, `--brand-primary` / `--brand-emphasis` (RGB triplets) set dynamically
+- Fallback primary: `#ea8022` (BengoBox orange)
 
-- SSO login + outlet-scoped session
-- Menu grid with category tabs and search
-- Cart with line items, modifiers, quantity adjust, notes
-- Order creation (dine-in, takeaway)
-- Cash payment with change calculation
-- Cash drawer open/close
-- Order list (open orders, completed today)
-- Responsive layout optimized for 10" tablet
+---
 
-### Nice-to-have (stretch)
+## Component Architecture
 
-- Table floor plan view (assign/release)
-- Shift open/close
-- Card/mobile money payment (requires treasury integration)
-- Receipt preview (on-screen)
-- Offline order queue (IndexedDB)
+```
+src/
+  app/[orgSlug]/           ← Page components (one per route)
+  components/
+    ui/base.tsx            ← Re-exported Shadcn primitives
+    sidebar.tsx            ← Module-aware navigation
+    header.tsx             ← Outlet context, user, shift indicator
+    pos/
+      modifier-modal.tsx   ← Modifier selection bottom sheet
+      payment-modal.tsx    ← Full-screen payment flow (cash/card/M-Pesa/room-charge)
+    kds/                   ← KDS ticket cards (used by both /kds and /bar)
+  hooks/
+    useKDS.ts              ← KDS stations + tickets + mutations
+    usePOS.ts              ← Orders, catalog, tables, drawers, shifts
+    use-module-access.ts   ← Vertical module gating
+  store/
+    auth.ts                ← Zustand: user, session, logout
+  providers/
+    tenant-branding-provider.tsx
+    query-provider.tsx
+```
 
-### Post-MVP
+---
 
-- Full offline mode with sync
-- Kitchen ticket display (WebSocket)
-- Barcode scanner integration
-- Receipt printing (ESC/POS)
-- Multi-pricebook support
-- Promotion/discount engine
-- Gift card processing
-- Performance analytics dashboard
+## Performance Targets
+
+| Operation | Target |
+|-----------|--------|
+| Menu grid render (100 items) | < 100ms |
+| Add to cart | < 50ms (optimistic) |
+| Order creation API | < 500ms |
+| Cash payment completion | < 2s |
+| Card/M-Pesa payment | < 5s |
+| KDS polling interval | 5s (TanStack Query `refetchInterval`) |
+| Page navigation | < 200ms |
+
+---
+
+## Sprint Status
+
+| Sprint | Title | Status |
+|--------|-------|--------|
+| 1 | Foundation (scaffold, SSO, layout, module access) | 🟡 In progress |
+| 2 | Order Entry (menu grid, cart, modifiers, payment) | ✅ Implemented |
+| 3 | Tables & Shifts | ✅ Implemented |
+| 4 | Hotel UI (rooms, facilities, check-in/out) | 🟡 Scaffold done |
+| 5 | KDS Terminal View | ✅ Complete |
+| 6 | Offline / PWA (IndexedDB, sync) | 🔴 Not started |
+| 7 | Retail UI (barcode scan, list view, weight) | 🔴 Not started |
+| 8 | Service Business UI (appointments, packages) | 🔴 Not started |
+| 9 | Reports & Analytics UI | 🟡 Basic scaffold |
+| 10 | Dual Auth (SSO + PIN terminal login) | 🔴 Not started |

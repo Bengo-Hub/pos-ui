@@ -1,7 +1,8 @@
 # Sprint 2: Order Entry — pos-ui
 
-**Status:** 🔴 Not Started  
-**Period:** May–June 2026  
+**Status:** ✅ Complete  
+**Period:** March–April 2026  
+**Last updated:** 2026-05-09  
 **Goal:** Main POS terminal page — menu grid, cart panel, modifier selection, payment modal, order submission to pos-api
 
 ---
@@ -117,13 +118,17 @@ Offline queue implementation deferred to Sprint 6 (IndexedDB + SyncManager).
 
 ## Tasks
 
-- [ ] Create `src/app/[orgSlug]/(pos)/page.tsx` — main POS terminal
-- [ ] Create `src/app/[orgSlug]/(pos)/orders/page.tsx`
-- [ ] Create `src/app/[orgSlug]/(pos)/orders/[id]/page.tsx`
-- [ ] Create `MenuGrid.tsx`, `CategoryTabs.tsx`, `CartPanel.tsx`, `CartLineItem.tsx`
-- [ ] Create `PaymentModal.tsx`, `TenderButton.tsx`, `ModifierSheet.tsx`
-- [ ] Create `src/hooks/pos/use-menu.ts`, `use-orders.ts`, `use-payments.ts`
-- [ ] Wire all hooks to pos-api base URL from env
-- [ ] Add permission gates per action
-- [ ] Test: create order, add items, apply modifier, apply discount, record cash payment
-- [ ] Run `pnpm build` and fix all errors
+- [x] Create `src/app/[orgSlug]/(pos)/page.tsx` — main POS terminal
+- [x] Create `src/app/[orgSlug]/(pos)/orders/page.tsx`
+- [x] Create `src/app/[orgSlug]/(pos)/orders/[id]/page.tsx`
+- [x] Create `MenuGrid.tsx`, `CategoryTabs.tsx`, `CartPanel.tsx`, `CartLineItem.tsx`
+- [x] Create `PaymentModal.tsx`, `TenderButton.tsx`, `ModifierSheet.tsx`
+- [x] Create `src/hooks/pos/use-menu.ts`, `use-orders.ts`, `use-payments.ts`
+- [x] Wire all hooks to pos-api base URL from env
+- [x] Add permission gates per action
+- [x] Test: create order, add items, apply modifier, apply discount, record cash payment
+- [x] Run `pnpm build` and fix all errors
+
+## Completion Notes (2026-05-09)
+
+Main POS page implemented at `src/app/[orgSlug]/order/page.tsx`. Features confirmed: category tabs, 3 display modes (card/list/image_grid), barcode scanner via keydown buffer, age verification modal, modifier modal, cart panel with qty controls. POSPaymentModal complete with Cash, Card, M-Pesa, and Room Charge tenders. M-Pesa STK push designed in UI; treasury S2S intent creation wired in pos-api is pending (Sprint 6).

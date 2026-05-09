@@ -1,7 +1,8 @@
 # Sprint 3: Tables, Shifts & Cash Drawer — pos-ui
 
-**Status:** 🔴 Not Started  
-**Period:** June 2026  
+**Status:** ✅ Complete  
+**Period:** April 2026  
+**Last updated:** 2026-05-09  
 **Goal:** Floor plan view, table assignment/release, shift open/close, cash drawer management
 
 ---
@@ -105,13 +106,17 @@ useSessions()                          → GET /{t}/pos/devices/{deviceId}/sessi
 
 ## Tasks
 
-- [ ] Create `src/app/[orgSlug]/(pos)/tables/page.tsx`
-- [ ] Create `src/app/[orgSlug]/(pos)/drawer/page.tsx`
-- [ ] Create `src/app/[orgSlug]/(pos)/shifts/page.tsx`
-- [ ] Create `FloorPlan.tsx`, `TableCard.tsx`, `TableAssignModal.tsx`
-- [ ] Create `DrawerStatus.tsx`, `DrawerOpenModal.tsx`, `DrawerCloseModal.tsx`
-- [ ] Create `ShiftCard.tsx`, `ShiftOpenModal.tsx`, `ShiftCloseModal.tsx`
-- [ ] Create TanStack Query hooks for tables, drawer, sessions
-- [ ] Wire device ID from user session / localStorage
-- [ ] Test: open shift → assign table → create order → close drawer
-- [ ] Run `pnpm build` and fix all errors
+- [x] Create `src/app/[orgSlug]/(pos)/tables/page.tsx`
+- [x] Create `src/app/[orgSlug]/(pos)/drawer/page.tsx`
+- [x] Create `src/app/[orgSlug]/(pos)/shifts/page.tsx`
+- [x] Create `FloorPlan.tsx`, `TableCard.tsx`, `TableAssignModal.tsx`
+- [x] Create `DrawerStatus.tsx`, `DrawerOpenModal.tsx`, `DrawerCloseModal.tsx`
+- [x] Create `ShiftCard.tsx`, `ShiftOpenModal.tsx`, `ShiftCloseModal.tsx`
+- [x] Create TanStack Query hooks for tables, drawer, sessions
+- [x] Wire device ID from user session / localStorage
+- [x] Test: open shift → assign table → create order → close drawer
+- [x] Run `pnpm build` and fix all errors
+
+## Completion Notes (2026-05-09)
+
+Floor plan at `tables/page.tsx`: section tabs, table status color-coding, status filters, and release button all confirmed. Shifts at `shifts/page.tsx`: shift open/close with float entry. Cash drawer at `drawer/page.tsx`: open/close/events flow operational.

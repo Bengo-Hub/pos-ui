@@ -2,6 +2,7 @@
 
 **Status:** 🔴 Not Started  
 **Period:** July–August 2026  
+**Last updated:** 2026-05-09  
 **Goal:** Retail-optimised POS terminal — barcode scan, weighing scale, serial number capture, layaway management
 
 ---

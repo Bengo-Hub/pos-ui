@@ -2,6 +2,7 @@
 
 **Status:** 🔴 Not Started  
 **Period:** July–August 2026  
+**Last updated:** 2026-05-09  
 **Goal:** IndexedDB offline order queue, SyncManager background sync, PWA install prompt, receipt printing
 
 ---

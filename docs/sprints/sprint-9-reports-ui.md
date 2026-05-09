@@ -1,7 +1,8 @@
 # Sprint 9: Reports & Analytics UI — pos-ui
 
-**Status:** 🔴 Not Started  
+**Status:** 🟡 Basic scaffold exists — API hooks not wired  
 **Period:** November–December 2026  
+**Last updated:** 2026-05-09  
 **Goal:** Manager-facing reports dashboard — EOD reconciliation, sales trends, staff performance, and export
 
 ---
