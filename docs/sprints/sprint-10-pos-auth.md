@@ -3,6 +3,7 @@
 **Status:** 🔴 Not Started  
 **Period:** January–February 2027  
 **Last updated:** 2026-05-09  
+**Audit note (2026-05-09):** PIN endpoint paths clarified to full `/api/v1/{tenant}/pos/auth/pin` form; pos-api prerequisites listed; routing note added for UUID vs slug param.  
 **Goal:** Implement touchscreen PIN login for terminal-mode staff alongside the existing SSO login, enabling kitchen staff, waiters, cashiers, and bar staff to quickly authenticate and switch users on a dedicated POS terminal
 
 ---
@@ -70,20 +71,32 @@ src/components/auth/
 
 ## API Endpoints (to be implemented in pos-api)
 
+These endpoints must be implemented in **pos-api** under the `/api/v1/{tenant}/pos/auth/` path. They are NOT in auth-api — PIN management is pos-specific and scoped to a POS device session.
+
 ```
-POST /{tenant}/pos/auth/pin          — validate PIN, return terminal token
+POST /api/v1/{tenant}/pos/auth/pin          — validate PIN, return terminal token
   Body: { user_id, pin, device_id }
   Returns: { terminal_token, expires_at, user: { id, name, role, permissions } }
+  Ref: pos-api Sprint 1 pending task + architecture.md auth section
 
-POST /{tenant}/pos/auth/pin/set      — set or reset a staff PIN (manager only)
+POST /api/v1/{tenant}/pos/auth/pin/set      — set or reset a staff PIN (manager only)
   Body: { user_id, new_pin }
-  Requires: pos.staff.manage permission
+  Requires: pos.staff.manage permission (must be seeded — see pos-api Sprint 1 pending tasks)
 
-GET  /{tenant}/pos/staff             — list active staff for PIN selector grid
-  Returns: [ { id, name, role, avatar_url, has_pin } ]
+GET  /api/v1/{tenant}/pos/staff             — list active staff for PIN selector grid
+  Returns: [ { id, name, role, avatar_url, has_pin, has_pin_expired } ]
 ```
 
-**Terminal token:** Short-lived JWT (4-hour expiry) signed by pos-api internal secret. Scoped to `tenant_id`, `outlet_id`, `device_id`. Carries the same permissions as the user's RBAC role within pos-api.
+**Routing note:** In the router, these register under `/{tenantID}/pos/auth/pin` (Chi path), which maps to the full URL path `/api/v1/{tenantID}/pos/auth/pin`. The `{tenant}` slug in pos-ui hooks should resolve to the org's `tenantID` UUID from JWT claims (the router uses `{tenantID}` as the path param).
+
+**Terminal token:** Short-lived JWT (4-hour expiry) signed by pos-api internal secret. Scoped to `tenant_id`, `outlet_id`, `device_id`. Carries the same permissions as the user's RBAC role within pos-api. Stored in `sessionStorage` (not `localStorage`) — cleared on tab/browser close.
+
+**pos-api prerequisites for Sprint 10 (not yet done — see pos-api sprint-1-foundation.md pending tasks):**
+- `POSStaffPin` Ent schema: `{id, tenant_id, user_id, pin_hash (bcrypt), is_active, failed_attempts, locked_until, last_used_at}`
+- `pos.staff.manage` permission seeded
+- `POST /api/v1/{tenant}/pos/auth/pin` handler
+- `POST /api/v1/{tenant}/pos/auth/pin/set` handler
+- `GET /api/v1/{tenant}/pos/staff` handler
 
 ---
 

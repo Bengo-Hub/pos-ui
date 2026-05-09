@@ -3,6 +3,7 @@
 **Status:** 🔴 Not Started  
 **Period:** July–August 2026  
 **Last updated:** 2026-05-09  
+**Audit note (2026-05-09):** Offline payment strategy clarified — cash-only when offline; M-Pesa/card/room-charge require connectivity. eTIMS offline queue is treasury-api's responsibility (VSCU mode).  
 **Goal:** IndexedDB offline order queue, SyncManager background sync, PWA install prompt, receipt printing
 
 ---
@@ -10,6 +11,33 @@
 ## Context
 
 POS terminals may lose connectivity (power cuts, network issues). Orders created offline must be queued and auto-synced when connectivity restores. pos-ui is already configured as a PWA (`next-pwa`). This sprint wires the offline data layer.
+
+---
+
+## Offline Payment Strategy
+
+**Cash-only when offline.** This is a hard constraint, not a configurable option.
+
+| Tender | Offline behaviour |
+|--------|------------------|
+| Cash | ✅ Allowed — record locally, sync with order on reconnect |
+| M-Pesa (STK Push) | ❌ Blocked — requires live NATS callback from treasury-api via Daraja; no connectivity = no confirmation |
+| Card (Paystack) | ❌ Blocked — requires redirect to Paystack checkout URL; cannot complete offline |
+| Room Charge | ❌ Blocked — must write to `room_folio_items` in pos-api; requires connectivity |
+| Loyalty Points | ❌ Blocked — balance validation requires pos-api; queue risk of over-redemption |
+
+**UI requirements:**
+- When `navigator.onLine === false`:
+  - Show yellow `OfflineBanner` at top: "Offline mode — cash payments only"
+  - In the payment modal, disable all tender buttons except Cash
+  - Add tooltip on disabled tenders: "Requires internet connection"
+  - Do not attempt treasury-api S2S calls (they will fail and leave `pos_payments` in `pending` state with no callback path)
+
+**Why M-Pesa cannot be queued:**
+treasury-api triggers the STK Push and receives the Daraja callback. pos-api only knows the result via `treasury.payment.success` NATS event. There is no offline-safe way to confirm M-Pesa payment without this callback — queuing an M-Pesa payment offline would create an order with an unconfirmed payment that can never be reconciled without manual intervention.
+
+**eTIMS offline queue:**
+eTIMS submission is owned by treasury-api (not pos-api). When pos-api is offline, `pos.sale.finalized` events accumulate in the `outbox_events` table and are published once connectivity restores. treasury-api's VSCU offline queue handles the KRA submission backlog. pos-api's `etims_invoice_number` and `etims_qr_code_url` fields on `pos_orders` are populated after reconnect. Receipts printed offline will not have the QR code — this is acceptable for cash sales; the fields will be populated for reprint once synced.
 
 ---
 

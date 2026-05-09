@@ -1,6 +1,7 @@
 # POS UI — Implementation Plan
 
-**Last updated:** 2026-05-09
+**Last updated:** 2026-05-09  
+**Audit note (2026-05-09):** Sprint 6 eTIMS offline task corrected — treasury-api owns VSCU offline queue; pos-ui role is receipt indicator + reprint only.
 
 ---
 
@@ -156,7 +157,7 @@ pos-ui is a touch-optimized, offline-capable Progressive Web App (PWA) built on 
 - [ ] Offline banner: "Offline mode — cash payments only"
 - [ ] Service Worker (via `@ducanh2912/next-pwa`): cache static assets + API responses
 - [ ] PWA manifest: `add to homescreen` prompt for tablet installers
-- [ ] eTIMS offline queue: queue invoice submissions, sync on reconnect
+- [ ] eTIMS offline receipts: treasury-api owns eTIMS submission (VSCU mode handles the offline queue server-side). pos-ui should display a "eTIMS pending" indicator when `pos_orders.etims_invoice_number` is null; offer a receipt Reprint action once populated after reconnect.
 
 ---
 

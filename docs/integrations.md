@@ -1,6 +1,7 @@
 # pos-ui — Integrations
 
-**Last updated:** 2026-05-09
+**Last updated:** 2026-05-09  
+**Audit note (2026-05-09):** M-Pesa and card payment flows expanded to show full pos-api→treasury-api→NATS chain. eTIMS QR code origin clarified (treasury-api → pos-api → pos-ui, not direct). Offline payment constraints documented.
 
 ---
 
@@ -145,19 +146,30 @@ For void, refund, and drawer close: if current user lacks the required permissio
 
 ### M-Pesa STK Push
 1. pos-ui: `POST /orders/{id}/payments` `{ tender_id: 'mpesa', amount, phone }`
-2. pos-api: calls treasury-api S2S → creates payment intent → Daraja STK Push triggered
-3. pos-ui: shows "Waiting for M-Pesa confirmation..." spinner, polls `GET /orders/{id}/payments` every 3s
-4. treasury-api: receives M-Pesa callback → publishes `treasury.payment.success`
-5. pos-api: marks payment succeeded → order completed
-6. pos-ui: poll detects `payment_status = succeeded` → success screen
+2. pos-api: calls treasury-api S2S → creates payment intent → Daraja STK Push triggered by treasury-api
+3. pos-api: stores `intent_id` in `pos_payments.external_reference`, returns `{ status: "pending", intent_id, mpesa_request_id }` to pos-ui
+4. pos-ui: shows "Waiting for M-Pesa confirmation..." spinner, polls `GET /orders/{id}/payments` every 3s
+5. treasury-api: receives M-Pesa callback from Daraja → publishes `treasury.payment.success` NATS event
+6. pos-api: NATS subscriber sets `pos_payments.status = "completed"`, auto-completes order if fully paid
+7. pos-ui: poll detects `pos_payments[0].status === "completed"` → success screen
+
+**Poll field to check:** `payments[0].status` (values: `pending` | `completed` | `failed`)
+
+**Offline behaviour:** M-Pesa STK push requires network connectivity. When `navigator.onLine === false`, the payment modal must disable the M-Pesa button and show "M-Pesa requires internet connection." Only cash payments may be queued offline.
+
+**eTIMS QR code on receipt:** After order completion, poll `GET /orders/{id}` for `etims_invoice_number` and `etims_qr_code_url` fields. These are populated asynchronously when treasury-api signs the invoice. If null after 5 seconds, print receipt without QR code — do not block the payment flow. The QR code data originates in treasury-api and is relayed through pos-api; pos-ui does not call treasury-api directly.
 
 **Status:** ❌ S2S treasury intent call not yet wired in pos-api (Sprint 6)
 
 ### Card (Paystack)
 1. pos-ui: `POST /orders/{id}/payments` `{ tender_id: 'card', amount }`
-2. pos-api: calls treasury-api → Paystack intent → returns `authorization_url`
-3. pos-ui: opens `authorization_url` in a modal/new tab
-4. On Paystack callback: `treasury.payment.success` → pos-api marks succeeded
+2. pos-api: calls treasury-api S2S → Paystack intent → returns `authorization_url`
+3. pos-api: stores `intent_id` in `pos_payments.external_reference`, returns `{ status: "pending", authorization_url }` to pos-ui
+4. pos-ui: opens `authorization_url` in a modal/new tab (Paystack checkout)
+5. On Paystack callback: treasury-api receives webhook → publishes `treasury.payment.success`
+6. pos-api: NATS subscriber sets `pos_payments.status = "completed"`, auto-completes order
+
+**Offline behaviour:** Card requires network connectivity. Disable card button when `navigator.onLine === false`.
 
 **Status:** ❌ Not yet wired (Sprint 6)
 
