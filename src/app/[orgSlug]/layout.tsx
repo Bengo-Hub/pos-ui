@@ -9,6 +9,16 @@ import { ReactNode, useState } from 'react';
 import { Footer } from '@/components/footer';
 import { SubscriptionBanner } from '@/components/subscription/subscription-banner';
 import { OfflineBanner } from '@/components/pos/offline-banner';
+import { InstallPrompt } from '@/components/pwa/install-prompt';
+import { useSyncOfflineOrders } from '@/hooks/use-sync-offline-orders';
+import { useEffect } from 'react';
+import { registerBackgroundSync } from '@/lib/sw/register-sync';
+
+function OfflineSyncWorker() {
+  useSyncOfflineOrders();
+  useEffect(() => { registerBackgroundSync(); }, []);
+  return null;
+}
 
 export default function OrgLayout({ children }: { children: ReactNode }) {
   const [queryClient] = useState(
@@ -31,6 +41,8 @@ export default function OrgLayout({ children }: { children: ReactNode }) {
     <AuthProvider>
       <TenantBrandingProvider>
       <OfflineBanner />
+      <OfflineSyncWorker />
+      <InstallPrompt />
       <div className="flex h-screen overflow-hidden bg-background">
         <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">

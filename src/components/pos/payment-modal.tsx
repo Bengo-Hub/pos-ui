@@ -6,7 +6,9 @@ import { cn } from '@/lib/utils';
 import {
   Banknote,
   CheckCircle2,
+  Clock,
   CreditCard,
+  Hash,
   Loader2,
   Smartphone,
   Wallet,
@@ -17,6 +19,7 @@ import {
 import { useCallback, useEffect, useState } from 'react';
 import { useCreatePaymentIntent } from '@/hooks/usePOS';
 import { useOnline } from '@/hooks/use-online';
+import { savePendingPayment } from '@/lib/db/pos-db';
 
 interface POSPaymentModalProps {
   open: boolean;
@@ -25,10 +28,11 @@ interface POSPaymentModalProps {
   orderNumber: string;
   total: number;
   tenantSlug: string;
+  tenderId?: string;
   onPaymentConfirmed: () => void;
 }
 
-type ModalStep = 'select' | 'cash' | 'treasury' | 'confirmed' | 'failed';
+type ModalStep = 'select' | 'cash' | 'manual' | 'treasury' | 'confirmed' | 'offline_queued' | 'failed';
 
 export function POSPaymentModal({
   open,
@@ -37,10 +41,12 @@ export function POSPaymentModal({
   orderNumber,
   total,
   tenantSlug,
+  tenderId = '00000000-0000-0000-0000-000000000000',
   onPaymentConfirmed,
 }: POSPaymentModalProps) {
   const [step, setStep] = useState<ModalStep>('select');
   const [cashTendered, setCashTendered] = useState('');
+  const [manualRef, setManualRef] = useState('');
   const [intentId, setIntentId] = useState('');
   const [initiateUrl, setInitiateUrl] = useState('');
 
@@ -51,27 +57,60 @@ export function POSPaymentModal({
     if (open) {
       setStep('select');
       setCashTendered('');
+      setManualRef('');
       setIntentId('');
       setInitiateUrl('');
     }
   }, [open]);
 
-  const handleCashConfirm = useCallback(() => {
+  // ── Cash confirm ─────────────────────────────────────────────────────────────
+  const handleCashConfirm = useCallback(async () => {
     const tendered = parseFloat(cashTendered) || total;
     if (tendered < total) return;
+
+    if (!isOnline) {
+      // Offline: save locally and show pending-sync state
+      try {
+        await savePendingPayment({
+          server_order_id: orderId,
+          tender_id: tenderId,
+          tender_method: 'cash',
+          amount: total,
+          currency: 'KES',
+          tenant_slug: tenantSlug,
+          created_at: new Date().toISOString(),
+          synced: false,
+        });
+        setStep('offline_queued');
+        onPaymentConfirmed();
+      } catch {
+        setStep('failed');
+      }
+      return;
+    }
 
     createIntent.mutate(
       { orderId, tenderMethod: 'cash', amount: total },
       {
-        onSuccess: () => {
-          setStep('confirmed');
-          onPaymentConfirmed();
-        },
+        onSuccess: () => { setStep('confirmed'); onPaymentConfirmed(); },
         onError: () => setStep('failed'),
       }
     );
-  }, [cashTendered, total, orderId, createIntent, onPaymentConfirmed]);
+  }, [cashTendered, total, orderId, tenderId, tenantSlug, isOnline, createIntent, onPaymentConfirmed]);
 
+  // ── Manual M-Pesa confirm ─────────────────────────────────────────────────────
+  const handleManualConfirm = useCallback(() => {
+    if (!manualRef.trim()) return;
+    createIntent.mutate(
+      { orderId, tenderMethod: 'manual', amount: total, externalRef: manualRef.trim() },
+      {
+        onSuccess: () => { setStep('confirmed'); onPaymentConfirmed(); },
+        onError: () => setStep('failed'),
+      }
+    );
+  }, [manualRef, orderId, total, createIntent, onPaymentConfirmed]);
+
+  // ── Digital (STK push / card) ─────────────────────────────────────────────────
   const handleDigital = useCallback(
     (method: string) => {
       createIntent.mutate(
@@ -111,10 +150,11 @@ export function POSPaymentModal({
         </div>
 
         <div className="flex-1 overflow-y-auto">
-          {/* Payment method selection */}
+
+          {/* ── Method selection ───────────────────────────────────────────── */}
           {step === 'select' && (
             <div className="p-5 space-y-3">
-              {/* Cash */}
+              {/* Cash — always available */}
               <button
                 onClick={() => { setCashTendered(String(total)); setStep('cash'); }}
                 className="w-full flex items-center gap-4 px-5 py-4 rounded-xl border-2 border-border hover:border-primary/30 transition-all min-h-15"
@@ -124,11 +164,13 @@ export function POSPaymentModal({
                 </div>
                 <div className="text-left">
                   <p className="font-bold text-sm">Cash</p>
-                  <p className="text-xs text-muted-foreground">Accept cash payment</p>
+                  <p className="text-xs text-muted-foreground">
+                    {isOnline ? 'Accept cash payment' : 'Offline — will sync automatically'}
+                  </p>
                 </div>
               </button>
 
-              {/* M-Pesa */}
+              {/* M-Pesa STK push — online only */}
               <button
                 onClick={() => handleDigital('mpesa')}
                 disabled={createIntent.isPending || !isOnline}
@@ -138,12 +180,31 @@ export function POSPaymentModal({
                   <Smartphone className="h-5 w-5 text-emerald-600" />
                 </div>
                 <div className="text-left">
-                  <p className="font-bold text-sm">M-Pesa / Mobile Money</p>
-                  <p className="text-xs text-muted-foreground">{isOnline ? 'STK Push or till payment' : 'Requires internet connection'}</p>
+                  <p className="font-bold text-sm">M-Pesa STK Push</p>
+                  <p className="text-xs text-muted-foreground">
+                    {isOnline ? 'Prompt sent to customer phone' : 'Requires internet connection'}
+                  </p>
                 </div>
               </button>
 
-              {/* Card */}
+              {/* Manual M-Pesa reference — online only */}
+              <button
+                onClick={() => setStep('manual')}
+                disabled={createIntent.isPending || !isOnline}
+                className="w-full flex items-center gap-4 px-5 py-4 rounded-xl border-2 border-border hover:border-primary/30 transition-all min-h-15 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <div className="h-10 w-10 rounded-lg bg-yellow-500/10 flex items-center justify-center">
+                  <Hash className="h-5 w-5 text-yellow-600" />
+                </div>
+                <div className="text-left">
+                  <p className="font-bold text-sm">M-Pesa (Manual / Paybill)</p>
+                  <p className="text-xs text-muted-foreground">
+                    {isOnline ? 'Enter M-Pesa transaction code' : 'Requires internet connection'}
+                  </p>
+                </div>
+              </button>
+
+              {/* Card — online only */}
               <button
                 onClick={() => handleDigital('card')}
                 disabled={createIntent.isPending || !isOnline}
@@ -154,11 +215,13 @@ export function POSPaymentModal({
                 </div>
                 <div className="text-left">
                   <p className="font-bold text-sm">Card Payment</p>
-                  <p className="text-xs text-muted-foreground">{isOnline ? 'Debit or credit card' : 'Requires internet connection'}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {isOnline ? 'Debit or credit card' : 'Requires internet connection'}
+                  </p>
                 </div>
               </button>
 
-              {/* Other (wallet, airtel, etc.) */}
+              {/* Other wallet / Airtel — online only */}
               <button
                 onClick={() => handleDigital('pending')}
                 disabled={createIntent.isPending || !isOnline}
@@ -169,14 +232,16 @@ export function POSPaymentModal({
                 </div>
                 <div className="text-left">
                   <p className="font-bold text-sm">Other Payment Methods</p>
-                  <p className="text-xs text-muted-foreground">{isOnline ? 'Wallet, Airtel Money, and more' : 'Requires internet connection'}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {isOnline ? 'Wallet, Airtel Money, and more' : 'Requires internet connection'}
+                  </p>
                 </div>
               </button>
 
               {!isOnline && (
                 <div className="flex items-center gap-2 rounded-xl bg-destructive/10 px-4 py-3 text-xs text-destructive font-medium">
                   <WifiOff className="h-4 w-4 shrink-0" />
-                  You are offline. Only cash payments are available.
+                  Offline — only cash payments available. Payment will sync when connected.
                 </div>
               )}
 
@@ -189,7 +254,7 @@ export function POSPaymentModal({
             </div>
           )}
 
-          {/* Cash tendered UI */}
+          {/* ── Cash tendered ──────────────────────────────────────────────── */}
           {step === 'cash' && (
             <div className="p-5 space-y-4">
               <label className="block">
@@ -208,6 +273,12 @@ export function POSPaymentModal({
                   <span className="font-bold text-green-600">KES {change.toLocaleString()}</span>
                 </div>
               )}
+              {!isOnline && (
+                <div className="flex items-center gap-2 rounded-xl bg-amber-500/10 px-4 py-3 text-xs text-amber-700 dark:text-amber-400 font-medium">
+                  <WifiOff className="h-4 w-4 shrink-0" />
+                  Offline — payment saved locally and will sync when connection is restored.
+                </div>
+              )}
               <Button
                 onClick={handleCashConfirm}
                 disabled={parseFloat(cashTendered) < total || createIntent.isPending}
@@ -218,7 +289,7 @@ export function POSPaymentModal({
                 ) : (
                   <CheckCircle2 className="h-5 w-5 mr-2" />
                 )}
-                Confirm Cash Payment
+                {isOnline ? 'Confirm Cash Payment' : 'Record & Sync Later'}
               </Button>
               <Button variant="outline" onClick={() => setStep('select')} className="w-full">
                 Back
@@ -226,7 +297,43 @@ export function POSPaymentModal({
             </div>
           )}
 
-          {/* Treasury payment modal for digital payments */}
+          {/* ── Manual M-Pesa reference ────────────────────────────────────── */}
+          {step === 'manual' && (
+            <div className="p-5 space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Enter the M-Pesa transaction code the customer received after paying via paybill or till number.
+              </p>
+              <label className="block">
+                <span className="text-sm font-medium text-foreground">M-Pesa Transaction Code</span>
+                <input
+                  type="text"
+                  placeholder="e.g. QB234ABCDE"
+                  value={manualRef}
+                  onChange={(e) => setManualRef(e.target.value.toUpperCase())}
+                  className="mt-1 w-full bg-background border border-border rounded-xl py-3 px-4 text-lg font-bold tracking-widest uppercase focus:ring-1 focus:ring-primary"
+                  autoFocus
+                  maxLength={20}
+                />
+              </label>
+              <Button
+                onClick={handleManualConfirm}
+                disabled={!manualRef.trim() || createIntent.isPending}
+                className="w-full min-h-12 font-bold"
+              >
+                {createIntent.isPending ? (
+                  <Loader2 className="h-5 w-5 animate-spin mr-2" />
+                ) : (
+                  <CheckCircle2 className="h-5 w-5 mr-2" />
+                )}
+                Confirm Manual Payment
+              </Button>
+              <Button variant="outline" onClick={() => setStep('select')} className="w-full">
+                Back
+              </Button>
+            </div>
+          )}
+
+          {/* ── Treasury modal for digital payments ───────────────────────── */}
           {step === 'treasury' && intentId && (
             <div className="p-2">
               <TreasuryPaymentModal
@@ -236,16 +343,13 @@ export function POSPaymentModal({
                 tenantSlug={tenantSlug}
                 initiateUrl={initiateUrl}
                 amount={total}
-                onPaymentConfirmed={() => {
-                  setStep('confirmed');
-                  onPaymentConfirmed();
-                }}
+                onPaymentConfirmed={() => { setStep('confirmed'); onPaymentConfirmed(); }}
                 onPaymentFailed={() => setStep('failed')}
               />
             </div>
           )}
 
-          {/* Confirmed */}
+          {/* ── Confirmed ─────────────────────────────────────────────────── */}
           {step === 'confirmed' && (
             <div className="flex flex-col items-center justify-center py-12 px-6 text-center">
               <CheckCircle2 className="h-16 w-16 text-green-500 mb-4" />
@@ -255,7 +359,20 @@ export function POSPaymentModal({
             </div>
           )}
 
-          {/* Failed */}
+          {/* ── Offline queued ────────────────────────────────────────────── */}
+          {step === 'offline_queued' && (
+            <div className="flex flex-col items-center justify-center py-12 px-6 text-center">
+              <Clock className="h-16 w-16 text-amber-500 mb-4" />
+              <h3 className="text-lg font-bold mb-2">Payment Queued</h3>
+              <p className="text-sm text-muted-foreground">
+                You are offline. The cash payment for order {orderNumber} has been saved locally and will
+                automatically sync to the server when your connection is restored.
+              </p>
+              <Button className="mt-6" onClick={onClose}>Done</Button>
+            </div>
+          )}
+
+          {/* ── Failed ────────────────────────────────────────────────────── */}
           {step === 'failed' && (
             <div className="flex flex-col items-center justify-center py-12 px-6 text-center">
               <XCircle className="h-16 w-16 text-destructive mb-4" />

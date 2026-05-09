@@ -239,18 +239,21 @@ export function useCreatePaymentIntent() {
       amount,
       tenderId,
       currency,
+      externalRef,
     }: {
       orderId: string;
       tenderMethod: string;
       amount: number;
       tenderId?: string;
       currency?: string;
+      externalRef?: string; // cashier-entered reference for manual/paybill payments
     }) =>
       apiClient.post<PaymentIntentResult>(`${basePath(tenantID)}/orders/${orderId}/payments/intent`, {
         tenderMethod,
         tenderId: tenderId ?? '00000000-0000-0000-0000-000000000000',
         amount,
         currency: currency ?? 'KES',
+        externalRef,
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['pos-orders'] });
