@@ -106,11 +106,14 @@ export default function PINLoginPage() {
   const { orgSlug } = useParams<{ orgSlug: string }>();
   const router = useRouter();
   const isOnline = useOnline();
-  const { tenant } = useTenantBranding();
+  const { tenant, isLoading: tenantLoading } = useTenantBranding();
   const setTerminalSession = useAuthStore((s) => s.setTerminalSession);
   const redirectToSSO      = useAuthStore((s) => s.redirectToSSO);
   const tenantID = useAuthStore((s) => s.user?.tenant_id ?? '');
-  const effectiveTenantID  = tenantID || (tenant?.id ?? '');
+  // Prefer auth store tenant ID (UUID) → then SSO-fetched tenant UUID from branding provider.
+  // Only use tenant.id when it's a real UUID (not the 'platform' placeholder used while loading).
+  const tenantUUID = tenant?.id && /^[0-9a-f-]{36}$/.test(tenant.id) ? tenant.id : '';
+  const effectiveTenantID  = tenantID || tenantUUID;
 
   const [selected, setSelected]               = useState<StaffProfile | null>(null);
   const [pinError, setPinError]               = useState<string | null>(null);
@@ -153,12 +156,14 @@ export default function PINLoginPage() {
       }
       return list;
     },
-    enabled: isOnline && !!effectiveTenantID,
+    // Only fetch when we have a real UUID tenant ID (not a placeholder or empty)
+    enabled: isOnline && !!effectiveTenantID && !tenantLoading,
     staleTime: 5 * 60 * 1000,
+    retry: false,
   });
 
   useEffect(() => {
-    if (!isOnline && effectiveTenantID) {
+    if (!isOnline && effectiveTenantID && !tenantLoading) {
       getCachedStaffProfiles(effectiveTenantID).then(setOfflineProfiles);
     }
   }, [isOnline, effectiveTenantID]);
