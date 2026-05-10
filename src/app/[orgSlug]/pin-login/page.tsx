@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { compare as bcryptCompare } from 'bcryptjs';
@@ -49,47 +49,51 @@ const TIMEOUT_OPTIONS = [
   { label: 'Never', ms: 0 },
 ];
 
-const ROLE_CONFIG: Record<string, { label: string; color: string; dot: string }> = {
-  cashier:      { label: 'Cashier',    color: 'bg-blue-500/20 text-blue-300',       dot: 'bg-blue-400' },
-  waiter:       { label: 'Waiter',     color: 'bg-emerald-500/20 text-emerald-300', dot: 'bg-emerald-400' },
-  kitchen:      { label: 'Kitchen',    color: 'bg-orange-500/20 text-orange-300',   dot: 'bg-orange-400' },
-  bar:          { label: 'Bar',        color: 'bg-violet-500/20 text-violet-300',   dot: 'bg-violet-400' },
-  receptionist: { label: 'Reception',  color: 'bg-pink-500/20 text-pink-300',       dot: 'bg-pink-400' },
-  manager:      { label: 'Manager',    color: 'bg-amber-500/20 text-amber-300',     dot: 'bg-amber-400' },
-  store_manager:{ label: 'Manager',    color: 'bg-amber-500/20 text-amber-300',     dot: 'bg-amber-400' },
-  admin:        { label: 'Admin',      color: 'bg-red-500/20 text-red-300',         dot: 'bg-red-400' },
-  pos_admin:    { label: 'Admin',      color: 'bg-red-500/20 text-red-300',         dot: 'bg-red-400' },
-  superuser:    { label: 'Superuser',  color: 'bg-purple-500/20 text-purple-300',   dot: 'bg-purple-400' },
+// Role display config — ordered by priority for tabs
+const ROLE_CONFIG: Record<string, { label: string; accent: string; dot: string; tabOrder: number }> = {
+  admin:        { label: 'Admin',      accent: '#ef4444', dot: 'bg-red-400',     tabOrder: 0 },
+  pos_admin:    { label: 'Admin',      accent: '#ef4444', dot: 'bg-red-400',     tabOrder: 0 },
+  superuser:    { label: 'Superuser',  accent: '#a855f7', dot: 'bg-purple-400',  tabOrder: 0 },
+  manager:      { label: 'Manager',    accent: '#f59e0b', dot: 'bg-amber-400',   tabOrder: 1 },
+  store_manager:{ label: 'Manager',    accent: '#f59e0b', dot: 'bg-amber-400',   tabOrder: 1 },
+  cashier:      { label: 'Cashier',    accent: '#3b82f6', dot: 'bg-blue-400',    tabOrder: 2 },
+  waiter:       { label: 'Waiter',     accent: '#10b981', dot: 'bg-emerald-400', tabOrder: 3 },
+  kitchen:      { label: 'Kitchen',    accent: '#f97316', dot: 'bg-orange-400',  tabOrder: 4 },
+  bar:          { label: 'Bar',        accent: '#8b5cf6', dot: 'bg-violet-400',  tabOrder: 5 },
+  receptionist: { label: 'Reception',  accent: '#ec4899', dot: 'bg-pink-400',    tabOrder: 6 },
 };
 
 function roleMeta(role?: string) {
-  return ROLE_CONFIG[role ?? ''] ?? { label: role ?? 'Staff', color: 'bg-white/10 text-white/60', dot: 'bg-white/40' };
+  return ROLE_CONFIG[role ?? ''] ?? {
+    label: role ? role.charAt(0).toUpperCase() + role.slice(1) : 'Staff',
+    accent: '#ffffff',
+    dot: 'bg-white/40',
+    tabOrder: 99,
+  };
 }
 
 function initials(name: string) {
   return name.split(' ').slice(0, 2).map((w) => w[0]).join('').toUpperCase();
 }
 
-// Ghost keypad — always rendered on right, shows faint numbers when no staff selected
+// Ghost keypad shown before staff is selected
 function GhostKeypad() {
   const keys = ['1','2','3','4','5','6','7','8','9','','0','⌫'];
   return (
-    <div className="flex flex-col items-center gap-5 w-full opacity-30 pointer-events-none select-none">
-      {/* Ghost dots */}
-      <div className="flex gap-3.5">
+    <div className="flex flex-col items-center gap-5 w-full opacity-25 pointer-events-none select-none">
+      <div className="flex gap-4">
         {Array.from({ length: 6 }).map((_, i) => (
           <div key={i} className="h-3.5 w-3.5 rounded-full border-2 border-white/30" />
         ))}
       </div>
-      <div className="min-h-4" />
-      {/* Ghost keypad WITH numbers */}
-      <div className="grid grid-cols-3 gap-2.5 w-full">
+      <div className="h-4" />
+      <div className="grid grid-cols-3 gap-3 w-full">
         {keys.map((k, i) => (
           <div
             key={i}
             className={cn(
-              'h-14 rounded-2xl flex items-center justify-center',
-              k === '' ? 'invisible' : 'bg-white/10 border border-white/18 text-white/60 text-2xl font-bold'
+              'h-16 rounded-2xl flex items-center justify-center',
+              k === '' ? 'invisible' : 'bg-white/12 border border-white/20 text-white/70 text-2xl font-bold'
             )}
           >
             {k === '⌫' ? <Delete className="h-5 w-5" /> : k}
@@ -110,8 +114,6 @@ export default function PINLoginPage() {
   const setTerminalSession = useAuthStore((s) => s.setTerminalSession);
   const redirectToSSO      = useAuthStore((s) => s.redirectToSSO);
   const tenantID = useAuthStore((s) => s.user?.tenant_id ?? '');
-  // Prefer auth store tenant ID (UUID) → then SSO-fetched tenant UUID from branding provider.
-  // Only use tenant.id when it's a real UUID (not the 'platform' placeholder used while loading).
   const tenantUUID = tenant?.id && /^[0-9a-f-]{36}$/.test(tenant.id) ? tenant.id : '';
   const effectiveTenantID  = tenantID || tenantUUID;
 
@@ -121,6 +123,7 @@ export default function PINLoginPage() {
   const [screensaverActive, setScreensaverActive] = useState(false);
   const [showSettings, setShowSettings]       = useState(false);
   const [timeoutMs, setTimeoutMsState]        = useState<number>(30_000);
+  const [activeTab, setActiveTab]             = useState<string>('All');
 
   useEffect(() => { setTimeoutMsState(getScreensaverTimeoutMs()); }, []);
 
@@ -156,7 +159,6 @@ export default function PINLoginPage() {
       }
       return list;
     },
-    // Only fetch when we have a real UUID tenant ID (not a placeholder or empty)
     enabled: isOnline && !!effectiveTenantID && !tenantLoading,
     staleTime: 5 * 60 * 1000,
     retry: false,
@@ -166,7 +168,7 @@ export default function PINLoginPage() {
     if (!isOnline && effectiveTenantID && !tenantLoading) {
       getCachedStaffProfiles(effectiveTenantID).then(setOfflineProfiles);
     }
-  }, [isOnline, effectiveTenantID]);
+  }, [isOnline, effectiveTenantID, tenantLoading]);
 
   const profiles: StaffProfile[] = isOnline
     ? (serverProfiles ?? [])
@@ -178,6 +180,25 @@ export default function PINLoginPage() {
         outlet_id: '',
         has_pin:   !!p.pin_hash,
       }));
+
+  // Derive available role tabs from loaded profiles
+  const roleTabs = useMemo(() => {
+    const roles = new Set(profiles.map((p) => p.role ?? 'staff'));
+    const sorted = Array.from(roles).sort(
+      (a, b) => (ROLE_CONFIG[a]?.tabOrder ?? 99) - (ROLE_CONFIG[b]?.tabOrder ?? 99)
+    );
+    return ['All', ...sorted];
+  }, [profiles]);
+
+  // Reset active tab when profiles change
+  useEffect(() => {
+    if (!roleTabs.includes(activeTab)) setActiveTab('All');
+  }, [roleTabs]);
+
+  const filteredProfiles = useMemo(() =>
+    activeTab === 'All' ? profiles : profiles.filter((p) => (p.role ?? 'staff') === activeTab),
+    [profiles, activeTab]
+  );
 
   // ── PIN login ──────────────────────────────────────────────────────────────
 
@@ -207,6 +228,11 @@ export default function PINLoginPage() {
   const handlePIN = async (pin: string) => {
     if (!selected) return;
     setPinError(null);
+
+    if (!selected.has_pin) {
+      setPinError('No PIN set. Ask your manager to set your PIN.');
+      return;
+    }
 
     if (isOnline) {
       loginMutation.mutate({ userId: selected.user_id, pin });
@@ -259,31 +285,27 @@ export default function PINLoginPage() {
       >
         {/* Ambient blobs */}
         <div className="pointer-events-none absolute inset-0 overflow-hidden">
-          <div className="absolute -top-40 -left-40 h-96 w-96 rounded-full bg-primary/12 blur-3xl" />
-          <div className="absolute top-1/2 -right-24 h-80 w-80 rounded-full bg-primary/8 blur-3xl" />
-          <div className="absolute -bottom-24 left-1/2 h-72 w-72 rounded-full bg-primary/6 blur-3xl" />
+          <div className="absolute -top-48 -left-48 h-125 w-125 rounded-full bg-primary/10 blur-3xl" />
+          <div className="absolute top-1/3 -right-32 h-96 w-96 rounded-full bg-primary/7 blur-3xl" />
+          <div className="absolute -bottom-32 left-1/3 h-80 w-80 rounded-full bg-primary/5 blur-3xl" />
         </div>
 
         {/* ── Top bar ── */}
-        <div className="relative z-10 flex items-center justify-between px-5 py-3.5 shrink-0">
-          {/* Tenant brand */}
+        <div className="relative z-10 flex items-center justify-between px-6 py-4 shrink-0">
           <div className="flex items-center gap-3">
             {tenant?.logoUrl ? (
-              <img src={tenant.logoUrl} alt={displayName} className="h-8 object-contain" />
+              <img src={tenant.logoUrl} alt={displayName} className="h-9 object-contain" />
             ) : (
-              <div className="h-8 w-8 rounded-lg bg-primary/20 flex items-center justify-center">
-                <span className="text-xs font-bold text-primary">
-                  {displayName.slice(0, 2).toUpperCase()}
-                </span>
+              <div className="h-9 w-9 rounded-xl bg-primary/20 flex items-center justify-center">
+                <span className="text-sm font-bold text-primary">{displayName.slice(0, 2).toUpperCase()}</span>
               </div>
             )}
-            <span className="font-semibold text-sm text-white/75">{displayName}</span>
+            <span className="font-semibold text-white/80 text-sm">{displayName}</span>
           </div>
 
-          {/* Controls */}
           <div className="flex items-center gap-2">
             {!isOnline && (
-              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/25 text-amber-400 text-xs">
+              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-500/12 border border-amber-500/25 text-amber-400 text-xs font-semibold">
                 <WifiOff className="h-3 w-3" />
                 Offline
               </div>
@@ -293,13 +315,13 @@ export default function PINLoginPage() {
             <div className="relative">
               <button
                 onClick={() => setShowSettings((v) => !v)}
-                className="h-8 w-8 rounded-xl flex items-center justify-center bg-white/5 hover:bg-white/10 text-white/40 hover:text-white/70 transition-colors"
-                title="Screensaver settings"
+                className="h-9 w-9 rounded-xl flex items-center justify-center bg-white/6 hover:bg-white/12 text-white/40 hover:text-white/70 transition-colors"
+                title="Screensaver timeout"
               >
-                <Settings className="h-3.5 w-3.5" />
+                <Settings className="h-4 w-4" />
               </button>
               {showSettings && (
-                <div className="absolute right-0 top-10 z-50 w-44 rounded-2xl border border-white/10 bg-brand-dark/95 backdrop-blur-xl shadow-2xl p-1.5 space-y-0.5 animate-scale-in">
+                <div className="absolute right-0 top-11 z-50 w-44 rounded-2xl border border-white/10 bg-black/60 backdrop-blur-xl shadow-2xl p-1.5 space-y-0.5">
                   <p className="px-3 py-1.5 text-[9px] font-bold text-white/30 uppercase tracking-wider">Screensaver</p>
                   {TIMEOUT_OPTIONS.map((opt) => (
                     <button
@@ -321,87 +343,152 @@ export default function PINLoginPage() {
 
             <button
               onClick={() => redirectToSSO(orgSlug, window.location.href)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-white/12 bg-white/4 text-xs text-white/55 hover:bg-white/10 hover:text-white hover:border-white/22 transition-all"
+              className="flex items-center gap-2 px-4 py-2 rounded-xl border border-white/12 bg-white/5 text-xs text-white/60 hover:bg-white/12 hover:text-white hover:border-white/25 transition-all font-medium"
             >
-              <ExternalLink className="h-3 w-3" />
+              <ExternalLink className="h-3.5 w-3.5" />
               Admin Login
             </button>
           </div>
         </div>
 
-        {/* ── Split content ── */}
-        <div className="relative z-10 flex-1 flex overflow-hidden min-h-0">
+        {/* ── Main content ── */}
+        <div className="relative z-10 flex-1 flex overflow-hidden min-h-0 gap-0">
 
-          {/* LEFT: Staff list — 40% on desktop */}
-          <div className="flex flex-col w-full md:w-2/5 md:border-r border-white/8 overflow-hidden">
-            <div className="px-5 pt-1 pb-3 shrink-0">
-              <h1 className="text-lg font-bold text-white font-display">Who&apos;s working?</h1>
+          {/* ═══ LEFT PANEL: Staff selector ═══ */}
+          <div className="flex flex-col w-full md:w-[45%] lg:w-[40%] border-r border-white/8 overflow-hidden">
+
+            {/* Panel header */}
+            <div className="px-6 pt-2 pb-4 shrink-0">
+              <h1 className="text-xl font-bold text-white tracking-tight">Who&apos;s working?</h1>
               <p className="text-white/40 text-xs mt-0.5">Select your name to enter your PIN</p>
             </div>
 
-            <div className="flex-1 overflow-y-auto px-3 pb-4 scrollbar-hide space-y-1.5">
-              {isLoading ? (
+            {/* Role tabs */}
+            {!isLoading && roleTabs.length > 2 && (
+              <div className="px-4 pb-3 shrink-0">
+                <div className="flex gap-1.5 overflow-x-auto scrollbar-none pb-0.5">
+                  {roleTabs.map((tab) => {
+                    const isActive = activeTab === tab;
+                    const meta = tab === 'All' ? null : roleMeta(tab);
+                    const count = tab === 'All'
+                      ? profiles.length
+                      : profiles.filter((p) => (p.role ?? 'staff') === tab).length;
+                    return (
+                      <button
+                        key={tab}
+                        onClick={() => setActiveTab(tab)}
+                        className={cn(
+                          'flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all shrink-0 border',
+                          isActive
+                            ? 'bg-primary border-primary text-primary-foreground shadow-md shadow-primary/25'
+                            : 'bg-white/6 border-white/10 text-white/55 hover:text-white hover:bg-white/10 hover:border-white/18'
+                        )}
+                      >
+                        {meta && (
+                          <span className={cn('h-1.5 w-1.5 rounded-full shrink-0', meta.dot)} />
+                        )}
+                        {tab === 'All' ? 'All' : meta?.label ?? tab}
+                        <span className={cn(
+                          'text-[10px] rounded-full px-1 min-w-4 text-center font-bold',
+                          isActive ? 'bg-white/20 text-white' : 'bg-white/8 text-white/40'
+                        )}>
+                          {count}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Staff list — scrollable */}
+            <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-2 scrollbar-none">
+              {isLoading || tenantLoading ? (
                 Array.from({ length: 5 }).map((_, i) => (
-                  <div key={i} className="h-14 rounded-xl bg-white/5 animate-pulse" />
+                  <div key={i} className="h-18 rounded-2xl bg-white/5 animate-pulse" />
                 ))
-              ) : profiles.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-32 text-center px-4">
-                  <p className="text-white/35 text-sm">
-                    {isOnline ? 'No staff profiles found for this outlet.' : 'No cached profiles. Connect to internet first.'}
+              ) : filteredProfiles.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-40 text-center px-4">
+                  <p className="text-white/30 text-sm leading-relaxed">
+                    {profiles.length === 0
+                      ? isOnline
+                        ? 'No staff profiles found for this outlet.'
+                        : 'No cached profiles. Connect to internet first.'
+                      : 'No staff in this role group.'}
                   </p>
                 </div>
               ) : (
-                profiles.map((p, idx) => {
+                filteredProfiles.map((p, idx) => {
                   const rm = roleMeta(p.role);
                   const isSelected = selected?.user_id === p.user_id;
                   return (
                     <button
                       key={p.user_id}
                       onClick={() => {
-                        if (!p.has_pin) return;
                         setSelected(isSelected ? null : p);
                         setPinError(null);
                       }}
-                      disabled={!p.has_pin}
                       className={cn(
-                        'w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border transition-all duration-200 animate-fade-in',
+                        'w-full flex items-center gap-4 px-4 py-3.5 rounded-2xl border-2 transition-all duration-150 text-left group',
+                        'animate-fade-in touch-manipulation',
                         isSelected
-                          ? 'bg-primary/20 border-primary/50 shadow-md shadow-primary/10'
-                          : p.has_pin
-                          ? 'bg-white/4 border-white/8 hover:bg-white/9 hover:border-primary/25 active:scale-[0.98]'
-                          : 'bg-white/2 border-white/5 opacity-40 cursor-not-allowed'
+                          ? 'bg-primary/18 border-primary/55 shadow-lg shadow-primary/10'
+                          : 'bg-white/5 border-white/8 hover:bg-white/9 hover:border-white/18 active:scale-[0.98]'
                       )}
-                      style={{ animationDelay: `${idx * 35}ms` }}
+                      style={{ animationDelay: `${idx * 40}ms` }}
                     >
                       {/* Avatar */}
+                      <div
+                        className={cn(
+                          'h-11 w-11 rounded-xl flex items-center justify-center shrink-0 border-2 transition-all font-bold text-base',
+                          isSelected
+                            ? 'border-primary/60 text-primary'
+                            : 'border-white/10 text-white/70 group-hover:text-white group-hover:border-white/20'
+                        )}
+                        style={{
+                          background: isSelected
+                            ? `${rm.accent}22`
+                            : 'rgba(255,255,255,0.06)',
+                        }}
+                      >
+                        {initials(p.name)}
+                      </div>
+
+                      {/* Info */}
+                      <div className="flex-1 min-w-0">
+                        <p className={cn(
+                          'font-semibold text-sm truncate leading-tight transition-colors',
+                          isSelected ? 'text-white' : 'text-white/80 group-hover:text-white'
+                        )}>
+                          {p.name}
+                        </p>
+                        <div className="flex items-center gap-1.5 mt-1">
+                          {p.role ? (
+                            <span
+                              className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full"
+                              style={{
+                                background: `${rm.accent}22`,
+                                color: rm.accent,
+                              }}
+                            >
+                              <span
+                                className="h-1.5 w-1.5 rounded-full shrink-0"
+                                style={{ background: rm.accent }}
+                              />
+                              {rm.label}
+                            </span>
+                          ) : null}
+                          {!p.has_pin && (
+                            <span className="text-[10px] text-white/25 font-medium">No PIN set</span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Selected indicator / chevron */}
                       <div className={cn(
-                        'h-9 w-9 rounded-lg flex items-center justify-center shrink-0 border transition-colors',
-                        isSelected
-                          ? 'bg-primary/30 border-primary/50'
-                          : 'bg-primary/14 border-primary/18'
-                      )}>
-                        <span className={cn('text-sm font-bold', isSelected ? 'text-primary' : 'text-primary/80')}>
-                          {initials(p.name)}
-                        </span>
-                      </div>
-
-                      {/* Name + role */}
-                      <div className="flex-1 text-left min-w-0">
-                        <p className="text-sm font-semibold text-white truncate leading-tight">{p.name}</p>
-                        {p.role ? (
-                          <span className={cn('text-[9px] font-semibold flex items-center gap-1 mt-0.5', rm.color)}>
-                            <span className={cn('h-1.5 w-1.5 rounded-full shrink-0', rm.dot)} />
-                            {rm.label}
-                          </span>
-                        ) : !p.has_pin ? (
-                          <span className="text-[9px] text-white/25 mt-0.5 block">No PIN set</span>
-                        ) : null}
-                      </div>
-
-                      {/* Selected indicator */}
-                      {isSelected && (
-                        <div className="h-2 w-2 rounded-full bg-primary shrink-0" />
-                      )}
+                        'h-2 w-2 rounded-full shrink-0 transition-all',
+                        isSelected ? 'bg-primary scale-125' : 'bg-white/12 group-hover:bg-white/25'
+                      )} />
                     </button>
                   );
                 })
@@ -409,47 +496,68 @@ export default function PINLoginPage() {
             </div>
           </div>
 
-          {/* RIGHT: PIN pad — always visible on desktop */}
-          <div className="hidden md:flex flex-col items-center justify-center flex-1 px-8 py-6">
+          {/* ═══ RIGHT PANEL: PIN keypad ═══ */}
+          <div className="hidden md:flex flex-col items-center justify-center flex-1 px-10 py-8">
             {selected ? (
-              <div className="flex flex-col items-center gap-4 w-full max-w-68 animate-scale-in">
-                {/* Selected staff row */}
-                <div className="flex items-center gap-3 w-full">
-                  <div className="h-10 w-10 rounded-xl bg-primary/25 border border-primary/40 flex items-center justify-center shrink-0">
-                    <span className="text-sm font-bold text-primary">{initials(selected.name)}</span>
+              <div className="flex flex-col items-center gap-5 w-full max-w-72 animate-scale-in">
+
+                {/* Selected staff header */}
+                <div className="flex items-center gap-3 w-full bg-white/5 rounded-2xl px-4 py-3 border border-white/10">
+                  <div
+                    className="h-11 w-11 rounded-xl flex items-center justify-center shrink-0 border-2 font-bold text-base"
+                    style={{
+                      background: `${roleMeta(selected.role).accent}22`,
+                      borderColor: `${roleMeta(selected.role).accent}55`,
+                      color: roleMeta(selected.role).accent,
+                    }}
+                  >
+                    {initials(selected.name)}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-bold text-white truncate">{selected.name}</p>
+                    <p className="font-bold text-white text-sm truncate">{selected.name}</p>
                     {selected.role && (
-                      <span className={cn('text-[9px] font-semibold flex items-center gap-1 mt-0.5', roleMeta(selected.role).color)}>
-                        <span className={cn('h-1.5 w-1.5 rounded-full shrink-0', roleMeta(selected.role).dot)} />
+                      <span
+                        className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full mt-0.5"
+                        style={{
+                          background: `${roleMeta(selected.role).accent}22`,
+                          color: roleMeta(selected.role).accent,
+                        }}
+                      >
+                        <span
+                          className="h-1.5 w-1.5 rounded-full shrink-0"
+                          style={{ background: roleMeta(selected.role).accent }}
+                        />
                         {roleMeta(selected.role).label}
                       </span>
                     )}
                   </div>
                   <button
                     onClick={() => { setSelected(null); setPinError(null); }}
-                    className="h-7 w-7 rounded-lg flex items-center justify-center text-white/30 hover:text-white/60 hover:bg-white/8 transition-colors"
+                    className="h-8 w-8 rounded-xl flex items-center justify-center text-white/30 hover:text-white/70 hover:bg-white/8 transition-colors shrink-0"
                     title="Choose different person"
                   >
-                    <ArrowLeft className="h-3.5 w-3.5" />
+                    <ArrowLeft className="h-4 w-4" />
                   </button>
                 </div>
 
-                {/* Divider */}
-                <div className="w-full h-px bg-white/8" />
+                {/* "Enter your PIN" label */}
+                <p className="text-white/40 text-xs font-medium tracking-wide uppercase">
+                  {selected.has_pin ? 'Enter your PIN' : 'No PIN configured — contact your manager'}
+                </p>
 
-                {/* PIN keypad — no extra wrapper panel, sits directly on gradient */}
-                <PINKeypad
-                  onConfirm={handlePIN}
-                  loading={loginMutation.isPending}
-                  error={pinError}
-                />
+                {/* PIN keypad */}
+                <div className="w-full">
+                  <PINKeypadLarge
+                    onConfirm={handlePIN}
+                    loading={loginMutation.isPending}
+                    error={pinError}
+                    disabled={false}
+                  />
+                </div>
               </div>
             ) : (
-              /* Ghost state — faint keypad with visible numbers */
-              <div className="flex flex-col items-center gap-3 w-full max-w-68">
-                <p className="text-white/25 text-xs text-center mb-1">
+              <div className="flex flex-col items-center gap-4 w-full max-w-72">
+                <p className="text-white/25 text-sm font-medium text-center">
                   ← Select a staff member to enter your PIN
                 </p>
                 <GhostKeypad />
@@ -457,44 +565,54 @@ export default function PINLoginPage() {
             )}
           </div>
 
-          {/* MOBILE: Full-screen PIN overlay when staff selected */}
+          {/* ═══ MOBILE: Full-screen PIN overlay ═══ */}
           {selected && (
             <div
               className="md:hidden absolute inset-0 z-20 flex flex-col animate-slide-up"
               style={{
-                background: 'linear-gradient(160deg, rgb(var(--brand-dark)) 0%, color-mix(in srgb, rgb(var(--brand-dark)) 80%, rgb(var(--brand-emphasis))) 100%)',
+                background: 'linear-gradient(160deg, rgb(var(--brand-dark)) 0%, color-mix(in srgb, rgb(var(--brand-dark)) 78%, rgb(var(--brand-emphasis))) 100%)',
               }}
             >
-              {/* Mobile header */}
-              <div className="flex items-center gap-3 px-4 pt-4 pb-3 shrink-0">
+              <div className="flex items-center gap-3 px-4 pt-5 pb-4 shrink-0">
                 <button
                   onClick={() => { setSelected(null); setPinError(null); }}
-                  className="h-9 w-9 rounded-xl bg-white/8 flex items-center justify-center text-white/60 hover:text-white transition-colors"
+                  className="h-10 w-10 rounded-xl bg-white/8 flex items-center justify-center text-white/60 hover:text-white transition-colors shrink-0"
                 >
                   <ArrowLeft className="h-4 w-4" />
                 </button>
-                <div className="flex items-center gap-2.5">
-                  <div className="h-9 w-9 rounded-xl bg-primary/20 border border-primary/35 flex items-center justify-center">
-                    <span className="text-sm font-bold text-primary">{initials(selected.name)}</span>
-                  </div>
-                  <div>
-                    <p className="text-sm font-bold text-white">{selected.name}</p>
-                    {selected.role && (
-                      <span className={cn('text-[9px] font-semibold flex items-center gap-1', roleMeta(selected.role).color)}>
-                        <span className={cn('h-1.5 w-1.5 rounded-full shrink-0', roleMeta(selected.role).dot)} />
-                        {roleMeta(selected.role).label}
-                      </span>
-                    )}
-                  </div>
+                <div
+                  className="h-10 w-10 rounded-xl flex items-center justify-center font-bold border-2 shrink-0"
+                  style={{
+                    background: `${roleMeta(selected.role).accent}22`,
+                    borderColor: `${roleMeta(selected.role).accent}55`,
+                    color: roleMeta(selected.role).accent,
+                  }}
+                >
+                  {initials(selected.name)}
+                </div>
+                <div>
+                  <p className="font-bold text-white text-sm">{selected.name}</p>
+                  {selected.role && (
+                    <span
+                      className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-full"
+                      style={{
+                        background: `${roleMeta(selected.role).accent}22`,
+                        color: roleMeta(selected.role).accent,
+                      }}
+                    >
+                      {roleMeta(selected.role).label}
+                    </span>
+                  )}
                 </div>
               </div>
 
-              <div className="flex-1 flex items-center justify-center px-6">
+              <div className="flex-1 flex items-center justify-center px-8">
                 <div className="w-full max-w-xs">
-                  <PINKeypad
+                  <PINKeypadLarge
                     onConfirm={handlePIN}
                     loading={loginMutation.isPending}
                     error={pinError}
+                    disabled={false}
                   />
                 </div>
               </div>
@@ -508,6 +626,125 @@ export default function PINLoginPage() {
         </div>
       </div>
     </>
+  );
+}
+
+// ── Larger PIN keypad variant for the login panel ──────────────────────────────
+
+interface PINKeypadLargeProps {
+  onConfirm: (pin: string) => void;
+  loading?: boolean;
+  error?: string | null;
+  disabled?: boolean;
+}
+
+function PINKeypadLarge({ onConfirm, loading, error, disabled }: PINKeypadLargeProps) {
+  const maxLength = 6;
+  const [pin, setPin] = useState('');
+  const [shaking, setShaking] = useState(false);
+
+  useEffect(() => {
+    if (!error) return;
+    setShaking(true);
+    setPin('');
+    const t = setTimeout(() => setShaking(false), 600);
+    return () => clearTimeout(t);
+  }, [error]);
+
+  const handleKey = useCallback(
+    (key: string) => {
+      if (loading || shaking || disabled) return;
+      if (key === '⌫') { setPin((p) => p.slice(0, -1)); return; }
+      if (!key) return;
+      const next = pin + key;
+      setPin(next);
+      if (next.length >= maxLength) {
+        onConfirm(next);
+        setPin('');
+      }
+    },
+    [loading, shaking, disabled, maxLength, onConfirm, pin]
+  );
+
+  const handleConfirm = () => {
+    if (pin.length >= 4 && !loading && !disabled) {
+      onConfirm(pin);
+      setPin('');
+    }
+  };
+
+  const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '', '0', '⌫'];
+
+  return (
+    <div className="flex flex-col items-center gap-5 select-none w-full">
+      {/* PIN dots */}
+      <div className={cn('flex gap-4', shaking && 'animate-shake')}>
+        {Array.from({ length: maxLength }).map((_, i) => {
+          const filled = i < pin.length;
+          return (
+            <div
+              key={i}
+              className={cn(
+                'h-4 w-4 rounded-full border-2 transition-all duration-200',
+                shaking
+                  ? 'border-destructive bg-destructive shadow-[0_0_10px_2px_rgba(239,68,68,0.5)]'
+                  : filled
+                  ? 'bg-primary border-primary scale-110 shadow-[0_0_12px_2px_rgba(234,128,34,0.45)]'
+                  : 'bg-transparent border-white/30'
+              )}
+              style={filled && !shaking ? { animation: 'dot-fill 0.2s ease-out' } : undefined}
+            />
+          );
+        })}
+      </div>
+
+      {/* Error */}
+      <p className={cn(
+        'text-xs text-center min-h-4 -mt-2 transition-all duration-200',
+        error ? 'text-red-400 opacity-100' : 'opacity-0'
+      )}>
+        {error ?? '​'}
+      </p>
+
+      {/* Key grid — taller keys */}
+      <div className="grid grid-cols-3 gap-3 w-full">
+        {KEYS.map((key, idx) => (
+          <button
+            key={idx}
+            onClick={() => handleKey(key)}
+            disabled={loading || !key || shaking}
+            className={cn(
+              'h-16 rounded-2xl text-2xl font-bold transition-all duration-100 touch-manipulation',
+              key === ''
+                ? 'pointer-events-none invisible'
+                : cn(
+                    'bg-white/14 border border-white/25 text-white',
+                    'shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_3px_8px_rgba(0,0,0,0.4)]',
+                    'hover:bg-white/22 hover:border-white/35 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.22),0_4px_12px_rgba(0,0,0,0.45)]',
+                    'active:scale-90 active:bg-white/30',
+                    'disabled:opacity-40 disabled:cursor-not-allowed',
+                  ),
+              key === '⌫' && 'text-lg'
+            )}
+          >
+            {key === '⌫'
+              ? <Delete className="mx-auto h-5 w-5" />
+              : key}
+          </button>
+        ))}
+      </div>
+
+      {/* Manual confirm */}
+      {pin.length >= 4 && pin.length < maxLength && (
+        <button
+          onClick={handleConfirm}
+          disabled={loading || disabled}
+          className="w-full h-14 rounded-2xl bg-primary text-primary-foreground font-bold text-sm flex items-center justify-center gap-2 hover:bg-primary/90 active:scale-95 disabled:opacity-50 transition-all touch-manipulation shadow-lg shadow-primary/30"
+        >
+          Confirm PIN
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -525,7 +762,7 @@ function LiveClock() {
     return () => clearInterval(id);
   }, []);
   return (
-    <div className="flex items-center gap-2 text-white/18 text-xs font-mono tabular-nums">
+    <div className="flex items-center gap-2 text-white/20 text-xs font-mono tabular-nums">
       <span>{time}</span>
       <span className="text-white/10">·</span>
       <span>{date}</span>
