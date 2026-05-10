@@ -1,5 +1,5 @@
 import { apiClient } from '@/lib/api/client';
-import { buildAuthorizeUrl, buildLogoutUrl, exchangeCodeForTokens, fetchProfile } from '@/lib/auth/api';
+import { buildAuthorizeUrl, buildLogoutUrl, exchangeCodeForTokens, fetchProfile, fetchPosServiceProfile } from '@/lib/auth/api';
 import {
     consumeVerifier,
     generateCodeChallenge,
@@ -146,8 +146,21 @@ export const useAuthStore = create<AuthState>()(
           let attempts = 0;
           while (attempts < 5) {
             try {
-              const user = await fetchProfile(session.accessToken);
-              apiClient.setTenantInfo(user.tenant_id, user.tenant_slug);
+              const ssoUser = await fetchProfile(session.accessToken);
+              apiClient.setTenantInfo(ssoUser.tenant_id, ssoUser.tenant_slug);
+
+              // Enrich with pos-api service-level role + permissions (Trinity Layer 3).
+              // SSO JWT carries global roles; pos-api maps those to pos.*.* permissions.
+              const svcProfile = await fetchPosServiceProfile(session.accessToken, ssoUser.tenant_id);
+              const user = svcProfile
+                ? {
+                    ...ssoUser,
+                    // Merge: pos-api role overrides global role for POS contexts
+                    roles: [svcProfile.posRole, ...ssoUser.roles].filter(Boolean),
+                    permissions: svcProfile.permissions,
+                  }
+                : ssoUser;
+
               set({ user, status: 'authenticated', lastAuthenticatedAt: Date.now() });
               return;
             } catch {

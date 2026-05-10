@@ -80,6 +80,31 @@ export async function refreshTokens(refreshToken: string): Promise<{
   return response.json();
 }
 
+/**
+ * Fetches POS service-level identity enrichment from pos-api.
+ * Called after SSO login to get the mapped POS role + fine-grained pos.*.* permissions.
+ * Falls back gracefully — if pos-api is unavailable, pos-ui falls back to role inference.
+ */
+export async function fetchPosServiceProfile(
+  accessToken: string,
+  tenantId: string
+): Promise<{ posRole: string; permissions: string[] } | null> {
+  try {
+    const POS_API_URL = process.env.NEXT_PUBLIC_POS_API_URL ?? '';
+    const response = await fetch(`${POS_API_URL}/api/v1/${tenantId}/pos/auth/me`, {
+      headers: { Authorization: `Bearer ${accessToken}`, 'X-Tenant-ID': tenantId },
+    });
+    if (!response.ok) return null;
+    const data = await response.json();
+    return {
+      posRole: data.pos_role ?? '',
+      permissions: data.permissions ?? [],
+    };
+  } catch {
+    return null;
+  }
+}
+
 /** Fetches current user profile from auth-api (SSO). Use for /me with TanStack Query + TTL. */
 export async function fetchProfile(accessToken: string): Promise<{
   id: string;
