@@ -1,87 +1,173 @@
 'use client';
 
-import { Button } from '@/components/ui/base';
-import { Download } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import { Button } from '@/components/ui/base';
+import { Download, Share, X } from 'lucide-react';
 import { toast } from 'sonner';
 
-const PWA_DISMISS_KEY = 'pos-ui-pwa-install-dismissed';
-const RE_PROMPT_MS = 30 * 60 * 1000; // Re-prompt at least once every 30 min if not installed
+interface BeforeInstallPromptEvent extends Event {
+  prompt(): Promise<void>;
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
+}
 
-function wasDismissedRecently(): boolean {
+const DISMISS_KEY = 'pos_pwa_install_dismissed_until';
+const RE_PROMPT_MS = 60 * 60 * 1000; // 1 hour
+
+function isDismissedRecently(): boolean {
   if (typeof window === 'undefined') return false;
-  const raw = localStorage.getItem(PWA_DISMISS_KEY);
-  if (!raw) return false;
-  const ts = parseInt(raw, 10);
-  return !Number.isNaN(ts) && Date.now() - ts < RE_PROMPT_MS;
+  const until = parseInt(localStorage.getItem(DISMISS_KEY) ?? '0', 10);
+  return Date.now() < until;
+}
+
+function isStandalone(): boolean {
+  if (typeof window === 'undefined') return false;
+  return (
+    window.matchMedia('(display-mode: standalone)').matches ||
+    (navigator as Navigator & { standalone?: boolean }).standalone === true
+  );
+}
+
+function isIOS(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  return /iphone|ipad|ipod/i.test(navigator.userAgent) &&
+    !(window as unknown as { MSStream?: unknown }).MSStream;
+}
+
+async function requestPermissions() {
+  if ('Notification' in window && Notification.permission === 'default') {
+    await Notification.requestPermission();
+  }
+  if (navigator.storage?.persist) {
+    await navigator.storage.persist();
+  }
+  if (navigator.mediaDevices?.getUserMedia) {
+    try {
+      const s = await navigator.mediaDevices.getUserMedia({ video: true });
+      s.getTracks().forEach((t) => t.stop());
+    } catch { /* non-fatal */ }
+  }
 }
 
 export function PWARegistration() {
-  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
-  const [showInstall, setShowInstall] = useState(false);
-  const promptRef = useRef<any>(null);
+  const [visible, setVisible] = useState(false);
+  const [ios, setIos] = useState(false);
+  const promptRef = useRef<BeforeInstallPromptEvent | null>(null);
 
   useEffect(() => {
-    if (typeof window !== 'undefined' && (window.matchMedia('(display-mode: standalone)').matches || ('standalone' in navigator && (navigator as { standalone?: boolean }).standalone === true))) return;
+    if (isStandalone() || isDismissedRecently()) return;
 
-    window.addEventListener('beforeinstallprompt', (e) => {
+    if (isIOS()) {
+      setIos(true);
+      setTimeout(() => setVisible(true), 3000);
+      return;
+    }
+
+    const onPrompt = (e: Event) => {
       e.preventDefault();
-      promptRef.current = e;
-      setDeferredPrompt(e);
-      if (!wasDismissedRecently()) setTimeout(() => setShowInstall(true), 2000);
-    });
+      promptRef.current = e as BeforeInstallPromptEvent;
+      if (!isDismissedRecently()) setTimeout(() => setVisible(true), 3000);
+    };
 
-    window.addEventListener('appinstalled', () => {
-      setDeferredPrompt(null);
-      setShowInstall(false);
-      toast.success('BengoBox POS installed successfully!');
-    });
+    const onInstalled = () => {
+      setVisible(false);
+      toast.success('BengoBox POS installed!');
+    };
 
-    const interval = setInterval(() => {
-      if (!wasDismissedRecently() && promptRef.current) setShowInstall(true);
+    window.addEventListener('beforeinstallprompt', onPrompt);
+    window.addEventListener('appinstalled', onInstalled);
+
+    const timer = setInterval(() => {
+      if (!isDismissedRecently() && promptRef.current) setVisible(true);
     }, RE_PROMPT_MS);
-    return () => clearInterval(interval);
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', onPrompt);
+      window.removeEventListener('appinstalled', onInstalled);
+      clearInterval(timer);
+    };
   }, []);
 
-  const handleInstall = async () => {
-    if (!deferredPrompt) return;
-    deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
+  if (!visible) return null;
+
+  const dismiss = () => {
+    localStorage.setItem(DISMISS_KEY, String(Date.now() + RE_PROMPT_MS));
+    setVisible(false);
+  };
+
+  const install = async () => {
+    if (!promptRef.current) return;
+    promptRef.current.prompt();
+    const { outcome } = await promptRef.current.userChoice;
     if (outcome === 'accepted') {
-      setDeferredPrompt(null);
-      setShowInstall(false);
+      setVisible(false);
+      await requestPermissions();
     }
   };
 
-  if (!showInstall) return null;
-
   return (
     <div
-      className="fixed bottom-4 left-3 right-3 sm:left-4 sm:right-4 md:left-auto md:right-4 md:w-96 z-50 animate-in fade-in slide-in-from-bottom-5 max-w-full"
-      style={{ paddingBottom: "max(env(safe-area-inset-bottom, 0px), 0.5rem)" }}
+      className="fixed bottom-4 right-4 z-50 w-[min(22rem,calc(100vw-2rem))] animate-slide-up"
+      style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
     >
-      <div className="bg-card border border-border rounded-2xl p-4 shadow-2xl flex flex-wrap items-center gap-3 sm:gap-4">
-        <div className="h-10 w-10 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 rounded-xl bg-primary/10 flex items-center justify-center text-primary shrink-0">
-          <Download className="h-5 w-5" />
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-bold sm:text-base">Install POS</p>
-          <p className="text-xs text-muted-foreground truncate sm:text-sm">Add to home screen for quick access.</p>
-        </div>
-        <div className="flex gap-2 w-full sm:w-auto">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="min-h-[44px] flex-1 sm:flex-none touch-manipulation"
-            onClick={() => {
-              setShowInstall(false);
-              if (typeof window !== 'undefined') localStorage.setItem(PWA_DISMISS_KEY, Date.now().toString());
-            }}
+      <div className="bg-card border border-border rounded-2xl shadow-2xl shadow-black/10 overflow-hidden">
+        {/* Header */}
+        <div className="flex items-center gap-3 px-4 pt-4 pb-3">
+          <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+            {ios ? <Share className="h-5 w-5 text-primary" /> : <Download className="h-5 w-5 text-primary" />}
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="font-semibold text-sm leading-tight">Install BengoBox POS</p>
+            <p className="text-xs text-muted-foreground mt-0.5 leading-snug">
+              {ios
+                ? 'Add to your Home Screen for offline access.'
+                : 'Full offline support — orders, payments & drawer.'}
+            </p>
+          </div>
+          <button
+            onClick={dismiss}
+            className="h-7 w-7 rounded-lg flex items-center justify-center hover:bg-accent shrink-0 transition-colors -mt-1 -mr-1"
+            aria-label="Dismiss"
           >
-            Later
-          </Button>
-          <Button size="sm" onClick={handleInstall} className="shadow-lg shadow-primary/20 min-h-[44px] touch-manipulation flex-1 sm:flex-none">Install</Button>
+            <X className="h-4 w-4 text-muted-foreground" />
+          </button>
         </div>
+
+        {ios ? (
+          /* iOS instructions */
+          <ol className="px-4 pb-4 space-y-2 text-xs text-muted-foreground">
+            <li className="flex items-center gap-2.5">
+              <span className="h-5 w-5 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[10px] font-bold shrink-0">1</span>
+              Tap <Share className="h-3.5 w-3.5 inline mx-0.5 text-primary shrink-0" /> <strong className="text-foreground">Share</strong> in Safari
+            </li>
+            <li className="flex items-center gap-2.5">
+              <span className="h-5 w-5 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[10px] font-bold shrink-0">2</span>
+              Tap <strong className="text-foreground">"Add to Home Screen"</strong>
+            </li>
+            <li className="flex items-center gap-2.5">
+              <span className="h-5 w-5 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[10px] font-bold shrink-0">3</span>
+              Tap <strong className="text-foreground">"Add"</strong>
+            </li>
+          </ol>
+        ) : (
+          /* Android / Chrome install actions */
+          <div className="flex items-center gap-2 px-4 pb-4">
+            <Button
+              size="sm"
+              variant="ghost"
+              className="flex-1 text-muted-foreground"
+              onClick={dismiss}
+            >
+              Later
+            </Button>
+            <Button
+              size="sm"
+              className="flex-1 shadow-md shadow-primary/20"
+              onClick={install}
+            >
+              Install
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   );

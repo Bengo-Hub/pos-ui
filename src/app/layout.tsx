@@ -1,48 +1,77 @@
 import { PWARegistration } from "@/components/pwa-registration";
 import { ThemeProvider } from "@/components/theme-provider";
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Outfit, DM_Sans, JetBrains_Mono } from "next/font/google";
 import { Toaster } from "sonner";
 import "./globals.css";
 
-const geistSans = Geist({
+const outfit = Outfit({
   subsets: ["latin"],
+  variable: "--font-outfit",
+  display: "swap",
+  weight: ["400", "500", "600", "700", "800"],
 });
 
-const geistMono = Geist_Mono({
+const dmSans = DM_Sans({
   subsets: ["latin"],
+  variable: "--font-dm-sans",
+  display: "swap",
+  weight: ["400", "500", "600", "700"],
+});
+
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ["latin"],
+  variable: "--font-jetbrains",
+  display: "swap",
+  weight: ["400", "500"],
 });
 
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
-  themeColor: "#f43f5e",
+  userScalable: false,
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#ea8022" },
+    { media: "(prefers-color-scheme: dark)",  color: "#1c0f02" },
+  ],
 };
 
 export const metadata: Metadata = {
-  title: "BengoBox POS",
-  description: "Point of Sale for the BengoBox ecosystem",
+  title: {
+    default: "BengoBox POS",
+    template: "%s | BengoBox POS",
+  },
+  description: "Fast, offline-ready Point of Sale for hospitality, retail and service businesses across Africa.",
   manifest: "/manifest.json",
   icons: {
-    icon: "/logo.svg",
-    apple: "/logo.svg",
+    icon:      [
+      { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
+      { url: "/favicon.svg",        type: "image/svg+xml" },
+    ],
+    apple:     "/icons/apple-touch-icon.png",
+    shortcut:  "/favicon.svg",
   },
   appleWebApp: {
-    capable: true,
-    statusBarStyle: "default",
-    title: "BengoBox POS",
+    capable:         true,
+    statusBarStyle:  "black-translucent",
+    title:           "BengoBox POS",
+    startupImage:    "/icons/splash-640x1136.png",
   },
+  applicationName: "BengoBox POS",
+  keywords:        ["pos", "point of sale", "restaurant", "hotel", "retail", "Africa", "Kenya"],
+  robots: "noindex, nofollow",
 };
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body className={`${geistSans.className} ${geistMono.className} antialiased`}>
+    <html
+      lang="en"
+      suppressHydrationWarning
+      className={`${outfit.variable} ${dmSans.variable} ${jetbrainsMono.variable}`}
+    >
+      <body className="font-sans antialiased">
         <ThemeProvider
           attribute="class"
           defaultTheme="light"
@@ -51,7 +80,7 @@ export default function RootLayout({
         >
           {children}
           <PWARegistration />
-          <Toaster richColors position="top-right" />
+          <Toaster richColors position="top-right" closeButton />
         </ThemeProvider>
       </body>
     </html>
