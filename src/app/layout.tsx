@@ -1,4 +1,3 @@
-import { PWARegistration } from "@/components/pwa-registration";
 import { ThemeProvider } from "@/components/theme-provider";
 import type { Metadata, Viewport } from "next";
 import { Outfit, DM_Sans, JetBrains_Mono } from "next/font/google";
@@ -79,7 +78,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           disableTransitionOnChange
         >
           {children}
-          <PWARegistration />
           <Toaster richColors position="top-right" closeButton />
         </ThemeProvider>
       </body>

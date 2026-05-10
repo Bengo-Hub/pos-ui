@@ -9,6 +9,7 @@ import { ReactNode, useState } from 'react';
 import { Footer } from '@/components/footer';
 import { SubscriptionBanner } from '@/components/subscription/subscription-banner';
 import { OfflineBanner } from '@/components/pos/offline-banner';
+import { PWARegistration } from '@/components/pwa-registration';
 import { useSyncOfflineOrders } from '@/hooks/use-sync-offline-orders';
 import { useEffect } from 'react';
 import { registerBackgroundSync } from '@/lib/sw/register-sync';
@@ -51,6 +52,7 @@ export default function OrgLayout({ children }: { children: ReactNode }) {
         <TenantBrandingProvider>
           <OfflineBanner />
           <OfflineSyncWorker />
+          <PWARegistration />
 
           {kiosk ? (
             // Fullscreen kiosk layout — no nav chrome

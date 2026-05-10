@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/base';
 import { Download, Share, X } from 'lucide-react';
 import { toast } from 'sonner';
+import { useTenantBranding } from '@/providers/tenant-branding-provider';
 
 interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<void>;
@@ -49,9 +50,13 @@ async function requestPermissions() {
 }
 
 export function PWARegistration() {
+  const { tenant } = useTenantBranding();
   const [visible, setVisible] = useState(false);
   const [ios, setIos] = useState(false);
   const promptRef = useRef<BeforeInstallPromptEvent | null>(null);
+
+  const appName = tenant?.orgName ? `${tenant.orgName} POS` : 'BengoBox POS';
+  const logoUrl = tenant?.logoUrl;
 
   useEffect(() => {
     if (isStandalone() || isDismissedRecently()) return;
@@ -70,7 +75,7 @@ export function PWARegistration() {
 
     const onInstalled = () => {
       setVisible(false);
-      toast.success('BengoBox POS installed!');
+      toast.success(`${appName} installed!`);
     };
 
     window.addEventListener('beforeinstallprompt', onPrompt);
@@ -85,7 +90,7 @@ export function PWARegistration() {
       window.removeEventListener('appinstalled', onInstalled);
       clearInterval(timer);
     };
-  }, []);
+  }, [appName]);
 
   if (!visible) return null;
 
@@ -112,11 +117,17 @@ export function PWARegistration() {
       <div className="bg-card border border-border rounded-2xl shadow-2xl shadow-black/10 overflow-hidden">
         {/* Header */}
         <div className="flex items-center gap-3 px-4 pt-4 pb-3">
-          <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
-            {ios ? <Share className="h-5 w-5 text-primary" /> : <Download className="h-5 w-5 text-primary" />}
+          <div className="h-11 w-11 rounded-xl overflow-hidden border border-border shrink-0 flex items-center justify-center bg-primary/8">
+            {logoUrl ? (
+              <img src={logoUrl} alt={appName} className="h-full w-full object-contain p-1" />
+            ) : ios ? (
+              <Share className="h-5 w-5 text-primary" />
+            ) : (
+              <Download className="h-5 w-5 text-primary" />
+            )}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="font-semibold text-sm leading-tight">Install BengoBox POS</p>
+            <p className="font-semibold text-sm leading-tight">Install {appName}</p>
             <p className="text-xs text-muted-foreground mt-0.5 leading-snug">
               {ios
                 ? 'Add to your Home Screen for offline access.'

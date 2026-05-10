@@ -17,7 +17,6 @@ export function PINKeypad({ onConfirm, loading, error, maxLength = 6 }: PINKeypa
   const [pin, setPin] = useState('');
   const [shaking, setShaking] = useState(false);
 
-  // Trigger shake when error appears
   useEffect(() => {
     if (!error) return;
     setShaking(true);
@@ -52,22 +51,23 @@ export function PINKeypad({ onConfirm, loading, error, maxLength = 6 }: PINKeypa
   };
 
   return (
-    <div className="flex flex-col items-center gap-6 select-none w-full max-w-xs">
+    <div className="flex flex-col items-center gap-5 select-none w-full">
       {/* PIN dots */}
-      <div className={cn('flex gap-4 py-2', shaking && 'animate-shake')}>
+      <div className={cn('flex gap-3.5', shaking && 'animate-shake')}>
         {Array.from({ length: maxLength }).map((_, i) => {
           const filled = i < pin.length;
           return (
             <div
               key={i}
               className={cn(
-                'h-4 w-4 rounded-full border-2 transition-all duration-200',
-                filled
-                  ? 'bg-primary border-primary scale-110 shadow-[0_0_8px_2px_rgba(234,128,34,0.4)]'
-                  : 'bg-transparent border-white/40',
-                shaking && filled && 'border-destructive bg-destructive shadow-[0_0_8px_2px_rgba(239,68,68,0.4)]'
+                'h-3.5 w-3.5 rounded-full border-2 transition-all duration-200',
+                shaking
+                  ? 'border-destructive bg-destructive shadow-[0_0_8px_2px_rgba(239,68,68,0.5)]'
+                  : filled
+                  ? 'bg-primary border-primary scale-110 shadow-[0_0_10px_2px_rgba(234,128,34,0.45)]'
+                  : 'bg-transparent border-white/35'
               )}
-              style={filled ? { animation: 'dot-fill 0.25s ease-out' } : undefined}
+              style={filled && !shaking ? { animation: 'dot-fill 0.2s ease-out' } : undefined}
             />
           );
         })}
@@ -75,31 +75,31 @@ export function PINKeypad({ onConfirm, loading, error, maxLength = 6 }: PINKeypa
 
       {/* Error message */}
       <p className={cn(
-        'text-sm text-center min-h-5 transition-all duration-200',
+        'text-xs text-center min-h-4 -mt-2 transition-all duration-200',
         error ? 'text-red-400 opacity-100' : 'opacity-0'
       )}>
-        {error ?? '‎'}
+        {error ?? '​'}
       </p>
 
       {/* Key grid */}
-      <div className="grid grid-cols-3 gap-3 w-full">
+      <div className="grid grid-cols-3 gap-2.5 w-full">
         {KEYS.map((key, idx) => (
           <button
             key={idx}
             onClick={() => handleKey(key)}
             disabled={loading || !key || shaking}
             className={cn(
-              'h-14.5 rounded-2xl text-xl font-semibold transition-all duration-150',
-              'active:scale-90 touch-manipulation',
+              'h-14 rounded-2xl text-2xl font-bold transition-all duration-100 touch-manipulation',
               key === ''
                 ? 'pointer-events-none invisible'
-                : [
-                    'bg-white/10 border border-white/20 text-white',
-                    'hover:bg-white/20 hover:border-white/30',
-                    'backdrop-blur-sm',
+                : cn(
+                    'bg-white/16 border border-white/28 text-white',
+                    'shadow-[inset_0_1px_0_rgba(255,255,255,0.18),_0_2px_6px_rgba(0,0,0,0.35)]',
+                    'hover:bg-white/24 hover:border-white/38',
+                    'active:scale-90 active:bg-white/32',
                     'disabled:opacity-40 disabled:cursor-not-allowed',
-                  ].join(' '),
-              key === '⌫' && 'text-base'
+                  ),
+              key === '⌫' && 'text-lg'
             )}
           >
             {key === '⌫'
@@ -114,15 +114,15 @@ export function PINKeypad({ onConfirm, loading, error, maxLength = 6 }: PINKeypa
         <button
           onClick={handleConfirm}
           disabled={loading}
-          className="w-full h-13 rounded-2xl bg-primary text-primary-foreground font-semibold text-sm flex items-center justify-center gap-2 hover:bg-primary/90 active:scale-95 disabled:opacity-50 transition-all touch-manipulation"
+          className="w-full h-13 rounded-2xl bg-primary text-primary-foreground font-bold text-sm flex items-center justify-center gap-2 hover:bg-primary/90 active:scale-95 disabled:opacity-50 transition-all touch-manipulation shadow-lg shadow-primary/30"
         >
           {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Confirm PIN'}
         </button>
       )}
 
       {loading && (
-        <div className="flex items-center gap-2 text-sm text-white/70">
-          <Loader2 className="h-4 w-4 animate-spin" />
+        <div className="flex items-center gap-2 text-xs text-white/60">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
           Verifying…
         </div>
       )}
