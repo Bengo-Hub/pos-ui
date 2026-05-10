@@ -2,7 +2,7 @@
 
 **Status:** ✅ Complete  
 **Period:** January–February 2027  
-**Last updated:** 2026-05-09  
+**Last updated:** 2026-05-10  
 **Audit note (2026-05-09):** PIN endpoint paths clarified to full `/api/v1/{tenant}/pos/auth/pin` form; pos-api prerequisites listed; routing note added for UUID vs slug param.  
 **Goal:** Implement touchscreen PIN login for terminal-mode staff alongside the existing SSO login, enabling kitchen staff, waiters, cashiers, and bar staff to quickly authenticate and switch users on a dedicated POS terminal
 
@@ -187,3 +187,14 @@ src/hooks/
 - [x] pos-api: Atlas migration adding `pin_hash`, `pin_failed_attempts`, `pin_locked_until` to `staff_members`
 - [x] pos-api: `issueTerminalJWT` — HMAC-SHA256, 4 h expiry, `iss=pos-terminal`
 - [x] PWA install prompt requests push notifications, persistent storage, camera permissions after install
+
+## Addendum: PIN Login UX Redesign + Trinity Authorization (2026-05-10)
+
+- [x] **PIN keypad visibility fix:** Key buttons changed from `bg-white/10 border-white/20` (nearly invisible on dark brand bg) to `bg-white/16 border-white/28` + inset highlight shadow — fully readable on any brand color
+- [x] **Ghost keypad:** Before staff is selected, a faint ghost keypad (`text-white/60`) shows users the keypad is there; replaced the blank state
+- [x] **Staff card layout redesign:** Horizontal cards (`flex items-center gap-3 px-3 py-2.5 h-14`) with `h-9 w-9 rounded-lg` avatar — more compact, touch-friendly
+- [x] **Tenant-derived app name:** PIN login page uses `tenant?.orgName ?? tenant?.name ?? orgSlug` for display name and "Admin Login" button label
+- [x] **`ROLE_CONFIG` updated** to include canonical role names: `manager`, `admin`, `superuser` (in addition to prior cashier/waiter/kitchen/bar/receptionist)
+- [x] **`pos-api GET /{tenant}/pos/auth/me`** — new endpoint that returns service-local POS role + `pos.*.*` permissions for the authenticated SSO user. Called by pos-ui after SSO token exchange to enrich the user object with fine-grained permissions (Trinity Layer 3).
+- [x] **`fetchPosServiceProfile()`** in `src/lib/auth/api.ts` — calls pos-api `/pos/auth/me`, returns `{ posRole, permissions }` or null on failure
+- [x] **`handleSSOCallback` enrichment** in auth store — merges pos-api role + permissions into user after SSO profile fetch; gracefully falls back to SSO-only if pos-api is unreachable

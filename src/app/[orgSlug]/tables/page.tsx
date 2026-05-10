@@ -3,6 +3,7 @@
 import { Badge, Button, Card, CardContent } from '@/components/ui/base';
 import { cn } from '@/lib/utils';
 import { useTables, useSections, useUpdateTableStatus, useReleaseTable } from '@/hooks/usePOS';
+import { usePermissions, P } from '@/hooks/usePermissions';
 import {
   CheckCircle,
   Grid3x3,
@@ -43,9 +44,10 @@ interface TableCardProps {
   onRelease: () => void;
   onChangeStatus: (status: string) => void;
   releaseLoading: boolean;
+  canChange: boolean;
 }
 
-function TableCard({ table, onRelease, onChangeStatus, releaseLoading }: TableCardProps) {
+function TableCard({ table, onRelease, onChangeStatus, releaseLoading, canChange }: TableCardProps) {
   const [sheetOpen, setSheetOpen] = useState(false);
   const cfg = getStatusCfg(table.status);
 
@@ -128,16 +130,18 @@ function TableCard({ table, onRelease, onChangeStatus, releaseLoading }: TableCa
             {/* Actions */}
             <div className="p-4 space-y-2.5">
               {/* Assign order */}
-              <button
-                onClick={() => setSheetOpen(false)}
-                className="w-full flex items-center gap-3 px-4 py-4 rounded-2xl border-2 border-primary bg-primary/5 hover:bg-primary/10 transition-colors min-h-14 touch-manipulation"
-              >
-                <CheckCircle className="h-5 w-5 text-primary" />
-                <div className="text-left">
-                  <p className="font-bold text-sm">Assign Order</p>
-                  <p className="text-xs text-muted-foreground">Link an order to this table</p>
-                </div>
-              </button>
+              {canChange && (
+                <button
+                  onClick={() => setSheetOpen(false)}
+                  className="w-full flex items-center gap-3 px-4 py-4 rounded-2xl border-2 border-primary bg-primary/5 hover:bg-primary/10 transition-colors min-h-14 touch-manipulation"
+                >
+                  <CheckCircle className="h-5 w-5 text-primary" />
+                  <div className="text-left">
+                    <p className="font-bold text-sm">Assign Order</p>
+                    <p className="text-xs text-muted-foreground">Link an order to this table</p>
+                  </div>
+                </button>
+              )}
 
               {/* Change status options */}
               <div className="grid grid-cols-2 gap-2">
@@ -148,14 +152,17 @@ function TableCard({ table, onRelease, onChangeStatus, releaseLoading }: TableCa
                     <button
                       key={s}
                       onClick={() => {
+                        if (!canChange || isActive) return;
                         onChangeStatus(s);
                         setSheetOpen(false);
                       }}
-                      disabled={isActive}
+                      disabled={isActive || !canChange}
                       className={cn(
                         'flex items-center gap-2 px-3 py-3 rounded-xl border-2 transition-all min-h-13 touch-manipulation',
                         isActive
                           ? cn(sc.border, sc.bg, 'opacity-100 cursor-default')
+                          : !canChange
+                          ? 'border-border opacity-40 cursor-not-allowed'
                           : 'border-border hover:border-primary/30 hover:bg-accent/30'
                       )}
                     >
@@ -168,7 +175,7 @@ function TableCard({ table, onRelease, onChangeStatus, releaseLoading }: TableCa
               </div>
 
               {/* Release table */}
-              {table.status === 'occupied' && (
+              {table.status === 'occupied' && canChange && (
                 <Button
                   variant="outline"
                   className="w-full min-h-13 border-destructive/30 text-destructive hover:bg-destructive/10 gap-2"
@@ -181,6 +188,10 @@ function TableCard({ table, onRelease, onChangeStatus, releaseLoading }: TableCa
                   {releaseLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                   Release Table
                 </Button>
+              )}
+
+              {!canChange && (
+                <p className="text-center text-xs text-muted-foreground pt-1">View only — no table management permission</p>
               )}
             </div>
 
@@ -201,12 +212,14 @@ function SectionGroup({
   tables,
   updateStatus,
   releaseTable,
+  canChange,
 }: {
   title: string;
   type?: string;
   tables: any[];
   updateStatus: any;
   releaseTable: any;
+  canChange: boolean;
 }) {
   const counts = tables.reduce<Record<string, number>>((acc, t) => {
     acc[t.status] = (acc[t.status] || 0) + 1;
@@ -246,6 +259,7 @@ function SectionGroup({
             onRelease={() => releaseTable.mutate(table.id)}
             onChangeStatus={(status) => updateStatus.mutate({ id: table.id, status })}
             releaseLoading={releaseTable.isPending}
+            canChange={canChange}
           />
         ))}
       </div>
@@ -282,6 +296,8 @@ function SummaryBar({ tables }: { tables: any[] }) {
 
 export default function TablesPage() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const { canAny } = usePermissions();
+  const canChange = canAny([P.TABLES_CHANGE, P.TABLES_CHANGE_OWN, P.TABLES_MANAGE]);
 
   const { data: tablesData, isLoading: tablesLoading } = useTables(
     statusFilter !== 'all' ? { status: statusFilter } : undefined
@@ -373,6 +389,7 @@ export default function TablesPage() {
                     tables={section.tables}
                     updateStatus={updateStatus}
                     releaseTable={releaseTable}
+                    canChange={canChange}
                   />
                 )
             )}
@@ -384,6 +401,7 @@ export default function TablesPage() {
                 tables={unassignedTables}
                 updateStatus={updateStatus}
                 releaseTable={releaseTable}
+                canChange={canChange}
               />
             )}
           </div>

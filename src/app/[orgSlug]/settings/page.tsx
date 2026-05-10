@@ -2,7 +2,9 @@
 
 import { Button, Card, CardContent, CardHeader } from '@/components/ui/base';
 import { useTenantBranding } from '@/providers/tenant-branding-provider';
+import { usePermissions, P } from '@/hooks/usePermissions';
 import {
+  Lock,
   Palette,
   Printer,
   Receipt,
@@ -14,6 +16,8 @@ import { toast } from 'sonner';
 
 export default function SettingsPage() {
   const { tenant, isLoading } = useTenantBranding();
+  const { can } = usePermissions();
+  const canSave = can(P.CONFIG_CHANGE) || can(P.CONFIG_MANAGE);
   const logoUrl = tenant?.logoUrl;
   const primaryColor = tenant?.primaryColor;
   const [settings, setSettings] = useState({
@@ -69,7 +73,7 @@ export default function SettingsPage() {
         </Card>
       )}
 
-      <Card>
+      <Card className={!canSave ? 'opacity-75' : ''}>
         <CardHeader className="border-b border-border/50 py-4">
           <div className="flex items-center gap-2">
             <Receipt className="h-4 w-4 text-primary" />
@@ -82,16 +86,18 @@ export default function SettingsPage() {
               <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Header Text</label>
               <input
                 value={settings.receiptHeader}
-                onChange={(e) => setSettings({ ...settings, receiptHeader: e.target.value })}
-                className="w-full bg-accent/10 border border-border rounded-lg py-2 px-3 text-sm focus:ring-1 focus:ring-primary outline-none"
+                onChange={(e) => canSave && setSettings({ ...settings, receiptHeader: e.target.value })}
+                readOnly={!canSave}
+                className="w-full bg-accent/10 border border-border rounded-lg py-2 px-3 text-sm focus:ring-1 focus:ring-primary outline-none disabled:cursor-not-allowed"
               />
             </div>
             <div className="space-y-2">
               <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Footer Text</label>
               <input
                 value={settings.receiptFooter}
-                onChange={(e) => setSettings({ ...settings, receiptFooter: e.target.value })}
-                className="w-full bg-accent/10 border border-border rounded-lg py-2 px-3 text-sm focus:ring-1 focus:ring-primary outline-none"
+                onChange={(e) => canSave && setSettings({ ...settings, receiptFooter: e.target.value })}
+                readOnly={!canSave}
+                className="w-full bg-accent/10 border border-border rounded-lg py-2 px-3 text-sm focus:ring-1 focus:ring-primary outline-none disabled:cursor-not-allowed"
               />
             </div>
           </div>
@@ -199,8 +205,13 @@ export default function SettingsPage() {
         </CardContent>
       </Card>
 
-      <div className="flex justify-end">
-        <Button onClick={handleSave} disabled={saving} className="gap-2 px-8 shadow-lg shadow-primary/10">
+      <div className="flex items-center justify-end gap-3">
+        {!canSave && (
+          <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+            <Lock className="h-3 w-3" /> View only — contact an admin to change settings
+          </p>
+        )}
+        <Button onClick={handleSave} disabled={saving || !canSave} className="gap-2 px-8 shadow-lg shadow-primary/10">
           <Save className="h-4 w-4" />
           {saving ? 'Saving...' : 'Save Settings'}
         </Button>

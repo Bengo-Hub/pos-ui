@@ -3,20 +3,25 @@
 import { Badge, Button, Card, CardContent, CardHeader } from '@/components/ui/base';
 import { cn } from '@/lib/utils';
 import { useOrders } from '@/hooks/usePOS';
+import { usePermissions, P } from '@/hooks/usePermissions';
+import { useParams } from 'next/navigation';
+import Link from 'next/link';
 import {
-  ChevronRight,
   Download,
   Eye,
   Filter,
   Loader2,
   Map,
+  Plus,
   Search,
-  X
+  X,
 } from 'lucide-react';
 import { useState } from 'react';
 import { TrackingIframeModal } from '@bengo-hub/shared-ui-lib';
 
 export default function OrdersPage() {
+  const { orgSlug } = useParams<{ orgSlug: string }>();
+  const { can } = usePermissions();
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
@@ -50,9 +55,18 @@ export default function OrdersPage() {
           <h1 className="text-3xl font-bold tracking-tight">Order History</h1>
           <p className="text-muted-foreground mt-1">View and manage all orders.</p>
         </div>
-        <Button variant="outline" className="gap-2">
-          <Download className="h-4 w-4" /> Export
-        </Button>
+        <div className="flex items-center gap-2">
+          {can(P.ORDERS_ADD) && (
+            <Button asChild className="gap-2">
+              <Link href={`/${orgSlug}/order`}>
+                <Plus className="h-4 w-4" /> New Order
+              </Link>
+            </Button>
+          )}
+          <Button variant="outline" className="gap-2">
+            <Download className="h-4 w-4" /> Export
+          </Button>
+        </div>
       </div>
 
       <div className="flex gap-6">

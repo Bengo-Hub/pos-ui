@@ -1,11 +1,23 @@
 # Sprint 1 -- MVP Foundation
 
-**Status:** 🟡 In Progress (foundation complete; PIN kiosk landing and offline layer done in Sprint 6 + Sprint 10)  
+**Status:** 🟡 In Progress (foundation + RBAC complete; PIN kiosk, offline layer in Sprint 6 + Sprint 10)  
 **Timeline**: March 3 - March 17, 2026  
-**Last updated:** 2026-05-09  
+**Last updated:** 2026-05-10  
 **Goal**: Scaffold pos-ui and deliver a functional touch-optimized POS terminal for order entry, cash payments, and cash drawer management. Ship as part of BengoBox MVP.
 
-**Progress (March 7, 2026):** **RBAC & TanStack Query:** Current user (roles + permissions) from auth-api GET /me cached with TanStack Query (useMe, 5 min TTL, gcTime); hasRole/hasPermission for RBAC; sidebar uses useMe().hasRole for platform section; AuthProvider redirects unauthenticated to SSO and 403 from /me to `/[orgSlug]/unauthorized`; 404 not-found page added. fetchProfile attaches status to errors for 403 handling. pos-api documents auth-api as identity source. — Full Next.js 16 app scaffold complete. SSO/PKCE, [orgSlug] routes, dashboard, order entry (touch-optimized 44px targets), orders list, tables, cash drawer, settings, platform admin. Production domain pos.codevertexitsolutions.com; values.yaml already existed. **Tenant/brand:** TenantBrandingProvider in [orgSlug] layout; fetches tenant from auth-api GET /api/v1/tenants/by-slug/{slug} (NEXT_PUBLIC_SSO_URL); applies theme (--primary, --tenant-*); Settings page has "Tenant & Branding" card. **Remaining:** Wire to posapi; deploy.
+**Progress (March 7, 2026):** Full Next.js scaffold complete. SSO/PKCE, [orgSlug] routes, dashboard, order entry, orders list, tables, cash drawer, settings, platform admin. Tenant branding via TenantBrandingProvider. **Remaining:** Wire to posapi; deploy.
+
+**Update (2026-05-10 — Trinity Authorization / RBAC overhaul):**
+- **Trinity Authorization Pattern implemented (Layer 3):** After SSO login, pos-ui calls `GET /{tenant}/pos/auth/me` (pos-api) to fetch service-local role + `pos.*.*` permissions. Merged into auth store user object: `roles: [posRole, ...ssoRoles]`, `permissions: svcPermissions`.
+- **`usePermissions` hook** (`src/hooks/usePermissions.ts`): single truth for permission checks. Uses server permissions from JWT/auth/me when available; falls back to client-side `ROLE_PERMISSIONS` map. Returns `can()`, `canAny()`, `canAll()`, `isSuperuser`, and convenience flags (`canCreateOrder`, `canManageDrawer`, etc.).
+- **`P.*` constants** (`src/lib/rbac/permissions.ts`): all `pos.{module}.{action}` strings as typed constants. `ROLE_PERMISSIONS` client-side fallback mirrors pos-api seed.
+- **Sidebar permission-based filtering**: removed role arrays, all nav items use `P.*` constants with `canAny()`. Platform section uses `isPlatformOwner`.
+- **Permission-gated action buttons (2026-05-10):**
+  - Orders page: "New Order" button shown only if `can(P.ORDERS_ADD)`
+  - Tables page: "Assign Order", "Change Status", "Release Table" disabled/hidden for users without `P.TABLES_CHANGE` or `P.TABLES_MANAGE`
+  - Settings page: all form inputs `readOnly` + Save button disabled if no `P.CONFIG_CHANGE`
+- **auth-api cleanup:** `pos.*.*` permissions removed from auth-api seed — auth-api now only seeds `auth.*.*` permissions. pos-api owns its own RBAC.
+- **PWA install prompt:** tenant-branded (shows tenant logo + `{orgName} POS` app name). Moved to `[orgSlug]/layout.tsx` inside TenantBrandingProvider so it only shows once per org context.
 
 ### RBAC & data fetching — in place vs gaps (March 2026)
 
