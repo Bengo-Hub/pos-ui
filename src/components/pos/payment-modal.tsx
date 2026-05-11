@@ -133,6 +133,24 @@ export function POSPaymentModal({
   if (!open) return null;
 
   return (
+    <>
+      {/* ── Treasury payment modal — renders as its own full-screen overlay ── */}
+      {step === 'treasury' && intentId && (
+        <TreasuryPaymentModal
+          open={true}
+          onOpenChange={(isOpen) => { if (!isOpen) setStep('select'); }}
+          paymentIntentId={intentId}
+          tenantSlug={tenantSlug}
+          initiateUrl={initiateUrl}
+          amount={total}
+          currency="KES"
+          referenceId={orderId}
+          referenceType="pos_sale"
+          onPaymentConfirmed={() => { setStep('confirmed'); onPaymentConfirmed(); }}
+          onPaymentFailed={() => setStep('failed')}
+        />
+      )}
+
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
       <div className="bg-card rounded-2xl border border-border w-full max-w-lg max-h-[85vh] flex flex-col shadow-xl">
         {/* Header */}
@@ -333,22 +351,6 @@ export function POSPaymentModal({
             </div>
           )}
 
-          {/* ── Treasury modal for digital payments ───────────────────────── */}
-          {step === 'treasury' && intentId && (
-            <div className="p-2">
-              <TreasuryPaymentModal
-                open={step === 'treasury'}
-                onOpenChange={(isOpen) => { if (!isOpen) setStep('select'); }}
-                paymentIntentId={intentId}
-                tenantSlug={tenantSlug}
-                initiateUrl={initiateUrl}
-                amount={total}
-                onPaymentConfirmed={() => { setStep('confirmed'); onPaymentConfirmed(); }}
-                onPaymentFailed={() => setStep('failed')}
-              />
-            </div>
-          )}
-
           {/* ── Confirmed ─────────────────────────────────────────────────── */}
           {step === 'confirmed' && (
             <div className="flex flex-col items-center justify-center py-12 px-6 text-center">
@@ -386,5 +388,6 @@ export function POSPaymentModal({
         </div>
       </div>
     </div>
+    </>
   );
 }
