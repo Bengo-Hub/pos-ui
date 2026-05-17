@@ -7,7 +7,7 @@ import { TenantBrandingProvider } from '@/providers/tenant-branding-provider';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReactNode, useState } from 'react';
 import { Footer } from '@/components/footer';
-import { SubscriptionBanner } from '@/components/subscription/subscription-banner';
+import { SubscriptionBanner, SubscriptionExpiredOverlay } from '@/components/subscription/subscription-banner';
 import { OfflineBanner } from '@/components/pos/offline-banner';
 import { PWARegistration } from '@/components/pwa-registration';
 import { useSyncOfflineOrders } from '@/hooks/use-sync-offline-orders';
@@ -67,10 +67,12 @@ export default function OrgLayout({ children }: { children: ReactNode }) {
                 <Header onMenuClick={() => setSidebarOpen(true)} />
                 <SubscriptionBanner />
                 <main className="flex-1 overflow-y-auto bg-accent/5">
-                  <div className="min-h-full flex flex-col">
-                    <div className="flex-1">{children}</div>
-                    <Footer />
-                  </div>
+                  <SubscriptionExpiredOverlay>
+                    <div className="min-h-full flex flex-col">
+                      <div className="flex-1">{children}</div>
+                      <Footer />
+                    </div>
+                  </SubscriptionExpiredOverlay>
                 </main>
               </div>
             </div>
