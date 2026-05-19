@@ -82,10 +82,13 @@ export function OutletFilter({ className }: { className?: string }) {
     }
   }, [fetchedOutlets, setOutlets]);
 
-  // Sync selected outlet → apiClient X-Outlet-ID header
+  // Sync selected outlet → apiClient X-Outlet-ID header.
+  // When drill-down is cleared (null), fall back to the user's home outlet
+  // so non-HQ queries still get scoped to their assigned outlet.
+  const homeOutletId = useAuthStore((s) => s.outlet?.id ?? null);
   useEffect(() => {
-    apiClient.setOutletID(selectedOutlet?.id ?? null);
-  }, [selectedOutlet]);
+    apiClient.setOutletID(selectedOutlet?.id ?? homeOutletId);
+  }, [selectedOutlet, homeOutletId]);
 
   if (!canFilter || outlets.length === 0) return null;
 

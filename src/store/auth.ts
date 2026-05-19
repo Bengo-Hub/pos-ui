@@ -29,6 +29,18 @@ interface Session {
   expiresAt: string;
 }
 
+export interface OutletInfo {
+  id: string;
+  code: string;
+  name: string;
+  use_case?: string;
+  is_hq?: boolean;
+  status?: string;
+}
+
+/** localStorage key for the last-selected outlet (read by PIN login page and outlet selector). */
+export const POS_SELECTED_OUTLET_KEY = 'pos-selected-outlet-id';
+
 interface AuthState {
   status: 'idle' | 'loading' | 'authenticated' | 'error' | 'syncing';
   user: UserProfile | null;
@@ -41,6 +53,23 @@ interface AuthState {
   /** Subscription info fetched lazily after login (undefined = not started, null = loading). */
   subscriptionInfo: Record<string, unknown> | null | undefined;
   setSubscriptionInfo: (info: Record<string, unknown> | null) => void;
+
+  /**
+   * Currently active outlet for this session.
+   * Set by the outlet selector page after SSO login (stored in localStorage + persisted here).
+   * Restored on rehydration to set apiClient X-Outlet-ID.
+   */
+  outlet: OutletInfo | null;
+  /**
+   * For HQ users doing a cross-outlet drill-down (different from their assigned outlet).
+   * Propagated to apiClient as X-Outlet-ID when set; null clears the override.
+   */
+  selectedOutletId: string | null;
+
+  /** Set the active outlet and store its ID in localStorage. Updates apiClient header. */
+  setOutlet: (outlet: OutletInfo | null) => void;
+  /** HQ user drill-down: override outlet context for queries without changing the user's home outlet. */
+  setSelectedOutletId: (id: string | null) => void;
 
   initialize: () => Promise<void>;
   redirectToSSO: (orgSlug: string, returnTo?: string) => Promise<void>;
@@ -67,9 +96,33 @@ export const useAuthStore = create<AuthState>()(
       error: null,
       lastAuthenticatedAt: null,
       isTerminalSession: false,
+      outlet: null,
+      selectedOutletId: null,
+
+      setOutlet: (outlet) => {
+        set({ outlet });
+        if (typeof window !== 'undefined') {
+          if (outlet?.id) {
+            localStorage.setItem(POS_SELECTED_OUTLET_KEY, outlet.id);
+          } else {
+            localStorage.removeItem(POS_SELECTED_OUTLET_KEY);
+          }
+        }
+        // Always use the home outlet ID as the base X-Outlet-ID (unless a drill-down override is active)
+        const { selectedOutletId } = get();
+        if (!selectedOutletId) {
+          apiClient.setOutletID(outlet?.id ?? null);
+        }
+      },
+
+      setSelectedOutletId: (id) => {
+        set({ selectedOutletId: id });
+        // Drill-down takes precedence over the home outlet header
+        apiClient.setOutletID(id ?? get().outlet?.id ?? null);
+      },
 
       initialize: async () => {
-        const { session, user, isTerminalSession } = get();
+        const { session, user, isTerminalSession, outlet } = get();
         if (!session) {
           set({ status: 'idle' });
           return;
@@ -78,6 +131,10 @@ export const useAuthStore = create<AuthState>()(
         apiClient.setAccessToken(session.accessToken);
         if (user) {
           apiClient.setTenantInfo(user.tenant_id, user.tenant_slug);
+        }
+        // Restore outlet header on page reload
+        if (outlet?.id) {
+          apiClient.setOutletID(outlet.id);
         }
 
         // Terminal sessions use a pos-api HMAC JWT — never validate against SSO /me.
@@ -195,13 +252,15 @@ export const useAuthStore = create<AuthState>()(
       },
 
       logout: async () => {
-        set({ status: 'idle', user: null, session: null, subscriptionInfo: undefined, lastAuthenticatedAt: null, isTerminalSession: false });
+        set({ status: 'idle', user: null, session: null, subscriptionInfo: undefined, lastAuthenticatedAt: null, isTerminalSession: false, outlet: null, selectedOutletId: null });
         apiClient.setAccessToken(null);
         apiClient.setTenantInfo(null, null);
+        apiClient.setOutletID(null);
         if (typeof window !== 'undefined') {
           try { localStorage.removeItem('tenantId'); } catch { /* no-op */ }
           try { localStorage.removeItem('tenantSlug'); } catch { /* no-op */ }
           try { localStorage.removeItem('pos-auth-storage'); } catch { /* no-op */ }
+          try { localStorage.removeItem(POS_SELECTED_OUTLET_KEY); } catch { /* no-op */ }
           try { sessionStorage.clear(); } catch { /* no-op */ }
           window.location.href = buildLogoutUrl('https://accounts.codevertexitsolutions.com');
         }
@@ -227,6 +286,7 @@ export const useAuthStore = create<AuthState>()(
         session: state.session,
         user: state.user,
         isTerminalSession: state.isTerminalSession,
+        outlet: state.outlet,
       }),
       onRehydrateStorage: () => (state) => {
         if (state?.session?.accessToken) {
@@ -235,8 +295,10 @@ export const useAuthStore = create<AuthState>()(
         if (state?.user?.tenant_id) {
           apiClient.setTenantInfo(state.user.tenant_id, state.user.tenant_slug);
         }
-        // Restore isTerminalSession flag so initialize() skips SSO /me for PIN sessions.
-        // The flag is persisted alongside session/user so it's available before initialize() runs.
+        // Restore outlet header so first API call already has X-Outlet-ID.
+        if (state?.outlet?.id) {
+          apiClient.setOutletID(state.outlet.id);
+        }
       },
     }
   )
