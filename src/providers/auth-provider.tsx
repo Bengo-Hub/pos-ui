@@ -52,13 +52,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => apiClient.setOn401(null);
   }, [queryClient, logout, orgSlug, router]);
 
-  // SSO redirect for unauthenticated users — skip for kiosk and auth callback paths
+  // SSO redirect for unauthenticated users — skip for kiosk, terminal sessions, and auth callback paths.
+  // Also skip if a session token exists regardless of status (covers the brief window between rehydration
+  // and initialize() completing, which previously triggered a spurious SSO redirect for terminal sessions).
   useEffect(() => {
     if (isKiosk || isTerminalSession) return;
+    if (session) return; // already have a token; let initialize() handle it
     if (status === 'idle' && !pathname?.includes('/auth') && orgSlug) {
       useAuthStore.getState().redirectToSSO(orgSlug, window.location.href);
     }
-  }, [status, pathname, orgSlug, isKiosk, isTerminalSession]);
+  }, [status, session, pathname, orgSlug, isKiosk, isTerminalSession]);
 
   // Forbidden (403) redirect — skip for terminal sessions (no subscription concept)
   useEffect(() => {

@@ -69,7 +69,7 @@ export const useAuthStore = create<AuthState>()(
       isTerminalSession: false,
 
       initialize: async () => {
-        const { session, user } = get();
+        const { session, user, isTerminalSession } = get();
         if (!session) {
           set({ status: 'idle' });
           return;
@@ -79,6 +79,14 @@ export const useAuthStore = create<AuthState>()(
         if (user) {
           apiClient.setTenantInfo(user.tenant_id, user.tenant_slug);
         }
+
+        // Terminal sessions use a pos-api HMAC JWT — never validate against SSO /me.
+        // The JWT is already stored, user profile is persisted; just mark as authenticated.
+        if (isTerminalSession) {
+          set({ status: 'authenticated', lastAuthenticatedAt: Date.now() });
+          return;
+        }
+
         set({ status: 'loading' });
 
         try {
@@ -218,6 +226,7 @@ export const useAuthStore = create<AuthState>()(
       partialize: (state) => ({
         session: state.session,
         user: state.user,
+        isTerminalSession: state.isTerminalSession,
       }),
       onRehydrateStorage: () => (state) => {
         if (state?.session?.accessToken) {
@@ -226,6 +235,8 @@ export const useAuthStore = create<AuthState>()(
         if (state?.user?.tenant_id) {
           apiClient.setTenantInfo(state.user.tenant_id, state.user.tenant_slug);
         }
+        // Restore isTerminalSession flag so initialize() skips SSO /me for PIN sessions.
+        // The flag is persisted alongside session/user so it's available before initialize() runs.
       },
     }
   )
