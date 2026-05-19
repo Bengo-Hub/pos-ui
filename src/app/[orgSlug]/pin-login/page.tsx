@@ -4,13 +4,12 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { compare as bcryptCompare } from 'bcryptjs';
-import { ArrowLeft, ExternalLink, Settings, WifiOff } from 'lucide-react';
+import { ArrowLeft, Building2, ChevronRight, ExternalLink, Settings, WifiOff } from 'lucide-react';
 import { useOnline } from '@/hooks/use-online';
 import { useIdleTimer, getScreensaverTimeoutMs, setScreensaverTimeoutMs } from '@/hooks/use-idle-timer';
 import { apiClient } from '@/lib/api/client';
 import { useAuthStore } from '@/store/auth';
 import { getCachedStaffProfiles, cacheStaffProfile, type CachedStaffProfile } from '@/lib/db/pos-db';
-import { PINKeypad } from '@/components/pos/pin-keypad';
 import { Screensaver } from '@/components/pos/screensaver';
 import { useTenantBranding } from '@/providers/tenant-branding-provider';
 import { cn } from '@/lib/utils';
@@ -41,6 +40,17 @@ interface PINLoginResponse {
   };
 }
 
+interface OutletInfo {
+  id: string;
+  name: string;
+  use_case?: string;
+  is_hq?: boolean;
+  settings?: {
+    pin_login_message?: string;
+    screensaver_url?: string;
+  };
+}
+
 const TIMEOUT_OPTIONS = [
   { label: '15 s',  ms: 15_000 },
   { label: '30 s',  ms: 30_000 },
@@ -49,18 +59,42 @@ const TIMEOUT_OPTIONS = [
   { label: 'Never', ms: 0 },
 ];
 
-// Role display config — ordered by priority for tabs
+const USE_CASE_LABELS: Record<string, string> = {
+  hospitality:   'Hospitality',
+  quick_service: 'Quick Service',
+  retail:        'Retail',
+  pharmacy:      'Pharmacy',
+  services:      'Services',
+  cafe:          'Café',
+  bar:           'Bar',
+  hotel:         'Hotel',
+  warehouse:     'Warehouse',
+};
+
+const USE_CASE_COLORS: Record<string, { bg: string; text: string }> = {
+  hospitality:   { bg: 'bg-amber-500/18',   text: 'text-amber-300' },
+  quick_service: { bg: 'bg-blue-500/18',    text: 'text-blue-300' },
+  retail:        { bg: 'bg-violet-500/18',  text: 'text-violet-300' },
+  pharmacy:      { bg: 'bg-emerald-500/18', text: 'text-emerald-300' },
+  services:      { bg: 'bg-teal-500/18',    text: 'text-teal-300' },
+  cafe:          { bg: 'bg-orange-500/18',  text: 'text-orange-300' },
+  bar:           { bg: 'bg-purple-500/18',  text: 'text-purple-300' },
+  hotel:         { bg: 'bg-sky-500/18',     text: 'text-sky-300' },
+  warehouse:     { bg: 'bg-slate-500/18',   text: 'text-slate-300' },
+};
+
+// Role display config
 const ROLE_CONFIG: Record<string, { label: string; accent: string; dot: string; tabOrder: number }> = {
-  admin:        { label: 'Admin',      accent: '#ef4444', dot: 'bg-red-400',     tabOrder: 0 },
-  pos_admin:    { label: 'Admin',      accent: '#ef4444', dot: 'bg-red-400',     tabOrder: 0 },
-  superuser:    { label: 'Superuser',  accent: '#a855f7', dot: 'bg-purple-400',  tabOrder: 0 },
-  manager:      { label: 'Manager',    accent: '#f59e0b', dot: 'bg-amber-400',   tabOrder: 1 },
-  store_manager:{ label: 'Manager',    accent: '#f59e0b', dot: 'bg-amber-400',   tabOrder: 1 },
-  cashier:      { label: 'Cashier',    accent: '#3b82f6', dot: 'bg-blue-400',    tabOrder: 2 },
-  waiter:       { label: 'Waiter',     accent: '#10b981', dot: 'bg-emerald-400', tabOrder: 3 },
-  kitchen:      { label: 'Kitchen',    accent: '#f97316', dot: 'bg-orange-400',  tabOrder: 4 },
-  bar:          { label: 'Bar',        accent: '#8b5cf6', dot: 'bg-violet-400',  tabOrder: 5 },
-  receptionist: { label: 'Reception',  accent: '#ec4899', dot: 'bg-pink-400',    tabOrder: 6 },
+  admin:         { label: 'Admin',      accent: '#ef4444', dot: 'bg-red-400',     tabOrder: 0 },
+  pos_admin:     { label: 'Admin',      accent: '#ef4444', dot: 'bg-red-400',     tabOrder: 0 },
+  superuser:     { label: 'Superuser',  accent: '#a855f7', dot: 'bg-purple-400',  tabOrder: 0 },
+  manager:       { label: 'Manager',    accent: '#f59e0b', dot: 'bg-amber-400',   tabOrder: 1 },
+  store_manager: { label: 'Manager',    accent: '#f59e0b', dot: 'bg-amber-400',   tabOrder: 1 },
+  cashier:       { label: 'Cashier',    accent: '#3b82f6', dot: 'bg-blue-400',    tabOrder: 2 },
+  waiter:        { label: 'Waiter',     accent: '#10b981', dot: 'bg-emerald-400', tabOrder: 3 },
+  kitchen:       { label: 'Kitchen',    accent: '#f97316', dot: 'bg-orange-400',  tabOrder: 4 },
+  bar:           { label: 'Bar',        accent: '#8b5cf6', dot: 'bg-violet-400',  tabOrder: 5 },
+  receptionist:  { label: 'Reception',  accent: '#ec4899', dot: 'bg-pink-400',    tabOrder: 6 },
 };
 
 function roleMeta(role?: string) {
@@ -80,7 +114,7 @@ function initials(name: string) {
 function GhostKeypad() {
   const keys = ['1','2','3','4','5','6','7','8','9','','0','⌫'];
   return (
-    <div className="flex flex-col items-center gap-5 w-full opacity-25 pointer-events-none select-none">
+    <div className="flex flex-col items-center gap-5 w-full opacity-20 pointer-events-none select-none">
       <div className="flex gap-4">
         {Array.from({ length: 6 }).map((_, i) => (
           <div key={i} className="h-3.5 w-3.5 rounded-full border-2 border-white/30" />
@@ -124,6 +158,7 @@ export default function PINLoginPage() {
   const [showSettings, setShowSettings]       = useState(false);
   const [timeoutMs, setTimeoutMsState]        = useState<number>(30_000);
   const [activeTab, setActiveTab]             = useState<string>('All');
+  const [showOutletModal, setShowOutletModal] = useState(false);
 
   useEffect(() => { setTimeoutMsState(getScreensaverTimeoutMs()); }, []);
 
@@ -137,13 +172,39 @@ export default function PINLoginPage() {
     setShowSettings(false);
   };
 
+  // ── Outlet info ────────────────────────────────────────────────────────────
+
+  // Read last-selected outlet ID from localStorage (set by SSO outlet selector)
+  const storedOutletId = typeof window !== 'undefined'
+    ? (localStorage.getItem('pos-selected-outlet-id') ?? '')
+    : '';
+
+  const { data: outletInfo } = useQuery<OutletInfo | null>({
+    queryKey: ['pos-current-outlet', effectiveTenantID, storedOutletId],
+    queryFn: async () => {
+      try {
+        const params = storedOutletId ? `?outlet_id=${storedOutletId}` : '';
+        const res = await apiClient.get<{ data: OutletInfo }>(
+          `/api/v1/${effectiveTenantID}/pos/outlets/current${params}`
+        );
+        return res.data ?? null;
+      } catch {
+        return null;
+      }
+    },
+    enabled: !!effectiveTenantID && !tenantLoading,
+    staleTime: 10 * 60_000,
+    retry: false,
+  });
+
   // ── Staff profiles ─────────────────────────────────────────────────────────
 
   const { data: serverProfiles, isLoading } = useQuery<StaffProfile[]>({
-    queryKey: ['pos-staff-profiles', effectiveTenantID],
+    queryKey: ['pos-staff-profiles', effectiveTenantID, outletInfo?.id ?? ''],
     queryFn: async () => {
+      const params = outletInfo?.id ? `?outlet_id=${outletInfo.id}` : '';
       const body = await apiClient.get<{ data: StaffProfile[] }>(
-        `/api/v1/${effectiveTenantID}/pos/auth/pin/profile`
+        `/api/v1/${effectiveTenantID}/pos/auth/pin/profile${params}`
       );
       const list: StaffProfile[] = body.data ?? [];
       for (const p of list) {
@@ -181,7 +242,6 @@ export default function PINLoginPage() {
         has_pin:   !!p.pin_hash,
       }));
 
-  // Derive available role tabs from loaded profiles
   const roleTabs = useMemo(() => {
     const roles = new Set(profiles.map((p) => p.role ?? 'staff'));
     const sorted = Array.from(roles).sort(
@@ -190,7 +250,6 @@ export default function PINLoginPage() {
     return ['All', ...sorted];
   }, [profiles]);
 
-  // Reset active tab when profiles change
   useEffect(() => {
     if (!roleTabs.includes(activeTab)) setActiveTab('All');
   }, [roleTabs]);
@@ -263,7 +322,12 @@ export default function PINLoginPage() {
     router.push(`/${orgSlug}/dashboard`);
   };
 
-  const displayName = tenant?.orgName ?? tenant?.name ?? orgSlug;
+  const tenantDisplayName = tenant?.orgName ?? tenant?.name ?? orgSlug;
+  const outletName = outletInfo?.name ?? tenantDisplayName;
+  const useCase = outletInfo?.use_case;
+  const pinLoginMessage = outletInfo?.settings?.pin_login_message;
+  const useCaseColor = useCase ? USE_CASE_COLORS[useCase] : null;
+  const useCaseLabel = useCase ? (USE_CASE_LABELS[useCase] ?? useCase) : null;
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
@@ -272,7 +336,7 @@ export default function PINLoginPage() {
       <Screensaver
         active={screensaverActive}
         onDismiss={() => setScreensaverActive(false)}
-        screensaverUrl={tenant?.posScreensaverUrl}
+        screensaverUrl={outletInfo?.settings?.screensaver_url ?? tenant?.posScreensaverUrl}
         tenantName={tenant?.orgName ?? tenant?.name}
         tenantLogoUrl={tenant?.logoUrl}
       />
@@ -290,66 +354,88 @@ export default function PINLoginPage() {
           <div className="absolute -bottom-32 left-1/3 h-80 w-80 rounded-full bg-primary/5 blur-3xl" />
         </div>
 
-        {/* ── Top bar ── */}
-        <div className="relative z-10 flex items-center justify-between px-6 py-4 shrink-0">
-          <div className="flex items-center gap-3">
-            {tenant?.logoUrl ? (
-              <img src={tenant.logoUrl} alt={displayName} className="h-9 object-contain" />
-            ) : (
-              <div className="h-9 w-9 rounded-xl bg-primary/20 flex items-center justify-center">
-                <span className="text-sm font-bold text-primary">{displayName.slice(0, 2).toUpperCase()}</span>
-              </div>
-            )}
-            <span className="font-semibold text-white/80 text-sm">{displayName}</span>
-          </div>
+        {/* ── Outlet info header ── */}
+        <div className="relative z-10 shrink-0 px-6 pt-5 pb-4">
+          <div className="flex items-center justify-between gap-4">
 
-          <div className="flex items-center gap-2">
-            {!isOnline && (
-              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-500/12 border border-amber-500/25 text-amber-400 text-xs font-semibold">
-                <WifiOff className="h-3 w-3" />
-                Offline
-              </div>
-            )}
-
-            {/* Screensaver settings */}
-            <div className="relative">
-              <button
-                onClick={() => setShowSettings((v) => !v)}
-                className="h-9 w-9 rounded-xl flex items-center justify-center bg-white/6 hover:bg-white/12 text-white/40 hover:text-white/70 transition-colors"
-                title="Screensaver timeout"
-              >
-                <Settings className="h-4 w-4" />
-              </button>
-              {showSettings && (
-                <div className="absolute right-0 top-11 z-50 w-44 rounded-2xl border border-white/10 bg-black/60 backdrop-blur-xl shadow-2xl p-1.5 space-y-0.5">
-                  <p className="px-3 py-1.5 text-[9px] font-bold text-white/30 uppercase tracking-wider">Screensaver</p>
-                  {TIMEOUT_OPTIONS.map((opt) => (
-                    <button
-                      key={opt.ms}
-                      onClick={() => handleTimeoutChange(opt.ms)}
-                      className={cn(
-                        'w-full text-left px-3 py-2 rounded-xl text-sm transition-colors',
-                        timeoutMs === opt.ms
-                          ? 'bg-primary text-primary-foreground font-semibold'
-                          : 'text-white/65 hover:bg-white/10 hover:text-white'
-                      )}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
+            {/* Left: Logo + Outlet info */}
+            <div className="flex items-center gap-4 min-w-0">
+              {tenant?.logoUrl ? (
+                <img src={tenant.logoUrl} alt={tenantDisplayName} className="h-11 w-11 object-contain rounded-xl shrink-0" />
+              ) : (
+                <div className="h-11 w-11 rounded-xl bg-primary/20 border border-primary/30 flex items-center justify-center shrink-0">
+                  <span className="text-sm font-black text-primary">{tenantDisplayName.slice(0, 2).toUpperCase()}</span>
                 </div>
               )}
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h1 className="text-lg font-black text-white tracking-tight truncate">{outletName}</h1>
+                  {useCaseLabel && useCaseColor && (
+                    <span className={cn('inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wide uppercase shrink-0', useCaseColor.bg, useCaseColor.text)}>
+                      {useCaseLabel}
+                    </span>
+                  )}
+                  {outletInfo?.is_hq && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-white/8 text-white/40 shrink-0">
+                      <Building2 className="h-2.5 w-2.5" />
+                      HQ
+                    </span>
+                  )}
+                </div>
+                {pinLoginMessage && (
+                  <p className="text-white/45 text-xs mt-0.5 truncate max-w-xs">{pinLoginMessage}</p>
+                )}
+              </div>
             </div>
 
-            <button
-              onClick={() => redirectToSSO(orgSlug, window.location.href)}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl border border-white/12 bg-white/5 text-xs text-white/60 hover:bg-white/12 hover:text-white hover:border-white/25 transition-all font-medium"
-            >
-              <ExternalLink className="h-3.5 w-3.5" />
-              Admin Login
-            </button>
+            {/* Center: Live clock */}
+            <div className="hidden md:block shrink-0">
+              <LiveClock />
+            </div>
+
+            {/* Right: Controls */}
+            <div className="flex items-center gap-2 shrink-0">
+              {!isOnline && (
+                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-500/12 border border-amber-500/25 text-amber-400 text-xs font-semibold">
+                  <WifiOff className="h-3 w-3" />
+                  <span className="hidden sm:inline">Offline</span>
+                </div>
+              )}
+
+              <div className="relative">
+                <button
+                  onClick={() => setShowSettings((v) => !v)}
+                  className="h-9 w-9 rounded-xl flex items-center justify-center bg-white/6 hover:bg-white/12 text-white/40 hover:text-white/70 transition-colors"
+                  title="Screensaver timeout"
+                >
+                  <Settings className="h-4 w-4" />
+                </button>
+                {showSettings && (
+                  <div className="absolute right-0 top-11 z-50 w-44 rounded-2xl border border-white/10 bg-black/60 backdrop-blur-xl shadow-2xl p-1.5 space-y-0.5">
+                    <p className="px-3 py-1.5 text-[9px] font-bold text-white/30 uppercase tracking-wider">Screensaver</p>
+                    {TIMEOUT_OPTIONS.map((opt) => (
+                      <button
+                        key={opt.ms}
+                        onClick={() => handleTimeoutChange(opt.ms)}
+                        className={cn(
+                          'w-full text-left px-3 py-2 rounded-xl text-sm transition-colors',
+                          timeoutMs === opt.ms
+                            ? 'bg-primary text-primary-foreground font-semibold'
+                            : 'text-white/65 hover:bg-white/10 hover:text-white'
+                        )}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         </div>
+
+        {/* Divider */}
+        <div className="relative z-10 mx-6 h-px bg-white/8 shrink-0" />
 
         {/* ── Main content ── */}
         <div className="relative z-10 flex-1 flex overflow-hidden min-h-0 gap-0">
@@ -357,10 +443,9 @@ export default function PINLoginPage() {
           {/* ═══ LEFT PANEL: Staff selector ═══ */}
           <div className="flex flex-col w-full md:w-[45%] lg:w-[40%] border-r border-white/8 overflow-hidden">
 
-            {/* Panel header */}
-            <div className="px-6 pt-2 pb-4 shrink-0">
-              <h1 className="text-xl font-bold text-white tracking-tight">Who&apos;s working?</h1>
-              <p className="text-white/40 text-xs mt-0.5">Select your name to enter your PIN</p>
+            <div className="px-6 pt-4 pb-3 shrink-0">
+              <h2 className="text-base font-bold text-white tracking-tight">Who&apos;s working?</h2>
+              <p className="text-white/35 text-xs mt-0.5">Select your name to enter your PIN</p>
             </div>
 
             {/* Role tabs */}
@@ -384,9 +469,7 @@ export default function PINLoginPage() {
                             : 'bg-white/6 border-white/10 text-white/55 hover:text-white hover:bg-white/10 hover:border-white/18'
                         )}
                       >
-                        {meta && (
-                          <span className={cn('h-1.5 w-1.5 rounded-full shrink-0', meta.dot)} />
-                        )}
+                        {meta && <span className={cn('h-1.5 w-1.5 rounded-full shrink-0', meta.dot)} />}
                         {tab === 'All' ? 'All' : meta?.label ?? tab}
                         <span className={cn(
                           'text-[10px] rounded-full px-1 min-w-4 text-center font-bold',
@@ -401,7 +484,7 @@ export default function PINLoginPage() {
               </div>
             )}
 
-            {/* Staff list — scrollable */}
+            {/* Staff list */}
             <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-2 scrollbar-none">
               {isLoading || tenantLoading ? (
                 Array.from({ length: 5 }).map((_, i) => (
@@ -437,7 +520,6 @@ export default function PINLoginPage() {
                       )}
                       style={{ animationDelay: `${idx * 40}ms` }}
                     >
-                      {/* Avatar */}
                       <div
                         className={cn(
                           'h-11 w-11 rounded-xl flex items-center justify-center shrink-0 border-2 transition-all font-bold text-base',
@@ -445,16 +527,11 @@ export default function PINLoginPage() {
                             ? 'border-primary/60 text-primary'
                             : 'border-white/10 text-white/70 group-hover:text-white group-hover:border-white/20'
                         )}
-                        style={{
-                          background: isSelected
-                            ? `${rm.accent}22`
-                            : 'rgba(255,255,255,0.06)',
-                        }}
+                        style={{ background: isSelected ? `${rm.accent}22` : 'rgba(255,255,255,0.06)' }}
                       >
                         {initials(p.name)}
                       </div>
 
-                      {/* Info */}
                       <div className="flex-1 min-w-0">
                         <p className={cn(
                           'font-semibold text-sm truncate leading-tight transition-colors',
@@ -463,28 +540,21 @@ export default function PINLoginPage() {
                           {p.name}
                         </p>
                         <div className="flex items-center gap-1.5 mt-1">
-                          {p.role ? (
+                          {p.role && (
                             <span
                               className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full"
-                              style={{
-                                background: `${rm.accent}22`,
-                                color: rm.accent,
-                              }}
+                              style={{ background: `${rm.accent}22`, color: rm.accent }}
                             >
-                              <span
-                                className="h-1.5 w-1.5 rounded-full shrink-0"
-                                style={{ background: rm.accent }}
-                              />
+                              <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ background: rm.accent }} />
                               {rm.label}
                             </span>
-                          ) : null}
+                          )}
                           {!p.has_pin && (
                             <span className="text-[10px] text-white/25 font-medium">No PIN set</span>
                           )}
                         </div>
                       </div>
 
-                      {/* Selected indicator / chevron */}
                       <div className={cn(
                         'h-2 w-2 rounded-full shrink-0 transition-all',
                         isSelected ? 'bg-primary scale-125' : 'bg-white/12 group-hover:bg-white/25'
@@ -497,7 +567,7 @@ export default function PINLoginPage() {
           </div>
 
           {/* ═══ RIGHT PANEL: PIN keypad ═══ */}
-          <div className="hidden md:flex flex-col items-center justify-center flex-1 px-10 py-8">
+          <div className="hidden md:flex flex-col items-center justify-center flex-1 px-10 py-8 gap-6">
             {selected ? (
               <div className="flex flex-col items-center gap-5 w-full max-w-72 animate-scale-in">
 
@@ -523,10 +593,7 @@ export default function PINLoginPage() {
                           color: roleMeta(selected.role).accent,
                         }}
                       >
-                        <span
-                          className="h-1.5 w-1.5 rounded-full shrink-0"
-                          style={{ background: roleMeta(selected.role).accent }}
-                        />
+                        <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ background: roleMeta(selected.role).accent }} />
                         {roleMeta(selected.role).label}
                       </span>
                     )}
@@ -540,12 +607,10 @@ export default function PINLoginPage() {
                   </button>
                 </div>
 
-                {/* "Enter your PIN" label */}
                 <p className="text-white/40 text-xs font-medium tracking-wide uppercase">
-                  {selected.has_pin ? 'Enter your PIN' : 'No PIN configured — contact your manager'}
+                  {selected.has_pin ? `Enter your PIN · ${outletName}` : 'No PIN configured — contact your manager'}
                 </p>
 
-                {/* PIN keypad */}
                 <div className="w-full">
                   <PINKeypadLarge
                     onConfirm={handlePIN}
@@ -563,6 +628,22 @@ export default function PINLoginPage() {
                 <GhostKeypad />
               </div>
             )}
+
+            {/* Sign in with account — secondary CTA */}
+            <div className="flex flex-col items-center gap-2 w-full max-w-72">
+              <div className="flex items-center gap-3 w-full">
+                <div className="flex-1 h-px bg-white/10" />
+                <span className="text-[10px] text-white/25 font-medium tracking-wider uppercase">or</span>
+                <div className="flex-1 h-px bg-white/10" />
+              </div>
+              <button
+                onClick={() => redirectToSSO(orgSlug, window.location.href)}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-white/12 bg-white/4 text-xs text-white/50 hover:bg-white/10 hover:text-white/80 hover:border-white/22 transition-all font-medium group"
+              >
+                <ExternalLink className="h-3.5 w-3.5 group-hover:text-primary transition-colors" />
+                Sign in with your account
+              </button>
+            </div>
           </div>
 
           {/* ═══ MOBILE: Full-screen PIN overlay ═══ */}
@@ -607,24 +688,83 @@ export default function PINLoginPage() {
               </div>
 
               <div className="flex-1 flex items-center justify-center px-8">
-                <div className="w-full max-w-xs">
+                <div className="w-full max-w-xs flex flex-col gap-5">
                   <PINKeypadLarge
                     onConfirm={handlePIN}
                     loading={loginMutation.isPending}
                     error={pinError}
                     disabled={false}
                   />
+                  <div className="flex flex-col items-center gap-2">
+                    <div className="flex items-center gap-3 w-full">
+                      <div className="flex-1 h-px bg-white/10" />
+                      <span className="text-[10px] text-white/25 font-medium tracking-wider uppercase">or</span>
+                      <div className="flex-1 h-px bg-white/10" />
+                    </div>
+                    <button
+                      onClick={() => redirectToSSO(orgSlug, window.location.href)}
+                      className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-white/12 bg-white/4 text-xs text-white/50 hover:bg-white/10 hover:text-white/80 transition-all font-medium"
+                    >
+                      <ExternalLink className="h-3.5 w-3.5" />
+                      Sign in with your account
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
           )}
         </div>
 
-        {/* ── Bottom clock ── */}
-        <div className="relative z-10 flex justify-center pb-3 shrink-0">
-          <LiveClock />
+        {/* ── Bottom bar ── */}
+        <div className="relative z-10 flex items-center justify-between px-6 pb-4 pt-2 shrink-0">
+          <div className="md:hidden">
+            <LiveClock />
+          </div>
+          <div className="hidden md:block" />
+
+          {/* Switch Outlet — shown when multi-outlet or when outlet info is loaded */}
+          {outletInfo && (
+            <button
+              onClick={() => setShowOutletModal(true)}
+              className="flex items-center gap-1.5 text-[11px] text-white/25 hover:text-white/50 transition-colors font-medium group"
+            >
+              <Building2 className="h-3 w-3" />
+              Switch Outlet
+              <ChevronRight className="h-3 w-3 group-hover:translate-x-0.5 transition-transform" />
+            </button>
+          )}
         </div>
       </div>
+
+      {/* Switch Outlet modal placeholder */}
+      {showOutletModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-3xl border border-white/10 bg-slate-900/95 shadow-2xl p-6 flex flex-col gap-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-white text-base">Switch Outlet</h3>
+              <button
+                onClick={() => setShowOutletModal(false)}
+                className="h-8 w-8 rounded-xl flex items-center justify-center text-white/30 hover:text-white/70 hover:bg-white/8 transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+            <p className="text-white/40 text-sm">
+              Outlet selection is managed through your account settings. Sign in to switch outlets.
+            </p>
+            <button
+              onClick={() => {
+                setShowOutletModal(false);
+                redirectToSSO(orgSlug, window.location.href);
+              }}
+              className="flex items-center justify-center gap-2 w-full py-3 rounded-2xl bg-primary text-primary-foreground font-bold text-sm hover:bg-primary/90 transition-colors"
+            >
+              <ExternalLink className="h-4 w-4" />
+              Sign in with your account
+            </button>
+          </div>
+        </div>
+      )}
     </>
   );
 }
@@ -677,7 +817,6 @@ function PINKeypadLarge({ onConfirm, loading, error, disabled }: PINKeypadLargeP
 
   return (
     <div className="flex flex-col items-center gap-5 select-none w-full">
-      {/* PIN dots */}
       <div className={cn('flex gap-4', shaking && 'animate-shake')}>
         {Array.from({ length: maxLength }).map((_, i) => {
           const filled = i < pin.length;
@@ -698,7 +837,6 @@ function PINKeypadLarge({ onConfirm, loading, error, disabled }: PINKeypadLargeP
         })}
       </div>
 
-      {/* Error */}
       <p className={cn(
         'text-xs text-center min-h-4 -mt-2 transition-all duration-200',
         error ? 'text-red-400 opacity-100' : 'opacity-0'
@@ -706,7 +844,6 @@ function PINKeypadLarge({ onConfirm, loading, error, disabled }: PINKeypadLargeP
         {error ?? '​'}
       </p>
 
-      {/* Key grid — taller keys */}
       <div className="grid grid-cols-3 gap-3 w-full">
         {KEYS.map((key, idx) => (
           <button
@@ -727,14 +864,11 @@ function PINKeypadLarge({ onConfirm, loading, error, disabled }: PINKeypadLargeP
               key === '⌫' && 'text-lg'
             )}
           >
-            {key === '⌫'
-              ? <Delete className="mx-auto h-5 w-5" />
-              : key}
+            {key === '⌫' ? <Delete className="mx-auto h-5 w-5" /> : key}
           </button>
         ))}
       </div>
 
-      {/* Manual confirm */}
       {pin.length >= 4 && pin.length < maxLength && (
         <button
           onClick={handleConfirm}
@@ -762,10 +896,9 @@ function LiveClock() {
     return () => clearInterval(id);
   }, []);
   return (
-    <div className="flex items-center gap-2 text-white/20 text-xs font-mono tabular-nums">
-      <span>{time}</span>
-      <span className="text-white/10">·</span>
-      <span>{date}</span>
+    <div className="flex flex-col items-center">
+      <span className="text-white/70 text-2xl font-bold tabular-nums font-mono">{time}</span>
+      <span className="text-white/30 text-xs font-medium mt-0.5">{date}</span>
     </div>
   );
 }
