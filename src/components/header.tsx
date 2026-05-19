@@ -1,14 +1,21 @@
 'use client';
 
 import { useAuthStore } from '@/store/auth';
-import { Bell, ChevronDown, LogOut, Menu, Search, Settings, User } from 'lucide-react';
+import { Bell, ChevronDown, LogOut, MapPin, Menu, Search, Settings, User } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useRef, useState } from 'react';
 import { ThemeToggle } from './theme-toggle';
-
 import { useTenantBranding } from '@/providers/tenant-branding-provider';
 import { OutletFilter } from './outlet-filter';
+
+const USE_CASE_LABELS: Record<string, string> = {
+  hospitality: 'Hospitality',
+  quick_service: 'Quick Service',
+  retail: 'Retail',
+  pharmacy: 'Pharmacy',
+  services: 'Services',
+};
 
 function displayName(user: { fullName?: string; name?: string; email?: string } | null): string {
   if (!user) return 'Account';
@@ -26,6 +33,7 @@ export function Header({ onMenuClick }: HeaderProps) {
   const status = useAuthStore((state) => state.status);
   const logout = useAuthStore((state) => state.logout);
   const { getServiceTitle } = useTenantBranding();
+  const outlet = useAuthStore((s) => s.outlet);
   const [profileOpen, setProfileOpen] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
   const isAuthenticated = !!user && status === 'authenticated';
@@ -50,6 +58,22 @@ export function Header({ onMenuClick }: HeaderProps) {
               />
             </div>
         </div>
+        {/* Outlet chip — shows home outlet name + use_case; tap to switch */}
+        {outlet && (
+          <Link
+            href={`/${orgSlug}/auth/select-outlet`}
+            className="hidden lg:flex items-center gap-2 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 px-3 py-1.5 text-sm font-medium text-slate-700 dark:text-white/70 hover:bg-slate-100 dark:hover:bg-white/10 transition-colors group"
+            title="Switch outlet"
+          >
+            <MapPin className="h-3.5 w-3.5 text-primary shrink-0" />
+            <span className="truncate max-w-30">{outlet.name}</span>
+            {outlet.use_case && (
+              <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
+                {USE_CASE_LABELS[outlet.use_case] ?? outlet.use_case}
+              </span>
+            )}
+          </Link>
+        )}
         <OutletFilter className="hidden md:block" />
       </div>
 

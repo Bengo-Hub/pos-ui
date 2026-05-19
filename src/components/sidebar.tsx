@@ -6,6 +6,7 @@ import {
   BedDouble,
   Calendar,
   ChefHat,
+  ChevronDown,
   ClipboardList,
   Clock,
   Cpu,
@@ -23,6 +24,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { useParams, usePathname } from 'next/navigation';
+import { useState } from 'react';
 import { useTenantBranding } from '@/providers/tenant-branding-provider';
 import { useAuthStore } from '@/store/auth';
 import { useModuleAccess } from '@/hooks/use-module-access';
@@ -48,10 +50,12 @@ interface NavItem {
 
 interface NavGroup {
   label: string;
+  /** If true, this group starts collapsed by default (unless it has the active route). */
+  defaultCollapsed?: boolean;
   items: NavItem[];
 }
 
-// ── Nav item component ────────────────────────────────────────────────────────
+// ── Nav link ──────────────────────────────────────────────────────────────────
 
 function NavLink({ item, orgSlug, onClose }: { item: NavItem; orgSlug: string; onClose?: () => void }) {
   const pathname = usePathname();
@@ -79,147 +83,111 @@ function NavLink({ item, orgSlug, onClose }: { item: NavItem; orgSlug: string; o
   );
 }
 
-// ── Sidebar content ───────────────────────────────────────────────────────────
+// ── Collapsible group ─────────────────────────────────────────────────────────
+
+function NavGroupSection({
+  group,
+  orgSlug,
+  onClose,
+  initialOpen,
+}: {
+  group: NavGroup & { items: NavItem[] };
+  orgSlug: string;
+  onClose?: () => void;
+  initialOpen: boolean;
+}) {
+  const [open, setOpen] = useState(initialOpen);
+
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center justify-between px-3 mb-1 py-0.5 group/header"
+        aria-expanded={open}
+      >
+        <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-white/25 group-hover/header:text-white/40 transition-colors">
+          {group.label}
+        </span>
+        <ChevronDown
+          className={cn(
+            'h-3 w-3 text-white/20 transition-all duration-200 group-hover/header:text-white/40',
+            open && 'rotate-180'
+          )}
+        />
+      </button>
+      {open && (
+        <div className="space-y-0.5">
+          {group.items.map((item) => (
+            <NavLink key={item.href + item.label} item={item} orgSlug={orgSlug} onClose={onClose} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Sidebar ───────────────────────────────────────────────────────────────────
 
 export function Sidebar({ open = false, onClose }: SidebarProps) {
   const params = useParams();
+  const pathname = usePathname();
   const orgSlug = params?.orgSlug as string;
   const { tenant } = useTenantBranding();
   const logout = useAuthStore((s) => s.logout);
   const user = useAuthStore((s) => s.user);
   const { hasModule, isSuperUser } = useModuleAccess();
-
   const { canAny, isSuperuser } = usePermissions();
   const isPlatformOwner = isSuperuser || isSuperUser || orgSlug === 'codevertex';
 
-  // ── Define all groups ──────────────────────────────────────────────────────
+  // ── Nav groups ────────────────────────────────────────────────────────────
 
   const navGroups: NavGroup[] = [
     {
       label: 'Operations',
       items: [
-        {
-          label: 'Dashboard',
-          icon: LayoutDashboard,
-          href: '/dashboard',
-          moduleKey: 'dashboard',
-        },
-        {
-          label: 'New Order',
-          icon: Plus,
-          href: '/order',
-          moduleKey: 'new_order',
-          permission: P.ORDERS_ADD,
-        },
-        {
-          label: 'Orders',
-          icon: ClipboardList,
-          href: '/orders',
-          moduleKey: 'orders',
-          permission: [P.ORDERS_VIEW, P.ORDERS_VIEW_OWN],
-        },
-        {
-          label: 'Cash Drawer',
-          icon: Wallet,
-          href: '/drawer',
-          moduleKey: 'cash_drawer',
-          permission: [P.DRAWERS_ADD, P.DRAWERS_MANAGE, P.DRAWERS_VIEW_OWN],
-        },
-        {
-          label: 'Shifts',
-          icon: Clock,
-          href: '/shifts',
-          moduleKey: 'shifts',
-          permission: [P.SESSIONS_ADD, P.SESSIONS_VIEW, P.SESSIONS_VIEW_OWN],
-        },
+        { label: 'Dashboard', icon: LayoutDashboard, href: '/dashboard', moduleKey: 'dashboard' },
+        { label: 'New Order', icon: Plus, href: '/order', moduleKey: 'new_order', permission: P.ORDERS_ADD },
+        { label: 'Orders', icon: ClipboardList, href: '/orders', moduleKey: 'orders', permission: [P.ORDERS_VIEW, P.ORDERS_VIEW_OWN] },
+        { label: 'Cash Drawer', icon: Wallet, href: '/drawer', moduleKey: 'cash_drawer', permission: [P.DRAWERS_ADD, P.DRAWERS_MANAGE, P.DRAWERS_VIEW_OWN] },
+        { label: 'Shifts', icon: Clock, href: '/shifts', moduleKey: 'shifts', permission: [P.SESSIONS_ADD, P.SESSIONS_VIEW, P.SESSIONS_VIEW_OWN] },
       ],
     },
     {
       label: 'Floor & Service',
       items: [
-        {
-          label: 'Tables',
-          icon: Grid3x3,
-          href: '/tables',
-          moduleKey: 'tables',
-          permission: [P.TABLES_VIEW, P.TABLES_MANAGE],
-        },
-        {
-          label: 'Appointments',
-          icon: Calendar,
-          href: '/appointments',
-          moduleKey: 'appointments',
-          permission: [P.ORDERS_VIEW, P.HOTEL_VIEW],
-        },
+        { label: 'Tables', icon: Grid3x3, href: '/tables', moduleKey: 'tables', permission: [P.TABLES_VIEW, P.TABLES_MANAGE] },
+        { label: 'Appointments', icon: Calendar, href: '/appointments', moduleKey: 'appointments', permission: [P.ORDERS_VIEW, P.HOTEL_VIEW] },
       ],
     },
     {
       label: 'Kitchen & Bar',
+      defaultCollapsed: true,
       items: [
-        {
-          label: 'KDS',
-          icon: ChefHat,
-          href: '/kds',
-          moduleKey: 'kds',
-          permission: [P.ORDERS_VIEW, P.ORDERS_MANAGE],
-        },
-        {
-          label: 'Bar Display',
-          icon: Wine,
-          href: '/bar',
-          moduleKey: 'kds',
-          permission: [P.ORDERS_VIEW, P.ORDERS_MANAGE],
-        },
-        {
-          label: 'Menu',
-          icon: Utensils,
-          href: '/order',
-          moduleKey: 'new_order',
-          permission: P.CATALOG_VIEW,
-        },
+        { label: 'KDS', icon: ChefHat, href: '/kds', moduleKey: 'kds', permission: [P.ORDERS_VIEW, P.ORDERS_MANAGE] },
+        { label: 'Bar Display', icon: Wine, href: '/bar', moduleKey: 'kds', permission: [P.ORDERS_VIEW, P.ORDERS_MANAGE] },
+        { label: 'Menu', icon: Utensils, href: '/order', moduleKey: 'new_order', permission: P.CATALOG_VIEW },
       ],
     },
     {
       label: 'Hotel',
+      defaultCollapsed: true,
       items: [
-        {
-          label: 'Rooms',
-          icon: BedDouble,
-          href: '/hotel/rooms',
-          moduleKey: 'hotel',
-          permission: [P.HOTEL_VIEW, P.HOTEL_MANAGE],
-        },
-        {
-          label: 'Facilities',
-          icon: Cpu,
-          href: '/hotel/facilities',
-          moduleKey: 'hotel',
-          permission: [P.HOTEL_VIEW, P.HOTEL_MANAGE],
-        },
+        { label: 'Rooms', icon: BedDouble, href: '/hotel/rooms', moduleKey: 'hotel', permission: [P.HOTEL_VIEW, P.HOTEL_MANAGE] },
+        { label: 'Facilities', icon: Cpu, href: '/hotel/facilities', moduleKey: 'hotel', permission: [P.HOTEL_VIEW, P.HOTEL_MANAGE] },
       ],
     },
     {
       label: 'Management',
+      defaultCollapsed: true,
       items: [
-        {
-          label: 'Reports',
-          icon: BarChart3,
-          href: '/reports',
-          moduleKey: 'reports',
-          permission: [P.REPORTS_VIEW, P.REPORTS_MANAGE],
-        },
-        {
-          label: 'Settings',
-          icon: Settings,
-          href: '/settings',
-          moduleKey: 'settings',
-          permission: [P.CONFIG_VIEW, P.CONFIG_CHANGE, P.CONFIG_MANAGE],
-        },
+        { label: 'Reports', icon: BarChart3, href: '/reports', moduleKey: 'reports', permission: [P.REPORTS_VIEW, P.REPORTS_MANAGE] },
+        { label: 'Settings', icon: Settings, href: '/settings', moduleKey: 'settings', permission: [P.CONFIG_VIEW, P.CONFIG_CHANGE, P.CONFIG_MANAGE] },
       ],
     },
   ];
 
-  // ── Filter groups by module + permission ──────────────────────────────────
+  // ── Filter by module + permission ─────────────────────────────────────────
 
   const visibleGroups = navGroups
     .map((group) => ({
@@ -234,7 +202,16 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
     }))
     .filter((g) => g.items.length > 0);
 
-  // ── Resolve current user display name ──────────────────────────────────────
+  // Groups that contain the current active route are auto-expanded
+  function isGroupInitiallyOpen(group: NavGroup): boolean {
+    if (!group.defaultCollapsed) return true;
+    return group.items.some((item) => {
+      const href = `/${orgSlug}${item.href}`;
+      return item.href === '/dashboard' ? pathname === href : pathname?.startsWith(href);
+    });
+  }
+
+  // ── User display ──────────────────────────────────────────────────────────
 
   const displayName = user?.fullName || tenant?.name || orgSlug;
   const displayInitial = displayName?.[0]?.toUpperCase() ?? '?';
@@ -246,7 +223,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
       ? primaryRole.charAt(0).toUpperCase() + primaryRole.slice(1)
       : 'Staff';
 
-  // ── Sidebar content ────────────────────────────────────────────────────────
+  // ── Content ───────────────────────────────────────────────────────────────
 
   const content = (
     <div className="flex flex-col h-full bg-brand-dark border-r border-white/8">
@@ -270,35 +247,24 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
       {/* Nav groups */}
       <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-5 scrollbar-hide">
         {visibleGroups.map((group) => (
-          <div key={group.label}>
-            <p className="px-3 mb-1.5 text-[10px] font-bold uppercase tracking-[0.15em] text-white/25">
-              {group.label}
-            </p>
-            <div className="space-y-0.5">
-              {group.items.map((item) => (
-                <NavLink key={item.href + item.label} item={item} orgSlug={orgSlug} onClose={onClose} />
-              ))}
-            </div>
-          </div>
+          <NavGroupSection
+            key={group.label}
+            group={group}
+            orgSlug={orgSlug}
+            onClose={onClose}
+            initialOpen={isGroupInitiallyOpen(group)}
+          />
         ))}
 
-        {/* Platform section */}
+        {/* Platform section — always expanded, superuser only */}
         {isPlatformOwner && (
           <div>
             <p className="px-3 mb-1.5 text-[10px] font-bold uppercase tracking-[0.15em] text-white/25">
               Platform
             </p>
             <div className="space-y-0.5">
-              <NavLink
-                item={{ label: 'Devices', icon: Monitor, href: '/platform', moduleKey: 'platform' }}
-                orgSlug={orgSlug}
-                onClose={onClose}
-              />
-              <NavLink
-                item={{ label: 'Licenses', icon: Key, href: '/platform?tab=licenses', moduleKey: 'platform' }}
-                orgSlug={orgSlug}
-                onClose={onClose}
-              />
+              <NavLink item={{ label: 'Devices', icon: Monitor, href: '/platform', moduleKey: 'platform' }} orgSlug={orgSlug} onClose={onClose} />
+              <NavLink item={{ label: 'Licenses', icon: Key, href: '/platform?tab=licenses', moduleKey: 'platform' }} orgSlug={orgSlug} onClose={onClose} />
             </div>
           </div>
         )}

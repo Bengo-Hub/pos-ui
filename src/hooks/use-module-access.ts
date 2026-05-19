@@ -61,9 +61,13 @@ const USE_CASE_MODULES: Record<UseCaseType, ModuleKey[]> = {
 
 export function useModuleAccess() {
   const user = useAuthStore((s) => s.user);
+  // Read use_case from the persisted outlet (set by service-level outlet selector).
+  // Falls back to JWT claims for backward compat, then defaults to 'hospitality'.
+  const outlet = useAuthStore((s) => s.outlet);
 
-  // Use case resolution: outlet-level override > tenant-level default > hospitality fallback
+  // Use case resolution: outlet store (post-login) > JWT claims > fallback
   const rawUseCase =
+    outlet?.use_case ??
     (user as any)?.outlet_use_case ??
     (user as any)?.outletUseCase ??
     (user as any)?.tenant_use_case ??
