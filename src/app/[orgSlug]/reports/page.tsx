@@ -10,9 +10,11 @@ import {
   BarChart3,
   DollarSign,
   Loader2,
+  Package,
   Receipt,
   ShoppingCart,
   TrendingDown,
+  Users,
 } from 'lucide-react';
 
 function useTenantID() {
@@ -59,6 +61,19 @@ interface DayRow {
   order_count: number;
 }
 
+interface TopItem {
+  sku: string;
+  name: string;
+  quantity_sold: number;
+  revenue: number;
+}
+
+interface StaffRow {
+  user_id: string;
+  order_count: number;
+  revenue: number;
+}
+
 export default function ReportsPage() {
   const tenantID = useTenantID();
   const [period, setPeriod] = useState<Period>('today');
@@ -81,6 +96,20 @@ export default function ReportsPage() {
     queryKey: ['reports-daily', tenantID, from, to],
     queryFn: () => apiClient.get<DayRow[]>(`${base}/daily-breakdown`, { from, to }),
     enabled: !!tenantID && period !== 'today',
+  });
+
+  const { data: topItems = [] } = useQuery<TopItem[]>({
+    queryKey: ['reports-top-items', tenantID, from, to],
+    queryFn: () => apiClient.get<TopItem[]>(`${base}/top-items`, { from, to, limit: 10 }),
+    enabled: !!tenantID,
+    staleTime: 2 * 60_000,
+  });
+
+  const { data: staffSales = [] } = useQuery<StaffRow[]>({
+    queryKey: ['reports-staff-sales', tenantID, from, to],
+    queryFn: () => apiClient.get<StaffRow[]>(`${base}/sales-by-staff`, { from, to }),
+    enabled: !!tenantID,
+    staleTime: 2 * 60_000,
   });
 
   const kpis = sales
@@ -184,6 +213,63 @@ export default function ReportsPage() {
                       </div>
                     );
                   })}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Top selling items */}
+          {topItems.length > 0 && (
+            <Card>
+              <CardContent className="p-5">
+                <div className="flex items-center gap-2 mb-4">
+                  <Package className="h-4 w-4 text-muted-foreground" />
+                  <p className="text-sm font-semibold">Top Selling Items</p>
+                </div>
+                <div className="space-y-2">
+                  {topItems.map((item, idx) => {
+                    const maxRev = topItems[0]?.revenue ?? 1;
+                    const pct = Math.round((item.revenue / maxRev) * 100);
+                    return (
+                      <div key={item.sku} className="flex items-center gap-3">
+                        <span className="text-xs font-bold text-muted-foreground w-5 shrink-0">{idx + 1}</span>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between mb-0.5">
+                            <span className="text-sm font-medium truncate">{item.name}</span>
+                            <span className="text-xs text-muted-foreground ml-2 shrink-0">
+                              {item.quantity_sold.toLocaleString()} sold · KES {item.revenue.toLocaleString()}
+                            </span>
+                          </div>
+                          <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                            <div className="h-full bg-primary rounded-full" style={{ width: `${pct}%` }} />
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Sales by staff */}
+          {staffSales.length > 0 && (
+            <Card>
+              <CardContent className="p-5">
+                <div className="flex items-center gap-2 mb-4">
+                  <Users className="h-4 w-4 text-muted-foreground" />
+                  <p className="text-sm font-semibold">Sales by Staff</p>
+                </div>
+                <div className="divide-y divide-border">
+                  {staffSales.map((row) => (
+                    <div key={row.user_id} className="flex items-center justify-between py-2.5 text-sm">
+                      <div>
+                        <p className="font-medium text-foreground font-mono text-xs">{row.user_id.slice(0, 8)}…</p>
+                        <p className="text-xs text-muted-foreground">{row.order_count} orders</p>
+                      </div>
+                      <p className="font-semibold text-foreground">KES {row.revenue.toLocaleString()}</p>
+                    </div>
+                  ))}
                 </div>
               </CardContent>
             </Card>
