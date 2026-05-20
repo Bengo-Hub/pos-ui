@@ -2,72 +2,39 @@
 
 import { useState } from 'react';
 import { Card, CardContent } from '@/components/ui/base';
-import { useParams } from 'next/navigation';
 import { Clock, DollarSign, LogIn, LogOut, Loader2 } from 'lucide-react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useAuthStore } from '@/store/auth';
-
-const POS_API = process.env.NEXT_PUBLIC_POS_API_URL || 'https://posapi.codevertexitsolutions.com';
-
-interface ShiftSession {
-  id: string;
-  device_id: string;
-  opened_by: string;
-  opened_at: string;
-  closed_at?: string;
-  opening_float: number;
-  closing_float?: number;
-  status: 'open' | 'closed';
-}
+import { useCurrentShift, useOpenShift, useCloseShift } from '@/hooks/useShifts';
+import { toast } from 'sonner';
 
 export default function ShiftsPage() {
-  const params = useParams();
-  const orgSlug = params?.orgSlug as string;
-  const token = useAuthStore((s) => s.session?.accessToken);
-  const qc = useQueryClient();
   const [float, setFloat] = useState('');
 
-  const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
-
-  const { data: session, isLoading } = useQuery<ShiftSession | null>({
-    queryKey: ['shift-session', orgSlug],
-    queryFn: async () => {
-      const res = await fetch(`${POS_API}/v1/${orgSlug}/pos/devices/current/sessions/current`, { headers });
-      if (res.status === 404) return null;
-      if (!res.ok) throw new Error('Failed to fetch session');
-      return res.json();
-    },
-    enabled: !!token && !!orgSlug,
-  });
-
-  const openShift = useMutation({
-    mutationFn: async () => {
-      const res = await fetch(`${POS_API}/v1/${orgSlug}/pos/devices/current/sessions/open`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ opening_float: parseFloat(float) || 0 }),
-      });
-      if (!res.ok) throw new Error('Failed to open shift');
-      return res.json();
-    },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['shift-session', orgSlug] }); setFloat(''); },
-  });
-
-  const closeShift = useMutation({
-    mutationFn: async () => {
-      const res = await fetch(`${POS_API}/v1/${orgSlug}/pos/devices/current/sessions/close`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ closing_float: parseFloat(float) || 0 }),
-      });
-      if (!res.ok) throw new Error('Failed to close shift');
-      return res.json();
-    },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['shift-session', orgSlug] }); setFloat(''); },
-  });
+  const { data: session, isLoading } = useCurrentShift();
+  const openShift = useOpenShift();
+  const closeShift = useCloseShift();
 
   const isOpen = session?.status === 'open';
   const busy = openShift.isPending || closeShift.isPending;
+
+  async function handleOpen() {
+    try {
+      await openShift.mutateAsync(parseFloat(float) || 0);
+      toast.success('Shift opened');
+      setFloat('');
+    } catch {
+      toast.error('Failed to open shift');
+    }
+  }
+
+  async function handleClose() {
+    try {
+      await closeShift.mutateAsync(parseFloat(float) || 0);
+      toast.success('Shift closed');
+      setFloat('');
+    } catch {
+      toast.error('Failed to close shift');
+    }
+  }
 
   if (isLoading) {
     return (
@@ -108,7 +75,7 @@ export default function ShiftsPage() {
         </CardContent>
       </Card>
 
-      {/* Float entry */}
+      {/* Float entry + action */}
       <Card>
         <CardContent className="p-6 space-y-4">
           <label className="block">
@@ -131,7 +98,7 @@ export default function ShiftsPage() {
 
           {isOpen ? (
             <button
-              onClick={() => closeShift.mutate()}
+              onClick={handleClose}
               disabled={busy}
               className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-destructive text-destructive-foreground font-semibold hover:bg-destructive/90 disabled:opacity-50 transition-colors"
             >
@@ -140,7 +107,7 @@ export default function ShiftsPage() {
             </button>
           ) : (
             <button
-              onClick={() => openShift.mutate()}
+              onClick={handleOpen}
               disabled={busy}
               className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-primary text-primary-foreground font-semibold hover:bg-primary/90 disabled:opacity-50 transition-colors"
             >

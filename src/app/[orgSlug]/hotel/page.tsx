@@ -3,8 +3,7 @@
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { Card, CardContent } from '@/components/ui/base';
-import { useQuery } from '@tanstack/react-query';
-import { useAuthStore } from '@/store/auth';
+import { useHotelRooms } from '@/hooks/useHotel';
 import {
   BedDouble,
   Building2,
@@ -14,16 +13,6 @@ import {
   Wrench,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-
-const POS_API = process.env.NEXT_PUBLIC_POS_API_URL || 'https://posapi.codevertexitsolutions.com';
-
-interface RoomSummary {
-  total: number;
-  available: number;
-  occupied: number;
-  cleaning: number;
-  maintenance: number;
-}
 
 const statusConfig: Record<string, { label: string; color: string; icon: React.ElementType }> = {
   available:    { label: 'Available',    color: 'text-green-600 bg-green-500/10',  icon: CheckCircle },
@@ -36,20 +25,15 @@ const statusConfig: Record<string, { label: string; color: string; icon: React.E
 export default function HotelPage() {
   const params = useParams();
   const orgSlug = params?.orgSlug as string;
-  const token = useAuthStore((s) => s.session?.accessToken);
 
-  const headers = { Authorization: `Bearer ${token}` };
+  const { data: rooms = [], isLoading } = useHotelRooms();
 
-  const { data: summary, isLoading } = useQuery<RoomSummary>({
-    queryKey: ['hotel-summary', orgSlug],
-    queryFn: async () => {
-      const res = await fetch(`${POS_API}/v1/${orgSlug}/hotel/rooms?summary=true`, { headers });
-      if (!res.ok) throw new Error('Failed to fetch rooms summary');
-      return res.json();
-    },
-    enabled: !!token && !!orgSlug,
-    refetchInterval: 60_000,
-  });
+  const summary = {
+    available:   rooms.filter((r) => r.status === 'available').length,
+    occupied:    rooms.filter((r) => r.status === 'occupied').length,
+    cleaning:    rooms.filter((r) => r.status === 'cleaning').length,
+    maintenance: rooms.filter((r) => r.status === 'maintenance').length,
+  };
 
   return (
     <div className="p-6 space-y-6">
