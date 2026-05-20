@@ -283,3 +283,19 @@ button:focus-visible {
   scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
 }
+
+/* ===== Receipt Print Styles ===== */
+@media print {
+  body > * {
+    display: none !important;
+  }
+  #receipt-print-content {
+    display: block !important;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    background: white;
+    color: black;
+  }
+}

@@ -3,9 +3,11 @@
 import { Badge, Button } from '@/components/ui/base';
 import { ModifierModal, type ModifierGroup } from '@/components/pos/modifier-modal';
 import { POSPaymentModal } from '@/components/pos/payment-modal';
+import { ReceiptPreview, type ReceiptData } from '@/components/pos/receipt-preview';
 import { cn } from '@/lib/utils';
 import { useMenuItems, useCreateOrder } from '@/hooks/usePOS';
 import { useAuthStore } from '@/store/auth';
+import { apiClient } from '@/lib/api/client';
 import {
   AlertTriangle,
   Barcode,
@@ -63,6 +65,10 @@ export default function OrderPage() {
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [currentOrderId, setCurrentOrderId] = useState('');
   const [currentOrderNumber, setCurrentOrderNumber] = useState('');
+
+  // Receipt
+  const [receiptData, setReceiptData] = useState<ReceiptData | null>(null);
+  const [receiptOpen, setReceiptOpen] = useState(false);
 
   // Serial number prompt
   const [serialPrompt, setSerialPrompt] = useState<{ item: MenuItem; callback: (sn: string) => void } | null>(null);
@@ -257,11 +263,25 @@ export default function OrderPage() {
     );
   };
 
-  const handlePaymentConfirmed = useCallback(() => {
+  const handlePaymentConfirmed = useCallback(async () => {
     toast.success(`Order ${currentOrderNumber} paid!`);
     clearCart();
     setPaymentOpen(false);
-  }, [currentOrderNumber]);
+
+    // Fetch receipt data and show the receipt preview
+    const tenantId = user?.tenant_id ?? '';
+    if (tenantId && currentOrderId) {
+      try {
+        const data = await apiClient.get<ReceiptData>(
+          `/api/v1/${tenantId}/pos/orders/${currentOrderId}/receipt`
+        );
+        setReceiptData(data);
+        setReceiptOpen(true);
+      } catch {
+        // Receipt fetch failed — not critical, payment already confirmed
+      }
+    }
+  }, [currentOrderNumber, currentOrderId, user?.tenant_id]);
 
   // ─── Render ─────────────────────────────────────────────────────────────
 
@@ -658,6 +678,15 @@ export default function OrderPage() {
         total={total}
         tenantSlug={user?.tenant_slug ?? ''}
         onPaymentConfirmed={handlePaymentConfirmed}
+      />
+
+      <ReceiptPreview
+        receipt={receiptData}
+        open={receiptOpen}
+        onClose={() => {
+          setReceiptOpen(false);
+          setReceiptData(null);
+        }}
       />
 
       {/* Age Verification */}
