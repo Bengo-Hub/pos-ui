@@ -1,25 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { cn } from '@/lib/utils';
+import { useHotelRooms } from '@/hooks/useHotel';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { useQuery } from '@tanstack/react-query';
-import { useAuthStore } from '@/store/auth';
-import { Badge } from '@/components/ui/base';
-import { cn } from '@/lib/utils';
 import { BedDouble, Loader2 } from 'lucide-react';
-
-const POS_API = process.env.NEXT_PUBLIC_POS_API_URL || 'https://posapi.codevertexitsolutions.com';
-
-interface Room {
-  id: string;
-  room_number: string;
-  name: string;
-  room_type: string;
-  floor: number;
-  rate_per_night: number;
-  status: 'available' | 'occupied' | 'cleaning' | 'maintenance' | 'reserved' | 'checkout';
-}
+import { useState } from 'react';
 
 const statusColors: Record<string, string> = {
   available:   'bg-green-500/10 text-green-700 dark:text-green-400',
@@ -35,22 +21,9 @@ const STATUS_OPTIONS = ['all', 'available', 'occupied', 'cleaning', 'maintenance
 export default function RoomsPage() {
   const params = useParams();
   const orgSlug = params?.orgSlug as string;
-  const token = useAuthStore((s) => s.session?.accessToken);
-  const [filter, setFilter] = useState('all');
+  const [filter, setFilter] = useState<string | undefined>(undefined);
 
-  const { data: rooms = [], isLoading } = useQuery<Room[]>({
-    queryKey: ['hotel-rooms', orgSlug, filter],
-    queryFn: async () => {
-      const url = new URL(`${POS_API}/v1/${orgSlug}/hotel/rooms`);
-      if (filter !== 'all') url.searchParams.set('status', filter);
-      const res = await fetch(url.toString(), { headers: { Authorization: `Bearer ${token}` } });
-      if (!res.ok) throw new Error('Failed to fetch rooms');
-      const data = await res.json();
-      return data.rooms ?? data ?? [];
-    },
-    enabled: !!token && !!orgSlug,
-    refetchInterval: 30_000,
-  });
+  const { data: rooms = [], isLoading } = useHotelRooms(filter);
 
   return (
     <div className="p-6 space-y-6">
@@ -66,10 +39,10 @@ export default function RoomsPage() {
         {STATUS_OPTIONS.map((s) => (
           <button
             key={s}
-            onClick={() => setFilter(s)}
+            onClick={() => setFilter(s === 'all' ? undefined : s)}
             className={cn(
               'px-3 py-1.5 rounded-full text-sm font-medium capitalize transition-colors',
-              filter === s
+              (s === 'all' ? !filter : filter === s)
                 ? 'bg-primary text-primary-foreground'
                 : 'bg-muted text-muted-foreground hover:bg-muted/80'
             )}

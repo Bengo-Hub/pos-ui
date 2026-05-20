@@ -1,8 +1,8 @@
 # Sprint 9: Reports & Analytics UI — pos-ui
 
-**Status:** 🟡 Basic scaffold exists — API hooks not wired  
+**Status:** ✅ Core Delivered — reports dashboard with KPI cards, payment breakdown bar chart, and daily breakdown fully wired to pos-api reports endpoints; advanced charts, EOD close flow, and export pending  
 **Period:** November–December 2026  
-**Last updated:** 2026-05-09  
+**Last updated:** 2026-05-21  
 **Goal:** Manager-facing reports dashboard — EOD reconciliation, sales trends, staff performance, and export
 
 ---

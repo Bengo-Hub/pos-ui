@@ -2,131 +2,59 @@
 
 import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useAuthStore } from '@/store/auth';
+import { useHotelRoom, useRoomGuest, useRoomFolio, useCheckIn, useCheckOut } from '@/hooks/useHotel';
 import { Card, CardContent } from '@/components/ui/base';
 import { cn } from '@/lib/utils';
 import {
   ArrowLeft,
   BedDouble,
-  ChevronRight,
   Loader2,
   LogIn,
   LogOut,
-  PlusCircle,
   Receipt,
 } from 'lucide-react';
 import Link from 'next/link';
-
-const POS_API = process.env.NEXT_PUBLIC_POS_API_URL || 'https://posapi.codevertexitsolutions.com';
-
-interface Room {
-  id: string;
-  room_number: string;
-  name: string;
-  room_type: string;
-  floor: number;
-  rate_per_night: number;
-  status: string;
-}
-
-interface RoomGuest {
-  id: string;
-  guest_name: string;
-  phone: string;
-  id_number: string;
-  check_in_date: string;
-  check_out_date: string;
-  nights: number;
-  total_room_charge: number;
-  status: 'active' | 'checked_out';
-}
-
-interface FolioItem {
-  id: string;
-  description: string;
-  amount: number;
-  charge_type: string;
-  created_at: string;
-}
+import { toast } from 'sonner';
 
 export default function RoomDetailPage() {
   const params = useParams();
   const orgSlug = params?.orgSlug as string;
   const roomId = params?.roomId as string;
   const router = useRouter();
-  const token = useAuthStore((s) => s.session?.accessToken);
-  const qc = useQueryClient();
-  const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
 
   const [checkInForm, setCheckInForm] = useState({ guest_name: '', phone: '', id_number: '', nights: '1' });
   const [showCheckIn, setShowCheckIn] = useState(false);
 
-  const { data: room, isLoading: roomLoading } = useQuery<Room>({
-    queryKey: ['room', orgSlug, roomId],
-    queryFn: async () => {
-      const res = await fetch(`${POS_API}/v1/${orgSlug}/hotel/rooms/${roomId}`, { headers });
-      if (!res.ok) throw new Error('Failed to fetch room');
-      return res.json();
-    },
-    enabled: !!token && !!roomId,
-  });
+  const { data: room, isLoading: roomLoading } = useHotelRoom(roomId);
+  const isOccupied = room?.status === 'occupied';
+  const { data: guest } = useRoomGuest(roomId, isOccupied);
+  const { data: folio = [] } = useRoomFolio(roomId, isOccupied);
 
-  const { data: guest } = useQuery<RoomGuest | null>({
-    queryKey: ['room-guest', orgSlug, roomId],
-    queryFn: async () => {
-      const res = await fetch(`${POS_API}/v1/${orgSlug}/hotel/rooms/${roomId}/current-guest`, { headers });
-      if (res.status === 404) return null;
-      if (!res.ok) throw new Error('Failed to fetch guest');
-      return res.json();
-    },
-    enabled: !!token && !!roomId,
-  });
+  const checkIn  = useCheckIn(roomId);
+  const checkOut = useCheckOut(roomId);
 
-  const { data: folio = [] } = useQuery<FolioItem[]>({
-    queryKey: ['room-folio', orgSlug, roomId],
-    queryFn: async () => {
-      const res = await fetch(`${POS_API}/v1/${orgSlug}/hotel/rooms/${roomId}/folio`, { headers });
-      if (!res.ok) throw new Error('Failed to fetch folio');
-      const data = await res.json();
-      return data.items ?? data ?? [];
-    },
-    enabled: !!token && !!roomId && room?.status === 'occupied',
-  });
-
-  const checkIn = useMutation({
-    mutationFn: async () => {
-      const res = await fetch(`${POS_API}/v1/${orgSlug}/hotel/rooms/${roomId}/check-in`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ ...checkInForm, nights: parseInt(checkInForm.nights) }),
+  async function handleCheckIn() {
+    try {
+      await checkIn.mutateAsync({
+        ...checkInForm,
+        nights: parseInt(checkInForm.nights),
       });
-      if (!res.ok) throw new Error('Check-in failed');
-      return res.json();
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['room', orgSlug, roomId] });
-      qc.invalidateQueries({ queryKey: ['room-guest', orgSlug, roomId] });
-      qc.invalidateQueries({ queryKey: ['hotel-rooms', orgSlug] });
+      toast.success('Guest checked in');
       setShowCheckIn(false);
-    },
-  });
+    } catch {
+      toast.error('Check-in failed');
+    }
+  }
 
-  const checkOut = useMutation({
-    mutationFn: async () => {
-      const res = await fetch(`${POS_API}/v1/${orgSlug}/hotel/rooms/${roomId}/check-out`, {
-        method: 'POST',
-        headers,
-      });
-      if (!res.ok) throw new Error('Check-out failed');
-      return res.json();
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['room', orgSlug, roomId] });
-      qc.invalidateQueries({ queryKey: ['hotel-rooms', orgSlug] });
+  async function handleCheckOut() {
+    try {
+      await checkOut.mutateAsync();
+      toast.success('Guest checked out');
       router.push(`/${orgSlug}/hotel/rooms`);
-    },
-  });
+    } catch {
+      toast.error('Check-out failed');
+    }
+  }
 
   if (roomLoading || !room) {
     return (
@@ -135,8 +63,6 @@ export default function RoomDetailPage() {
       </div>
     );
   }
-
-  const isOccupied = room.status === 'occupied';
 
   return (
     <div className="p-6 max-w-2xl mx-auto space-y-6">
@@ -169,30 +95,19 @@ export default function RoomDetailPage() {
           <CardContent className="p-5 space-y-3">
             <p className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">Current Guest</p>
             <div className="grid grid-cols-2 gap-3 text-sm">
-              <div>
-                <p className="text-muted-foreground">Name</p>
-                <p className="font-semibold text-foreground">{guest.guest_name}</p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">Phone</p>
-                <p className="font-semibold text-foreground">{guest.phone}</p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">Check-In</p>
-                <p className="font-semibold text-foreground">{new Date(guest.check_in_date).toLocaleDateString()}</p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">Check-Out</p>
-                <p className="font-semibold text-foreground">{new Date(guest.check_out_date).toLocaleDateString()}</p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">Nights</p>
-                <p className="font-semibold text-foreground">{guest.nights}</p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">Room Total</p>
-                <p className="font-semibold text-primary">KES {guest.total_room_charge.toLocaleString()}</p>
-              </div>
+              {[
+                { label: 'Name', value: guest.guest_name },
+                { label: 'Phone', value: guest.phone },
+                { label: 'Check-In', value: new Date(guest.check_in_date).toLocaleDateString() },
+                { label: 'Check-Out', value: new Date(guest.check_out_date).toLocaleDateString() },
+                { label: 'Nights', value: String(guest.nights) },
+                { label: 'Room Total', value: `KES ${guest.total_room_charge.toLocaleString()}`, highlight: true },
+              ].map(({ label, value, highlight }) => (
+                <div key={label}>
+                  <p className="text-muted-foreground">{label}</p>
+                  <p className={cn('font-semibold', highlight ? 'text-primary' : 'text-foreground')}>{value}</p>
+                </div>
+              ))}
             </div>
           </CardContent>
         </Card>
@@ -258,14 +173,11 @@ export default function RoomDetailPage() {
                 </label>
               ))}
               <div className="flex gap-3 pt-1">
-                <button
-                  onClick={() => setShowCheckIn(false)}
-                  className="flex-1 py-2.5 rounded-xl border border-border text-foreground font-medium hover:bg-muted transition-colors"
-                >
+                <button onClick={() => setShowCheckIn(false)} className="flex-1 py-2.5 rounded-xl border border-border text-foreground font-medium hover:bg-muted transition-colors">
                   Cancel
                 </button>
                 <button
-                  onClick={() => checkIn.mutate()}
+                  onClick={handleCheckIn}
                   disabled={checkIn.isPending || !checkInForm.guest_name}
                   className="flex-1 py-2.5 rounded-xl bg-primary text-primary-foreground font-semibold hover:bg-primary/90 disabled:opacity-50 transition-colors"
                 >
@@ -278,7 +190,7 @@ export default function RoomDetailPage() {
 
         {isOccupied && (
           <button
-            onClick={() => checkOut.mutate()}
+            onClick={handleCheckOut}
             disabled={checkOut.isPending}
             className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-destructive text-destructive-foreground font-semibold hover:bg-destructive/90 disabled:opacity-50 transition-colors"
           >

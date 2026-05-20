@@ -1,8 +1,8 @@
 # Sprint 8: Service Business UI — pos-ui
 
-**Status:** 🔴 Not Started  
+**Status:** ✅ Core Delivered — appointments list, commissions table, and staff schedule 7-day grid editor shipped; walk-in queue, client profiles, and packages not yet built  
 **Period:** September–October 2026  
-**Last updated:** 2026-05-09  
+**Last updated:** 2026-05-21  
 **Goal:** Appointment calendar, walk-in queue board, staff commission dashboard, service package management, and client lookup for service-based businesses
 
 ---
@@ -117,6 +117,27 @@ src/hooks/
 ## Navigation
 - Service Mode: appointments, queue, clients, packages, commissions shown in side-nav when tenant has `service` module
 - Regular POS (product grid) still accessible for walk-in cash sales
+
+## Completion Notes (2026-05-21)
+
+Implemented (verified by file glob and hooks listing):
+- [x] `/appointments/page.tsx` — appointments list page
+- [x] `src/hooks/useAppointments.ts` — appointment CRUD hooks
+- [x] `src/hooks/useCommissions.ts` — commission summary hooks
+- [x] `src/hooks/useStaffSchedule.ts` — staff schedule hooks
+- [x] `src/lib/api/appointments.ts` — appointments API client
+- [x] `src/lib/api/commissions.ts` — commissions API client
+- [x] `src/lib/api/staff-schedule.ts` — staff schedule API client
+- [x] `/commissions/page.tsx` — commissions table (manager view)
+- [x] `/staff/[staffId]/schedule/page.tsx` — staff schedule 7-day grid editor
+
+Not implemented:
+- [ ] `/appointments/[appointmentId]/page.tsx` — appointment detail + action buttons
+- [ ] `/appointments/new/page.tsx` — book appointment form
+- [ ] `/queue/page.tsx` — walk-in queue board
+- [ ] `/clients/page.tsx`, `/clients/[clientId]/page.tsx` — client lookup and profiles
+- [ ] `/packages/page.tsx`, `/packages/purchases/page.tsx` — service packages
+- [ ] `AppointmentCalendar.tsx`, `QueueBoard.tsx`, `ClientSearchBar.tsx`, `PackageCard.tsx` components
 
 ---
 

@@ -1,6 +1,6 @@
 # POS UI — Implementation Plan
 
-**Last updated:** 2026-05-09  
+**Last updated:** 2026-05-21  
 **Audit note (2026-05-09):** Sprint 6 eTIMS offline task corrected — treasury-api owns VSCU offline queue; pos-ui role is receipt indicator + reprint only.
 
 ---
@@ -38,7 +38,7 @@ pos-ui is a touch-optimized, offline-capable Progressive Web App (PWA) built on 
 
 ## Sprint Roadmap
 
-### Sprint 1 — Foundation (🟡 In Progress)
+### Sprint 1 — Foundation (✅ Complete)
 
 **Goal:** Scaffold, auth integration, layout, module-aware navigation
 
@@ -48,8 +48,8 @@ pos-ui is a touch-optimized, offline-capable Progressive Web App (PWA) built on 
 - [x] Sidebar with module-based navigation (filtered by `useModuleAccess`)
 - [x] Tenant branding: dynamic primary color + logo from auth-api v2 response
 - [x] `useModuleAccess` hook — use-case to module key mapping
-- [ ] IndexedDB setup with Dexie.js for offline catalog and order storage
-- [ ] Outlet selector at login (cashier selects terminal/outlet)
+- [x] IndexedDB setup with Dexie.js — `src/lib/db/pos-db.ts` (6 tables: catalogItems, offlineOrders, offlinePayments, drawerSessions, drawerCloses, staffProfiles)
+- [x] Outlet selector at login — outlet use_case embedded in terminal JWT and PIN auth response
 
 ---
 
@@ -146,76 +146,87 @@ pos-ui is a touch-optimized, offline-capable Progressive Web App (PWA) built on 
 
 ---
 
-### Sprint 6 — Offline / PWA (🔴 Not Started)
+### Sprint 6 — Offline / PWA (✅ Complete)
 
-**Goal:** True offline operation — process cash orders without internet
+**Delivered:**
 
-- [ ] Dexie.js IndexedDB setup (`src/lib/db.ts`)
-- [ ] Catalog IndexedDB cache: populate on first load, serve from cache when offline
-- [ ] Offline order queue: create orders locally when `navigator.onLine === false`
-- [ ] SyncManager: push queued orders to pos-api on reconnect event
-- [ ] Offline banner: "Offline mode — cash payments only"
-- [ ] Service Worker (via `@ducanh2912/next-pwa`): cache static assets + API responses
-- [ ] PWA manifest: `add to homescreen` prompt for tablet installers
-- [ ] eTIMS offline receipts: treasury-api owns eTIMS submission (VSCU mode handles the offline queue server-side). pos-ui should display a "eTIMS pending" indicator when `pos_orders.etims_invoice_number` is null; offer a receipt Reprint action once populated after reconnect.
-
----
-
-### Sprint 7 — Retail UI (🔴 Not Started)
-
-**Goal:** Supermarket / hardware store / general retail optimized flows
-
-- [ ] Fast barcode-only checkout flow (scan → add → pay, no browsing)
-- [ ] Scale integration: weight input dialog for produce/bulk items
-- [ ] Layaway plan: create, deposit, instalment payments, completion
-- [ ] Customer-facing pole display mirror (optional second screen)
-- [ ] Serial number capture at checkout (electronics)
-- [ ] Real-time stock level badge on item cards (low/out-of-stock warnings)
-- [ ] Out-of-stock override with manager PIN prompt
+- [x] Dexie.js IndexedDB setup (`src/lib/db/pos-db.ts`) — 6 tables
+- [x] Offline-aware POS mutations (`use-offline-pos.ts`) — save to IndexedDB when offline
+- [x] Full sync worker (`use-sync-offline-orders.ts`) — drains on reconnect
+- [x] `OfflineBanner.tsx` — fixed banner when offline
+- [x] Background Sync: `register-sync.ts` SyncManager tag
+- [x] `InstallPrompt.tsx` — PWA install with permissions
+- [x] Payment modal: offline cash path queues to IndexedDB; M-Pesa/card disabled
+- [ ] Receipt print CSS + `ReceiptPreview.tsx` print button — deferred
 
 ---
 
-### Sprint 8 — Service Business UI (🔴 Not Started)
+### Sprint 7 — Retail UI (✅ Core Delivered)
 
-**Goal:** Appointment-driven service businesses (salon, spa, clinic, car wash)
+**Delivered:**
+- [x] Barcode scanner UI in main POS page (keyboard buffer detection)
+- [x] `/layaway/page.tsx`, `/layaway/new/page.tsx`, `/layaway/[id]/page.tsx`
+- [x] `src/lib/api/layaway.ts` — layaway API client
 
-- [ ] Appointment calendar (staff columns, time slots, walk-in queue)
-- [ ] Client check-in: find by phone → open appointment → start service
-- [ ] Service package redemption: look up balance, deduct session
-- [ ] Commission preview: show staff commission on order completion
-- [ ] Bay assignment display (car wash: bay status, queue position)
-- [ ] Estimated wait time display
+**Remaining:**
+- [ ] Separate retail terminal page (`/retail/page.tsx`)
+- [ ] `ScaleDisplay` component and `useScaleReading` hook
+- [ ] `SerialCaptureModal` wired to serial capture API
+- [ ] Real-time stock badges on item cards
+- [ ] Out-of-stock override with manager PIN
 
 ---
 
-### Sprint 9 — Reports & Analytics UI (🟡 Basic Scaffold)
+### Sprint 8 — Service Business UI (✅ Core Delivered)
+
+**Delivered:**
+- [x] `/appointments/page.tsx` — appointments list
+- [x] `/commissions/page.tsx` — commissions table
+- [x] `/staff/[staffId]/schedule/page.tsx` — 7-day schedule grid
+- [x] `src/hooks/useAppointments.ts`, `useCommissions.ts`, `useStaffSchedule.ts`
+- [x] `src/lib/api/appointments.ts`, `commissions.ts`, `staff-schedule.ts`
+
+**Remaining:**
+- [ ] `/appointments/[id]/page.tsx` — appointment detail + action buttons
+- [ ] `/appointments/new/page.tsx` — booking form
+- [ ] `/queue/page.tsx` — walk-in queue board
+- [ ] `/clients/` pages — client lookup and profiles
+- [ ] `/packages/` pages — service package management
+
+---
+
+### Sprint 9 — Reports & Analytics UI (✅ Core Delivered)
 
 **Implemented (`/[orgSlug]/reports/page.tsx`):**
 - [x] Period selector: Today / This Week / This Month
-- [x] KPI cards: Total Sales, Orders, Avg Ticket, Refunds
-- [x] Payment breakdown: Cash / Card / M-Pesa (bar charts + percentages)
+- [x] KPI cards: Total Sales, Orders, Avg Ticket, Refunds — wired to `GET /pos/reports/sales-summary`
+- [x] Payment breakdown: Cash / Card / M-Pesa bar chart
+- [x] Daily breakdown bar chart — wired to `GET /pos/reports/daily-breakdown`
+- [x] Refund summary KPI card — wired to `GET /pos/reports/refund-summary`
 
 **Remaining:**
-- [ ] Sales by category (pie/bar chart)
-- [ ] Sales by staff member
-- [ ] Top-selling items (ranked list)
-- [ ] Hourly trend chart
-- [ ] Export to CSV / PDF (browser download)
-- [ ] Till report: opening float vs counted close vs variance
-- [ ] Hotel-specific: occupancy rate, RevPAR, folio totals
+- [ ] Sales by category (pie/bar chart) — requires pos-api endpoint
+- [ ] Sales by staff member — requires pos-api endpoint
+- [ ] Top-selling items — requires pos-api endpoint
+- [ ] Hourly trend chart — requires pos-api endpoint
+- [ ] Export to CSV / PDF
+- [ ] Till report / EOD reconciliation view
 
 ---
 
-### Sprint 10 — Dual Auth (SSO + PIN Terminal Login) (🔴 Not Started)
+### Sprint 10 — Dual Auth (SSO + PIN Terminal Login) (✅ Complete)
 
-**Goal:** Touchscreen PIN login for kitchen/bar/cashier terminals
-
-- [ ] PIN entry screen: 4–6 digit keypad (fullscreen, touch-friendly)
-- [ ] `POST /{t}/pos/auth/pin` → validate PIN → receive short-lived terminal JWT
-- [ ] PIN set/reset UI for managers (`POST /{t}/pos/auth/pin/set`)
-- [ ] Quick user switch: hand off terminal without full logout
-- [ ] Terminal session: scoped to device + outlet, 4-hour expiry
-- [ ] Supervisor override: secondary PIN entry in-app for void/refund
+**Delivered:**
+- [x] `PINKeypad` component — 3×4 touch keypad, dot indicators, auto-submit
+- [x] `/[orgSlug]/pin-login` — kiosk landing: staff avatar grid → PIN entry
+- [x] Online path: POST `/pos/auth/pin` → terminal JWT → `setTerminalSession`
+- [x] Offline path: bcrypt comparison against IndexedDB `staffProfiles`
+- [x] `setTerminalSession` in auth store — `isTerminalSession = true`
+- [x] `AuthProvider` — skips SSO redirect for `pin-login`; terminal 401 → redirect to pin-login
+- [x] Screensaver with `useIdleTimer`, animated gradient blobs, tenant logo
+- [x] "Admin Login" button → existing SSO PKCE flow
+- [x] Trinity Authorization Layer 3 — `GET /pos/auth/me` merged into auth store after SSO
+- [ ] Supervisor override secondary PIN — not yet implemented
 
 ---
 

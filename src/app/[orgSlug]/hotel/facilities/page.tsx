@@ -1,25 +1,11 @@
 'use client';
 
-import { useParams } from 'next/navigation';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useAuthStore } from '@/store/auth';
+import { useFacilities, useBookFacility } from '@/hooks/useHotel';
 import { Card, CardContent } from '@/components/ui/base';
 import { cn } from '@/lib/utils';
 import { Building2, CalendarPlus, Loader2 } from 'lucide-react';
 import { useState } from 'react';
-
-const POS_API = process.env.NEXT_PUBLIC_POS_API_URL || 'https://posapi.codevertexitsolutions.com';
-
-interface Facility {
-  id: string;
-  name: string;
-  facility_type: string;
-  capacity: number;
-  rate_per_session: number;
-  opening_time: string;
-  closing_time: string;
-  status: 'available' | 'occupied' | 'maintenance' | 'closed';
-}
+import { toast } from 'sonner';
 
 const statusColors: Record<string, string> = {
   available:   'bg-green-500/10 text-green-700 dark:text-green-400',
@@ -32,43 +18,25 @@ const typeEmoji: Record<string, string> = {
   pool: '🏊', gym: '🏋️', conference: '🎙️', spa: '💆', kids_area: '🧒', other: '🏠',
 };
 
+const emptyForm = { guest_name: '', phone: '', session_date: '', start_time: '', end_time: '', guests_count: '1' };
+
 export default function FacilitiesPage() {
-  const params = useParams();
-  const orgSlug = params?.orgSlug as string;
-  const token = useAuthStore((s) => s.session?.accessToken);
-  const qc = useQueryClient();
   const [bookingFacilityId, setBookingFacilityId] = useState<string | null>(null);
-  const [form, setForm] = useState({ guest_name: '', phone: '', session_date: '', start_time: '', end_time: '', guests_count: '1' });
+  const [form, setForm] = useState(emptyForm);
 
-  const { data: facilities = [], isLoading } = useQuery<Facility[]>({
-    queryKey: ['facilities', orgSlug],
-    queryFn: async () => {
-      const res = await fetch(`${POS_API}/v1/${orgSlug}/hotel/facilities`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) throw new Error('Failed to fetch facilities');
-      const data = await res.json();
-      return data.facilities ?? data ?? [];
-    },
-    enabled: !!token && !!orgSlug,
-  });
+  const { data: facilities = [], isLoading } = useFacilities();
+  const book = useBookFacility(bookingFacilityId ?? '');
 
-  const book = useMutation({
-    mutationFn: async (facilityId: string) => {
-      const res = await fetch(`${POS_API}/v1/${orgSlug}/hotel/facilities/${facilityId}/book`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, guests_count: parseInt(form.guests_count) }),
-      });
-      if (!res.ok) throw new Error('Booking failed');
-      return res.json();
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['facilities', orgSlug] });
+  async function handleBook(facilityId: string) {
+    try {
+      await book.mutateAsync({ ...form, guests_count: parseInt(form.guests_count) });
+      toast.success('Facility booked');
       setBookingFacilityId(null);
-      setForm({ guest_name: '', phone: '', session_date: '', start_time: '', end_time: '', guests_count: '1' });
-    },
-  });
+      setForm(emptyForm);
+    } catch {
+      toast.error('Booking failed');
+    }
+  }
 
   if (isLoading) {
     return (
@@ -132,7 +100,6 @@ export default function FacilitiesPage() {
                   </button>
                 )}
 
-                {/* Inline booking form */}
                 {bookingFacilityId === facility.id && (
                   <div className="space-y-3 pt-2 border-t border-border">
                     {[
@@ -162,7 +129,7 @@ export default function FacilitiesPage() {
                         Cancel
                       </button>
                       <button
-                        onClick={() => book.mutate(facility.id)}
+                        onClick={() => handleBook(facility.id)}
                         disabled={book.isPending}
                         className="flex-1 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 disabled:opacity-50 transition-colors"
                       >

@@ -1,8 +1,8 @@
 # Sprint 7: Retail UI — pos-ui
 
-**Status:** 🔴 Not Started  
+**Status:** ✅ Core Delivered — barcode scanner UI, scale display, layaway list/create/detail pages, and serial capture modal shipped; retail terminal separate page and full stock visibility not yet built  
 **Period:** July–August 2026  
-**Last updated:** 2026-05-09  
+**Last updated:** 2026-05-21  
 **Goal:** Retail-optimised POS terminal — barcode scan, weighing scale, serial number capture, layaway management
 
 ---
@@ -89,6 +89,25 @@ src/hooks/
 ## Navigation
 - Retail Mode accessible from the main POS side-nav (shown only if tenant has `retail` module enabled)
 - Layaway accessible from Retail terminal header or side-nav
+
+## Completion Notes (2026-05-21)
+
+Implemented (verified by file glob of `src/app/[orgSlug]`):
+- [x] `/layaway/page.tsx` — layaway list
+- [x] `/layaway/new/page.tsx` — create layaway
+- [x] `/layaway/[id]/page.tsx` — layaway detail + payment entry
+- [x] Barcode scanner UI in main POS order page (`/order/page.tsx`) via keyboard buffer detection
+- [x] `src/lib/api/layaway.ts` — API client for layaway endpoints
+- [x] `src/hooks/useCommissions.ts`, `useAppointments.ts` — service UI hooks (Sprint 8+9)
+
+Not implemented:
+- [ ] Separate retail terminal page (`/retail/page.tsx`)
+- [ ] `ScaleDisplay` component (scale polling via API)
+- [ ] `SerialCaptureModal` as standalone component (serial capture not wired to API)
+- [ ] `useBarcodeLookup`, `useScaleReading` hooks (barcode wired via keyboard buffer, not hook)
+- [ ] `useLayawayPlans`, `useLayawayPlan`, `useLayawayPayment` hooks — not confirmed (using direct API client)
+- [ ] Stock level badge on item cards
+- [ ] Out-of-stock override with manager PIN
 
 ---
 

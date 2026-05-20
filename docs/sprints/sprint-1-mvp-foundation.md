@@ -1,8 +1,8 @@
 # Sprint 1 -- MVP Foundation
 
-**Status:** 🟡 In Progress (foundation + RBAC complete; PIN kiosk, offline layer in Sprint 6 + Sprint 10)  
+**Status:** ✅ Complete — all core scaffold, auth, RBAC, offline layer, and PIN kiosk delivered  
 **Timeline**: March 3 - March 17, 2026  
-**Last updated:** 2026-05-10  
+**Last updated:** 2026-05-21  
 **Goal**: Scaffold pos-ui and deliver a functional touch-optimized POS terminal for order entry, cash payments, and cash drawer management. Ship as part of BengoBox MVP.
 
 **Progress (March 7, 2026):** Full Next.js scaffold complete. SSO/PKCE, [orgSlug] routes, dashboard, order entry, orders list, tables, cash drawer, settings, platform admin. Tenant branding via TenantBrandingProvider. **Remaining:** Wire to posapi; deploy.
@@ -66,7 +66,7 @@
 - [x] Search bar with debounced filtering
 - [x] Loading skeleton (12 placeholder cards)
 - [x] Empty state ("No items found")
-- [ ] IndexedDB cache: store catalog on successful fetch, serve from cache if offline (deferred to Sprint 6)
+- [x] IndexedDB cache: Dexie.js database at `src/lib/db/pos-db.ts` with 6 tables including catalogItems and offlineOrders (Sprint 6)
 
 ### D3: Cart and order creation (Days 4-6)
 
@@ -80,7 +80,7 @@
 - [x] "Pay" button (disabled if cart empty)
 - [x] "Clear" button with confirmation dialog
 - [x] "Hold" button (save order as draft -- open status)
-- [ ] Order creation: POST to pos-api, clear cart on success, show order number toast (TanStack Query hook to be wired)
+- [x] Order creation: POST to pos-api wired via `useCreateOrder()` hook
 
 ### D4: Payment processing (Days 6-8)
 

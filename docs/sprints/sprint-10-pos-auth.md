@@ -1,8 +1,8 @@
 # Sprint 10: POS Dual Authentication — pos-ui
 
-**Status:** ✅ Complete  
+**Status:** ✅ Complete — PIN kiosk, terminal JWT, offline PIN, screensaver, Trinity auth, and dual auth store all shipped  
 **Period:** January–February 2027  
-**Last updated:** 2026-05-10  
+**Last updated:** 2026-05-21  
 **Audit note (2026-05-09):** PIN endpoint paths clarified to full `/api/v1/{tenant}/pos/auth/pin` form; pos-api prerequisites listed; routing note added for UUID vs slug param.  
 **Goal:** Implement touchscreen PIN login for terminal-mode staff alongside the existing SSO login, enabling kitchen staff, waiters, cashiers, and bar staff to quickly authenticate and switch users on a dedicated POS terminal
 

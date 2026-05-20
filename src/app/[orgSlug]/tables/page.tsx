@@ -5,13 +5,15 @@ import { cn } from '@/lib/utils';
 import { useTables, useSections, useUpdateTableStatus, useReleaseTable } from '@/hooks/usePOS';
 import { usePermissions, P } from '@/hooks/usePermissions';
 import {
-  CheckCircle,
+  ClipboardList,
   Grid3x3,
   Loader2,
+  Plus,
   Users,
   X,
 } from 'lucide-react';
 import { useState } from 'react';
+import { useRouter, useParams } from 'next/navigation';
 
 // ─── Status config ─────────────────────────────────────────────────────────────
 
@@ -41,14 +43,16 @@ const FILTER_OPTIONS = [
 
 interface TableCardProps {
   table: any;
+  orgSlug: string;
   onRelease: () => void;
   onChangeStatus: (status: string) => void;
   releaseLoading: boolean;
   canChange: boolean;
 }
 
-function TableCard({ table, onRelease, onChangeStatus, releaseLoading, canChange }: TableCardProps) {
+function TableCard({ table, orgSlug, onRelease, onChangeStatus, releaseLoading, canChange }: TableCardProps) {
   const [sheetOpen, setSheetOpen] = useState(false);
+  const router = useRouter();
   const cfg = getStatusCfg(table.status);
 
   return (
@@ -129,16 +133,36 @@ function TableCard({ table, onRelease, onChangeStatus, releaseLoading, canChange
 
             {/* Actions */}
             <div className="p-4 space-y-2.5">
-              {/* Assign order */}
-              {canChange && (
+              {/* New order at this table (available/reserved) */}
+              {canChange && table.status !== 'occupied' && (
                 <button
-                  onClick={() => setSheetOpen(false)}
+                  onClick={() => {
+                    setSheetOpen(false);
+                    router.push(`/${orgSlug}/order?table_id=${table.id}&table_name=${encodeURIComponent(table.name)}`);
+                  }}
                   className="w-full flex items-center gap-3 px-4 py-4 rounded-2xl border-2 border-primary bg-primary/5 hover:bg-primary/10 transition-colors min-h-14 touch-manipulation"
                 >
-                  <CheckCircle className="h-5 w-5 text-primary" />
+                  <Plus className="h-5 w-5 text-primary" />
                   <div className="text-left">
-                    <p className="font-bold text-sm">Assign Order</p>
-                    <p className="text-xs text-muted-foreground">Link an order to this table</p>
+                    <p className="font-bold text-sm">New Order</p>
+                    <p className="text-xs text-muted-foreground">Start a new order for this table</p>
+                  </div>
+                </button>
+              )}
+
+              {/* View open order (occupied) */}
+              {table.status === 'occupied' && (
+                <button
+                  onClick={() => {
+                    setSheetOpen(false);
+                    router.push(`/${orgSlug}/orders?table_id=${table.id}`);
+                  }}
+                  className="w-full flex items-center gap-3 px-4 py-4 rounded-2xl border-2 border-amber-500 bg-amber-500/5 hover:bg-amber-500/10 transition-colors min-h-14 touch-manipulation"
+                >
+                  <ClipboardList className="h-5 w-5 text-amber-600" />
+                  <div className="text-left">
+                    <p className="font-bold text-sm text-amber-700 dark:text-amber-400">View Order</p>
+                    <p className="text-xs text-muted-foreground">Open the active order for this table</p>
                   </div>
                 </button>
               )}
@@ -210,6 +234,7 @@ function SectionGroup({
   title,
   type,
   tables,
+  orgSlug,
   updateStatus,
   releaseTable,
   canChange,
@@ -217,6 +242,7 @@ function SectionGroup({
   title: string;
   type?: string;
   tables: any[];
+  orgSlug: string;
   updateStatus: any;
   releaseTable: any;
   canChange: boolean;
@@ -256,6 +282,7 @@ function SectionGroup({
           <TableCard
             key={table.id}
             table={table}
+            orgSlug={orgSlug}
             onRelease={() => releaseTable.mutate(table.id)}
             onChangeStatus={(status) => updateStatus.mutate({ id: table.id, status })}
             releaseLoading={releaseTable.isPending}
@@ -295,6 +322,8 @@ function SummaryBar({ tables }: { tables: any[] }) {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function TablesPage() {
+  const params = useParams();
+  const orgSlug = params?.orgSlug as string;
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const { canAny } = usePermissions();
   const canChange = canAny([P.TABLES_CHANGE, P.TABLES_CHANGE_OWN, P.TABLES_MANAGE]);
@@ -387,6 +416,7 @@ export default function TablesPage() {
                     title={section.name}
                     type={section.section_type || section.sectionType}
                     tables={section.tables}
+                    orgSlug={orgSlug}
                     updateStatus={updateStatus}
                     releaseTable={releaseTable}
                     canChange={canChange}
@@ -399,6 +429,7 @@ export default function TablesPage() {
               <SectionGroup
                 title="Other Tables"
                 tables={unassignedTables}
+                orgSlug={orgSlug}
                 updateStatus={updateStatus}
                 releaseTable={releaseTable}
                 canChange={canChange}

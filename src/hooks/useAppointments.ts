@@ -83,14 +83,58 @@ export function useCreateAppointment() {
   });
 }
 
-// ─── Update Status ──────────────────────────────────────────────────────────
+// ─── Get single ─────────────────────────────────────────────────────────────
+
+export function useAppointment(id: string) {
+  const tenantID = useTenantID();
+  return useQuery({
+    queryKey: ['appointment', tenantID, id],
+    queryFn: () => apiClient.get<Appointment>(`${basePath(tenantID)}/${id}`),
+    enabled: !!tenantID && !!id,
+  });
+}
+
+// ─── Update (full edit) ──────────────────────────────────────────────────────
+
+export function useUpdateAppointment() {
+  const tenantID = useTenantID();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Partial<CreateAppointmentInput> }) =>
+      apiClient.put<Appointment>(`${basePath(tenantID)}/${id}`, data),
+    onSuccess: (_d, v) => {
+      qc.invalidateQueries({ queryKey: ['appointments'] });
+      qc.invalidateQueries({ queryKey: ['appointment', tenantID, v.id] });
+    },
+  });
+}
+
+// ─── Status-transition action helpers ────────────────────────────────────────
+
+function useAppointmentAction(action: string) {
+  const tenantID = useTenantID();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      apiClient.post(`${basePath(tenantID)}/${id}/${action}`, {}),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['appointments'] }),
+  });
+}
+
+export const useCheckInAppointment  = () => useAppointmentAction('check-in');
+export const useStartAppointment    = () => useAppointmentAction('start');
+export const useCompleteAppointment = () => useAppointmentAction('complete');
+export const useCancelAppointment   = () => useAppointmentAction('cancel');
+export const useNoShowAppointment   = () => useAppointmentAction('no-show');
+
+// ─── Legacy alias (kept for appointments list page) ──────────────────────────
 
 export function useUpdateAppointmentStatus() {
   const tenantID = useTenantID();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, status }: { id: string; status: AppointmentStatus }) =>
-      apiClient.patch(`${basePath(tenantID)}/${id}/status`, { status }),
+      apiClient.put(`${basePath(tenantID)}/${id}`, { status }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['appointments'] }),
   });
 }

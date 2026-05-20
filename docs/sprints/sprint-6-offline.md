@@ -1,8 +1,8 @@
 # Sprint 6: Offline Mode & PWA — pos-ui
 
-**Status:** ✅ Complete  
+**Status:** ✅ Complete — core offline layer, IndexedDB, sync worker, offline banner, and PIN offline path all shipped; receipt print CSS deferred  
 **Period:** July–August 2026  
-**Last updated:** 2026-05-09  
+**Last updated:** 2026-05-21  
 **Audit note (2026-05-09):** Offline payment strategy clarified — cash-only when offline; M-Pesa/card/room-charge require connectivity. eTIMS offline queue is treasury-api's responsibility (VSCU mode).  
 **Goal:** IndexedDB offline order queue, SyncManager background sync, PWA install prompt, receipt printing
 

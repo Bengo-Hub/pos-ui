@@ -3,7 +3,8 @@
 **Service**: pos-ui (Next.js 15 PWA)  
 **Last updated**: 2026-05-09  
 **Purpose**: Touch-optimized, offline-capable Point of Sale terminal — multi-vertical (hospitality, retail, pharmacy, services)  
-**Status**: Core pages live; hotel/reports/shifts scaffolded; offline mode and payment flow partially implemented
+**Status**: Sprints 1–10 substantially complete. PWA offline, PIN terminal login, multi-vertical module gating, and loyalty all shipped.
+**Last updated**: 2026-05-21
 
 ---
 
@@ -23,32 +24,50 @@
 
 ---
 
-## Current Route Structure
+## Implemented Route Structure (as of 2026-05-21)
 
 ```
 src/app/
-  page.tsx                          ← Root redirect to /[orgSlug]
+  page.tsx                              # Root redirect to /[orgSlug]
   [orgSlug]/
-    page.tsx                        ← Dashboard / analytics overview
-    auth/callback/page.tsx          ← SSO OAuth2 callback
-    unauthorized/page.tsx           ← 403 access denied
-    order/page.tsx                  ← ✅ Main POS terminal (menu grid + cart + payment)
-    orders/page.tsx                 ← Orders list (open, completed)
-    tables/page.tsx                 ← ✅ Floor plan (sections, table status, release)
-    kds/page.tsx                    ← ✅ Kitchen Display System (polling, ticket management)
-    bar/page.tsx                    ← ✅ Bar Display (KDS filtered to bar station)
-    drawer/page.tsx                 ← Cash drawer management
-    shifts/page.tsx                 ← Shift open/close + float entry
+    page.tsx                            # Dashboard / analytics overview
+    auth/callback/page.tsx              # SSO OAuth2 callback
+    auth/select-outlet/page.tsx         # Outlet selector after SSO login
+    pin-login/page.tsx                  # PIN terminal login (staff avatar grid + keypad)
+    unauthorized/page.tsx               # 403 access denied
+    order/page.tsx                      # Main POS terminal (menu grid + cart + payment)
+    orders/page.tsx                     # Orders list (open, completed)
+    tables/page.tsx                     # Floor plan (sections, table status, release)
+    kds/page.tsx                        # Kitchen Display System (polling, ticket management)
+    bar/page.tsx                        # Bar Display (KDS filtered to bar station)
+    drawer/page.tsx                     # Cash drawer management
+    shifts/page.tsx                     # Shift open/close + float entry
     hotel/
-      page.tsx                      ← Hotel overview (occupancy KPIs + quick links)
-      rooms/page.tsx                ← Rooms grid with status filter
-      rooms/[roomId]/page.tsx       ← Room detail (folio, check-in/out)
-      facilities/page.tsx           ← Facilities + inline booking
-    appointments/page.tsx           ← Appointments (service businesses)
-    reports/page.tsx                ← Sales reports (KPI cards, payment breakdown)
-    settings/page.tsx               ← Outlet and device settings
-    platform/page.tsx               ← Platform admin (superuser only)
+      page.tsx                          # Hotel overview (occupancy KPIs + quick links)
+      rooms/page.tsx                    # Rooms grid with status filter
+      rooms/[roomId]/page.tsx           # Room detail (folio, check-in/out)
+      facilities/page.tsx               # Facilities + inline booking
+    appointments/page.tsx               # Appointments list (services use case)
+    commissions/page.tsx                # Commissions table
+    staff/[staffId]/schedule/page.tsx   # 7-day schedule grid
+    layaway/page.tsx                    # Layaway plans list
+    layaway/new/page.tsx                # New layaway plan
+    layaway/[id]/page.tsx               # Layaway plan detail + payments
+    loyalty/page.tsx                    # Loyalty programs
+    loyalty/[id]/page.tsx               # Loyalty program detail + transactions
+    reports/page.tsx                    # Sales reports (KPI cards, payment breakdown, charts)
+    settings/page.tsx                   # Outlet and device settings
+    platform/page.tsx                   # Platform admin (superuser only)
 ```
+
+**Not yet implemented (planned):**
+- `/appointments/[id]/page.tsx` — appointment detail + action buttons
+- `/appointments/new/page.tsx` — booking form
+- `/queue/page.tsx` — walk-in service queue
+- `/clients/` — client lookup and profiles
+- `/packages/` — service package management
+- `/webhooks/` — webhook management UI
+- `/online-orders/` — online order pickup queue UI
 
 ---
 
@@ -101,17 +120,24 @@ const USE_CASE_MODULES = {
 ```
 [Online]
   pos-api  ←── TanStack Query ←── pos-ui  ──→  Dexie.js (IndexedDB)
-                                                  ├── catalog_items (offline menu)
-                                                  ├── offline_orders (queued orders)
-                                                  └── pending_payments (cash only)
+                                                  ├── catalogItems (offline menu)
+                                                  ├── offlineOrders (queued orders)
+                                                  ├── offlinePayments (pending)
+                                                  ├── drawerSessions
+                                                  ├── drawerCloses
+                                                  └── staffProfiles (PIN bcrypt cache)
 
 [Reconnect]
   Dexie.js  ──→  SyncManager  ──→  pos-api (bulk POST)
 ```
 
-**Status:** ❌ IndexedDB not yet wired (Sprint 6).  
-Catalog is served from TanStack Query cache (in-memory, not persisted).  
-**Offline banner**: Yellow "Offline mode — cash payments only" should appear when `navigator.onLine` is false.
+**Status:** ✅ Implemented (Sprint 6).
+- `src/lib/db/pos-db.ts` — Dexie.js instance with 6 tables
+- `src/hooks/use-offline-pos.ts` — mutation hooks that fall back to IndexedDB when offline
+- `src/hooks/use-sync-offline-orders.ts` — full sync worker draining on reconnect
+- `src/components/OfflineBanner.tsx` — fixed banner shown when `navigator.onLine` is false
+- `src/lib/register-sync.ts` — SyncManager background sync tag registration
+- Payment modal: offline restricts to cash only; card/M-Pesa disabled offline
 
 ---
 
@@ -124,7 +150,14 @@ Catalog is served from TanStack Query cache (in-memory, not persisted).
 5. Axios interceptor attaches `Authorization: Bearer {token}` + tenant/outlet headers
 6. Session auto-refresh on 401; terminal session = 8 hours (shift-aligned)
 
-**Planned (Sprint 10):** PIN terminal login — touchscreen 4–6 digit PIN for kitchen, bar, and cashier terminals. Issues short-lived `pos_terminal` JWT scoped to device + outlet. Enables quick staff hand-off without full OAuth redirect.
+**Sprint 10 (✅ Complete):** PIN terminal login implemented. Touchscreen 4-digit PIN for kitchen, bar, and cashier terminals.
+- `/pin-login` page: staff avatar grid → PIN keypad → POST `/pos/auth/pin` → short-lived 4-hour terminal JWT
+- Offline path: bcrypt comparison against IndexedDB `staffProfiles`
+- `setTerminalSession` in Zustand auth store (`isTerminalSession = true`)
+- `AuthProvider` skips SSO redirect for `pin-login`; terminal 401 redirects back to `pin-login`
+- Screensaver with `useIdleTimer`, animated blobs, tenant logo
+- "Admin Login" button for SSO manager flow
+- Trinity Layer 3: `GET /pos/auth/me` merges POS permissions into auth store after SSO login
 
 ---
 
@@ -177,17 +210,17 @@ src/
 
 ---
 
-## Sprint Status
+## Sprint Status (as of 2026-05-21)
 
 | Sprint | Title | Status |
 |--------|-------|--------|
-| 1 | Foundation (scaffold, SSO, layout, module access) | 🟡 In progress |
-| 2 | Order Entry (menu grid, cart, modifiers, payment) | ✅ Implemented |
-| 3 | Tables & Shifts | ✅ Implemented |
-| 4 | Hotel UI (rooms, facilities, check-in/out) | 🟡 Scaffold done |
+| 1 | Foundation (scaffold, SSO, layout, module access) | ✅ Complete |
+| 2 | Order Entry (menu grid, cart, modifiers, payment) | ✅ Implemented (M-Pesa polling, table selector pending) |
+| 3 | Tables & Shifts | ✅ Implemented (table-to-order nav pending) |
+| 4 | Hotel UI (rooms, facilities, check-in/out) | 🟡 Scaffold done (API hooks not wired) |
 | 5 | KDS Terminal View | ✅ Complete |
-| 6 | Offline / PWA (IndexedDB, sync) | 🔴 Not started |
-| 7 | Retail UI (barcode scan, list view, weight) | 🔴 Not started |
-| 8 | Service Business UI (appointments, packages) | 🔴 Not started |
-| 9 | Reports & Analytics UI | 🟡 Basic scaffold |
-| 10 | Dual Auth (SSO + PIN terminal login) | 🔴 Not started |
+| 6 | Offline / PWA (IndexedDB, sync) | ✅ Complete (receipt print deferred) |
+| 7 | Retail UI (barcode scan, layaway) | ✅ Core delivered (ScaleDisplay, serial capture pending) |
+| 8 | Service Business UI (appointments, commissions, schedules) | ✅ Core delivered (detail/new/queue pages pending) |
+| 9 | Reports & Analytics UI | ✅ Core delivered (category/staff/top-items charts pending) |
+| 10 | Dual Auth (SSO + PIN terminal login) | ✅ Complete (supervisor override PIN pending) |
