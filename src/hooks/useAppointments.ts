@@ -9,7 +9,7 @@ function useTenantID() {
 }
 
 function basePath(tenantID: string) {
-  return `/api/v1/${tenantID}/appointments`;
+  return `/api/v1/${tenantID}/pos/appointments`;
 }
 
 // ─── Types ──────────────────────────────────────────────────────────────────
