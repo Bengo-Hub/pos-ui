@@ -8,6 +8,7 @@ import {
   ChefHat,
   ChevronDown,
   ClipboardList,
+  Gift,
   TrendingUp,
   Clock,
   Cpu,
@@ -185,6 +186,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
       defaultCollapsed: true,
       items: [
         { label: 'Reports', icon: BarChart3, href: '/reports', moduleKey: 'reports', permission: [P.REPORTS_VIEW, P.REPORTS_MANAGE] },
+        { label: 'Loyalty', icon: Gift, href: '/loyalty', moduleKey: 'orders', permission: [P.ORDERS_VIEW, P.ORDERS_ADD] },
         { label: 'Commissions', icon: TrendingUp, href: '/commissions', moduleKey: 'orders', permission: [P.ORDERS_VIEW, P.ORDERS_MANAGE] },
         { label: 'Settings', icon: Settings, href: '/settings', moduleKey: 'settings', permission: [P.CONFIG_VIEW, P.CONFIG_CHANGE, P.CONFIG_MANAGE] },
       ],
