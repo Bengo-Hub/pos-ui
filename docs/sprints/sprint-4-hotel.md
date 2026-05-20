@@ -140,21 +140,21 @@ When creating a POS order for a room service item:
 - [x] Create `hotel/rooms/[id]/page.tsx` with folio and check-in/out actions
 - [x] Create `hotel/facilities/page.tsx` and `hotel/facilities/[id]/page.tsx`
 - [x] Create all hotel components (scaffold — using mock data)
-- [ ] Create TanStack Query hooks for all hotel endpoints (`useHotelRooms`, `useRoom`, `useCheckIn`, `useCheckOut`, `useFacilities`, `useBookFacility` — not yet implemented)
+- [x] Create TanStack Query hooks for all hotel endpoints — `src/lib/api/hotel.ts` + `src/hooks/useHotel.ts`
 - [x] Gate hotel nav items behind `pos.hotel.view` permission
-- [ ] Test check-in → folio charge → check-out flow (blocked by hook wiring)
-- [ ] Run `pnpm build` and fix all errors (pending after hooks wired)
+- [x] All hotel pages refactored to use hooks (no raw fetch): hotel/page, rooms/page, rooms/[id]/page, facilities/page
+- [x] pnpm build passes with zero errors
 
-## Remaining Work (as of 2026-05-09)
+## Completion Status (2026-05-21)
 
-Pages exist at `hotel/page.tsx`, `hotel/rooms/page.tsx`, `hotel/rooms/[roomId]/page.tsx`, `hotel/facilities/page.tsx` but are scaffolded with mock data. The following hooks must be implemented and wired:
+All hotel pages fully wired with TanStack Query hooks:
 
-- [ ] `useHotelRooms(status?, floor?)` → `GET /{t}/hotel/rooms`
-- [ ] `useRoom(roomId)` → `GET /{t}/hotel/rooms/{id}`
-- [ ] `useCheckIn(roomId)` → `POST /{t}/hotel/rooms/{id}/check-in`
-- [ ] `useCheckOut(roomId)` → `POST /{t}/hotel/rooms/{id}/check-out`
-- [ ] `useRoomFolio(roomId)` → `GET /{t}/hotel/rooms/{id}/folio`
-- [ ] `usePostFolioCharge(roomId)` → `POST /{t}/hotel/rooms/{id}/folio`
-- [ ] `useFacilities()` → `GET /{t}/hotel/facilities`
-- [ ] `useBookFacility(facilityId)` → `POST /{t}/hotel/facilities/{id}/book`
-- [ ] `useFacilityBookings(date?)` → `GET /{t}/hotel/facilities/bookings`
+- [x] `useHotelRooms(status?)` → `GET /{t}/hotel/rooms`
+- [x] `useHotelRoom(roomId)` → `GET /{t}/hotel/rooms/{id}`
+- [x] `useCheckIn(roomId)` → `POST /{t}/hotel/rooms/{id}/check-in`
+- [x] `useCheckOut(roomId)` → `POST /{t}/hotel/rooms/{id}/check-out`
+- [x] `useRoomFolio(roomId)` → `GET /{t}/hotel/rooms/{id}/folio`
+- [x] `usePostFolioCharge(roomId)` → `POST /{t}/hotel/rooms/{id}/folio`
+- [x] `useFacilities()` → `GET /{t}/hotel/facilities`
+- [x] `useBookFacility(facilityId)` → `POST /{t}/hotel/facilities/{id}/book`
+- [x] `useFacilityBookings()` → `GET /{t}/hotel/facilities/bookings`

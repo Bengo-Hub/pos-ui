@@ -117,6 +117,8 @@ useSessions()                          → GET /{t}/pos/devices/{deviceId}/sessi
 - [x] Test: open shift → assign table → create order → close drawer
 - [x] Run `pnpm build` and fix all errors
 
-## Completion Notes (2026-05-09)
+## Completion Notes (2026-05-21)
 
-Floor plan at `tables/page.tsx`: section tabs, table status color-coding, status filters, and release button all confirmed. Shifts at `shifts/page.tsx`: shift open/close with float entry. Cash drawer at `drawer/page.tsx`: open/close/events flow operational.
+Floor plan at `tables/page.tsx`: section tabs, table status color-coding, status filters, and release button all confirmed. Table action buttons updated: "New Order" routes to `/order?table_id={id}` for available tables; "View Order" routes to `/orders?table_id={id}` for occupied tables.
+
+Shifts at `shifts/page.tsx`: refactored to use `useCurrentShift`, `useOpenShift`, `useCloseShift` from `src/hooks/useShifts.ts` — no raw fetch(). Cash drawer at `drawer/page.tsx`: open/close/events flow operational.

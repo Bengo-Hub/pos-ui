@@ -131,9 +131,18 @@ Implemented (verified by file glob and hooks listing):
 - [x] `/commissions/page.tsx` — commissions table (manager view)
 - [x] `/staff/[staffId]/schedule/page.tsx` — staff schedule 7-day grid editor
 
-Not implemented:
-- [ ] `/appointments/[appointmentId]/page.tsx` — appointment detail + action buttons
-- [ ] `/appointments/new/page.tsx` — book appointment form
+Additionally implemented (2026-05-21):
+- [x] `/appointments/[id]/page.tsx` — appointment detail with contextual action buttons (check-in, start, complete, cancel, no-show)
+- [x] `useAppointment(id)`, `useCheckInAppointment()`, `useStartAppointment()`, `useCompleteAppointment()`, `useCancelAppointment()`, `useNoShowAppointment()` hooks in `useAppointments.ts`
+- [x] `src/hooks/useShifts.ts` — `useCurrentShift`, `useOpenShift`, `useCloseShift` hooks
+- [x] `src/lib/api/shifts.ts` — shifts API lib
+- [x] `/shifts/page.tsx` refactored to use useShifts hooks (no raw fetch)
+- [x] `src/lib/api/webhooks.ts`, `src/lib/api/online-orders.ts` — webhook and online-orders API libs
+- [x] `/webhooks/page.tsx` — webhook management with delivery log
+- [x] `/online-orders/page.tsx` — pickup queue with auto-refresh
+
+Not yet implemented:
+- [ ] `/appointments/new/page.tsx` — standalone book appointment form page (BookingForm exists inline on list page)
 - [ ] `/queue/page.tsx` — walk-in queue board
 - [ ] `/clients/page.tsx`, `/clients/[clientId]/page.tsx` — client lookup and profiles
 - [ ] `/packages/page.tsx`, `/packages/purchases/page.tsx` — service packages
