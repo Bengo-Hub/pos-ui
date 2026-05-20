@@ -15,9 +15,21 @@ function shiftsBase(tenantId: string) {
   return `/api/v1/${tenantId}/pos/devices/current/sessions`;
 }
 
+export interface SessionSummary {
+  session_id: string;
+  opened_at: string;
+  opening_float: number;
+  order_count: number;
+  total_revenue: number;
+  expected_cash: number;
+}
+
 export const shiftsApi = {
   getCurrent: (tenantId: string) =>
     apiClient.get<ShiftSession>(`${shiftsBase(tenantId)}/current`),
+
+  getSummary: (tenantId: string) =>
+    apiClient.get<SessionSummary>(`${shiftsBase(tenantId)}/current/summary`),
 
   open: (tenantId: string, opening_float: number) =>
     apiClient.post<ShiftSession>(`${shiftsBase(tenantId)}/open`, { opening_float }),

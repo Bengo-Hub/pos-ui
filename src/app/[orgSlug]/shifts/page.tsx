@@ -2,8 +2,8 @@
 
 import { useState } from 'react';
 import { Card, CardContent } from '@/components/ui/base';
-import { Clock, DollarSign, LogIn, LogOut, Loader2 } from 'lucide-react';
-import { useCurrentShift, useOpenShift, useCloseShift } from '@/hooks/useShifts';
+import { BarChart3, Clock, DollarSign, LogIn, LogOut, Loader2, ShoppingCart } from 'lucide-react';
+import { useCurrentShift, useOpenShift, useCloseShift, useSessionSummary } from '@/hooks/useShifts';
 import { toast } from 'sonner';
 
 export default function ShiftsPage() {
@@ -12,6 +12,7 @@ export default function ShiftsPage() {
   const { data: session, isLoading } = useCurrentShift();
   const openShift = useOpenShift();
   const closeShift = useCloseShift();
+  const { data: summary } = useSessionSummary(session?.status === 'open');
 
   const isOpen = session?.status === 'open';
   const busy = openShift.isPending || closeShift.isPending;
@@ -74,6 +75,27 @@ export default function ShiftsPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Session summary — shown when shift is open */}
+      {isOpen && summary && (
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            { label: 'Orders', value: summary.order_count.toString(), icon: ShoppingCart },
+            { label: 'Revenue', value: `KES ${summary.total_revenue.toLocaleString()}`, icon: BarChart3 },
+            { label: 'Expected Cash', value: `KES ${summary.expected_cash.toLocaleString()}`, icon: DollarSign },
+          ].map(({ label, value, icon: Icon }) => (
+            <Card key={label}>
+              <CardContent className="p-4 flex flex-col gap-1">
+                <div className="flex items-center gap-1.5 text-muted-foreground">
+                  <Icon className="h-3.5 w-3.5" />
+                  <span className="text-xs">{label}</span>
+                </div>
+                <p className="font-bold text-sm truncate">{value}</p>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
 
       {/* Float entry + action */}
       <Card>
