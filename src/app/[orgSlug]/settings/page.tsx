@@ -395,7 +395,7 @@ function ModulesTab() {
   const updateModules = useUpdatePOSModules();
   const { can } = usePermissions();
   const { isSuperUser } = useModuleAccess();
-  const canEdit = can(P.CONFIG_MANAGE) || isSuperUser;
+  const canEdit = can(P.CONFIG_MANAGE) || can(P.CONFIG_CHANGE) || isSuperUser;
 
   const [modules, setModules] = useState({
     hotel_module_enabled: false,

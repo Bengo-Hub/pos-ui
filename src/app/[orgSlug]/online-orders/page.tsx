@@ -114,7 +114,7 @@ export default function OnlineOrdersPage() {
   const ready    = orders.filter((o) => o.status === 'ready_for_pickup');
 
   return (
-    <div className="p-6 space-y-6 max-w-3xl mx-auto">
+    <div className="p-6 space-y-6">
       <div>
         <h1 className="text-2xl font-bold">Online Orders — Pickup Queue</h1>
         <p className="text-sm text-muted-foreground mt-1">

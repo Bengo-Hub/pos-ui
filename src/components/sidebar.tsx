@@ -111,12 +111,12 @@ function NavGroupSection({
         className="flex w-full items-center justify-between px-3 mb-1 py-0.5 group/header"
         aria-expanded={open}
       >
-        <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-sidebar-foreground/25 group-hover/header:text-sidebar-foreground/40 transition-colors">
+        <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-sidebar-foreground/35 group-hover/header:text-sidebar-foreground/50 transition-colors">
           {group.label}
         </span>
         <ChevronDown
           className={cn(
-            'h-3 w-3 text-sidebar-foreground/20 transition-all duration-200 group-hover/header:text-sidebar-foreground/40',
+            'h-3 w-3 text-sidebar-foreground/30 transition-all duration-200 group-hover/header:text-sidebar-foreground/50',
             open && 'rotate-180'
           )}
         />
@@ -155,7 +155,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
         { label: 'New Order', icon: Plus, href: '/order', moduleKey: 'new_order', permission: P.ORDERS_ADD },
         { label: 'Orders', icon: ClipboardList, href: '/orders', moduleKey: 'orders', permission: [P.ORDERS_VIEW, P.ORDERS_VIEW_OWN] },
         { label: 'Cash Drawer', icon: Wallet, href: '/drawer', moduleKey: 'cash_drawer', permission: [P.DRAWERS_ADD, P.DRAWERS_MANAGE, P.DRAWERS_VIEW_OWN] },
-        { label: 'Layaway', icon: Package, href: '/layaway', moduleKey: 'orders', permission: [P.ORDERS_VIEW, P.ORDERS_ADD] },
+        { label: 'Layaway', icon: Package, href: '/layaway', moduleKey: 'layaway', permission: [P.ORDERS_VIEW, P.ORDERS_ADD] },
         { label: 'Shifts', icon: Clock, href: '/shifts', moduleKey: 'shifts', permission: [P.SESSIONS_ADD, P.SESSIONS_VIEW, P.SESSIONS_VIEW_OWN] },
       ],
     },
@@ -187,7 +187,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
       label: 'Online Orders',
       defaultCollapsed: true,
       items: [
-        { label: 'Pickup Queue', icon: ShoppingBag, href: '/online-orders', moduleKey: 'orders', permission: [P.ORDERS_VIEW, P.ORDERS_MANAGE] },
+        { label: 'Pickup Queue', icon: ShoppingBag, href: '/online-orders', moduleKey: 'online_orders', permission: [P.ORDERS_VIEW, P.ORDERS_MANAGE] },
       ],
     },
     {
@@ -195,8 +195,8 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
       defaultCollapsed: true,
       items: [
         { label: 'Reports', icon: BarChart3, href: '/reports', moduleKey: 'reports', permission: [P.REPORTS_VIEW, P.REPORTS_MANAGE] },
-        { label: 'Loyalty', icon: Gift, href: '/loyalty', moduleKey: 'orders', permission: [P.ORDERS_VIEW, P.ORDERS_ADD] },
-        { label: 'Commissions', icon: TrendingUp, href: '/commissions', moduleKey: 'orders', permission: [P.ORDERS_VIEW, P.ORDERS_MANAGE] },
+        { label: 'Loyalty', icon: Gift, href: '/loyalty', moduleKey: 'loyalty', permission: [P.ORDERS_VIEW, P.ORDERS_ADD] },
+        { label: 'Commissions', icon: TrendingUp, href: '/commissions', moduleKey: 'commissions', permission: [P.ORDERS_VIEW, P.ORDERS_MANAGE] },
         { label: 'Webhooks', icon: Webhook, href: '/webhooks', moduleKey: 'settings', permission: [P.CONFIG_VIEW, P.CONFIG_MANAGE] },
         { label: 'Settings', icon: Settings, href: '/settings', moduleKey: 'settings', permission: [P.CONFIG_VIEW, P.CONFIG_CHANGE, P.CONFIG_MANAGE] },
       ],
@@ -293,12 +293,12 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
             <span className="text-xs font-bold text-primary">{displayInitial}</span>
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-xs font-semibold text-white truncate">{displayName}</p>
-            <p className="text-[10px] text-sidebar-foreground/40 mt-0.5">{roleLabel}</p>
+            <p className="text-xs font-semibold text-sidebar-foreground truncate">{displayName}</p>
+            <p className="text-[10px] text-sidebar-foreground/50 mt-0.5">{roleLabel}</p>
           </div>
           <button
             onClick={() => logout()}
-            className="h-7 w-7 rounded-lg flex items-center justify-center text-sidebar-foreground/35 hover:text-rose-400 hover:bg-white/8 transition-colors"
+            className="h-7 w-7 rounded-lg flex items-center justify-center text-sidebar-foreground/40 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
             title="Sign out"
           >
             <LogOut className="h-4 w-4" />
@@ -328,7 +328,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
       >
         {/* Mobile header bar */}
         <div className="flex h-14 items-center justify-between border-b border-sidebar-border px-4 lg:hidden bg-sidebar">
-          <span className="text-sm font-semibold text-white">Menu</span>
+          <span className="text-sm font-semibold text-sidebar-foreground">Menu</span>
           <button
             type="button"
             onClick={onClose}

@@ -2,19 +2,18 @@
 
 /**
  * Centralized module access hook for BengoBox POS.
- * Single source of truth for outlet use-case and module-based authorization.
+ * Two-level gating:
+ *   1. Use-case level: does this use case support the module at all?
+ *   2. Outlet setting level: is the module toggled on in pos-api outlet settings?
  *
  * Use case is per-outlet (not per-tenant). The default comes from the tenant
  * but each outlet can override it.
  *
  * Use cases: hospitality, retail, services, quick_service, pharmacy
- *
- * Usage:
- *   const { isHospitality, hasModule } = useModuleAccess();
- *   if (hasModule('kds')) { ... }
  */
 
 import { useAuthStore } from '@/store/auth';
+import { usePOSSettings } from './usePOSSettings';
 
 // ─── Module keys ────────────────────────────────────────────────────────────
 export type ModuleKey =
@@ -29,7 +28,11 @@ export type ModuleKey =
   | 'platform'
   | 'hotel'
   | 'shifts'
-  | 'reports';
+  | 'reports'
+  | 'layaway'
+  | 'loyalty'
+  | 'commissions'
+  | 'online_orders';
 
 // ─── Use-case types ─────────────────────────────────────────────────────────
 export type UseCaseType =
@@ -50,11 +53,11 @@ const COMMON_MODULES: ModuleKey[] = [
 ];
 
 const USE_CASE_MODULES: Record<UseCaseType, ModuleKey[]> = {
-  hospitality: [...COMMON_MODULES, 'tables', 'kds', 'appointments', 'hotel', 'shifts', 'reports'],
-  retail: [...COMMON_MODULES, 'shifts', 'reports'],
-  services: [...COMMON_MODULES, 'appointments', 'shifts', 'reports'],
-  quick_service: [...COMMON_MODULES, 'kds', 'shifts', 'reports'],
-  pharmacy: [...COMMON_MODULES, 'shifts', 'reports'],
+  hospitality:   [...COMMON_MODULES, 'tables', 'kds', 'appointments', 'hotel', 'shifts', 'reports', 'loyalty', 'commissions', 'online_orders'],
+  retail:        [...COMMON_MODULES, 'shifts', 'reports', 'layaway', 'loyalty', 'commissions', 'online_orders'],
+  services:      [...COMMON_MODULES, 'appointments', 'shifts', 'reports', 'loyalty', 'commissions'],
+  quick_service: [...COMMON_MODULES, 'kds', 'shifts', 'reports', 'online_orders'],
+  pharmacy:      [...COMMON_MODULES, 'shifts', 'reports', 'loyalty'],
 };
 
 // ─── Hook ───────────────────────────────────────────────────────────────────
@@ -86,6 +89,9 @@ export function useModuleAccess() {
     (user?.roles ?? []).includes('superuser') ||
     (user?.roles ?? []).includes('super_admin');
 
+  // Outlet-level backend module toggles (staleTime 5min — won't re-fetch on every render)
+  const { data: posSettings } = usePOSSettings();
+
   // Use-case convenience flags
   const isHospitality = useCase === 'hospitality';
   const isRetail = useCase === 'retail';
@@ -97,12 +103,22 @@ export function useModuleAccess() {
   const enabledModules = USE_CASE_MODULES[useCase];
 
   /**
-   * Check if a module is enabled for the current outlet use-case.
+   * Check if a module is enabled for the current outlet.
    * Superusers always have access.
+   * Regular users must pass both use-case check AND backend toggle (where applicable).
    */
   function hasModule(moduleKey: string): boolean {
     if (isSuperUser) return true;
-    return enabledModules.includes(moduleKey as ModuleKey);
+    if (!enabledModules.includes(moduleKey as ModuleKey)) return false;
+    // Overlay backend toggle flags from outlet settings
+    if (posSettings) {
+      if (moduleKey === 'hotel'    && !posSettings.hotel_module_enabled)  return false;
+      if (moduleKey === 'layaway'  && !posSettings.layaway_enabled)        return false;
+      if (moduleKey === 'kds'      && !posSettings.enable_kds)             return false;
+      if (moduleKey === 'appointments' && !posSettings.enable_appointments) return false;
+      if (moduleKey === 'shifts'   && !posSettings.shift_reports_enabled)  return false;
+    }
+    return true;
   }
 
   return {

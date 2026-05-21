@@ -159,6 +159,7 @@ export default function PINLoginPage() {
   const [timeoutMs, setTimeoutMsState]        = useState<number>(30_000);
   const [activeTab, setActiveTab]             = useState<string>('All');
   const [showOutletModal, setShowOutletModal] = useState(false);
+  const [step, setStep]                       = useState<'outlet' | 'pin'>('pin');
 
   useEffect(() => { setTimeoutMsState(getScreensaverTimeoutMs()); }, []);
 
@@ -196,6 +197,40 @@ export default function PINLoginPage() {
     staleTime: 10 * 60_000,
     retry: false,
   });
+
+  // Fetch all outlets for the tenant (public endpoint, no auth needed)
+  const { data: allOutlets = [] } = useQuery<OutletInfo[]>({
+    queryKey: ['pos-outlets-list', effectiveTenantID],
+    queryFn: async () => {
+      try {
+        const res = await apiClient.get<OutletInfo[] | { data: OutletInfo[] }>(
+          `/api/v1/${effectiveTenantID}/pos/outlets`
+        );
+        return Array.isArray(res) ? res : (res as { data: OutletInfo[] }).data ?? [];
+      } catch {
+        return [];
+      }
+    },
+    enabled: !!effectiveTenantID && !tenantLoading,
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+
+  // Show outlet selector if multiple outlets and none previously selected
+  useEffect(() => {
+    if (tenantLoading || !effectiveTenantID) return;
+    const hasStoredOutlet = typeof window !== 'undefined' && !!localStorage.getItem('pos-selected-outlet-id');
+    if (!hasStoredOutlet && allOutlets.length > 1) {
+      setStep('outlet');
+    }
+  }, [allOutlets.length, effectiveTenantID, tenantLoading]);
+
+  function selectOutlet(outlet: OutletInfo) {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('pos-selected-outlet-id', outlet.id);
+    }
+    setStep('pin');
+  }
 
   // ── Staff profiles ─────────────────────────────────────────────────────────
 
@@ -330,6 +365,88 @@ export default function PINLoginPage() {
   const useCaseLabel = useCase ? (USE_CASE_LABELS[useCase] ?? useCase) : null;
 
   // ── Render ─────────────────────────────────────────────────────────────────
+
+  // Outlet selection step — shown when multiple outlets and none stored
+  if (step === 'outlet') {
+    return (
+      <div
+        className="relative h-screen w-screen overflow-hidden flex flex-col items-center justify-center p-6"
+        style={{
+          background: 'linear-gradient(135deg, rgb(var(--brand-dark)) 0%, color-mix(in srgb, rgb(var(--brand-dark)) 80%, rgb(var(--brand-emphasis))) 50%, rgb(var(--brand-dark)) 100%)',
+        }}
+      >
+        <div className="pointer-events-none absolute inset-0 overflow-hidden">
+          <div className="absolute -top-48 -left-48 h-125 w-125 rounded-full bg-primary/10 blur-3xl" />
+          <div className="absolute -bottom-32 right-1/3 h-80 w-80 rounded-full bg-primary/5 blur-3xl" />
+        </div>
+
+        <div className="relative z-10 w-full max-w-md flex flex-col gap-6">
+          <div className="flex flex-col items-center gap-3 text-center">
+            {tenant?.logoUrl ? (
+              <img src={tenant.logoUrl} alt={tenant.orgName} className="h-14 w-14 object-contain rounded-2xl" />
+            ) : (
+              <div className="h-14 w-14 rounded-2xl bg-primary/20 border border-primary/30 flex items-center justify-center">
+                <span className="text-lg font-black text-primary">{(tenant?.orgName ?? orgSlug).slice(0, 2).toUpperCase()}</span>
+              </div>
+            )}
+            <div>
+              <h1 className="text-xl font-black text-white">{tenant?.orgName ?? orgSlug}</h1>
+              <p className="text-white/45 text-sm mt-1">Select your outlet to continue</p>
+            </div>
+          </div>
+
+          <div className="grid gap-3">
+            {allOutlets.length === 0 ? (
+              Array.from({ length: 2 }).map((_, i) => (
+                <div key={i} className="h-16 rounded-2xl bg-white/5 animate-pulse" />
+              ))
+            ) : (
+              allOutlets.map((outlet) => {
+                const color = outlet.use_case ? USE_CASE_COLORS[outlet.use_case] : null;
+                const label = outlet.use_case ? (USE_CASE_LABELS[outlet.use_case] ?? outlet.use_case) : null;
+                return (
+                  <button
+                    key={outlet.id}
+                    onClick={() => selectOutlet(outlet)}
+                    className="flex items-center gap-4 px-5 py-4 rounded-2xl border border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/25 active:scale-[0.98] transition-all text-left group"
+                  >
+                    <div className="h-10 w-10 rounded-xl bg-primary/15 border border-primary/25 flex items-center justify-center shrink-0 group-hover:bg-primary/25 transition-colors">
+                      <Building2 className="h-5 w-5 text-primary" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold text-white truncate">{outlet.name}</p>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        {outlet.is_hq && (
+                          <span className="text-[10px] font-bold text-white/30 uppercase">HQ</span>
+                        )}
+                        {label && color && (
+                          <span className={cn('text-[10px] font-bold uppercase tracking-wide', color.text)}>{label}</span>
+                        )}
+                      </div>
+                    </div>
+                    <ChevronRight className="h-4 w-4 text-white/25 group-hover:text-white/60 group-hover:translate-x-0.5 transition-all shrink-0" />
+                  </button>
+                );
+              })
+            )}
+          </div>
+
+          <div className="flex items-center gap-3">
+            <div className="flex-1 h-px bg-white/10" />
+            <span className="text-[10px] text-white/25 font-medium tracking-wider uppercase">or</span>
+            <div className="flex-1 h-px bg-white/10" />
+          </div>
+          <button
+            onClick={() => redirectToSSO(orgSlug, window.location.href)}
+            className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-2xl border border-white/12 bg-white/4 text-sm text-white/50 hover:bg-white/10 hover:text-white/80 hover:border-white/22 transition-all font-medium"
+          >
+            <ExternalLink className="h-4 w-4" />
+            Sign in with your account
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <>
@@ -722,10 +839,10 @@ export default function PINLoginPage() {
           </div>
           <div className="hidden md:block" />
 
-          {/* Switch Outlet — shown when multi-outlet or when outlet info is loaded */}
+          {/* Switch Outlet — shown when outlet info is loaded */}
           {outletInfo && (
             <button
-              onClick={() => setShowOutletModal(true)}
+              onClick={() => allOutlets.length > 1 ? setStep('outlet') : setShowOutletModal(true)}
               className="flex items-center gap-1.5 text-[11px] text-white/25 hover:text-white/50 transition-colors font-medium group"
             >
               <Building2 className="h-3 w-3" />
@@ -736,7 +853,7 @@ export default function PINLoginPage() {
         </div>
       </div>
 
-      {/* Switch Outlet modal placeholder */}
+      {/* Switch Outlet modal — real outlet list */}
       {showOutletModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
           <div className="w-full max-w-sm rounded-3xl border border-white/10 bg-slate-900/95 shadow-2xl p-6 flex flex-col gap-4">
@@ -749,19 +866,41 @@ export default function PINLoginPage() {
                 ✕
               </button>
             </div>
-            <p className="text-white/40 text-sm">
-              Outlet selection is managed through your account settings. Sign in to switch outlets.
-            </p>
-            <button
-              onClick={() => {
-                setShowOutletModal(false);
-                redirectToSSO(orgSlug, window.location.href);
-              }}
-              className="flex items-center justify-center gap-2 w-full py-3 rounded-2xl bg-primary text-primary-foreground font-bold text-sm hover:bg-primary/90 transition-colors"
-            >
-              <ExternalLink className="h-4 w-4" />
-              Sign in with your account
-            </button>
+            {allOutlets.length > 0 ? (
+              <div className="grid gap-2">
+                {allOutlets.map((outlet) => {
+                  const color = outlet.use_case ? USE_CASE_COLORS[outlet.use_case] : null;
+                  const label = outlet.use_case ? (USE_CASE_LABELS[outlet.use_case] ?? outlet.use_case) : null;
+                  const isCurrent = outletInfo?.id === outlet.id;
+                  return (
+                    <button
+                      key={outlet.id}
+                      onClick={() => {
+                        selectOutlet(outlet);
+                        setShowOutletModal(false);
+                      }}
+                      className={cn(
+                        'flex items-center gap-3 px-4 py-3 rounded-2xl border text-left transition-all',
+                        isCurrent
+                          ? 'border-primary/50 bg-primary/10'
+                          : 'border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20'
+                      )}
+                    >
+                      <Building2 className={cn('h-4 w-4 shrink-0', isCurrent ? 'text-primary' : 'text-white/40')} />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-white truncate">{outlet.name}</p>
+                        {label && color && (
+                          <span className={cn('text-[10px] font-bold', color.text)}>{label}</span>
+                        )}
+                      </div>
+                      {isCurrent && <span className="text-[10px] text-primary font-bold">Current</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="text-white/40 text-sm text-center py-4">No outlets available.</p>
+            )}
           </div>
         </div>
       )}

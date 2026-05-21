@@ -13,6 +13,8 @@ export interface POSSettings {
   paper_width: string;
   auto_print_order: boolean;
   auto_print_kitchen: boolean;
+  enable_kds: boolean;
+  enable_appointments: boolean;
   hotel_module_enabled: boolean;
   layaway_enabled: boolean;
   shift_reports_enabled: boolean;

@@ -1,13 +1,27 @@
 'use client';
 
 import { useAuthStore } from '@/store/auth';
-import { Bell, ChevronDown, LogOut, MapPin, Menu, Search, Settings, User } from 'lucide-react';
+import { Bell, BookOpen, ChevronDown, ExternalLink, Globe, LogOut, MapPin, Menu, Package, Search, Settings, ShoppingCart, Tag, User } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useRef, useState } from 'react';
 import { ThemeToggle } from './theme-toggle';
 import { useTenantBranding } from '@/providers/tenant-branding-provider';
 import { OutletFilter } from './outlet-filter';
+
+const INVENTORY_URL = process.env.NEXT_PUBLIC_INVENTORY_UI_URL ?? 'https://inventory.codevertexitsolutions.com';
+const TREASURY_URL = process.env.NEXT_PUBLIC_TREASURY_UI_URL ?? 'https://books.codevertexitsolutions.com';
+const PRICING_URL = process.env.NEXT_PUBLIC_SUBSCRIPTIONS_UI_URL ?? 'https://pricing.codevertexitsolutions.com';
+const ORDERING_URL = process.env.NEXT_PUBLIC_ORDERING_UI_URL ?? 'https://order.codevertexitsolutions.com';
+const AUTH_URL = process.env.NEXT_PUBLIC_AUTH_UI_URL ?? 'https://accounts.codevertexitsolutions.com';
+
+const SERVICES = [
+  { label: 'Inventory', href: (slug: string) => `${INVENTORY_URL}/${slug}`, Icon: Package },
+  { label: 'Treasury', href: (slug: string) => `${TREASURY_URL}/${slug}`, Icon: BookOpen },
+  { label: 'Online Store', href: (slug: string) => `${ORDERING_URL}/${slug}`, Icon: ShoppingCart },
+  { label: 'Subscriptions', href: (slug: string) => `${PRICING_URL}/${slug}`, Icon: Tag },
+  { label: 'Account Portal', href: (slug: string) => `${AUTH_URL}/${slug}`, Icon: Globe },
+] as const;
 
 const USE_CASE_LABELS: Record<string, string> = {
   hospitality: 'Hospitality',
@@ -110,13 +124,13 @@ export function Header({ onMenuClick }: HeaderProps) {
           {isAuthenticated && profileOpen && (
             <>
               <div className="fixed inset-0 z-40" aria-hidden="true" onClick={() => setProfileOpen(false)} />
-              <div className="absolute right-0 top-full mt-2 z-50 w-64 rounded-[1.5rem] p-3 shadow-2xl border border-border bg-popover overflow-hidden">
+              <div className="absolute right-0 top-full mt-2 z-50 w-72 rounded-[1.5rem] p-3 shadow-2xl border border-border bg-popover overflow-hidden">
                 <div className="mb-2 px-3 py-2">
                   <p className="text-sm font-black text-slate-900 dark:text-white">{name}</p>
                   <p className="text-[10px] text-slate-400 truncate font-bold uppercase tracking-widest mt-0.5">{role || 'Member'}</p>
                 </div>
-                
-                <div className="h-[1px] bg-slate-100 dark:bg-white/5 my-2 mx-1" />
+
+                <div className="h-px bg-slate-100 dark:bg-white/5 my-2 mx-1" />
 
                 <div className="grid gap-1">
                   <Link
@@ -129,20 +143,45 @@ export function Header({ onMenuClick }: HeaderProps) {
                     </div>
                     Settings
                   </Link>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setProfileOpen(false);
-                      void logout();
-                    }}
-                    className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition-all group"
-                  >
-                    <div className="w-8 h-8 rounded-lg bg-rose-50 dark:bg-rose-500/10 flex items-center justify-center transition-colors">
-                      <LogOut className="h-4 w-4" />
-                    </div>
-                    Logout
-                  </button>
                 </div>
+
+                <div className="h-px bg-slate-100 dark:bg-white/5 my-2 mx-1" />
+
+                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 px-3 mb-1.5">Services</p>
+                <div className="grid gap-1">
+                  {SERVICES.map(({ label, href, Icon }) => (
+                    <a
+                      key={label}
+                      href={href(orgSlug)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={() => setProfileOpen(false)}
+                      className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5 transition-all group"
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-white/10 flex items-center justify-center group-hover:text-primary transition-colors">
+                        <Icon className="h-4 w-4" />
+                      </div>
+                      <span className="flex-1">{label}</span>
+                      <ExternalLink className="h-3 w-3 text-slate-400 opacity-60" />
+                    </a>
+                  ))}
+                </div>
+
+                <div className="h-px bg-slate-100 dark:bg-white/5 my-2 mx-1" />
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setProfileOpen(false);
+                    void logout();
+                  }}
+                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition-all group"
+                >
+                  <div className="w-8 h-8 rounded-lg bg-rose-50 dark:bg-rose-500/10 flex items-center justify-center transition-colors">
+                    <LogOut className="h-4 w-4" />
+                  </div>
+                  Logout
+                </button>
               </div>
             </>
           )}

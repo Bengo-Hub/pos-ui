@@ -44,7 +44,7 @@ function cardBorderClass(minutes: number, status: string): string {
   if (status === 'in_progress') return 'border-amber-400/70 bg-amber-400/5 shadow-amber-400/10';
   if (minutes > 15)             return 'border-red-500/50 bg-red-500/5 shadow-red-500/10';
   if (minutes > 10)             return 'border-yellow-500/50 bg-yellow-500/5';
-  return 'border-gray-700/80 bg-gray-900/60';
+  return 'border-border/50 bg-card/60';
 }
 
 // ─── Source Badge ─────────────────────────────────────────────────────────────
@@ -70,7 +70,7 @@ function SourceBadge({ source }: { source?: OrderSource }) {
 
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, { label: string; cls: string }> = {
-    pending:     { label: 'Pending',  cls: 'bg-gray-700/80 text-gray-300 border border-gray-600' },
+    pending:     { label: 'Pending',  cls: 'bg-muted text-muted-foreground border border-border' },
     in_progress: { label: 'Cooking',  cls: 'bg-amber-500/25 text-amber-300 border border-amber-500/40' },
     ready:       { label: 'Ready',    cls: 'bg-emerald-500/25 text-emerald-300 border border-emerald-500/40' },
     served:      { label: 'Served',   cls: 'bg-blue-500/25 text-blue-300 border border-blue-500/40' },
@@ -102,7 +102,7 @@ function ActionButton({
       onClick={onClick}
       disabled={loading}
       className={cn(
-        'flex items-center justify-center gap-1.5 text-xs font-bold text-white px-4 py-2.5 rounded-xl transition-all disabled:opacity-50 min-h-11 touch-manipulation active:scale-95',
+        'flex items-center justify-center gap-1.5 text-xs font-bold px-4 py-2.5 rounded-xl transition-all disabled:opacity-50 min-h-11 touch-manipulation active:scale-95',
         className
       )}
     >
@@ -116,8 +116,8 @@ function ActionButton({
 
 function ItemDot({ status }: { status?: string }) {
   if (status === 'done') return <Circle className="h-3 w-3 fill-emerald-400 text-emerald-400" />;
-  if (status === 'skip') return <Circle className="h-3 w-3 fill-gray-600 text-gray-600" />;
-  return <Circle className="h-3 w-3 fill-gray-700 text-gray-700" />;
+  if (status === 'skip') return <Circle className="h-3 w-3 fill-muted-foreground/40 text-muted-foreground/40" />;
+  return <Circle className="h-3 w-3 fill-muted-foreground/20 text-muted-foreground/20" />;
 }
 
 // ─── Ticket Card ──────────────────────────────────────────────────────────────
@@ -142,12 +142,12 @@ function TicketCard({ ticket }: { ticket: KDSTicket }) {
       <div className="px-4 pt-4 pb-3 space-y-2">
         <div className="flex items-start justify-between gap-2">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xl font-bold text-white font-display tracking-tight">
+            <span className="text-xl font-bold text-foreground font-display tracking-tight">
               #{ticket.order_number}
             </span>
             <SourceBadge source={ticket.order_source} />
             {ticket.order_label && (
-              <span className="text-[10px] text-gray-400 bg-gray-800 px-1.5 py-0.5 rounded">
+              <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
                 {ticket.order_label}
               </span>
             )}
@@ -164,17 +164,17 @@ function TicketCard({ ticket }: { ticket: KDSTicket }) {
       </div>
 
       {/* Divider */}
-      <div className="h-px bg-gray-700/50 mx-4" />
+      <div className="h-px bg-border/50 mx-4" />
 
       {/* Item list */}
       <ul className="flex-1 px-4 py-3 space-y-2">
         {ticket.items.map((item, idx) => (
           <li key={item.line_id ?? idx} className="flex items-start gap-2">
             <ItemDot />
-            <span className="font-bold text-white text-sm leading-none pt-0.5 shrink-0">
+            <span className="font-bold text-foreground text-sm leading-none pt-0.5 shrink-0">
               {item.qty}×
             </span>
-            <span className="text-gray-200 text-sm leading-tight">{item.name}</span>
+            <span className="text-foreground/80 text-sm leading-tight">{item.name}</span>
           </li>
         ))}
       </ul>
@@ -213,7 +213,7 @@ function TicketCard({ ticket }: { ticket: KDSTicket }) {
           label="Waiter"
           onClick={() => callWaiter.mutate(ticket.id)}
           loading={callWaiter.isPending}
-          className="bg-gray-700 hover:bg-gray-600 shrink-0"
+          className="bg-muted hover:bg-muted/80 text-muted-foreground shrink-0"
         />
       </div>
     </div>
@@ -243,14 +243,14 @@ function SourceFilterBar({
         'flex items-center gap-2 text-xs font-semibold px-4 py-2.5 rounded-xl border transition-all min-h-11 touch-manipulation whitespace-nowrap',
         value === v
           ? 'bg-primary text-primary-foreground border-primary shadow-md shadow-primary/20'
-          : 'bg-gray-900 text-gray-400 border-gray-700 hover:border-gray-500 hover:text-white'
+          : 'bg-card text-muted-foreground border-border hover:border-border/80 hover:text-foreground'
       )}
     >
       {icon}
       {label}
       <span className={cn(
         'ml-1 px-1.5 py-0.5 rounded text-[10px] font-bold',
-        value === v ? 'bg-white/20' : 'bg-gray-800 text-gray-400'
+        value === v ? 'bg-white/20' : 'bg-muted text-muted-foreground'
       )}>
         {count}
       </span>
@@ -285,15 +285,15 @@ function StationTab({
       className={cn(
         'flex items-center gap-2 px-5 py-3 rounded-xl border transition-all min-h-13 shrink-0 touch-manipulation',
         isSelected
-          ? 'bg-gray-800 border-gray-600 text-white shadow-md'
-          : 'bg-gray-900 border-gray-800 text-gray-400 hover:border-gray-600 hover:text-gray-200'
+          ? 'bg-muted border-border text-foreground shadow-md'
+          : 'bg-card border-border text-muted-foreground hover:border-border/80 hover:text-foreground'
       )}
     >
       <MonitorPlay className="h-4 w-4" />
       <span className="text-sm font-bold">{station.name}</span>
       <span className={cn(
         'text-[11px] font-bold px-2 py-0.5 rounded-full',
-        activeCount > 0 ? 'bg-primary text-primary-foreground' : 'bg-gray-800 text-gray-500'
+        activeCount > 0 ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
       )}>
         {activeCount}
       </span>
@@ -341,15 +341,15 @@ export default function KDSPage() {
   const currentTickets = currentStation ? activeFor(currentStation) : [];
 
   return (
-    <div className="min-h-screen bg-gray-950 text-white flex flex-col">
+    <div className="min-h-screen bg-background text-foreground flex flex-col">
       {/* ── Top header bar ── */}
-      <div className="shrink-0 px-6 pt-5 pb-4 border-b border-gray-800 bg-gray-950 space-y-4">
+      <div className="shrink-0 px-6 pt-5 pb-4 border-b border-border bg-background space-y-4">
         {/* Title + live badge + source filter */}
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div className="flex items-center gap-3">
             <div>
-              <h1 className="text-xl font-bold text-white font-display">Kitchen Display</h1>
-              <p className="text-gray-500 text-xs mt-0.5">Ticket board</p>
+              <h1 className="text-xl font-bold text-foreground font-display">Kitchen Display</h1>
+              <p className="text-muted-foreground text-xs mt-0.5">Ticket board</p>
             </div>
             {/* Live badge */}
             <span className="flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
@@ -386,10 +386,10 @@ export default function KDSPage() {
         {isLoading ? (
           <div className="flex flex-col items-center justify-center h-64 gap-4">
             <Loader2 className="h-10 w-10 animate-spin text-primary" />
-            <p className="text-gray-500 text-sm">Loading tickets…</p>
+            <p className="text-muted-foreground text-sm">Loading tickets…</p>
           </div>
         ) : activeStations.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-64 text-gray-600 gap-4">
+          <div className="flex flex-col items-center justify-center h-64 text-muted-foreground gap-4">
             <MonitorPlay className="h-16 w-16 opacity-15" />
             <div className="text-center">
               <p className="text-lg font-bold text-gray-500">No KDS stations configured</p>
@@ -401,10 +401,10 @@ export default function KDSPage() {
           <>
             {currentTickets.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-64 text-center gap-4">
-                <div className="h-20 w-20 rounded-2xl border-2 border-dashed border-gray-700 flex items-center justify-center">
-                  <ChefHat className="h-10 w-10 text-gray-700" />
+                <div className="h-20 w-20 rounded-2xl border-2 border-dashed border-border flex items-center justify-center">
+                  <ChefHat className="h-10 w-10 text-muted-foreground/30" />
                 </div>
-                <p className="text-gray-600 font-medium">No active tickets</p>
+                <p className="text-muted-foreground font-medium">No active tickets</p>
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -419,19 +419,19 @@ export default function KDSPage() {
           <>
             {currentStation && (
               <div className="mb-4 flex items-center gap-2">
-                <MonitorPlay className="h-4 w-4 text-gray-400" />
-                <h2 className="text-sm font-bold text-gray-300 uppercase tracking-wider">{currentStation.name}</h2>
-                <span className="text-xs text-gray-600 ml-auto">
+                <MonitorPlay className="h-4 w-4 text-muted-foreground" />
+                <h2 className="text-sm font-bold text-foreground/70 uppercase tracking-wider">{currentStation.name}</h2>
+                <span className="text-xs text-muted-foreground ml-auto">
                   {currentTickets.length} ticket{currentTickets.length !== 1 ? 's' : ''}
                 </span>
               </div>
             )}
             {currentTickets.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-64 text-center gap-4">
-                <div className="h-20 w-20 rounded-2xl border-2 border-dashed border-gray-700 flex items-center justify-center">
-                  <ChefHat className="h-10 w-10 text-gray-700" />
+                <div className="h-20 w-20 rounded-2xl border-2 border-dashed border-border flex items-center justify-center">
+                  <ChefHat className="h-10 w-10 text-muted-foreground/30" />
                 </div>
-                <p className="text-gray-600 font-medium">No active tickets for this station</p>
+                <p className="text-muted-foreground font-medium">No active tickets for this station</p>
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">

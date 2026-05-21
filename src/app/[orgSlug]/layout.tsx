@@ -10,6 +10,7 @@ import { Footer } from '@/components/footer';
 import { SubscriptionBanner, SubscriptionExpiredOverlay } from '@/components/subscription/subscription-banner';
 import { OfflineBanner } from '@/components/pos/offline-banner';
 import { PWARegistration } from '@/components/pwa-registration';
+import { StartShiftGate } from '@/components/pos/start-shift-gate';
 import { useSyncOfflineOrders } from '@/hooks/use-sync-offline-orders';
 import { useEffect } from 'react';
 import { registerBackgroundSync } from '@/lib/sw/register-sync';
@@ -68,10 +69,12 @@ export default function OrgLayout({ children }: { children: ReactNode }) {
                 <SubscriptionBanner />
                 <main className="flex-1 overflow-y-auto bg-accent/5">
                   <SubscriptionExpiredOverlay>
-                    <div className="min-h-full flex flex-col">
-                      <div className="flex-1">{children}</div>
-                      <Footer />
-                    </div>
+                    <StartShiftGate>
+                      <div className="min-h-full flex flex-col">
+                        <div className="flex-1">{children}</div>
+                        <Footer />
+                      </div>
+                    </StartShiftGate>
                   </SubscriptionExpiredOverlay>
                 </main>
               </div>

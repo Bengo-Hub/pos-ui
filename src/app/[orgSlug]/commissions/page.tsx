@@ -28,7 +28,7 @@ export default function CommissionsPage() {
   const totalAmount = records.reduce((sum, r) => sum + (r.amount ?? 0), 0);
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
+    <div className="p-6">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold">Commissions</h1>
