@@ -15,6 +15,7 @@ import {
   Grid3x3,
   Key,
   LayoutDashboard,
+  Lock,
   LogOut,
   Monitor,
   Package,
@@ -36,8 +37,11 @@ import { useTenantBranding } from '@/providers/tenant-branding-provider';
 import { useAuthStore } from '@/store/auth';
 import { useModuleAccess } from '@/hooks/use-module-access';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useSubscription } from '@/hooks/use-subscription';
 import { P } from '@/lib/rbac/permissions';
 import type { Permission } from '@/lib/rbac/permissions';
+
+const SUBSCRIBE_URL = process.env.NEXT_PUBLIC_SUBSCRIPTIONS_UI_URL || 'https://pricing.codevertexitsolutions.com';
 
 interface SidebarProps {
   open?: boolean;
@@ -53,6 +57,10 @@ interface NavItem {
   moduleKey: string;
   /** At least one of these permissions must be held */
   permission?: Permission | Permission[];
+  /** Subscription feature code — shows upgrade lock badge if not in plan */
+  subFeature?: string;
+  /** Human-readable plan label shown in the lock badge, e.g. "Pro" */
+  subPlan?: string;
 }
 
 interface NavGroup {
@@ -64,7 +72,13 @@ interface NavGroup {
 
 // ── Nav link ──────────────────────────────────────────────────────────────────
 
-function NavLink({ item, orgSlug, onClose }: { item: NavItem; orgSlug: string; onClose?: () => void }) {
+function NavLink({ item, orgSlug, onClose, locked, subPlan }: {
+  item: NavItem;
+  orgSlug: string;
+  onClose?: () => void;
+  locked?: boolean;
+  subPlan?: string;
+}) {
   const pathname = usePathname();
   const href = `/${orgSlug}${item.href}`;
   const active =
@@ -72,6 +86,24 @@ function NavLink({ item, orgSlug, onClose }: { item: NavItem; orgSlug: string; o
       ? pathname === href
       : pathname.startsWith(href);
   const Icon = item.icon;
+
+  if (locked) {
+    return (
+      <a
+        href={`${SUBSCRIBE_URL}/subscribe`}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="group flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 text-sm text-sidebar-foreground/35 hover:text-sidebar-foreground/55 hover:bg-sidebar-foreground/5 font-medium"
+      >
+        <Icon className="h-4.5 w-4.5 shrink-0 opacity-50" />
+        <span className="truncate flex-1">{item.label}</span>
+        <span className="flex items-center gap-1 rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-bold text-amber-500 border border-amber-500/20 shrink-0">
+          <Lock className="h-2.5 w-2.5" />
+          {subPlan ?? 'Pro'}
+        </span>
+      </a>
+    );
+  }
 
   return (
     <Link
@@ -97,11 +129,13 @@ function NavGroupSection({
   orgSlug,
   onClose,
   initialOpen,
+  lockedFeatures,
 }: {
   group: NavGroup & { items: NavItem[] };
   orgSlug: string;
   onClose?: () => void;
   initialOpen: boolean;
+  lockedFeatures: Set<string>;
 }) {
   const [open, setOpen] = useState(initialOpen);
 
@@ -125,9 +159,19 @@ function NavGroupSection({
       </button>
       {open && (
         <div className="space-y-0.5">
-          {group.items.map((item) => (
-            <NavLink key={item.href + item.label} item={item} orgSlug={orgSlug} onClose={onClose} />
-          ))}
+          {group.items.map((item) => {
+            const locked = !!item.subFeature && lockedFeatures.has(item.subFeature);
+            return (
+              <NavLink
+                key={item.href + item.label}
+                item={item}
+                orgSlug={orgSlug}
+                onClose={onClose}
+                locked={locked}
+                subPlan={item.subPlan}
+              />
+            );
+          })}
         </div>
       )}
     </div>
@@ -145,7 +189,8 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
   const user = useAuthStore((s) => s.user);
   const { hasModule, isSuperUser } = useModuleAccess();
   const { canAny, isSuperuser } = usePermissions();
-  const isPlatformOwner = isSuperuser || isSuperUser || orgSlug === 'codevertex';
+  const { hasFeature, isActive, isPlatformOwner: isSubPlatform } = useSubscription();
+  const isPlatformOwner = isSuperuser || isSuperUser || isSubPlatform || orgSlug === 'codevertex';
 
   // ── Nav groups ────────────────────────────────────────────────────────────
 
@@ -158,14 +203,14 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
         { label: 'Orders', icon: ClipboardList, href: '/orders', moduleKey: 'orders', permission: [P.ORDERS_VIEW, P.ORDERS_VIEW_OWN] },
         { label: 'Cash Drawer', icon: Wallet, href: '/drawer', moduleKey: 'cash_drawer', permission: [P.DRAWERS_ADD, P.DRAWERS_MANAGE, P.DRAWERS_VIEW_OWN] },
         { label: 'Retail', icon: ShoppingCart, href: '/retail', moduleKey: 'retail', permission: [P.ORDERS_ADD, P.ORDERS_VIEW] },
-        { label: 'Layaway', icon: Package, href: '/layaway', moduleKey: 'layaway', permission: [P.ORDERS_VIEW, P.ORDERS_ADD] },
-        { label: 'Shifts', icon: Clock, href: '/shifts', moduleKey: 'shifts', permission: [P.SESSIONS_ADD, P.SESSIONS_VIEW, P.SESSIONS_VIEW_OWN] },
+        { label: 'Layaway', icon: Package, href: '/layaway', moduleKey: 'layaway', permission: [P.ORDERS_VIEW, P.ORDERS_ADD], subFeature: 'layaway', subPlan: 'Growth' },
+        { label: 'Shifts', icon: Clock, href: '/shifts', moduleKey: 'shifts', permission: [P.SESSIONS_ADD, P.SESSIONS_VIEW, P.SESSIONS_VIEW_OWN], subFeature: 'shift_reports', subPlan: 'Pro' },
       ],
     },
     {
       label: 'Floor & Service',
       items: [
-        { label: 'Tables', icon: Grid3x3, href: '/tables', moduleKey: 'tables', permission: [P.TABLES_VIEW, P.TABLES_MANAGE] },
+        { label: 'Tables', icon: Grid3x3, href: '/tables', moduleKey: 'tables', permission: [P.TABLES_VIEW, P.TABLES_MANAGE], subFeature: 'table_management', subPlan: 'Pro' },
         { label: 'Appointments', icon: Calendar, href: '/appointments', moduleKey: 'appointments', permission: [P.ORDERS_VIEW, P.HOTEL_VIEW] },
       ],
     },
@@ -190,7 +235,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
       label: 'Online Orders',
       defaultCollapsed: true,
       items: [
-        { label: 'Pickup Queue', icon: ShoppingBag, href: '/online-orders', moduleKey: 'online_orders', permission: [P.ORDERS_VIEW, P.ORDERS_MANAGE] },
+        { label: 'Pickup Queue', icon: ShoppingBag, href: '/online-orders', moduleKey: 'online_orders', permission: [P.ORDERS_VIEW, P.ORDERS_MANAGE], subFeature: 'online_orders', subPlan: 'Pro' },
       ],
     },
     {
@@ -204,16 +249,29 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
       label: 'Management',
       defaultCollapsed: true,
       items: [
-        { label: 'Reports', icon: BarChart3, href: '/reports', moduleKey: 'reports', permission: [P.REPORTS_VIEW, P.REPORTS_MANAGE] },
-        { label: 'Loyalty', icon: Gift, href: '/loyalty', moduleKey: 'loyalty', permission: [P.ORDERS_VIEW, P.ORDERS_ADD] },
-        { label: 'Commissions', icon: TrendingUp, href: '/commissions', moduleKey: 'commissions', permission: [P.ORDERS_VIEW, P.ORDERS_MANAGE] },
-        { label: 'Webhooks', icon: Webhook, href: '/webhooks', moduleKey: 'settings', permission: [P.CONFIG_VIEW, P.CONFIG_MANAGE] },
+        { label: 'Reports', icon: BarChart3, href: '/reports', moduleKey: 'reports', permission: [P.REPORTS_VIEW, P.REPORTS_MANAGE], subFeature: 'shift_reports', subPlan: 'Pro' },
+        { label: 'Loyalty', icon: Gift, href: '/loyalty', moduleKey: 'loyalty', permission: [P.ORDERS_VIEW, P.ORDERS_ADD], subFeature: 'loyalty', subPlan: 'Growth' },
+        { label: 'Commissions', icon: TrendingUp, href: '/commissions', moduleKey: 'commissions', permission: [P.ORDERS_VIEW, P.ORDERS_MANAGE], subFeature: 'commissions', subPlan: 'Pro' },
+        { label: 'Webhooks', icon: Webhook, href: '/webhooks', moduleKey: 'settings', permission: [P.CONFIG_VIEW, P.CONFIG_MANAGE], subFeature: 'webhooks', subPlan: 'Growth' },
         { label: 'Settings', icon: Settings, href: '/settings', moduleKey: 'settings', permission: [P.CONFIG_VIEW, P.CONFIG_CHANGE, P.CONFIG_MANAGE] },
       ],
     },
   ];
 
-  // ── Filter by module + permission ─────────────────────────────────────────
+  // ── Filter by module + permission; subscription features shown but locked ───
+
+  // Collect which subFeature codes are locked (not in the current plan).
+  // Platform owners and superusers bypass all subscription gates.
+  const lockedFeatures = new Set<string>();
+  if (!isPlatformOwner && isActive !== undefined) {
+    navGroups.forEach((g) =>
+      g.items.forEach((item) => {
+        if (item.subFeature && !hasFeature(item.subFeature)) {
+          lockedFeatures.add(item.subFeature);
+        }
+      })
+    );
+  }
 
   const visibleGroups = navGroups
     .map((group) => ({
@@ -275,6 +333,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
             orgSlug={orgSlug}
             onClose={onClose}
             initialOpen={isGroupInitiallyOpen(group)}
+            lockedFeatures={lockedFeatures}
           />
         ))}
 
