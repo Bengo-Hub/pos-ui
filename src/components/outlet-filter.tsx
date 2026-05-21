@@ -9,8 +9,6 @@ import { useParams } from 'next/navigation';
 import { useRef, useState, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://posapi.codevertexitsolutions.com';
-
 interface OutletListItem {
   id: string;
   code: string;
@@ -20,16 +18,11 @@ interface OutletListItem {
   status?: string;
 }
 
-async function fetchOutlets(accessToken: string, tenantId: string): Promise<OutletListItem[]> {
-  const res = await fetch(`${API_URL}/api/v1/${tenantId}/pos/outlets`, {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      Accept: 'application/json',
-    },
-  });
-  if (!res.ok) return [];
-  const data = await res.json();
-  const outlets: OutletListItem[] = Array.isArray(data) ? data : data.outlets ?? data.data ?? [];
+async function fetchOutlets(tenantId: string): Promise<OutletListItem[]> {
+  const data = await apiClient.get<OutletListItem[] | { outlets?: OutletListItem[]; data?: OutletListItem[] }>(
+    `/api/v1/${tenantId}/pos/outlets`,
+  );
+  const outlets: OutletListItem[] = Array.isArray(data) ? data : (data as any).outlets ?? (data as any).data ?? [];
   return outlets.filter((o) => o.status !== 'archived');
 }
 
@@ -46,7 +39,6 @@ export function OutletFilter({ className }: { className?: string }) {
   const params = useParams();
   const orgSlug = params?.orgSlug as string;
   const user = useAuthStore((s) => s.user);
-  const session = useAuthStore((s) => s.session);
 
   // HQ/admin users can drill into specific outlets
   const canFilter = !!(
@@ -64,8 +56,8 @@ export function OutletFilter({ className }: { className?: string }) {
 
   const { data: fetchedOutlets = [] } = useQuery<OutletListItem[]>({
     queryKey: ['outlet_list', tenantId],
-    queryFn: () => fetchOutlets(session?.accessToken ?? '', tenantId),
-    enabled: canFilter && !!session?.accessToken && !!tenantId,
+    queryFn: () => fetchOutlets(tenantId),
+    enabled: canFilter && !!tenantId,
     staleTime: 5 * 60_000,
   });
 

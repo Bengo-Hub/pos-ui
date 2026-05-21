@@ -3,7 +3,11 @@
 import { Button, Card, CardContent, CardHeader } from '@/components/ui/base';
 import { useTenantBranding } from '@/providers/tenant-branding-provider';
 import { usePermissions, P } from '@/hooks/usePermissions';
+import { apiClient } from '@/lib/api/client';
 import {
+  Globe,
+  Link2,
+  Loader2,
   Lock,
   Palette,
   Printer,
@@ -216,6 +220,115 @@ export default function SettingsPage() {
           {saving ? 'Saving...' : 'Save Settings'}
         </Button>
       </div>
+
+      <IntegrationsSection />
+    </div>
+  );
+}
+
+// ── Integrations Section ──────────────────────────────────────────────────────
+
+const AUTH_API_URL_DEFAULT = process.env.NEXT_PUBLIC_AUTH_API_URL || 'https://sso.codevertexitsolutions.com';
+const POS_API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://posapi.codevertexitsolutions.com';
+
+function IntegrationsSection() {
+  const [authApiUrl, setAuthApiUrl] = useState(AUTH_API_URL_DEFAULT);
+  const [allowedOrigins, setAllowedOrigins] = useState('');
+  const [testStatus, setTestStatus] = useState<'idle' | 'loading' | 'ok' | 'fail'>('idle');
+  const [saving, setSaving] = useState(false);
+
+  const testAuthConnection = async () => {
+    setTestStatus('loading');
+    try {
+      const res = await fetch(`${authApiUrl}/healthz`);
+      setTestStatus(res.ok ? 'ok' : 'fail');
+    } catch {
+      setTestStatus('fail');
+    }
+  };
+
+  const handleSave = async () => {
+    if (!allowedOrigins.trim()) { toast.success('No changes to save'); return; }
+    setSaving(true);
+    try {
+      await apiClient.put('/api/v1/admin/config/allowed_origins', {
+        config_value: allowedOrigins,
+        config_type: 'string',
+      });
+      toast.success('Integrations settings saved');
+    } catch {
+      toast.error('Failed to save');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-xl font-bold tracking-tight">Integrations</h2>
+        <p className="text-muted-foreground mt-1">S2S auth, service URLs, and CORS for the POS service.</p>
+      </div>
+
+      <Card>
+        <CardHeader className="border-b border-border/50 py-4">
+          <div className="flex items-center gap-2">
+            <Link2 className="h-4 w-4 text-primary" />
+            <h3 className="font-bold text-sm uppercase tracking-tight">S2S Auth</h3>
+          </div>
+        </CardHeader>
+        <CardContent className="p-6 space-y-4">
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Auth-API URL</label>
+            <div className="flex gap-3">
+              <input
+                value={authApiUrl}
+                onChange={(e) => setAuthApiUrl(e.target.value)}
+                className="flex-1 bg-accent/10 border border-border rounded-lg py-2 px-3 text-sm focus:ring-1 focus:ring-primary outline-none"
+              />
+              <Button
+                type="button"
+                size="sm"
+                onClick={testAuthConnection}
+                disabled={testStatus === 'loading'}
+              >
+                {testStatus === 'loading' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Test'}
+              </Button>
+            </div>
+            {testStatus === 'ok' && <p className="text-xs text-green-600">Connection successful</p>}
+            {testStatus === 'fail' && <p className="text-xs text-red-600">Connection failed</p>}
+          </div>
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">POS API URL (this service)</label>
+            <input value={POS_API_URL} readOnly className="w-full bg-accent/10 border border-border rounded-lg py-2 px-3 text-sm opacity-60 cursor-not-allowed" />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="border-b border-border/50 py-4">
+          <div className="flex items-center gap-2">
+            <Globe className="h-4 w-4 text-primary" />
+            <h3 className="font-bold text-sm uppercase tracking-tight">CORS</h3>
+          </div>
+        </CardHeader>
+        <CardContent className="p-6 space-y-4">
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Allowed Origins</label>
+            <input
+              value={allowedOrigins}
+              onChange={(e) => setAllowedOrigins(e.target.value)}
+              placeholder="https://app.example.com, https://admin.example.com"
+              className="w-full bg-accent/10 border border-border rounded-lg py-2 px-3 text-sm focus:ring-1 focus:ring-primary outline-none"
+            />
+            <p className="text-xs text-muted-foreground">Comma-separated list of allowed CORS origins.</p>
+          </div>
+          <Button size="sm" onClick={handleSave} disabled={saving} className="gap-2">
+            {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+            {saving ? 'Saving...' : 'Save'}
+          </Button>
+        </CardContent>
+      </Card>
     </div>
   );
 }
