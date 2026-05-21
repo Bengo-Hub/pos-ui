@@ -41,7 +41,7 @@ export function Header({ onMenuClick }: HeaderProps) {
   const role = user?.roles?.[0];
 
   return (
-    <header className="h-20 border-b border-slate-200 dark:border-white/5 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md sticky top-0 z-30 px-4 sm:px-8 flex items-center justify-between">
+    <header className="h-20 border-b border-border bg-background/80 backdrop-blur-md sticky top-0 z-30 px-4 sm:px-8 flex items-center justify-between">
       <div className="flex items-center gap-4 flex-1">
         <button type="button" onClick={onMenuClick} className="lg:hidden p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-white/10 transition-colors" aria-label="Open menu">
           <Menu className="h-5 w-5 text-slate-500" />
@@ -62,7 +62,7 @@ export function Header({ onMenuClick }: HeaderProps) {
         {outlet && (
           <Link
             href={`/${orgSlug}/auth/select-outlet`}
-            className="hidden lg:flex items-center gap-2 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 px-3 py-1.5 text-sm font-medium text-slate-700 dark:text-white/70 hover:bg-slate-100 dark:hover:bg-white/10 transition-colors group"
+            className="hidden lg:flex items-center gap-2 rounded-xl border border-border bg-muted/50 px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-muted transition-colors group"
             title="Switch outlet"
           >
             <MapPin className="h-3.5 w-3.5 text-primary shrink-0" />
@@ -110,7 +110,7 @@ export function Header({ onMenuClick }: HeaderProps) {
           {isAuthenticated && profileOpen && (
             <>
               <div className="fixed inset-0 z-40" aria-hidden="true" onClick={() => setProfileOpen(false)} />
-              <div className="absolute right-0 top-full mt-2 z-50 w-64 rounded-[1.5rem] p-3 shadow-2xl border border-slate-100 dark:border-white/5 bg-white dark:bg-slate-900 overflow-hidden">
+              <div className="absolute right-0 top-full mt-2 z-50 w-64 rounded-[1.5rem] p-3 shadow-2xl border border-border bg-popover overflow-hidden">
                 <div className="mb-2 px-3 py-2">
                   <p className="text-sm font-black text-slate-900 dark:text-white">{name}</p>
                   <p className="text-[10px] text-slate-400 truncate font-bold uppercase tracking-widest mt-0.5">{role || 'Member'}</p>

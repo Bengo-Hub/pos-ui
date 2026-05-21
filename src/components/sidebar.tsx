@@ -79,7 +79,7 @@ function NavLink({ item, orgSlug, onClose }: { item: NavItem; orgSlug: string; o
         'group flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 text-sm',
         active
           ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/25 font-semibold'
-          : 'text-white/55 hover:text-white hover:bg-white/8 font-medium'
+          : 'text-sidebar-foreground/55 hover:text-sidebar-foreground hover:bg-sidebar-foreground/8 font-medium'
       )}
     >
       <Icon className={cn('h-4.5 w-4.5 shrink-0 transition-transform duration-200', !active && 'group-hover:scale-110')} />
@@ -111,12 +111,12 @@ function NavGroupSection({
         className="flex w-full items-center justify-between px-3 mb-1 py-0.5 group/header"
         aria-expanded={open}
       >
-        <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-white/25 group-hover/header:text-white/40 transition-colors">
+        <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-sidebar-foreground/25 group-hover/header:text-sidebar-foreground/40 transition-colors">
           {group.label}
         </span>
         <ChevronDown
           className={cn(
-            'h-3 w-3 text-white/20 transition-all duration-200 group-hover/header:text-white/40',
+            'h-3 w-3 text-sidebar-foreground/20 transition-all duration-200 group-hover/header:text-sidebar-foreground/40',
             open && 'rotate-180'
           )}
         />
@@ -242,9 +242,9 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
   // ── Content ───────────────────────────────────────────────────────────────
 
   const content = (
-    <div className="flex flex-col h-full bg-brand-dark border-r border-white/8">
+    <div className="flex flex-col h-full bg-sidebar border-r border-sidebar-border">
       {/* Logo / tenant */}
-      <div className="flex items-center gap-3 px-5 py-5 border-b border-white/8">
+      <div className="flex items-center gap-3 px-5 py-5 border-b border-sidebar-border">
         {tenant?.logoUrl ? (
           <img src={tenant.logoUrl} alt={tenant.name ?? orgSlug} className="h-9 w-auto object-contain" />
         ) : (
@@ -255,8 +255,8 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
           </div>
         )}
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-white truncate">{tenant?.orgName ?? orgSlug}</p>
-          <p className="text-[10px] text-white/35 mt-0.5">POS Terminal</p>
+          <p className="text-sm font-semibold text-sidebar-foreground truncate">{tenant?.orgName ?? orgSlug}</p>
+          <p className="text-[10px] text-sidebar-foreground/35 mt-0.5">POS Terminal</p>
         </div>
       </div>
 
@@ -275,7 +275,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
         {/* Platform section — always expanded, superuser only */}
         {isPlatformOwner && (
           <div>
-            <p className="px-3 mb-1.5 text-[10px] font-bold uppercase tracking-[0.15em] text-white/25">
+            <p className="px-3 mb-1.5 text-[10px] font-bold uppercase tracking-[0.15em] text-sidebar-foreground/25">
               Platform
             </p>
             <div className="space-y-0.5">
@@ -287,18 +287,18 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
       </nav>
 
       {/* User footer */}
-      <div className="px-3 py-4 border-t border-white/8">
-        <div className="flex items-center gap-3 px-3 py-3 rounded-xl bg-white/5">
+      <div className="px-3 py-4 border-t border-sidebar-border">
+        <div className="flex items-center gap-3 px-3 py-3 rounded-xl bg-sidebar-foreground/5">
           <div className="h-8 w-8 rounded-lg bg-primary/25 flex items-center justify-center shrink-0">
             <span className="text-xs font-bold text-primary">{displayInitial}</span>
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-xs font-semibold text-white truncate">{displayName}</p>
-            <p className="text-[10px] text-white/40 mt-0.5">{roleLabel}</p>
+            <p className="text-[10px] text-sidebar-foreground/40 mt-0.5">{roleLabel}</p>
           </div>
           <button
             onClick={() => logout()}
-            className="h-7 w-7 rounded-lg flex items-center justify-center text-white/35 hover:text-rose-400 hover:bg-white/8 transition-colors"
+            className="h-7 w-7 rounded-lg flex items-center justify-center text-sidebar-foreground/35 hover:text-rose-400 hover:bg-white/8 transition-colors"
             title="Sign out"
           >
             <LogOut className="h-4 w-4" />
@@ -327,12 +327,12 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
         )}
       >
         {/* Mobile header bar */}
-        <div className="flex h-14 items-center justify-between border-b border-white/8 px-4 lg:hidden bg-brand-dark">
+        <div className="flex h-14 items-center justify-between border-b border-sidebar-border px-4 lg:hidden bg-sidebar">
           <span className="text-sm font-semibold text-white">Menu</span>
           <button
             type="button"
             onClick={onClose}
-            className="h-8 w-8 flex items-center justify-center rounded-lg text-white/50 hover:text-white hover:bg-white/10 transition-colors"
+            className="h-8 w-8 flex items-center justify-center rounded-lg text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-foreground/10 transition-colors"
             aria-label="Close menu"
           >
             <X className="h-4 w-4" />
