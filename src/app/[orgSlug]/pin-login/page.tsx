@@ -1,10 +1,14 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { compare as bcryptCompare } from 'bcryptjs';
-import { ArrowLeft, Building2, ChevronRight, ExternalLink, Settings, WifiOff } from 'lucide-react';
+import {
+  ArrowLeft, BedDouble, Building2, ChevronRight, Coffee, ExternalLink,
+  Pill, Scissors, Settings, ShoppingBag, Truck, UtensilsCrossed,
+  Warehouse, Wine, WifiOff, Zap,
+} from 'lucide-react';
 import { useOnline } from '@/hooks/use-online';
 import { useIdleTimer, getScreensaverTimeoutMs, setScreensaverTimeoutMs } from '@/hooks/use-idle-timer';
 import { apiClient } from '@/lib/api/client';
@@ -71,16 +75,30 @@ const USE_CASE_LABELS: Record<string, string> = {
   warehouse:     'Warehouse',
 };
 
-const USE_CASE_COLORS: Record<string, { bg: string; text: string }> = {
-  hospitality:   { bg: 'bg-amber-500/18',   text: 'text-amber-300' },
-  quick_service: { bg: 'bg-blue-500/18',    text: 'text-blue-300' },
-  retail:        { bg: 'bg-violet-500/18',  text: 'text-violet-300' },
-  pharmacy:      { bg: 'bg-emerald-500/18', text: 'text-emerald-300' },
-  services:      { bg: 'bg-teal-500/18',    text: 'text-teal-300' },
-  cafe:          { bg: 'bg-orange-500/18',  text: 'text-orange-300' },
-  bar:           { bg: 'bg-purple-500/18',  text: 'text-purple-300' },
-  hotel:         { bg: 'bg-sky-500/18',     text: 'text-sky-300' },
-  warehouse:     { bg: 'bg-slate-500/18',   text: 'text-slate-300' },
+const USE_CASE_COLORS: Record<string, { bg: string; text: string; accent: string; glow: string }> = {
+  hospitality:   { bg: 'bg-amber-500/20',   text: 'text-amber-300',   accent: '#f59e0b', glow: 'hover:shadow-amber-500/15' },
+  quick_service: { bg: 'bg-blue-500/20',    text: 'text-blue-300',    accent: '#3b82f6', glow: 'hover:shadow-blue-500/15' },
+  retail:        { bg: 'bg-violet-500/20',  text: 'text-violet-300',  accent: '#8b5cf6', glow: 'hover:shadow-violet-500/15' },
+  pharmacy:      { bg: 'bg-emerald-500/20', text: 'text-emerald-300', accent: '#10b981', glow: 'hover:shadow-emerald-500/15' },
+  services:      { bg: 'bg-teal-500/20',    text: 'text-teal-300',    accent: '#14b8a6', glow: 'hover:shadow-teal-500/15' },
+  cafe:          { bg: 'bg-orange-500/20',  text: 'text-orange-300',  accent: '#f97316', glow: 'hover:shadow-orange-500/15' },
+  bar:           { bg: 'bg-purple-500/20',  text: 'text-purple-300',  accent: '#a855f7', glow: 'hover:shadow-purple-500/15' },
+  hotel:         { bg: 'bg-sky-500/20',     text: 'text-sky-300',     accent: '#0ea5e9', glow: 'hover:shadow-sky-500/15' },
+  warehouse:     { bg: 'bg-slate-500/20',   text: 'text-slate-300',   accent: '#94a3b8', glow: 'hover:shadow-slate-500/15' },
+  logistics:     { bg: 'bg-cyan-500/20',    text: 'text-cyan-300',    accent: '#06b6d4', glow: 'hover:shadow-cyan-500/15' },
+};
+
+const USE_CASE_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
+  hospitality:   UtensilsCrossed,
+  quick_service: Zap,
+  retail:        ShoppingBag,
+  pharmacy:      Pill,
+  services:      Scissors,
+  cafe:          Coffee,
+  bar:           Wine,
+  hotel:         BedDouble,
+  warehouse:     Warehouse,
+  logistics:     Truck,
 };
 
 // Role display config
@@ -368,81 +386,170 @@ export default function PINLoginPage() {
 
   // Outlet selection step — shown when multiple outlets and none stored
   if (step === 'outlet') {
+    const colClass =
+      allOutlets.length === 1 ? 'grid-cols-1 max-w-xs mx-auto' :
+      allOutlets.length <= 4  ? 'grid-cols-1 sm:grid-cols-2' :
+                                'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3';
+
     return (
       <div
-        className="relative h-screen w-screen overflow-hidden flex flex-col items-center justify-center p-6"
+        className="relative min-h-screen w-screen flex flex-col"
         style={{
-          background: 'linear-gradient(135deg, rgb(var(--brand-dark)) 0%, color-mix(in srgb, rgb(var(--brand-dark)) 80%, rgb(var(--brand-emphasis))) 50%, rgb(var(--brand-dark)) 100%)',
+          background: 'linear-gradient(160deg, rgb(var(--brand-dark)) 0%, color-mix(in srgb, rgb(var(--brand-dark)) 72%, rgb(var(--brand-emphasis))) 55%, rgb(var(--brand-dark)) 100%)',
         }}
       >
+        {/* Ambient blobs */}
         <div className="pointer-events-none absolute inset-0 overflow-hidden">
-          <div className="absolute -top-48 -left-48 h-125 w-125 rounded-full bg-primary/10 blur-3xl" />
-          <div className="absolute -bottom-32 right-1/3 h-80 w-80 rounded-full bg-primary/5 blur-3xl" />
+          <div className="absolute -top-64 -left-64 h-175 w-175 rounded-full bg-primary/8 blur-3xl" />
+          <div className="absolute top-1/2 -right-48 h-125 w-125 rounded-full bg-primary/5 blur-3xl" />
+          <div className="absolute -bottom-48 left-1/3 h-96 w-96 rounded-full bg-primary/6 blur-3xl" />
         </div>
 
-        <div className="relative z-10 w-full max-w-md flex flex-col gap-6">
-          <div className="flex flex-col items-center gap-3 text-center">
-            {tenant?.logoUrl ? (
-              <img src={tenant.logoUrl} alt={tenant.orgName} className="h-14 w-14 object-contain rounded-2xl" />
-            ) : (
-              <div className="h-14 w-14 rounded-2xl bg-primary/20 border border-primary/30 flex items-center justify-center">
-                <span className="text-lg font-black text-primary">{(tenant?.orgName ?? orgSlug).slice(0, 2).toUpperCase()}</span>
+        <div className="relative z-10 flex flex-col flex-1 items-center px-4 sm:px-6 pt-12 pb-10 overflow-y-auto">
+
+          {/* ── Header ─────────────────────────────────────────────────────── */}
+          <div className="flex flex-col items-center gap-5 mb-10 text-center">
+            {/* Logo with status dot */}
+            <div className="relative">
+              {tenant?.logoUrl ? (
+                <div className="h-20 w-20 rounded-3xl overflow-hidden ring-2 ring-white/15 shadow-2xl shadow-black/50">
+                  <img src={tenant.logoUrl} alt={tenant.orgName} className="h-full w-full object-cover" />
+                </div>
+              ) : (
+                <div className="h-20 w-20 rounded-3xl bg-linear-to-br from-primary/35 to-primary/10 border border-primary/30 flex items-center justify-center shadow-2xl shadow-black/50">
+                  <span className="text-2xl font-black text-primary">{(tenant?.orgName ?? orgSlug).slice(0, 2).toUpperCase()}</span>
+                </div>
+              )}
+              <div className={cn(
+                'absolute -bottom-1 -right-1 h-4 w-4 rounded-full border-[3px]',
+                'border-[rgb(var(--brand-dark))]',
+                isOnline ? 'bg-emerald-400' : 'bg-amber-400'
+              )} />
+            </div>
+
+            <div className="space-y-1">
+              <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight leading-none">
+                {tenant?.orgName ?? orgSlug}
+              </h1>
+              <p className="text-white/40 text-sm font-medium">Select your outlet to continue</p>
+            </div>
+
+            {!isOnline && (
+              <div className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-semibold">
+                <WifiOff className="h-3 w-3" />
+                Offline mode
               </div>
             )}
-            <div>
-              <h1 className="text-xl font-black text-white">{tenant?.orgName ?? orgSlug}</h1>
-              <p className="text-white/45 text-sm mt-1">Select your outlet to continue</p>
-            </div>
           </div>
 
-          <div className="grid gap-3">
+          {/* ── Outlet grid ─────────────────────────────────────────────────── */}
+          <div className="w-full max-w-2xl">
             {allOutlets.length === 0 ? (
-              Array.from({ length: 2 }).map((_, i) => (
-                <div key={i} className="h-16 rounded-2xl bg-white/5 animate-pulse" />
-              ))
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <div key={i} className="h-36 rounded-2xl bg-white/5 animate-pulse" style={{ animationDelay: `${i * 80}ms` }} />
+                ))}
+              </div>
             ) : (
-              allOutlets.map((outlet) => {
-                const color = outlet.use_case ? USE_CASE_COLORS[outlet.use_case] : null;
-                const label = outlet.use_case ? (USE_CASE_LABELS[outlet.use_case] ?? outlet.use_case) : null;
-                return (
-                  <button
-                    key={outlet.id}
-                    onClick={() => selectOutlet(outlet)}
-                    className="flex items-center gap-4 px-5 py-4 rounded-2xl border border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/25 active:scale-[0.98] transition-all text-left group"
-                  >
-                    <div className="h-10 w-10 rounded-xl bg-primary/15 border border-primary/25 flex items-center justify-center shrink-0 group-hover:bg-primary/25 transition-colors">
-                      <Building2 className="h-5 w-5 text-primary" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-bold text-white truncate">{outlet.name}</p>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        {outlet.is_hq && (
-                          <span className="text-[10px] font-bold text-white/30 uppercase">HQ</span>
-                        )}
-                        {label && color && (
-                          <span className={cn('text-[10px] font-bold uppercase tracking-wide', color.text)}>{label}</span>
-                        )}
+              <div className={cn('grid gap-3', colClass)}>
+                {allOutlets.map((outlet, idx) => {
+                  const color = (outlet.use_case ? USE_CASE_COLORS[outlet.use_case] : null) ?? {
+                    bg: 'bg-slate-500/20', text: 'text-slate-300', accent: '#94a3b8', glow: 'hover:shadow-slate-500/15',
+                  };
+                  const label = outlet.use_case ? (USE_CASE_LABELS[outlet.use_case] ?? outlet.use_case) : null;
+                  const OutletIcon: React.ComponentType<{ className?: string }> =
+                    (outlet.use_case ? USE_CASE_ICONS[outlet.use_case] : undefined) ?? Building2;
+
+                  return (
+                    <button
+                      key={outlet.id}
+                      onClick={() => selectOutlet(outlet)}
+                      className={cn(
+                        'group relative flex flex-col text-left rounded-2xl border overflow-hidden',
+                        'bg-white/4 border-white/10',
+                        'hover:bg-white/8 hover:border-white/22',
+                        'hover:shadow-2xl', color.glow,
+                        'active:scale-[0.97] transition-all duration-200',
+                        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60'
+                      )}
+                      style={{ animationDelay: `${idx * 55}ms` }}
+                    >
+                      {/* Colored top accent bar */}
+                      <div
+                        className="absolute top-0 inset-x-0 h-0.5 opacity-70 group-hover:opacity-100 transition-opacity"
+                        style={{ background: `linear-gradient(90deg, transparent, ${color.accent}, transparent)` }}
+                      />
+
+                      <div className="p-5 flex flex-col gap-4">
+                        {/* Icon row */}
+                        <div className="flex items-start justify-between">
+                          <div
+                            className="h-12 w-12 rounded-xl flex items-center justify-center border transition-colors duration-200"
+                            style={{
+                              background: `${color.accent}18`,
+                              borderColor: `${color.accent}30`,
+                            }}
+                          >
+                            <OutletIcon className={cn('h-5 w-5 transition-transform duration-200 group-hover:scale-110', color.text)} />
+                          </div>
+
+                          {/* Badges */}
+                          <div className="flex flex-col items-end gap-1.5">
+                            {outlet.is_hq && (
+                              <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-white/10 text-white/45 uppercase tracking-widest">
+                                HQ
+                              </span>
+                            )}
+                            {label && (
+                              <span
+                                className={cn('px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide', color.text)}
+                                style={{ background: `${color.accent}22` }}
+                              >
+                                {label}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Name + arrow */}
+                        <div className="flex items-end justify-between gap-2">
+                          <p className="font-bold text-white text-sm sm:text-base leading-snug group-hover:text-white/90 transition-colors">
+                            {outlet.name}
+                          </p>
+                          <ChevronRight
+                            className="h-4 w-4 text-white/20 group-hover:text-white/55 group-hover:translate-x-0.5 transition-all shrink-0 mb-0.5"
+                          />
+                        </div>
                       </div>
-                    </div>
-                    <ChevronRight className="h-4 w-4 text-white/25 group-hover:text-white/60 group-hover:translate-x-0.5 transition-all shrink-0" />
-                  </button>
-                );
-              })
+                    </button>
+                  );
+                })}
+              </div>
             )}
           </div>
 
-          <div className="flex items-center gap-3">
-            <div className="flex-1 h-px bg-white/10" />
-            <span className="text-[10px] text-white/25 font-medium tracking-wider uppercase">or</span>
-            <div className="flex-1 h-px bg-white/10" />
+          {/* ── SSO fallback ────────────────────────────────────────────────── */}
+          <div className="w-full max-w-xs mt-10 flex flex-col gap-3">
+            <div className="flex items-center gap-3">
+              <div className="flex-1 h-px bg-white/10" />
+              <span className="text-[10px] text-white/25 font-medium tracking-widest uppercase">or</span>
+              <div className="flex-1 h-px bg-white/10" />
+            </div>
+            <button
+              onClick={() => redirectToSSO(orgSlug, window.location.href)}
+              className={cn(
+                'w-full flex items-center justify-center gap-2.5 px-5 py-3 rounded-2xl',
+                'border border-white/10 bg-white/3',
+                'text-sm text-white/40 font-medium',
+                'hover:bg-white/8 hover:text-white/70 hover:border-white/20',
+                'transition-all duration-200 group'
+              )}
+            >
+              <ExternalLink className="h-4 w-4 group-hover:text-primary transition-colors" />
+              Sign in with your account
+            </button>
           </div>
-          <button
-            onClick={() => redirectToSSO(orgSlug, window.location.href)}
-            className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-2xl border border-white/12 bg-white/4 text-sm text-white/50 hover:bg-white/10 hover:text-white/80 hover:border-white/22 transition-all font-medium"
-          >
-            <ExternalLink className="h-4 w-4" />
-            Sign in with your account
-          </button>
+
         </div>
       </div>
     );
