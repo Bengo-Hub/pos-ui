@@ -578,49 +578,84 @@ export default function PINLoginPage() {
           <div className="absolute -bottom-32 left-1/3 h-80 w-80 rounded-full bg-primary/5 blur-3xl" />
         </div>
 
-        {/* ── Outlet info header ── */}
-        <div className="relative z-10 shrink-0 px-6 pt-5 pb-4">
-          <div className="flex items-center justify-between gap-4">
+        {/* ── Top nav ── */}
+        <div className="relative z-10 shrink-0 px-4 sm:px-6 pt-4 pb-3">
+          <div className="flex items-center justify-between gap-3">
 
-            {/* Left: Logo + Outlet info */}
-            <div className="flex items-center gap-4 min-w-0">
-              {tenant?.logoUrl ? (
-                <img src={tenant.logoUrl} alt={tenantDisplayName} className="h-11 w-11 object-contain rounded-xl shrink-0" />
-              ) : (
-                <div className="h-11 w-11 rounded-xl bg-primary/20 border border-primary/30 flex items-center justify-center shrink-0">
-                  <span className="text-sm font-black text-primary">{tenantDisplayName.slice(0, 2).toUpperCase()}</span>
+            {/* ── Left: Logo + Outlet identity + Switcher ── */}
+            <div className="flex items-center gap-3 min-w-0 flex-1">
+
+              {/* Logo — always visible: white backdrop ensures transparency doesn't hide it */}
+              <div className="relative shrink-0">
+                <div className="h-10 w-10 rounded-xl bg-white/15 backdrop-blur-sm border border-white/20 flex items-center justify-center overflow-hidden shadow-lg">
+                  {tenant?.logoUrl ? (
+                    <img
+                      src={tenant.logoUrl}
+                      alt={tenantDisplayName}
+                      className="h-8 w-8 object-contain"
+                      style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.4))' }}
+                    />
+                  ) : (
+                    <span className="text-xs font-black text-white drop-shadow">
+                      {tenantDisplayName.slice(0, 2).toUpperCase()}
+                    </span>
+                  )}
                 </div>
-              )}
-              <div className="min-w-0">
+              </div>
+
+              {/* Outlet name + badge + inline switch button */}
+              <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <h1 className="text-lg font-black text-white tracking-tight truncate">{outletName}</h1>
+                  <h1 className="text-base font-black text-white tracking-tight truncate leading-tight">
+                    {outletName}
+                  </h1>
                   {useCaseLabel && useCaseColor && (
-                    <span className={cn('inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wide uppercase shrink-0', useCaseColor.bg, useCaseColor.text)}>
+                    <span className={cn(
+                      'inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wide uppercase shrink-0',
+                      useCaseColor.bg, useCaseColor.text
+                    )}>
                       {useCaseLabel}
                     </span>
                   )}
                   {outletInfo?.is_hq && (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-white/8 text-white/40 shrink-0">
-                      <Building2 className="h-2.5 w-2.5" />
-                      HQ
+                    <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-white/8 text-white/35 shrink-0">
+                      <Building2 className="h-2.5 w-2.5" />HQ
                     </span>
                   )}
                 </div>
+
+                {/* Switch outlet button — always visible below outlet name */}
+                {allOutlets.length > 1 && (
+                  <button
+                    onClick={() => setStep('outlet')}
+                    className={cn(
+                      'mt-0.5 inline-flex items-center gap-1 text-[11px] font-semibold transition-all group',
+                      useCaseColor ? useCaseColor.text : 'text-primary',
+                      'opacity-70 hover:opacity-100'
+                    )}
+                  >
+                    <ChevronRight className="h-3 w-3 rotate-90 group-hover:translate-y-[-1px] transition-transform" />
+                    Switch outlet
+                  </button>
+                )}
+
                 {pinLoginMessage && (
-                  <p className="text-white/45 text-xs mt-0.5 truncate max-w-xs">{pinLoginMessage}</p>
+                  <p className="hidden sm:block text-white/35 text-[11px] mt-0.5 truncate max-w-xs leading-tight">
+                    {pinLoginMessage}
+                  </p>
                 )}
               </div>
             </div>
 
-            {/* Center: Live clock */}
+            {/* ── Center: Live clock (desktop only) ── */}
             <div className="hidden md:block shrink-0">
               <LiveClock />
             </div>
 
-            {/* Right: Controls */}
-            <div className="flex items-center gap-2 shrink-0">
+            {/* ── Right: Status + Settings ── */}
+            <div className="flex items-center gap-1.5 shrink-0">
               {!isOnline && (
-                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-500/12 border border-amber-500/25 text-amber-400 text-xs font-semibold">
+                <div className="flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-amber-500/12 border border-amber-500/25 text-amber-400 text-[11px] font-semibold">
                   <WifiOff className="h-3 w-3" />
                   <span className="hidden sm:inline">Offline</span>
                 </div>
@@ -635,7 +670,7 @@ export default function PINLoginPage() {
                   <Settings className="h-4 w-4" />
                 </button>
                 {showSettings && (
-                  <div className="absolute right-0 top-11 z-50 w-44 rounded-2xl border border-white/10 bg-black/60 backdrop-blur-xl shadow-2xl p-1.5 space-y-0.5">
+                  <div className="absolute right-0 top-11 z-50 w-44 rounded-2xl border border-white/10 bg-black/70 backdrop-blur-xl shadow-2xl p-1.5 space-y-0.5">
                     <p className="px-3 py-1.5 text-[9px] font-bold text-white/30 uppercase tracking-wider">Screensaver</p>
                     {TIMEOUT_OPTIONS.map((opt) => (
                       <button
@@ -659,7 +694,7 @@ export default function PINLoginPage() {
         </div>
 
         {/* Divider */}
-        <div className="relative z-10 mx-6 h-px bg-white/8 shrink-0" />
+        <div className="relative z-10 mx-4 sm:mx-6 h-px bg-white/8 shrink-0" />
 
         {/* ── Main content ── */}
         <div className="relative z-10 flex-1 flex overflow-hidden min-h-0 gap-0">
@@ -939,24 +974,9 @@ export default function PINLoginPage() {
           )}
         </div>
 
-        {/* ── Bottom bar ── */}
-        <div className="relative z-10 flex items-center justify-between px-6 pb-4 pt-2 shrink-0">
-          <div className="md:hidden">
-            <LiveClock />
-          </div>
-          <div className="hidden md:block" />
-
-          {/* Switch Outlet — shown when outlet info is loaded */}
-          {outletInfo && (
-            <button
-              onClick={() => allOutlets.length > 1 ? setStep('outlet') : setShowOutletModal(true)}
-              className="flex items-center gap-1.5 text-[11px] text-white/25 hover:text-white/50 transition-colors font-medium group"
-            >
-              <Building2 className="h-3 w-3" />
-              Switch Outlet
-              <ChevronRight className="h-3 w-3 group-hover:translate-x-0.5 transition-transform" />
-            </button>
-          )}
+        {/* ── Bottom bar: clock on mobile only ── */}
+        <div className="relative z-10 flex items-center justify-center px-6 pb-3 pt-1 shrink-0 md:hidden">
+          <LiveClock />
         </div>
       </div>
 
