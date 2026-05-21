@@ -252,6 +252,7 @@ export const useAuthStore = create<AuthState>()(
       },
 
       logout: async () => {
+        const { isTerminalSession } = get();
         set({ status: 'idle', user: null, session: null, subscriptionInfo: undefined, lastAuthenticatedAt: null, isTerminalSession: false, outlet: null, selectedOutletId: null });
         apiClient.setAccessToken(null);
         apiClient.setTenantInfo(null, null);
@@ -262,7 +263,10 @@ export const useAuthStore = create<AuthState>()(
           try { localStorage.removeItem('pos-auth-storage'); } catch { /* no-op */ }
           try { localStorage.removeItem(POS_SELECTED_OUTLET_KEY); } catch { /* no-op */ }
           try { sessionStorage.clear(); } catch { /* no-op */ }
-          window.location.href = buildLogoutUrl('https://accounts.codevertexitsolutions.com');
+          // Terminal sessions use pos-api HMAC JWTs — there's no SSO session to invalidate.
+          if (!isTerminalSession) {
+            window.location.href = buildLogoutUrl('https://accounts.codevertexitsolutions.com');
+          }
         }
       },
 

@@ -254,20 +254,16 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
   const content = (
     <div className="flex flex-col h-full bg-sidebar border-r border-sidebar-border">
       {/* Logo / tenant */}
-      <div className="flex items-center gap-3 px-5 py-5 border-b border-sidebar-border">
+      <div className="flex items-center justify-center px-5 py-5 border-b border-sidebar-border">
         {tenant?.logoUrl ? (
-          <img src={tenant.logoUrl} alt={tenant.name ?? orgSlug} className="h-9 w-auto object-contain" />
+          <img src={tenant.logoUrl} alt={tenant.name ?? orgSlug} className="h-10 w-auto max-w-40 object-contain" />
         ) : (
-          <div className="h-9 w-9 rounded-xl bg-primary flex items-center justify-center shadow-lg shadow-primary/30 shrink-0">
+          <div className="h-10 w-10 rounded-xl bg-primary flex items-center justify-center shadow-lg shadow-primary/30">
             <span className="text-sm font-bold text-primary-foreground">
               {(tenant?.orgName ?? orgSlug).slice(0, 2).toUpperCase()}
             </span>
           </div>
         )}
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-sidebar-foreground truncate">{tenant?.orgName ?? orgSlug}</p>
-          <p className="text-[10px] text-sidebar-foreground/35 mt-0.5">POS Terminal</p>
-        </div>
       </div>
 
       {/* Nav groups */}

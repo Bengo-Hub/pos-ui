@@ -16,10 +16,9 @@ interface StartShiftGateProps {
 
 export function StartShiftGate({ children }: StartShiftGateProps) {
   const user = useAuthStore((s) => s.user);
-  const status = useAuthStore((s) => s.status);
+  const isTerminalSession = useAuthStore((s) => s.isTerminalSession);
   const { hasModule } = useModuleAccess();
 
-  const isTerminalSession = status === 'authenticated' && !!user;
   const shiftsEnabled = hasModule('shifts');
   const role = user?.roles?.[0] ?? '';
   const isCashierRole = CASHIER_ROLES.includes(role);
