@@ -32,7 +32,8 @@ export type ModuleKey =
   | 'layaway'
   | 'loyalty'
   | 'commissions'
-  | 'online_orders';
+  | 'online_orders'
+  | 'retail';
 
 // ─── Use-case types ─────────────────────────────────────────────────────────
 export type UseCaseType =
@@ -54,7 +55,7 @@ const COMMON_MODULES: ModuleKey[] = [
 
 const USE_CASE_MODULES: Record<UseCaseType, ModuleKey[]> = {
   hospitality:   [...COMMON_MODULES, 'tables', 'kds', 'appointments', 'hotel', 'shifts', 'reports', 'loyalty', 'commissions', 'online_orders'],
-  retail:        [...COMMON_MODULES, 'shifts', 'reports', 'layaway', 'loyalty', 'commissions', 'online_orders'],
+  retail:        [...COMMON_MODULES, 'retail', 'shifts', 'reports', 'layaway', 'loyalty', 'commissions', 'online_orders'],
   services:      [...COMMON_MODULES, 'appointments', 'shifts', 'reports', 'loyalty', 'commissions'],
   quick_service: [...COMMON_MODULES, 'kds', 'shifts', 'reports', 'online_orders'],
   pharmacy:      [...COMMON_MODULES, 'shifts', 'reports', 'loyalty'],
