@@ -3,6 +3,10 @@ import { apiClient } from './client';
 export interface POSSettings {
   tenant_id: string;
   outlet_id?: string | null;
+  display_mode: string;
+  show_images: boolean;
+  show_barcode_scanner: boolean;
+  default_view: string;
   receipt_header?: string | null;
   receipt_footer?: string | null;
   currency: string;
@@ -24,6 +28,9 @@ export interface POSSettings {
 }
 
 export interface UpdatePOSSettingsInput {
+  display_mode?: string;
+  show_images?: boolean;
+  show_barcode_scanner?: boolean;
   receipt_header?: string | null;
   receipt_footer?: string | null;
   currency?: string;
