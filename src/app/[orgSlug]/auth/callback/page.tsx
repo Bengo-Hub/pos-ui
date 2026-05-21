@@ -27,18 +27,35 @@ function AuthCallbackContent() {
       const returnTo = sessionStorage.getItem('sso_return_to');
       sessionStorage.removeItem('sso_return_to');
 
-      // If the user has a stored outlet from a previous session, go straight to their destination.
-      // Otherwise send them through the outlet selector (which auto-skips for single-outlet tenants).
       const storedOutlet = typeof window !== 'undefined'
         ? localStorage.getItem('pos-selected-outlet-id')
         : null;
 
       if (storedOutlet) {
         router.replace(returnTo || `/${orgSlug}`);
-      } else {
-        const next = returnTo ? `?returnTo=${encodeURIComponent(returnTo)}` : '';
-        router.replace(`/${orgSlug}/auth/select-outlet${next}`);
+        return;
       }
+
+      // Auto-preselect outlet from JWT claims for non-HQ single-outlet users.
+      // This skips the outlet selector entirely for staff assigned to one outlet.
+      const { user: authUser, setOutlet } = useAuthStore.getState();
+      const jwtOutletId = (authUser as any)?.outlet_id || (authUser as any)?.outletId;
+      const isHqUser = (authUser as any)?.is_hq_user || (authUser as any)?.isHqUser;
+
+      if (jwtOutletId && !isHqUser) {
+        setOutlet({
+          id: jwtOutletId,
+          code: (authUser as any)?.outlet_code ?? '',
+          name: (authUser as any)?.outlet_code ?? '',
+          use_case: (authUser as any)?.outlet_use_case,
+          is_hq: false,
+        });
+        router.replace(returnTo || `/${orgSlug}`);
+        return;
+      }
+
+      const next = returnTo ? `?returnTo=${encodeURIComponent(returnTo)}` : '';
+      router.replace(`/${orgSlug}/auth/select-outlet${next}`);
     }
   }, [status, orgSlug, router]);
 

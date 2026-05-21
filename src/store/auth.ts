@@ -49,6 +49,8 @@ interface AuthState {
   lastAuthenticatedAt: number | null;
   /** True when authenticated via terminal PIN JWT (not SSO). useMe() is skipped for terminal sessions. */
   isTerminalSession: boolean;
+  /** Set to true after Zustand persist has finished loading from localStorage. Guards against SSO redirect race on page refresh. */
+  _hasHydrated: boolean;
 
   /** Subscription info fetched lazily after login (undefined = not started, null = loading). */
   subscriptionInfo: Record<string, unknown> | null | undefined;
@@ -89,6 +91,7 @@ export const useAuthStore = create<AuthState>()(
   persist(
     (set, get) => ({
       status: 'idle',
+      _hasHydrated: false,
       subscriptionInfo: undefined,
       setSubscriptionInfo: (info: Record<string, unknown> | null) => set({ subscriptionInfo: info }),
       user: null,
@@ -303,6 +306,10 @@ export const useAuthStore = create<AuthState>()(
         if (state?.outlet?.id) {
           apiClient.setOutletID(state.outlet.id);
         }
+        // Signal that localStorage rehydration is complete — guards against
+        // the SSO redirect race condition on page refresh where effects fire
+        // before the persisted isTerminalSession/session values are available.
+        useAuthStore.setState({ _hasHydrated: true });
       },
     }
   )
