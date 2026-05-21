@@ -18,6 +18,7 @@ import {
   LogOut,
   Monitor,
   Package,
+  Pill,
   Plus,
   Settings,
   ShoppingBag,
@@ -190,6 +191,13 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
       defaultCollapsed: true,
       items: [
         { label: 'Pickup Queue', icon: ShoppingBag, href: '/online-orders', moduleKey: 'online_orders', permission: [P.ORDERS_VIEW, P.ORDERS_MANAGE] },
+      ],
+    },
+    {
+      label: 'Pharmacy',
+      defaultCollapsed: true,
+      items: [
+        { label: 'Prescriptions', icon: Pill, href: '/pharmacy', moduleKey: 'pharmacy', permission: [P.ORDERS_VIEW, P.ORDERS_ADD] },
       ],
     },
     {
