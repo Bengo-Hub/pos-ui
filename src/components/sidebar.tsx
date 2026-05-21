@@ -311,19 +311,16 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
 
   const content = (
     <div className="flex flex-col h-full bg-sidebar border-r border-sidebar-border">
-      {/* Logo / tenant — fills the header area regardless of aspect ratio */}
-      <div className="flex items-center justify-center px-4 py-4 border-b border-sidebar-border min-h-18">
+      {/* Logo / tenant — full-bleed image banner, or pill fallback */}
+      <div className="border-b border-sidebar-border shrink-0 overflow-hidden" style={{ height: '72px' }}>
         {tenant?.logoUrl ? (
-          <div className="w-full h-14 flex items-center justify-center">
-            <img
-              src={tenant.logoUrl}
-              alt={tenant.name ?? orgSlug}
-              className="max-h-14 w-full object-contain"
-              style={{ maxWidth: '100%' }}
-            />
-          </div>
+          <img
+            src={tenant.logoUrl}
+            alt={tenant.name ?? orgSlug}
+            className="w-full h-full object-cover"
+          />
         ) : (
-          <div className="flex items-center gap-3 w-full">
+          <div className="flex items-center gap-3 h-full px-4">
             <div className="h-10 w-10 shrink-0 rounded-xl bg-primary flex items-center justify-center shadow-lg shadow-primary/30">
               <span className="text-sm font-bold text-primary-foreground">
                 {(tenant?.orgName ?? orgSlug).slice(0, 2).toUpperCase()}

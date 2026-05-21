@@ -46,14 +46,17 @@ export function Header({ onMenuClick }: HeaderProps) {
   const params = useParams();
   const orgSlug = (params?.orgSlug as string) || 'codevertex';
   const router = useRouter();
-  const user = useAuthStore((state) => state.user);
-  const status = useAuthStore((state) => state.status);
-  const logout = useAuthStore((state) => state.logout);
+  const user = useAuthStore((s) => s.user);
+  const _hasHydrated = useAuthStore((s) => s._hasHydrated);
+  const logout = useAuthStore((s) => s.logout);
   const { getServiceTitle } = useTenantBranding();
   const outlet = useAuthStore((s) => s.outlet);
   const [profileOpen, setProfileOpen] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
-  const isAuthenticated = !!user && status === 'authenticated';
+  // Authenticated when user is present and store has finished rehydrating.
+  // Do NOT gate on status==='authenticated' — initialize() briefly sets 'loading'
+  // after rehydration, making buttons disappear on every page refresh.
+  const isAuthenticated = _hasHydrated && !!user;
   const isTerminalSession = useAuthStore((s) => s.isTerminalSession);
   const name = displayName(user);
   const role = user?.roles?.[0];

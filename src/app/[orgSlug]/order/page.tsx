@@ -307,7 +307,7 @@ export default function OrderPage() {
   // ─── Render ─────────────────────────────────────────────────────────────
 
   return (
-    <div className="h-screen flex flex-col lg:flex-row overflow-hidden bg-background">
+    <div className="flex flex-col lg:flex-row overflow-hidden bg-background" style={{ height: 'calc(100vh - 80px)' }}>
       {/* ── Left Panel: Menu (60%) ── */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden min-h-0">
 
@@ -581,7 +581,7 @@ export default function OrderPage() {
       </div>
 
       {/* ── Right Panel: Cart ── */}
-      <div className="w-full lg:w-96 xl:w-104 border-t lg:border-t-0 lg:border-l border-border bg-card flex flex-col shrink-0 min-h-0 max-h-screen lg:max-h-full overflow-hidden">
+      <div className="w-full lg:w-96 xl:w-104 border-t lg:border-t-0 lg:border-l border-border bg-card flex flex-col shrink-0 min-h-0 overflow-hidden">
         {/* Cart header */}
         <div className="px-5 py-4 border-b border-border flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2.5">
