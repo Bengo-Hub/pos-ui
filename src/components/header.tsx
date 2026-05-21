@@ -1,13 +1,15 @@
 'use client';
 
 import { useAuthStore } from '@/store/auth';
-import { Bell, BookOpen, ChevronDown, ExternalLink, Globe, LogOut, MapPin, Menu, Package, Search, Settings, ShoppingCart, Tag, User } from 'lucide-react';
+import { Bell, BookOpen, ChevronDown, ExternalLink, Globe, LogOut, MapPin, Menu, Package, Search, Settings, ShoppingCart, Square, Tag, User } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useRef, useState } from 'react';
 import { ThemeToggle } from './theme-toggle';
 import { useTenantBranding } from '@/providers/tenant-branding-provider';
 import { OutletFilter } from './outlet-filter';
+import { useCurrentShift, useCloseShift } from '@/hooks/useShifts';
+import { toast } from 'sonner';
 
 const INVENTORY_URL = process.env.NEXT_PUBLIC_INVENTORY_UI_URL ?? 'https://inventory.codevertexitsolutions.com';
 const TREASURY_URL = process.env.NEXT_PUBLIC_TREASURY_UI_URL ?? 'https://books.codevertexitsolutions.com';
@@ -51,8 +53,22 @@ export function Header({ onMenuClick }: HeaderProps) {
   const [profileOpen, setProfileOpen] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
   const isAuthenticated = !!user && status === 'authenticated';
+  const isTerminalSession = useAuthStore((s) => s.isTerminalSession);
   const name = displayName(user);
   const role = user?.roles?.[0];
+
+  const { data: currentShift } = useCurrentShift();
+  const closeShift = useCloseShift();
+  const hasActiveShift = !!currentShift;
+
+  async function handleEndShift() {
+    try {
+      await closeShift.mutateAsync(0);
+      toast.success('Shift ended');
+    } catch {
+      toast.error('Failed to end shift');
+    }
+  }
 
   return (
     <header className="h-20 border-b border-border bg-background/80 backdrop-blur-md sticky top-0 z-30 px-4 sm:px-8 flex items-center justify-between">
@@ -92,6 +108,29 @@ export function Header({ onMenuClick }: HeaderProps) {
       </div>
 
       <div className="flex items-center gap-1 sm:gap-3">
+        {isTerminalSession && isAuthenticated && hasActiveShift && (
+          <button
+            type="button"
+            onClick={handleEndShift}
+            disabled={closeShift.isPending}
+            title="End shift"
+            className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 hover:bg-amber-500/20 transition-all text-xs font-bold disabled:opacity-50"
+          >
+            <Square className="h-3.5 w-3.5" />
+            <span className="hidden md:inline">End Shift</span>
+          </button>
+        )}
+        {isTerminalSession && isAuthenticated && (
+          <button
+            type="button"
+            onClick={() => void logout()}
+            title="Logout"
+            className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 hover:bg-rose-500/20 transition-all text-xs font-bold"
+          >
+            <LogOut className="h-3.5 w-3.5" />
+            <span className="hidden md:inline">Logout</span>
+          </button>
+        )}
         <button className="relative group p-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-white/5 transition-all">
           <Bell className="h-5 w-5 text-slate-500 group-hover:text-primary transition-colors" />
           <span className="absolute top-2.5 right-2.5 w-2 h-2 bg-rose-500 rounded-full border-2 border-white dark:border-slate-950" />

@@ -252,7 +252,8 @@ export const useAuthStore = create<AuthState>()(
       },
 
       logout: async () => {
-        const { isTerminalSession } = get();
+        const { user } = get();
+        const orgSlug = user?.tenant_slug ?? '';
         set({ status: 'idle', user: null, session: null, subscriptionInfo: undefined, lastAuthenticatedAt: null, isTerminalSession: false, outlet: null, selectedOutletId: null });
         apiClient.setAccessToken(null);
         apiClient.setTenantInfo(null, null);
@@ -263,10 +264,9 @@ export const useAuthStore = create<AuthState>()(
           try { localStorage.removeItem('pos-auth-storage'); } catch { /* no-op */ }
           try { localStorage.removeItem(POS_SELECTED_OUTLET_KEY); } catch { /* no-op */ }
           try { sessionStorage.clear(); } catch { /* no-op */ }
-          // Terminal sessions use pos-api HMAC JWTs — there's no SSO session to invalidate.
-          if (!isTerminalSession) {
-            window.location.href = buildLogoutUrl('https://accounts.codevertexitsolutions.com');
-          }
+          // Always redirect to PIN login so staff re-authenticate locally.
+          // No need to invalidate SSO sessions — pos-api HMAC and SSO tokens are both short-lived.
+          window.location.href = orgSlug ? `/${orgSlug}/pin-login` : '/';
         }
       },
 

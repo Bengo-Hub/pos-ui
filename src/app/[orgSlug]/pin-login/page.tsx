@@ -918,7 +918,7 @@ interface PINKeypadLargeProps {
 }
 
 function PINKeypadLarge({ onConfirm, loading, error, disabled }: PINKeypadLargeProps) {
-  const maxLength = 6;
+  const maxLength = 4;
   const [pin, setPin] = useState('');
   const [shaking, setShaking] = useState(false);
 
@@ -944,13 +944,6 @@ function PINKeypadLarge({ onConfirm, loading, error, disabled }: PINKeypadLargeP
     },
     [loading, shaking, disabled, maxLength, onConfirm, pin]
   );
-
-  const handleConfirm = () => {
-    if (pin.length >= 4 && !loading && !disabled) {
-      onConfirm(pin);
-      setPin('');
-    }
-  };
 
   const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '', '0', '⌫'];
 
@@ -1008,15 +1001,6 @@ function PINKeypadLarge({ onConfirm, loading, error, disabled }: PINKeypadLargeP
         ))}
       </div>
 
-      {pin.length >= 4 && pin.length < maxLength && (
-        <button
-          onClick={handleConfirm}
-          disabled={loading || disabled}
-          className="w-full h-14 rounded-2xl bg-primary text-primary-foreground font-bold text-sm flex items-center justify-center gap-2 hover:bg-primary/90 active:scale-95 disabled:opacity-50 transition-all touch-manipulation shadow-lg shadow-primary/30"
-        >
-          Confirm PIN
-        </button>
-      )}
     </div>
   );
 }

@@ -61,7 +61,8 @@ function hotelBase(tenantSlug: string) {
 
 export const hotelApi = {
   listRooms: (tenantSlug: string, status?: string) =>
-    apiClient.get<Room[]>(`${hotelBase(tenantSlug)}/rooms`, status ? { status } : {}),
+    apiClient.get<{ data: Room[]; total: number }>(`${hotelBase(tenantSlug)}/rooms`, status ? { status } : {})
+      .then((r) => r.data ?? []),
 
   getRoom: (tenantSlug: string, roomId: string) =>
     apiClient.get<Room>(`${hotelBase(tenantSlug)}/rooms/${roomId}`),
@@ -87,7 +88,8 @@ export const hotelApi = {
   // ─── Facilities ────────────────────────────────────────────────────────────
 
   listFacilities: (tenantSlug: string) =>
-    apiClient.get<Facility[]>(`${hotelBase(tenantSlug)}/facilities`),
+    apiClient.get<{ data: Facility[]; total: number }>(`${hotelBase(tenantSlug)}/facilities`)
+      .then((r) => r.data ?? []),
 
   getFacility: (tenantSlug: string, facilityId: string) =>
     apiClient.get<Facility>(`${hotelBase(tenantSlug)}/facilities/${facilityId}`),
@@ -96,5 +98,6 @@ export const hotelApi = {
     apiClient.post<FacilityBooking>(`${hotelBase(tenantSlug)}/facilities/${facilityId}/book`, body),
 
   listFacilityBookings: (tenantSlug: string) =>
-    apiClient.get<FacilityBooking[]>(`${hotelBase(tenantSlug)}/facilities/bookings`),
+    apiClient.get<{ data: FacilityBooking[]; total: number }>(`${hotelBase(tenantSlug)}/facilities/bookings`)
+      .then((r) => r.data ?? []),
 };
