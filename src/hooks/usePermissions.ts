@@ -18,7 +18,10 @@ import { useMemo } from 'react';
 import { useAuthStore } from '@/store/auth';
 import { P, ROLE_PERMISSIONS, type Permission } from '@/lib/rbac/permissions';
 
-const SUPERUSER_ROLES = ['superuser', 'admin', 'pos_admin', 'super_admin'];
+// Standard superuser roles as seeded by auth-api. 'admin' is the tenant-level superuser;
+// 'superuser' is the platform-level superuser. Avoid checking for pos_admin/super_admin
+// — those are not seeded in auth-api and cause role check discrepancies.
+const SUPERUSER_ROLES = ['superuser', 'admin'];
 
 export function usePermissions() {
   const user = useAuthStore((s) => s.user);
