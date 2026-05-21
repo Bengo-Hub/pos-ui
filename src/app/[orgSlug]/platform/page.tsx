@@ -314,7 +314,7 @@ function LicensesTab() {
                     No active POS subscription. Subscribe to unlock device limits and premium features.
                   </p>
                   <a
-                    href="https://pricingapi.codevertexitsolutions.com/plans?service=pos"
+                    href="https://pricing.codevertexitsolutions.com/plans?service=pos"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-block mt-2 text-sm font-medium text-amber-700 dark:text-amber-400 underline"
