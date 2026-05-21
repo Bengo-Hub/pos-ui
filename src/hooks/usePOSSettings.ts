@@ -2,6 +2,8 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { posSettingsApi, type UpdatePOSModulesInput, type UpdatePOSSettingsInput } from '@/lib/api/settings';
+
+export type { POSSettings } from '@/lib/api/settings';
 import { useAuthStore } from '@/store/auth';
 import { toast } from 'sonner';
 
@@ -31,6 +33,21 @@ export function useUpdatePOSSettings() {
       toast.success('Settings saved');
     },
     onError: () => toast.error('Failed to save settings'),
+  });
+}
+
+export function useUpdateShiftSettings() {
+  const tenantID = useTenantID();
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: { shift_auto_end_enabled?: boolean; shift_max_hours?: number }) =>
+      posSettingsApi.patchShifts(tenantID, input),
+    onSuccess: (data) => {
+      qc.setQueryData(['pos-settings', tenantID], data);
+      toast.success('Shift settings saved');
+    },
+    onError: () => toast.error('Failed to save shift settings'),
   });
 }
 

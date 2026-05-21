@@ -306,10 +306,14 @@ export const useAuthStore = create<AuthState>()(
         if (state?.outlet?.id) {
           apiClient.setOutletID(state.outlet.id);
         }
-        // Signal that localStorage rehydration is complete — guards against
-        // the SSO redirect race condition on page refresh where effects fire
-        // before the persisted isTerminalSession/session values are available.
-        useAuthStore.setState({ _hasHydrated: true });
+        // Signal rehydration complete. If session + user are present, immediately
+        // mark as authenticated so the header doesn't flash unauthenticated state
+        // while waiting for initialize() to run.
+        if (state?.session && state?.user) {
+          useAuthStore.setState({ _hasHydrated: true, status: 'authenticated' });
+        } else {
+          useAuthStore.setState({ _hasHydrated: true });
+        }
       },
     }
   )

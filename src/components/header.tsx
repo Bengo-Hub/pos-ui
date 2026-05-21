@@ -3,7 +3,7 @@
 import { useAuthStore } from '@/store/auth';
 import { Bell, BookOpen, ChevronDown, ExternalLink, Globe, LogOut, MapPin, Menu, Package, Search, Settings, ShoppingCart, Square, Tag, User } from 'lucide-react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { useRef, useState } from 'react';
 import { ThemeToggle } from './theme-toggle';
 import { useTenantBranding } from '@/providers/tenant-branding-provider';
@@ -45,6 +45,7 @@ interface HeaderProps {
 export function Header({ onMenuClick }: HeaderProps) {
   const params = useParams();
   const orgSlug = (params?.orgSlug as string) || 'codevertex';
+  const router = useRouter();
   const user = useAuthStore((state) => state.user);
   const status = useAuthStore((state) => state.status);
   const logout = useAuthStore((state) => state.logout);
@@ -64,7 +65,13 @@ export function Header({ onMenuClick }: HeaderProps) {
   async function handleEndShift() {
     try {
       await closeShift.mutateAsync(0);
-      toast.success('Shift ended');
+      if (isTerminalSession) {
+        // Terminal session: logout and redirect back to PIN login.
+        await logout();
+        router.replace(`/${orgSlug}/pin-login`);
+      } else {
+        toast.success('Shift ended');
+      }
     } catch {
       toast.error('Failed to end shift');
     }

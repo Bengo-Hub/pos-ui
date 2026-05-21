@@ -15,33 +15,49 @@ function basePath(tenantID: string) {
 
 // ─── Catalog Items ──────────────────────────────────────────────────────────
 
-interface CatalogItem {
+export interface CatalogItem {
   id: string;
   sku: string;
   name: string;
+  description?: string;
   category: string;
+  item_type?: string;
   taxStatus: string;
   status: string;
-  metadata: Record<string, any>;
+  image_url?: string;
+  barcode?: string;
+  price?: number;
+  metadata?: Record<string, any>;
 }
 
-interface ListResponse<T> {
+export interface PaginatedResponse<T> {
   data: T[];
   total: number;
+  limit: number;
+  page: number;
 }
 
-export function useMenuItems(filters?: { category?: string; search?: string }) {
+export function useMenuItems(filters?: {
+  category?: string;
+  search?: string;
+  page?: number;
+  limit?: number;
+}) {
   const tenantID = useTenantID();
+  const page = filters?.page ?? 1;
+  const limit = filters?.limit ?? 50;
   return useQuery({
-    queryKey: ['pos-catalog-items', tenantID, filters],
+    queryKey: ['pos-catalog-items', tenantID, filters?.category, filters?.search, page, limit],
     queryFn: () =>
-      apiClient.get<ListResponse<CatalogItem>>(`${basePath(tenantID)}/catalog/items`, {
+      apiClient.get<PaginatedResponse<CatalogItem>>(`${basePath(tenantID)}/catalog/items`, {
         category: filters?.category,
         search: filters?.search,
-        limit: 200,
+        page,
+        limit,
       }),
     enabled: !!tenantID,
     staleTime: 5 * 60_000,
+    placeholderData: (prev) => prev,
   });
 }
 
@@ -72,7 +88,7 @@ export function useSections() {
   const tenantID = useTenantID();
   return useQuery({
     queryKey: ['pos-sections', tenantID],
-    queryFn: () => apiClient.get<ListResponse<Section>>(`${basePath(tenantID)}/sections`),
+    queryFn: () => apiClient.get<PaginatedResponse<Section>>(`${basePath(tenantID)}/sections`),
     enabled: !!tenantID,
     staleTime: 30_000,
   });
@@ -97,7 +113,7 @@ export function useTables(filters?: { status?: string; sectionId?: string }) {
   return useQuery({
     queryKey: ['pos-tables', tenantID, filters],
     queryFn: () =>
-      apiClient.get<ListResponse<Table>>(`${basePath(tenantID)}/tables`, {
+      apiClient.get<PaginatedResponse<Table>>(`${basePath(tenantID)}/tables`, {
         status: filters?.status,
         section_id: filters?.sectionId,
       }),
@@ -215,7 +231,7 @@ export function useTenders() {
   const tenantID = useTenantID();
   return useQuery({
     queryKey: ['pos-tenders', tenantID],
-    queryFn: () => apiClient.get<ListResponse<Tender>>(`${basePath(tenantID)}/tenders`),
+    queryFn: () => apiClient.get<PaginatedResponse<Tender>>(`${basePath(tenantID)}/tenders`),
     enabled: !!tenantID,
     staleTime: 5 * 60_000,
   });
@@ -324,7 +340,7 @@ export function useDrawerHistory() {
   return useQuery({
     queryKey: ['pos-drawer-history', tenantID],
     queryFn: () =>
-      apiClient.get<ListResponse<CashDrawer>>(`${basePath(tenantID)}/drawers`),
+      apiClient.get<PaginatedResponse<CashDrawer>>(`${basePath(tenantID)}/drawers`),
     enabled: !!tenantID,
     staleTime: 30_000,
   });

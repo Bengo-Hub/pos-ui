@@ -18,6 +18,8 @@ export interface POSSettings {
   hotel_module_enabled: boolean;
   layaway_enabled: boolean;
   shift_reports_enabled: boolean;
+  shift_auto_end_enabled: boolean;
+  shift_max_hours: number;
   updated_at: string;
 }
 
@@ -55,6 +57,9 @@ export const posSettingsApi = {
 
   patchModules: (tenantID: string, body: UpdatePOSModulesInput) =>
     apiClient.patch<POSSettings>(`${settingsBase(tenantID)}/modules`, body),
+
+  patchShifts: (tenantID: string, body: { shift_auto_end_enabled?: boolean; shift_max_hours?: number }) =>
+    apiClient.patch<POSSettings>(`${settingsBase(tenantID)}/shifts`, body),
 
   getOutlet: (tenantID: string, outletID: string) =>
     apiClient.get<POSSettings>(`/api/v1/${tenantID}/pos/outlets/${outletID}/settings`),

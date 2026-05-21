@@ -288,10 +288,20 @@ function CashierDashboard({ orgSlug }: { orgSlug: string }) {
     queryFn: () => apiClient.get<any>(`/api/v1/${tenantID}/pos/drawers/current`),
     enabled: !!tenantID,
     retry: false,
+    staleTime: 30_000,
+  });
+
+  const { data: currentShift } = useQuery({
+    queryKey: ['shift-current', tenantID],
+    queryFn: () => apiClient.get<any>(`/api/v1/${tenantID}/pos/devices/current/sessions/current`),
+    enabled: !!tenantID,
+    retry: (count, err: any) => err?.response?.status !== 404 && count < 2,
+    staleTime: 30_000,
   });
 
   const drawer = drawerData?.data ?? drawerData;
-  const drawerOpen = drawer?.status === 'open';
+  // Consider drawer "open" if either the drawer record is open OR a shift session is active.
+  const drawerOpen = drawer?.isOpen === true || drawer?.status === 'open' || !!currentShift?.id;
 
   return (
     <div className="p-6 space-y-6">

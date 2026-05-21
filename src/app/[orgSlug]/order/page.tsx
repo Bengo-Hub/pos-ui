@@ -31,6 +31,7 @@ interface MenuItem {
   id: string;
   name: string;
   sku: string;
+  description?: string;
   price: number;
   category: string;
   image?: string;
@@ -49,14 +50,29 @@ interface CartItem extends MenuItem {
 
 type DisplayMode = 'card' | 'list' | 'image_grid';
 
+const HOSPITALITY_USE_CASES = ['hospitality', 'hotel', 'bar', 'cafe', 'restaurant'];
+const QUICK_USE_CASES = ['quick_service', 'quick service'];
+
+function defaultDisplayMode(useCase?: string): DisplayMode {
+  const uc = (useCase ?? '').toLowerCase();
+  if (HOSPITALITY_USE_CASES.some((h) => uc.includes(h))) return 'image_grid';
+  if (QUICK_USE_CASES.some((q) => uc.includes(q))) return 'card';
+  return 'list'; // retail, pharmacy, services → datatable
+}
+
 // ─── Page ───────────────────────────────────────────────────────────────────
 
 export default function OrderPage() {
   const user = useAuthStore((s) => s.user);
+  const outlet = useAuthStore((s) => s.outlet);
   const [activeCategory, setActiveCategory] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [cart, setCart] = useState<CartItem[]>([]);
-  const [displayMode, setDisplayMode] = useState<DisplayMode>('card');
+  const [displayMode, setDisplayMode] = useState<DisplayMode>(() =>
+    defaultDisplayMode(outlet?.use_case)
+  );
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 50;
 
   // Modifier modal
   const [modifierItem, setModifierItem] = useState<MenuItem | null>(null);
@@ -81,9 +97,15 @@ export default function OrderPage() {
   const barcodeInputRef = useRef<HTMLInputElement>(null);
   const [barcodeBuffer, setBarcodeBuffer] = useState('');
 
+  // Reset to page 1 when search/category changes
+  const handleCategoryChange = (cat: string) => { setActiveCategory(cat); setPage(1); };
+  const handleSearchChange = (q: string) => { setSearchQuery(q); setPage(1); };
+
   const { data: catalogData, isLoading: menuLoading } = useMenuItems({
     category: activeCategory !== 'All' ? activeCategory : undefined,
     search: searchQuery || undefined,
+    page,
+    limit: PAGE_SIZE,
   });
   const createOrder = useCreateOrder();
 
@@ -93,6 +115,7 @@ export default function OrderPage() {
       id: item.id,
       name: item.name,
       sku: item.sku,
+      description: item.description,
       price: item.sell_price ?? item.price ?? 0,
       category: item.category || 'Uncategorized',
       image: item.image_url,
@@ -102,18 +125,16 @@ export default function OrderPage() {
     }));
   }, [catalogData]);
 
+  const totalItems = catalogData?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(totalItems / PAGE_SIZE));
+
   const categories = useMemo(() => {
     const cats = new Set(menuItems.map((i) => i.category));
     return ['All', ...Array.from(cats).sort()];
   }, [menuItems]);
 
-  const filteredItems = menuItems.filter((item) => {
-    const matchesCategory = activeCategory === 'All' || item.category === activeCategory;
-    const matchesSearch =
-      item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.sku.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesCategory && matchesSearch;
-  });
+  // Server-side filtering — items returned by the API are already filtered
+  const filteredItems = menuItems;
 
   // ─── Item Add Flow ──────────────────────────────────────────────────────
 
@@ -286,9 +307,9 @@ export default function OrderPage() {
   // ─── Render ─────────────────────────────────────────────────────────────
 
   return (
-    <div className="h-full flex flex-col lg:flex-row overflow-hidden bg-background">
+    <div className="h-screen flex flex-col lg:flex-row overflow-hidden bg-background">
       {/* ── Left Panel: Menu (60%) ── */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden min-h-0">
 
         {/* Search bar — full width at very top */}
         <div className="px-4 pt-4 pb-2 shrink-0">
@@ -298,11 +319,11 @@ export default function OrderPage() {
               placeholder="Search items or scan barcode..."
               className="w-full bg-card border border-border rounded-2xl py-3.5 pl-11 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 transition-all min-h-13 font-medium placeholder:text-muted-foreground/60"
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => handleSearchChange(e.target.value)}
             />
             {searchQuery && (
               <button
-                onClick={() => setSearchQuery('')}
+                onClick={() => handleSearchChange('')}
                 className="absolute right-3 top-1/2 -translate-y-1/2 h-7 w-7 rounded-full bg-muted flex items-center justify-center hover:bg-destructive/10 hover:text-destructive transition-colors"
                 aria-label="Clear search"
               >
@@ -319,7 +340,7 @@ export default function OrderPage() {
             {categories.map((cat) => (
               <button
                 key={cat}
-                onClick={() => setActiveCategory(cat)}
+                onClick={() => handleCategoryChange(cat)}
                 className={cn(
                   'px-4 py-2 rounded-full text-sm font-semibold whitespace-nowrap transition-all min-h-9.5 shrink-0',
                   activeCategory === cat
@@ -374,8 +395,8 @@ export default function OrderPage() {
           <input ref={barcodeInputRef} className="sr-only" aria-label="Barcode input" />
         </div>
 
-        {/* Items area */}
-        <div className="flex-1 overflow-y-auto px-4 pb-4">
+        {/* Items area — scrolls internally */}
+        <div className="flex-1 overflow-y-auto min-h-0 px-4 pb-4">
           {menuLoading ? (
             <div className="flex flex-col items-center justify-center h-48 gap-3">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -386,44 +407,60 @@ export default function OrderPage() {
               <Search className="h-10 w-10 opacity-20" />
               <p className="text-sm font-medium">No items found</p>
               {searchQuery && (
-                <button onClick={() => setSearchQuery('')} className="text-xs text-primary underline">
+                <button onClick={() => handleSearchChange('')} className="text-xs text-primary underline">
                   Clear search
                 </button>
               )}
             </div>
           ) : displayMode === 'list' ? (
-            /* ─── LIST MODE ─── */
-            <div className="space-y-1.5">
-              {filteredItems.map((item) => {
+            /* ─── LIST / DATATABLE MODE ─── */
+            <div className="rounded-2xl border border-border overflow-hidden bg-card">
+              {/* Table header */}
+              <div className="grid grid-cols-[1fr_auto_auto] gap-3 px-4 py-2.5 bg-muted/50 border-b border-border text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                <span>Item</span>
+                <span className="text-right w-24">Price</span>
+                <span className="w-6" />
+              </div>
+              {filteredItems.map((item, idx) => {
                 const inCart = cart.find((c) => c.id === item.id && !c.selectedModifiers);
                 return (
                   <button
                     key={item.id}
                     onClick={() => handleItemTap(item)}
                     className={cn(
-                      'w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl border-2 transition-all min-h-14 touch-manipulation active:scale-[0.98]',
+                      'w-full grid grid-cols-[1fr_auto_auto] gap-3 items-center px-4 py-3 transition-all touch-manipulation active:scale-[0.99]',
+                      idx !== 0 && 'border-t border-border',
                       inCart
-                        ? 'border-primary bg-primary/5 shadow-sm'
-                        : 'border-border bg-card hover:border-primary/30 hover:bg-accent/30'
+                        ? 'bg-primary/5 hover:bg-primary/8'
+                        : 'hover:bg-accent/40'
                     )}
                   >
-                    {/* Availability dot */}
-                    <span className="h-2 w-2 rounded-full bg-emerald-500 shrink-0" />
-                    <div className="flex-1 text-left min-w-0">
-                      <p className="text-sm font-bold truncate">{item.name}</p>
-                      <p className="text-xs text-muted-foreground font-mono">{item.sku}</p>
+                    <div className="flex items-center gap-3 min-w-0 text-left">
+                      <span className={cn('h-2 w-2 rounded-full shrink-0', inCart ? 'bg-primary' : 'bg-emerald-500')} />
+                      <div className="min-w-0">
+                        <p className="text-sm font-bold truncate leading-tight">{item.name}</p>
+                        {item.description ? (
+                          <p className="text-xs text-muted-foreground truncate mt-0.5">{item.description}</p>
+                        ) : (
+                          <p className="text-xs text-muted-foreground font-mono">{item.sku}</p>
+                        )}
+                        {item.modifierGroups?.length ? (
+                          <span className="text-[10px] text-primary">Has options</span>
+                        ) : null}
+                      </div>
                     </div>
-                    <span className="text-sm font-bold font-mono shrink-0 text-foreground">
+                    <span className="text-sm font-bold font-mono text-right w-24">
                       KES {item.price.toLocaleString()}
                     </span>
-                    {inCart && (
+                    {inCart ? (
                       <span className="h-6 w-6 rounded-full bg-primary text-primary-foreground text-xs font-bold flex items-center justify-center shrink-0">
                         {inCart.quantity}
                       </span>
+                    ) : (
+                      <span className="h-6 w-6 rounded-full border-2 border-border flex items-center justify-center shrink-0">
+                        <Plus className="h-3 w-3 text-muted-foreground" />
+                      </span>
                     )}
-                    {item.modifierGroups?.length ? (
-                      <span className="text-[10px] text-primary shrink-0">Options</span>
-                    ) : null}
                   </button>
                 );
               })}
@@ -458,8 +495,11 @@ export default function OrderPage() {
                     )}
                     <div className="p-3 bg-card">
                       <p className="text-sm font-bold truncate leading-tight">{item.name}</p>
+                      {item.description && (
+                        <p className="text-xs text-muted-foreground truncate mt-0.5 leading-tight">{item.description}</p>
+                      )}
                       <div className="flex items-center justify-between mt-1">
-                        <p className="text-xs text-muted-foreground font-mono">KES {item.price.toLocaleString()}</p>
+                        <p className="text-xs font-bold font-mono text-primary">KES {item.price.toLocaleString()}</p>
                         {item.modifierGroups?.length ? (
                           <span className="text-[10px] text-primary">Has options</span>
                         ) : null}
@@ -512,10 +552,36 @@ export default function OrderPage() {
             </div>
           )}
         </div>
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="shrink-0 px-4 py-2.5 border-t border-border flex items-center justify-between bg-background">
+            <span className="text-xs text-muted-foreground">
+              {((page - 1) * PAGE_SIZE) + 1}–{Math.min(page * PAGE_SIZE, totalItems)} of {totalItems} items
+            </span>
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page === 1}
+                className="h-8 px-3 rounded-lg border border-border text-xs font-semibold disabled:opacity-40 hover:bg-accent transition-colors"
+              >
+                ← Prev
+              </button>
+              <span className="text-xs font-bold px-2">{page} / {totalPages}</span>
+              <button
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={page === totalPages}
+                className="h-8 px-3 rounded-lg border border-border text-xs font-semibold disabled:opacity-40 hover:bg-accent transition-colors"
+              >
+                Next →
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* ── Right Panel: Cart (40%) ── */}
-      <div className="w-full lg:w-100 xl:w-105 border-t lg:border-t-0 lg:border-l border-border bg-card flex flex-col shrink-0">
+      {/* ── Right Panel: Cart ── */}
+      <div className="w-full lg:w-96 xl:w-104 border-t lg:border-t-0 lg:border-l border-border bg-card flex flex-col shrink-0 min-h-0 max-h-screen lg:max-h-full overflow-hidden">
         {/* Cart header */}
         <div className="px-5 py-4 border-b border-border flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2.5">
@@ -545,7 +611,7 @@ export default function OrderPage() {
         </div>
 
         {/* Cart items — scrollable */}
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto min-h-0">
           {cart.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-center p-10 gap-4">
               <div className="h-20 w-20 rounded-full bg-muted flex items-center justify-center">
