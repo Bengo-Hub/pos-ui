@@ -108,27 +108,27 @@ export function Header({ onMenuClick }: HeaderProps) {
       </div>
 
       <div className="flex items-center gap-1 sm:gap-3">
-        {isTerminalSession && isAuthenticated && hasActiveShift && (
+        {isAuthenticated && hasActiveShift && (
           <button
             type="button"
             onClick={handleEndShift}
             disabled={closeShift.isPending}
             title="End shift"
-            className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 hover:bg-amber-500/20 transition-all text-xs font-bold disabled:opacity-50"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 hover:bg-amber-500/20 transition-all text-xs font-bold disabled:opacity-50"
           >
             <Square className="h-3.5 w-3.5" />
-            <span className="hidden md:inline">End Shift</span>
+            <span className="hidden sm:inline">End Shift</span>
           </button>
         )}
-        {isTerminalSession && isAuthenticated && (
+        {isAuthenticated && (
           <button
             type="button"
             onClick={() => void logout()}
             title="Logout"
-            className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 hover:bg-rose-500/20 transition-all text-xs font-bold"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 hover:bg-rose-500/20 transition-all text-xs font-bold"
           >
             <LogOut className="h-3.5 w-3.5" />
-            <span className="hidden md:inline">Logout</span>
+            <span className="hidden sm:inline">Logout</span>
           </button>
         )}
         <button className="relative group p-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-white/5 transition-all">

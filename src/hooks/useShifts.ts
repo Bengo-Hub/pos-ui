@@ -15,7 +15,7 @@ export function useCurrentShift() {
     queryFn: () => shiftsApi.getCurrent(tenantId),
     enabled: !!tenantId,
     staleTime: 30_000,
-    retry: (count, err: any) => err?.status !== 404 && count < 2,
+    retry: (count, err: any) => err?.response?.status !== 404 && count < 2,
   });
 }
 
@@ -27,7 +27,7 @@ export function useSessionSummary(enabled: boolean) {
     enabled: !!tenantId && enabled,
     staleTime: 30_000,
     refetchInterval: 60_000,
-    retry: (count, err: any) => err?.status !== 404 && count < 2,
+    retry: (count, err: any) => err?.response?.status !== 404 && count < 2,
   });
 }
 

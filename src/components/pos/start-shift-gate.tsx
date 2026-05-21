@@ -2,7 +2,6 @@
 
 import { useCurrentShift, useOpenShift } from '@/hooks/useShifts';
 import { useAuthStore } from '@/store/auth';
-import { useModuleAccess } from '@/hooks/use-module-access';
 import { cn } from '@/lib/utils';
 import { Loader2, Play } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -22,9 +21,7 @@ interface StartShiftGateProps {
 export function StartShiftGate({ children }: StartShiftGateProps) {
   const user = useAuthStore((s) => s.user);
   const isTerminalSession = useAuthStore((s) => s.isTerminalSession);
-  const { hasModule } = useModuleAccess();
 
-  const shiftsEnabled = hasModule('shifts');
   const role = user?.roles?.[0] ?? '';
   const needsShiftGate = SHIFT_ROLES.includes(role);
   const needsFloat = FLOAT_ROLES.includes(role);
@@ -36,16 +33,17 @@ export function StartShiftGate({ children }: StartShiftGateProps) {
   const [float, setFloat] = useState('');
   const [submitted, setSubmitted] = useState(false);
 
-  const noShift = !isLoading && !currentShift && (error as any)?.status === 404;
-  const showGate = isTerminalSession && shiftsEnabled && needsShiftGate && noShift && !submitted;
+  // noShift = query settled with no active session (404 = no open session exists)
+  const noShift = !isLoading && !currentShift && (error as any)?.response?.status === 404;
+  const showGate = isTerminalSession && needsShiftGate && noShift && !submitted;
 
   // Auto-open shift for kitchen/bar without showing the gate UI
   useEffect(() => {
-    if (isTerminalSession && shiftsEnabled && isAutoShift && noShift && !submitted && !openShift.isPending) {
+    if (isTerminalSession && isAutoShift && noShift && !submitted && !openShift.isPending) {
       openShift.mutate(0);
       setSubmitted(true);
     }
-  }, [isTerminalSession, shiftsEnabled, isAutoShift, noShift, submitted, openShift.isPending]);
+  }, [isTerminalSession, isAutoShift, noShift, submitted, openShift.isPending]);
 
   async function handleBeginShift() {
     const opening = needsFloat ? (parseFloat(float) || 0) : 0;
