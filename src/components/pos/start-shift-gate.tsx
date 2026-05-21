@@ -8,7 +8,8 @@ import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
 // Roles that always require an explicit shift start (with or without float)
-const SHIFT_ROLES = ['cashier', 'waiter', 'receptionist', 'admin', 'manager'];
+// Admin and manager are exempt — they can access the app without opening a shift.
+const SHIFT_ROLES = ['cashier', 'waiter', 'receptionist'];
 // Roles that get the opening float input (cashier manages cash)
 const FLOAT_ROLES = ['cashier'];
 // Roles that auto-open a shift immediately on login (no gate UI)

@@ -17,6 +17,7 @@ function isKioskPath(pathname: string | null): boolean {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const { status, initialize, isTerminalSession } = useAuthStore();
   const session = useAuthStore((s) => s.session);
+  const _hasHydrated = useAuthStore((s) => s._hasHydrated);
   const logout = useAuthStore((s) => s.logout);
   const { isLoading: meLoading, isError, error } = useMe();
   const pathname = usePathname();
@@ -29,9 +30,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isUnauthorizedPage = pathname?.endsWith('/unauthorized');
   const isKiosk = isKioskPath(pathname);
 
+  // Wait for Zustand localStorage rehydration before running initialize to prevent
+  // the race where isTerminalSession=false fires before persisted state is loaded.
   useEffect(() => {
+    if (!_hasHydrated) return;
     initialize();
-  }, [initialize]);
+  }, [initialize, _hasHydrated]);
 
   // Register 401 handler. Terminal sessions redirect to pin-login instead of SSO.
   useEffect(() => {
@@ -53,15 +57,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [queryClient, logout, orgSlug, router]);
 
   // SSO redirect for unauthenticated users — skip for kiosk, terminal sessions, and auth callback paths.
-  // Also skip if a session token exists regardless of status (covers the brief window between rehydration
-  // and initialize() completing, which previously triggered a spurious SSO redirect for terminal sessions).
+  // Also skip until rehydration is complete to prevent spurious SSO redirects on page refresh
+  // when persisted isTerminalSession/session haven't been restored from localStorage yet.
   useEffect(() => {
+    if (!_hasHydrated) return;
     if (isKiosk || isTerminalSession) return;
-    if (session) return; // already have a token; let initialize() handle it
+    if (session) return;
     if (status === 'idle' && !pathname?.includes('/auth') && orgSlug) {
       useAuthStore.getState().redirectToSSO(orgSlug, window.location.href);
     }
-  }, [status, session, pathname, orgSlug, isKiosk, isTerminalSession]);
+  }, [status, session, pathname, orgSlug, isKiosk, isTerminalSession, _hasHydrated]);
 
   // Forbidden (403) redirect — skip for terminal sessions (no subscription concept)
   useEffect(() => {
