@@ -187,7 +187,12 @@ export function useBiometric(options: UseBiometricOptions = {}) {
           throw new Error(body.message || 'Biometric authentication failed');
         }
 
-        const tokens = await finishRes.json();
+        const raw = await finishRes.json();
+        const tokens = {
+          accessToken: raw.access_token ?? raw.accessToken,
+          refreshToken: raw.refresh_token ?? raw.refreshToken ?? '',
+          expiresIn: raw.expires_in ?? raw.expiresIn ?? 3600,
+        };
         setState('success');
         options.onAuthSuccess?.(tokens);
         return tokens;
