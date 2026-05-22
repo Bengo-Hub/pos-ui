@@ -13,6 +13,7 @@
  */
 
 import { useAuthStore } from '@/store/auth';
+import { useOutletFilterStore } from '@/store/outlet-filter';
 import { usePOSSettings } from './usePOSSettings';
 
 // ─── Module keys ────────────────────────────────────────────────────────────
@@ -69,9 +70,12 @@ export function useModuleAccess() {
   // Read use_case from the persisted outlet (set by service-level outlet selector).
   // Falls back to JWT claims for backward compat, then defaults to 'hospitality'.
   const outlet = useAuthStore((s) => s.outlet);
+  // When an HQ admin drills into a specific outlet, that outlet's use_case takes priority.
+  const drillOutlet = useOutletFilterStore((s) => s.selectedOutlet);
 
-  // Use case resolution: outlet store (post-login) > JWT claims > fallback
+  // Use case resolution: drill-down outlet > home outlet store > JWT claims > fallback
   const rawUseCase =
+    drillOutlet?.useCase ??
     outlet?.use_case ??
     (user as any)?.outlet_use_case ??
     (user as any)?.outletUseCase ??

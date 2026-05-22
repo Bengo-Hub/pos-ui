@@ -41,8 +41,13 @@ interface PINLoginResponse {
     permissions?: string[];
     tenant_id: string;
     outlet_id: string;
+    outlet_use_case?: string;
+    is_hq_user?: boolean;
   };
 }
+
+// Use cases that support POS terminals — logistics/warehouse do not.
+const POS_OUTLET_USE_CASES = ['hospitality', 'quick_service', 'retail', 'pharmacy', 'services'];
 
 interface OutletInfo {
   id: string;
@@ -164,6 +169,7 @@ export default function PINLoginPage() {
   const isOnline = useOnline();
   const { tenant, isLoading: tenantLoading } = useTenantBranding();
   const setTerminalSession = useAuthStore((s) => s.setTerminalSession);
+  const setOutlet          = useAuthStore((s) => s.setOutlet);
   const redirectToSSO      = useAuthStore((s) => s.redirectToSSO);
   const tenantID = useAuthStore((s) => s.user?.tenant_id ?? '');
   const tenantUUID = tenant?.id && /^[0-9a-f-]{36}$/.test(tenant.id) ? tenant.id : '';
@@ -234,19 +240,26 @@ export default function PINLoginPage() {
     retry: false,
   });
 
-  // Show outlet selector if multiple outlets and none previously selected
+  // Filter out non-POS outlet types (logistics, warehouse) before showing the outlet grid.
+  const posOutlets = allOutlets.filter(
+    (o) => !o.use_case || POS_OUTLET_USE_CASES.includes(o.use_case)
+  );
+
+  // Show outlet selector if multiple POS outlets and none previously selected
   useEffect(() => {
     if (tenantLoading || !effectiveTenantID) return;
     const hasStoredOutlet = typeof window !== 'undefined' && !!localStorage.getItem('pos-selected-outlet-id');
-    if (!hasStoredOutlet && allOutlets.length > 1) {
+    if (!hasStoredOutlet && posOutlets.length > 1) {
       setStep('outlet');
     }
-  }, [allOutlets.length, effectiveTenantID, tenantLoading]);
+  }, [posOutlets.length, effectiveTenantID, tenantLoading]);
 
   function selectOutlet(outlet: OutletInfo) {
     if (typeof window !== 'undefined') {
       localStorage.setItem('pos-selected-outlet-id', outlet.id);
     }
+    // Pre-set outlet ID on apiClient so the PIN login request includes X-Outlet-ID
+    apiClient.setOutletID(outlet.id);
     setStep('pin');
   }
 
@@ -332,6 +345,25 @@ export default function PINLoginPage() {
         isPlatformOwner: false,
         isSuperUser:     false,
       });
+      // Store the outlet the staff logged into so the header chip shows the correct outlet.
+      // Prefer outletInfo (what was selected on screen) and enrich from API response.
+      const sessionOutlet = outletInfo ?? (data.user.outlet_id ? {
+        id:       data.user.outlet_id,
+        name:     data.user.outlet_id,
+        use_case: data.user.outlet_use_case,
+        is_hq:    data.user.is_hq_user ?? false,
+      } : null);
+      if (sessionOutlet) {
+        setOutlet({
+          id:       sessionOutlet.id,
+          code:     (sessionOutlet as OutletInfo & { code?: string }).code ?? '',
+          name:     sessionOutlet.name,
+          use_case: data.user.outlet_use_case ?? sessionOutlet.use_case,
+          is_hq:    data.user.is_hq_user ?? sessionOutlet.is_hq ?? false,
+          status:   'active',
+        });
+        apiClient.setOutletID(sessionOutlet.id);
+      }
       router.push(`/${orgSlug}/dashboard`);
     },
     onError: () => setPinError('Incorrect PIN. Please try again.'),
@@ -387,8 +419,8 @@ export default function PINLoginPage() {
   // Outlet selection step — shown when multiple outlets and none stored
   if (step === 'outlet') {
     const colClass =
-      allOutlets.length === 1 ? 'grid-cols-1 max-w-xs mx-auto' :
-      allOutlets.length <= 4  ? 'grid-cols-1 sm:grid-cols-2' :
+      posOutlets.length === 1 ? 'grid-cols-1 max-w-xs mx-auto' :
+      posOutlets.length <= 4  ? 'grid-cols-1 sm:grid-cols-2' :
                                 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3';
 
     return (
@@ -444,7 +476,7 @@ export default function PINLoginPage() {
 
           {/* ── Outlet grid ─────────────────────────────────────────────────── */}
           <div className="w-full max-w-2xl">
-            {allOutlets.length === 0 ? (
+            {posOutlets.length === 0 ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {Array.from({ length: 4 }).map((_, i) => (
                   <div key={i} className="h-36 rounded-2xl bg-white/5 animate-pulse" style={{ animationDelay: `${i * 80}ms` }} />
@@ -452,7 +484,7 @@ export default function PINLoginPage() {
               </div>
             ) : (
               <div className={cn('grid gap-3', colClass)}>
-                {allOutlets.map((outlet, idx) => {
+                {posOutlets.map((outlet, idx) => {
                   const color = (outlet.use_case ? USE_CASE_COLORS[outlet.use_case] : null) ?? {
                     bg: 'bg-slate-500/20', text: 'text-slate-300', accent: '#94a3b8', glow: 'hover:shadow-slate-500/15',
                   };
@@ -625,7 +657,7 @@ export default function PINLoginPage() {
                 </div>
 
                 {/* Switch outlet button — always visible below outlet name */}
-                {allOutlets.length > 1 && (
+                {posOutlets.length > 1 && (
                   <button
                     onClick={() => setStep('outlet')}
                     className={cn(
@@ -993,9 +1025,9 @@ export default function PINLoginPage() {
                 ✕
               </button>
             </div>
-            {allOutlets.length > 0 ? (
+            {posOutlets.length > 0 ? (
               <div className="grid gap-2">
-                {allOutlets.map((outlet) => {
+                {posOutlets.map((outlet) => {
                   const color = outlet.use_case ? USE_CASE_COLORS[outlet.use_case] : null;
                   const label = outlet.use_case ? (USE_CASE_LABELS[outlet.use_case] ?? outlet.use_case) : null;
                   const isCurrent = outletInfo?.id === outlet.id;

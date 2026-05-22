@@ -11,12 +11,14 @@ import {
   ArrowRight,
   BarChart3,
   BedDouble,
+  Calendar,
   ChefHat,
   ClipboardList,
   Clock,
   CreditCard,
   Grid3x3,
   Package,
+  Pill,
   Plus,
   RefreshCw,
   ShoppingBag,
@@ -209,6 +211,7 @@ function useDashboardSummary() {
 
 function AdminDashboard({ orgSlug }: { orgSlug: string }) {
   const { data: summary, isLoading, refetch, isFetching } = useDashboardSummary();
+  const { hasModule, isPharmacy, isServices, isRetail, isQuickService } = useModuleAccess();
   const s = summary ?? {};
 
   return (
@@ -271,8 +274,22 @@ function AdminDashboard({ orgSlug }: { orgSlug: string }) {
         <div className="space-y-3">
           <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Quick Actions</p>
           <QuickAction icon={Plus} label="New Order" desc="Start order entry" href={`/${orgSlug}/order`} accent />
-          <QuickAction icon={Grid3x3} label="Tables" desc="View floor plan" href={`/${orgSlug}/tables`} />
-          <QuickAction icon={BarChart3} label="Reports" desc="Sales & analytics" href={`/${orgSlug}/reports`} />
+          {/* Use-case contextual action */}
+          {isPharmacy && hasModule('pharmacy') && (
+            <QuickAction icon={Pill} label="Prescriptions" desc="Fill & dispense" href={`/${orgSlug}/pharmacy`} />
+          )}
+          {isServices && hasModule('appointments') && (
+            <QuickAction icon={Calendar} label="Appointments" desc="Manage bookings" href={`/${orgSlug}/appointments`} />
+          )}
+          {isRetail && (
+            <QuickAction icon={ShoppingBag} label="Layaway" desc="Manage layaway orders" href={`/${orgSlug}/layaway`} />
+          )}
+          {!isPharmacy && !isServices && !isRetail && !isQuickService && hasModule('tables') && (
+            <QuickAction icon={Grid3x3} label="Tables" desc="View floor plan" href={`/${orgSlug}/tables`} />
+          )}
+          {hasModule('reports') && (
+            <QuickAction icon={BarChart3} label="Reports" desc="Sales & analytics" href={`/${orgSlug}/reports`} />
+          )}
           <QuickAction icon={Wallet} label="Cash Drawer" desc="Open or close drawer" href={`/${orgSlug}/drawer`} />
         </div>
       </div>

@@ -311,13 +311,13 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
 
   const content = (
     <div className="flex flex-col h-full bg-sidebar border-r border-sidebar-border">
-      {/* Logo / tenant — full-bleed image banner, or pill fallback */}
-      <div className="border-b border-sidebar-border shrink-0 overflow-hidden" style={{ height: '72px' }}>
+      {/* Logo / tenant — constrained to sidebar header band; object-contain prevents overflow */}
+      <div className="border-b border-sidebar-border shrink-0 overflow-hidden flex items-center justify-center" style={{ height: '72px' }}>
         {tenant?.logoUrl ? (
           <img
             src={tenant.logoUrl}
             alt={tenant.name ?? orgSlug}
-            className="w-full h-full object-cover"
+            className="max-h-full w-auto object-contain px-4"
           />
         ) : (
           <div className="flex items-center gap-3 h-full px-4">
