@@ -47,16 +47,16 @@ export function Header({ onMenuClick }: HeaderProps) {
   const orgSlug = (params?.orgSlug as string) || 'codevertex';
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
-  const _hasHydrated = useAuthStore((s) => s._hasHydrated);
   const logout = useAuthStore((s) => s.logout);
   const { getServiceTitle } = useTenantBranding();
   const outlet = useAuthStore((s) => s.outlet);
   const [profileOpen, setProfileOpen] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
-  // Authenticated when user is present and store has finished rehydrating.
-  // Do NOT gate on status==='authenticated' — initialize() briefly sets 'loading'
-  // after rehydration, making buttons disappear on every page refresh.
-  const isAuthenticated = _hasHydrated && !!user;
+  // Gate only on !!user — _hasHydrated was causing permanent unauthenticated
+  // state when the onRehydrateStorage callback failed to fire (e.g. invalid
+  // persisted JSON, private browsing restrictions). !!user is safe here because
+  // the header has no redirect logic; auth guards live in the middleware/layout.
+  const isAuthenticated = !!user;
   const isTerminalSession = useAuthStore((s) => s.isTerminalSession);
   const name = displayName(user);
   const role = user?.roles?.[0];
