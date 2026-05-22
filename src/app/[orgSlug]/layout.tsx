@@ -15,7 +15,26 @@ import { StartShiftGate } from '@/components/pos/start-shift-gate';
 import { useSyncOfflineOrders } from '@/hooks/use-sync-offline-orders';
 import { useEffect } from 'react';
 import { registerBackgroundSync } from '@/lib/sw/register-sync';
-import { usePathname } from 'next/navigation';
+import { usePathname, useParams } from 'next/navigation';
+
+function ManifestInjector() {
+  const params = useParams();
+  const orgSlug = params?.orgSlug as string | undefined;
+  useEffect(() => {
+    if (!orgSlug) return;
+    const href = `/${orgSlug}/manifest.webmanifest`;
+    let link = document.querySelector<HTMLLinkElement>('link[rel="manifest"]');
+    if (!link) {
+      link = document.createElement('link');
+      link.rel = 'manifest';
+      document.head.appendChild(link);
+    }
+    if (link.href !== new URL(href, window.location.href).href) {
+      link.href = href;
+    }
+  }, [orgSlug]);
+  return null;
+}
 
 function OfflineSyncWorker() {
   useSyncOfflineOrders();
@@ -52,6 +71,7 @@ export default function OrgLayout({ children }: { children: ReactNode }) {
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <TenantBrandingProvider>
+          <ManifestInjector />
           <PWAUpdateBanner />
           <OfflineBanner />
           <OfflineSyncWorker />
