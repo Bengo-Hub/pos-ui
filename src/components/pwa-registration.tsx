@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { useParams } from 'next/navigation';
 import { Button } from '@/components/ui/base';
 import { Download, Share, X } from 'lucide-react';
 import { toast } from 'sonner';
@@ -12,7 +13,7 @@ interface BeforeInstallPromptEvent extends Event {
 }
 
 const DISMISS_KEY = 'pos_pwa_install_dismissed_until';
-const RE_PROMPT_MS = 60 * 60 * 1000; // 1 hour
+const RE_PROMPT_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 function isDismissedRecently(): boolean {
   if (typeof window === 'undefined') return false;
@@ -51,9 +52,28 @@ async function requestPermissions() {
 
 export function PWARegistration() {
   const { tenant } = useTenantBranding();
+  const params = useParams();
+  const orgSlug = params?.orgSlug as string | undefined;
   const [visible, setVisible] = useState(false);
   const [ios, setIos] = useState(false);
   const promptRef = useRef<BeforeInstallPromptEvent | null>(null);
+
+  // Inject the tenant-specific manifest link into <head> so the browser uses
+  // the dynamic manifest (with tenant logo, start_url=/{orgSlug}/) when
+  // evaluating PWA install criteria and capturing the app icon on install.
+  useEffect(() => {
+    if (!orgSlug) return;
+    const href = `/${orgSlug}/manifest.webmanifest`;
+    let link = document.querySelector<HTMLLinkElement>('link[rel="manifest"]');
+    if (!link) {
+      link = document.createElement('link');
+      link.rel = 'manifest';
+      document.head.appendChild(link);
+    }
+    if (link.href !== new URL(href, window.location.href).href) {
+      link.href = href;
+    }
+  }, [orgSlug]);
 
   const appName = tenant?.orgName ? `${tenant.orgName} POS` : 'BengoBox POS';
   const logoUrl = tenant?.logoUrl;

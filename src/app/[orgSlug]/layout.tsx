@@ -10,6 +10,7 @@ import { Footer } from '@/components/footer';
 import { SubscriptionBanner } from '@/components/subscription/subscription-banner';
 import { OfflineBanner } from '@/components/pos/offline-banner';
 import { PWARegistration } from '@/components/pwa-registration';
+import { PWAUpdateBanner } from '@/components/pwa-update-banner';
 import { StartShiftGate } from '@/components/pos/start-shift-gate';
 import { useSyncOfflineOrders } from '@/hooks/use-sync-offline-orders';
 import { useEffect } from 'react';
@@ -51,6 +52,7 @@ export default function OrgLayout({ children }: { children: ReactNode }) {
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <TenantBrandingProvider>
+          <PWAUpdateBanner />
           <OfflineBanner />
           <OfflineSyncWorker />
           <PWARegistration />

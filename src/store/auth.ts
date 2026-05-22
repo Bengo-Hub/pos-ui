@@ -141,18 +141,27 @@ export const useAuthStore = create<AuthState>()(
         }
 
         // Terminal sessions use a pos-api HMAC JWT — never validate against SSO /me.
-        // The JWT is already stored, user profile is persisted; just mark as authenticated.
         if (isTerminalSession) {
           set({ status: 'authenticated', lastAuthenticatedAt: Date.now() });
           return;
         }
 
+        // If user profile is persisted and token hasn't expired, hydrate from storage
+        // without a network call. A 60-second buffer guards against clock skew.
+        if (user && session.expiresAt) {
+          const expiresAt = new Date(session.expiresAt).getTime();
+          if (Date.now() < expiresAt - 60_000) {
+            set({ status: 'authenticated', lastAuthenticatedAt: Date.now() });
+            return;
+          }
+        }
+
         set({ status: 'loading' });
 
         try {
-          const user = await fetchProfile(session.accessToken);
-          apiClient.setTenantInfo(user.tenant_id, user.tenant_slug);
-          set({ user, status: 'authenticated', lastAuthenticatedAt: Date.now() });
+          const freshUser = await fetchProfile(session.accessToken);
+          apiClient.setTenantInfo(freshUser.tenant_id, freshUser.tenant_slug);
+          set({ user: freshUser, status: 'authenticated', lastAuthenticatedAt: Date.now() });
         } catch {
           set({ status: 'idle', session: null, user: null });
         }

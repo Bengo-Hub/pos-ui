@@ -8,6 +8,10 @@ const withPWA = withPWAInit({
   cacheOnFrontEndNav: true,
   aggressiveFrontEndNavCaching: true,
   reloadOnOnline: true,
+  workboxOptions: {
+    skipWaiting: false,  // message listener handles SKIP_WAITING from update banner
+    clientsClaim: true,
+  },
 });
 
 const nextConfig: NextConfig = {
