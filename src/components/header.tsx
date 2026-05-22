@@ -61,6 +61,10 @@ export function Header({ onMenuClick }: HeaderProps) {
   const name = displayName(user);
   const role = user?.roles?.[0];
 
+  const canSwitchOutlet = !isTerminalSession && user?.roles?.some(r =>
+    ['admin', 'superuser', 'manager', 'pos_admin', 'super_admin'].includes(r)
+  );
+
   const { data: currentShift } = useCurrentShift();
   const closeShift = useCloseShift();
   const hasActiveShift = !!currentShift;
@@ -81,16 +85,17 @@ export function Header({ onMenuClick }: HeaderProps) {
   }
 
   return (
-    <header className="h-20 border-b border-border bg-background/80 backdrop-blur-md sticky top-0 z-30 px-4 sm:px-8 flex items-center justify-between">
-      <div className="flex items-center gap-4 flex-1">
-        <button type="button" onClick={onMenuClick} className="lg:hidden p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-white/10 transition-colors" aria-label="Open menu">
+    <header className="h-20 border-b border-border bg-background/80 backdrop-blur-md sticky top-0 z-30 px-4 sm:px-8 flex items-center gap-4">
+      {/* Left: title + search + outlet context */}
+      <div className="flex items-center gap-4 flex-1 min-w-0 overflow-hidden">
+        <button type="button" onClick={onMenuClick} className="lg:hidden p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-white/10 transition-colors shrink-0" aria-label="Open menu">
           <Menu className="h-5 w-5 text-slate-500" />
         </button>
-        <div className="flex items-center gap-6">
-            <h1 className="text-lg sm:text-xl font-black tracking-tight text-foreground uppercase truncate max-w-[150px] sm:max-w-none">
+        <div className="flex items-center gap-6 min-w-0">
+            <h1 className="text-lg sm:text-xl font-black tracking-tight text-foreground uppercase truncate max-w-[150px] sm:max-w-none shrink-0">
                 {getServiceTitle('POS')}
             </h1>
-            <div className="hidden lg:flex relative w-80 max-w-full group">
+            <div className="hidden lg:flex relative w-64 max-w-full group shrink-0">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 group-focus-within:text-primary transition-colors" />
               <input
                 placeholder="Search orders, tables..."
@@ -100,34 +105,40 @@ export function Header({ onMenuClick }: HeaderProps) {
         </div>
         {/* Outlet chip — shows home outlet name + use_case.
             Terminal sessions and non-admin staff see a display-only chip (no navigation). */}
-        {outlet && (() => {
-          const canSwitchOutlet = !isTerminalSession && user?.roles?.some(r =>
-            ['admin', 'superuser', 'manager', 'pos_admin', 'super_admin'].includes(r)
-          );
-          const chipClass = "hidden lg:flex items-center gap-2 rounded-xl border border-border bg-muted/50 px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors group";
-          const inner = (
-            <>
-              <MapPin className="h-3.5 w-3.5 text-primary shrink-0" />
-              <span className="truncate max-w-30">{outlet.name}</span>
-              {outlet.use_case && (
-                <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
-                  {USE_CASE_LABELS[outlet.use_case] ?? outlet.use_case}
-                </span>
-              )}
-            </>
-          );
-          return canSwitchOutlet ? (
-            <Link href={`/${orgSlug}/auth/select-outlet`} className={`${chipClass} hover:bg-muted`} title="Switch outlet">
-              {inner}
-            </Link>
-          ) : (
-            <div className={chipClass} title={outlet.name}>{inner}</div>
-          );
-        })()}
-        <OutletFilter className="hidden md:block" />
+        {outlet && canSwitchOutlet && (
+          <Link
+            href={`/${orgSlug}/auth/select-outlet`}
+            className="hidden lg:flex items-center gap-2 rounded-xl border border-border bg-muted/50 px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-muted transition-colors shrink-0"
+            title="Switch outlet"
+          >
+            <MapPin className="h-3.5 w-3.5 text-primary shrink-0" />
+            <span className="truncate max-w-30">{outlet.name}</span>
+            {outlet.use_case && (
+              <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary whitespace-nowrap">
+                {USE_CASE_LABELS[outlet.use_case] ?? outlet.use_case}
+              </span>
+            )}
+          </Link>
+        )}
+        {outlet && !canSwitchOutlet && (
+          <div
+            className="hidden lg:flex items-center gap-2 rounded-xl border border-border bg-muted/50 px-3 py-1.5 text-sm font-medium text-muted-foreground shrink-0"
+            title={outlet.name}
+          >
+            <MapPin className="h-3.5 w-3.5 text-primary shrink-0" />
+            <span className="truncate max-w-30">{outlet.name}</span>
+            {outlet.use_case && (
+              <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary whitespace-nowrap">
+                {USE_CASE_LABELS[outlet.use_case] ?? outlet.use_case}
+              </span>
+            )}
+          </div>
+        )}
+        <OutletFilter className="hidden md:block shrink-0" />
       </div>
 
-      <div className="flex items-center gap-1 sm:gap-3">
+      {/* Right: actions + profile — shrink-0 so it's never squeezed off screen */}
+      <div className="flex items-center gap-1 sm:gap-3 shrink-0">
         {isAuthenticated && hasActiveShift && (
           <button
             type="button"
