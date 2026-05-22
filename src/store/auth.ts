@@ -82,6 +82,8 @@ interface AuthState {
    * (bypasses SSO /auth/me check).
    */
   setTerminalSession: (token: string, user: UserProfile) => void;
+  /** Hydrate session from WebAuthn tokens (biometric login). Triggers fetchUser() to populate user profile. */
+  hydrateFromWebAuthn: (tokens: { accessToken: string; refreshToken: string; expiresAt: string }) => void;
   logout: () => Promise<void>;
   fetchUser: () => Promise<void>;
   setUser: (user: UserProfile | null) => void;
@@ -261,6 +263,18 @@ export const useAuthStore = create<AuthState>()(
         apiClient.setAccessToken(token);
         apiClient.setTenantInfo(user.tenant_id, user.tenant_slug);
         set({ session, user, status: 'authenticated', isTerminalSession: true, lastAuthenticatedAt: Date.now() });
+      },
+
+      hydrateFromWebAuthn: (tokens) => {
+        const session: Session = {
+          accessToken: tokens.accessToken,
+          refreshToken: tokens.refreshToken,
+          expiresAt: tokens.expiresAt,
+        };
+        apiClient.setAccessToken(tokens.accessToken);
+        set({ session, status: 'loading', lastAuthenticatedAt: Date.now() });
+        // Fetch user profile to complete hydration (same as SSO callback).
+        get().fetchUser();
       },
 
       logout: async () => {
