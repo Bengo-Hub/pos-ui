@@ -1,5 +1,8 @@
 'use client';
 
+import { ModuleGate } from '@/components/auth/module-gate';
+import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
+
 import { useLoyaltyAccounts, useCreateLoyaltyAccount, type LoyaltyAccount } from '@/hooks/useLoyalty';
 import { cn } from '@/lib/utils';
 import { Gift, Loader2, Plus, Search } from 'lucide-react';
@@ -8,7 +11,7 @@ import { useParams } from 'next/navigation';
 import { useState } from 'react';
 import { toast } from 'sonner';
 
-export default function LoyaltyPage() {
+function LoyaltyPage() {
   const params = useParams();
   const orgSlug = params?.orgSlug as string;
   const [search, setSearch] = useState('');
@@ -150,5 +153,13 @@ export default function LoyaltyPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function LoyaltyPageGated() {
+  return (
+    <ModuleGate moduleKey="loyalty" fallback={<ModuleUnavailablePage moduleKey="loyalty" />}>
+      <LoyaltyPage />
+    </ModuleGate>
   );
 }

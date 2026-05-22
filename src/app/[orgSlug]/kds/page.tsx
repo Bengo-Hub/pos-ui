@@ -1,5 +1,8 @@
 'use client';
 
+import { ModuleGate } from '@/components/auth/module-gate';
+import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
+
 import { Badge } from '@/components/ui/base';
 import { cn } from '@/lib/utils';
 import {
@@ -303,7 +306,7 @@ function StationTab({
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-export default function KDSPage() {
+function KDSPage() {
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all');
   const [selectedStation, setSelectedStation] = useState<string | null>(null);
 
@@ -444,5 +447,13 @@ export default function KDSPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function KDSPageGated() {
+  return (
+    <ModuleGate moduleKey="kds" fallback={<ModuleUnavailablePage moduleKey="kds" />}>
+      <KDSPage />
+    </ModuleGate>
   );
 }

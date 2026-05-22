@@ -1,7 +1,8 @@
 'use client';
 
 import { useAuthStore } from '@/store/auth';
-import { Bell, BookOpen, ChevronDown, ExternalLink, Globe, LogOut, MapPin, Menu, Package, Search, Settings, ShoppingCart, Square, Tag, User } from 'lucide-react';
+import { BookOpen, ChevronDown, ExternalLink, Globe, LogOut, MapPin, Menu, Package, Search, Settings, ShoppingCart, Square, Tag, User } from 'lucide-react';
+import { NotificationBell } from './notifications/NotificationBell';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useRef, useState } from 'react';
@@ -162,10 +163,7 @@ export function Header({ onMenuClick }: HeaderProps) {
             <span className="hidden sm:inline">Logout</span>
           </button>
         )}
-        <button className="relative group p-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-white/5 transition-all">
-          <Bell className="h-5 w-5 text-slate-500 group-hover:text-primary transition-colors" />
-          <span className="absolute top-2.5 right-2.5 w-2 h-2 bg-rose-500 rounded-full border-2 border-white dark:border-slate-950" />
-        </button>
+        <NotificationBell />
 
         <ThemeToggle />
 

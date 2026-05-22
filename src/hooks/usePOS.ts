@@ -22,6 +22,7 @@ export interface CatalogItem {
   description?: string;
   category: string;
   item_type?: string;
+  duration_minutes?: number;
   taxStatus: string;
   status: string;
   image_url?: string;
@@ -214,6 +215,16 @@ export function useUpdateOrderStatus() {
   return useMutation({
     mutationFn: ({ orderId, status }: { orderId: string; status: string }) =>
       apiClient.patch(`${basePath(tenantID)}/orders/${orderId}/status`, { status }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['pos-orders'] }),
+  });
+}
+
+export function useVoidOrder() {
+  const tenantID = useTenantID();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ orderId, reason }: { orderId: string; reason: string }) =>
+      apiClient.patch(`${basePath(tenantID)}/orders/${orderId}/void`, { reason }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['pos-orders'] }),
   });
 }

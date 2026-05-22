@@ -1,5 +1,8 @@
 'use client';
 
+import { ModuleGate } from '@/components/auth/module-gate';
+import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
+
 import { Badge, Button, Card, CardContent, CardHeader } from '@/components/ui/base';
 import { cn } from '@/lib/utils';
 import {
@@ -213,7 +216,7 @@ function BookingForm({
   );
 }
 
-export default function AppointmentsPage() {
+function AppointmentsPage() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [dateFilter, setDateFilter] = useState(new Date().toISOString().split('T')[0]);
   const [showBooking, setShowBooking] = useState(false);
@@ -357,5 +360,13 @@ export default function AppointmentsPage() {
         />
       )}
     </div>
+  );
+}
+
+export default function AppointmentsPageGated() {
+  return (
+    <ModuleGate moduleKey="appointments" fallback={<ModuleUnavailablePage moduleKey="appointments" />}>
+      <AppointmentsPage />
+    </ModuleGate>
   );
 }

@@ -299,6 +299,7 @@ function AdminDashboard({ orgSlug }: { orgSlug: string }) {
 
 function CashierDashboard({ orgSlug }: { orgSlug: string }) {
   const tenantID = useTenantID();
+  const { hasModule } = useModuleAccess();
 
   const { data: drawerData } = useQuery({
     queryKey: ['dashboard-drawer', tenantID],
@@ -355,7 +356,9 @@ function CashierDashboard({ orgSlug }: { orgSlug: string }) {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <QuickAction icon={Plus} label="New Order" desc="Start a new sale" href={`/${orgSlug}/order`} accent />
           <QuickAction icon={ClipboardList} label="Orders" desc="View open bills" href={`/${orgSlug}/orders`} />
-          <QuickAction icon={Clock} label="Shifts" desc="View shift status" href={`/${orgSlug}/shifts`} />
+          {hasModule('shifts') && (
+            <QuickAction icon={Clock} label="Shifts" desc="View shift status" href={`/${orgSlug}/shifts`} />
+          )}
           <QuickAction icon={Wallet} label="Cash Drawer" desc="Manage drawer" href={`/${orgSlug}/drawer`} />
         </div>
       </div>
@@ -366,15 +369,26 @@ function CashierDashboard({ orgSlug }: { orgSlug: string }) {
 }
 
 function WaiterDashboard({ orgSlug }: { orgSlug: string }) {
+  const { hasModule } = useModuleAccess();
+  const showTables = hasModule('tables');
+  const showAppointments = hasModule('appointments');
+
   return (
     <div className="p-6 space-y-6">
       <div>
         <h1 className="text-xl font-bold font-display">Good {greeting()}</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">Manage your tables and orders</p>
+        <p className="text-sm text-muted-foreground mt-0.5">
+          {showTables ? 'Manage your tables and orders' : 'Manage your orders and appointments'}
+        </p>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <QuickAction icon={Grid3x3} label="Tables" desc="View your section" href={`/${orgSlug}/tables`} accent />
+        {showTables && (
+          <QuickAction icon={Grid3x3} label="Tables" desc="View your section" href={`/${orgSlug}/tables`} accent />
+        )}
+        {!showTables && showAppointments && (
+          <QuickAction icon={Calendar} label="Appointments" desc="View today's schedule" href={`/${orgSlug}/appointments`} accent />
+        )}
         <QuickAction icon={Plus} label="New Order" desc="Take a new order" href={`/${orgSlug}/order`} />
         <QuickAction icon={ClipboardList} label="Open Bills" desc="Manage running orders" href={`/${orgSlug}/orders`} />
       </div>
@@ -386,30 +400,72 @@ function WaiterDashboard({ orgSlug }: { orgSlug: string }) {
 
 function KitchenDashboard({ orgSlug }: { orgSlug: string }) {
   const router = useRouter();
+  const { hasModule } = useModuleAccess();
   useEffect(() => {
-    router.replace(`/${orgSlug}/kds`);
-  }, [orgSlug, router]);
-  return (
-    <div className="flex-1 flex items-center justify-center">
-      <div className="flex flex-col items-center gap-3 text-muted-foreground">
-        <ChefHat className="h-10 w-10 animate-pulse" />
-        <p className="text-sm">Loading Kitchen Display…</p>
+    if (hasModule('kds')) {
+      router.replace(`/${orgSlug}/kds`);
+    }
+  }, [orgSlug, router, hasModule]);
+
+  if (hasModule('kds')) {
+    return (
+      <div className="flex-1 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3 text-muted-foreground">
+          <ChefHat className="h-10 w-10 animate-pulse" />
+          <p className="text-sm">Loading Kitchen Display…</p>
+        </div>
       </div>
+    );
+  }
+
+  // KDS not available for this outlet — show a basic orders view
+  return (
+    <div className="p-6 space-y-6">
+      <div>
+        <h1 className="text-xl font-bold font-display">Good {greeting()}</h1>
+        <p className="text-sm text-muted-foreground mt-0.5">Ready to work</p>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <QuickAction icon={ClipboardList} label="Orders" desc="View active orders" href={`/${orgSlug}/orders`} accent />
+        <QuickAction icon={Plus} label="New Order" desc="Start a new order" href={`/${orgSlug}/order`} />
+      </div>
+      <RecentOrdersCard orgSlug={orgSlug} />
     </div>
   );
 }
 
 function BarDashboard({ orgSlug }: { orgSlug: string }) {
   const router = useRouter();
+  const { hasModule } = useModuleAccess();
   useEffect(() => {
-    router.replace(`/${orgSlug}/bar`);
-  }, [orgSlug, router]);
-  return (
-    <div className="flex-1 flex items-center justify-center">
-      <div className="flex flex-col items-center gap-3 text-muted-foreground">
-        <Wine className="h-10 w-10 animate-pulse" />
-        <p className="text-sm">Loading Bar Display…</p>
+    if (hasModule('kds')) {
+      router.replace(`/${orgSlug}/bar`);
+    }
+  }, [orgSlug, router, hasModule]);
+
+  if (hasModule('kds')) {
+    return (
+      <div className="flex-1 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3 text-muted-foreground">
+          <Wine className="h-10 w-10 animate-pulse" />
+          <p className="text-sm">Loading Bar Display…</p>
+        </div>
       </div>
+    );
+  }
+
+  // Bar display not available for this outlet — show a basic orders view
+  return (
+    <div className="p-6 space-y-6">
+      <div>
+        <h1 className="text-xl font-bold font-display">Good {greeting()}</h1>
+        <p className="text-sm text-muted-foreground mt-0.5">Ready to serve</p>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <QuickAction icon={ClipboardList} label="Orders" desc="View active orders" href={`/${orgSlug}/orders`} accent />
+        <QuickAction icon={Plus} label="New Order" desc="Start a new order" href={`/${orgSlug}/order`} />
+      </div>
+      <RecentOrdersCard orgSlug={orgSlug} />
     </div>
   );
 }

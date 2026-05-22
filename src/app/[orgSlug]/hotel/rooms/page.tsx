@@ -1,5 +1,8 @@
 'use client';
 
+import { ModuleGate } from '@/components/auth/module-gate';
+import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
+
 import { cn } from '@/lib/utils';
 import { useHotelRooms } from '@/hooks/useHotel';
 import { useParams } from 'next/navigation';
@@ -18,7 +21,7 @@ const statusColors: Record<string, string> = {
 
 const STATUS_OPTIONS = ['all', 'available', 'occupied', 'cleaning', 'maintenance', 'reserved'];
 
-export default function RoomsPage() {
+function RoomsPage() {
   const params = useParams();
   const orgSlug = params?.orgSlug as string;
   const [filter, setFilter] = useState<string | undefined>(undefined);
@@ -87,5 +90,13 @@ export default function RoomsPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function RoomsPageGated() {
+  return (
+    <ModuleGate moduleKey="hotel" fallback={<ModuleUnavailablePage moduleKey="hotel" />}>
+      <RoomsPage />
+    </ModuleGate>
   );
 }

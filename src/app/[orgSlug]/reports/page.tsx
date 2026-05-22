@@ -1,5 +1,8 @@
 'use client';
 
+import { ModuleGate } from '@/components/auth/module-gate';
+import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
+
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api/client';
@@ -9,6 +12,7 @@ import { cn } from '@/lib/utils';
 import {
   BarChart3,
   DollarSign,
+  Download,
   Loader2,
   Package,
   Receipt,
@@ -74,7 +78,7 @@ interface StaffRow {
   revenue: number;
 }
 
-export default function ReportsPage() {
+function ReportsPage() {
   const tenantID = useTenantID();
   const [period, setPeriod] = useState<Period>('today');
   const { from, to } = periodToRange(period);
@@ -130,7 +134,7 @@ export default function ReportsPage() {
           <h1 className="text-2xl font-bold">Reports</h1>
           <p className="text-sm text-muted-foreground mt-1">Sales and performance summary</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           {PERIODS.map((p) => (
             <button
               key={p}
@@ -143,6 +147,14 @@ export default function ReportsPage() {
               {PERIOD_LABELS[p]}
             </button>
           ))}
+          <a
+            href={`/api/v1/${tenantID}/pos/reports/export?from=${from}&to=${to}`}
+            download
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium bg-muted text-muted-foreground hover:bg-muted/80 transition-colors"
+          >
+            <Download className="h-3.5 w-3.5" />
+            Export CSV
+          </a>
         </div>
       </div>
 
@@ -284,5 +296,13 @@ export default function ReportsPage() {
         </>
       )}
     </div>
+  );
+}
+
+export default function ReportsPageGated() {
+  return (
+    <ModuleGate moduleKey="reports" fallback={<ModuleUnavailablePage moduleKey="reports" />}>
+      <ReportsPage />
+    </ModuleGate>
   );
 }

@@ -6,9 +6,24 @@ interface StockBadgeProps {
   quantity: number;
   threshold?: number;
   className?: string;
+  itemType?: string;
 }
 
-export function StockBadge({ quantity, threshold = 5, className }: StockBadgeProps) {
+export function StockBadge({ quantity, threshold = 5, className, itemType }: StockBadgeProps) {
+  // Services are non-depletable — stock tracking does not apply
+  if (itemType === 'SERVICE') {
+    return (
+      <span
+        className={cn(
+          'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+          className,
+        )}
+      >
+        Service
+      </span>
+    );
+  }
+
   if (quantity === 0) {
     return (
       <span

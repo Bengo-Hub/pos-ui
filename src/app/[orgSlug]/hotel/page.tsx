@@ -1,5 +1,8 @@
 'use client';
 
+import { ModuleGate } from '@/components/auth/module-gate';
+import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
+
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { Card, CardContent } from '@/components/ui/base';
@@ -22,7 +25,7 @@ const statusConfig: Record<string, { label: string; color: string; icon: React.E
   reserved:     { label: 'Reserved',     color: 'text-purple-600 bg-purple-500/10', icon: BedDouble },
 };
 
-export default function HotelPage() {
+function HotelPage() {
   const params = useParams();
   const orgSlug = params?.orgSlug as string;
 
@@ -103,5 +106,13 @@ export default function HotelPage() {
         </Link>
       </div>
     </div>
+  );
+}
+
+export default function HotelPageGated() {
+  return (
+    <ModuleGate moduleKey="hotel" fallback={<ModuleUnavailablePage moduleKey="hotel" />}>
+      <HotelPage />
+    </ModuleGate>
   );
 }

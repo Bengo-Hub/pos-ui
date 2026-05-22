@@ -1,5 +1,8 @@
 'use client';
 
+import { ModuleGate } from '@/components/auth/module-gate';
+import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
+
 import { Badge, Button, Card, CardContent } from '@/components/ui/base';
 import { cn } from '@/lib/utils';
 import { useTables, useSections, useUpdateTableStatus, useReleaseTable } from '@/hooks/usePOS';
@@ -321,7 +324,7 @@ function SummaryBar({ tables }: { tables: any[] }) {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-export default function TablesPage() {
+function TablesPage() {
   const params = useParams();
   const orgSlug = params?.orgSlug as string;
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -439,5 +442,13 @@ export default function TablesPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function TablesPageGated() {
+  return (
+    <ModuleGate moduleKey="tables" fallback={<ModuleUnavailablePage moduleKey="tables" />}>
+      <TablesPage />
+    </ModuleGate>
   );
 }

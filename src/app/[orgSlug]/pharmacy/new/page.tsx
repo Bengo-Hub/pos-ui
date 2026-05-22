@@ -1,5 +1,8 @@
 'use client';
 
+import { ModuleGate } from '@/components/auth/module-gate';
+import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
+
 import { useCreatePrescription } from '@/hooks/usePharmacy';
 import { useAuthStore } from '@/store/auth';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -37,7 +40,7 @@ type FormValues = z.infer<typeof schema>;
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-export default function NewPrescriptionPage() {
+function NewPrescriptionPage() {
   const params = useParams();
   const orgSlug = params?.orgSlug as string;
   const router = useRouter();
@@ -326,5 +329,13 @@ export default function NewPrescriptionPage() {
         </div>
       </form>
     </div>
+  );
+}
+
+export default function NewPrescriptionPageGated() {
+  return (
+    <ModuleGate moduleKey="pharmacy" fallback={<ModuleUnavailablePage moduleKey="pharmacy" />}>
+      <NewPrescriptionPage />
+    </ModuleGate>
   );
 }

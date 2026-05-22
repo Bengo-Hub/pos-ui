@@ -1,5 +1,8 @@
 'use client';
 
+import { ModuleGate } from '@/components/auth/module-gate';
+import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
+
 import { Button } from '@/components/ui/base';
 import { createLayawayPlan, type CreateLayawayPlanInput } from '@/lib/api/layaway';
 import { useAuthStore } from '@/store/auth';
@@ -8,7 +11,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { toast } from 'sonner';
 
-export default function NewLayawayPage() {
+function NewLayawayPage() {
   const params = useParams();
   const orgSlug = params?.orgSlug as string;
   const router = useRouter();
@@ -167,5 +170,13 @@ export default function NewLayawayPage() {
         </div>
       </form>
     </div>
+  );
+}
+
+export default function NewLayawayPageGated() {
+  return (
+    <ModuleGate moduleKey="layaway" fallback={<ModuleUnavailablePage moduleKey="layaway" />}>
+      <NewLayawayPage />
+    </ModuleGate>
   );
 }

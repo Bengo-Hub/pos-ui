@@ -1,5 +1,8 @@
 'use client';
 
+import { ModuleGate } from '@/components/auth/module-gate';
+import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
+
 import { cn } from '@/lib/utils';
 import { usePrescriptions } from '@/hooks/usePharmacy';
 import { useDispensePrescription } from '@/hooks/usePharmacy';
@@ -38,7 +41,7 @@ function StatusBadge({ status }: { status: Prescription['status'] }) {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-export default function PharmacyPage() {
+function PharmacyPage() {
   const params = useParams();
   const orgSlug = params?.orgSlug as string;
   const tenantSlug = useAuthStore((s) => s.user?.tenant_slug ?? '');
@@ -184,5 +187,13 @@ export default function PharmacyPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function PharmacyPageGated() {
+  return (
+    <ModuleGate moduleKey="pharmacy" fallback={<ModuleUnavailablePage moduleKey="pharmacy" />}>
+      <PharmacyPage />
+    </ModuleGate>
   );
 }

@@ -2,15 +2,20 @@
 
 import { Badge, Button } from '@/components/ui/base';
 import { ModifierModal, type ModifierGroup } from '@/components/pos/modifier-modal';
-import { POSPaymentModal } from '@/components/pos/payment-modal';
+import { SplitPaymentModal } from '@/components/pos/split-payment-modal';
+import { VoidOrderModal } from '@/components/pos/void-order-modal';
 import { ReceiptPreview, type ReceiptData } from '@/components/pos/receipt-preview';
 import { cn } from '@/lib/utils';
-import { useMenuItems, useCreateOrder } from '@/hooks/usePOS';
+import { useMenuItems, useCreateOrder, useVoidOrder } from '@/hooks/usePOS';
+import { usePOSSettings } from '@/hooks/usePOSSettings';
+import { usePermissions } from '@/hooks/usePermissions';
 import { useAuthStore } from '@/store/auth';
 import { apiClient } from '@/lib/api/client';
+import { useRouter, useParams } from 'next/navigation';
 import {
   AlertTriangle,
   Barcode,
+  Ban,
   Grid3x3,
   Image as ImageIcon,
   LayoutList,
@@ -35,6 +40,8 @@ interface MenuItem {
   price: number;
   category: string;
   image?: string;
+  item_type?: string;       // GOODS | SERVICE | RECIPE | VOUCHER
+  duration_minutes?: number;
   requiresAgeVerification?: boolean;
   trackSerialNumber?: boolean;
   modifierGroups?: ModifierGroup[];
@@ -63,8 +70,14 @@ function defaultDisplayMode(useCase?: string): DisplayMode {
 // ─── Page ───────────────────────────────────────────────────────────────────
 
 export default function OrderPage() {
+  const router = useRouter();
+  const params = useParams();
+  const orgSlug = (params?.orgSlug as string) || '';
   const user = useAuthStore((s) => s.user);
   const outlet = useAuthStore((s) => s.outlet);
+  const { can } = usePermissions();
+  const { data: posSettings } = usePOSSettings();
+  const taxRate = (posSettings?.vat_rate ?? 16) / 100;
   const [activeCategory, setActiveCategory] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -81,6 +94,10 @@ export default function OrderPage() {
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [currentOrderId, setCurrentOrderId] = useState('');
   const [currentOrderNumber, setCurrentOrderNumber] = useState('');
+
+  // Void order modal
+  const [voidOpen, setVoidOpen] = useState(false);
+  const voidOrder = useVoidOrder();
 
   // Receipt
   const [receiptData, setReceiptData] = useState<ReceiptData | null>(null);
@@ -251,7 +268,7 @@ export default function OrderPage() {
   const clearCart = () => setCart([]);
 
   const subtotal = cart.reduce((sum, item) => sum + (item.price + (item.modifierTotal ?? 0)) * item.quantity, 0);
-  const tax = Math.round(subtotal * 0.16);
+  const tax = Math.round(subtotal * taxRate);
   const total = subtotal + tax;
   const cartItemCount = cart.reduce((s, c) => s + c.quantity, 0);
 
@@ -288,6 +305,14 @@ export default function OrderPage() {
     toast.success(`Order ${currentOrderNumber} paid!`);
     clearCart();
     setPaymentOpen(false);
+    setCurrentOrderId('');
+
+    // Waiter auto-logout: return to PIN selector after placing an order
+    const isWaiter = user?.roles?.includes('waiter') || user?.roles?.[0] === 'waiter';
+    if (isWaiter && orgSlug) {
+      router.replace(`/${orgSlug}/pin-login`);
+      return;
+    }
 
     // Fetch receipt data and show the receipt preview
     const tenantId = user?.tenant_id ?? '';
@@ -302,7 +327,7 @@ export default function OrderPage() {
         // Receipt fetch failed — not critical, payment already confirmed
       }
     }
-  }, [currentOrderNumber, currentOrderId, user?.tenant_id]);
+  }, [currentOrderNumber, currentOrderId, user, orgSlug, router]);
 
   // ─── Render ─────────────────────────────────────────────────────────────
 
@@ -444,6 +469,11 @@ export default function OrderPage() {
                         ) : (
                           <p className="text-xs text-muted-foreground font-mono">{item.sku}</p>
                         )}
+                        {item.item_type === 'SERVICE' && (
+                          <span className="text-[10px] text-blue-600 dark:text-blue-400 font-semibold">
+                            {item.duration_minutes ? `Service · ${item.duration_minutes}min` : 'Service'}
+                          </span>
+                        )}
                         {item.modifierGroups?.length ? (
                           <span className="text-[10px] text-primary">Has options</span>
                         ) : null}
@@ -542,7 +572,11 @@ export default function OrderPage() {
                       <span className="text-xs font-bold font-mono text-primary">
                         KES {item.price.toLocaleString()}
                       </span>
-                      {item.modifierGroups?.length ? (
+                      {item.item_type === 'SERVICE' ? (
+                        <span className="text-[10px] text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-900/30 px-1.5 py-0.5 rounded font-semibold">
+                          {item.duration_minutes ? `${item.duration_minutes}min` : 'Service'}
+                        </span>
+                      ) : item.modifierGroups?.length ? (
                         <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">Options</span>
                       ) : null}
                     </div>
@@ -689,7 +723,7 @@ export default function OrderPage() {
                 <span className="font-medium tabular-nums">KES {subtotal.toLocaleString()}</span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">VAT (16%)</span>
+                <span className="text-muted-foreground">VAT ({Math.round(taxRate * 100)}%)</span>
                 <span className="font-medium tabular-nums">KES {tax.toLocaleString()}</span>
               </div>
               <div className="flex justify-between pt-2 border-t border-border">
@@ -698,7 +732,7 @@ export default function OrderPage() {
               </div>
             </div>
           )}
-          <div className="p-5 pt-3">
+          <div className="p-5 pt-3 space-y-2">
             <Button
               onClick={handlePlaceOrder}
               disabled={cart.length === 0 || createOrder.isPending}
@@ -716,6 +750,16 @@ export default function OrderPage() {
               )}
               {cart.length === 0 ? 'Add items to pay' : `Pay · KES ${total.toLocaleString()}`}
             </Button>
+            {currentOrderId && can('pos.orders.void') && (
+              <button
+                type="button"
+                onClick={() => setVoidOpen(true)}
+                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-destructive/40 text-destructive text-sm font-semibold hover:bg-destructive/5 transition-colors"
+              >
+                <Ban className="h-4 w-4" />
+                Void Order #{currentOrderNumber}
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -736,7 +780,7 @@ export default function OrderPage() {
         />
       )}
 
-      <POSPaymentModal
+      <SplitPaymentModal
         open={paymentOpen}
         onClose={() => setPaymentOpen(false)}
         orderId={currentOrderId}
@@ -744,6 +788,20 @@ export default function OrderPage() {
         total={total}
         tenantSlug={user?.tenant_slug ?? ''}
         onPaymentConfirmed={handlePaymentConfirmed}
+      />
+
+      <VoidOrderModal
+        open={voidOpen}
+        orderId={currentOrderId}
+        orderNumber={currentOrderNumber}
+        onClose={() => setVoidOpen(false)}
+        onConfirm={async (reason) => {
+          await voidOrder.mutateAsync({ orderId: currentOrderId, reason });
+          toast.success(`Order #${currentOrderNumber} voided`);
+          setCurrentOrderId('');
+          setCurrentOrderNumber('');
+          clearCart();
+        }}
       />
 
       <ReceiptPreview

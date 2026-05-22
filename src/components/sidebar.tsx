@@ -211,7 +211,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
       label: 'Floor & Service',
       items: [
         { label: 'Tables', icon: Grid3x3, href: '/tables', moduleKey: 'tables', permission: [P.TABLES_VIEW, P.TABLES_MANAGE], subFeature: 'table_management', subPlan: 'Pro' },
-        { label: 'Appointments', icon: Calendar, href: '/appointments', moduleKey: 'appointments', permission: [P.ORDERS_VIEW, P.HOTEL_VIEW] },
+        { label: 'Appointments', icon: Calendar, href: '/appointments', moduleKey: 'appointments', permission: [P.ORDERS_VIEW] },
       ],
     },
     {

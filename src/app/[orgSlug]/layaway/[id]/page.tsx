@@ -1,5 +1,8 @@
 'use client';
 
+import { ModuleGate } from '@/components/auth/module-gate';
+import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
+
 import { Badge, Button } from '@/components/ui/base';
 import {
   cancelLayawayPlan,
@@ -23,7 +26,7 @@ function statusVariant(status: LayawayPlan['status']): 'default' | 'success' | '
 
 const PAYMENT_METHODS = ['cash', 'mpesa', 'card'] as const;
 
-export default function LayawayDetailPage() {
+function LayawayDetailPage() {
   const params = useParams();
   const orgSlug = params?.orgSlug as string;
   const id = params?.id as string;
@@ -346,5 +349,13 @@ export default function LayawayDetailPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function LayawayDetailPageGated() {
+  return (
+    <ModuleGate moduleKey="layaway" fallback={<ModuleUnavailablePage moduleKey="layaway" />}>
+      <LayawayDetailPage />
+    </ModuleGate>
   );
 }

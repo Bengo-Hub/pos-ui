@@ -1,5 +1,8 @@
 'use client';
 
+import { ModuleGate } from '@/components/auth/module-gate';
+import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
+
 import { useFacilities, useBookFacility } from '@/hooks/useHotel';
 import { Card, CardContent } from '@/components/ui/base';
 import { cn } from '@/lib/utils';
@@ -20,7 +23,7 @@ const typeEmoji: Record<string, string> = {
 
 const emptyForm = { guest_name: '', phone: '', session_date: '', start_time: '', end_time: '', guests_count: '1' };
 
-export default function FacilitiesPage() {
+function FacilitiesPage() {
   const [bookingFacilityId, setBookingFacilityId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
 
@@ -144,5 +147,13 @@ export default function FacilitiesPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function FacilitiesPageGated() {
+  return (
+    <ModuleGate moduleKey="hotel" fallback={<ModuleUnavailablePage moduleKey="hotel" />}>
+      <FacilitiesPage />
+    </ModuleGate>
   );
 }

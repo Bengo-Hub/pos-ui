@@ -1,12 +1,15 @@
 'use client';
 
+import { ModuleGate } from '@/components/auth/module-gate';
+import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
+
 import { useState } from 'react';
 import { Card, CardContent } from '@/components/ui/base';
 import { BarChart3, Clock, DollarSign, LogIn, LogOut, Loader2, ShoppingCart } from 'lucide-react';
 import { useCurrentShift, useOpenShift, useCloseShift, useSessionSummary } from '@/hooks/useShifts';
 import { toast } from 'sonner';
 
-export default function ShiftsPage() {
+function ShiftsPage() {
   const [float, setFloat] = useState('');
 
   const { data: session, isLoading } = useCurrentShift();
@@ -140,5 +143,13 @@ export default function ShiftsPage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+export default function ShiftsPageGated() {
+  return (
+    <ModuleGate moduleKey="shifts" fallback={<ModuleUnavailablePage moduleKey="shifts" />}>
+      <ShiftsPage />
+    </ModuleGate>
   );
 }

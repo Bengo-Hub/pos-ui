@@ -1,5 +1,8 @@
 'use client';
 
+import { ModuleGate } from '@/components/auth/module-gate';
+import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
+
 import { Badge } from '@/components/ui/base';
 import { listLayawayPlans, type LayawayPlan } from '@/lib/api/layaway';
 import { useAuthStore } from '@/store/auth';
@@ -16,7 +19,7 @@ function statusVariant(status: LayawayPlan['status']): 'default' | 'success' | '
   return 'default';
 }
 
-export default function LayawayListPage() {
+function LayawayListPage() {
   const params = useParams();
   const orgSlug = params?.orgSlug as string;
   const router = useRouter();
@@ -102,5 +105,13 @@ export default function LayawayListPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function LayawayListPageGated() {
+  return (
+    <ModuleGate moduleKey="layaway" fallback={<ModuleUnavailablePage moduleKey="layaway" />}>
+      <LayawayListPage />
+    </ModuleGate>
   );
 }

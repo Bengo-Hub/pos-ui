@@ -11,8 +11,10 @@ export interface CatalogItem {
   sku: string;
   barcode?: string;
   stock_quantity?: number;
+  item_type?: string; // GOODS | SERVICE | RECIPE | VOUCHER
   requires_serial: boolean;
   weight_grams?: number;
+  duration_minutes?: number;
 }
 
 export interface ScaleReading {

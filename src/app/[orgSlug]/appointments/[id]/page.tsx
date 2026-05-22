@@ -1,5 +1,8 @@
 'use client';
 
+import { ModuleGate } from '@/components/auth/module-gate';
+import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
+
 import { cn } from '@/lib/utils';
 import {
   useAppointment,
@@ -74,7 +77,7 @@ function ActionButton({
   );
 }
 
-export default function AppointmentDetailPage() {
+function AppointmentDetailPage() {
   const params = useParams();
   const orgSlug = params?.orgSlug as string;
   const id = params?.id as string;
@@ -223,5 +226,13 @@ export default function AppointmentDetailPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function AppointmentDetailPageGated() {
+  return (
+    <ModuleGate moduleKey="appointments" fallback={<ModuleUnavailablePage moduleKey="appointments" />}>
+      <AppointmentDetailPage />
+    </ModuleGate>
   );
 }

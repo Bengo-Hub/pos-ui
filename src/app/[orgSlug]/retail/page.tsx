@@ -1,9 +1,13 @@
 'use client';
 
+import { ModuleGate } from '@/components/auth/module-gate';
+import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
+
 import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import { Trash2, ShoppingCart, Tag } from 'lucide-react';
 import { useAuthStore } from '@/store/auth';
+import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { lookupItemByBarcode } from '@/lib/api/retail';
 import type { CatalogItem } from '@/lib/api/retail';
 import { BarcodeInput } from '@/components/retail/BarcodeInput';
@@ -25,16 +29,14 @@ interface PendingSerialItem {
   lineId: string;
 }
 
-// ─── Constants ────────────────────────────────────────────────────────────────
-
-const TAX_RATE = 0.16; // 16% VAT
-
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-export default function RetailPage() {
+function RetailPage() {
   const params = useParams();
   const orgSlug = params?.orgSlug as string;
   const tenantSlug = useAuthStore((s) => s.user?.tenant_slug ?? orgSlug);
+  const { data: posSettings } = usePOSSettings();
+  const taxRate = (posSettings?.vat_rate ?? 16) / 100;
 
   const [cart, setCart] = useState<CartLine[]>([]);
   const [scanLoading, setScanLoading] = useState(false);
@@ -109,7 +111,7 @@ export default function RetailPage() {
   // ── Order totals ─────────────────────────────────────────────────────────
 
   const subtotal = cart.reduce((sum, l) => sum + l.item.price * l.quantity, 0);
-  const tax = subtotal * TAX_RATE;
+  const tax = subtotal * taxRate;
   const total = subtotal + tax;
 
   // ── Checkout ─────────────────────────────────────────────────────────────
@@ -205,7 +207,7 @@ export default function RetailPage() {
                     <div className="flex items-center gap-2 mt-0.5">
                       <span className="text-xs text-muted-foreground">{line.item.sku}</span>
                       {line.item.stock_quantity !== undefined && (
-                        <StockBadge quantity={line.item.stock_quantity} />
+                        <StockBadge quantity={line.item.stock_quantity} itemType={line.item.item_type} />
                       )}
                     </div>
                   </div>
@@ -264,7 +266,7 @@ export default function RetailPage() {
               <span className="font-semibold">{fmt(subtotal)}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-muted-foreground">VAT (16%)</span>
+              <span className="text-muted-foreground">VAT ({Math.round(taxRate * 100)}%)</span>
               <span className="font-semibold">{fmt(tax)}</span>
             </div>
             <div className="flex justify-between border-t border-border pt-2.5">
@@ -297,5 +299,13 @@ export default function RetailPage() {
         />
       )}
     </div>
+  );
+}
+
+export default function RetailPageGated() {
+  return (
+    <ModuleGate moduleKey="retail" fallback={<ModuleUnavailablePage moduleKey="retail" />}>
+      <RetailPage />
+    </ModuleGate>
   );
 }

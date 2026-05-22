@@ -1,5 +1,8 @@
 'use client';
 
+import { ModuleGate } from '@/components/auth/module-gate';
+import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
+
 import { useCommissions, type CommissionRecord } from '@/hooks/useCommissions';
 import { cn } from '@/lib/utils';
 import { Loader2, TrendingUp } from 'lucide-react';
@@ -14,7 +17,7 @@ function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
-export default function CommissionsPage() {
+function CommissionsPage() {
   const [staffFilter, setStaffFilter] = useState('');
 
   const { data: records = [], isLoading, error } = useCommissions(
@@ -97,5 +100,13 @@ export default function CommissionsPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function CommissionsPageGated() {
+  return (
+    <ModuleGate moduleKey="commissions" fallback={<ModuleUnavailablePage moduleKey="commissions" />}>
+      <CommissionsPage />
+    </ModuleGate>
   );
 }

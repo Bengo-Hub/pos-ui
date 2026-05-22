@@ -1,5 +1,8 @@
 'use client';
 
+import { ModuleGate } from '@/components/auth/module-gate';
+import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
+
 import { cn } from '@/lib/utils';
 import {
   useKDSStations,
@@ -34,7 +37,7 @@ function timerClass(minutes: number) {
   return 'text-muted-foreground';
 }
 
-export default function BarDisplayPage() {
+function BarDisplayPage() {
   const { data: stationsData } = useKDSStations();
   const stations: KDSStation[] = stationsData?.data ?? [];
   // Find bar station by name heuristic (no station_type field in the type)
@@ -162,5 +165,13 @@ function BarTicketCard({
         )}
       </div>
     </div>
+  );
+}
+
+export default function BarDisplayPageGated() {
+  return (
+    <ModuleGate moduleKey="kds" fallback={<ModuleUnavailablePage moduleKey="kds" />}>
+      <BarDisplayPage />
+    </ModuleGate>
   );
 }

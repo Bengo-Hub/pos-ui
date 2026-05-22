@@ -1,5 +1,8 @@
 'use client';
 
+import { ModuleGate } from '@/components/auth/module-gate';
+import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
+
 import { useLoyaltyAccount, useEarnPoints, useRedeemPoints, type LoyaltyTransaction } from '@/hooks/useLoyalty';
 import { cn } from '@/lib/utils';
 import { ArrowLeft, Gift, Loader2, Minus, Plus } from 'lucide-react';
@@ -18,7 +21,7 @@ function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
-export default function LoyaltyAccountDetailPage() {
+function LoyaltyAccountDetailPage() {
   const params = useParams();
   const orgSlug = params?.orgSlug as string;
   const id = params?.id as string;
@@ -190,5 +193,13 @@ export default function LoyaltyAccountDetailPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function LoyaltyAccountDetailPageGated() {
+  return (
+    <ModuleGate moduleKey="loyalty" fallback={<ModuleUnavailablePage moduleKey="loyalty" />}>
+      <LoyaltyAccountDetailPage />
+    </ModuleGate>
   );
 }

@@ -1,5 +1,8 @@
 'use client';
 
+import { ModuleGate } from '@/components/auth/module-gate';
+import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
+
 import { usePrescription, useDispensePrescription } from '@/hooks/usePharmacy';
 import { cn } from '@/lib/utils';
 import { ArrowLeft, Loader2, Pill } from 'lucide-react';
@@ -35,7 +38,7 @@ function StatusBadge({ status }: { status: Prescription['status'] }) {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-export default function PrescriptionDetailPage() {
+function PrescriptionDetailPage() {
   const params = useParams();
   const orgSlug = params?.orgSlug as string;
   const id = params?.id as string;
@@ -216,5 +219,13 @@ export default function PrescriptionDetailPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function PrescriptionDetailPageGated() {
+  return (
+    <ModuleGate moduleKey="pharmacy" fallback={<ModuleUnavailablePage moduleKey="pharmacy" />}>
+      <PrescriptionDetailPage />
+    </ModuleGate>
   );
 }

@@ -1,5 +1,8 @@
 'use client';
 
+import { ModuleGate } from '@/components/auth/module-gate';
+import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
+
 import { onlineOrdersApi, type PickupOrder } from '@/lib/api/online-orders';
 import { useAuthStore } from '@/store/auth';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -99,7 +102,7 @@ function OrderCard({ order, tenantID }: { order: PickupOrder; tenantID: string }
   );
 }
 
-export default function OnlineOrdersPage() {
+function OnlineOrdersPage() {
   const tenantID = useAuthStore((s) => s.user?.tenant_id ?? '');
 
   const { data: orders = [], isLoading } = useQuery({
@@ -163,5 +166,13 @@ export default function OnlineOrdersPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function OnlineOrdersPageGated() {
+  return (
+    <ModuleGate moduleKey="online_orders" fallback={<ModuleUnavailablePage moduleKey="online_orders" />}>
+      <OnlineOrdersPage />
+    </ModuleGate>
   );
 }
