@@ -240,6 +240,9 @@ export const useAuthStore = create<AuthState>()(
                   }
                 : ssoUser;
 
+              if (typeof window !== 'undefined' && ssoUser.email) {
+                localStorage.setItem('sso_last_email', ssoUser.email);
+              }
               set({ user, status: 'authenticated', lastAuthenticatedAt: Date.now() });
               return;
             } catch {

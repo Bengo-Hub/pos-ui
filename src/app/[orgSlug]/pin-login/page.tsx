@@ -6,11 +6,12 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { compare as bcryptCompare } from 'bcryptjs';
 import {
   ArrowLeft, BedDouble, Building2, ChevronRight, Coffee, ExternalLink,
-  Pill, Scissors, Settings, ShoppingBag, Truck, UtensilsCrossed,
+  Fingerprint, Pill, Scissors, Settings, ShoppingBag, Truck, UtensilsCrossed,
   Warehouse, Wine, WifiOff, Zap,
 } from 'lucide-react';
 import { useOnline } from '@/hooks/use-online';
 import { useIdleTimer, getScreensaverTimeoutMs, setScreensaverTimeoutMs } from '@/hooks/use-idle-timer';
+import { useBiometric } from '@/hooks/use-biometric';
 import { apiClient } from '@/lib/api/client';
 import { useAuthStore } from '@/store/auth';
 import { getCachedStaffProfiles, cacheStaffProfile, type CachedStaffProfile } from '@/lib/db/pos-db';
@@ -184,8 +185,23 @@ export default function PINLoginPage() {
   const [activeTab, setActiveTab]             = useState<string>('All');
   const [showOutletModal, setShowOutletModal] = useState(false);
   const [step, setStep]                       = useState<'outlet' | 'pin'>('pin');
+  const [storedEmail, setStoredEmail]          = useState<string | null>(null);
 
   useEffect(() => { setTimeoutMsState(getScreensaverTimeoutMs()); }, []);
+  useEffect(() => {
+    if (typeof window !== 'undefined') setStoredEmail(localStorage.getItem('sso_last_email'));
+  }, []);
+
+  const hydrateFromWebAuthn = useAuthStore((s) => s.hydrateFromWebAuthn);
+  const { authenticate: biometricAuth, isSupported: biometricSupported, hasRegisteredCredential, isLoading: biometricLoading, error: biometricError } = useBiometric({
+    onAuthSuccess: (tokens) => {
+      hydrateFromWebAuthn({
+        accessToken: tokens.accessToken,
+        refreshToken: tokens.refreshToken,
+        expiresAt: new Date(Date.now() + tokens.expiresIn * 1000).toISOString(),
+      });
+    },
+  });
 
   const handleIdle   = useCallback(() => setScreensaverActive(true),  []);
   const handleActive = useCallback(() => setScreensaverActive(false), []);
@@ -580,6 +596,28 @@ export default function PINLoginPage() {
               <ExternalLink className="h-4 w-4 group-hover:text-primary transition-colors" />
               Sign in with your account
             </button>
+
+            {biometricSupported && hasRegisteredCredential && storedEmail && (
+              <div className="flex flex-col gap-1">
+                <button
+                  onClick={() => biometricAuth(storedEmail, orgSlug)}
+                  disabled={biometricLoading}
+                  className={cn(
+                    'w-full flex items-center justify-center gap-2.5 px-5 py-3 rounded-2xl',
+                    'border border-primary/30 bg-primary/10',
+                    'text-sm text-primary font-medium',
+                    'hover:bg-primary/20 hover:border-primary/50',
+                    'disabled:opacity-60 transition-all duration-200'
+                  )}
+                >
+                  <Fingerprint className="h-4 w-4" />
+                  {biometricLoading ? 'Verifying…' : 'Sign in with fingerprint'}
+                </button>
+                {biometricError && (
+                  <p className="text-center text-xs text-red-400">{biometricError}</p>
+                )}
+              </div>
+            )}
           </div>
 
         </div>
