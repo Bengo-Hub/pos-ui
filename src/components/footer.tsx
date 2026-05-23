@@ -31,7 +31,7 @@ export function Footer() {
                   className="h-3.5 w-auto brightness-0 invert dark:brightness-100 dark:invert-0"
                 />
                 <span className="text-[10px] font-black tracking-tight uppercase">
-                  Powered by <span className="text-primary">Codevertex IT Solutions</span>
+                  Powered by <span className="text-primary">Codevertex Africa Limited</span>
                 </span>
               </a>
             </div>
