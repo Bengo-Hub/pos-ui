@@ -86,7 +86,7 @@ function FacilitiesPage() {
                   </div>
                   <div>
                     <p className="text-muted-foreground text-xs">Rate</p>
-                    <p className="font-medium text-primary">KES {facility.rate_per_session.toLocaleString()}</p>
+                    <p className="font-medium text-primary">KES {(facility.rate_per_session ?? 0).toLocaleString()}</p>
                   </div>
                   <div className="col-span-2">
                     <p className="text-muted-foreground text-xs">Hours</p>

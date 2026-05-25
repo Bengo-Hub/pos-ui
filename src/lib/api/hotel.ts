@@ -35,7 +35,7 @@ export interface Facility {
   name: string;
   facility_type: string;
   capacity: number;
-  rate_per_session: number;
+  rate_per_session: number | null;
   opening_time: string;
   closing_time: string;
   status: 'available' | 'occupied' | 'maintenance' | 'closed';
