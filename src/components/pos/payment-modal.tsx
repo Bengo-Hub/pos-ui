@@ -99,8 +99,31 @@ export function POSPaymentModal({
   }, [cashTendered, total, orderId, tenderId, tenantSlug, isOnline, createIntent, onPaymentConfirmed]);
 
   // ── Manual M-Pesa confirm ─────────────────────────────────────────────────────
-  const handleManualConfirm = useCallback(() => {
+  const handleManualConfirm = useCallback(async () => {
     if (!manualRef.trim()) return;
+
+    if (!isOnline) {
+      // Offline: save locally with pending_verification status — sync worker validates later
+      try {
+        await savePendingPayment({
+          server_order_id: orderId,
+          tender_id: tenderId,
+          tender_method: 'manual',
+          amount: total,
+          currency: 'KES',
+          external_ref: manualRef.trim(),
+          tenant_slug: tenantSlug,
+          created_at: new Date().toISOString(),
+          synced: false,
+        });
+        setStep('offline_queued');
+        onPaymentConfirmed();
+      } catch {
+        setStep('failed');
+      }
+      return;
+    }
+
     createIntent.mutate(
       { orderId, tenderMethod: 'manual', amount: total, externalRef: manualRef.trim() },
       {
@@ -108,7 +131,7 @@ export function POSPaymentModal({
         onError: () => setStep('failed'),
       }
     );
-  }, [manualRef, orderId, total, createIntent, onPaymentConfirmed]);
+  }, [manualRef, orderId, tenderId, tenantSlug, total, isOnline, createIntent, onPaymentConfirmed]);
 
   // ── Digital (STK push / card) ─────────────────────────────────────────────────
   const handleDigital = useCallback(
@@ -205,10 +228,10 @@ export function POSPaymentModal({
                 </div>
               </button>
 
-              {/* Manual M-Pesa reference — online only */}
+              {/* Manual M-Pesa reference — available online and offline */}
               <button
                 onClick={() => setStep('manual')}
-                disabled={createIntent.isPending || !isOnline}
+                disabled={createIntent.isPending}
                 className="w-full flex items-center gap-4 px-5 py-4 rounded-xl border-2 border-border hover:border-primary/30 transition-all min-h-15 disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 <div className="h-10 w-10 rounded-lg bg-yellow-500/10 flex items-center justify-center">
@@ -217,7 +240,7 @@ export function POSPaymentModal({
                 <div className="text-left">
                   <p className="font-bold text-sm">M-Pesa (Manual / Paybill)</p>
                   <p className="text-xs text-muted-foreground">
-                    {isOnline ? 'Enter M-Pesa transaction code' : 'Requires internet connection'}
+                    {isOnline ? 'Enter M-Pesa transaction code' : 'Record code — verified when back online'}
                   </p>
                 </div>
               </button>
@@ -319,8 +342,14 @@ export function POSPaymentModal({
           {step === 'manual' && (
             <div className="p-5 space-y-4">
               <p className="text-sm text-muted-foreground">
-                Enter the M-Pesa transaction code the customer received after paying via paybill or till number.
+                Enter the M-Pesa transaction code from the customer&apos;s SMS confirmation after paying via paybill or till number.
               </p>
+              {!isOnline && (
+                <div className="flex items-center gap-2 rounded-xl bg-amber-500/10 px-4 py-3 text-xs text-amber-700 dark:text-amber-400 font-medium">
+                  <WifiOff className="h-4 w-4 shrink-0" />
+                  Offline — code will be verified against M-Pesa records when connection is restored.
+                </div>
+              )}
               <label className="block">
                 <span className="text-sm font-medium text-foreground">M-Pesa Transaction Code</span>
                 <input
@@ -343,7 +372,7 @@ export function POSPaymentModal({
                 ) : (
                   <CheckCircle2 className="h-5 w-5 mr-2" />
                 )}
-                Confirm Manual Payment
+                {isOnline ? 'Confirm Manual Payment' : 'Record & Verify Later'}
               </Button>
               <Button variant="outline" onClick={() => setStep('select')} className="w-full">
                 Back

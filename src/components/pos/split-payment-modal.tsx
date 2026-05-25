@@ -1,14 +1,22 @@
 'use client';
 
 import { useState } from 'react';
-import { Users, SplitSquareHorizontal, CreditCard, Minus, Plus, X } from 'lucide-react';
+import { Users, SplitSquareHorizontal, CreditCard, Minus, Plus, X, ListOrdered } from 'lucide-react';
 import { POSPaymentModal } from './payment-modal';
 
-type SplitMode = 'full' | 'equal' | 'custom';
+type SplitMode = 'full' | 'equal' | 'custom' | 'by_item';
 
 interface CustomSplit {
   amount: string;
   paid: boolean;
+}
+
+export interface OrderLineItem {
+  id: string;
+  name: string;
+  quantity: number;
+  unitPrice: number;
+  totalPrice: number;
 }
 
 interface SplitPaymentModalProps {
@@ -19,6 +27,7 @@ interface SplitPaymentModalProps {
   total: number;
   tenantSlug: string;
   tenderId?: string;
+  orderLines?: OrderLineItem[];
   onPaymentConfirmed: () => void;
 }
 
@@ -30,6 +39,7 @@ export function SplitPaymentModal({
   total,
   tenantSlug,
   tenderId,
+  orderLines = [],
   onPaymentConfirmed,
 }: SplitPaymentModalProps) {
   const [mode, setMode] = useState<SplitMode>('full');
@@ -37,6 +47,11 @@ export function SplitPaymentModal({
   const [currentPayer, setCurrentPayer] = useState<number | null>(null);
   const [paidCount, setPaidCount] = useState(0);
   const [customSplits, setCustomSplits] = useState<CustomSplit[]>([{ amount: '', paid: false }]);
+  // By Item: guestCount guests, lineAssignments[lineIndex] = guestIndex (1-based, 0 = unassigned)
+  const [guestCount, setGuestCount] = useState(2);
+  const [lineAssignments, setLineAssignments] = useState<number[]>(() => new Array(orderLines.length).fill(0));
+  const [itemSplitPayer, setItemSplitPayer] = useState<number | null>(null); // guest index (1-based)
+  const [paidGuests, setPaidGuests] = useState<Set<number>>(new Set());
 
   const fmt = (n: number) =>
     new Intl.NumberFormat('en-KE', { style: 'currency', currency: 'KES' }).format(n);
@@ -67,6 +82,33 @@ export function SplitPaymentModal({
     }
   }
 
+  // By Item helpers
+  function guestTotal(guest: number) {
+    return orderLines.reduce((sum, line, i) => {
+      if (lineAssignments[i] === guest) return sum + line.totalPrice;
+      return sum;
+    }, 0);
+  }
+
+  function unassignedTotal() {
+    return orderLines.reduce((sum, line, i) => {
+      if (lineAssignments[i] === 0) return sum + line.totalPrice;
+      return sum;
+    }, 0);
+  }
+
+  function handleItemGuestPaid(guest: number) {
+    const next = new Set(paidGuests).add(guest);
+    setPaidGuests(next);
+    setItemSplitPayer(null);
+    // All assigned guests paid AND no unassigned items remain
+    const allGuests = Array.from({ length: guestCount }, (_, i) => i + 1);
+    const allPaid = allGuests.every((g) => next.has(g) || guestTotal(g) === 0);
+    if (allPaid && unassignedTotal() === 0) {
+      onPaymentConfirmed();
+    }
+  }
+
   if (!open) return null;
 
   // Sub-modal for a specific payer
@@ -84,6 +126,23 @@ export function SplitPaymentModal({
         tenantSlug={tenantSlug}
         tenderId={tenderId}
         onPaymentConfirmed={mode === 'equal' ? handleEqualPayerDone : () => handleCustomPayerDone(currentPayer)}
+      />
+    );
+  }
+
+  // Sub-modal for by-item guest payer
+  if (itemSplitPayer !== null) {
+    const amt = guestTotal(itemSplitPayer);
+    return (
+      <POSPaymentModal
+        open
+        onClose={() => setItemSplitPayer(null)}
+        orderId={orderId}
+        orderNumber={`${orderNumber} — Guest ${itemSplitPayer}`}
+        total={amt}
+        tenantSlug={tenantSlug}
+        tenderId={tenderId}
+        onPaymentConfirmed={() => handleItemGuestPaid(itemSplitPayer)}
       />
     );
   }
@@ -109,9 +168,10 @@ export function SplitPaymentModal({
         {/* Mode tabs */}
         <div className="flex gap-1 px-5 pt-4">
           {([
-            { key: 'full', label: 'Full Payment', icon: CreditCard },
-            { key: 'equal', label: 'Split Equally', icon: Users },
-            { key: 'custom', label: 'Custom Split', icon: SplitSquareHorizontal },
+            { key: 'full', label: 'Full', icon: CreditCard },
+            { key: 'equal', label: 'Equal', icon: Users },
+            { key: 'custom', label: 'Custom', icon: SplitSquareHorizontal },
+            ...(orderLines.length > 0 ? [{ key: 'by_item' as const, label: 'By Item', icon: ListOrdered }] : []),
           ] as const).map(({ key, label, icon: Icon }) => (
             <button
               key={key}
@@ -124,7 +184,7 @@ export function SplitPaymentModal({
               }`}
             >
               <Icon className="h-4 w-4" />
-              <span className="hidden sm:inline">{label}</span>
+              <span>{label}</span>
             </button>
           ))}
         </div>
@@ -192,6 +252,100 @@ export function SplitPaymentModal({
                           </button>
                         ) : (
                           <span className="text-xs text-muted-foreground">Waiting</span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* By Item split */}
+          {mode === 'by_item' && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">Number of guests</span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const n = Math.max(2, guestCount - 1);
+                      setGuestCount(n);
+                      setLineAssignments((prev) => prev.map((a) => (a > n ? 0 : a)));
+                    }}
+                    className="h-8 w-8 rounded-lg border border-border flex items-center justify-center hover:bg-accent transition-colors"
+                  >
+                    <Minus className="h-3.5 w-3.5" />
+                  </button>
+                  <span className="w-8 text-center text-sm font-bold tabular-nums">{guestCount}</span>
+                  <button
+                    type="button"
+                    onClick={() => setGuestCount((n) => Math.min(10, n + 1))}
+                    className="h-8 w-8 rounded-lg border border-border flex items-center justify-center hover:bg-accent transition-colors"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-1.5 max-h-52 overflow-y-auto">
+                {orderLines.map((line, i) => (
+                  <div key={line.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg border border-border text-sm">
+                    <span className="flex-1 truncate font-medium">{line.name}</span>
+                    <span className="text-xs text-muted-foreground shrink-0">×{line.quantity}</span>
+                    <span className="text-xs font-semibold shrink-0 w-16 text-right">
+                      {fmt(line.totalPrice)}
+                    </span>
+                    <select
+                      value={lineAssignments[i]}
+                      onChange={(e) => {
+                        const updated = [...lineAssignments];
+                        updated[i] = Number(e.target.value);
+                        setLineAssignments(updated);
+                      }}
+                      className="h-7 rounded-lg border border-border bg-background px-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-primary/30"
+                    >
+                      <option value={0}>—</option>
+                      {Array.from({ length: guestCount }, (_, g) => (
+                        <option key={g + 1} value={g + 1}>Guest {g + 1}</option>
+                      ))}
+                    </select>
+                  </div>
+                ))}
+              </div>
+
+              {unassignedTotal() > 0 && (
+                <p className="text-xs text-amber-600 font-medium">
+                  {fmt(unassignedTotal())} unassigned — assign all items before collecting payment.
+                </p>
+              )}
+
+              <div className="space-y-2">
+                {Array.from({ length: guestCount }, (_, g) => {
+                  const guest = g + 1;
+                  const amt = guestTotal(guest);
+                  const paid = paidGuests.has(guest);
+                  if (amt === 0) return null;
+                  return (
+                    <div
+                      key={guest}
+                      className={`flex items-center justify-between px-3 py-2 rounded-xl border ${paid ? 'border-green-200 bg-green-50 dark:bg-green-900/10' : 'border-border'}`}
+                    >
+                      <span className="text-sm font-medium">Guest {guest}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-semibold">{fmt(amt)}</span>
+                        {paid ? (
+                          <span className="text-xs text-green-600 font-bold">Paid</span>
+                        ) : (
+                          <button
+                            type="button"
+                            disabled={unassignedTotal() > 0}
+                            onClick={() => setItemSplitPayer(guest)}
+                            className="px-3 py-1 rounded-lg bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 disabled:opacity-40 transition-colors"
+                          >
+                            Pay
+                          </button>
                         )}
                       </div>
                     </div>

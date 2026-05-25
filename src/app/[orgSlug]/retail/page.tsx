@@ -14,6 +14,7 @@ import { BarcodeInput } from '@/components/retail/BarcodeInput';
 import { ScaleDisplay } from '@/components/retail/ScaleDisplay';
 import { SerialCaptureModal } from '@/components/retail/SerialCaptureModal';
 import { StockBadge } from '@/components/retail/StockBadge';
+import { ManagerPINOverrideModal } from '@/components/retail/ManagerPINOverrideModal';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -27,6 +28,11 @@ interface PendingSerialItem {
   item: CatalogItem;
   orderId: string;
   lineId: string;
+}
+
+interface PendingOverrideItem {
+  item: CatalogItem;
+  qty: number;
 }
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
@@ -43,6 +49,7 @@ function RetailPage() {
   const [scanError, setScanError] = useState<string | null>(null);
   const [scaleDeviceId, setScaleDeviceId] = useState<string>('');
   const [pendingSerial, setPendingSerial] = useState<PendingSerialItem | null>(null);
+  const [pendingOverride, setPendingOverride] = useState<PendingOverrideItem | null>(null);
   const [checkoutDone, setCheckoutDone] = useState(false);
 
   // Read scale device ID from localStorage
@@ -55,7 +62,7 @@ function RetailPage() {
 
   // ── Cart helpers ─────────────────────────────────────────────────────────
 
-  const addToCart = useCallback((item: CatalogItem, qty = 1) => {
+  const commitAddToCart = useCallback((item: CatalogItem, qty = 1) => {
     setCart((prev) => {
       const idx = prev.findIndex((l) => l.item.id === item.id);
       if (idx >= 0) {
@@ -64,6 +71,19 @@ function RetailPage() {
       return [...prev, { item, quantity: qty }];
     });
   }, []);
+
+  const addToCart = useCallback((item: CatalogItem, qty = 1) => {
+    // Intercept out-of-stock items (non-service, tracked stock) for manager override
+    if (
+      item.item_type !== 'SERVICE' &&
+      item.stock_quantity !== undefined &&
+      item.stock_quantity === 0
+    ) {
+      setPendingOverride({ item, qty });
+      return;
+    }
+    commitAddToCart(item, qty);
+  }, [commitAddToCart]);
 
   const removeFromCart = (index: number) => {
     setCart((prev) => prev.filter((_, i) => i !== index));
@@ -296,6 +316,19 @@ function RetailPage() {
           lineId={pendingSerial.lineId}
           requiredCount={cart[pendingSerial.cartIndex]?.quantity ?? 1}
           itemName={pendingSerial.item.name}
+        />
+      )}
+
+      {/* ── Manager override modal (out-of-stock) ── */}
+      {pendingOverride && (
+        <ManagerPINOverrideModal
+          tenantId={tenantSlug}
+          itemName={pendingOverride.item.name}
+          onApprove={() => {
+            commitAddToCart(pendingOverride.item, pendingOverride.qty);
+            setPendingOverride(null);
+          }}
+          onCancel={() => setPendingOverride(null)}
         />
       )}
     </div>

@@ -2,7 +2,7 @@
 
 import { Badge, Button } from '@/components/ui/base';
 import { ModifierModal, type ModifierGroup } from '@/components/pos/modifier-modal';
-import { SplitPaymentModal } from '@/components/pos/split-payment-modal';
+import { SplitPaymentModal, type OrderLineItem } from '@/components/pos/split-payment-modal';
 import { VoidOrderModal } from '@/components/pos/void-order-modal';
 import { ReceiptPreview, type ReceiptData } from '@/components/pos/receipt-preview';
 import { cn } from '@/lib/utils';
@@ -94,6 +94,7 @@ export default function OrderPage() {
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [currentOrderId, setCurrentOrderId] = useState('');
   const [currentOrderNumber, setCurrentOrderNumber] = useState('');
+  const [currentOrderLines, setCurrentOrderLines] = useState<OrderLineItem[]>([]);
 
   // Void order modal
   const [voidOpen, setVoidOpen] = useState(false);
@@ -297,6 +298,13 @@ export default function OrderPage() {
         onSuccess: (data: any) => {
           setCurrentOrderId(data.id || data.order_id || '');
           setCurrentOrderNumber(data.order_number || '');
+          setCurrentOrderLines(cart.map((item) => ({
+            id: item.id,
+            name: item.name,
+            quantity: item.quantity,
+            unitPrice: item.price + (item.modifierTotal ?? 0),
+            totalPrice: (item.price + (item.modifierTotal ?? 0)) * item.quantity,
+          })));
           setPaymentOpen(true);
         },
         onError: () => {
@@ -792,6 +800,7 @@ export default function OrderPage() {
         orderNumber={currentOrderNumber}
         total={total}
         tenantSlug={user?.tenant_slug ?? ''}
+        orderLines={currentOrderLines}
         onPaymentConfirmed={handlePaymentConfirmed}
       />
 
