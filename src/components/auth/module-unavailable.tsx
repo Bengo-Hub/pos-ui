@@ -14,10 +14,10 @@ const USE_CASE_LABELS: Record<string, string> = {
 };
 
 interface ModuleUnavailablePageProps {
-  moduleKey: string;
+  moduleKey?: string;
 }
 
-export function ModuleUnavailablePage({ moduleKey }: ModuleUnavailablePageProps) {
+export function ModuleUnavailablePage({ moduleKey = 'reports' }: ModuleUnavailablePageProps) {
   const { orgSlug } = useParams<{ orgSlug: string }>();
   const { useCase } = useModuleAccess();
   const useCaseLabel = useCase ? (USE_CASE_LABELS[useCase] ?? useCase) : '';

@@ -57,6 +57,56 @@ export interface ShiftRow {
   order_count: number;
 }
 
+export interface ShiftDetail {
+  session_id: string;
+  device_id: string;
+  started_at: string;
+  ended_at?: string;
+  order_count: number;
+  total_revenue: number;
+  total_tax: number;
+  total_discounts: number;
+  total_refunds: number;
+  net_sales: number;
+  opening_cash: number;
+}
+
+export interface EODRow {
+  id: string;
+  outlet_id: string;
+  outlet_name?: string;
+  closing_date: string;
+  status: string;
+  total_sales: number;
+  total_cash: number;
+  total_card: number;
+  total_mpesa: number;
+  cash_variance: number;
+  order_count: number;
+  created_at: string;
+  closed_by?: string;
+}
+
+export interface StockConsumptionRow {
+  sku: string;
+  name: string;
+  quantity_consumed: number;
+  uom_code: string;
+  order_count: number;
+}
+
+export interface ReturnsRow {
+  return_id: string;
+  order_id: string;
+  order_number: string;
+  reason: string;
+  return_type: string;
+  status: string;
+  amount: number;
+  created_at: string;
+  items_count: number;
+}
+
 export interface CommissionRow {
   user_id: string;
   rule_name?: string;
@@ -93,10 +143,14 @@ export const reportKeys = {
   topItems: (tid: string, from: string, to: string) => ['reports', tid, 'top-items', from, to] as const,
   staffSales: (tid: string, from: string, to: string) => ['reports', tid, 'staff-sales', from, to] as const,
   shifts: (tid: string, from: string, to: string) => ['reports', tid, 'shifts', from, to] as const,
+  shiftDetail: (tid: string, sessionId: string) => ['reports', tid, 'shift-detail', sessionId] as const,
   commissions: (tid: string, from: string, to: string) => ['reports', tid, 'commissions', from, to] as const,
   tax: (tid: string, from: string, to: string) => ['reports', tid, 'tax', from, to] as const,
   salesByHour: (tid: string, from: string, to: string) => ['reports', tid, 'sales-by-hour', from, to] as const,
   salesByCategory: (tid: string, from: string, to: string) => ['reports', tid, 'sales-by-category', from, to] as const,
+  eodList: (tid: string, outletId: string, from: string, to: string) => ['reports', tid, 'eod', outletId, from, to] as const,
+  stockConsumption: (tid: string, from: string, to: string) => ['reports', tid, 'stock-consumption', from, to] as const,
+  returnsDetail: (tid: string, from: string, to: string) => ['reports', tid, 'returns-detail', from, to] as const,
 };
 
 // ─── Hooks ────────────────────────────────────────────────────────────────────
@@ -200,4 +254,47 @@ export function useSalesByCategory(from: string, to: string) {
 
 export function useReportExportUrl(tenantID: string, from: string, to: string) {
   return `/api/v1/${tenantID}/pos/reports/export?from=${from}&to=${to}`;
+}
+
+export function useShiftReportDetail(sessionId: string) {
+  const tenantID = useTenantID();
+  return useQuery({
+    queryKey: reportKeys.shiftDetail(tenantID, sessionId),
+    queryFn: () => apiClient.get<ShiftDetail>(`${basePath(tenantID)}/shifts/${sessionId}`),
+    enabled: !!tenantID && !!sessionId,
+    staleTime: 2 * 60_000,
+  });
+}
+
+export function useEODList(outletId: string, from: string, to: string) {
+  const tenantID = useTenantID();
+  return useQuery({
+    queryKey: reportKeys.eodList(tenantID, outletId, from, to),
+    queryFn: () => apiClient.get<EODRow[]>(
+      `/api/v1/${tenantID}/pos/outlets/${outletId}/daily-closings`,
+      { from, to },
+    ),
+    enabled: !!tenantID && !!outletId && !!from && !!to,
+    staleTime: 2 * 60_000,
+  });
+}
+
+export function useStockConsumptionReport(from: string, to: string) {
+  const tenantID = useTenantID();
+  return useQuery({
+    queryKey: reportKeys.stockConsumption(tenantID, from, to),
+    queryFn: () => apiClient.get<StockConsumptionRow[]>(`${basePath(tenantID)}/stock-consumption`, { from, to }),
+    enabled: !!tenantID && !!from && !!to,
+    staleTime: 2 * 60_000,
+  });
+}
+
+export function useReturnsDetail(from: string, to: string) {
+  const tenantID = useTenantID();
+  return useQuery({
+    queryKey: reportKeys.returnsDetail(tenantID, from, to),
+    queryFn: () => apiClient.get<ReturnsRow[]>(`${basePath(tenantID)}/returns`, { from, to }),
+    enabled: !!tenantID && !!from && !!to,
+    staleTime: 2 * 60_000,
+  });
 }

@@ -1,0 +1,162 @@
+'use client';
+
+import '@/styles/receipt.css';
+import type { ReceiptData } from './receipt-preview';
+
+interface ReceiptPrintProps {
+  receipt: ReceiptData;
+  outletName?: string;
+  tenantName?: string;
+  tenantAddress?: string;
+  tenantPhone?: string;
+  tenantPin?: string; // KRA PIN for eTIMS
+}
+
+/**
+ * Standalone thermal receipt component.
+ *
+ * Mount it invisible at root level; window.print() will isolate it via
+ * #receipt-print-root in receipt.css (@media print).
+ *
+ * Usage:
+ *   <div id="receipt-print-root" style={{ display: 'none' }}>
+ *     <ReceiptPrint receipt={receiptData} tenantName="Urban Loft" />
+ *   </div>
+ */
+export function ReceiptPrint({
+  receipt,
+  outletName,
+  tenantName,
+  tenantAddress,
+  tenantPhone,
+  tenantPin,
+}: ReceiptPrintProps) {
+  const fmt = (n: number) => `KES ${n.toFixed(2)}`;
+  const fmtDate = (s: string) =>
+    new Date(s).toLocaleString('en-KE', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+
+  return (
+    <div className="receipt-root">
+      {/* Header / branding */}
+      {tenantName && (
+        <p className="receipt-center receipt-bold" style={{ fontSize: 13, marginBottom: 2 }}>
+          {tenantName}
+        </p>
+      )}
+      {outletName && (
+        <p className="receipt-center" style={{ marginBottom: 1 }}>
+          {outletName}
+        </p>
+      )}
+      {tenantAddress && (
+        <p className="receipt-center receipt-small">{tenantAddress}</p>
+      )}
+      {tenantPhone && (
+        <p className="receipt-center receipt-small">Tel: {tenantPhone}</p>
+      )}
+      {tenantPin && (
+        <p className="receipt-center receipt-small">PIN: {tenantPin}</p>
+      )}
+
+      <hr className="receipt-divider" style={{ marginTop: 6 }} />
+
+      <p className="receipt-center" style={{ marginBottom: 1 }}>
+        <span className="receipt-bold">Receipt #{receipt.receipt_number}</span>
+      </p>
+      <p className="receipt-center receipt-small">{fmtDate(receipt.issued_at)}</p>
+      {receipt.cashier_name && (
+        <p className="receipt-center receipt-small">Cashier: {receipt.cashier_name}</p>
+      )}
+
+      <hr className="receipt-divider" />
+
+      {/* Line items */}
+      {receipt.lines.map((line, i) => (
+        <div key={i}>
+          <div className="receipt-row">
+            <span className="receipt-row-name">
+              {line.name}{line.modifiers ? ` (${line.modifiers})` : ''}
+            </span>
+            <span className="receipt-row-value">{fmt(line.total_price)}</span>
+          </div>
+          {line.quantity !== 1 && (
+            <div className="receipt-small" style={{ paddingLeft: 8 }}>
+              {line.quantity} × {fmt(line.unit_price)}
+            </div>
+          )}
+        </div>
+      ))}
+
+      <hr className="receipt-divider" />
+
+      {/* Totals */}
+      <div className="receipt-row">
+        <span className="receipt-row-name">Subtotal</span>
+        <span className="receipt-row-value">{fmt(receipt.subtotal)}</span>
+      </div>
+      <div className="receipt-row">
+        <span className="receipt-row-name">VAT (16%)</span>
+        <span className="receipt-row-value">{fmt(receipt.tax_amount)}</span>
+      </div>
+      {receipt.discount_amount > 0 && (
+        <div className="receipt-row">
+          <span className="receipt-row-name">Discount</span>
+          <span className="receipt-row-value">-{fmt(receipt.discount_amount)}</span>
+        </div>
+      )}
+
+      <div className="receipt-row receipt-total-row">
+        <span className="receipt-row-name">TOTAL</span>
+        <span className="receipt-row-value">{fmt(receipt.total_amount)}</span>
+      </div>
+
+      <hr className="receipt-divider" style={{ marginTop: 4 }} />
+
+      {/* Payment */}
+      <div className="receipt-row">
+        <span className="receipt-row-name" style={{ textTransform: 'capitalize' }}>
+          {receipt.payment_method.replace(/_/g, ' ')}
+        </span>
+        <span className="receipt-row-value">{fmt(receipt.amount_tendered)}</span>
+      </div>
+      {receipt.change_due > 0 && (
+        <div className="receipt-row">
+          <span className="receipt-row-name">Change</span>
+          <span className="receipt-row-value">{fmt(receipt.change_due)}</span>
+        </div>
+      )}
+
+      {/* eTIMS compliance section */}
+      {receipt.etims_invoice_number && (
+        <>
+          <hr className="receipt-divider" style={{ marginTop: 6 }} />
+          <p className="receipt-center receipt-small" style={{ marginBottom: 2 }}>
+            KRA eTIMS Invoice
+          </p>
+          <p className="receipt-center receipt-small">
+            CU#: {receipt.etims_invoice_number}
+          </p>
+          {receipt.etims_qr_code_url && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={receipt.etims_qr_code_url}
+              alt="eTIMS QR Code"
+              className="receipt-qr"
+            />
+          )}
+        </>
+      )}
+
+      <hr className="receipt-divider" style={{ marginTop: 6 }} />
+      <p className="receipt-center" style={{ marginTop: 4, marginBottom: 2, fontSize: 10 }}>
+        Thank you for your business!
+      </p>
+    </div>
+  );
+}

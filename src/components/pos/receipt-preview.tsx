@@ -1,8 +1,10 @@
 'use client';
 
+import '@/styles/receipt.css';
 import { useState } from 'react';
 import { Button } from '@/components/ui/base';
 import { Printer, Download, X } from 'lucide-react';
+import { ReceiptPrint } from './receipt-print';
 
 export interface ReceiptLine {
   sku: string;
@@ -77,27 +79,9 @@ export function ReceiptPreview({ receipt, open, onClose, outletName, tenantName 
 
   return (
     <>
-      {/* Print-specific styles: visibility isolation works at any DOM depth */}
-      <style>{`
-        @page { size: 80mm auto; margin: 4mm; }
-        @media print {
-          * { visibility: hidden !important; }
-          #receipt-print-content,
-          #receipt-print-content * { visibility: visible !important; }
-          #receipt-print-content {
-            position: fixed !important;
-            top: 0 !important;
-            left: 0 !important;
-            width: 80mm !important;
-            background: white !important;
-          }
-        }
-        #receipt-print-content { display: none; }
-      `}</style>
-
-      {/* Hidden printable version */}
-      <div id="receipt-print-content">
-        <PrintableReceipt receipt={receipt} outletName={outletName} tenantName={tenantName} />
+      {/* Hidden printable version — isolated by #receipt-print-root in receipt.css */}
+      <div id="receipt-print-root" style={{ display: 'none' }}>
+        <ReceiptPrint receipt={receipt} outletName={outletName} tenantName={tenantName} />
       </div>
 
       {/* Modal overlay */}
@@ -228,70 +212,3 @@ export function ReceiptPreview({ receipt, open, onClose, outletName, tenantName 
   );
 }
 
-// PrintableReceipt renders a clean monospace receipt for window.print()
-function PrintableReceipt({
-  receipt,
-  outletName,
-  tenantName,
-}: {
-  receipt: ReceiptData;
-  outletName?: string;
-  tenantName?: string;
-}) {
-  const formatCurrency = (amount: number) => `KES ${amount.toFixed(2)}`;
-  const formatDate = (dateStr: string) => new Date(dateStr).toLocaleString('en-KE');
-
-  return (
-    <div style={{ fontFamily: 'monospace', fontSize: 12, maxWidth: 300, margin: '0 auto', padding: 8 }}>
-      {tenantName && (
-        <p style={{ textAlign: 'center', fontWeight: 'bold', margin: '0 0 4px' }}>{tenantName}</p>
-      )}
-      {outletName && (
-        <p style={{ textAlign: 'center', margin: '0 0 4px' }}>{outletName}</p>
-      )}
-      <p style={{ textAlign: 'center', margin: '0 0 8px' }}>{formatDate(receipt.issued_at)}</p>
-      <hr style={{ border: 'none', borderTop: '1px dashed #000', margin: '4px 0' }} />
-      <p style={{ textAlign: 'center' }}>Order: {receipt.order_number}</p>
-      <hr style={{ border: 'none', borderTop: '1px dashed #000', margin: '4px 0' }} />
-      {receipt.lines.map((l, i) => (
-        <div key={i} style={{ display: 'flex', justifyContent: 'space-between' }}>
-          <span>
-            {l.name} ×{l.quantity}
-          </span>
-          <span>{formatCurrency(l.total_price)}</span>
-        </div>
-      ))}
-      <hr style={{ border: 'none', borderTop: '1px dashed #000', margin: '4px 0' }} />
-      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-        <span>Subtotal</span>
-        <span>{formatCurrency(receipt.subtotal)}</span>
-      </div>
-      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-        <span>Tax</span>
-        <span>{formatCurrency(receipt.tax_amount)}</span>
-      </div>
-      <hr style={{ border: 'none', borderTop: '1px dashed #000', margin: '4px 0' }} />
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold' }}>
-        <span>TOTAL</span>
-        <span>{formatCurrency(receipt.total_amount)}</span>
-      </div>
-      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-        <span>{receipt.payment_method}</span>
-        <span>{formatCurrency(receipt.amount_tendered)}</span>
-      </div>
-      {receipt.change_due > 0 && (
-        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-          <span>Change</span>
-          <span>{formatCurrency(receipt.change_due)}</span>
-        </div>
-      )}
-      {receipt.etims_invoice_number && (
-        <>
-          <hr style={{ border: 'none', borderTop: '1px dashed #000', margin: '4px 0' }} />
-          <p style={{ textAlign: 'center', fontSize: 10 }}>eTIMS: {receipt.etims_invoice_number}</p>
-        </>
-      )}
-      <p style={{ textAlign: 'center', marginTop: 8, fontSize: 10 }}>Thank you!</p>
-    </div>
-  );
-}
