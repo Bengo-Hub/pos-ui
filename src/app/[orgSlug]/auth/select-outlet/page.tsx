@@ -50,6 +50,13 @@ function SelectOutletContent() {
   const { user, status, setOutlet } = useAuthStore();
   const tenantID = user?.tenant_id ?? '';
 
+  // HQ users (admin/manager) get the full outlet picker; other roles auto-select.
+  const userRoles = user?.roles ?? [];
+  const isHQUser =
+    user?.isPlatformOwner ||
+    user?.isSuperUser ||
+    userRoles.some((r) => ['admin', 'pos_admin', 'manager', 'store_manager', 'superuser', 'super_admin'].includes(r));
+
   const [outlets, setOutlets] = useState<OutletInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -94,8 +101,18 @@ function SelectOutletContent() {
           redirect(returnTo);
           return;
         }
+
+        // Non-HQ users (cashier, waiter, kitchen, bar, pharmacist, etc.) are locked
+        // to their assigned outlet. Auto-select the last-used outlet or the first one
+        // without showing the picker UI.
+        if (!isHQUser) {
+          const preferred = lastOutletId ? active.find((o) => o.id === lastOutletId) : null;
+          handleSelect(preferred ?? active[0]);
+          return;
+        }
+
         if (active.length === 1) {
-          // Single outlet — auto-select and skip UI
+          // Single outlet — auto-select even for HQ users, no need to show picker
           handleSelect(active[0]);
           return;
         }
@@ -108,7 +125,7 @@ function SelectOutletContent() {
 
     loadOutlets();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tenantID]);
+  }, [tenantID, isHQUser]);
 
   // Bring last-used outlet to the top (TruLoad pattern: orderedStations)
   const orderedOutlets = useMemo(() => {

@@ -8,6 +8,7 @@ import {
   ChefHat,
   ChevronDown,
   ClipboardList,
+  FlaskConical,
   Gift,
   TrendingUp,
   Clock,
@@ -21,10 +22,14 @@ import {
   Package,
   Pill,
   Plus,
+  RotateCcw,
   Settings,
   ShoppingBag,
   ShoppingCart,
-  Utensils,
+  Sofa,
+  Truck,
+  UserSquare,
+  Users,
   Wallet,
   Webhook,
   Wine,
@@ -40,6 +45,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { useSubscription } from '@/hooks/use-subscription';
 import { P } from '@/lib/rbac/permissions';
 import type { Permission } from '@/lib/rbac/permissions';
+import { OutletSwitcher } from './outlet-switcher';
 
 const SUBSCRIBE_URL = process.env.NEXT_PUBLIC_SUBSCRIPTIONS_UI_URL || 'https://pricing.codevertexitsolutions.com';
 
@@ -187,10 +193,14 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
   const { tenant } = useTenantBranding();
   const logout = useAuthStore((s) => s.logout);
   const user = useAuthStore((s) => s.user);
-  const { hasModule, isSuperUser } = useModuleAccess();
+  const { hasModule, isSuperUser, isResolved } = useModuleAccess();
   const { canAny, isSuperuser } = usePermissions();
   const { hasFeature, isActive, isPlatformOwner: isSubPlatform } = useSubscription();
   const isPlatformOwner = isSuperuser || isSuperUser || isSubPlatform || orgSlug === 'codevertex';
+
+  // HQ users (admin/manager/superuser) can switch between outlets; everyone else is locked to their outlet.
+  const userRoles = user?.roles ?? [];
+  const isHQUser = isPlatformOwner || userRoles.some((r) => ['admin', 'pos_admin', 'manager', 'store_manager', 'superuser', 'super_admin'].includes(r));
 
   // ── Nav groups ────────────────────────────────────────────────────────────
 
@@ -219,8 +229,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
       defaultCollapsed: true,
       items: [
         { label: 'KDS', icon: ChefHat, href: '/kds', moduleKey: 'kds', permission: [P.ORDERS_VIEW, P.ORDERS_MANAGE] },
-        { label: 'Bar Display', icon: Wine, href: '/bar', moduleKey: 'kds', permission: [P.ORDERS_VIEW, P.ORDERS_MANAGE] },
-        { label: 'Menu', icon: Utensils, href: '/order', moduleKey: 'new_order', permission: P.CATALOG_VIEW },
+        { label: 'Bar Display', icon: Wine, href: '/bar', moduleKey: 'bar', permission: [P.ORDERS_VIEW, P.ORDERS_MANAGE] },
       ],
     },
     {
@@ -333,9 +342,24 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
         )}
       </div>
 
+      {/* Outlet switcher — visible to admin/manager only */}
+      {isHQUser && (
+        <div className="pt-3">
+          <OutletSwitcher />
+        </div>
+      )}
+
       {/* Nav groups */}
       <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-5 scrollbar-hide">
-        {visibleGroups.map((group) => (
+        {/* Skeleton while outlet use-case resolves — prevents wrong modules from flashing */}
+        {!isResolved && !isSuperUser && (
+          <div className="space-y-2 px-1">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <div key={i} className="h-9 rounded-xl bg-sidebar-foreground/8 animate-pulse" />
+            ))}
+          </div>
+        )}
+        {(isResolved || isSuperUser) && visibleGroups.map((group) => (
           <NavGroupSection
             key={group.label}
             group={group}

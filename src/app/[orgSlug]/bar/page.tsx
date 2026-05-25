@@ -170,7 +170,7 @@ function BarTicketCard({
 
 export default function BarDisplayPageGated() {
   return (
-    <ModuleGate moduleKey="kds" fallback={<ModuleUnavailablePage moduleKey="kds" />}>
+    <ModuleGate moduleKey="bar" fallback={<ModuleUnavailablePage moduleKey="bar" />}>
       <BarDisplayPage />
     </ModuleGate>
   );

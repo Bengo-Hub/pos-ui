@@ -10,12 +10,12 @@ export const MODULES = [
   'orders', 'payments', 'catalog', 'outlets', 'devices',
   'sessions', 'cash_drawers', 'tables', 'gift_cards',
   'price_books', 'modifiers', 'channels', 'config', 'users',
-  'reports', 'hotel',
+  'reports', 'hotel', 'appointments', 'pharmacy',
 ] as const;
 
 export const ACTIONS = [
   'add', 'view', 'view_own', 'change', 'change_own',
-  'delete', 'delete_own', 'manage', 'manage_own',
+  'delete', 'delete_own', 'manage', 'manage_own', 'void',
 ] as const;
 
 // ── Permission constants ───────────────────────────────────────────────────────
@@ -29,6 +29,7 @@ export const P = {
   ORDERS_CHANGE_OWN: 'pos.orders.change_own',
   ORDERS_DELETE:     'pos.orders.delete',
   ORDERS_MANAGE:     'pos.orders.manage',
+  ORDERS_VOID:       'pos.orders.void',
 
   // Payments
   PAYMENTS_ADD:      'pos.payments.add',
@@ -82,7 +83,20 @@ export const P = {
 
   // Hotel
   HOTEL_VIEW:        'pos.hotel.view',
+  HOTEL_CHANGE:      'pos.hotel.change',
   HOTEL_MANAGE:      'pos.hotel.manage',
+
+  // Appointments
+  APPOINTMENTS_ADD:    'pos.appointments.add',
+  APPOINTMENTS_VIEW:   'pos.appointments.view',
+  APPOINTMENTS_CHANGE: 'pos.appointments.change',
+  APPOINTMENTS_MANAGE: 'pos.appointments.manage',
+
+  // Pharmacy
+  PHARMACY_VIEW:     'pos.pharmacy.view',
+  PHARMACY_CHANGE:   'pos.pharmacy.change',
+  PHARMACY_ADD:      'pos.pharmacy.add',
+  PHARMACY_MANAGE:   'pos.pharmacy.manage',
 
   // Outlets
   OUTLETS_VIEW:      'pos.outlets.view',
@@ -104,7 +118,7 @@ export const ROLE_PERMISSIONS: Record<string, Permission[]> = {
   superuser: Object.values(P) as Permission[],
   admin:     Object.values(P) as Permission[],
   manager: [
-    P.ORDERS_ADD, P.ORDERS_VIEW, P.ORDERS_CHANGE, P.ORDERS_DELETE, P.ORDERS_MANAGE,
+    P.ORDERS_ADD, P.ORDERS_VIEW, P.ORDERS_CHANGE, P.ORDERS_DELETE, P.ORDERS_MANAGE, P.ORDERS_VOID,
     P.PAYMENTS_ADD, P.PAYMENTS_VIEW, P.PAYMENTS_MANAGE,
     P.CATALOG_ADD, P.CATALOG_VIEW, P.CATALOG_CHANGE, P.CATALOG_DELETE, P.CATALOG_MANAGE,
     P.TABLES_VIEW, P.TABLES_CHANGE, P.TABLES_MANAGE,
@@ -116,7 +130,9 @@ export const ROLE_PERMISSIONS: Record<string, Permission[]> = {
     P.REPORTS_VIEW,
     P.OUTLETS_VIEW, P.OUTLETS_CHANGE,
     P.MODIFIERS_VIEW, P.GIFT_CARDS_VIEW, P.PRICE_BOOKS_VIEW,
-    P.HOTEL_VIEW, P.HOTEL_MANAGE,
+    P.HOTEL_VIEW, P.HOTEL_CHANGE, P.HOTEL_MANAGE,
+    P.APPOINTMENTS_ADD, P.APPOINTMENTS_VIEW, P.APPOINTMENTS_CHANGE, P.APPOINTMENTS_MANAGE,
+    P.PHARMACY_ADD, P.PHARMACY_VIEW, P.PHARMACY_CHANGE, P.PHARMACY_MANAGE,
   ],
   cashier: [
     P.ORDERS_ADD, P.ORDERS_VIEW, P.ORDERS_VIEW_OWN, P.ORDERS_CHANGE_OWN,
@@ -148,13 +164,28 @@ export const ROLE_PERMISSIONS: Record<string, Permission[]> = {
     P.PAYMENTS_VIEW,
     P.TABLES_VIEW,
     P.SESSIONS_ADD, P.SESSIONS_VIEW_OWN,
-    P.HOTEL_VIEW, P.HOTEL_MANAGE,
+    P.HOTEL_VIEW, P.HOTEL_CHANGE, P.HOTEL_MANAGE,
+  ],
+  pharmacist: [
+    P.ORDERS_ADD, P.ORDERS_VIEW, P.ORDERS_CHANGE_OWN,
+    P.PAYMENTS_ADD, P.PAYMENTS_VIEW,
+    P.CATALOG_VIEW,
+    P.SESSIONS_ADD, P.SESSIONS_VIEW_OWN,
+    P.PHARMACY_ADD, P.PHARMACY_VIEW, P.PHARMACY_CHANGE, P.PHARMACY_MANAGE,
+  ],
+  pharmacy_technician: [
+    P.ORDERS_ADD, P.ORDERS_VIEW_OWN, P.ORDERS_CHANGE_OWN,
+    P.PAYMENTS_ADD, P.PAYMENTS_VIEW_OWN,
+    P.CATALOG_VIEW,
+    P.SESSIONS_ADD, P.SESSIONS_VIEW_OWN,
+    P.PHARMACY_VIEW, P.PHARMACY_CHANGE,
   ],
   viewer: [
     P.ORDERS_VIEW, P.PAYMENTS_VIEW, P.CATALOG_VIEW,
     P.OUTLETS_VIEW, P.DEVICES_VIEW, P.SESSIONS_VIEW,
     P.DRAWERS_VIEW, P.TABLES_VIEW, P.GIFT_CARDS_VIEW,
     P.PRICE_BOOKS_VIEW, P.MODIFIERS_VIEW, P.CONFIG_VIEW,
-    P.USERS_VIEW, P.REPORTS_VIEW, P.HOTEL_VIEW,
+    P.USERS_VIEW, P.REPORTS_VIEW,
+    P.HOTEL_VIEW, P.APPOINTMENTS_VIEW, P.PHARMACY_VIEW,
   ],
 };

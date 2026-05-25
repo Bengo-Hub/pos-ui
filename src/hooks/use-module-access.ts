@@ -23,6 +23,7 @@ export type ModuleKey =
   | 'new_order'
   | 'tables'
   | 'kds'
+  | 'bar'
   | 'appointments'
   | 'cash_drawer'
   | 'settings'
@@ -35,7 +36,15 @@ export type ModuleKey =
   | 'commissions'
   | 'online_orders'
   | 'retail'
-  | 'pharmacy';
+  | 'pharmacy'
+  | 'patients'
+  | 'drug_inventory'
+  | 'purchase_orders'
+  | 'returns'
+  | 'clients'
+  | 'staff_schedule'
+  | 'resources'
+  | 'queue';
 
 // ─── Use-case types ─────────────────────────────────────────────────────────
 export type UseCaseType =
@@ -56,11 +65,11 @@ const COMMON_MODULES: ModuleKey[] = [
 ];
 
 const USE_CASE_MODULES: Record<UseCaseType, ModuleKey[]> = {
-  hospitality:   [...COMMON_MODULES, 'tables', 'kds', 'appointments', 'hotel', 'shifts', 'reports', 'loyalty', 'commissions', 'online_orders'],
-  retail:        [...COMMON_MODULES, 'retail', 'shifts', 'reports', 'layaway', 'loyalty', 'commissions', 'online_orders'],
-  services:      [...COMMON_MODULES, 'appointments', 'shifts', 'reports', 'loyalty', 'commissions'],
-  quick_service: [...COMMON_MODULES, 'kds', 'shifts', 'reports', 'online_orders'],
-  pharmacy:      [...COMMON_MODULES, 'shifts', 'reports', 'loyalty', 'pharmacy'],
+  hospitality:   [...COMMON_MODULES, 'bar', 'tables', 'kds', 'appointments', 'hotel', 'shifts', 'reports', 'loyalty', 'commissions', 'online_orders'],
+  retail:        [...COMMON_MODULES, 'retail', 'shifts', 'reports', 'layaway', 'loyalty', 'commissions', 'online_orders', 'purchase_orders', 'returns', 'clients'],
+  services:      [...COMMON_MODULES, 'appointments', 'shifts', 'reports', 'loyalty', 'commissions', 'clients', 'staff_schedule', 'resources'],
+  quick_service: [...COMMON_MODULES, 'kds', 'shifts', 'reports', 'online_orders', 'queue'],
+  pharmacy:      [...COMMON_MODULES, 'shifts', 'reports', 'pharmacy', 'patients', 'drug_inventory'],
 };
 
 // ─── Hook ───────────────────────────────────────────────────────────────────
@@ -68,26 +77,31 @@ const USE_CASE_MODULES: Record<UseCaseType, ModuleKey[]> = {
 export function useModuleAccess() {
   const user = useAuthStore((s) => s.user);
   // Read use_case from the persisted outlet (set by service-level outlet selector).
-  // Falls back to JWT claims for backward compat, then defaults to 'hospitality'.
+  // Falls back to JWT claims for backward compat. null means not yet resolved.
   const outlet = useAuthStore((s) => s.outlet);
   // When an HQ admin drills into a specific outlet, that outlet's use_case takes priority.
   const drillOutlet = useOutletFilterStore((s) => s.selectedOutlet);
 
-  // Use case resolution: drill-down outlet > home outlet store > JWT claims > fallback
-  const rawUseCase =
+  // Use case resolution: drill-down outlet > home outlet store > JWT claims > null (unresolved)
+  // IMPORTANT: never fall back to a hardcoded use case — that causes wrong modules to appear
+  // while the outlet context is still loading (e.g. Kitchen & Bar showing on pharmacy outlets).
+  const rawUseCase: string | null =
     drillOutlet?.useCase ??
     outlet?.use_case ??
     (user as any)?.outlet_use_case ??
     (user as any)?.outletUseCase ??
     (user as any)?.tenant_use_case ??
     (user as any)?.tenantUseCase ??
-    'hospitality';
+    null;
 
-  const useCase: UseCaseType = (
-    Object.keys(USE_CASE_MODULES).includes(rawUseCase)
-      ? rawUseCase
-      : 'hospitality'
-  ) as UseCaseType;
+  // isResolved is false until we have a concrete use case. Sidebar renders a skeleton until true.
+  const isResolved = rawUseCase !== null;
+
+  const useCase: UseCaseType | null = (
+    rawUseCase && Object.keys(USE_CASE_MODULES).includes(rawUseCase)
+      ? rawUseCase as UseCaseType
+      : null
+  );
 
   const isSuperUser =
     user?.isSuperUser === true ||
@@ -105,24 +119,27 @@ export function useModuleAccess() {
   const isQuickService = useCase === 'quick_service';
   const isPharmacy = useCase === 'pharmacy';
 
-  // Enabled modules for the current use case
-  const enabledModules = USE_CASE_MODULES[useCase];
+  // Enabled modules for the current use case (empty until use case resolves)
+  const enabledModules: ModuleKey[] = useCase ? USE_CASE_MODULES[useCase] : [];
 
   /**
    * Check if a module is enabled for the current outlet.
    * Superusers always have access.
    * Regular users must pass both use-case check AND backend toggle (where applicable).
+   * Returns false when use case hasn't resolved yet (isResolved=false).
    */
   function hasModule(moduleKey: string): boolean {
     if (isSuperUser) return true;
+    if (!useCase) return false; // not yet resolved — hide everything
     if (!enabledModules.includes(moduleKey as ModuleKey)) return false;
     // Overlay backend toggle flags from outlet settings
     if (posSettings) {
-      if (moduleKey === 'hotel'    && !posSettings.hotel_module_enabled)  return false;
-      if (moduleKey === 'layaway'  && !posSettings.layaway_enabled)        return false;
-      if (moduleKey === 'kds'      && !posSettings.enable_kds)             return false;
-      if (moduleKey === 'appointments' && !posSettings.enable_appointments) return false;
-      if (moduleKey === 'shifts'   && !posSettings.shift_reports_enabled)  return false;
+      if (moduleKey === 'hotel'        && !posSettings.hotel_module_enabled)   return false;
+      if (moduleKey === 'layaway'      && !posSettings.layaway_enabled)         return false;
+      if (moduleKey === 'kds'          && !posSettings.enable_kds)              return false;
+      if (moduleKey === 'bar'          && !posSettings.enable_kds)              return false; // bar shares KDS toggle
+      if (moduleKey === 'appointments' && !posSettings.enable_appointments)     return false;
+      if (moduleKey === 'shifts'       && !posSettings.shift_reports_enabled)   return false;
     }
     return true;
   }
@@ -130,6 +147,7 @@ export function useModuleAccess() {
   return {
     // Core
     useCase,
+    isResolved,
     isSuperUser,
     enabledModules,
 

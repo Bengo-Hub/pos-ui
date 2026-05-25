@@ -20,7 +20,7 @@ interface ModuleUnavailablePageProps {
 export function ModuleUnavailablePage({ moduleKey }: ModuleUnavailablePageProps) {
   const { orgSlug } = useParams<{ orgSlug: string }>();
   const { useCase } = useModuleAccess();
-  const useCaseLabel = USE_CASE_LABELS[useCase] ?? useCase;
+  const useCaseLabel = useCase ? (USE_CASE_LABELS[useCase] ?? useCase) : '';
 
   return (
     <div className="flex flex-col items-center justify-center min-h-[60vh] p-8 text-center">
