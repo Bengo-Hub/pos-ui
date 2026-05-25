@@ -52,6 +52,7 @@ function PackagesPage() {
   };
 
   const handleDeactivate = (id: string, name: string) => {
+    if (!window.confirm(`Deactivate package "${name}"?\n\nExisting subscribers will keep their access until expiry, but no new subscriptions can be started.`)) return;
     deactivate.mutate(id, {
       onSuccess: () => toast.success(`Package "${name}" deactivated`),
       onError: () => toast.error('Failed to deactivate package'),

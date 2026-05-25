@@ -67,6 +67,7 @@ export interface UpdateKDSStationInput {
   is_active?: boolean;
 }
 
+/** Active stations only (for KDS display). */
 export function useKDSStations() {
   const tenantID = useTenantID();
   return useQuery({
@@ -75,6 +76,18 @@ export function useKDSStations() {
       apiClient.get<{ data: KDSStation[] }>(`${basePath(tenantID)}/stations`),
     enabled: !!tenantID,
     staleTime: 60_000,
+  });
+}
+
+/** All stations including inactive — used by the settings/management UI. */
+export function useAllKDSStations() {
+  const tenantID = useTenantID();
+  return useQuery({
+    queryKey: ['kds-stations-all', tenantID],
+    queryFn: () =>
+      apiClient.get<{ data: KDSStation[] }>(`${basePath(tenantID)}/stations`, { all: 'true' }),
+    enabled: !!tenantID,
+    staleTime: 30_000,
   });
 }
 
@@ -94,7 +107,23 @@ export function useUpdateKDSStation() {
   return useMutation({
     mutationFn: ({ stationID, input }: { stationID: string; input: UpdateKDSStationInput }) =>
       apiClient.put<KDSStation>(`${basePath(tenantID)}/stations/${stationID}`, input),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['kds-stations', tenantID] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['kds-stations'] });
+      qc.invalidateQueries({ queryKey: ['kds-stations-all'] });
+    },
+  });
+}
+
+export function useDeleteKDSStation() {
+  const tenantID = useTenantID();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (stationID: string) =>
+      apiClient.delete(`${basePath(tenantID)}/stations/${stationID}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['kds-stations'] });
+      qc.invalidateQueries({ queryKey: ['kds-stations-all'] });
+    },
   });
 }
 

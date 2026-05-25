@@ -601,8 +601,12 @@ function KDSTab({ tenantID }: { tenantID: string }) {
                           {station.is_active ? 'Active' : 'Inactive'}
                         </Badge>
                         <button
-                          onClick={() => deleteStation.mutate(station.id)}
+                          onClick={() => {
+                            if (!window.confirm(`Permanently delete station "${station.name}"?\n\nHistorical ticket data will be preserved but this station will no longer receive tickets.`)) return;
+                            deleteStation.mutate(station.id);
+                          }}
                           className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+                          title="Delete station"
                         >
                           <Trash2 className="h-4 w-4" />
                         </button>

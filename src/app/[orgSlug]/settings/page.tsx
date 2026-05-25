@@ -6,7 +6,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { useModuleAccess } from '@/hooks/use-module-access';
 import { P } from '@/lib/rbac/permissions';
 import { usePOSSettings, useUpdatePOSSettings, useUpdatePOSModules, useUpdateShiftSettings, useUpdateOutletConfig } from '@/hooks/usePOSSettings';
-import { useKDSStations, useCreateKDSStation, useUpdateKDSStation } from '@/hooks/useKDS';
+import { useAllKDSStations, useCreateKDSStation, useUpdateKDSStation, useDeleteKDSStation } from '@/hooks/useKDS';
 import { TablesSettingsTab } from '@/components/settings/TablesSettingsTab';
 import type { PrinterProfile } from '@/lib/api/settings';
 import { apiClient } from '@/lib/api/client';
@@ -15,6 +15,7 @@ import {
   BadgeCheck,
   BedDouble,
   Calendar,
+  Check,
   ChefHat,
   Clock,
   FlaskConical,
@@ -25,6 +26,7 @@ import {
   Lock,
   Palette,
   Package,
+  Pencil,
   Plus,
   Printer,
   Receipt,
@@ -33,6 +35,7 @@ import {
   ShieldCheck,
   ShoppingCart,
   Table2,
+  Trash2,
   UtensilsCrossed,
   Wrench,
   X,
@@ -911,26 +914,68 @@ function PlatformTab() {
 const KDS_CATEGORIES = ['food', 'mains', 'starters', 'desserts', 'drinks', 'cocktails', 'mocktails', 'beverages', 'sides'];
 
 function KDSStationsTab() {
-  const { data, isLoading } = useKDSStations();
+  const { data, isLoading } = useAllKDSStations();
   const createStation = useCreateKDSStation();
   const updateStation = useUpdateKDSStation();
+  const deleteStation = useDeleteKDSStation();
   const { can } = usePermissions();
   const outlet = useAuthStore((s) => s.outlet);
   const canEdit = can(P.CONFIG_MANAGE) || can(P.CONFIG_CHANGE);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ name: '', category_filter: [] as string[], sort_order: 0 });
 
+  // Inline edit state
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState({ name: '', category_filter: [] as string[], sort_order: 0 });
+
   const stations = data?.data ?? [];
 
   const handleCreate = async () => {
     if (!form.name.trim()) return;
-    await createStation.mutateAsync({ outlet_id: outlet?.id ?? '', name: form.name, category_filter: form.category_filter, sort_order: form.sort_order });
-    setForm({ name: '', category_filter: [], sort_order: 0 });
-    setShowForm(false);
+    try {
+      await createStation.mutateAsync({ outlet_id: outlet?.id ?? '', name: form.name, category_filter: form.category_filter, sort_order: form.sort_order });
+      setForm({ name: '', category_filter: [], sort_order: 0 });
+      setShowForm(false);
+      toast.success('Station created');
+    } catch {
+      toast.error('Failed to create station');
+    }
   };
 
   const toggleActive = (stationID: string, current: boolean) => {
-    updateStation.mutate({ stationID, input: { is_active: !current } });
+    const action = current ? 'deactivate' : 'reactivate';
+    const msg = current
+      ? 'Deactivate this station? It will no longer receive tickets until reactivated.'
+      : 'Reactivate this station?';
+    if (!window.confirm(msg)) return;
+    updateStation.mutate({ stationID, input: { is_active: !current } }, {
+      onSuccess: () => toast.success(`Station ${action}d`),
+      onError: () => toast.error(`Failed to ${action} station`),
+    });
+  };
+
+  const startEdit = (s: { id: string; name: string; category_filter: string[]; sort_order: number }) => {
+    setEditingId(s.id);
+    setEditForm({ name: s.name, category_filter: s.category_filter ?? [], sort_order: s.sort_order });
+  };
+
+  const handleSaveEdit = async (stationID: string) => {
+    if (!editForm.name.trim()) return;
+    try {
+      await updateStation.mutateAsync({ stationID, input: { name: editForm.name, category_filter: editForm.category_filter, sort_order: editForm.sort_order } });
+      setEditingId(null);
+      toast.success('Station updated');
+    } catch {
+      toast.error('Failed to update station');
+    }
+  };
+
+  const handleDelete = (stationID: string, name: string) => {
+    if (!window.confirm(`Permanently delete station "${name}"?\n\nHistorical ticket data will be preserved, but this station will no longer appear anywhere.`)) return;
+    deleteStation.mutate(stationID, {
+      onSuccess: () => toast.success(`Station "${name}" deleted`),
+      onError: () => toast.error('Failed to delete station'),
+    });
   };
 
   if (isLoading) return <div className="h-40 flex items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;
@@ -940,7 +985,7 @@ function KDSStationsTab() {
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">Configure kitchen and bar display stations. Category filters route specific items to each station.</p>
         {canEdit && (
-          <Button size="sm" onClick={() => setShowForm(!showForm)} className="gap-2">
+          <Button size="sm" onClick={() => { setShowForm(!showForm); setEditingId(null); }} className="gap-2">
             <Plus className="h-4 w-4" /> Add Station
           </Button>
         )}
@@ -952,7 +997,7 @@ function KDSStationsTab() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-1">
                 <label className={labelClass}>Station Name</label>
-                <input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="e.g. Kitchen, Bar" className={inputClass} />
+                <input autoFocus value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="e.g. Kitchen, Bar" className={inputClass} />
               </div>
               <div className="space-y-1">
                 <label className={labelClass}>Sort Order</label>
@@ -965,9 +1010,7 @@ function KDSStationsTab() {
                 {KDS_CATEGORIES.map((cat) => {
                   const selected = form.category_filter.includes(cat);
                   return (
-                    <button
-                      key={cat}
-                      type="button"
+                    <button key={cat} type="button"
                       onClick={() => setForm((f) => ({ ...f, category_filter: selected ? f.category_filter.filter((c) => c !== cat) : [...f.category_filter, cat] }))}
                       className={`px-3 py-1 rounded-full text-xs font-semibold border transition-colors ${selected ? 'bg-primary text-primary-foreground border-primary' : 'border-border text-muted-foreground hover:border-primary'}`}
                     >{cat}</button>
@@ -978,7 +1021,7 @@ function KDSStationsTab() {
             <div className="flex gap-2 justify-end">
               <Button variant="outline" size="sm" onClick={() => setShowForm(false)}>Cancel</Button>
               <Button size="sm" onClick={handleCreate} disabled={createStation.isPending || !form.name.trim()}>
-                {createStation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null} Create
+                {createStation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-1" />} Create
               </Button>
             </div>
           </CardContent>
@@ -990,20 +1033,73 @@ function KDSStationsTab() {
       )}
 
       <div className="space-y-2">
-        {stations.map((station) => (
-          <div key={station.id} className="flex items-center gap-4 p-4 rounded-xl border border-border bg-card">
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-bold">{station.name}</p>
-              <div className="flex flex-wrap gap-1 mt-1">
-                {(station.category_filter ?? []).length > 0
-                  ? (station.category_filter ?? []).map((c) => <span key={c} className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded-full font-semibold">{c}</span>)
-                  : <span className="text-[10px] text-muted-foreground">All categories</span>}
-              </div>
+        {stations.map((station) => {
+          const isEditing = editingId === station.id;
+          return (
+            <div key={station.id} className={`rounded-xl border bg-card transition-opacity ${!station.is_active ? 'opacity-50' : ''}`}>
+              {isEditing ? (
+                <div className="p-4 space-y-3">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className={labelClass}>Station Name</label>
+                      <input autoFocus value={editForm.name} onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))} className={inputClass} />
+                    </div>
+                    <div className="space-y-1">
+                      <label className={labelClass}>Sort Order</label>
+                      <input type="number" min={0} value={editForm.sort_order} onChange={(e) => setEditForm((f) => ({ ...f, sort_order: parseInt(e.target.value) || 0 }))} className={`${inputClass} font-mono`} />
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <label className={labelClass}>Category Filters</label>
+                    <div className="flex flex-wrap gap-2">
+                      {KDS_CATEGORIES.map((cat) => {
+                        const sel = editForm.category_filter.includes(cat);
+                        return (
+                          <button key={cat} type="button"
+                            onClick={() => setEditForm((f) => ({ ...f, category_filter: sel ? f.category_filter.filter((c) => c !== cat) : [...f.category_filter, cat] }))}
+                            className={`px-3 py-1 rounded-full text-xs font-semibold border transition-colors ${sel ? 'bg-primary text-primary-foreground border-primary' : 'border-border text-muted-foreground hover:border-primary'}`}
+                          >{cat}</button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  <div className="flex gap-2 justify-end">
+                    <Button variant="outline" size="sm" onClick={() => setEditingId(null)}><X className="h-3.5 w-3.5 mr-1" />Cancel</Button>
+                    <Button size="sm" onClick={() => handleSaveEdit(station.id)} disabled={updateStation.isPending || !editForm.name.trim()}>
+                      {updateStation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Check className="h-3.5 w-3.5 mr-1" />} Save
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center gap-4 p-4">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-bold">{station.name}</p>
+                      {!station.is_active && <span className="text-[10px] font-semibold bg-muted text-muted-foreground px-2 py-0.5 rounded-full">Inactive</span>}
+                    </div>
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {(station.category_filter ?? []).length > 0
+                        ? (station.category_filter ?? []).map((c) => <span key={c} className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded-full font-semibold">{c}</span>)
+                        : <span className="text-[10px] text-muted-foreground">All categories</span>}
+                    </div>
+                  </div>
+                  <span className="text-xs text-muted-foreground tabular-nums">#{station.sort_order}</span>
+                  {canEdit && (
+                    <div className="flex items-center gap-2">
+                      <Toggle checked={station.is_active} onChange={() => toggleActive(station.id, station.is_active)} />
+                      <button onClick={() => startEdit(station)} className="p-1.5 rounded-lg hover:bg-accent text-muted-foreground hover:text-foreground transition-colors" title="Edit station">
+                        <Pencil className="h-4 w-4" />
+                      </button>
+                      <button onClick={() => handleDelete(station.id, station.name)} disabled={deleteStation.isPending} className="p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors" title="Delete station">
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
-            <span className="text-xs text-muted-foreground tabular-nums">#{station.sort_order}</span>
-            {canEdit && <Toggle checked={station.is_active} onChange={() => toggleActive(station.id, station.is_active)} />}
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
