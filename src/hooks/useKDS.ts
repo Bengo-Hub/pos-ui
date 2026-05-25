@@ -54,6 +54,20 @@ export interface KDSTicket {
 
 // ─── Stations ────────────────────────────────────────────────────────────────
 
+export interface CreateKDSStationInput {
+  outlet_id: string;
+  name: string;
+  category_filter?: string[];
+  sort_order?: number;
+}
+
+export interface UpdateKDSStationInput {
+  name?: string;
+  category_filter?: string[];
+  sort_order?: number;
+  is_active?: boolean;
+}
+
 export function useKDSStations() {
   const tenantID = useTenantID();
   return useQuery({
@@ -62,6 +76,26 @@ export function useKDSStations() {
       apiClient.get<{ data: KDSStation[] }>(`${basePath(tenantID)}/stations`),
     enabled: !!tenantID,
     staleTime: 60_000,
+  });
+}
+
+export function useCreateKDSStation() {
+  const tenantID = useTenantID();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateKDSStationInput) =>
+      apiClient.post<KDSStation>(`${basePath(tenantID)}/stations`, input),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['kds-stations', tenantID] }),
+  });
+}
+
+export function useUpdateKDSStation() {
+  const tenantID = useTenantID();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ stationID, input }: { stationID: string; input: UpdateKDSStationInput }) =>
+      apiClient.put<KDSStation>(`${basePath(tenantID)}/stations/${stationID}`, input),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['kds-stations', tenantID] }),
   });
 }
 

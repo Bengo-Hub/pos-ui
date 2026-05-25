@@ -6,6 +6,9 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { useModuleAccess } from '@/hooks/use-module-access';
 import { P } from '@/lib/rbac/permissions';
 import { usePOSSettings, useUpdatePOSSettings, useUpdatePOSModules, useUpdateShiftSettings } from '@/hooks/usePOSSettings';
+import { useKDSStations, useCreateKDSStation, useUpdateKDSStation } from '@/hooks/useKDS';
+import { useSections, useTables, useCreateSection, useCreateTable, useUpdateSection, useUpdateTable } from '@/hooks/usePOS';
+import type { PrinterProfile } from '@/lib/api/settings';
 import { apiClient } from '@/lib/api/client';
 import { useAuthStore } from '@/store/auth';
 import {
@@ -20,22 +23,27 @@ import {
   Lock,
   Palette,
   Package,
+  Plus,
   Printer,
   Receipt,
   Save,
   Settings,
   ShieldCheck,
+  Table2,
+  X,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
-type Tab = 'general' | 'receipt' | 'modules' | 'shifts' | 'integrations' | 'platform';
+type Tab = 'general' | 'receipt' | 'modules' | 'shifts' | 'kds_stations' | 'tables' | 'integrations' | 'platform';
 
-const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
+const ALL_TABS: { id: Tab; label: string; icon: React.ElementType; requireModule?: string }[] = [
   { id: 'general', label: 'General', icon: Settings },
   { id: 'receipt', label: 'Receipt & Printing', icon: Receipt },
   { id: 'modules', label: 'Modules', icon: Layers },
   { id: 'shifts', label: 'Shifts', icon: Clock },
+  { id: 'kds_stations', label: 'KDS Stations', icon: ChefHat, requireModule: 'kds' },
+  { id: 'tables', label: 'Tables', icon: Table2, requireModule: 'tables' },
   { id: 'integrations', label: 'Integrations', icon: Link2 },
   { id: 'platform', label: 'Platform', icon: ShieldCheck },
 ];
@@ -196,6 +204,13 @@ function GeneralTab() {
 // Receipt & Printing tab
 // ══════════════════════════════════════════════════════════════════════════════
 
+const RECEIPT_PRINTER_ROLES = [
+  { id: 'customer', label: 'Customer Receipt', desc: 'Full receipt printed at point of sale' },
+  { id: 'kitchen', label: 'Kitchen Printer', desc: 'Kitchen ticket (no prices) sent on order open' },
+  { id: 'bar', label: 'Bar Printer', desc: 'Bar ticket for drinks and cocktails' },
+  { id: 'waiter', label: 'Waiter Copy', desc: 'Order summary for the serving staff' },
+];
+
 function ReceiptTab() {
   const { data: settings, isLoading } = usePOSSettings();
   const updateSettings = useUpdatePOSSettings();
@@ -211,6 +226,7 @@ function ReceiptTab() {
     autoPrintOrder: false,
     autoPrintKitchen: false,
   });
+  const [profiles, setProfiles] = useState<PrinterProfile[]>([]);
 
   useEffect(() => {
     if (settings) {
@@ -223,10 +239,25 @@ function ReceiptTab() {
         autoPrintOrder: settings.auto_print_order ?? false,
         autoPrintKitchen: settings.auto_print_kitchen ?? false,
       });
+      setProfiles(settings.printer_profiles ?? []);
     }
   }, [settings]);
 
   const set = (k: keyof typeof form, v: unknown) => setForm((f) => ({ ...f, [k]: v }));
+
+  const setProfile = (id: string, field: keyof PrinterProfile, value: unknown) => {
+    setProfiles((prev) => {
+      const existing = prev.find((p) => p.id === id);
+      if (existing) {
+        return prev.map((p) => p.id === id ? { ...p, [field]: value } : p);
+      }
+      const role = RECEIPT_PRINTER_ROLES.find((r) => r.id === id);
+      return [...prev, { id, label: role?.label ?? id, printer_type: 'none', [field]: value } as PrinterProfile];
+    });
+  };
+
+  const getProfile = (id: string): PrinterProfile =>
+    profiles.find((p) => p.id === id) ?? { id, label: id, printer_type: 'none' };
 
   const handleSave = () => {
     updateSettings.mutate({
@@ -237,6 +268,7 @@ function ReceiptTab() {
       paper_width: form.paperWidth,
       auto_print_order: form.autoPrintOrder,
       auto_print_kitchen: form.autoPrintKitchen,
+      printer_profiles: profiles.filter((p) => p.printer_type !== 'none'),
     });
   };
 
@@ -339,6 +371,53 @@ function ReceiptTab() {
         </CardContent>
       </Card>
 
+      {/* Multi-printer profiles */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Printer className="h-4 w-4 text-primary" />
+            <span className="font-bold text-sm">Printer Profiles</span>
+          </div>
+          <p className="text-xs text-muted-foreground mt-1">Configure separate printers for customer receipts, kitchen tickets, and bar orders.</p>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {RECEIPT_PRINTER_ROLES.map((role) => {
+            const p = getProfile(role.id);
+            return (
+              <div key={role.id} className="rounded-xl border border-border p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-bold">{role.label}</p>
+                    <p className="text-xs text-muted-foreground">{role.desc}</p>
+                  </div>
+                  <select value={p.printer_type} onChange={(e) => setProfile(role.id, 'printer_type', e.target.value as any)} disabled={!canEdit} className={`${inputClass} w-40`}>
+                    <option value="none">Disabled</option>
+                    <option value="network">Network (ESC/POS)</option>
+                    <option value="browser">Browser Print</option>
+                    <option value="bluetooth">Bluetooth</option>
+                  </select>
+                </div>
+                {p.printer_type === 'network' && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className={labelClass}>Printer IP</label>
+                      <input value={p.printer_ip ?? ''} onChange={(e) => setProfile(role.id, 'printer_ip', e.target.value)} disabled={!canEdit} placeholder="192.168.1.100" className={`${inputClass} font-mono`} />
+                    </div>
+                    <div className="space-y-1">
+                      <label className={labelClass}>Paper Width</label>
+                      <select value={p.paper_width ?? '80mm'} onChange={(e) => setProfile(role.id, 'paper_width', e.target.value)} disabled={!canEdit} className={inputClass}>
+                        <option value="58mm">58mm</option>
+                        <option value="80mm">80mm</option>
+                      </select>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </CardContent>
+      </Card>
+
       <div className="flex items-center justify-end gap-3">
         {!canEdit && (
           <p className="text-xs text-muted-foreground flex items-center gap-1.5">
@@ -402,6 +481,8 @@ function ModulesTab() {
     hotel_module_enabled: false,
     layaway_enabled: false,
     shift_reports_enabled: false,
+    enable_kds: false,
+    enable_appointments: false,
   });
   const [saving, setSaving] = useState<string | null>(null);
 
@@ -411,6 +492,8 @@ function ModulesTab() {
         hotel_module_enabled: settings.hotel_module_enabled ?? false,
         layaway_enabled: settings.layaway_enabled ?? false,
         shift_reports_enabled: settings.shift_reports_enabled ?? false,
+        enable_kds: settings.enable_kds ?? false,
+        enable_appointments: settings.enable_appointments ?? false,
       });
     }
   }, [settings]);
@@ -472,6 +555,26 @@ function ModulesTab() {
         onChange={toggle('shift_reports_enabled')}
         disabled={!canEdit}
         saving={saving === 'shift_reports_enabled'}
+      />
+      <ModuleCard
+        icon={ChefHat}
+        name="Kitchen Display System (KDS)"
+        description="Show orders on kitchen screens; staff bump tickets to mark items ready. Also enables the Bar display."
+        useCases={['hospitality', 'quick_service']}
+        checked={modules.enable_kds}
+        onChange={toggle('enable_kds')}
+        disabled={!canEdit}
+        saving={saving === 'enable_kds'}
+      />
+      <ModuleCard
+        icon={Calendar}
+        name="Appointments"
+        description="Accept bookings for services and manage the appointment calendar."
+        useCases={['services', 'hospitality']}
+        checked={modules.enable_appointments}
+        onChange={toggle('enable_appointments')}
+        disabled={!canEdit}
+        saving={saving === 'enable_appointments'}
       />
     </div>
   );
@@ -711,16 +814,212 @@ function PlatformTab() {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
+// KDS Stations tab
+// ══════════════════════════════════════════════════════════════════════════════
+
+const KDS_CATEGORIES = ['food', 'mains', 'starters', 'desserts', 'drinks', 'cocktails', 'mocktails', 'beverages', 'sides'];
+
+function KDSStationsTab() {
+  const { data, isLoading } = useKDSStations();
+  const createStation = useCreateKDSStation();
+  const updateStation = useUpdateKDSStation();
+  const { can } = usePermissions();
+  const canEdit = can(P.CONFIG_MANAGE) || can(P.CONFIG_CHANGE);
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({ name: '', category_filter: [] as string[], sort_order: 0 });
+
+  const stations = data?.data ?? [];
+
+  const handleCreate = async () => {
+    if (!form.name.trim()) return;
+    await createStation.mutateAsync({ outlet_id: '', name: form.name, category_filter: form.category_filter, sort_order: form.sort_order });
+    setForm({ name: '', category_filter: [], sort_order: 0 });
+    setShowForm(false);
+  };
+
+  const toggleActive = (stationID: string, current: boolean) => {
+    updateStation.mutate({ stationID, input: { is_active: !current } });
+  };
+
+  if (isLoading) return <div className="h-40 flex items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-muted-foreground">Configure kitchen and bar display stations. Category filters route specific items to each station.</p>
+        {canEdit && (
+          <Button size="sm" onClick={() => setShowForm(!showForm)} className="gap-2">
+            <Plus className="h-4 w-4" /> Add Station
+          </Button>
+        )}
+      </div>
+
+      {showForm && (
+        <Card>
+          <CardContent className="pt-4 space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label className={labelClass}>Station Name</label>
+                <input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="e.g. Kitchen, Bar" className={inputClass} />
+              </div>
+              <div className="space-y-1">
+                <label className={labelClass}>Sort Order</label>
+                <input type="number" min={0} value={form.sort_order} onChange={(e) => setForm((f) => ({ ...f, sort_order: parseInt(e.target.value) || 0 }))} className={`${inputClass} font-mono`} />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <label className={labelClass}>Category Filters (leave empty to show all)</label>
+              <div className="flex flex-wrap gap-2">
+                {KDS_CATEGORIES.map((cat) => {
+                  const selected = form.category_filter.includes(cat);
+                  return (
+                    <button
+                      key={cat}
+                      type="button"
+                      onClick={() => setForm((f) => ({ ...f, category_filter: selected ? f.category_filter.filter((c) => c !== cat) : [...f.category_filter, cat] }))}
+                      className={`px-3 py-1 rounded-full text-xs font-semibold border transition-colors ${selected ? 'bg-primary text-primary-foreground border-primary' : 'border-border text-muted-foreground hover:border-primary'}`}
+                    >{cat}</button>
+                  );
+                })}
+              </div>
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" size="sm" onClick={() => setShowForm(false)}>Cancel</Button>
+              <Button size="sm" onClick={handleCreate} disabled={createStation.isPending || !form.name.trim()}>
+                {createStation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null} Create
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {stations.length === 0 && !showForm && (
+        <div className="text-center py-12 text-muted-foreground text-sm">No KDS stations configured. Add your first station to get started.</div>
+      )}
+
+      <div className="space-y-2">
+        {stations.map((station) => (
+          <div key={station.id} className="flex items-center gap-4 p-4 rounded-xl border border-border bg-card">
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-bold">{station.name}</p>
+              <div className="flex flex-wrap gap-1 mt-1">
+                {station.category_filter.length > 0
+                  ? station.category_filter.map((c) => <span key={c} className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded-full font-semibold">{c}</span>)
+                  : <span className="text-[10px] text-muted-foreground">All categories</span>}
+              </div>
+            </div>
+            <span className="text-xs text-muted-foreground tabular-nums">#{station.sort_order}</span>
+            {canEdit && <Toggle checked={station.is_active} onChange={() => toggleActive(station.id, station.is_active)} />}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Tables tab
+// ══════════════════════════════════════════════════════════════════════════════
+
+function TablesTab() {
+  const { data: sectionsData, isLoading } = useSections();
+  const { data: tablesData } = useTables();
+  const createSection = useCreateSection();
+  const createTable = useCreateTable();
+  const updateSection = useUpdateSection();
+  const { can } = usePermissions();
+  const canEdit = can(P.CONFIG_MANAGE) || can(P.CONFIG_CHANGE) || can(P.TABLES_MANAGE);
+
+  const [selectedSection, setSelectedSection] = useState<string | null>(null);
+  const [showSectionForm, setShowSectionForm] = useState(false);
+  const [showTableForm, setShowTableForm] = useState(false);
+  const [sectionName, setSectionName] = useState('');
+  const [tableForm, setTableForm] = useState({ name: '', capacity: 4 });
+
+  const sections = (sectionsData?.data ?? []) as any[];
+  const allTables = (tablesData?.data ?? []) as any[];
+  const sectionTables = selectedSection ? allTables.filter((t: any) => t.edges?.section?.id === selectedSection || t.section_id === selectedSection) : [];
+
+  if (isLoading) return <div className="h-40 flex items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      {/* Sections panel */}
+      <div className="md:col-span-1 space-y-2">
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Sections</p>
+          {canEdit && <button onClick={() => setShowSectionForm(!showSectionForm)} className="h-7 w-7 rounded-lg flex items-center justify-center hover:bg-accent border border-border text-muted-foreground hover:text-foreground transition-colors"><Plus className="h-3.5 w-3.5" /></button>}
+        </div>
+        {showSectionForm && (
+          <div className="flex gap-2">
+            <input value={sectionName} onChange={(e) => setSectionName(e.target.value)} placeholder="Section name" className={`${inputClass} flex-1 text-xs`} />
+            <button onClick={async () => { if (!sectionName.trim()) return; await createSection.mutateAsync({ outletId: '', name: sectionName }); setSectionName(''); setShowSectionForm(false); }} className="px-3 py-1 rounded-lg bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90">{createSection.isPending ? '…' : 'Add'}</button>
+            <button onClick={() => setShowSectionForm(false)} className="h-8 w-8 flex items-center justify-center rounded-lg hover:bg-accent"><X className="h-3.5 w-3.5" /></button>
+          </div>
+        )}
+        {sections.length === 0 && <p className="text-xs text-muted-foreground py-4 text-center">No sections yet</p>}
+        {sections.map((sec: any) => (
+          <button
+            key={sec.id}
+            onClick={() => setSelectedSection(sec.id === selectedSection ? null : sec.id)}
+            className={`w-full text-left px-4 py-3 rounded-xl border transition-colors text-sm font-semibold ${selectedSection === sec.id ? 'border-primary bg-primary/5 text-primary' : 'border-border bg-card text-foreground hover:border-primary/50'}`}
+          >
+            {sec.name}
+            <span className="float-right text-xs font-normal text-muted-foreground">{allTables.filter((t: any) => t.edges?.section?.id === sec.id || t.section_id === sec.id).length} tables</span>
+          </button>
+        ))}
+      </div>
+
+      {/* Tables panel */}
+      <div className="md:col-span-2 space-y-2">
+        {!selectedSection ? (
+          <div className="h-full flex items-center justify-center text-sm text-muted-foreground py-12">Select a section to manage tables</div>
+        ) : (
+          <>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Tables in {sections.find((s: any) => s.id === selectedSection)?.name}</p>
+              {canEdit && <button onClick={() => setShowTableForm(!showTableForm)} className="flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline"><Plus className="h-3.5 w-3.5" />Add Table</button>}
+            </div>
+            {showTableForm && (
+              <div className="flex gap-2 mb-2">
+                <input value={tableForm.name} onChange={(e) => setTableForm((f) => ({ ...f, name: e.target.value }))} placeholder="Table name (e.g. T1)" className={`${inputClass} flex-1 text-xs`} />
+                <input type="number" min={1} max={20} value={tableForm.capacity} onChange={(e) => setTableForm((f) => ({ ...f, capacity: parseInt(e.target.value) || 4 }))} className={`${inputClass} w-20 text-xs font-mono`} title="Capacity" />
+                <button onClick={async () => { if (!tableForm.name.trim()) return; await createTable.mutateAsync({ outletId: '', sectionId: selectedSection, name: tableForm.name, capacity: tableForm.capacity }); setTableForm({ name: '', capacity: 4 }); setShowTableForm(false); }} className="px-3 py-1 rounded-lg bg-primary text-primary-foreground text-xs font-semibold">{createTable.isPending ? '…' : 'Add'}</button>
+                <button onClick={() => setShowTableForm(false)} className="h-8 w-8 flex items-center justify-center rounded-lg hover:bg-accent"><X className="h-3.5 w-3.5" /></button>
+              </div>
+            )}
+            {sectionTables.length === 0 && !showTableForm && <p className="text-xs text-muted-foreground py-8 text-center">No tables in this section yet</p>}
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {sectionTables.map((table: any) => (
+                <div key={table.id} className="p-3 rounded-xl border border-border bg-card text-center">
+                  <p className="text-sm font-bold">{table.name}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{table.capacity} seats</p>
+                  <span className={`inline-block mt-1 text-[10px] font-semibold px-2 py-0.5 rounded-full ${table.status === 'available' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'}`}>{table.status}</span>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
 // Root settings page
 // ══════════════════════════════════════════════════════════════════════════════
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<Tab>('general');
   const user = useAuthStore((s) => s.user);
-  const { isSuperUser } = useModuleAccess();
+  const { isSuperUser, hasModule } = useModuleAccess();
   const isPlatformOwner = isSuperUser || user?.isPlatformOwner;
 
-  const visibleTabs = TABS.filter((t) => t.id !== 'platform' || isPlatformOwner);
+  const visibleTabs = ALL_TABS.filter((t) => {
+    if (t.id === 'platform') return isPlatformOwner;
+    if (t.requireModule) return isSuperUser || hasModule(t.requireModule);
+    return true;
+  });
 
   return (
     <div className="p-4 sm:p-8 max-w-5xl mx-auto space-y-6">
@@ -755,6 +1054,8 @@ export default function SettingsPage() {
         {activeTab === 'receipt' && <ReceiptTab />}
         {activeTab === 'modules' && <ModulesTab />}
         {activeTab === 'shifts' && <ShiftsTab />}
+        {activeTab === 'kds_stations' && <KDSStationsTab />}
+        {activeTab === 'tables' && <TablesTab />}
         {activeTab === 'integrations' && <IntegrationsTab />}
         {activeTab === 'platform' && isPlatformOwner && <PlatformTab />}
       </div>

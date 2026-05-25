@@ -286,6 +286,11 @@ export default function OrderPage() {
           quantity: item.quantity,
           unit_price: item.price + (item.modifierTotal ?? 0),
           total_price: (item.price + (item.modifierTotal ?? 0)) * item.quantity,
+          metadata: {
+            ...(item.selectedModifiers ? { modifiers: item.selectedModifiers } : {}),
+            ...(item.notes ? { notes: item.notes } : {}),
+            ...(item.serialNumber ? { serial_number: item.serialNumber } : {}),
+          },
         })),
       },
       {

@@ -165,6 +165,51 @@ export function useReleaseTable() {
   });
 }
 
+export function useCreateSection() {
+  const tenantID = useTenantID();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { outletId: string; name: string; sectionType?: string; floorNumber?: number; sortOrder?: number }) =>
+      apiClient.post<Section>(`${basePath(tenantID)}/sections`, input),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['pos-sections'] }),
+  });
+}
+
+export function useUpdateSection() {
+  const tenantID = useTenantID();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ sectionId, input }: { sectionId: string; input: { name?: string; isActive?: boolean } }) =>
+      apiClient.put<Section>(`${basePath(tenantID)}/sections/${sectionId}`, input),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['pos-sections'] }),
+  });
+}
+
+export function useCreateTable() {
+  const tenantID = useTenantID();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { outletId: string; sectionId?: string; name: string; capacity: number; tableType?: string }) =>
+      apiClient.post<Table>(`${basePath(tenantID)}/tables`, input),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['pos-tables'] });
+      qc.invalidateQueries({ queryKey: ['pos-sections'] });
+    },
+  });
+}
+
+export function useUpdateTable() {
+  const tenantID = useTenantID();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ tableId, input }: { tableId: string; input: { name?: string; capacity?: number; tableType?: string; isActive?: boolean } }) =>
+      apiClient.put<Table>(`${basePath(tenantID)}/tables/${tableId}`, input),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['pos-tables'] }),
+  });
+}
+
+export type { Section, Table };
+
 // ─── Orders ─────────────────────────────────────────────────────────────────
 
 interface POSOrder {
@@ -212,6 +257,7 @@ interface CreateOrderInput {
     quantity: number;
     unit_price: number;
     total_price: number;
+    metadata?: Record<string, unknown>;
   }>;
 }
 
