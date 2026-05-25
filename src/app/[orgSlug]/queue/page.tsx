@@ -105,7 +105,7 @@ export default function QueuePage() {
   }
 
   return (
-    <ModuleGate moduleKey="appointments" fallback={<ModuleUnavailablePage moduleKey="appointments" />}>
+    <ModuleGate moduleKey="queue" fallback={<ModuleUnavailablePage moduleKey="queue" />}>
       <div className="flex flex-col h-full p-4 sm:p-6 gap-4">
         {/* Header */}
         <div className="flex items-center justify-between shrink-0">
