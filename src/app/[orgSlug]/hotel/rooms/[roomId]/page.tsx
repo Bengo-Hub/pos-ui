@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { useHotelRoom, useRoomGuest, useRoomFolio, useCheckIn, useCheckOut } from '@/hooks/useHotel';
+import { useHotelRoom, useRoomFolio, useCheckIn, useCheckOut } from '@/hooks/useHotel';
 import { Card, CardContent } from '@/components/ui/base';
 import { cn } from '@/lib/utils';
 import {
@@ -27,7 +27,7 @@ export default function RoomDetailPage() {
 
   const { data: room, isLoading: roomLoading } = useHotelRoom(roomId);
   const isOccupied = room?.status === 'occupied';
-  const { data: guest } = useRoomGuest(roomId, isOccupied);
+  const guest = room?.edges?.guests?.[0] ?? null;
   const { data: folio = [] } = useRoomFolio(roomId, isOccupied);
 
   const checkIn  = useCheckIn(roomId);

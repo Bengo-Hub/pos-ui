@@ -100,10 +100,10 @@ interface Section {
   id: string;
   name: string;
   slug: string;
-  sectionType: string;
-  floorNumber: number;
-  sortOrder: number;
-  isActive: boolean;
+  section_type: string;
+  floor_number: number;
+  sort_order: number;
+  is_active: boolean;
   edges?: { tables?: Table[] };
 }
 
@@ -124,9 +124,10 @@ interface Table {
   name: string;
   capacity: number;
   status: string;
-  tableType: string;
-  xPosition?: number;
-  yPosition?: number;
+  table_type: string;
+  section_id?: string;
+  x_position?: number;
+  y_position?: number;
   tags?: string[];
   edges?: { section?: Section };
 }
@@ -212,7 +213,7 @@ export function useUpdateTable() {
   const tenantID = useTenantID();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ tableId, input }: { tableId: string; input: { name?: string; capacity?: number; tableType?: string; isActive?: boolean } }) =>
+    mutationFn: ({ tableId, input }: { tableId: string; input: { name?: string; capacity?: number; tableType?: string; isActive?: boolean; xPosition?: number; yPosition?: number } }) =>
       apiClient.put<Table>(`${basePath(tenantID)}/tables/${tableId}`, input),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['pos-tables'] }),
   });

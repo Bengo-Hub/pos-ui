@@ -287,7 +287,7 @@ function SectionGroup({
             table={table}
             orgSlug={orgSlug}
             onRelease={() => releaseTable.mutate(table.id)}
-            onChangeStatus={(status) => updateStatus.mutate({ id: table.id, status })}
+            onChangeStatus={(status) => updateStatus.mutate({ tableId: table.id, status })}
             releaseLoading={releaseTable.isPending}
             canChange={canChange}
           />

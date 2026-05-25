@@ -7,7 +7,7 @@ import { useModuleAccess } from '@/hooks/use-module-access';
 import { P } from '@/lib/rbac/permissions';
 import { usePOSSettings, useUpdatePOSSettings, useUpdatePOSModules, useUpdateShiftSettings, useUpdateOutletConfig } from '@/hooks/usePOSSettings';
 import { useKDSStations, useCreateKDSStation, useUpdateKDSStation } from '@/hooks/useKDS';
-import { useSections, useTables, useCreateSection, useCreateTable, useUpdateSection, useUpdateTable } from '@/hooks/usePOS';
+import { TablesSettingsTab } from '@/components/settings/TablesSettingsTab';
 import type { PrinterProfile } from '@/lib/api/settings';
 import { apiClient } from '@/lib/api/client';
 import { useAuthStore } from '@/store/auth';
@@ -1009,93 +1009,6 @@ function KDSStationsTab() {
   );
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
-// Tables tab
-// ══════════════════════════════════════════════════════════════════════════════
-
-function TablesTab() {
-  const { data: sectionsData, isLoading } = useSections();
-  const { data: tablesData } = useTables();
-  const createSection = useCreateSection();
-  const createTable = useCreateTable();
-  const updateSection = useUpdateSection();
-  const { can } = usePermissions();
-  const canEdit = can(P.CONFIG_MANAGE) || can(P.CONFIG_CHANGE) || can(P.TABLES_MANAGE);
-
-  const [selectedSection, setSelectedSection] = useState<string | null>(null);
-  const [showSectionForm, setShowSectionForm] = useState(false);
-  const [showTableForm, setShowTableForm] = useState(false);
-  const [sectionName, setSectionName] = useState('');
-  const [tableForm, setTableForm] = useState({ name: '', capacity: 4 });
-
-  const sections = (sectionsData?.data ?? []) as any[];
-  const allTables = (tablesData?.data ?? []) as any[];
-  const sectionTables = selectedSection ? allTables.filter((t: any) => t.edges?.section?.id === selectedSection || t.section_id === selectedSection) : [];
-
-  if (isLoading) return <div className="h-40 flex items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;
-
-  return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-      {/* Sections panel */}
-      <div className="md:col-span-1 space-y-2">
-        <div className="flex items-center justify-between mb-2">
-          <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Sections</p>
-          {canEdit && <button onClick={() => setShowSectionForm(!showSectionForm)} className="h-7 w-7 rounded-lg flex items-center justify-center hover:bg-accent border border-border text-muted-foreground hover:text-foreground transition-colors"><Plus className="h-3.5 w-3.5" /></button>}
-        </div>
-        {showSectionForm && (
-          <div className="flex gap-2">
-            <input value={sectionName} onChange={(e) => setSectionName(e.target.value)} placeholder="Section name" className={`${inputClass} flex-1 text-xs`} />
-            <button onClick={async () => { if (!sectionName.trim()) return; await createSection.mutateAsync({ outletId: '', name: sectionName }); setSectionName(''); setShowSectionForm(false); }} className="px-3 py-1 rounded-lg bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90">{createSection.isPending ? '…' : 'Add'}</button>
-            <button onClick={() => setShowSectionForm(false)} className="h-8 w-8 flex items-center justify-center rounded-lg hover:bg-accent"><X className="h-3.5 w-3.5" /></button>
-          </div>
-        )}
-        {sections.length === 0 && <p className="text-xs text-muted-foreground py-4 text-center">No sections yet</p>}
-        {sections.map((sec: any) => (
-          <button
-            key={sec.id}
-            onClick={() => setSelectedSection(sec.id === selectedSection ? null : sec.id)}
-            className={`w-full text-left px-4 py-3 rounded-xl border transition-colors text-sm font-semibold ${selectedSection === sec.id ? 'border-primary bg-primary/5 text-primary' : 'border-border bg-card text-foreground hover:border-primary/50'}`}
-          >
-            {sec.name}
-            <span className="float-right text-xs font-normal text-muted-foreground">{allTables.filter((t: any) => t.edges?.section?.id === sec.id || t.section_id === sec.id).length} tables</span>
-          </button>
-        ))}
-      </div>
-
-      {/* Tables panel */}
-      <div className="md:col-span-2 space-y-2">
-        {!selectedSection ? (
-          <div className="h-full flex items-center justify-center text-sm text-muted-foreground py-12">Select a section to manage tables</div>
-        ) : (
-          <>
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Tables in {sections.find((s: any) => s.id === selectedSection)?.name}</p>
-              {canEdit && <button onClick={() => setShowTableForm(!showTableForm)} className="flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline"><Plus className="h-3.5 w-3.5" />Add Table</button>}
-            </div>
-            {showTableForm && (
-              <div className="flex gap-2 mb-2">
-                <input value={tableForm.name} onChange={(e) => setTableForm((f) => ({ ...f, name: e.target.value }))} placeholder="Table name (e.g. T1)" className={`${inputClass} flex-1 text-xs`} />
-                <input type="number" min={1} max={20} value={tableForm.capacity} onChange={(e) => setTableForm((f) => ({ ...f, capacity: parseInt(e.target.value) || 4 }))} className={`${inputClass} w-20 text-xs font-mono`} title="Capacity" />
-                <button onClick={async () => { if (!tableForm.name.trim()) return; await createTable.mutateAsync({ outletId: '', sectionId: selectedSection, name: tableForm.name, capacity: tableForm.capacity }); setTableForm({ name: '', capacity: 4 }); setShowTableForm(false); }} className="px-3 py-1 rounded-lg bg-primary text-primary-foreground text-xs font-semibold">{createTable.isPending ? '…' : 'Add'}</button>
-                <button onClick={() => setShowTableForm(false)} className="h-8 w-8 flex items-center justify-center rounded-lg hover:bg-accent"><X className="h-3.5 w-3.5" /></button>
-              </div>
-            )}
-            {sectionTables.length === 0 && !showTableForm && <p className="text-xs text-muted-foreground py-8 text-center">No tables in this section yet</p>}
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-              {sectionTables.map((table: any) => (
-                <div key={table.id} className="p-3 rounded-xl border border-border bg-card text-center">
-                  <p className="text-sm font-bold">{table.name}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">{table.capacity} seats</p>
-                  <span className={`inline-block mt-1 text-[10px] font-semibold px-2 py-0.5 rounded-full ${table.status === 'available' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'}`}>{table.status}</span>
-                </div>
-              ))}
-            </div>
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
 
 // ══════════════════════════════════════════════════════════════════════════════
 // Root settings page
@@ -1147,7 +1060,7 @@ export default function SettingsPage() {
         {activeTab === 'modules' && <ModulesTab />}
         {activeTab === 'shifts' && <ShiftsTab />}
         {activeTab === 'kds_stations' && <KDSStationsTab />}
-        {activeTab === 'tables' && <TablesTab />}
+        {activeTab === 'tables' && <TablesSettingsTab />}
         {activeTab === 'integrations' && <IntegrationsTab />}
         {activeTab === 'platform' && isPlatformOwner && <PlatformTab />}
       </div>

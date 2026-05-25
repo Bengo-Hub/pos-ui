@@ -7,7 +7,12 @@ export interface Room {
   room_type: string;
   floor: number;
   rate_per_night: number;
+  currency?: string;
   status: 'available' | 'occupied' | 'cleaning' | 'maintenance' | 'reserved' | 'checkout';
+  edges?: {
+    guests?: RoomGuest[];
+    folio_items?: FolioItem[];
+  };
 }
 
 export interface RoomGuest {

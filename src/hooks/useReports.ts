@@ -75,16 +75,26 @@ export interface EODRow {
   id: string;
   outlet_id: string;
   outlet_name?: string;
-  closing_date: string;
+  business_date: string;
   status: string;
   total_sales: number;
-  total_cash: number;
+  total_refunds: number;
+  total_discounts: number;
+  total_voids: number;
   total_card: number;
   total_mpesa: number;
-  cash_variance: number;
-  order_count: number;
-  created_at: string;
+  total_tax: number;
+  total_loyalty_redemptions: number;
+  total_room_charge: number;
+  total_orders: number;
+  total_items_sold: number;
+  cash_expected: number;
+  cash_actual: number;
+  variance: number;
+  notes?: string;
   closed_by?: string;
+  closed_at?: string;
+  created_at: string;
 }
 
 export interface StockConsumptionRow {
