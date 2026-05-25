@@ -13,6 +13,7 @@ export interface PrinterProfile {
 export interface POSSettings {
   tenant_id: string;
   outlet_id?: string | null;
+  use_case?: string | null;
   display_mode: string;
   show_images: boolean;
   show_barcode_scanner: boolean;
@@ -79,6 +80,9 @@ export const posSettingsApi = {
 
   patchShifts: (tenantID: string, body: { shift_auto_end_enabled?: boolean; shift_max_hours?: number }) =>
     apiClient.patch<POSSettings>(`${settingsBase(tenantID)}/shifts`, body),
+
+  patchOutletConfig: (tenantID: string, body: { use_case?: string | null }) =>
+    apiClient.patch<POSSettings>(`${settingsBase(tenantID)}/outlet`, body),
 
   getOutlet: (tenantID: string, outletID: string) =>
     apiClient.get<POSSettings>(`/api/v1/${tenantID}/pos/outlets/${outletID}/settings`),

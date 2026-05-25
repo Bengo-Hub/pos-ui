@@ -5,17 +5,19 @@ import { useTenantBranding } from '@/providers/tenant-branding-provider';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useModuleAccess } from '@/hooks/use-module-access';
 import { P } from '@/lib/rbac/permissions';
-import { usePOSSettings, useUpdatePOSSettings, useUpdatePOSModules, useUpdateShiftSettings } from '@/hooks/usePOSSettings';
+import { usePOSSettings, useUpdatePOSSettings, useUpdatePOSModules, useUpdateShiftSettings, useUpdateOutletConfig } from '@/hooks/usePOSSettings';
 import { useKDSStations, useCreateKDSStation, useUpdateKDSStation } from '@/hooks/useKDS';
 import { useSections, useTables, useCreateSection, useCreateTable, useUpdateSection, useUpdateTable } from '@/hooks/usePOS';
 import type { PrinterProfile } from '@/lib/api/settings';
 import { apiClient } from '@/lib/api/client';
 import { useAuthStore } from '@/store/auth';
 import {
+  BadgeCheck,
   BedDouble,
   Calendar,
   ChefHat,
   Clock,
+  FlaskConical,
   Globe,
   Layers,
   Link2,
@@ -29,7 +31,10 @@ import {
   Save,
   Settings,
   ShieldCheck,
+  ShoppingCart,
   Table2,
+  UtensilsCrossed,
+  Wrench,
   X,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -220,9 +225,6 @@ function ReceiptTab() {
   const [form, setForm] = useState({
     receiptHeader: '',
     receiptFooter: '',
-    printerType: 'thermal',
-    printerIP: '',
-    paperWidth: '80mm',
     autoPrintOrder: false,
     autoPrintKitchen: false,
   });
@@ -233,9 +235,6 @@ function ReceiptTab() {
       setForm({
         receiptHeader: settings.receipt_header ?? '',
         receiptFooter: settings.receipt_footer ?? '',
-        printerType: settings.printer_type ?? 'thermal',
-        printerIP: settings.printer_ip ?? '',
-        paperWidth: settings.paper_width ?? '80mm',
         autoPrintOrder: settings.auto_print_order ?? false,
         autoPrintKitchen: settings.auto_print_kitchen ?? false,
       });
@@ -263,9 +262,6 @@ function ReceiptTab() {
     updateSettings.mutate({
       receipt_header: form.receiptHeader || null,
       receipt_footer: form.receiptFooter || null,
-      printer_type: form.printerType,
-      printer_ip: form.printerIP || null,
-      paper_width: form.paperWidth,
       auto_print_order: form.autoPrintOrder,
       auto_print_kitchen: form.autoPrintKitchen,
       printer_profiles: profiles.filter((p) => p.printer_type !== 'none'),
@@ -317,48 +313,18 @@ function ReceiptTab() {
         </CardContent>
       </Card>
 
+      {/* Auto-print behavior */}
       <Card>
         <CardHeader>
           <div className="flex items-center gap-2">
             <Printer className="h-4 w-4 text-primary" />
-            <span className="font-bold text-sm">Printer Configuration</span>
+            <span className="font-bold text-sm">Auto-Print Behavior</span>
           </div>
         </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="space-y-2">
-              <label className={labelClass}>Printer Type</label>
-              <select value={form.printerType} onChange={(e) => set('printerType', e.target.value)} disabled={!canEdit} className={inputClass}>
-                <option value="thermal">Thermal (ESC/POS)</option>
-                <option value="network">Network Printer</option>
-                <option value="bluetooth">Bluetooth</option>
-                <option value="none">No Printer</option>
-              </select>
-            </div>
-            {form.printerType !== 'none' && form.printerType !== 'bluetooth' && (
-              <div className="space-y-2">
-                <label className={labelClass}>Printer IP / Address</label>
-                <input
-                  value={form.printerIP}
-                  onChange={(e) => set('printerIP', e.target.value)}
-                  disabled={!canEdit}
-                  placeholder="192.168.1.100"
-                  className={`${inputClass} font-mono`}
-                />
-              </div>
-            )}
-            <div className="space-y-2">
-              <label className={labelClass}>Paper Width</label>
-              <select value={form.paperWidth} onChange={(e) => set('paperWidth', e.target.value)} disabled={!canEdit} className={inputClass}>
-                <option value="58mm">58mm</option>
-                <option value="80mm">80mm</option>
-              </select>
-            </div>
-          </div>
-
+        <CardContent className="space-y-3">
           {[
-            { key: 'autoPrintOrder' as const, label: 'Auto-Print on Order', desc: 'Automatically print receipt when a sale is completed.' },
-            { key: 'autoPrintKitchen' as const, label: 'Print Kitchen Ticket', desc: 'Send a kitchen order ticket to the kitchen printer.' },
+            { key: 'autoPrintOrder' as const, label: 'Auto-Print Receipt on Completion', desc: 'Automatically print customer receipt when a sale is completed.' },
+            { key: 'autoPrintKitchen' as const, label: 'Auto-Print Kitchen Ticket', desc: 'Send a kitchen order ticket when an order is created.' },
           ].map((item) => (
             <div key={item.key} className="flex items-center justify-between p-4 rounded-xl bg-accent/10 border border-border">
               <div>
@@ -434,71 +400,126 @@ function ReceiptTab() {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// Modules tab
+// Modules tab — use-case-based feature configuration
 // ══════════════════════════════════════════════════════════════════════════════
 
-interface ModuleCardProps {
+type ModuleToggleKey = 'hotel_module_enabled' | 'enable_kds' | 'enable_appointments' | 'layaway_enabled' | 'shift_reports_enabled';
+
+interface FeatureDef {
+  key: ModuleToggleKey;
+  label: string;
   icon: React.ElementType;
-  name: string;
   description: string;
-  useCases?: string[];
-  checked: boolean;
-  onChange: (v: boolean) => void;
-  disabled?: boolean;
-  saving?: boolean;
 }
 
-function ModuleCard({ icon: Icon, name, description, useCases, checked, onChange, disabled, saving }: ModuleCardProps) {
-  return (
-    <div className={`flex items-start gap-4 p-5 rounded-2xl border transition-colors ${checked ? 'border-primary/30 bg-primary/5' : 'border-border bg-card'}`}>
-      <div className={`h-10 w-10 rounded-xl flex items-center justify-center shrink-0 ${checked ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground'}`}>
-        {saving ? <Loader2 className="h-5 w-5 animate-spin" /> : <Icon className="h-5 w-5" />}
-      </div>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 flex-wrap">
-          <h4 className="text-sm font-bold">{name}</h4>
-          {useCases && useCases.map((uc) => (
-            <span key={uc} className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
-              {uc}
-            </span>
-          ))}
-        </div>
-        <p className="text-xs text-muted-foreground mt-1">{description}</p>
-      </div>
-      <Toggle checked={checked} onChange={onChange} disabled={disabled || saving} />
-    </div>
-  );
+interface UseCaseDef {
+  id: string;
+  label: string;
+  icon: React.ElementType;
+  description: string;
+  configurable: FeatureDef[];
+  alwaysOn: string[];
 }
+
+const USE_CASE_DEFS: UseCaseDef[] = [
+  {
+    id: 'hospitality',
+    label: 'Hospitality',
+    icon: UtensilsCrossed,
+    description: 'Restaurants, cafes, hotels — table management, kitchen display, room billing.',
+    configurable: [
+      { key: 'enable_kds', label: 'Kitchen Display System', icon: ChefHat, description: 'Show orders on kitchen/bar screens; staff bump tickets to mark items ready.' },
+      { key: 'hotel_module_enabled', label: 'Hotel / Rooms', icon: BedDouble, description: 'Room management, check-in/check-out, and room billing.' },
+      { key: 'enable_appointments', label: 'Appointments', icon: Calendar, description: 'Bookings for services, events, or seated reservations.' },
+      { key: 'shift_reports_enabled', label: 'Shift Reports', icon: Clock, description: 'Shift summaries, cash reconciliation, and end-of-day reports.' },
+    ],
+    alwaysOn: ['Tables & Floor Plan', 'Bar Display (with KDS)', 'Loyalty', 'Commissions', 'Online Orders'],
+  },
+  {
+    id: 'retail',
+    label: 'Retail',
+    icon: ShoppingCart,
+    description: 'General retail — supermarkets, hardware stores, fashion — barcode scanning and inventory.',
+    configurable: [
+      { key: 'layaway_enabled', label: 'Layaway', icon: Package, description: 'Reserve items with a deposit; customers pay the balance later.' },
+      { key: 'shift_reports_enabled', label: 'Shift Reports', icon: Clock, description: 'Shift summaries, cash reconciliation, and end-of-day reports.' },
+    ],
+    alwaysOn: ['Barcode Scanner', 'Loyalty', 'Commissions', 'Online Orders', 'Purchase Orders', 'Returns', 'Clients'],
+  },
+  {
+    id: 'services',
+    label: 'Services',
+    icon: Wrench,
+    description: 'Salons, spas, repair shops — appointment calendar, client records, staff scheduling.',
+    configurable: [
+      { key: 'enable_appointments', label: 'Appointments', icon: Calendar, description: 'Booking calendar for services, stylists, or technicians.' },
+      { key: 'layaway_enabled', label: 'Layaway / Instalment', icon: Package, description: 'Allow customers to pay for services in instalments.' },
+      { key: 'shift_reports_enabled', label: 'Shift Reports', icon: Clock, description: 'Shift summaries, cash reconciliation, and end-of-day reports.' },
+    ],
+    alwaysOn: ['Clients', 'Staff Schedule', 'Resources', 'Queue Management', 'Loyalty', 'Commissions'],
+  },
+  {
+    id: 'quick_service',
+    label: 'Quick Service',
+    icon: ChefHat,
+    description: 'Fast-food outlets, food courts, kiosks — simple order flow and kitchen display.',
+    configurable: [
+      { key: 'enable_kds', label: 'Kitchen Display System', icon: ChefHat, description: 'Show orders on kitchen screens; staff bump tickets to mark items ready.' },
+      { key: 'shift_reports_enabled', label: 'Shift Reports', icon: Clock, description: 'Shift summaries, cash reconciliation, and end-of-day reports.' },
+    ],
+    alwaysOn: ['Online Orders'],
+  },
+  {
+    id: 'pharmacy',
+    label: 'Pharmacy',
+    icon: FlaskConical,
+    description: 'Dispensaries and pharmacies — drug inventory, prescription records, patient management.',
+    configurable: [
+      { key: 'shift_reports_enabled', label: 'Shift Reports', icon: Clock, description: 'Shift summaries, cash reconciliation, and end-of-day reports.' },
+    ],
+    alwaysOn: ['Patients', 'Drug Inventory', 'Controlled Substances Log'],
+  },
+];
 
 function ModulesTab() {
   const { data: settings, isLoading } = usePOSSettings();
   const updateModules = useUpdatePOSModules();
+  const updateOutletConfig = useUpdateOutletConfig();
   const { can } = usePermissions();
-  const { isSuperUser } = useModuleAccess();
+  const { useCase: resolvedUseCase, isSuperUser } = useModuleAccess();
+  const setOutlet = useAuthStore((s) => s.setOutlet);
+  const outlet = useAuthStore((s) => s.outlet);
   const canEdit = can(P.CONFIG_MANAGE) || can(P.CONFIG_CHANGE) || isSuperUser;
 
-  const [modules, setModules] = useState({
+  // Active use-case tab — default to resolved outlet use case, or first tab
+  const [activeUC, setActiveUC] = useState<string>(resolvedUseCase ?? 'hospitality');
+  const [modules, setModules] = useState<Record<ModuleToggleKey, boolean>>({
     hotel_module_enabled: false,
-    layaway_enabled: false,
-    shift_reports_enabled: false,
     enable_kds: false,
     enable_appointments: false,
+    layaway_enabled: false,
+    shift_reports_enabled: false,
   });
   const [saving, setSaving] = useState<string | null>(null);
+  const [assigningUC, setAssigningUC] = useState(false);
+
+  useEffect(() => {
+    if (resolvedUseCase) setActiveUC(resolvedUseCase);
+  }, [resolvedUseCase]);
 
   useEffect(() => {
     if (settings) {
       setModules({
         hotel_module_enabled: settings.hotel_module_enabled ?? false,
-        layaway_enabled: settings.layaway_enabled ?? false,
-        shift_reports_enabled: settings.shift_reports_enabled ?? false,
         enable_kds: settings.enable_kds ?? false,
         enable_appointments: settings.enable_appointments ?? false,
+        layaway_enabled: settings.layaway_enabled ?? false,
+        shift_reports_enabled: settings.shift_reports_enabled ?? false,
       });
     }
   }, [settings]);
 
-  const toggle = (key: keyof typeof modules) => async (value: boolean) => {
+  const toggle = (key: ModuleToggleKey) => async (value: boolean) => {
     setModules((m) => ({ ...m, [key]: value }));
     setSaving(key);
     try {
@@ -510,6 +531,20 @@ function ModulesTab() {
     }
   };
 
+  const assignUseCase = async (ucId: string) => {
+    setAssigningUC(true);
+    try {
+      await updateOutletConfig.mutateAsync({ use_case: ucId });
+      setActiveUC(ucId);
+      // Update local outlet store so sidebar re-gates immediately
+      if (outlet) {
+        setOutlet({ ...outlet, use_case: ucId });
+      }
+    } finally {
+      setAssigningUC(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="h-40 flex items-center justify-center text-muted-foreground">
@@ -518,8 +553,11 @@ function ModulesTab() {
     );
   }
 
+  const activeDef = USE_CASE_DEFS.find((uc) => uc.id === activeUC) ?? USE_CASE_DEFS[0];
+  const outletHasUseCase = !!resolvedUseCase;
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       {!canEdit && (
         <div className="flex items-center gap-2 p-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/30 text-amber-800 dark:text-amber-300 text-sm">
           <Lock className="h-4 w-4 shrink-0" />
@@ -527,55 +565,108 @@ function ModulesTab() {
         </div>
       )}
 
-      <ModuleCard
-        icon={BedDouble}
-        name="Hotel / Rooms"
-        description="Enable room management, check-in/check-out, and room billing for hospitality operations."
-        useCases={['hospitality']}
-        checked={modules.hotel_module_enabled}
-        onChange={toggle('hotel_module_enabled')}
-        disabled={!canEdit}
-        saving={saving === 'hotel_module_enabled'}
-      />
-      <ModuleCard
-        icon={Package}
-        name="Layaway"
-        description="Allow customers to reserve items with a deposit and pay the balance later."
-        useCases={['retail', 'services']}
-        checked={modules.layaway_enabled}
-        onChange={toggle('layaway_enabled')}
-        disabled={!canEdit}
-        saving={saving === 'layaway_enabled'}
-      />
-      <ModuleCard
-        icon={Clock}
-        name="Shift Reports"
-        description="Enable detailed shift summaries, cash reconciliation, and end-of-day reports."
-        checked={modules.shift_reports_enabled}
-        onChange={toggle('shift_reports_enabled')}
-        disabled={!canEdit}
-        saving={saving === 'shift_reports_enabled'}
-      />
-      <ModuleCard
-        icon={ChefHat}
-        name="Kitchen Display System (KDS)"
-        description="Show orders on kitchen screens; staff bump tickets to mark items ready. Also enables the Bar display."
-        useCases={['hospitality', 'quick_service']}
-        checked={modules.enable_kds}
-        onChange={toggle('enable_kds')}
-        disabled={!canEdit}
-        saving={saving === 'enable_kds'}
-      />
-      <ModuleCard
-        icon={Calendar}
-        name="Appointments"
-        description="Accept bookings for services and manage the appointment calendar."
-        useCases={['services', 'hospitality']}
-        checked={modules.enable_appointments}
-        onChange={toggle('enable_appointments')}
-        disabled={!canEdit}
-        saving={saving === 'enable_appointments'}
-      />
+      {/* Use-case not configured — prompt */}
+      {!outletHasUseCase && canEdit && (
+        <div className="p-4 rounded-2xl border border-dashed border-primary/40 bg-primary/5 text-sm text-primary">
+          <p className="font-semibold mb-1">Outlet type not configured</p>
+          <p className="text-xs text-muted-foreground">Select a use case below to activate the matching feature set for this outlet. Features are pre-selected based on the use case.</p>
+        </div>
+      )}
+
+      {/* Use-case tabs */}
+      <div className="flex gap-1 p-1 rounded-2xl bg-muted/50 border border-border overflow-x-auto scrollbar-hide">
+        {USE_CASE_DEFS.map((uc) => {
+          const Icon = uc.icon;
+          const active = activeUC === uc.id;
+          const isCurrent = resolvedUseCase === uc.id;
+          return (
+            <button
+              key={uc.id}
+              type="button"
+              onClick={() => setActiveUC(uc.id)}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold whitespace-nowrap transition-all
+                ${active ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+            >
+              <Icon className="h-4 w-4 shrink-0" />
+              {uc.label}
+              {isCurrent && <BadgeCheck className="h-3.5 w-3.5 text-primary shrink-0" />}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Use-case description + assign button */}
+      <div className="flex items-start justify-between gap-4 px-1">
+        <div>
+          <p className="text-sm font-semibold">{activeDef.label}</p>
+          <p className="text-xs text-muted-foreground mt-0.5">{activeDef.description}</p>
+        </div>
+        {canEdit && resolvedUseCase !== activeDef.id && (
+          <button
+            type="button"
+            disabled={assigningUC}
+            onClick={() => assignUseCase(activeDef.id)}
+            className="shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-xl bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 disabled:opacity-60"
+          >
+            {assigningUC ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+            {resolvedUseCase ? 'Switch to this use case' : 'Set use case'}
+          </button>
+        )}
+        {resolvedUseCase === activeDef.id && (
+          <span className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary/10 text-primary text-xs font-semibold">
+            <BadgeCheck className="h-3.5 w-3.5" /> Active use case
+          </span>
+        )}
+      </div>
+
+      {/* Configurable modules */}
+      {activeDef.configurable.length > 0 && (
+        <div className="space-y-3">
+          <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground px-1">Configurable Modules</p>
+          {activeDef.configurable.map((feat) => {
+            const Icon = feat.icon;
+            const on = modules[feat.key];
+            return (
+              <label
+                key={feat.key}
+                className={`flex items-start gap-4 p-4 rounded-2xl border cursor-pointer transition-colors select-none
+                  ${on ? 'border-primary/30 bg-primary/5' : 'border-border bg-card'}
+                  ${!canEdit ? 'cursor-default opacity-70' : ''}`}
+              >
+                <div className={`h-9 w-9 rounded-xl flex items-center justify-center shrink-0 mt-0.5 ${on ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground'}`}>
+                  {saving === feat.key ? <Loader2 className="h-4 w-4 animate-spin" /> : <Icon className="h-4 w-4" />}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-bold">{feat.label}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{feat.description}</p>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={on}
+                  disabled={!canEdit || saving === feat.key}
+                  onChange={(e) => toggle(feat.key)(e.target.checked)}
+                  className="h-4 w-4 mt-1 rounded accent-primary shrink-0 cursor-pointer disabled:cursor-not-allowed"
+                />
+              </label>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Always-on features */}
+      {activeDef.alwaysOn.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground px-1">Always Included</p>
+          <div className="flex flex-wrap gap-2">
+            {activeDef.alwaysOn.map((feat) => (
+              <span key={feat} className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border bg-muted/50 text-xs font-semibold text-muted-foreground">
+                <BadgeCheck className="h-3 w-3 text-primary shrink-0" />
+                {feat}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -903,8 +994,8 @@ function KDSStationsTab() {
             <div className="flex-1 min-w-0">
               <p className="text-sm font-bold">{station.name}</p>
               <div className="flex flex-wrap gap-1 mt-1">
-                {station.category_filter.length > 0
-                  ? station.category_filter.map((c) => <span key={c} className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded-full font-semibold">{c}</span>)
+                {(station.category_filter ?? []).length > 0
+                  ? (station.category_filter ?? []).map((c) => <span key={c} className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded-full font-semibold">{c}</span>)
                   : <span className="text-[10px] text-muted-foreground">All categories</span>}
               </div>
             </div>

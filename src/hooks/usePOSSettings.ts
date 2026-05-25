@@ -64,3 +64,17 @@ export function useUpdatePOSModules() {
     onError: () => toast.error('Failed to save module settings'),
   });
 }
+
+export function useUpdateOutletConfig() {
+  const tenantID = useTenantID();
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: { use_case?: string | null }) => posSettingsApi.patchOutletConfig(tenantID, input),
+    onSuccess: (data) => {
+      qc.setQueryData(['pos-settings', tenantID], data);
+      toast.success('Outlet configuration saved');
+    },
+    onError: () => toast.error('Failed to save outlet configuration'),
+  });
+}
