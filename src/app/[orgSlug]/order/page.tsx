@@ -3,6 +3,7 @@
 import { Badge, Button } from '@/components/ui/base';
 import { ModifierModal, type ModifierGroup } from '@/components/pos/modifier-modal';
 import { SplitPaymentModal, type OrderLineItem } from '@/components/pos/split-payment-modal';
+import { CourseSelector, CourseBadge, COURSES, type CourseValue } from '@/components/pos/course-selector';
 import { VoidOrderModal } from '@/components/pos/void-order-modal';
 import { ReceiptPreview, type ReceiptData } from '@/components/pos/receipt-preview';
 import { cn } from '@/lib/utils';
@@ -16,6 +17,8 @@ import {
   AlertTriangle,
   Barcode,
   Ban,
+  ChefHat,
+  Flame,
   Grid3x3,
   Image as ImageIcon,
   LayoutList,
@@ -53,6 +56,7 @@ interface CartItem extends MenuItem {
   modifierTotal?: number;
   serialNumber?: string;
   notes?: string;
+  courseNumber?: CourseValue;
 }
 
 type DisplayMode = 'card' | 'list' | 'image_grid';
@@ -103,6 +107,12 @@ export default function OrderPage() {
   // Receipt
   const [receiptData, setReceiptData] = useState<ReceiptData | null>(null);
   const [receiptOpen, setReceiptOpen] = useState(false);
+
+  // Course management (hospitality only)
+  const isHospitality = ['hospitality', 'quick_service', 'hotel'].includes((outlet?.use_case ?? '').toLowerCase());
+  const [currentOrderCourses, setCurrentOrderCourses] = useState<CourseValue[]>([]);
+  const [firedCourses, setFiredCourses] = useState(0);
+  const [firingCourse, setFiringCourse] = useState<number | null>(null);
 
   // Serial number prompt
   const [serialPrompt, setSerialPrompt] = useState<{ item: MenuItem; callback: (sn: string) => void } | null>(null);
@@ -272,6 +282,10 @@ export default function OrderPage() {
 
   const clearCart = () => setCart([]);
 
+  const updateCourse = (index: number, course: CourseValue) => {
+    setCart((prev) => prev.map((c, i) => i === index ? { ...c, courseNumber: course } : c));
+  };
+
   const subtotal = cart.reduce((sum, item) => sum + (item.price + (item.modifierTotal ?? 0)) * item.quantity, 0);
   const tax = Math.round(subtotal * taxRate);
   const total = subtotal + tax;
@@ -279,8 +293,25 @@ export default function OrderPage() {
 
   // ─── Place Order ────────────────────────────────────────────────────────
 
+  const handleFireCourse = async (course: number) => {
+    if (!currentOrderId || firingCourse !== null) return;
+    setFiringCourse(course);
+    const tenantId = user?.tenant_id ?? '';
+    try {
+      await apiClient.post(`/api/v1/${tenantId}/pos/orders/${currentOrderId}/fire-course`, { course });
+      setFiredCourses(course);
+      const courseName = COURSES.find((c) => c.value === course)?.label ?? `Course ${course}`;
+      toast.success(`${courseName} fired to kitchen`);
+    } catch {
+      toast.error('Failed to fire course');
+    } finally {
+      setFiringCourse(null);
+    }
+  };
+
   const handlePlaceOrder = () => {
     if (cart.length === 0) return;
+    const courses = [...new Set(cart.map((i) => (i.courseNumber ?? 0) as CourseValue).filter((c) => c > 0))].sort() as CourseValue[];
     createOrder.mutate(
       {
         outletId: outlet?.id ?? '',
@@ -291,6 +322,7 @@ export default function OrderPage() {
           quantity: item.quantity,
           unit_price: item.price + (item.modifierTotal ?? 0),
           total_price: (item.price + (item.modifierTotal ?? 0)) * item.quantity,
+          course_number: item.courseNumber ?? 0,
           metadata: {
             ...(item.selectedModifiers ? { modifiers: item.selectedModifiers } : {}),
             ...(item.notes ? { notes: item.notes } : {}),
@@ -302,6 +334,8 @@ export default function OrderPage() {
         onSuccess: (data: any) => {
           setCurrentOrderId(data.id || data.order_id || '');
           setCurrentOrderNumber(data.order_number || '');
+          setFiredCourses(0);
+          setCurrentOrderCourses(courses);
           setCurrentOrderLines(cart.map((item) => ({
             id: item.id,
             name: item.name,
@@ -323,6 +357,8 @@ export default function OrderPage() {
     clearCart();
     setPaymentOpen(false);
     setCurrentOrderId('');
+    setCurrentOrderCourses([]);
+    setFiredCourses(0);
 
     // Waiter auto-logout: return to PIN selector after placing an order
     const isWaiter = user?.roles?.includes('waiter') || user?.roles?.[0] === 'waiter';
@@ -679,7 +715,10 @@ export default function OrderPage() {
                 <div key={`${item.id}-${idx}`} className="px-5 py-4">
                   <div className="flex items-start gap-3">
                     <div className="flex-1 min-w-0 pt-0.5">
-                      <p className="text-sm font-bold truncate leading-tight">{item.name}</p>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <p className="text-sm font-bold truncate leading-tight">{item.name}</p>
+                        {isHospitality && item.courseNumber ? <CourseBadge course={item.courseNumber} /> : null}
+                      </div>
                       {item.selectedModifiers && item.modifierGroups && (
                         <p className="text-xs text-primary mt-0.5 truncate">
                           {item.modifierGroups
@@ -695,9 +734,18 @@ export default function OrderPage() {
                       {item.serialNumber && (
                         <p className="text-xs text-muted-foreground font-mono mt-0.5">S/N: {item.serialNumber}</p>
                       )}
-                      <p className="text-xs font-bold font-mono text-primary mt-1">
-                        KES {((item.price + (item.modifierTotal ?? 0)) * item.quantity).toLocaleString()}
-                      </p>
+                      <div className="flex items-center gap-2 mt-1 flex-wrap">
+                        <p className="text-xs font-bold font-mono text-primary">
+                          KES {((item.price + (item.modifierTotal ?? 0)) * item.quantity).toLocaleString()}
+                        </p>
+                        {isHospitality && (
+                          <CourseSelector
+                            value={item.courseNumber ?? 0}
+                            onChange={(c) => updateCourse(idx, c)}
+                            compact
+                          />
+                        )}
+                      </div>
                     </div>
                     {/* Qty controls + delete */}
                     <div className="flex items-center gap-1 shrink-0">
@@ -776,6 +824,41 @@ export default function OrderPage() {
                 <Ban className="h-4 w-4" />
                 Void Order #{currentOrderNumber}
               </button>
+            )}
+            {isHospitality && currentOrderId && currentOrderCourses.length > 0 && (
+              <div className="rounded-xl border border-border bg-muted/30 p-3 space-y-2">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-muted-foreground uppercase tracking-wide">
+                  <ChefHat className="h-3.5 w-3.5" /> Fire Courses
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {currentOrderCourses.map((c) => {
+                    const label = COURSES.find((x) => x.value === c)?.label ?? `Course ${c}`;
+                    const alreadyFired = c <= firedCourses;
+                    return (
+                      <button
+                        key={c}
+                        type="button"
+                        disabled={alreadyFired || firingCourse !== null}
+                        onClick={() => handleFireCourse(c)}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                          alreadyFired
+                            ? 'bg-muted text-muted-foreground cursor-default'
+                            : 'bg-primary/10 text-primary hover:bg-primary/20 active:scale-95'
+                        }`}
+                      >
+                        {firingCourse === c ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : alreadyFired ? (
+                          <span className="h-3 w-3 rounded-full bg-green-500 inline-block shrink-0" />
+                        ) : (
+                          <Flame className="h-3 w-3" />
+                        )}
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             )}
           </div>
         </div>

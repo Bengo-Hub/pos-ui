@@ -297,6 +297,7 @@ interface CreateOrderInput {
     quantity: number;
     unit_price: number;
     total_price: number;
+    course_number?: number;
     metadata?: Record<string, unknown>;
   }>;
 }
