@@ -119,7 +119,7 @@ export function useSubscription() {
     isPlatformOwner,
     isServiceCharge,
     isDemo,
-    hasFeature: (code: string) => info?.features?.includes(code) ?? false,
+    hasFeature: (code: string) => isDemo || isServiceCharge || isPlatformOwner || (info?.features?.includes(code) ?? false),
     getLimit: (key: string) => (info?.limits?.[key] ?? Infinity) as number,
     daysUntilExpiry: subStore.daysUntilExpiry,
     isInGracePeriod: subStore.isInGracePeriod,

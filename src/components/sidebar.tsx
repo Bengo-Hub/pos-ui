@@ -230,11 +230,10 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
       ],
     },
     {
-      label: 'Kitchen & Bar',
+      label: 'Display Board',
       defaultCollapsed: true,
       items: [
         { label: 'KDS', icon: ChefHat, href: '/kds', moduleKey: 'kds', permission: [P.ORDERS_VIEW, P.ORDERS_MANAGE] },
-        { label: 'Bar Display', icon: Wine, href: '/bar', moduleKey: 'bar', permission: [P.ORDERS_VIEW, P.ORDERS_MANAGE] },
       ],
     },
     {

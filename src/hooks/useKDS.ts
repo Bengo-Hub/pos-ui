@@ -1,12 +1,11 @@
 'use client';
 
 import { apiClient } from '@/lib/api/client';
-import { useParams } from 'next/navigation';
+import { useAuthStore } from '@/store/auth';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 function useTenantID() {
-  const params = useParams<{ orgSlug: string }>();
-  return params?.orgSlug ?? '';
+  return useAuthStore((s) => s.user?.tenant_id ?? '');
 }
 
 function basePath(tenantID: string) {

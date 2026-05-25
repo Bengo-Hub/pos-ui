@@ -279,7 +279,7 @@ export default function OrderPage() {
     if (cart.length === 0) return;
     createOrder.mutate(
       {
-        outletId: '',
+        outletId: outlet?.id ?? '',
         lines: cart.map((item) => ({
           catalog_item_id: item.id,
           sku: item.sku || '',

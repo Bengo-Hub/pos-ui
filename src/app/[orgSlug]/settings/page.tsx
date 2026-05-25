@@ -915,6 +915,7 @@ function KDSStationsTab() {
   const createStation = useCreateKDSStation();
   const updateStation = useUpdateKDSStation();
   const { can } = usePermissions();
+  const outlet = useAuthStore((s) => s.outlet);
   const canEdit = can(P.CONFIG_MANAGE) || can(P.CONFIG_CHANGE);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ name: '', category_filter: [] as string[], sort_order: 0 });
@@ -923,7 +924,7 @@ function KDSStationsTab() {
 
   const handleCreate = async () => {
     if (!form.name.trim()) return;
-    await createStation.mutateAsync({ outlet_id: '', name: form.name, category_filter: form.category_filter, sort_order: form.sort_order });
+    await createStation.mutateAsync({ outlet_id: outlet?.id ?? '', name: form.name, category_filter: form.category_filter, sort_order: form.sort_order });
     setForm({ name: '', category_filter: [], sort_order: 0 });
     setShowForm(false);
   };

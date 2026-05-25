@@ -351,8 +351,8 @@ function KDSPage() {
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div className="flex items-center gap-3">
             <div>
-              <h1 className="text-xl font-bold text-foreground font-display">Kitchen Display</h1>
-              <p className="text-muted-foreground text-xs mt-0.5">Ticket board</p>
+              <h1 className="text-xl font-bold text-foreground font-display">Display Board</h1>
+              <p className="text-muted-foreground text-xs mt-0.5">Kitchen · Bar · All stations</p>
             </div>
             {/* Live badge */}
             <span className="flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
