@@ -1,14 +1,50 @@
 'use client';
 
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Phone, Star, Gift, Calendar } from 'lucide-react';
+import { ArrowLeft, Calendar, Gift, Phone, Star, UserX } from 'lucide-react';
 import { ModuleGate } from '@/components/auth/module-gate';
 import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
 import { useClient } from '@/hooks/useClients';
+import { useQuery } from '@tanstack/react-query';
+import { apiClient } from '@/lib/api/client';
+import { useAuthStore } from '@/store/auth';
+import { cn } from '@/lib/utils';
 
 function fmt(n: number) {
   return new Intl.NumberFormat('en-KE', { style: 'currency', currency: 'KES' }).format(n);
 }
+
+interface ClientAppointment {
+  id: string;
+  date: string;
+  time: string;
+  service_name: string;
+  staff_name?: string;
+  status: string;
+  duration_minutes: number;
+}
+
+function useClientAppointments(customerName: string) {
+  const tenantID = useAuthStore((s) => s.user?.tenant_id ?? '');
+  return useQuery({
+    queryKey: ['client-appointments', tenantID, customerName],
+    queryFn: () =>
+      apiClient.get<{ data: ClientAppointment[] }>(
+        `/api/v1/${tenantID}/pos/appointments?customer_name=${encodeURIComponent(customerName)}&limit=20`
+      ),
+    enabled: !!tenantID && !!customerName,
+    staleTime: 60_000,
+  });
+}
+
+const STATUS_COLORS: Record<string, string> = {
+  completed:   'text-emerald-600',
+  confirmed:   'text-blue-600',
+  scheduled:   'text-muted-foreground',
+  no_show:     'text-red-500',
+  cancelled:   'text-muted-foreground/60',
+  in_progress: 'text-amber-600',
+};
 
 export default function ClientDetailPage() {
   const params = useParams();
@@ -17,6 +53,18 @@ export default function ClientDetailPage() {
   const accountID = (params?.id as string) || '';
 
   const { data: account, isLoading } = useClient(accountID);
+  const { data: apptData } = useClientAppointments(account?.customer_name ?? '');
+  const appointments = apptData?.data ?? [];
+  const noShowCount = appointments.filter((a) => a.status === 'no_show').length;
+  const completedCount = appointments.filter((a) => a.status === 'completed').length;
+  const serviceFrequency = appointments.reduce<Record<string, number>>((acc, a) => {
+    if (a.service_name) acc[a.service_name] = (acc[a.service_name] ?? 0) + 1;
+    return acc;
+  }, {});
+  const topServices = Object.entries(serviceFrequency)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([name, count]) => ({ name, count }));
 
   return (
     <ModuleGate moduleKey="loyalty" fallback={<ModuleUnavailablePage moduleKey="loyalty" />}>
@@ -61,19 +109,78 @@ export default function ClientDetailPage() {
               </div>
             </div>
 
-            {/* Loyalty stats */}
-            <div className="grid grid-cols-2 gap-3">
+            {/* Visit stats */}
+            <div className="grid grid-cols-3 gap-3">
+              <div className="bg-card border border-border rounded-2xl p-4 text-center">
+                <Calendar className="h-5 w-5 text-primary mx-auto mb-1" />
+                <p className="text-xl font-bold tabular-nums">{completedCount}</p>
+                <p className="text-xs text-muted-foreground">Visits</p>
+              </div>
+              <div className="bg-card border border-border rounded-2xl p-4 text-center">
+                <UserX className="h-5 w-5 text-red-500 mx-auto mb-1" />
+                <p className="text-xl font-bold tabular-nums text-red-500">{noShowCount}</p>
+                <p className="text-xs text-muted-foreground">No Shows</p>
+              </div>
               <div className="bg-card border border-border rounded-2xl p-4 text-center">
                 <Star className="h-5 w-5 text-primary mx-auto mb-1" />
                 <p className="text-xl font-bold tabular-nums">{account.points_balance.toLocaleString()}</p>
-                <p className="text-xs text-muted-foreground">Available Points</p>
+                <p className="text-xs text-muted-foreground">Points</p>
               </div>
+            </div>
+
+            {/* Service preferences */}
+            {topServices.length > 0 && (
+              <div className="bg-card border border-border rounded-2xl p-4">
+                <p className="text-xs font-bold text-muted-foreground mb-3">Preferred Services</p>
+                <div className="space-y-2">
+                  {topServices.map((s) => (
+                    <div key={s.name} className="flex items-center justify-between">
+                      <span className="text-sm font-medium truncate">{s.name}</span>
+                      <span className="text-xs text-muted-foreground shrink-0 ml-2">{s.count}×</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Lifetime loyalty stats */}
+            <div className="grid grid-cols-2 gap-3">
               <div className="bg-card border border-border rounded-2xl p-4 text-center">
                 <Gift className="h-5 w-5 text-primary mx-auto mb-1" />
                 <p className="text-xl font-bold tabular-nums">{account.lifetime_points.toLocaleString()}</p>
                 <p className="text-xs text-muted-foreground">Lifetime Points</p>
               </div>
+              <div className="bg-card border border-border rounded-2xl p-4 text-center">
+                <Phone className="h-5 w-5 text-primary mx-auto mb-1" />
+                <p className="text-sm font-bold truncate">{account.customer_phone || '—'}</p>
+                <p className="text-xs text-muted-foreground">Phone</p>
+              </div>
             </div>
+
+            {/* Visit history */}
+            {appointments.length > 0 && (
+              <div className="bg-card border border-border rounded-2xl overflow-hidden">
+                <div className="px-4 py-3 border-b border-border">
+                  <p className="text-xs font-bold text-muted-foreground">Visit History</p>
+                </div>
+                <div className="divide-y divide-border">
+                  {appointments.slice(0, 10).map((a) => (
+                    <div key={a.id} className="flex items-center justify-between px-4 py-3">
+                      <div>
+                        <p className="text-sm font-medium">{a.service_name || '—'}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {new Date(a.date).toLocaleDateString('en-KE', { dateStyle: 'medium' })} · {a.time}
+                          {a.staff_name ? ` · ${a.staff_name}` : ''}
+                        </p>
+                      </div>
+                      <span className={cn('text-[10px] font-bold capitalize', STATUS_COLORS[a.status] ?? 'text-muted-foreground')}>
+                        {a.status.replace('_', ' ')}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Action buttons */}
             <div className="flex gap-3">

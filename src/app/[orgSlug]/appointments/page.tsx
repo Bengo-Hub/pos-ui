@@ -8,18 +8,32 @@ import { cn } from '@/lib/utils';
 import {
   useAppointments,
   useCreateAppointment,
+  useNoShowAppointment,
   useUpdateAppointmentStatus,
 } from '@/hooks/useAppointments';
 import type { Appointment, AppointmentStatus, CreateAppointmentInput } from '@/hooks/useAppointments';
 import {
   Calendar,
-  Clock,
   Loader2,
   Plus,
   User,
+  UserX,
   X,
 } from 'lucide-react';
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { apiClient } from '@/lib/api/client';
+import { useAuthStore } from '@/store/auth';
+
+function useStaffList() {
+  const tenantID = useAuthStore((s) => s.user?.tenant_id ?? '');
+  return useQuery({
+    queryKey: ['staff-members', tenantID],
+    queryFn: () => apiClient.get<{ data: { id: string; full_name: string }[] }>(`/api/v1/${tenantID}/pos/staff`),
+    enabled: !!tenantID,
+    staleTime: 5 * 60_000,
+  });
+}
 import { toast } from 'sonner';
 
 const STATUS_BADGE: Record<AppointmentStatus, 'default' | 'success' | 'warning' | 'error' | 'outline'> = {
@@ -48,7 +62,10 @@ function BookingForm({
   onSuccess: () => void;
 }) {
   const create = useCreateAppointment();
-  const [form, setForm] = useState<CreateAppointmentInput>({
+  const { data: staffData } = useStaffList();
+  const staffList = staffData?.data ?? [];
+
+  const [form, setForm] = useState<CreateAppointmentInput & { deposit_amount?: number }>({
     date: new Date().toISOString().split('T')[0],
     time: '09:00',
     duration_minutes: 30,
@@ -57,9 +74,10 @@ function BookingForm({
     customer_phone: '',
     service_id: '',
     notes: '',
+    deposit_amount: undefined,
   });
 
-  const set = (key: keyof CreateAppointmentInput, value: string | number) =>
+  const set = <K extends keyof typeof form>(key: K, value: (typeof form)[K]) =>
     setForm((prev) => ({ ...prev, [key]: value }));
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -68,7 +86,9 @@ function BookingForm({
       toast.error('Please fill in required fields');
       return;
     }
-    create.mutate(form, {
+    const { deposit_amount, ...rest } = form;
+    const payload = deposit_amount ? { ...rest, deposit_amount } : rest;
+    create.mutate(payload, {
       onSuccess: () => {
         toast.success('Appointment booked');
         onSuccess();
@@ -83,7 +103,7 @@ function BookingForm({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <Card className="w-full max-w-md mx-4">
+      <Card className="w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto">
         <CardHeader>
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-bold">Book Appointment</h2>
@@ -96,117 +116,47 @@ function BookingForm({
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-xs font-bold text-muted-foreground mb-1 block">
-                  Date *
-                </label>
-                <input
-                  type="date"
-                  value={form.date}
-                  onChange={(e) => set('date', e.target.value)}
-                  className={inputClass}
-                  required
-                />
+                <label className="text-xs font-bold text-muted-foreground mb-1 block">Date *</label>
+                <input type="date" value={form.date} onChange={(e) => set('date', e.target.value)} className={inputClass} required />
               </div>
               <div>
-                <label className="text-xs font-bold text-muted-foreground mb-1 block">
-                  Time *
-                </label>
-                <input
-                  type="time"
-                  value={form.time}
-                  onChange={(e) => set('time', e.target.value)}
-                  className={inputClass}
-                  required
-                />
+                <label className="text-xs font-bold text-muted-foreground mb-1 block">Time *</label>
+                <input type="time" value={form.time} onChange={(e) => set('time', e.target.value)} className={inputClass} required />
               </div>
             </div>
             <div>
-              <label className="text-xs font-bold text-muted-foreground mb-1 block">
-                Customer Name *
-              </label>
-              <input
-                type="text"
-                value={form.customer_name}
-                onChange={(e) => set('customer_name', e.target.value)}
-                placeholder="Customer name"
-                className={inputClass}
-                required
-              />
+              <label className="text-xs font-bold text-muted-foreground mb-1 block">Customer Name *</label>
+              <input type="text" value={form.customer_name} onChange={(e) => set('customer_name', e.target.value)} placeholder="Customer name" className={inputClass} required />
             </div>
             <div>
-              <label className="text-xs font-bold text-muted-foreground mb-1 block">
-                Customer Phone
-              </label>
-              <input
-                type="tel"
-                value={form.customer_phone ?? ''}
-                onChange={(e) => set('customer_phone', e.target.value)}
-                placeholder="+254..."
-                className={inputClass}
-              />
+              <label className="text-xs font-bold text-muted-foreground mb-1 block">Customer Phone</label>
+              <input type="tel" value={form.customer_phone ?? ''} onChange={(e) => set('customer_phone', e.target.value)} placeholder="+254..." className={inputClass} />
+            </div>
+            <div>
+              <label className="text-xs font-bold text-muted-foreground mb-1 block">Staff Member</label>
+              <select value={form.staff_id} onChange={(e) => set('staff_id', e.target.value)} className={inputClass}>
+                <option value="">— Unassigned —</option>
+                {staffList.map((s) => (
+                  <option key={s.id} value={s.id}>{s.full_name}</option>
+                ))}
+              </select>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-xs font-bold text-muted-foreground mb-1 block">
-                  Staff ID
-                </label>
-                <input
-                  type="text"
-                  value={form.staff_id}
-                  onChange={(e) => set('staff_id', e.target.value)}
-                  placeholder="Staff member"
-                  className={inputClass}
-                />
+                <label className="text-xs font-bold text-muted-foreground mb-1 block">Duration (min)</label>
+                <input type="number" value={form.duration_minutes ?? 30} onChange={(e) => set('duration_minutes', parseInt(e.target.value, 10) || 30)} min={5} step={5} className={inputClass} />
               </div>
               <div>
-                <label className="text-xs font-bold text-muted-foreground mb-1 block">
-                  Service ID
-                </label>
-                <input
-                  type="text"
-                  value={form.service_id}
-                  onChange={(e) => set('service_id', e.target.value)}
-                  placeholder="Service"
-                  className={inputClass}
-                />
+                <label className="text-xs font-bold text-muted-foreground mb-1 block">Deposit (KES)</label>
+                <input type="number" value={form.deposit_amount ?? ''} onChange={(e) => set('deposit_amount', e.target.value ? parseFloat(e.target.value) : undefined)} min={0} step={50} placeholder="0" className={inputClass} />
               </div>
             </div>
             <div>
-              <label className="text-xs font-bold text-muted-foreground mb-1 block">
-                Duration (minutes)
-              </label>
-              <input
-                type="number"
-                value={form.duration_minutes ?? 30}
-                onChange={(e) => set('duration_minutes', parseInt(e.target.value, 10) || 30)}
-                min={5}
-                step={5}
-                className={inputClass}
-              />
+              <label className="text-xs font-bold text-muted-foreground mb-1 block">Notes</label>
+              <textarea value={form.notes ?? ''} onChange={(e) => set('notes', e.target.value)} placeholder="Optional notes..." rows={2} className={inputClass} />
             </div>
-            <div>
-              <label className="text-xs font-bold text-muted-foreground mb-1 block">
-                Notes
-              </label>
-              <textarea
-                value={form.notes ?? ''}
-                onChange={(e) => set('notes', e.target.value)}
-                placeholder="Optional notes..."
-                rows={2}
-                className={inputClass}
-              />
-            </div>
-            <Button
-              variant="primary"
-              className="w-full"
-              type="submit"
-              disabled={create.isPending}
-            >
-              {create.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
-              ) : (
-                <Plus className="h-4 w-4 mr-1.5" />
-              )}
+            <Button variant="primary" className="w-full" type="submit" disabled={create.isPending}>
+              {create.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <Plus className="h-4 w-4 mr-1.5" />}
               Book Appointment
             </Button>
           </form>
@@ -226,6 +176,7 @@ function AppointmentsPage() {
     status: statusFilter !== 'all' ? statusFilter : undefined,
   });
   const updateStatus = useUpdateAppointmentStatus();
+  const noShow = useNoShowAppointment();
 
   const appointments = data?.data ?? [];
 
@@ -332,6 +283,20 @@ function AppointmentsPage() {
                     <Badge variant={STATUS_BADGE[apt.status]} className="text-[10px]">
                       {apt.status.replace('_', ' ')}
                     </Badge>
+                    {(apt.status === 'scheduled' || apt.status === 'confirmed') && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          noShow.mutate(apt.id, { onError: () => toast.error('Failed to mark no-show') });
+                        }}
+                        disabled={noShow.isPending}
+                        title="Mark as No Show"
+                        className="flex items-center gap-1 px-2 py-1 rounded-lg border border-red-200 text-red-500 text-[10px] font-bold hover:bg-red-50 transition-colors disabled:opacity-50"
+                      >
+                        <UserX className="h-3 w-3" />
+                        No Show
+                      </button>
+                    )}
                     <select
                       value={apt.status}
                       onChange={(e) =>
