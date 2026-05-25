@@ -1,11 +1,13 @@
 'use client';
 
 import { apiClient } from '@/lib/api/client';
+import { subscriptionErrorMessage } from '@/lib/api/error-handler';
 import { useMe } from '@/hooks/useMe';
 import { useAuthStore } from '@/store/auth';
 import { useQueryClient } from '@tanstack/react-query';
 import { useParams, usePathname, useRouter } from 'next/navigation';
 import { ReactNode, useEffect } from 'react';
+import { toast } from 'sonner';
 
 const KIOSK_PATHS = ['/pin-login'];
 
@@ -55,6 +57,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
     return () => apiClient.setOn401(null);
   }, [queryClient, logout, orgSlug, router]);
+
+  // Wire subscription 403 → sonner toast with upgrade action
+  useEffect(() => {
+    apiClient.setOnSubscription403((data) => {
+      const message = subscriptionErrorMessage(data);
+      toast.error('Subscription limit reached', {
+        description: message,
+        duration: 8000,
+        action: orgSlug
+          ? {
+              label: 'Upgrade plan',
+              onClick: () => router.push(`/${orgSlug}/settings/billing`),
+            }
+          : undefined,
+      });
+    });
+    return () => apiClient.setOnSubscription403(null);
+  }, [orgSlug, router]);
+
+  // Wire 5xx server errors → sonner toast
+  useEffect(() => {
+    apiClient.setOnServerError((_status, message) => {
+      toast.error('Server error', {
+        description: message,
+        duration: 6000,
+      });
+    });
+    return () => apiClient.setOnServerError(null);
+  }, []);
 
   // SSO redirect for unauthenticated users — skip for kiosk, terminal sessions, and auth callback paths.
   // Also skip until rehydration is complete to prevent spurious SSO redirects on page refresh

@@ -1,10 +1,9 @@
 # pos-ui — Architecture
 
-**Service**: pos-ui (Next.js 15 PWA)  
-**Last updated**: 2026-05-09  
+**Service**: pos-ui (Next.js 16 PWA)  
+**Last updated**: 2026-05-25  
 **Purpose**: Touch-optimized, offline-capable Point of Sale terminal — multi-vertical (hospitality, retail, pharmacy, services)  
 **Status**: Sprints 1–10 substantially complete. PWA offline, PIN terminal login, multi-vertical module gating, and loyalty all shipped.
-**Last updated**: 2026-05-21
 
 ---
 
@@ -12,15 +11,17 @@
 
 | Layer | Technology |
 |-------|-----------|
-| Framework | Next.js 15 (App Router), React 19, TypeScript |
-| Styling | Tailwind CSS 4 + Shadcn UI + custom `@theme` tokens |
+| Framework | Next.js 16 (App Router), React 19, TypeScript |
+| Styling | Tailwind CSS 4 + shadcn/ui (`@base-ui/react`) + custom `@theme` tokens |
+| UI primitives | shadcn (initialized 2026-05-25, uses `@base-ui/react` not Radix; add via `pnpm dlx shadcn@latest add <name>`) |
 | State | Zustand (global: cart, drawer, session) + TanStack Query (server state) |
-| API client | Axios with auth interceptors + tenant/outlet headers |
+| API client | Axios with auth interceptors + tenant/outlet headers (`src/lib/api/client.ts`) |
 | PWA | `@ducanh2912/next-pwa` (offline capability) |
 | Forms | React Hook Form + Zod |
-| Offline DB | Dexie.js / IndexedDB (offline order queue) — not yet wired |
-| Auth | SSO via auth-api OIDC/OAuth2 PKCE; PIN terminal login planned (Sprint 10) |
-| Toast | Sonner |
+| Offline DB | Dexie.js / IndexedDB (`src/lib/db/pos-db.ts`) |
+| Auth | SSO via auth-api OIDC/OAuth2 PKCE; PIN terminal login (Sprint 10 ✅) |
+| Toast | Sonner v2 (`<Toaster>` in `app/layout.tsx`) |
+| Error handling | Central error parser: `src/lib/api/error-handler.ts` |
 
 ---
 
@@ -170,13 +171,51 @@ const USE_CASE_MODULES = {
 
 ---
 
+## Error Handling Architecture
+
+All API errors are surfaced to the user — **no silent failures**.
+
+### Subscription & Server Errors (Global)
+- `src/lib/api/error-handler.ts` — `parseApiError()`, `isSubscriptionError()`, `subscriptionErrorMessage()`
+- `src/lib/api/client.ts` — `setOnSubscription403(cb)` (all subscription error codes) + `setOnServerError(cb)` (5xx)
+- `src/providers/auth-provider.tsx` — wires both callbacks on mount; subscription 403 shows sonner toast with "Upgrade plan" action button; 5xx shows server error toast
+- Handled subscription codes: `subscription_inactive`, `subscription_expired`, `feature_not_available`, `usage_limit_exceeded`, `device_limit_reached`, `plan_upgrade_required`
+
+### Sensitive Action Confirmation
+- `src/components/ui/confirm-dialog.tsx` — reusable `ConfirmDialog` (shadcn AlertDialog)
+- **All** delete, deactivate, force-close, revoke actions MUST use `ConfirmDialog` — never `window.confirm()`
+- Variants: `danger` (delete/destructive), `warning` (caution), `info` (informational)
+
+```typescript
+// Usage pattern
+const [open, setOpen] = useState(false);
+<ConfirmDialog
+  open={open}
+  onOpenChange={setOpen}
+  title="Delete item?"
+  description="This cannot be undone."
+  confirmLabel="Delete"
+  variant="danger"
+  onConfirm={handleDelete}
+/>
+```
+
+---
+
 ## Component Architecture
 
 ```
 src/
   app/[orgSlug]/           ← Page components (one per route)
   components/
-    ui/base.tsx            ← Re-exported Shadcn primitives
+    ui/
+      base.tsx             ← Custom Button, Card, Badge (plain Tailwind)
+      button.tsx           ← shadcn Button (used by shadcn components)
+      alert-dialog.tsx     ← shadcn AlertDialog (via @base-ui/react)
+      dialog.tsx           ← shadcn Dialog
+      confirm-dialog.tsx   ← Reusable ConfirmDialog wrapper
+    subscription/
+      subscription-banner.tsx  ← Wraps SharedSubscriptionBanner from shared-ui-lib
     sidebar.tsx            ← Module-aware navigation
     header.tsx             ← Outlet context, user, shift indicator
     pos/
@@ -187,9 +226,14 @@ src/
     useKDS.ts              ← KDS stations + tickets + mutations
     usePOS.ts              ← Orders, catalog, tables, drawers, shifts
     use-module-access.ts   ← Vertical module gating
+  lib/
+    api/
+      client.ts            ← Axios client; setOn401, setOnSubscription403, setOnServerError
+      error-handler.ts     ← Central error parser + subscription error types
   store/
     auth.ts                ← Zustand: user, session, logout
   providers/
+    auth-provider.tsx      ← Wires 401, subscription 403, 5xx callbacks
     tenant-branding-provider.tsx
     query-provider.tsx
 ```

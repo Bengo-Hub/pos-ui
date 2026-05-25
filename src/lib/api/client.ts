@@ -1,4 +1,5 @@
 import axios, { AxiosInstance, AxiosResponse, InternalAxiosRequestConfig } from 'axios';
+import { isSubscriptionError } from '@/lib/api/error-handler';
 
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'https://posapi.codevertexitsolutions.com';
 
@@ -45,15 +46,21 @@ class ApiClient {
 
     private on401Callback: (() => void) | null = null;
     private onSubscription403Callback: ((data: any) => void) | null = null;
+    private onServerErrorCallback: ((status: number, message: string) => void) | null = null;
 
     /** Register a callback to run when any API response is 401 (e.g. clear session / redirect to auth). */
     public setOn401(callback: (() => void) | null) {
         this.on401Callback = callback;
     }
 
-    /** Register a callback for subscription-related 403 errors (code=subscription_inactive, upgrade=true). */
+    /** Register a callback for subscription-related 403 errors (feature gates, plan limits, inactive subscription). */
     public setOnSubscription403(callback: ((data: any) => void) | null) {
         this.onSubscription403Callback = callback;
+    }
+
+    /** Register a callback for 5xx server errors to show a global error toast. */
+    public setOnServerError(callback: ((status: number, message: string) => void) | null) {
+        this.onServerErrorCallback = callback;
     }
 
     private handleError = async (error: any) => {
@@ -76,11 +83,16 @@ class ApiClient {
                 this.on401Callback?.();
             }
         }
-        if (error.response?.status === 403 && this.onSubscription403Callback) {
+        if (error.response?.status === 403) {
             const data = error.response?.data;
-            if (data?.code === 'subscription_inactive' || data?.upgrade === true) {
+            if (isSubscriptionError(data) && this.onSubscription403Callback) {
                 this.onSubscription403Callback(data);
             }
+        }
+        if (error.response?.status >= 500 && this.onServerErrorCallback) {
+            const data = error.response?.data;
+            const message = data?.message ?? data?.error ?? 'A server error occurred. Please try again.';
+            this.onServerErrorCallback(error.response.status, message);
         }
         return Promise.reject(error);
     };
