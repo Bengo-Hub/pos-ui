@@ -8,13 +8,16 @@ import {
   useCreateSection,
   useCreateTable,
   useUpdateTable,
+  useUpdateSection,
+  useDeleteTable,
+  useDeleteSection,
   type Section,
   type Table,
 } from '@/hooks/usePOS';
 import { usePermissions } from '@/hooks/usePermissions';
 import { P } from '@/lib/rbac/permissions';
 import { Card, CardContent } from '@/components/ui/base';
-import { LayoutGrid, Loader2, Map, Plus, X } from 'lucide-react';
+import { LayoutGrid, Loader2, Map, Pencil, Plus, Trash2, X, Check } from 'lucide-react';
 import { toast } from 'sonner';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -35,12 +38,11 @@ const STATUS_COLORS: Record<string, { fill: string; stroke: string; text: string
 };
 
 const SECTION_PALETTE = [
-  '#6366f1','#0ea5e9','#10b981','#f59e0b','#ef4444','#8b5cf6',
+  '#6366f1', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6',
 ];
 
 const inputCls = 'w-full bg-accent/10 border border-border rounded-lg py-2 px-3 text-sm focus:ring-1 focus:ring-primary outline-none disabled:opacity-50';
-
-// ─── Snap to grid ─────────────────────────────────────────────────────────────
+const labelCls = 'block text-xs font-semibold text-muted-foreground mb-1';
 
 function snap(v: number) {
   return Math.round(v / GRID) * GRID;
@@ -52,7 +54,13 @@ function defaultPos(idx: number) {
   return { x: snap(20 + col * 110), y: snap(20 + row * 90) };
 }
 
-// ─── Component ────────────────────────────────────────────────────────────────
+// ─── Inline edit state for a table card ────────────────────────────────────
+
+interface EditState {
+  name: string;
+  capacity: number;
+  sectionId: string;
+}
 
 export function TablesSettingsTab() {
   const outlet = useAuthStore((s) => s.outlet);
@@ -61,21 +69,34 @@ export function TablesSettingsTab() {
 
   const { data: sectionsData, isLoading } = useSections();
   const { data: tablesData, refetch: refetchTables } = useTables();
-  const createSection = useCreateSection();
-  const createTable  = useCreateTable();
-  const updateTable  = useUpdateTable();
+  const createSection  = useCreateSection();
+  const createTable    = useCreateTable();
+  const updateTable    = useUpdateTable();
+  const updateSection  = useUpdateSection();
+  const deleteTable    = useDeleteTable();
+  const deleteSection  = useDeleteSection();
 
   const [selectedSection, setSelectedSection] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'list' | 'floor'>('list');
 
+  // Add section form
   const [showSectionForm, setShowSectionForm] = useState(false);
-  const [showTableForm,   setShowTableForm]   = useState(false);
   const [sectionName, setSectionName] = useState('');
-  const [tableForm, setTableForm] = useState({ name: '', capacity: 4 });
 
+  // Add table form
+  const [showTableForm, setShowTableForm] = useState(false);
+  const [tableForm, setTableForm] = useState({ name: '', capacity: 4, sectionId: '' });
+
+  // Inline edit for table card
+  const [editingTableId, setEditingTableId] = useState<string | null>(null);
+  const [editState, setEditState] = useState<EditState>({ name: '', capacity: 4, sectionId: '' });
+
+  // Inline rename section
+  const [renamingSectionId, setRenamingSectionId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState('');
+
+  // Floor plan positions
   type PosMap = Record<string, { x: number; y: number; dirty: boolean }>;
-
-  // Floor plan local positions: id → {x, y, dirty}
   const [positions, setPositions] = useState<PosMap>({});
   const [savingLayout, setSavingLayout] = useState(false);
   const dragging = useRef<{ id: string; svgX: number; svgY: number; ox: number; oy: number } | null>(null);
@@ -88,7 +109,7 @@ export function TablesSettingsTab() {
     ? allTables.filter((t) => t.section_id === selectedSection)
     : allTables;
 
-  // ── Helpers ───────────────────────────────────────────────────────────────
+  // ── Helpers ─────────────────────────────────────────────────────────────
 
   function getPos(t: Table, idx: number) {
     const local = positions[t.id];
@@ -103,22 +124,20 @@ export function TablesSettingsTab() {
     return SECTION_PALETTE[Math.max(0, idx) % SECTION_PALETTE.length];
   }
 
-  // ── SVG drag logic ────────────────────────────────────────────────────────
+  // ── SVG drag ────────────────────────────────────────────────────────────
 
   const svgPoint = useCallback((clientX: number, clientY: number) => {
     const el = svgRef.current;
     if (!el) return { x: 0, y: 0 };
     const rect = el.getBoundingClientRect();
-    const scaleX = CVW / rect.width;
-    const scaleY = CVH / rect.height;
-    return { x: (clientX - rect.left) * scaleX, y: (clientY - rect.top) * scaleY };
+    return {
+      x: (clientX - rect.left) * (CVW / rect.width),
+      y: (clientY - rect.top) * (CVH / rect.height),
+    };
   }, []);
 
   const onRectPointerDown = useCallback((
-    e: React.PointerEvent<SVGRectElement>,
-    id: string,
-    x: number,
-    y: number,
+    e: React.PointerEvent<SVGRectElement>, id: string, x: number, y: number,
   ) => {
     if (!canEdit) return;
     e.preventDefault();
@@ -138,11 +157,9 @@ export function TablesSettingsTab() {
     setPositions((prev) => ({ ...prev, [id]: { x: nx, y: ny, dirty: true } }));
   }, [svgPoint]);
 
-  const onSvgPointerUp = useCallback(() => {
-    dragging.current = null;
-  }, []);
+  const onSvgPointerUp = useCallback(() => { dragging.current = null; }, []);
 
-  // ── Actions ───────────────────────────────────────────────────────────────
+  // ── Actions ─────────────────────────────────────────────────────────────
 
   async function handleCreateSection() {
     if (!sectionName.trim()) return;
@@ -151,23 +168,91 @@ export function TablesSettingsTab() {
       setSectionName('');
       setShowSectionForm(false);
     } catch {
-      toast.error('Failed to create section — check the console');
+      toast.error('Failed to create section');
+    }
+  }
+
+  async function handleRenameSection(sectionId: string) {
+    if (!renameValue.trim()) return;
+    try {
+      await updateSection.mutateAsync({ sectionId, input: { name: renameValue.trim() } });
+      setRenamingSectionId(null);
+      toast.success('Section renamed');
+    } catch {
+      toast.error('Failed to rename section');
+    }
+  }
+
+  async function handleDeleteSection(sec: Section) {
+    const count = allTables.filter((t) => t.section_id === sec.id).length;
+    if (count > 0) {
+      toast.error(`Move or delete the ${count} table${count > 1 ? 's' : ''} in "${sec.name}" first`);
+      return;
+    }
+    if (!window.confirm(`Delete section "${sec.name}"? This cannot be undone.`)) return;
+    try {
+      await deleteSection.mutateAsync(sec.id);
+      if (selectedSection === sec.id) setSelectedSection(null);
+      toast.success(`Section "${sec.name}" deleted`);
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      toast.error(msg || 'Failed to delete section');
     }
   }
 
   async function handleCreateTable() {
-    if (!tableForm.name.trim() || !selectedSection) return;
+    const sectionId = tableForm.sectionId || selectedSection;
+    if (!tableForm.name.trim() || !sectionId) return;
     try {
       await createTable.mutateAsync({
         outletId: outlet?.id ?? '',
-        sectionId: selectedSection,
+        sectionId,
         name: tableForm.name.trim(),
         capacity: tableForm.capacity,
       });
-      setTableForm({ name: '', capacity: 4 });
+      setTableForm({ name: '', capacity: 4, sectionId: '' });
       setShowTableForm(false);
+      toast.success('Table added');
     } catch {
       toast.error('Failed to create table');
+    }
+  }
+
+  function startEditTable(t: Table) {
+    setEditingTableId(t.id);
+    setEditState({ name: t.name, capacity: t.capacity, sectionId: t.section_id ?? '' });
+  }
+
+  async function handleSaveTableEdit(tableId: string) {
+    if (!editState.name.trim()) return;
+    try {
+      await updateTable.mutateAsync({
+        tableId,
+        input: {
+          name: editState.name.trim(),
+          capacity: editState.capacity,
+          ...(editState.sectionId ? { sectionId: editState.sectionId } : {}),
+        },
+      });
+      setEditingTableId(null);
+      toast.success('Table updated');
+    } catch {
+      toast.error('Failed to update table');
+    }
+  }
+
+  async function handleDeleteTable(t: Table) {
+    if (t.status === 'occupied') {
+      toast.error('Cannot delete an occupied table — release it first');
+      return;
+    }
+    if (!window.confirm(`Delete table "${t.name}"? This cannot be undone.`)) return;
+    try {
+      await deleteTable.mutateAsync(t.id);
+      toast.success(`Table "${t.name}" deleted`);
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      toast.error(msg || 'Failed to delete table');
     }
   }
 
@@ -186,7 +271,7 @@ export function TablesSettingsTab() {
         Object.keys(next).forEach((k) => { next[k] = { ...next[k], dirty: false }; });
         return next;
       });
-      toast.success(`Saved layout for ${dirty.length} table${dirty.length > 1 ? 's' : ''}`);
+      toast.success(`Layout saved for ${dirty.length} table${dirty.length > 1 ? 's' : ''}`);
       refetchTables();
     } catch {
       toast.error('Failed to save layout');
@@ -253,7 +338,6 @@ export function TablesSettingsTab() {
           <p className="text-xs text-muted-foreground py-6 text-center">No sections yet. Click + to add one.</p>
         )}
 
-        {/* "All" filter */}
         <button
           onClick={() => setSelectedSection(null)}
           className={`w-full text-left px-4 py-3 rounded-xl border transition-colors text-sm font-semibold ${
@@ -268,31 +352,74 @@ export function TablesSettingsTab() {
 
         {sections.map((sec) => {
           const count = allTables.filter((t) => t.section_id === sec.id).length;
+          const isRenaming = renamingSectionId === sec.id;
           return (
-            <button
-              key={sec.id}
-              onClick={() => setSelectedSection(sec.id === selectedSection ? null : sec.id)}
-              className={`w-full text-left px-4 py-3 rounded-xl border transition-colors text-sm font-semibold ${
-                selectedSection === sec.id
-                  ? 'border-primary bg-primary/5 text-primary'
-                  : 'border-border bg-card text-foreground hover:border-primary/50'
-              }`}
-            >
-              <span className="flex items-center gap-2">
-                <span
-                  className="h-2.5 w-2.5 rounded-full shrink-0"
-                  style={{ backgroundColor: getSectionColor(sec.id) }}
-                />
-                {sec.name}
-              </span>
-              <span className="float-right text-xs font-normal text-muted-foreground">{count} tables</span>
-            </button>
+            <div key={sec.id} className="group relative">
+              {isRenaming ? (
+                <div className="flex gap-1.5 px-1">
+                  <input
+                    autoFocus
+                    value={renameValue}
+                    onChange={(e) => setRenameValue(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleRenameSection(sec.id);
+                      if (e.key === 'Escape') setRenamingSectionId(null);
+                    }}
+                    className={`${inputCls} flex-1 text-xs`}
+                  />
+                  <button
+                    onClick={() => handleRenameSection(sec.id)}
+                    disabled={updateSection.isPending}
+                    className="h-8 w-8 flex items-center justify-center rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                  >
+                    {updateSection.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                  </button>
+                  <button onClick={() => setRenamingSectionId(null)} className="h-8 w-8 flex items-center justify-center rounded-lg hover:bg-accent">
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setSelectedSection(sec.id === selectedSection ? null : sec.id)}
+                  className={`w-full text-left px-4 py-3 rounded-xl border transition-colors text-sm font-semibold ${
+                    selectedSection === sec.id
+                      ? 'border-primary bg-primary/5 text-primary'
+                      : 'border-border bg-card text-foreground hover:border-primary/50'
+                  }`}
+                >
+                  <span className="flex items-center gap-2">
+                    <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: getSectionColor(sec.id) }} />
+                    {sec.name}
+                  </span>
+                  <span className="float-right text-xs font-normal text-muted-foreground">{count} tables</span>
+                </button>
+              )}
+              {canEdit && !isRenaming && (
+                <div className="absolute right-2 top-1/2 -translate-y-1/2 hidden group-hover:flex items-center gap-1 bg-card/90 backdrop-blur-sm rounded-lg px-1 py-0.5 shadow-sm border border-border">
+                  <button
+                    onClick={() => { setRenamingSectionId(sec.id); setRenameValue(sec.name); }}
+                    className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground"
+                    title="Rename section"
+                  >
+                    <Pencil className="h-3 w-3" />
+                  </button>
+                  <button
+                    onClick={() => handleDeleteSection(sec)}
+                    disabled={deleteSection.isPending}
+                    className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
+                    title="Delete section"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </button>
+                </div>
+              )}
+            </div>
           );
         })}
       </div>
 
       {/* ── Tables panel ────────────────────────────────────────────────── */}
-      <div className="md:col-span-2 space-y-3">
+      <div className="md:col-span-2 space-y-4">
 
         {/* Toolbar */}
         <div className="flex items-center justify-between">
@@ -315,59 +442,89 @@ export function TablesSettingsTab() {
             </button>
           </div>
 
-          {canEdit && selectedSection && viewMode === 'list' && (
-            <button
-              onClick={() => setShowTableForm((v) => !v)}
-              className="flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline"
-            >
-              <Plus className="h-3.5 w-3.5" /> Add Table
-            </button>
-          )}
-
-          {viewMode === 'floor' && canEdit && (
-            <button
-              onClick={saveLayout}
-              disabled={savingLayout || !hasDirty}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-semibold disabled:opacity-50 hover:bg-primary/90 transition-colors"
-            >
-              {savingLayout ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
-              Save Layout
-            </button>
-          )}
+          <div className="flex items-center gap-2">
+            {canEdit && viewMode === 'list' && (
+              <button
+                onClick={() => { setShowTableForm((v) => !v); setEditingTableId(null); }}
+                className="flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline"
+              >
+                <Plus className="h-3.5 w-3.5" /> Add Table
+              </button>
+            )}
+            {viewMode === 'floor' && canEdit && (
+              <button
+                onClick={saveLayout}
+                disabled={savingLayout || !hasDirty}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-semibold disabled:opacity-50 hover:bg-primary/90 transition-colors"
+              >
+                {savingLayout && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                Save Layout
+              </button>
+            )}
+          </div>
         </div>
 
-        {/* Add table form */}
-        {showTableForm && selectedSection && (
-          <div className="flex gap-2">
-            <input
-              autoFocus
-              value={tableForm.name}
-              onChange={(e) => setTableForm((f) => ({ ...f, name: e.target.value }))}
-              onKeyDown={(e) => e.key === 'Enter' && handleCreateTable()}
-              placeholder="Table name (e.g. T1, Table 1)"
-              className={`${inputCls} flex-1 text-xs`}
-            />
-            <input
-              type="number" min={1} max={24}
-              value={tableForm.capacity}
-              onChange={(e) => setTableForm((f) => ({ ...f, capacity: parseInt(e.target.value) || 4 }))}
-              className={`${inputCls} w-20 text-xs font-mono`}
-              title="Seats"
-            />
-            <button
-              onClick={handleCreateTable}
-              disabled={createTable.isPending || !tableForm.name.trim()}
-              className="px-3 rounded-lg bg-primary text-primary-foreground text-xs font-semibold disabled:opacity-50"
-            >
-              {createTable.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Add'}
-            </button>
-            <button onClick={() => setShowTableForm(false)} className="h-8 w-8 flex items-center justify-center rounded-lg hover:bg-accent">
-              <X className="h-3.5 w-3.5" />
-            </button>
-          </div>
+        {/* ── Add table form (labeled, responsive) ──────────────────── */}
+        {showTableForm && (
+          <Card className="border-dashed border-primary/40">
+            <CardContent className="p-4">
+              <p className="text-sm font-semibold text-foreground mb-3">New Table</p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="sm:col-span-1">
+                  <label className={labelCls}>Table Name <span className="text-destructive">*</span></label>
+                  <input
+                    autoFocus
+                    value={tableForm.name}
+                    onChange={(e) => setTableForm((f) => ({ ...f, name: e.target.value }))}
+                    onKeyDown={(e) => e.key === 'Enter' && handleCreateTable()}
+                    placeholder="e.g. T1, Table 4, Bar 2"
+                    className={inputCls}
+                  />
+                </div>
+                <div>
+                  <label className={labelCls}>Seats <span className="text-destructive">*</span></label>
+                  <input
+                    type="number" min={1} max={100}
+                    value={tableForm.capacity}
+                    onChange={(e) => setTableForm((f) => ({ ...f, capacity: parseInt(e.target.value) || 1 }))}
+                    className={inputCls}
+                  />
+                </div>
+                <div>
+                  <label className={labelCls}>Section <span className="text-destructive">*</span></label>
+                  <select
+                    value={tableForm.sectionId || selectedSection || ''}
+                    onChange={(e) => setTableForm((f) => ({ ...f, sectionId: e.target.value }))}
+                    className={inputCls}
+                  >
+                    <option value="">Select section…</option>
+                    {sections.map((s) => (
+                      <option key={s.id} value={s.id}>{s.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="flex gap-2 mt-4">
+                <button
+                  onClick={handleCreateTable}
+                  disabled={createTable.isPending || !tableForm.name.trim() || !(tableForm.sectionId || selectedSection)}
+                  className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 disabled:opacity-50 flex items-center gap-2"
+                >
+                  {createTable.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                  Add Table
+                </button>
+                <button
+                  onClick={() => setShowTableForm(false)}
+                  className="px-4 py-2 rounded-lg border border-border text-sm font-semibold text-muted-foreground hover:bg-accent"
+                >
+                  Cancel
+                </button>
+              </div>
+            </CardContent>
+          </Card>
         )}
 
-        {/* ── List View ──────────────────────────────────────────────────── */}
+        {/* ── List View ──────────────────────────────────────────────── */}
         {viewMode === 'list' && (
           <>
             {displayTables.length === 0 ? (
@@ -382,21 +539,95 @@ export function TablesSettingsTab() {
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                 {displayTables.map((t) => {
                   const col = STATUS_COLORS[t.status] ?? STATUS_COLORS.available;
+                  const isEditing = editingTableId === t.id;
                   return (
-                    <Card key={t.id} className="text-center">
+                    <Card key={t.id} className="text-center group relative">
                       <CardContent className="p-3 space-y-1">
-                        <p className="text-sm font-bold">{t.name}</p>
-                        <p className="text-xs text-muted-foreground">{t.capacity} seats</p>
-                        <span
-                          className="inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full capitalize"
-                          style={{ backgroundColor: col.fill, color: col.text }}
-                        >
-                          {t.status}
-                        </span>
-                        {t.section_id && (
-                          <p className="text-[10px] text-muted-foreground truncate">
-                            {sections.find((s) => s.id === t.section_id)?.name ?? ''}
-                          </p>
+                        {isEditing ? (
+                          <div className="space-y-2 text-left">
+                            <div>
+                              <label className={labelCls}>Name</label>
+                              <input
+                                autoFocus
+                                value={editState.name}
+                                onChange={(e) => setEditState((s) => ({ ...s, name: e.target.value }))}
+                                className={`${inputCls} text-xs`}
+                              />
+                            </div>
+                            <div>
+                              <label className={labelCls}>Seats</label>
+                              <input
+                                type="number" min={1} max={100}
+                                value={editState.capacity}
+                                onChange={(e) => setEditState((s) => ({ ...s, capacity: parseInt(e.target.value) || 1 }))}
+                                className={`${inputCls} text-xs`}
+                              />
+                            </div>
+                            <div>
+                              <label className={labelCls}>Section</label>
+                              <select
+                                value={editState.sectionId}
+                                onChange={(e) => setEditState((s) => ({ ...s, sectionId: e.target.value }))}
+                                className={`${inputCls} text-xs`}
+                              >
+                                <option value="">No section</option>
+                                {sections.map((s) => (
+                                  <option key={s.id} value={s.id}>{s.name}</option>
+                                ))}
+                              </select>
+                            </div>
+                            <div className="flex gap-1 pt-1">
+                              <button
+                                onClick={() => handleSaveTableEdit(t.id)}
+                                disabled={updateTable.isPending}
+                                className="flex-1 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 disabled:opacity-50 flex items-center justify-center gap-1"
+                              >
+                                {updateTable.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
+                                Save
+                              </button>
+                              <button
+                                onClick={() => setEditingTableId(null)}
+                                className="px-2 py-1.5 rounded-lg border border-border text-xs text-muted-foreground hover:bg-accent"
+                              >
+                                <X className="h-3 w-3" />
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            <p className="text-sm font-bold">{t.name}</p>
+                            <p className="text-xs text-muted-foreground">{t.capacity} seats</p>
+                            <span
+                              className="inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full capitalize"
+                              style={{ backgroundColor: col.fill, color: col.text }}
+                            >
+                              {t.status}
+                            </span>
+                            {t.section_id && (
+                              <p className="text-[10px] text-muted-foreground truncate">
+                                {sections.find((s) => s.id === t.section_id)?.name ?? ''}
+                              </p>
+                            )}
+                            {canEdit && (
+                              <div className="absolute top-1.5 right-1.5 hidden group-hover:flex items-center gap-0.5 bg-card/90 backdrop-blur-sm rounded-lg px-1 py-0.5 shadow-sm border border-border">
+                                <button
+                                  onClick={() => startEditTable(t)}
+                                  className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground"
+                                  title="Edit table"
+                                >
+                                  <Pencil className="h-3 w-3" />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteTable(t)}
+                                  disabled={deleteTable.isPending}
+                                  className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
+                                  title={t.status === 'occupied' ? 'Release table first' : 'Delete table'}
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                </button>
+                              </div>
+                            )}
+                          </>
                         )}
                       </CardContent>
                     </Card>
@@ -407,7 +638,7 @@ export function TablesSettingsTab() {
           </>
         )}
 
-        {/* ── Floor Plan View ─────────────────────────────────────────────── */}
+        {/* ── Floor Plan View ─────────────────────────────────────────── */}
         {viewMode === 'floor' && (
           <div className="space-y-2">
             <p className="text-xs text-muted-foreground">
@@ -415,7 +646,6 @@ export function TablesSettingsTab() {
                 ? 'Drag tables to position them. Purple outline = unsaved. Click Save Layout when done.'
                 : 'Floor plan view (read-only).'}
             </p>
-
             <div className="rounded-xl border border-border overflow-hidden bg-muted/20">
               {displayTables.length === 0 ? (
                 <div className="h-48 flex items-center justify-center text-sm text-muted-foreground">
@@ -431,62 +661,33 @@ export function TablesSettingsTab() {
                   onPointerUp={onSvgPointerUp}
                   onPointerLeave={onSvgPointerUp}
                 >
-                  {/* Dot grid background */}
                   <defs>
                     <pattern id="floorGrid" x="0" y="0" width={GRID} height={GRID} patternUnits="userSpaceOnUse">
                       <circle cx="1" cy="1" r="1" fill="#d1d5db" />
                     </pattern>
                   </defs>
                   <rect width={CVW} height={CVH} fill="url(#floorGrid)" />
-
-                  {/* Tables */}
                   {displayTables.map((t, idx) => {
                     const { x, y, dirty } = getPos(t, idx);
                     const col = STATUS_COLORS[t.status] ?? STATUS_COLORS.available;
                     const secColor = getSectionColor(t.section_id);
                     return (
                       <g key={t.id} style={{ cursor: canEdit ? 'grab' : 'default' }}>
-                        {/* Section color accent bar */}
+                        <rect x={x} y={y} width={TW} height={4} rx={4} fill={secColor} style={{ pointerEvents: 'none' }} />
                         <rect
-                          x={x} y={y}
-                          width={TW} height={4}
-                          rx={4}
-                          fill={secColor}
-                          style={{ pointerEvents: 'none' }}
-                        />
-                        {/* Table body */}
-                        <rect
-                          x={x} y={y + 4}
-                          width={TW} height={TH - 4}
-                          rx={6}
+                          x={x} y={y + 4} width={TW} height={TH - 4} rx={6}
                           fill={col.fill}
                           stroke={dirty ? '#7c3aed' : col.stroke}
                           strokeWidth={dirty ? 2.5 : 1.5}
                           onPointerDown={(e) => onRectPointerDown(e, t.id, x, y)}
                         />
-                        {/* Table name */}
-                        <text
-                          x={x + TW / 2}
-                          y={y + TH / 2 + 2}
-                          textAnchor="middle"
-                          dominantBaseline="middle"
-                          fontSize={13}
-                          fontWeight="700"
-                          fill={col.text}
-                          style={{ pointerEvents: 'none', userSelect: 'none' }}
-                        >
+                        <text x={x + TW / 2} y={y + TH / 2 + 2} textAnchor="middle" dominantBaseline="middle"
+                          fontSize={13} fontWeight="700" fill={col.text}
+                          style={{ pointerEvents: 'none', userSelect: 'none' }}>
                           {t.name}
                         </text>
-                        {/* Capacity */}
-                        <text
-                          x={x + TW / 2}
-                          y={y + TH - 6}
-                          textAnchor="middle"
-                          fontSize={9}
-                          fill={col.text}
-                          opacity={0.65}
-                          style={{ pointerEvents: 'none', userSelect: 'none' }}
-                        >
+                        <text x={x + TW / 2} y={y + TH - 6} textAnchor="middle" fontSize={9} fill={col.text} opacity={0.65}
+                          style={{ pointerEvents: 'none', userSelect: 'none' }}>
                           {t.capacity} seats
                         </text>
                       </g>
@@ -495,8 +696,6 @@ export function TablesSettingsTab() {
                 </svg>
               )}
             </div>
-
-            {/* Legend */}
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
               {Object.entries(STATUS_COLORS).map(([status, col]) => (
                 <span key={status} className="flex items-center gap-1 text-[10px] text-muted-foreground capitalize">

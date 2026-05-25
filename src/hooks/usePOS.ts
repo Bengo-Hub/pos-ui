@@ -213,9 +213,38 @@ export function useUpdateTable() {
   const tenantID = useTenantID();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ tableId, input }: { tableId: string; input: { name?: string; capacity?: number; tableType?: string; isActive?: boolean; xPosition?: number; yPosition?: number } }) =>
+    mutationFn: ({ tableId, input }: { tableId: string; input: { name?: string; capacity?: number; tableType?: string; isActive?: boolean; xPosition?: number; yPosition?: number; sectionId?: string } }) =>
       apiClient.put<Table>(`${basePath(tenantID)}/tables/${tableId}`, input),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['pos-tables'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['pos-tables'] });
+      qc.invalidateQueries({ queryKey: ['pos-sections'] });
+    },
+  });
+}
+
+export function useDeleteTable() {
+  const tenantID = useTenantID();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (tableId: string) =>
+      apiClient.delete(`${basePath(tenantID)}/tables/${tableId}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['pos-tables'] });
+      qc.invalidateQueries({ queryKey: ['pos-sections'] });
+    },
+  });
+}
+
+export function useDeleteSection() {
+  const tenantID = useTenantID();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (sectionId: string) =>
+      apiClient.delete(`${basePath(tenantID)}/sections/${sectionId}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['pos-sections'] });
+      qc.invalidateQueries({ queryKey: ['pos-tables'] });
+    },
   });
 }
 
