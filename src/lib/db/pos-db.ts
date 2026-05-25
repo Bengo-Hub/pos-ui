@@ -99,6 +99,21 @@ export interface OfflineDrawerClose {
   sync_error?: string;
 }
 
+// ── eTIMS offline queue ────────────────────────────────────────────────────────
+
+export interface OfflineETIMSSubmission {
+  id?: number;
+  order_id: string; // server order ID (known at sale time)
+  local_order_id?: string; // set if order was created offline and not yet synced
+  tenant_id: string;
+  tenant_slug: string;
+  invoice_data: Record<string, any>; // full eTIMS payload built client-side
+  status: 'pending' | 'submitted' | 'failed';
+  error?: string;
+  created_at: string;
+  synced: boolean;
+}
+
 // ── Staff / Auth ───────────────────────────────────────────────────────────────
 
 export interface CachedStaffProfile {
@@ -121,6 +136,7 @@ class POSDatabase extends Dexie {
   drawerSessions!: Table<OfflineDrawerSession, number>;
   drawerCloses!: Table<OfflineDrawerClose, number>;
   staffProfiles!: Table<CachedStaffProfile, string>;
+  etimsQueue!: Table<OfflineETIMSSubmission, number>;
 
   constructor() {
     super('pos_offline_db');
@@ -132,6 +148,16 @@ class POSDatabase extends Dexie {
       drawerSessions: '++id, local_id, tenant_id, synced',
       drawerCloses:   '++id, server_drawer_id, local_drawer_id, tenant_id, synced',
       staffProfiles:  'user_id, tenant_id',
+    });
+
+    this.version(3).stores({
+      catalogItems:   'id, tenant_id, sku, category, status, cached_at',
+      offlineOrders:  '++id, local_id, tenant_id, synced, created_at',
+      offlinePayments:'++id, local_order_id, server_order_id, tenant_id, synced',
+      drawerSessions: '++id, local_id, tenant_id, synced',
+      drawerCloses:   '++id, server_drawer_id, local_drawer_id, tenant_id, synced',
+      staffProfiles:  'user_id, tenant_id',
+      etimsQueue:     '++id, order_id, tenant_id, synced, status, created_at',
     });
   }
 }
@@ -226,4 +252,24 @@ export async function getCachedStaffProfiles(tenantId: string): Promise<CachedSt
 
 export async function getCachedStaffProfile(userId: string): Promise<CachedStaffProfile | undefined> {
   return posDB.staffProfiles.get(userId);
+}
+
+// ── eTIMS queue helpers ────────────────────────────────────────────────────────
+
+export async function queueETIMSSubmission(
+  submission: Omit<OfflineETIMSSubmission, 'id'>
+): Promise<number> {
+  return posDB.etimsQueue.add(submission);
+}
+
+export async function getPendingETIMSSubmissions(): Promise<OfflineETIMSSubmission[]> {
+  return posDB.etimsQueue.where('synced').equals(0).toArray();
+}
+
+export async function markETIMSSubmissionSynced(id: number): Promise<void> {
+  await posDB.etimsQueue.update(id, { synced: true, status: 'submitted', error: undefined });
+}
+
+export async function markETIMSSubmissionFailed(id: number, error: string): Promise<void> {
+  await posDB.etimsQueue.update(id, { status: 'failed', error });
 }

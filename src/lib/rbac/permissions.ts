@@ -98,6 +98,9 @@ export const P = {
   PHARMACY_ADD:      'pos.pharmacy.add',
   PHARMACY_MANAGE:   'pos.pharmacy.manage',
 
+  // Staff
+  STAFF_MANAGE:      'pos.staff.manage',
+
   // Outlets
   OUTLETS_VIEW:      'pos.outlets.view',
   OUTLETS_CHANGE:    'pos.outlets.change',
@@ -124,6 +127,7 @@ export const ROLE_PERMISSIONS: Record<string, Permission[]> = {
     P.TABLES_VIEW, P.TABLES_CHANGE, P.TABLES_MANAGE,
     P.DRAWERS_ADD, P.DRAWERS_VIEW, P.DRAWERS_MANAGE,
     P.SESSIONS_ADD, P.SESSIONS_VIEW, P.SESSIONS_MANAGE,
+    P.STAFF_MANAGE,
     P.USERS_VIEW, P.USERS_CHANGE,
     P.DEVICES_VIEW,
     P.CONFIG_VIEW, P.CONFIG_CHANGE,

@@ -16,6 +16,9 @@ import {
   markDrawerSessionSynced,
   getPendingSyncDrawerCloses,
   markDrawerCloseSynced,
+  getPendingETIMSSubmissions,
+  markETIMSSubmissionSynced,
+  markETIMSSubmissionFailed,
 } from '@/lib/db/pos-db';
 
 /**
@@ -45,6 +48,7 @@ export function useSyncOfflineOrders() {
         await syncOrders(tenantID);
         await syncPayments(tenantID);
         await syncDrawerCloses(tenantID);
+        await syncETIMSQueue(tenantID);
 
         // Refresh UI after sync
         qc.invalidateQueries({ queryKey: ['pos-orders'] });
@@ -144,6 +148,25 @@ async function syncPayments(tenantID: string) {
     } catch (err: any) {
       const msg = err?.response?.data?.error ?? err?.message ?? 'sync failed';
       await markPaymentSyncFailed(payment.id!, msg);
+    }
+  }
+}
+
+// ── eTIMS queue sync ───────────────────────────────────────────────────────────
+
+async function syncETIMSQueue(tenantID: string) {
+  const submissions = await getPendingETIMSSubmissions();
+  for (const sub of submissions) {
+    try {
+      // Queue with treasury-api which owns eTIMS submission to KRA
+      await apiClient.post(
+        `/api/v1/${tenantID}/treasury/etims/queue`,
+        { order_id: sub.order_id, invoice_data: sub.invoice_data }
+      );
+      await markETIMSSubmissionSynced(sub.id!);
+    } catch (err: any) {
+      const msg = err?.response?.data?.error ?? err?.message ?? 'sync failed';
+      await markETIMSSubmissionFailed(sub.id!, msg);
     }
   }
 }
