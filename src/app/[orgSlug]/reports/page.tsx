@@ -2,12 +2,16 @@
 
 import { ModuleGate } from '@/components/auth/module-gate';
 import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
-
-import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { apiClient } from '@/lib/api/client';
-import { useAuthStore } from '@/store/auth';
 import { Card, CardContent } from '@/components/ui/base';
+import {
+  useSalesSummary,
+  useRefundSummary,
+  useDailyBreakdown,
+  useTopItems,
+  useSalesByStaff,
+  useReportExportUrl,
+} from '@/hooks/useReports';
+import { useAuthStore } from '@/store/auth';
 import { cn } from '@/lib/utils';
 import {
   BarChart3,
@@ -20,17 +24,12 @@ import {
   TrendingDown,
   Users,
 } from 'lucide-react';
-
-function useTenantID() {
-  return useAuthStore((s) => s.user?.tenant_id ?? '');
-}
+import { useState } from 'react';
 
 function periodToRange(period: 'today' | 'week' | 'month'): { from: string; to: string } {
   const now = new Date();
   const fmt = (d: Date) => d.toISOString().slice(0, 10);
-  if (period === 'today') {
-    return { from: fmt(now), to: fmt(now) };
-  }
+  if (period === 'today') return { from: fmt(now), to: fmt(now) };
   if (period === 'week') {
     const start = new Date(now);
     start.setDate(now.getDate() - 6);
@@ -44,77 +43,17 @@ const PERIODS = ['today', 'week', 'month'] as const;
 type Period = (typeof PERIODS)[number];
 const PERIOD_LABELS: Record<Period, string> = { today: 'Today', week: 'This Week', month: 'This Month' };
 
-interface SalesSummary {
-  from: string;
-  to: string;
-  order_count: number;
-  total_revenue: number;
-  total_tax: number;
-  total_discount: number;
-  avg_order_value: number;
-}
-
-interface RefundSummary {
-  refund_count: number;
-  total_refunded: number;
-}
-
-interface DayRow {
-  date: string;
-  revenue: number;
-  order_count: number;
-}
-
-interface TopItem {
-  sku: string;
-  name: string;
-  quantity_sold: number;
-  revenue: number;
-}
-
-interface StaffRow {
-  user_id: string;
-  order_count: number;
-  revenue: number;
-}
-
 function ReportsPage() {
-  const tenantID = useTenantID();
+  const tenantID = useAuthStore((s) => s.user?.tenant_id ?? '');
   const [period, setPeriod] = useState<Period>('today');
   const { from, to } = periodToRange(period);
-  const base = `/api/v1/${tenantID}/pos/reports`;
 
-  const { data: sales, isLoading: salesLoading } = useQuery<SalesSummary>({
-    queryKey: ['reports-sales', tenantID, from, to],
-    queryFn: () => apiClient.get<SalesSummary>(`${base}/sales-summary`, { from, to }),
-    enabled: !!tenantID,
-  });
-
-  const { data: refunds } = useQuery<RefundSummary>({
-    queryKey: ['reports-refunds', tenantID, from, to],
-    queryFn: () => apiClient.get<RefundSummary>(`${base}/refund-summary`, { from, to }),
-    enabled: !!tenantID,
-  });
-
-  const { data: daily = [] } = useQuery<DayRow[]>({
-    queryKey: ['reports-daily', tenantID, from, to],
-    queryFn: () => apiClient.get<DayRow[]>(`${base}/daily-breakdown`, { from, to }),
-    enabled: !!tenantID && period !== 'today',
-  });
-
-  const { data: topItems = [] } = useQuery<TopItem[]>({
-    queryKey: ['reports-top-items', tenantID, from, to],
-    queryFn: () => apiClient.get<TopItem[]>(`${base}/top-items`, { from, to, limit: 10 }),
-    enabled: !!tenantID,
-    staleTime: 2 * 60_000,
-  });
-
-  const { data: staffSales = [] } = useQuery<StaffRow[]>({
-    queryKey: ['reports-staff-sales', tenantID, from, to],
-    queryFn: () => apiClient.get<StaffRow[]>(`${base}/sales-by-staff`, { from, to }),
-    enabled: !!tenantID,
-    staleTime: 2 * 60_000,
-  });
+  const { data: sales, isLoading: salesLoading } = useSalesSummary(from, to);
+  const { data: refunds } = useRefundSummary(from, to);
+  const { data: daily = [] } = useDailyBreakdown(from, to, period !== 'today');
+  const { data: topItems = [] } = useTopItems(from, to);
+  const { data: staffSales = [] } = useSalesByStaff(from, to);
+  const exportUrl = useReportExportUrl(tenantID, from, to);
 
   const kpis = sales
     ? [
@@ -148,7 +87,7 @@ function ReportsPage() {
             </button>
           ))}
           <a
-            href={`/api/v1/${tenantID}/pos/reports/export?from=${from}&to=${to}`}
+            href={exportUrl}
             download
             className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium bg-muted text-muted-foreground hover:bg-muted/80 transition-colors"
           >
@@ -164,7 +103,6 @@ function ReportsPage() {
         </div>
       ) : (
         <>
-          {/* KPI cards */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {kpis.map(({ label, value, icon: Icon, color }) => (
               <Card key={label}>
@@ -181,7 +119,6 @@ function ReportsPage() {
             ))}
           </div>
 
-          {/* Tax & discount breakdown */}
           {sales && (sales.total_tax > 0 || sales.total_discount > 0) && (
             <Card>
               <CardContent className="p-5 space-y-3">
@@ -193,7 +130,7 @@ function ReportsPage() {
                   { label: 'Gross Revenue', amount: sales.total_revenue + sales.total_discount - sales.total_tax, color: 'bg-primary' },
                   { label: 'Tax Collected', amount: sales.total_tax, color: 'bg-yellow-500' },
                   { label: 'Discounts Given', amount: sales.total_discount, color: 'bg-red-400' },
-                ].map(({ label, amount, color }) => (
+                ].map(({ label, amount }) => (
                   <div key={label} className="flex justify-between text-sm">
                     <span className="text-muted-foreground">{label}</span>
                     <span className="font-medium">KES {amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
@@ -203,7 +140,6 @@ function ReportsPage() {
             </Card>
           )}
 
-          {/* Daily chart (week/month only) */}
           {daily.length > 1 && (
             <Card>
               <CardContent className="p-5">
@@ -230,7 +166,6 @@ function ReportsPage() {
             </Card>
           )}
 
-          {/* Top selling items */}
           {topItems.length > 0 && (
             <Card>
               <CardContent className="p-5">
@@ -264,7 +199,6 @@ function ReportsPage() {
             </Card>
           )}
 
-          {/* Sales by staff */}
           {staffSales.length > 0 && (
             <Card>
               <CardContent className="p-5">

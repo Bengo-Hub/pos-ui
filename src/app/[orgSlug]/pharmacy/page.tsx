@@ -4,14 +4,16 @@ import { ModuleGate } from '@/components/auth/module-gate';
 import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
 
 import { cn } from '@/lib/utils';
-import { usePrescriptions } from '@/hooks/usePharmacy';
-import { useDispensePrescription } from '@/hooks/usePharmacy';
+import { usePrescriptions, useDispensePrescription, useCreatePrescription } from '@/hooks/usePharmacy';
 import { useAuthStore } from '@/store/auth';
-import { Loader2, Pill, Plus, Eye } from 'lucide-react';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { Loader2, Pill, Plus, Eye, Trash2, X } from 'lucide-react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
-import { useState } from 'react';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import { useState, useEffect } from 'react';
+import { useFieldArray, useForm } from 'react-hook-form';
 import { toast } from 'sonner';
+import { z } from 'zod';
 import type { Prescription } from '@/lib/api/pharmacy';
 
 // ─── Status helpers ───────────────────────────────────────────────────────────
@@ -39,15 +41,272 @@ function StatusBadge({ status }: { status: Prescription['status'] }) {
   );
 }
 
+// ─── New Prescription form schema ────────────────────────────────────────────
+
+const drugLineSchema = z.object({
+  drug_name: z.string().min(1, 'Drug name required'),
+  dosage: z.string().min(1, 'Dosage required'),
+  form: z.string().min(1, 'Form required'),
+  instructions: z.string().min(1, 'Instructions required'),
+  quantity_prescribed: z.coerce.number().int().positive('Must be > 0'),
+  catalog_item_id: z.string().optional(),
+  lot_number: z.string().optional(),
+  unit_price: z.coerce.number().optional(),
+});
+
+const prescriptionSchema = z.object({
+  prescription_number: z.string().min(1, 'Prescription number required'),
+  prescriber_name: z.string().min(1, 'Prescriber name required'),
+  prescriber_license: z.string().min(1, 'Prescriber license required'),
+  patient_name: z.string().min(1, 'Patient name required'),
+  patient_dob: z.string().optional(),
+  patient_id_number: z.string().optional(),
+  notes: z.string().optional(),
+  lines: z.array(drugLineSchema).min(1, 'Add at least one drug'),
+});
+
+type PrescriptionFormValues = z.infer<typeof prescriptionSchema>;
+
+function NewPrescriptionModal({ onClose }: { onClose: () => void }) {
+  const params = useParams();
+  const orgSlug = params?.orgSlug as string;
+  const router = useRouter();
+  const outlet = useAuthStore((s) => s.outlet);
+  const createPrescription = useCreatePrescription();
+
+  const {
+    register,
+    handleSubmit,
+    control,
+    formState: { errors, isSubmitting },
+  } = useForm<PrescriptionFormValues>({
+    resolver: zodResolver(prescriptionSchema),
+    defaultValues: {
+      lines: [{ drug_name: '', dosage: '', form: '', instructions: '', quantity_prescribed: 1 }],
+    },
+  });
+
+  const { fields, append, remove } = useFieldArray({ control, name: 'lines' });
+
+  const onSubmit = async (values: PrescriptionFormValues) => {
+    if (!outlet?.id) {
+      toast.error('No outlet selected — please select an outlet first');
+      return;
+    }
+    try {
+      const rx = await createPrescription.mutateAsync({
+        outlet_id: outlet.id,
+        prescription_number: values.prescription_number,
+        prescriber_name: values.prescriber_name,
+        prescriber_license: values.prescriber_license,
+        patient_name: values.patient_name,
+        patient_dob: values.patient_dob || undefined,
+        patient_id_number: values.patient_id_number || undefined,
+        notes: values.notes || undefined,
+        lines: values.lines.map((l) => ({
+          drug_name: l.drug_name,
+          dosage: l.dosage,
+          form: l.form,
+          instructions: l.instructions,
+          quantity_prescribed: l.quantity_prescribed,
+          catalog_item_id: l.catalog_item_id || undefined,
+          lot_number: l.lot_number || undefined,
+          unit_price: l.unit_price || undefined,
+        })),
+      });
+      toast.success('Prescription created');
+      onClose();
+      router.push(`/${orgSlug}/pharmacy/${rx.id}`);
+    } catch {
+      toast.error('Failed to create prescription');
+    }
+  };
+
+  const inputCls = 'w-full bg-background border border-border rounded-xl py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40';
+  const labelCls = 'text-xs font-semibold text-muted-foreground mb-1 block';
+  const errorCls = 'text-xs text-destructive mt-0.5';
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+      <div className="bg-card rounded-2xl border border-border w-full max-w-2xl shadow-2xl flex flex-col max-h-[90vh]">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="h-9 w-9 rounded-xl bg-primary/10 flex items-center justify-center">
+              <Pill className="h-4.5 w-4.5 text-primary" />
+            </div>
+            <div>
+              <h3 className="font-bold text-base">New Prescription</h3>
+              <p className="text-xs text-muted-foreground">Enter prescription and drug details</p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="h-9 w-9 rounded-xl flex items-center justify-center hover:bg-accent"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        {/* Scrollable form body */}
+        <form onSubmit={handleSubmit(onSubmit)} className="overflow-y-auto flex-1">
+          <div className="p-6 space-y-5">
+            {/* Outlet info */}
+            {!outlet && (
+              <div className="bg-destructive/10 border border-destructive/20 rounded-xl px-4 py-3 text-sm text-destructive">
+                No outlet selected — please select an outlet before creating a prescription
+              </div>
+            )}
+
+            {/* Prescription info */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className={labelCls}>Prescription # <span className="text-destructive">*</span></label>
+                <input {...register('prescription_number')} placeholder="RX-00001" className={inputCls} />
+                {errors.prescription_number && <p className={errorCls}>{errors.prescription_number.message}</p>}
+              </div>
+              <div>
+                <label className={labelCls}>Prescriber Name <span className="text-destructive">*</span></label>
+                <input {...register('prescriber_name')} placeholder="Dr. Jane Doe" className={inputCls} />
+                {errors.prescriber_name && <p className={errorCls}>{errors.prescriber_name.message}</p>}
+              </div>
+              <div>
+                <label className={labelCls}>Prescriber License # <span className="text-destructive">*</span></label>
+                <input {...register('prescriber_license')} placeholder="LIC-12345" className={inputCls} />
+                {errors.prescriber_license && <p className={errorCls}>{errors.prescriber_license.message}</p>}
+              </div>
+            </div>
+
+            {/* Patient info */}
+            <div className="rounded-xl border border-border bg-background/50 p-4 space-y-3">
+              <h4 className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Patient Details</h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className={labelCls}>Patient Name <span className="text-destructive">*</span></label>
+                  <input {...register('patient_name')} placeholder="Full name" className={inputCls} />
+                  {errors.patient_name && <p className={errorCls}>{errors.patient_name.message}</p>}
+                </div>
+                <div>
+                  <label className={labelCls}>Date of Birth</label>
+                  <input {...register('patient_dob')} type="date" className={inputCls} />
+                </div>
+                <div>
+                  <label className={labelCls}>Patient ID Number</label>
+                  <input {...register('patient_id_number')} placeholder="National ID / Passport" className={inputCls} />
+                </div>
+              </div>
+              <div>
+                <label className={labelCls}>Notes</label>
+                <textarea {...register('notes')} rows={2} placeholder="Any additional notes…" className={`${inputCls} resize-none`} />
+              </div>
+            </div>
+
+            {/* Drug lines */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h4 className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Drug Lines</h4>
+                <button
+                  type="button"
+                  onClick={() => append({ drug_name: '', dosage: '', form: '', instructions: '', quantity_prescribed: 1 })}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-primary/30 text-primary text-xs font-semibold hover:bg-primary/5 transition-colors"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  Add Drug
+                </button>
+              </div>
+              {errors.lines && typeof errors.lines.message === 'string' && (
+                <p className={errorCls}>{errors.lines.message}</p>
+              )}
+              {fields.map((field, idx) => (
+                <div key={field.id} className="rounded-xl border border-border bg-background/50 p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-muted-foreground">Drug {idx + 1}</span>
+                    {fields.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => remove(idx)}
+                        className="h-7 w-7 rounded-lg flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className={labelCls}>Drug Name <span className="text-destructive">*</span></label>
+                      <input {...register(`lines.${idx}.drug_name`)} placeholder="e.g. Amoxicillin" className={inputCls} />
+                      {errors.lines?.[idx]?.drug_name && <p className={errorCls}>{errors.lines[idx]?.drug_name?.message}</p>}
+                    </div>
+                    <div>
+                      <label className={labelCls}>Dosage <span className="text-destructive">*</span></label>
+                      <input {...register(`lines.${idx}.dosage`)} placeholder="e.g. 500mg" className={inputCls} />
+                      {errors.lines?.[idx]?.dosage && <p className={errorCls}>{errors.lines[idx]?.dosage?.message}</p>}
+                    </div>
+                    <div>
+                      <label className={labelCls}>Form <span className="text-destructive">*</span></label>
+                      <input {...register(`lines.${idx}.form`)} placeholder="e.g. Capsule, Tablet" className={inputCls} />
+                      {errors.lines?.[idx]?.form && <p className={errorCls}>{errors.lines[idx]?.form?.message}</p>}
+                    </div>
+                    <div>
+                      <label className={labelCls}>Qty <span className="text-destructive">*</span></label>
+                      <input {...register(`lines.${idx}.quantity_prescribed`)} type="number" min="1" placeholder="1" className={inputCls} />
+                      {errors.lines?.[idx]?.quantity_prescribed && <p className={errorCls}>{errors.lines[idx]?.quantity_prescribed?.message}</p>}
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className={labelCls}>Instructions <span className="text-destructive">*</span></label>
+                      <input {...register(`lines.${idx}.instructions`)} placeholder="e.g. Take 1 capsule twice daily" className={inputCls} />
+                      {errors.lines?.[idx]?.instructions && <p className={errorCls}>{errors.lines[idx]?.instructions?.message}</p>}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Footer actions */}
+          <div className="flex gap-3 px-6 pb-6 pt-2 border-t border-border shrink-0">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={isSubmitting}
+              className="flex-1 min-h-11 rounded-xl border border-border text-sm font-semibold hover:bg-accent transition-colors disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isSubmitting || !outlet}
+              className="flex-1 min-h-11 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            >
+              {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
+              Create Prescription
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 function PharmacyPage() {
   const params = useParams();
   const orgSlug = params?.orgSlug as string;
-  const tenantSlug = useAuthStore((s) => s.user?.tenant_slug ?? '');
+  const searchParams = useSearchParams();
+  const router = useRouter();
 
   const [statusFilter, setStatusFilter] = useState('');
   const [patientSearch, setPatientSearch] = useState('');
+  const [createOpen, setCreateOpen] = useState(false);
+
+  // ?new=1 from redirect (e.g. navigating to /pharmacy/new)
+  useEffect(() => {
+    if (searchParams?.get('new') === '1') {
+      setCreateOpen(true);
+      router.replace(`/${orgSlug}/pharmacy`);
+    }
+  }, [searchParams, orgSlug, router]);
 
   const filters = {
     status: statusFilter || undefined,
@@ -70,7 +329,6 @@ function PharmacyPage() {
 
   return (
     <div className="p-6">
-      {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
           <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
@@ -81,16 +339,15 @@ function PharmacyPage() {
             <p className="text-sm text-muted-foreground mt-0.5">Manage prescriptions and dispensing</p>
           </div>
         </div>
-        <Link
-          href={`/${orgSlug}/pharmacy/new`}
+        <button
+          onClick={() => setCreateOpen(true)}
           className="inline-flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-primary/90 transition-colors"
         >
           <Plus className="h-4 w-4" />
           New Prescription
-        </Link>
+        </button>
       </div>
 
-      {/* Filters */}
       <div className="flex flex-wrap gap-3 mb-5">
         <select
           value={statusFilter}
@@ -112,7 +369,6 @@ function PharmacyPage() {
         />
       </div>
 
-      {/* Content */}
       {isLoading ? (
         <div className="flex items-center justify-center h-48 gap-3">
           <Loader2 className="h-6 w-6 animate-spin text-primary" />
@@ -122,9 +378,9 @@ function PharmacyPage() {
         <div className="flex flex-col items-center justify-center h-48 text-muted-foreground gap-2">
           <Pill className="h-10 w-10 opacity-30" />
           <p className="font-medium">No prescriptions found</p>
-          <Link href={`/${orgSlug}/pharmacy/new`} className="text-sm text-primary underline">
+          <button onClick={() => setCreateOpen(true)} className="text-sm text-primary underline">
             Create one
-          </Link>
+          </button>
         </div>
       ) : (
         <div className="rounded-2xl border border-border overflow-hidden bg-card">
@@ -186,6 +442,8 @@ function PharmacyPage() {
           </table>
         </div>
       )}
+
+      {createOpen && <NewPrescriptionModal onClose={() => setCreateOpen(false)} />}
     </div>
   );
 }

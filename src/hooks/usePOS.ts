@@ -72,6 +72,18 @@ export function useCreateMenuItem() {
   });
 }
 
+export function useCategories() {
+  const tenantID = useTenantID();
+  return useQuery({
+    queryKey: ['pos-categories', tenantID],
+    queryFn: () =>
+      apiClient.get<{ data: string[] }>(`${basePath(tenantID)}/catalog/categories`),
+    enabled: !!tenantID,
+    staleTime: 10 * 60_000,
+    select: (res) => res.data ?? [],
+  });
+}
+
 // ─── Sections ───────────────────────────────────────────────────────────────
 
 interface Section {
@@ -165,6 +177,15 @@ interface POSOrder {
   currency: string;
   created_at: string;
   edges?: { lines?: any[]; payments?: any[] };
+}
+
+export function useOrder(id: string) {
+  const tenantID = useTenantID();
+  return useQuery({
+    queryKey: ['pos-order', tenantID, id],
+    queryFn: () => apiClient.get<POSOrder>(`${basePath(tenantID)}/orders/${id}`),
+    enabled: !!tenantID && !!id,
+  });
 }
 
 export function useOrders(filters?: { status?: string }) {

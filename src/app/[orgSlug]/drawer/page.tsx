@@ -2,6 +2,7 @@
 
 import { Badge, Button, Card, CardContent } from '@/components/ui/base';
 import { useCurrentDrawer, useOpenDrawer, useCloseDrawer, useDrawerHistory } from '@/hooks/usePOS';
+import { useAuthStore } from '@/store/auth';
 import {
   Banknote,
   DollarSign,
@@ -16,6 +17,9 @@ export default function DrawerPage() {
   const [openingAmount, setOpeningAmount] = useState('5000');
   const [closingAmount, setClosingAmount] = useState('');
 
+  const outlet = useAuthStore((s) => s.outlet);
+  const outletId = outlet?.id ?? '';
+
   const { data: currentData, isLoading } = useCurrentDrawer();
   const { data: historyData } = useDrawerHistory();
   const openDrawer = useOpenDrawer();
@@ -27,7 +31,7 @@ export default function DrawerPage() {
 
   const handleOpen = () => {
     openDrawer.mutate(
-      { outletId: '', startingCash: parseFloat(openingAmount) || 0 },
+      { outletId, startingCash: parseFloat(openingAmount) || 0 },
       {
         onSuccess: () => toast.success('Drawer opened!'),
         onError: () => toast.error('Failed to open drawer'),

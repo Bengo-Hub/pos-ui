@@ -77,11 +77,20 @@ export function ReceiptPreview({ receipt, open, onClose, outletName, tenantName 
 
   return (
     <>
-      {/* Print-specific styles injected via a style tag */}
+      {/* Print-specific styles: visibility isolation works at any DOM depth */}
       <style>{`
+        @page { size: 80mm auto; margin: 4mm; }
         @media print {
-          body > * { display: none !important; }
-          #receipt-print-content { display: block !important; position: fixed; top: 0; left: 0; width: 100%; }
+          * { visibility: hidden !important; }
+          #receipt-print-content,
+          #receipt-print-content * { visibility: visible !important; }
+          #receipt-print-content {
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 80mm !important;
+            background: white !important;
+          }
         }
         #receipt-print-content { display: none; }
       `}</style>

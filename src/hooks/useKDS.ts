@@ -171,6 +171,20 @@ export function useCallWaiter() {
   });
 }
 
+export function useVoidTicket() {
+  const tenantID = useTenantID();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (ticketId: string) =>
+      apiClient.post(`${basePath(tenantID)}/tickets/${ticketId}/void`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['kds-tickets'] });
+      qc.invalidateQueries({ queryKey: ['kds-kitchen'] });
+      qc.invalidateQueries({ queryKey: ['kds-bar'] });
+    },
+  });
+}
+
 /** @deprecated Use useReadyTicket instead */
 export function useBumpTicket() {
   return useReadyTicket();

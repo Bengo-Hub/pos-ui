@@ -2,20 +2,18 @@
 
 import { ModuleGate } from '@/components/auth/module-gate';
 import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
-
 import { Badge, Button } from '@/components/ui/base';
 import {
-  cancelLayawayPlan,
-  getLayawayPlan,
-  recordLayawayPayment,
+  useLayawayPlan,
+  useRecordLayawayPayment,
+  useCancelLayaway,
   type LayawayPlan,
   type RecordPaymentInput,
-} from '@/lib/api/layaway';
-import { useAuthStore } from '@/store/auth';
+} from '@/hooks/useLayaway';
 import { cn } from '@/lib/utils';
 import { AlertTriangle, Loader2, X } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
 import { toast } from 'sonner';
 
 function statusVariant(status: LayawayPlan['status']): 'default' | 'success' | 'outline' {
@@ -31,12 +29,11 @@ function LayawayDetailPage() {
   const orgSlug = params?.orgSlug as string;
   const id = params?.id as string;
   const router = useRouter();
-  const tenantSlug = useAuthStore((s) => s.user?.tenant_slug ?? '');
 
-  const [plan, setPlan] = useState<LayawayPlan | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { data: plan, isLoading } = useLayawayPlan(id);
+  const recordPayment = useRecordLayawayPayment(id);
+  const cancelPlan = useCancelLayaway();
 
-  // Payment dialog
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [paymentForm, setPaymentForm] = useState<RecordPaymentInput>({
     amount: 0,
@@ -44,65 +41,43 @@ function LayawayDetailPage() {
     reference: '',
     notes: '',
   });
-  const [paymentSubmitting, setPaymentSubmitting] = useState(false);
-
-  // Cancel dialog
   const [cancelOpen, setCancelOpen] = useState(false);
-  const [cancelling, setCancelling] = useState(false);
 
-  const load = useCallback(() => {
-    if (!tenantSlug || !id) return;
-    setLoading(true);
-    getLayawayPlan(tenantSlug, id)
-      .then(setPlan)
-      .catch(() => toast.error('Failed to load layaway plan'))
-      .finally(() => setLoading(false));
-  }, [tenantSlug, id]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  const handleRecordPayment = async (e: React.FormEvent) => {
+  const handleRecordPayment = (e: React.FormEvent) => {
     e.preventDefault();
     if (!paymentForm.amount || paymentForm.amount <= 0) {
       toast.error('Enter a valid amount');
       return;
     }
-    setPaymentSubmitting(true);
-    try {
-      await recordLayawayPayment(tenantSlug, id, {
+    recordPayment.mutate(
+      {
         amount: Number(paymentForm.amount),
         payment_method: paymentForm.payment_method,
         reference: paymentForm.reference || undefined,
         notes: paymentForm.notes || undefined,
-      });
-      toast.success('Payment recorded');
-      setPaymentOpen(false);
-      setPaymentForm({ amount: 0, payment_method: 'cash', reference: '', notes: '' });
-      load();
-    } catch {
-      toast.error('Failed to record payment');
-    } finally {
-      setPaymentSubmitting(false);
-    }
+      },
+      {
+        onSuccess: () => {
+          toast.success('Payment recorded');
+          setPaymentOpen(false);
+          setPaymentForm({ amount: 0, payment_method: 'cash', reference: '', notes: '' });
+        },
+        onError: () => toast.error('Failed to record payment'),
+      }
+    );
   };
 
-  const handleCancel = async () => {
-    setCancelling(true);
-    try {
-      await cancelLayawayPlan(tenantSlug, id);
-      toast.success('Layaway plan cancelled');
-      setCancelOpen(false);
-      load();
-    } catch {
-      toast.error('Failed to cancel plan');
-    } finally {
-      setCancelling(false);
-    }
+  const handleCancel = () => {
+    cancelPlan.mutate(id, {
+      onSuccess: () => {
+        toast.success('Layaway plan cancelled');
+        setCancelOpen(false);
+      },
+      onError: () => toast.error('Failed to cancel plan'),
+    });
   };
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64 gap-3">
         <Loader2 className="h-6 w-6 animate-spin text-primary" />
@@ -124,7 +99,6 @@ function LayawayDetailPage() {
 
   return (
     <div className="p-6 max-w-2xl mx-auto space-y-6">
-      {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold">{plan.customer_name}</h1>
@@ -149,11 +123,7 @@ function LayawayDetailPage() {
               <Button onClick={() => setPaymentOpen(true)} className="min-h-10 px-4">
                 Record Payment
               </Button>
-              <Button
-                variant="destructive"
-                className="min-h-10 px-4"
-                onClick={() => setCancelOpen(true)}
-              >
+              <Button variant="destructive" className="min-h-10 px-4" onClick={() => setCancelOpen(true)}>
                 Cancel Plan
               </Button>
             </>
@@ -161,7 +131,6 @@ function LayawayDetailPage() {
         </div>
       </div>
 
-      {/* Amounts */}
       <div className="bg-card rounded-2xl border border-border p-5 space-y-4">
         <div className="grid grid-cols-3 gap-4 text-center">
           <div>
@@ -177,8 +146,6 @@ function LayawayDetailPage() {
             <p className="text-xl font-bold font-mono text-amber-600">{plan.remaining_amount.toLocaleString()}</p>
           </div>
         </div>
-
-        {/* Progress bar */}
         <div>
           <div className="flex justify-between text-xs text-muted-foreground mb-1.5">
             <span>Progress</span>
@@ -191,18 +158,14 @@ function LayawayDetailPage() {
             />
           </div>
         </div>
-
         {plan.due_date && (
           <p className="text-sm text-muted-foreground">
             Due: <span className="font-semibold text-foreground">{new Date(plan.due_date).toLocaleDateString()}</span>
           </p>
         )}
-        {plan.notes && (
-          <p className="text-sm text-muted-foreground italic">{plan.notes}</p>
-        )}
+        {plan.notes && <p className="text-sm text-muted-foreground italic">{plan.notes}</p>}
       </div>
 
-      {/* Payments table */}
       <div className="bg-card rounded-2xl border border-border overflow-hidden">
         <div className="px-5 py-4 border-b border-border">
           <h2 className="font-bold text-base">Payment History</h2>
@@ -222,14 +185,10 @@ function LayawayDetailPage() {
             <tbody className="divide-y divide-border">
               {plan.payments.map((p) => (
                 <tr key={p.id}>
-                  <td className="px-4 py-3 font-mono font-semibold text-green-600">
-                    KES {p.amount.toLocaleString()}
-                  </td>
+                  <td className="px-4 py-3 font-mono font-semibold text-green-600">KES {p.amount.toLocaleString()}</td>
                   <td className="px-4 py-3 capitalize">{p.payment_method}</td>
                   <td className="px-4 py-3 text-muted-foreground">{p.reference ?? '—'}</td>
-                  <td className="px-4 py-3 text-muted-foreground">
-                    {new Date(p.created_at).toLocaleString()}
-                  </td>
+                  <td className="px-4 py-3 text-muted-foreground">{new Date(p.created_at).toLocaleString()}</td>
                 </tr>
               ))}
             </tbody>
@@ -237,20 +196,16 @@ function LayawayDetailPage() {
         )}
       </div>
 
-      {/* Record Payment Dialog */}
+      {/* Record Payment Modal */}
       {paymentOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div className="bg-card rounded-2xl border border-border w-full max-w-sm p-6 shadow-2xl">
             <div className="flex items-center justify-between mb-5">
               <h3 className="font-bold text-base">Record Payment</h3>
-              <button
-                onClick={() => setPaymentOpen(false)}
-                className="h-9 w-9 rounded-xl flex items-center justify-center hover:bg-accent"
-              >
+              <button onClick={() => setPaymentOpen(false)} className="h-9 w-9 rounded-xl flex items-center justify-center hover:bg-accent">
                 <X className="h-4 w-4" />
               </button>
             </div>
-
             <form onSubmit={handleRecordPayment} className="space-y-4">
               <div>
                 <label className="text-xs font-semibold text-muted-foreground mb-1.5 block">
@@ -267,7 +222,6 @@ function LayawayDetailPage() {
                   autoFocus
                 />
               </div>
-
               <div>
                 <label className="text-xs font-semibold text-muted-foreground mb-1.5 block">
                   Payment Method <span className="text-destructive">*</span>
@@ -290,7 +244,6 @@ function LayawayDetailPage() {
                   ))}
                 </div>
               </div>
-
               <div>
                 <label className="text-xs font-semibold text-muted-foreground mb-1.5 block">Reference</label>
                 <input
@@ -300,7 +253,6 @@ function LayawayDetailPage() {
                   className="w-full bg-background border border-border rounded-xl py-2.5 px-3.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
                 />
               </div>
-
               <div>
                 <label className="text-xs font-semibold text-muted-foreground mb-1.5 block">Notes</label>
                 <input
@@ -310,13 +262,12 @@ function LayawayDetailPage() {
                   className="w-full bg-background border border-border rounded-xl py-2.5 px-3.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
                 />
               </div>
-
               <div className="flex gap-3 pt-1">
                 <Button type="button" variant="outline" className="flex-1 min-h-11" onClick={() => setPaymentOpen(false)}>
                   Cancel
                 </Button>
-                <Button type="submit" className="flex-1 min-h-11" disabled={paymentSubmitting}>
-                  {paymentSubmitting && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+                <Button type="submit" className="flex-1 min-h-11" disabled={recordPayment.isPending}>
+                  {recordPayment.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
                   Record
                 </Button>
               </div>
@@ -325,7 +276,7 @@ function LayawayDetailPage() {
         </div>
       )}
 
-      {/* Cancel Confirm Dialog */}
+      {/* Cancel Confirm Modal */}
       {cancelOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div className="bg-card rounded-2xl border border-border w-full max-w-sm p-6 shadow-2xl text-center">
@@ -340,8 +291,8 @@ function LayawayDetailPage() {
               <Button variant="outline" className="flex-1 min-h-11" onClick={() => setCancelOpen(false)}>
                 Keep Plan
               </Button>
-              <Button variant="destructive" className="flex-1 min-h-11" disabled={cancelling} onClick={handleCancel}>
-                {cancelling && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+              <Button variant="destructive" className="flex-1 min-h-11" disabled={cancelPlan.isPending} onClick={handleCancel}>
+                {cancelPlan.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
                 Cancel Plan
               </Button>
             </div>
