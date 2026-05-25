@@ -17,6 +17,7 @@ import {
 import { usePermissions } from '@/hooks/usePermissions';
 import { P } from '@/lib/rbac/permissions';
 import { Card, CardContent } from '@/components/ui/base';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { LayoutGrid, Loader2, Map, Pencil, Plus, Trash2, X, Check } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -94,6 +95,10 @@ export function TablesSettingsTab() {
   // Inline rename section
   const [renamingSectionId, setRenamingSectionId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
+
+  // Confirm dialogs
+  const [confirmSection, setConfirmSection] = useState<Section | null>(null);
+  const [confirmTable, setConfirmTable] = useState<Table | null>(null);
 
   // Floor plan positions
   type PosMap = Record<string, { x: number; y: number; dirty: boolean }>;
@@ -183,20 +188,26 @@ export function TablesSettingsTab() {
     }
   }
 
-  async function handleDeleteSection(sec: Section) {
+  function handleDeleteSection(sec: Section) {
     const count = allTables.filter((t) => t.section_id === sec.id).length;
     if (count > 0) {
       toast.error(`Move or delete the ${count} table${count > 1 ? 's' : ''} in "${sec.name}" first`);
       return;
     }
-    if (!window.confirm(`Delete section "${sec.name}"? This cannot be undone.`)) return;
+    setConfirmSection(sec);
+  }
+
+  async function doDeleteSection() {
+    if (!confirmSection) return;
     try {
-      await deleteSection.mutateAsync(sec.id);
-      if (selectedSection === sec.id) setSelectedSection(null);
-      toast.success(`Section "${sec.name}" deleted`);
+      await deleteSection.mutateAsync(confirmSection.id);
+      if (selectedSection === confirmSection.id) setSelectedSection(null);
+      toast.success(`Section "${confirmSection.name}" deleted`);
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
       toast.error(msg || 'Failed to delete section');
+    } finally {
+      setConfirmSection(null);
     }
   }
 
@@ -241,18 +252,24 @@ export function TablesSettingsTab() {
     }
   }
 
-  async function handleDeleteTable(t: Table) {
+  function handleDeleteTable(t: Table) {
     if (t.status === 'occupied') {
       toast.error('Cannot delete an occupied table — release it first');
       return;
     }
-    if (!window.confirm(`Delete table "${t.name}"? This cannot be undone.`)) return;
+    setConfirmTable(t);
+  }
+
+  async function doDeleteTable() {
+    if (!confirmTable) return;
     try {
-      await deleteTable.mutateAsync(t.id);
-      toast.success(`Table "${t.name}" deleted`);
+      await deleteTable.mutateAsync(confirmTable.id);
+      toast.success(`Table "${confirmTable.name}" deleted`);
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
       toast.error(msg || 'Failed to delete table');
+    } finally {
+      setConfirmTable(null);
     }
   }
 
@@ -717,6 +734,28 @@ export function TablesSettingsTab() {
           </div>
         )}
       </div>
+
+      <ConfirmDialog
+        open={!!confirmSection}
+        onOpenChange={(o) => { if (!o) setConfirmSection(null); }}
+        title={`Delete section "${confirmSection?.name}"?`}
+        description="This cannot be undone. Make sure no tables are assigned to this section first."
+        confirmLabel="Delete Section"
+        variant="danger"
+        loading={deleteSection.isPending}
+        onConfirm={doDeleteSection}
+      />
+
+      <ConfirmDialog
+        open={!!confirmTable}
+        onOpenChange={(o) => { if (!o) setConfirmTable(null); }}
+        title={`Delete table "${confirmTable?.name}"?`}
+        description="This cannot be undone. Historical order data will be preserved."
+        confirmLabel="Delete Table"
+        variant="danger"
+        loading={deleteTable.isPending}
+        onConfirm={doDeleteTable}
+      />
     </div>
   );
 }

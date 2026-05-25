@@ -8,6 +8,7 @@ import { P } from '@/lib/rbac/permissions';
 import { usePOSSettings, useUpdatePOSSettings, useUpdatePOSModules, useUpdateShiftSettings, useUpdateOutletConfig } from '@/hooks/usePOSSettings';
 import { useAllKDSStations, useCreateKDSStation, useUpdateKDSStation, useDeleteKDSStation } from '@/hooks/useKDS';
 import { TablesSettingsTab } from '@/components/settings/TablesSettingsTab';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import type { PrinterProfile } from '@/lib/api/settings';
 import { apiClient } from '@/lib/api/client';
 import { useAuthStore } from '@/store/auth';
@@ -928,6 +929,11 @@ function KDSStationsTab() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({ name: '', category_filter: [] as string[], sort_order: 0 });
 
+  // Confirm dialogs
+  type StationRef = { id: string; name: string; is_active: boolean };
+  const [confirmToggle, setConfirmToggle] = useState<StationRef | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<StationRef | null>(null);
+
   const stations = data?.data ?? [];
 
   const handleCreate = async () => {
@@ -942,15 +948,14 @@ function KDSStationsTab() {
     }
   };
 
-  const toggleActive = (stationID: string, current: boolean) => {
-    const action = current ? 'deactivate' : 'reactivate';
-    const msg = current
-      ? 'Deactivate this station? It will no longer receive tickets until reactivated.'
-      : 'Reactivate this station?';
-    if (!window.confirm(msg)) return;
-    updateStation.mutate({ stationID, input: { is_active: !current } }, {
-      onSuccess: () => toast.success(`Station ${action}d`),
-      onError: () => toast.error(`Failed to ${action} station`),
+  const toggleActive = (s: StationRef) => setConfirmToggle(s);
+
+  const doToggleActive = () => {
+    if (!confirmToggle) return;
+    const action = confirmToggle.is_active ? 'deactivate' : 'reactivate';
+    updateStation.mutate({ stationID: confirmToggle.id, input: { is_active: !confirmToggle.is_active } }, {
+      onSuccess: () => { toast.success(`Station ${action}d`); setConfirmToggle(null); },
+      onError: () => { toast.error(`Failed to ${action} station`); setConfirmToggle(null); },
     });
   };
 
@@ -970,11 +975,13 @@ function KDSStationsTab() {
     }
   };
 
-  const handleDelete = (stationID: string, name: string) => {
-    if (!window.confirm(`Permanently delete station "${name}"?\n\nHistorical ticket data will be preserved, but this station will no longer appear anywhere.`)) return;
-    deleteStation.mutate(stationID, {
-      onSuccess: () => toast.success(`Station "${name}" deleted`),
-      onError: () => toast.error('Failed to delete station'),
+  const handleDelete = (s: StationRef) => setConfirmDelete(s);
+
+  const doDelete = () => {
+    if (!confirmDelete) return;
+    deleteStation.mutate(confirmDelete.id, {
+      onSuccess: () => { toast.success(`Station "${confirmDelete.name}" deleted`); setConfirmDelete(null); },
+      onError: () => { toast.error('Failed to delete station'); setConfirmDelete(null); },
     });
   };
 
@@ -1086,11 +1093,11 @@ function KDSStationsTab() {
                   <span className="text-xs text-muted-foreground tabular-nums">#{station.sort_order}</span>
                   {canEdit && (
                     <div className="flex items-center gap-2">
-                      <Toggle checked={station.is_active} onChange={() => toggleActive(station.id, station.is_active)} />
+                      <Toggle checked={station.is_active} onChange={() => toggleActive({ id: station.id, name: station.name, is_active: station.is_active })} />
                       <button onClick={() => startEdit(station)} className="p-1.5 rounded-lg hover:bg-accent text-muted-foreground hover:text-foreground transition-colors" title="Edit station">
                         <Pencil className="h-4 w-4" />
                       </button>
-                      <button onClick={() => handleDelete(station.id, station.name)} disabled={deleteStation.isPending} className="p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors" title="Delete station">
+                      <button onClick={() => handleDelete({ id: station.id, name: station.name, is_active: station.is_active })} disabled={deleteStation.isPending} className="p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors" title="Delete station">
                         <Trash2 className="h-4 w-4" />
                       </button>
                     </div>
@@ -1101,6 +1108,30 @@ function KDSStationsTab() {
           );
         })}
       </div>
+
+      <ConfirmDialog
+        open={!!confirmToggle}
+        onOpenChange={(o) => { if (!o) setConfirmToggle(null); }}
+        title={confirmToggle?.is_active ? 'Deactivate station?' : 'Reactivate station?'}
+        description={confirmToggle?.is_active
+          ? `"${confirmToggle?.name}" will stop receiving tickets until reactivated.`
+          : `"${confirmToggle?.name}" will start receiving tickets again.`}
+        confirmLabel={confirmToggle?.is_active ? 'Deactivate' : 'Reactivate'}
+        variant={confirmToggle?.is_active ? 'warning' : 'info'}
+        loading={updateStation.isPending}
+        onConfirm={doToggleActive}
+      />
+
+      <ConfirmDialog
+        open={!!confirmDelete}
+        onOpenChange={(o) => { if (!o) setConfirmDelete(null); }}
+        title={`Delete station "${confirmDelete?.name}"?`}
+        description="Historical ticket data will be preserved, but this station will no longer appear anywhere."
+        confirmLabel="Delete Station"
+        variant="danger"
+        loading={deleteStation.isPending}
+        onConfirm={doDelete}
+      />
     </div>
   );
 }
