@@ -104,7 +104,7 @@ function TableCard({ table, orgSlug, onRelease, onChangeStatus, releaseLoading, 
           onClick={() => setSheetOpen(false)}
         >
           <div
-            className="w-full max-w-lg bg-card rounded-t-3xl border border-border shadow-2xl pb-safe"
+            className="w-full max-w-lg bg-card rounded-t-3xl border border-border shadow-2xl pb-safe max-h-[85vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Sheet handle */}

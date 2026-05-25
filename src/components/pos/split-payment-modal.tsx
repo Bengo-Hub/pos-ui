@@ -113,7 +113,7 @@ export function SplitPaymentModal({
 
   // Sub-modal for a specific payer
   if (currentPayer !== null) {
-    const payAmount = mode === 'equal' ? equalShare : parseFloat(customSplits[currentPayer].amount) || 0;
+    const payAmount = mode === 'full' ? total : mode === 'equal' ? equalShare : parseFloat(customSplits[currentPayer].amount) || 0;
     const label = mode === 'equal' ? `Person ${currentPayer + paidCount + 1} of ${peopleCount}` : `Split ${currentPayer + 1}`;
 
     return (
