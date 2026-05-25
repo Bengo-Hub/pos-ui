@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '@/store/auth';
-import { hotelApi, type Room, type FolioItem, type Facility, type FacilityBooking } from '@/lib/api/hotel';
+import { hotelApi, type Room, type FolioItem, type Facility, type FacilityBooking, type CreateRoomInput } from '@/lib/api/hotel';
 
 function useTenantSlug() {
   return useAuthStore((s) => s.user?.tenant_id ?? '');
@@ -18,6 +18,36 @@ export function useHotelRooms(status?: string) {
     enabled: !!slug,
     staleTime: 30_000,
     refetchInterval: 60_000,
+  });
+}
+
+export function useCreateRoom() {
+  const slug = useTenantSlug();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: CreateRoomInput) => hotelApi.createRoom(slug, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['hotel-rooms', slug] }),
+  });
+}
+
+export function useUpdateRoom(roomId: string) {
+  const slug = useTenantSlug();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: Partial<CreateRoomInput>) => hotelApi.updateRoom(slug, roomId, body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['hotel-rooms', slug] });
+      qc.invalidateQueries({ queryKey: ['hotel-room', slug, roomId] });
+    },
+  });
+}
+
+export function useDeleteRoom() {
+  const slug = useTenantSlug();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (roomId: string) => hotelApi.deleteRoom(slug, roomId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['hotel-rooms', slug] }),
   });
 }
 

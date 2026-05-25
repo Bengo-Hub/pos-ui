@@ -97,18 +97,18 @@ function TableCard({ table, orgSlug, onRelease, onChangeStatus, releaseLoading, 
         )}
       </button>
 
-      {/* Action sheet (bottom drawer) */}
+      {/* Action sheet — bottom sheet on mobile, centered dialog on desktop */}
       {sheetOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex items-end justify-center sm:items-center bg-black/50 backdrop-blur-sm"
           onClick={() => setSheetOpen(false)}
         >
           <div
-            className="w-full max-w-lg bg-card rounded-t-3xl border border-border shadow-2xl pb-safe max-h-[85vh] overflow-y-auto"
+            className="w-full max-w-lg sm:max-w-md bg-card rounded-t-3xl sm:rounded-3xl border border-border shadow-2xl pb-safe sm:pb-0 max-h-[85vh] sm:max-h-[80vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Sheet handle */}
-            <div className="flex justify-center pt-3 pb-2">
+            {/* Sheet handle — mobile only */}
+            <div className="flex justify-center pt-3 pb-2 sm:hidden">
               <div className="h-1 w-12 rounded-full bg-muted-foreground/30" />
             </div>
 

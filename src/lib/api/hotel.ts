@@ -46,6 +46,15 @@ export interface Facility {
   status: 'available' | 'occupied' | 'maintenance' | 'closed';
 }
 
+export interface CreateRoomInput {
+  room_number: string;
+  room_type: string;
+  floor: number;
+  rate_per_night: number;
+  name?: string;
+  currency?: string;
+}
+
 export interface FacilityBooking {
   id: string;
   facility_id: string;
@@ -71,6 +80,15 @@ export const hotelApi = {
 
   getRoom: (tenantSlug: string, roomId: string) =>
     apiClient.get<Room>(`${hotelBase(tenantSlug)}/rooms/${roomId}`),
+
+  createRoom: (tenantSlug: string, body: CreateRoomInput) =>
+    apiClient.post<Room>(`${hotelBase(tenantSlug)}/rooms`, body),
+
+  updateRoom: (tenantSlug: string, roomId: string, body: Partial<CreateRoomInput>) =>
+    apiClient.put<Room>(`${hotelBase(tenantSlug)}/rooms/${roomId}`, body),
+
+  deleteRoom: (tenantSlug: string, roomId: string) =>
+    apiClient.delete(`${hotelBase(tenantSlug)}/rooms/${roomId}`),
 
   updateRoomStatus: (tenantSlug: string, roomId: string, status: string) =>
     apiClient.patch<Room>(`${hotelBase(tenantSlug)}/rooms/${roomId}/status`, { status }),

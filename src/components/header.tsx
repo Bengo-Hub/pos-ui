@@ -1,14 +1,17 @@
 'use client';
 
 import { useAuthStore } from '@/store/auth';
-import { BookOpen, ChevronDown, ExternalLink, Globe, LogOut, MapPin, Menu, Package, Search, Settings, ShoppingCart, Square, Tag, User } from 'lucide-react';
+import { BookOpen, Building2, Check, ChevronDown, ExternalLink, Globe, LogOut, MapPin, Menu, Package, Search, Settings, ShoppingCart, Square, Tag, User } from 'lucide-react';
 import { NotificationBell } from './notifications/NotificationBell';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ThemeToggle } from './theme-toggle';
 import { useTenantBranding } from '@/providers/tenant-branding-provider';
-import { OutletFilter } from './outlet-filter';
+import { useOutletFilterStore } from '@/store/outlet-filter';
+import { useQuery } from '@tanstack/react-query';
+import { apiClient } from '@/lib/api/client';
+import { cn } from '@/lib/utils';
 import { useCurrentShift, useCloseShift } from '@/hooks/useShifts';
 import { toast } from 'sonner';
 
@@ -34,6 +37,125 @@ const USE_CASE_LABELS: Record<string, string> = {
   services: 'Services',
 };
 
+function HeaderOutletChip() {
+  const user = useAuthStore((s) => s.user);
+  const authOutlet = useAuthStore((s) => s.outlet);
+  const isTerminalSession = useAuthStore((s) => s.isTerminalSession);
+  const { selectedOutlet, outlets, setOutlets, selectOutlet } = useOutletFilterStore();
+  const [open, setOpen] = useState(false);
+
+  const canSwitch = !isTerminalSession && !!user?.roles?.some((r) =>
+    ['admin', 'superuser', 'manager', 'pos_admin', 'super_admin'].includes(r)
+  );
+
+  const tenantId = user?.tenant_id ?? '';
+
+  const { data: fetchedOutlets = [] } = useQuery<any[]>({
+    queryKey: ['outlet_list', tenantId],
+    queryFn: async () => {
+      const data = await apiClient.get<any>(`/api/v1/${tenantId}/pos/outlets`);
+      const list: any[] = Array.isArray(data) ? data : (data as any).data ?? (data as any).outlets ?? [];
+      return list.filter((o: any) => o.status !== 'archived');
+    },
+    enabled: canSwitch && !!tenantId,
+    staleTime: 5 * 60_000,
+  });
+
+  useEffect(() => {
+    if (fetchedOutlets.length === 0) return;
+    const mapped = fetchedOutlets.map((o: any) => ({
+      id: o.id, code: o.code, name: o.name, useCase: o.use_case, isHq: o.is_hq,
+    }));
+    setOutlets(mapped);
+    apiClient.setOutletID(selectedOutlet?.id ?? authOutlet?.id ?? null);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fetchedOutlets]);
+
+  const activeOutlet = selectedOutlet ?? (authOutlet ? { id: authOutlet.id, code: authOutlet.code, name: authOutlet.name, useCase: authOutlet.use_case } : null);
+  const activeName = activeOutlet?.name ?? 'Select Outlet';
+  const activeUseCase = activeOutlet?.useCase ?? authOutlet?.use_case ?? '';
+
+  if (!authOutlet && !selectedOutlet) return null;
+
+  const chipClass = 'hidden lg:flex items-center gap-2 rounded-xl border border-border bg-muted/50 px-3 py-1.5 text-sm font-medium text-muted-foreground shrink-0';
+
+  if (!canSwitch) {
+    return (
+      <div className={chipClass}>
+        <MapPin className="h-3.5 w-3.5 text-primary shrink-0" />
+        <span className="truncate max-w-[7.5rem]">{activeName}</span>
+        {activeUseCase && (
+          <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary whitespace-nowrap">
+            {USE_CASE_LABELS[activeUseCase] ?? activeUseCase}
+          </span>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative hidden lg:block shrink-0">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className={cn(chipClass, 'hover:bg-muted hover:text-foreground transition-colors cursor-pointer')}
+        title="Switch outlet"
+      >
+        <MapPin className="h-3.5 w-3.5 text-primary shrink-0" />
+        <span className="truncate max-w-[7.5rem]">{activeName}</span>
+        {activeUseCase && (
+          <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary whitespace-nowrap">
+            {USE_CASE_LABELS[activeUseCase] ?? activeUseCase}
+          </span>
+        )}
+        <ChevronDown className={cn('h-3.5 w-3.5 transition-transform shrink-0', open && 'rotate-180')} />
+      </button>
+
+      {open && outlets.length > 0 && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} aria-hidden />
+          <div className="absolute left-0 top-full mt-1 z-50 w-64 rounded-xl border border-border bg-popover shadow-xl overflow-hidden">
+            <div className="px-3 py-2 border-b border-border">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Switch Outlet</p>
+            </div>
+            <div className="max-h-56 overflow-y-auto py-1">
+              <button
+                type="button"
+                onClick={() => { selectOutlet(null); apiClient.setOutletID(authOutlet?.id ?? null); setOpen(false); }}
+                className={cn('w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted transition-colors text-left', !selectedOutlet && 'bg-primary/5 text-primary')}
+              >
+                <Building2 className="h-3.5 w-3.5 shrink-0" />
+                <span className="flex-1">All Outlets</span>
+                {!selectedOutlet && <Check className="h-3.5 w-3.5 shrink-0" />}
+              </button>
+              {outlets.map((o) => {
+                const isActive = selectedOutlet?.id === o.id;
+                return (
+                  <button
+                    key={o.id}
+                    type="button"
+                    onClick={() => { selectOutlet(o); apiClient.setOutletID(o.id); setOpen(false); }}
+                    className={cn('w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted transition-colors text-left', isActive && 'bg-primary/5')}
+                  >
+                    <span className={cn('h-6 w-6 rounded-lg flex items-center justify-center shrink-0 text-[9px] font-bold', isActive ? 'bg-primary/20 text-primary' : 'bg-muted text-muted-foreground')}>
+                      {o.code?.slice(0, 2) ?? '??'}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium truncate">{o.name}</p>
+                      {o.useCase && <p className="text-[10px] text-muted-foreground">{o.useCase.replace('_', ' ')}</p>}
+                    </div>
+                    {isActive && <Check className="h-3.5 w-3.5 text-primary shrink-0" />}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 function displayName(user: { fullName?: string; name?: string; email?: string } | null): string {
   if (!user) return 'Account';
   return user.fullName ?? user.name ?? user.email?.split('@')[0] ?? 'Account';
@@ -50,7 +172,6 @@ export function Header({ onMenuClick }: HeaderProps) {
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const { getServiceTitle } = useTenantBranding();
-  const outlet = useAuthStore((s) => s.outlet);
   const [profileOpen, setProfileOpen] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
   // Gate only on !!user — _hasHydrated was causing permanent unauthenticated
@@ -61,10 +182,6 @@ export function Header({ onMenuClick }: HeaderProps) {
   const isTerminalSession = useAuthStore((s) => s.isTerminalSession);
   const name = displayName(user);
   const role = user?.roles?.[0];
-
-  const canSwitchOutlet = !isTerminalSession && user?.roles?.some(r =>
-    ['admin', 'superuser', 'manager', 'pos_admin', 'super_admin'].includes(r)
-  );
 
   const { data: currentShift } = useCurrentShift();
   const closeShift = useCloseShift();
@@ -104,38 +221,7 @@ export function Header({ onMenuClick }: HeaderProps) {
               />
             </div>
         </div>
-        {/* Outlet chip — shows home outlet name + use_case.
-            Terminal sessions and non-admin staff see a display-only chip (no navigation). */}
-        {outlet && canSwitchOutlet && (
-          <Link
-            href={`/${orgSlug}/auth/select-outlet`}
-            className="hidden lg:flex items-center gap-2 rounded-xl border border-border bg-muted/50 px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-muted transition-colors shrink-0"
-            title="Switch outlet"
-          >
-            <MapPin className="h-3.5 w-3.5 text-primary shrink-0" />
-            <span className="truncate max-w-30">{outlet.name}</span>
-            {outlet.use_case && (
-              <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary whitespace-nowrap">
-                {USE_CASE_LABELS[outlet.use_case] ?? outlet.use_case}
-              </span>
-            )}
-          </Link>
-        )}
-        {outlet && !canSwitchOutlet && (
-          <div
-            className="hidden lg:flex items-center gap-2 rounded-xl border border-border bg-muted/50 px-3 py-1.5 text-sm font-medium text-muted-foreground shrink-0"
-            title={outlet.name}
-          >
-            <MapPin className="h-3.5 w-3.5 text-primary shrink-0" />
-            <span className="truncate max-w-30">{outlet.name}</span>
-            {outlet.use_case && (
-              <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary whitespace-nowrap">
-                {USE_CASE_LABELS[outlet.use_case] ?? outlet.use_case}
-              </span>
-            )}
-          </div>
-        )}
-        <OutletFilter className="hidden md:block shrink-0" />
+        <HeaderOutletChip />
       </div>
 
       {/* Right: actions + profile — shrink-0 so it's never squeezed off screen */}
