@@ -23,11 +23,21 @@ export interface CatalogItem {
   category: string;
   item_type?: string;
   duration_minutes?: number;
-  taxStatus: string;
-  status: string;
+  tax_status?: string;
+  status?: string;
+  is_available?: boolean;
+  is_featured?: boolean;
+  display_order?: number;
   image_url?: string;
   barcode?: string;
   price?: number;
+  requires_age_verification?: boolean;
+  track_serial_numbers?: boolean;
+  requires_prescription?: boolean;
+  is_controlled_substance?: boolean;
+  minimum_age?: number;
+  is_returnable?: boolean;
+  outlet_id?: string;
   metadata?: Record<string, any>;
 }
 

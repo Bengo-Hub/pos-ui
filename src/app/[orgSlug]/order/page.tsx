@@ -6,7 +6,7 @@ import { SplitPaymentModal, type OrderLineItem } from '@/components/pos/split-pa
 import { VoidOrderModal } from '@/components/pos/void-order-modal';
 import { ReceiptPreview, type ReceiptData } from '@/components/pos/receipt-preview';
 import { cn } from '@/lib/utils';
-import { useMenuItems, useCreateOrder, useVoidOrder } from '@/hooks/usePOS';
+import { useMenuItems, useCategories, useCreateOrder, useVoidOrder } from '@/hooks/usePOS';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useAuthStore } from '@/store/auth';
@@ -134,11 +134,11 @@ export default function OrderPage() {
       name: item.name,
       sku: item.sku,
       description: item.description,
-      price: item.sell_price ?? item.price ?? 0,
+      price: item.price ?? 0,
       category: item.category || 'Uncategorized',
       image: item.image_url,
       requiresAgeVerification: item.requires_age_verification,
-      trackSerialNumber: item.track_serial_number,
+      trackSerialNumber: item.track_serial_numbers,
       modifierGroups: item.modifier_groups,
     }));
   }, [catalogData]);
@@ -146,10 +146,14 @@ export default function OrderPage() {
   const totalItems = catalogData?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(totalItems / PAGE_SIZE));
 
+  const { data: serverCategories } = useCategories();
   const categories = useMemo(() => {
+    if (serverCategories && serverCategories.length > 0) {
+      return ['All', ...serverCategories];
+    }
     const cats = new Set(menuItems.map((i) => i.category));
     return ['All', ...Array.from(cats).sort()];
-  }, [menuItems]);
+  }, [serverCategories, menuItems]);
 
   // Server-side filtering — items returned by the API are already filtered
   const filteredItems = menuItems;

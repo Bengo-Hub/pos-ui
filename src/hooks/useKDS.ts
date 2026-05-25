@@ -140,11 +140,9 @@ export function useKDSTickets(filter?: KDSTicketsFilter) {
     queryKey: ['kds-tickets', tenantID, filter],
     queryFn: () =>
       apiClient.get<{ data: KDSTicket[] }>(`${basePath(tenantID)}/tickets`, {
-        params: {
-          ...(filter?.stationId ? { station_id: filter.stationId } : {}),
-          ...(filter?.status ? { status: filter.status } : {}),
-          ...(filter?.source ? { order_source: filter.source } : {}),
-        },
+        ...(filter?.stationId ? { station_id: filter.stationId } : {}),
+        ...(filter?.status ? { status: filter.status } : {}),
+        ...(filter?.source ? { order_source: filter.source } : {}),
       }),
     enabled: !!tenantID,
     staleTime: 5_000,

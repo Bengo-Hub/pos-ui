@@ -10,11 +10,21 @@ export interface CatalogItem {
   price: number;
   sku: string;
   barcode?: string;
+  description?: string;
+  category?: string;
+  image_url?: string;
   stock_quantity?: number;
   item_type?: string; // GOODS | SERVICE | RECIPE | VOUCHER
-  requires_serial: boolean;
+  track_serial_numbers: boolean;
   weight_grams?: number;
   duration_minutes?: number;
+  tax_status?: string;
+  requires_age_verification?: boolean;
+  requires_prescription?: boolean;
+  is_controlled_substance?: boolean;
+  minimum_age?: number;
+  is_returnable?: boolean;
+  is_available?: boolean;
 }
 
 export interface ScaleReading {
@@ -45,7 +55,7 @@ export async function lookupItemByBarcode(
   tenantSlug: string,
   barcode: string,
 ): Promise<CatalogItem> {
-  return apiClient.get<CatalogItem>(`${base(tenantSlug)}/catalog/items/lookup`, { barcode });
+  return apiClient.get<CatalogItem>(`${base(tenantSlug)}/catalog/barcode/${encodeURIComponent(barcode)}`);
 }
 
 // ─── Scale readings ───────────────────────────────────────────────────────────

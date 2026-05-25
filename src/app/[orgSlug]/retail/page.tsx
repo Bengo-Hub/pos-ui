@@ -3,11 +3,12 @@
 import { ModuleGate } from '@/components/auth/module-gate';
 import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useParams } from 'next/navigation';
-import { Trash2, ShoppingCart, Tag } from 'lucide-react';
+import { Loader2, Search, Trash2, ShoppingCart, Tag, X } from 'lucide-react';
 import { useAuthStore } from '@/store/auth';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
+import { useMenuItems } from '@/hooks/usePOS';
 import { lookupItemByBarcode } from '@/lib/api/retail';
 import type { CatalogItem } from '@/lib/api/retail';
 import { BarcodeInput } from '@/components/retail/BarcodeInput';
@@ -51,6 +52,39 @@ function RetailPage() {
   const [pendingSerial, setPendingSerial] = useState<PendingSerialItem | null>(null);
   const [pendingOverride, setPendingOverride] = useState<PendingOverrideItem | null>(null);
   const [checkoutDone, setCheckoutDone] = useState(false);
+
+  // ── Rich search ──────────────────────────────────────────────────────────
+  const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const searchRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(searchQuery), 300);
+    return () => clearTimeout(t);
+  }, [searchQuery]);
+
+  const { data: catalogData, isLoading: catalogLoading } = useMenuItems({
+    search: debouncedSearch || undefined,
+    limit: 50,
+  });
+
+  const catalogItems: CatalogItem[] = useMemo(() => {
+    return (catalogData?.data ?? []).map((item: any) => ({
+      id: item.id,
+      name: item.name,
+      price: item.price ?? 0,
+      sku: item.sku,
+      barcode: item.barcode,
+      description: item.description,
+      category: item.category,
+      image_url: item.image_url,
+      item_type: item.item_type,
+      track_serial_numbers: item.track_serial_numbers ?? false,
+      requires_age_verification: item.requires_age_verification,
+      requires_prescription: item.requires_prescription,
+      is_returnable: item.is_returnable,
+      is_available: item.is_available,
+    }));
+  }, [catalogData]);
 
   // Read scale device ID from localStorage
   useEffect(() => {
@@ -122,7 +156,7 @@ function RetailPage() {
       name: 'Weighed Item',
       price: 0,
       sku: 'SCALE',
-      requires_serial: false,
+      track_serial_numbers: false,
       weight_grams: weightGrams,
     };
     addToCart(genericItem, weightKg);
@@ -138,7 +172,7 @@ function RetailPage() {
 
   const handleCheckout = () => {
     // Check if any items require serial numbers — if so open modal for first one
-    const firstSerialItem = cart.find((l) => l.item.requires_serial);
+    const firstSerialItem = cart.find((l) => l.item.track_serial_numbers);
     if (firstSerialItem) {
       const idx = cart.indexOf(firstSerialItem);
       setPendingSerial({
@@ -179,7 +213,7 @@ function RetailPage() {
 
   return (
     <div className="flex flex-col lg:flex-row gap-4 p-4 min-h-0">
-      {/* ── Left panel: scan + cart ── */}
+      {/* ── Left panel: scan + search + catalog ── */}
       <div className="flex-1 flex flex-col gap-4 min-w-0">
         {/* Barcode input */}
         <BarcodeInput
@@ -200,6 +234,62 @@ function RetailPage() {
             onAddToCart={handleScaleAddToCart}
           />
         )}
+
+        {/* Rich text search */}
+        <div className="relative group">
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
+          <input
+            ref={searchRef}
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search by name, SKU, description…"
+            className="w-full bg-card border border-border rounded-2xl py-3 pl-10 pr-9 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 transition-all"
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery('')}
+              className="absolute right-3 top-1/2 -translate-y-1/2 h-6 w-6 rounded-full bg-muted flex items-center justify-center hover:bg-destructive/10 hover:text-destructive transition-colors"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          )}
+        </div>
+
+        {/* Catalog item list */}
+        <div className="bg-card border border-border rounded-2xl overflow-hidden max-h-64 overflow-y-auto">
+          {catalogLoading ? (
+            <div className="flex items-center justify-center py-8 gap-2 text-muted-foreground text-sm">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Loading items…
+            </div>
+          ) : catalogItems.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-8 text-muted-foreground gap-2">
+              <Search className="h-8 w-8 opacity-20" />
+              <p className="text-sm">No items found</p>
+            </div>
+          ) : (
+            <div className="divide-y divide-border">
+              {catalogItems.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => addToCart(item)}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-accent transition-colors text-left"
+                >
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold truncate">{item.name}</p>
+                    <p className="text-xs text-muted-foreground truncate">{item.sku}{item.description ? ` · ${item.description}` : ''}</p>
+                  </div>
+                  <span className="text-sm font-bold shrink-0 text-primary">
+                    {new Intl.NumberFormat('en-KE', { style: 'currency', currency: 'KES' }).format(item.price)}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
 
         {/* Cart items */}
         <div className="flex-1 bg-card border border-border rounded-2xl overflow-hidden">
