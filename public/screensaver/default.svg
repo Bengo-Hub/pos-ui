@@ -1,53 +1,79 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" width="1920" height="1080">
   <defs>
     <radialGradient id="bg" cx="50%" cy="50%" r="70%">
-      <stop offset="0%" stop-color="#1c1230"/>
-      <stop offset="100%" stop-color="#090910"/>
-    </radialGradient>
-    <radialGradient id="orb1" cx="50%" cy="50%" r="50%">
-      <stop offset="0%" stop-color="#ea8022" stop-opacity="0.35"/>
-      <stop offset="100%" stop-color="#ea8022" stop-opacity="0"/>
-    </radialGradient>
-    <radialGradient id="orb2" cx="50%" cy="50%" r="50%">
-      <stop offset="0%" stop-color="#6d40c4" stop-opacity="0.3"/>
-      <stop offset="100%" stop-color="#6d40c4" stop-opacity="0"/>
-    </radialGradient>
-    <radialGradient id="orb3" cx="50%" cy="50%" r="50%">
-      <stop offset="0%" stop-color="#1e88e5" stop-opacity="0.2"/>
-      <stop offset="100%" stop-color="#1e88e5" stop-opacity="0"/>
+      <stop offset="0%" stop-color="#0e0e14"/>
+      <stop offset="100%" stop-color="#050508"/>
     </radialGradient>
     <filter id="blur1">
-      <feGaussianBlur stdDeviation="60"/>
+      <feGaussianBlur stdDeviation="80"/>
     </filter>
   </defs>
 
-  <!-- Dark base -->
+  <!-- Deep neutral dark base — brand colors overlaid in React -->
   <rect width="1920" height="1080" fill="url(#bg)"/>
 
-  <!-- Animated blobs -->
-  <g filter="url(#blur1)">
-    <ellipse cx="480" cy="320" rx="380" ry="320" fill="url(#orb1)">
-      <animate attributeName="cx" values="480;620;380;480" dur="12s" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1"/>
-      <animate attributeName="cy" values="320;460;280;320" dur="9s" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1"/>
-    </ellipse>
-    <ellipse cx="1440" cy="760" rx="420" ry="340" fill="url(#orb2)">
-      <animate attributeName="cx" values="1440;1300;1520;1440" dur="15s" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1"/>
-      <animate attributeName="cy" values="760;620;800;760" dur="11s" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1"/>
-    </ellipse>
-    <ellipse cx="960" cy="180" rx="300" ry="260" fill="url(#orb3)">
-      <animate attributeName="cy" values="180;300;160;180" dur="10s" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.6 1;0.4 0 0.6 1;0.4 0 0.6 1"/>
-    </ellipse>
+  <!-- Subtle dot grid (3x3 spacing) — very low opacity, brand-color dots added via React layer -->
+  <g fill="white" fill-opacity="0.022">
+    <circle cx="192" cy="108" r="1.5"/>
+    <circle cx="384" cy="108" r="1.5"/>
+    <circle cx="576" cy="108" r="1.5"/>
+    <circle cx="768" cy="108" r="1.5"/>
+    <circle cx="960" cy="108" r="1.5"/>
+    <circle cx="1152" cy="108" r="1.5"/>
+    <circle cx="1344" cy="108" r="1.5"/>
+    <circle cx="1536" cy="108" r="1.5"/>
+    <circle cx="1728" cy="108" r="1.5"/>
+    <circle cx="192" cy="270" r="1.5"/>
+    <circle cx="384" cy="270" r="1.5"/>
+    <circle cx="576" cy="270" r="1.5"/>
+    <circle cx="768" cy="270" r="1.5"/>
+    <circle cx="960" cy="270" r="1.5"/>
+    <circle cx="1152" cy="270" r="1.5"/>
+    <circle cx="1344" cy="270" r="1.5"/>
+    <circle cx="1536" cy="270" r="1.5"/>
+    <circle cx="1728" cy="270" r="1.5"/>
+    <circle cx="192" cy="432" r="1.5"/>
+    <circle cx="384" cy="432" r="1.5"/>
+    <circle cx="576" cy="432" r="1.5"/>
+    <circle cx="768" cy="432" r="1.5"/>
+    <circle cx="960" cy="432" r="1.5"/>
+    <circle cx="1152" cy="432" r="1.5"/>
+    <circle cx="1344" cy="432" r="1.5"/>
+    <circle cx="1536" cy="432" r="1.5"/>
+    <circle cx="1728" cy="432" r="1.5"/>
+    <circle cx="192" cy="594" r="1.5"/>
+    <circle cx="384" cy="594" r="1.5"/>
+    <circle cx="576" cy="594" r="1.5"/>
+    <circle cx="768" cy="594" r="1.5"/>
+    <circle cx="960" cy="594" r="1.5"/>
+    <circle cx="1152" cy="594" r="1.5"/>
+    <circle cx="1344" cy="594" r="1.5"/>
+    <circle cx="1536" cy="594" r="1.5"/>
+    <circle cx="1728" cy="594" r="1.5"/>
+    <circle cx="192" cy="756" r="1.5"/>
+    <circle cx="384" cy="756" r="1.5"/>
+    <circle cx="576" cy="756" r="1.5"/>
+    <circle cx="768" cy="756" r="1.5"/>
+    <circle cx="960" cy="756" r="1.5"/>
+    <circle cx="1152" cy="756" r="1.5"/>
+    <circle cx="1344" cy="756" r="1.5"/>
+    <circle cx="1536" cy="756" r="1.5"/>
+    <circle cx="1728" cy="756" r="1.5"/>
+    <circle cx="192" cy="918" r="1.5"/>
+    <circle cx="384" cy="918" r="1.5"/>
+    <circle cx="576" cy="918" r="1.5"/>
+    <circle cx="768" cy="918" r="1.5"/>
+    <circle cx="960" cy="918" r="1.5"/>
+    <circle cx="1152" cy="918" r="1.5"/>
+    <circle cx="1344" cy="918" r="1.5"/>
+    <circle cx="1536" cy="918" r="1.5"/>
+    <circle cx="1728" cy="918" r="1.5"/>
   </g>
 
-  <!-- Subtle grid lines -->
-  <g stroke="white" stroke-opacity="0.03" stroke-width="1">
-    <line x1="0" y1="216" x2="1920" y2="216"/>
-    <line x1="0" y1="432" x2="1920" y2="432"/>
-    <line x1="0" y1="648" x2="1920" y2="648"/>
-    <line x1="0" y1="864" x2="1920" y2="864"/>
-    <line x1="384" y1="0" x2="384" y2="1080"/>
-    <line x1="768" y1="0" x2="768" y2="1080"/>
-    <line x1="1152" y1="0" x2="1152" y2="1080"/>
-    <line x1="1536" y1="0" x2="1536" y2="1080"/>
+  <!-- Subtle horizontal dividers -->
+  <g stroke="white" stroke-opacity="0.025" stroke-width="1">
+    <line x1="0" y1="270" x2="1920" y2="270"/>
+    <line x1="0" y1="540" x2="1920" y2="540"/>
+    <line x1="0" y1="810" x2="1920" y2="810"/>
   </g>
 </svg>

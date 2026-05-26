@@ -9,6 +9,34 @@ function hexToRgbTriplet(hex: string): string {
   return `${parseInt(t.slice(0, 2), 16)} ${parseInt(t.slice(2, 4), 16)} ${parseInt(t.slice(4, 6), 16)}`;
 }
 
+function hexToDarkRgbTriplet(hex: string): string {
+  const raw = hex.replace(/^#/, '').trim();
+  if (!/^[0-9a-fA-F]{6}$/.test(raw)) return '44 26 2';
+  const r = parseInt(raw.slice(0, 2), 16) / 255;
+  const g = parseInt(raw.slice(2, 4), 16) / 255;
+  const b = parseInt(raw.slice(4, 6), 16) / 255;
+  const max = Math.max(r, g, b), mn = Math.min(r, g, b);
+  let h = 0;
+  if (max !== mn) {
+    const d = max - mn;
+    h = max === r ? ((g - b) / d + (g < b ? 6 : 0)) / 6
+      : max === g ? ((b - r) / d + 2) / 6
+      : ((r - g) / d + 4) / 6;
+  }
+  // Very dark variant: L=7%, S=38%
+  const s = 0.38, l = 0.07;
+  const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+  const p = 2 * l - q;
+  const hue2rgb = (pp: number, qq: number, x: number) => {
+    if (x < 0) x += 1; if (x > 1) x -= 1;
+    if (x < 1 / 6) return pp + (qq - pp) * 6 * x;
+    if (x < 0.5) return qq;
+    if (x < 2 / 3) return pp + (qq - pp) * (2 / 3 - x) * 6;
+    return pp;
+  };
+  return `${Math.round(hue2rgb(p, q, h + 1 / 3) * 255)} ${Math.round(hue2rgb(p, q, h) * 255)} ${Math.round(hue2rgb(p, q, h - 1 / 3) * 255)}`;
+}
+
 function hexToHslTriplet(hex: string): string {
   const t = hex.replace(/^#/, '').trim();
   if (!/^[0-9a-fA-F]{6}$/.test(t)) return '24 91% 50%';
@@ -85,6 +113,10 @@ export function TenantBrandingProvider({ children }: { children: ReactNode }) {
       // Drive brand RGB triplets for bg-brand-primary / bg-brand-emphasis
       root.style.setProperty('--brand-primary', hexToRgbTriplet(primary));
       root.style.setProperty('--brand-emphasis', hexToRgbTriplet(secondary));
+      // Derive dark terminal background and primary-dark accent from brand color
+      root.style.setProperty('--brand-dark', hexToDarkRgbTriplet(primary));
+      const hue = hexToHslTriplet(primary).split(' ')[0];
+      root.style.setProperty('--primary-dark', `${hue} 68% 40%`);
     }
   }, [effectiveBrand]);
 

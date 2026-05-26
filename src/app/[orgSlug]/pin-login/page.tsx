@@ -139,23 +139,25 @@ function initials(name: string) {
 function GhostKeypad() {
   const keys = ['1','2','3','4','5','6','7','8','9','','0','⌫'];
   return (
-    <div className="flex flex-col items-center gap-5 w-full opacity-20 pointer-events-none select-none">
-      <div className="flex gap-4">
-        {Array.from({ length: 6 }).map((_, i) => (
-          <div key={i} className="h-3.5 w-3.5 rounded-full border-2 border-white/30" />
+    <div className="flex flex-col items-center gap-5 w-full opacity-[0.14] pointer-events-none select-none">
+      <div className="flex gap-5">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="h-[17px] w-[17px] rounded-full border-2 border-white/50 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]" />
         ))}
       </div>
-      <div className="h-4" />
+      <div className="h-3" />
       <div className="grid grid-cols-3 gap-3 w-full">
         {keys.map((k, i) => (
           <div
             key={i}
             className={cn(
-              'h-16 rounded-2xl flex items-center justify-center',
-              k === '' ? 'invisible' : 'bg-white/12 border border-white/20 text-white/70 text-2xl font-bold'
+              'h-[66px] rounded-2xl flex items-center justify-center',
+              k === ''
+                ? 'invisible'
+                : 'bg-white/10 border border-white/18 text-white/80 text-2xl font-bold shadow-[inset_0_1px_0_rgba(255,255,255,0.15),0_4px_14px_rgba(0,0,0,0.4)]'
             )}
           >
-            {k === '⌫' ? <Delete className="h-5 w-5" /> : k}
+            {k === '⌫' ? <Delete className="h-[18px] w-[18px]" /> : k}
           </div>
         ))}
       </div>
@@ -447,11 +449,19 @@ export default function PINLoginPage() {
           background: 'linear-gradient(160deg, rgb(var(--brand-dark)) 0%, color-mix(in srgb, rgb(var(--brand-dark)) 72%, rgb(var(--brand-emphasis))) 55%, rgb(var(--brand-dark)) 100%)',
         }}
       >
+        {/* Grain texture for depth */}
+        <svg className="pointer-events-none absolute inset-0 h-full w-full opacity-[0.032]" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+          <filter id="grain-outlet"><feTurbulence type="fractalNoise" baseFrequency="0.82" numOctaves="4" stitchTiles="stitch"/></filter>
+          <rect width="100%" height="100%" filter="url(#grain-outlet)"/>
+        </svg>
         {/* Ambient blobs */}
         <div className="pointer-events-none absolute inset-0 overflow-hidden">
-          <div className="absolute -top-64 -left-64 h-175 w-175 rounded-full bg-primary/8 blur-3xl" />
-          <div className="absolute top-1/2 -right-48 h-125 w-125 rounded-full bg-primary/5 blur-3xl" />
-          <div className="absolute -bottom-48 left-1/3 h-96 w-96 rounded-full bg-primary/6 blur-3xl" />
+          <div className="absolute -top-64 -left-64 h-[700px] w-[700px] rounded-full blur-3xl animate-breathe"
+               style={{ background: 'hsl(var(--primary) / 0.1)' }} />
+          <div className="absolute top-1/2 -right-48 h-[500px] w-[500px] rounded-full blur-3xl animate-breathe-slow"
+               style={{ background: 'hsl(var(--primary) / 0.06)' }} />
+          <div className="absolute -bottom-48 left-1/3 h-96 w-96 rounded-full blur-3xl"
+               style={{ background: 'hsl(var(--primary) / 0.07)' }} />
         </div>
 
         <div className="relative z-10 flex flex-col flex-1 items-center px-4 sm:px-6 pt-12 pb-10 overflow-y-auto">
@@ -634,6 +644,7 @@ export default function PINLoginPage() {
         screensaverUrl={outletInfo?.settings?.screensaver_url ?? tenant?.posScreensaverUrl}
         tenantName={tenant?.orgName ?? tenant?.name}
         tenantLogoUrl={tenant?.logoUrl}
+        outletName={outletName !== (tenant?.orgName ?? tenant?.name ?? orgSlug) ? outletName : undefined}
       />
 
       <div
@@ -642,11 +653,19 @@ export default function PINLoginPage() {
           background: 'linear-gradient(135deg, rgb(var(--brand-dark)) 0%, color-mix(in srgb, rgb(var(--brand-dark)) 80%, rgb(var(--brand-emphasis))) 50%, rgb(var(--brand-dark)) 100%)',
         }}
       >
+        {/* Grain texture for premium depth */}
+        <svg className="pointer-events-none absolute inset-0 h-full w-full opacity-[0.032]" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+          <filter id="grain-pin"><feTurbulence type="fractalNoise" baseFrequency="0.82" numOctaves="4" stitchTiles="stitch"/></filter>
+          <rect width="100%" height="100%" filter="url(#grain-pin)"/>
+        </svg>
         {/* Ambient blobs */}
         <div className="pointer-events-none absolute inset-0 overflow-hidden">
-          <div className="absolute -top-48 -left-48 h-125 w-125 rounded-full bg-primary/10 blur-3xl" />
-          <div className="absolute top-1/3 -right-32 h-96 w-96 rounded-full bg-primary/7 blur-3xl" />
-          <div className="absolute -bottom-32 left-1/3 h-80 w-80 rounded-full bg-primary/5 blur-3xl" />
+          <div className="absolute -top-48 -left-48 h-[500px] w-[500px] rounded-full blur-3xl animate-breathe"
+               style={{ background: 'hsl(var(--primary) / 0.12)' }} />
+          <div className="absolute top-1/3 -right-32 h-96 w-96 rounded-full blur-3xl animate-breathe-slow"
+               style={{ background: 'hsl(var(--primary) / 0.08)' }} />
+          <div className="absolute -bottom-32 left-1/3 h-80 w-80 rounded-full blur-3xl"
+               style={{ background: 'hsl(var(--primary) / 0.06)' }} />
         </div>
 
         {/* ── Top nav ── */}
@@ -901,45 +920,49 @@ export default function PINLoginPage() {
             {selected ? (
               <div className="flex flex-col items-center gap-5 w-full max-w-72 animate-scale-in">
 
-                {/* Selected staff header */}
-                <div className="flex items-center gap-3 w-full bg-white/5 rounded-2xl px-4 py-3 border border-white/10">
-                  <div
-                    className="h-11 w-11 rounded-xl flex items-center justify-center shrink-0 border-2 font-bold text-base"
-                    style={{
-                      background: `${roleMeta(selected.role).accent}22`,
-                      borderColor: `${roleMeta(selected.role).accent}55`,
-                      color: roleMeta(selected.role).accent,
-                    }}
-                  >
-                    {initials(selected.name)}
+                {/* Avatar with ambient glow */}
+                <div className="flex flex-col items-center gap-2.5">
+                  <div className="relative">
+                    <div
+                      className="absolute -inset-5 rounded-full blur-xl opacity-30 transition-opacity"
+                      style={{ background: roleMeta(selected.role).accent }}
+                    />
+                    <div
+                      className="relative h-16 w-16 rounded-2xl flex items-center justify-center font-black text-2xl border-2 shadow-2xl"
+                      style={{
+                        background: `${roleMeta(selected.role).accent}1c`,
+                        borderColor: `${roleMeta(selected.role).accent}55`,
+                        color: roleMeta(selected.role).accent,
+                        boxShadow: `0 0 0 4px ${roleMeta(selected.role).accent}14, 0 20px 40px rgba(0,0,0,0.55)`,
+                      }}
+                    >
+                      {initials(selected.name)}
+                    </div>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-bold text-white text-sm truncate">{selected.name}</p>
+                  <div className="text-center space-y-1">
+                    <p className="font-bold text-white text-base leading-tight">{selected.name}</p>
                     {selected.role && (
                       <span
-                        className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full mt-0.5"
-                        style={{
-                          background: `${roleMeta(selected.role).accent}22`,
-                          color: roleMeta(selected.role).accent,
-                        }}
+                        className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-0.5 rounded-full"
+                        style={{ background: `${roleMeta(selected.role).accent}1c`, color: roleMeta(selected.role).accent }}
                       >
                         <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ background: roleMeta(selected.role).accent }} />
                         {roleMeta(selected.role).label}
                       </span>
                     )}
                   </div>
-                  <button
-                    onClick={() => { setSelected(null); setPinError(null); }}
-                    className="h-8 w-8 rounded-xl flex items-center justify-center text-white/30 hover:text-white/70 hover:bg-white/8 transition-colors shrink-0"
-                    title="Choose different person"
-                  >
-                    <ArrowLeft className="h-4 w-4" />
-                  </button>
+                  {!selected.has_pin && (
+                    <p className="text-xs text-amber-400/80 bg-amber-500/10 border border-amber-500/20 px-3 py-1.5 rounded-xl text-center mt-1">
+                      No PIN configured — ask your manager
+                    </p>
+                  )}
                 </div>
 
-                <p className="text-white/40 text-xs font-medium tracking-wide uppercase">
-                  {selected.has_pin ? `Enter your PIN · ${outletName}` : 'No PIN configured — contact your manager'}
-                </p>
+                {selected.has_pin && (
+                  <p className="text-white/25 text-[10px] font-medium tracking-[0.18em] uppercase -mb-1">
+                    Enter your PIN
+                  </p>
+                )}
 
                 <div className="w-full">
                   <PINKeypadLarge
@@ -949,12 +972,41 @@ export default function PINLoginPage() {
                     disabled={false}
                   />
                 </div>
+
+                <button
+                  onClick={() => { setSelected(null); setPinError(null); }}
+                  className="flex items-center gap-1.5 text-[11px] text-white/22 hover:text-white/55 transition-colors -mt-1"
+                >
+                  <ArrowLeft className="h-3 w-3" />
+                  Choose different person
+                </button>
               </div>
             ) : (
-              <div className="flex flex-col items-center gap-4 w-full max-w-72">
-                <p className="text-white/25 text-sm font-medium text-center">
-                  ← Select a staff member to enter your PIN
-                </p>
+              <div className="flex flex-col items-center gap-6 w-full max-w-72 animate-fade-in">
+                {/* Branded outlet identity */}
+                <div className="flex flex-col items-center gap-3 text-center">
+                  <div className="relative">
+                    <div
+                      className="absolute -inset-5 rounded-full blur-2xl opacity-18"
+                      style={{ background: 'rgb(var(--brand-primary))' }}
+                    />
+                    {tenant?.logoUrl ? (
+                      <div className="relative h-16 w-16 rounded-2xl overflow-hidden ring-1 ring-white/15 shadow-2xl shadow-black/60">
+                        <img src={tenant.logoUrl} alt={tenantDisplayName} className="h-full w-full object-cover" />
+                      </div>
+                    ) : (
+                      <div className="relative h-16 w-16 rounded-2xl bg-gradient-to-br from-primary/28 to-primary/8 border border-primary/22 flex items-center justify-center shadow-2xl shadow-black/60">
+                        <span className="text-xl font-black" style={{ color: 'hsl(var(--primary) / 0.75)' }}>
+                          {tenantDisplayName.slice(0, 2).toUpperCase()}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-white/75 font-bold text-sm leading-tight">{outletName}</p>
+                    <p className="text-white/22 text-xs tracking-wide">Select a team member to sign in</p>
+                  </div>
+                </div>
                 <GhostKeypad />
               </div>
             )}
@@ -984,56 +1036,73 @@ export default function PINLoginPage() {
                 background: 'linear-gradient(160deg, rgb(var(--brand-dark)) 0%, color-mix(in srgb, rgb(var(--brand-dark)) 78%, rgb(var(--brand-emphasis))) 100%)',
               }}
             >
-              <div className="flex items-center gap-3 px-4 pt-5 pb-4 shrink-0">
+              {/* Back button row */}
+              <div className="flex items-center px-4 pt-5 pb-3 shrink-0">
                 <button
                   onClick={() => { setSelected(null); setPinError(null); }}
-                  className="h-10 w-10 rounded-xl bg-white/8 flex items-center justify-center text-white/60 hover:text-white transition-colors shrink-0"
+                  className="flex items-center gap-1.5 text-xs text-white/35 hover:text-white/65 transition-colors"
                 >
-                  <ArrowLeft className="h-4 w-4" />
+                  <ArrowLeft className="h-3.5 w-3.5" />
+                  Back
                 </button>
-                <div
-                  className="h-10 w-10 rounded-xl flex items-center justify-center font-bold border-2 shrink-0"
-                  style={{
-                    background: `${roleMeta(selected.role).accent}22`,
-                    borderColor: `${roleMeta(selected.role).accent}55`,
-                    color: roleMeta(selected.role).accent,
-                  }}
-                >
-                  {initials(selected.name)}
-                </div>
-                <div>
-                  <p className="font-bold text-white text-sm">{selected.name}</p>
-                  {selected.role && (
-                    <span
-                      className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-full"
-                      style={{
-                        background: `${roleMeta(selected.role).accent}22`,
-                        color: roleMeta(selected.role).accent,
-                      }}
-                    >
-                      {roleMeta(selected.role).label}
-                    </span>
-                  )}
-                </div>
               </div>
 
+              {/* Avatar + keypad */}
               <div className="flex-1 flex items-center justify-center px-8">
-                <div className="w-full max-w-xs flex flex-col gap-5">
+                <div className="w-full max-w-xs flex flex-col items-center gap-5">
+                  {/* Avatar with glow */}
+                  <div className="flex flex-col items-center gap-2.5">
+                    <div className="relative">
+                      <div
+                        className="absolute -inset-4 rounded-full blur-xl opacity-28"
+                        style={{ background: roleMeta(selected.role).accent }}
+                      />
+                      <div
+                        className="relative h-14 w-14 rounded-xl flex items-center justify-center font-black text-xl border-2"
+                        style={{
+                          background: `${roleMeta(selected.role).accent}1c`,
+                          borderColor: `${roleMeta(selected.role).accent}55`,
+                          color: roleMeta(selected.role).accent,
+                          boxShadow: `0 0 0 4px ${roleMeta(selected.role).accent}12, 0 16px 32px rgba(0,0,0,0.5)`,
+                        }}
+                      >
+                        {initials(selected.name)}
+                      </div>
+                    </div>
+                    <div className="text-center">
+                      <p className="font-bold text-white text-sm">{selected.name}</p>
+                      {selected.role && (
+                        <span
+                          className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full mt-0.5"
+                          style={{ background: `${roleMeta(selected.role).accent}1c`, color: roleMeta(selected.role).accent }}
+                        >
+                          <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ background: roleMeta(selected.role).accent }} />
+                          {roleMeta(selected.role).label}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {selected.has_pin && (
+                    <p className="text-white/22 text-[10px] font-medium tracking-[0.18em] uppercase -mb-1">Enter your PIN</p>
+                  )}
+
                   <PINKeypadLarge
                     onConfirm={handlePIN}
                     loading={loginMutation.isPending}
                     error={pinError}
                     disabled={false}
                   />
-                  <div className="flex flex-col items-center gap-2">
+
+                  <div className="flex flex-col items-center gap-2 w-full">
                     <div className="flex items-center gap-3 w-full">
                       <div className="flex-1 h-px bg-white/10" />
-                      <span className="text-[10px] text-white/25 font-medium tracking-wider uppercase">or</span>
+                      <span className="text-[10px] text-white/22 font-medium tracking-wider uppercase">or</span>
                       <div className="flex-1 h-px bg-white/10" />
                     </div>
                     <button
                       onClick={() => redirectToSSO(orgSlug, window.location.href)}
-                      className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-white/12 bg-white/4 text-xs text-white/50 hover:bg-white/10 hover:text-white/80 transition-all font-medium"
+                      className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-white/10 bg-white/4 text-xs text-white/45 hover:bg-white/9 hover:text-white/75 transition-all font-medium"
                     >
                       <ExternalLink className="h-3.5 w-3.5" />
                       Sign in with your account

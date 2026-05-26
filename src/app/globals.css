@@ -96,6 +96,21 @@
   @keyframes spinner {
     to { transform: rotate(360deg); }
   }
+
+  @keyframes breathe {
+    0%, 100% { transform: scale(1);    opacity: 0.65; }
+    50%       { transform: scale(1.12); opacity: 1;    }
+  }
+
+  @keyframes breathe-slow {
+    0%, 100% { transform: scale(1);    opacity: 0.5; }
+    50%       { transform: scale(1.08); opacity: 0.85; }
+  }
+
+  @keyframes wake-ring {
+    0%   { transform: scale(1);   opacity: 0.6; }
+    100% { transform: scale(2.2); opacity: 0;   }
+  }
 }
 
 @utility magical-card {
@@ -175,6 +190,19 @@
 
 @utility animate-spinner {
   animation: spinner 0.7s linear infinite;
+}
+
+@utility animate-breathe {
+  animation: breathe 10s ease-in-out infinite;
+}
+
+@utility animate-breathe-slow {
+  animation: breathe-slow 14s ease-in-out infinite;
+  animation-delay: -5s;
+}
+
+@utility animate-wake-ring {
+  animation: wake-ring 2s ease-out infinite;
 }
 
 :root {

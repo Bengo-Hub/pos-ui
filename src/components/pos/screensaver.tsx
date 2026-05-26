@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Image from 'next/image';
 
 interface ScreensaverProps {
   active: boolean;
@@ -9,6 +8,7 @@ interface ScreensaverProps {
   screensaverUrl?: string | null;
   tenantName?: string | null;
   tenantLogoUrl?: string | null;
+  outletName?: string | null;
 }
 
 function LiveClock() {
@@ -22,63 +22,109 @@ function LiveClock() {
 
   if (!now) return null;
 
-  const time = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-  const date = now.toLocaleDateString([], { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+  const timeMain = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const secs = now.toLocaleTimeString([], { second: '2-digit' }).split(':').pop() ?? '00';
+  const date = now.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
 
   return (
     <div className="text-center select-none">
-      <div className="text-7xl sm:text-8xl font-thin tracking-tight text-white tabular-nums drop-shadow-2xl">
-        {time}
+      {/* Large time display — follows 60-30-10 hierarchy */}
+      <div className="flex items-end justify-center gap-3 leading-none">
+        <span
+          className="text-[5.5rem] sm:text-[7.5rem] font-thin tracking-tight text-white tabular-nums"
+          style={{ textShadow: '0 0 60px rgba(255,255,255,0.08), 0 2px 20px rgba(0,0,0,0.5)' }}
+        >
+          {timeMain}
+        </span>
+        <span
+          className="text-2xl sm:text-3xl font-thin tabular-nums mb-4 sm:mb-6"
+          style={{ color: 'hsl(var(--primary) / 0.55)' }}
+        >
+          {secs}
+        </span>
       </div>
-      <div className="text-lg sm:text-xl text-white/50 mt-3 font-light">{date}</div>
+      <p className="text-base sm:text-lg text-white/30 mt-1 font-light tracking-[0.06em]">{date}</p>
     </div>
   );
 }
 
-function DefaultBackground() {
+function BrandBackground() {
   return (
     <>
       <style>{`
-        @keyframes ss-blob-a {
-          0%,100% { transform: translate(0,0) scale(1); }
-          50%      { transform: translate(55px,-35px) scale(1.12); }
-        }
-        @keyframes ss-blob-b {
-          0%,100% { transform: translate(0,0) scale(1); }
-          50%      { transform: translate(-45px,55px) scale(0.9); }
-        }
-        @keyframes ss-blob-c {
-          0%,100% { transform: translate(0,0) scale(1); }
-          50%      { transform: translate(35px,35px) scale(1.08); }
-        }
-        .ss-a { animation: ss-blob-a  9s ease-in-out infinite; }
+        @keyframes ss-blob-a { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(55px,-35px) scale(1.12); } }
+        @keyframes ss-blob-b { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(-45px,55px) scale(0.88); } }
+        @keyframes ss-blob-c { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(35px,35px) scale(1.08); } }
+        .ss-a { animation: ss-blob-a 9s ease-in-out infinite; }
         .ss-b { animation: ss-blob-b 12s ease-in-out infinite; }
         .ss-c { animation: ss-blob-c 15s ease-in-out infinite; }
       `}</style>
 
-      {/* Base dark */}
-      <div className="absolute inset-0 bg-gray-950" />
+      {/* Brand-driven base gradient — uses tenant --brand-dark */}
+      <div
+        className="absolute inset-0"
+        style={{
+          background: 'linear-gradient(135deg, rgb(var(--brand-dark)) 0%, color-mix(in srgb, rgb(var(--brand-dark)) 82%, rgb(var(--brand-emphasis))) 55%, rgb(var(--brand-dark)) 100%)',
+        }}
+      />
 
-      {/* SVG background (static animated gradient from public) */}
+      {/* Static SVG background pattern */}
       <img
         src="/screensaver/default.svg"
         alt=""
-        className="absolute inset-0 w-full h-full object-cover opacity-100"
-        aria-hidden="true"
+        className="absolute inset-0 w-full h-full object-cover opacity-40"
+        aria-hidden
       />
 
-      {/* React-animated blobs layered on top */}
-      <div className="absolute top-1/4 left-1/5 w-96 h-96 rounded-full bg-orange-500/25 blur-3xl ss-a pointer-events-none" />
-      <div className="absolute bottom-1/4 right-1/5 w-80 h-80 rounded-full bg-violet-600/20 blur-3xl ss-b pointer-events-none" />
-      <div className="absolute top-1/2 right-1/3  w-64 h-64 rounded-full bg-sky-500/15   blur-3xl ss-c pointer-events-none" />
+      {/* Brand-colored animated blobs — 60% primary, 30% emphasis, 10% accent */}
+      <div
+        className="absolute top-[10%] left-[8%] w-[48vw] h-[48vh] rounded-full blur-[90px] ss-a pointer-events-none"
+        style={{ background: 'rgb(var(--brand-primary))', opacity: 0.22 }}
+      />
+      <div
+        className="absolute bottom-[12%] right-[8%] w-[40vw] h-[40vh] rounded-full blur-[80px] ss-b pointer-events-none"
+        style={{ background: 'rgb(var(--brand-emphasis))', opacity: 0.18 }}
+      />
+      <div
+        className="absolute top-[42%] right-[28%] w-[26vw] h-[26vh] rounded-full blur-[70px] ss-c pointer-events-none"
+        style={{ background: 'rgb(var(--brand-primary))', opacity: 0.1 }}
+      />
+
+      {/* Grain texture overlay for premium depth */}
+      <svg
+        className="absolute inset-0 h-full w-full opacity-[0.03] pointer-events-none"
+        xmlns="http://www.w3.org/2000/svg"
+        aria-hidden
+      >
+        <filter id="ss-grain">
+          <feTurbulence type="fractalNoise" baseFrequency="0.82" numOctaves="4" stitchTiles="stitch" />
+        </filter>
+        <rect width="100%" height="100%" filter="url(#ss-grain)" />
+      </svg>
     </>
   );
 }
 
-export function Screensaver({ active, onDismiss, screensaverUrl, tenantName, tenantLogoUrl }: ScreensaverProps) {
+export function Screensaver({
+  active,
+  onDismiss,
+  screensaverUrl,
+  tenantName,
+  tenantLogoUrl,
+  outletName,
+}: ScreensaverProps) {
+  const [ringPhase, setRingPhase] = useState(0);
+
+  useEffect(() => {
+    if (!active) return;
+    const t = setInterval(() => setRingPhase((p) => (p + 1) % 3), 2200);
+    return () => clearInterval(t);
+  }, [active]);
+
   if (!active) return null;
 
   const isVideo = !!screensaverUrl && /\.(mp4|webm|ogg)(\?.*)?$/i.test(screensaverUrl);
+  const hasMedia = !!screensaverUrl;
 
   return (
     <div
@@ -89,7 +135,7 @@ export function Screensaver({ active, onDismiss, screensaverUrl, tenantName, ten
       onClick={onDismiss}
       onKeyDown={(e) => e.key !== 'Tab' && onDismiss()}
     >
-      {/* ── Background layer ── */}
+      {/* ── Background ── */}
       {isVideo ? (
         <video
           src={screensaverUrl!}
@@ -99,42 +145,81 @@ export function Screensaver({ active, onDismiss, screensaverUrl, tenantName, ten
           playsInline
           className="absolute inset-0 w-full h-full object-cover"
         />
-      ) : screensaverUrl ? (
-        <img
-          src={screensaverUrl}
-          alt=""
-          className="absolute inset-0 w-full h-full object-cover"
-        />
+      ) : hasMedia ? (
+        <img src={screensaverUrl!} alt="" className="absolute inset-0 w-full h-full object-cover" />
       ) : (
-        <DefaultBackground />
+        <BrandBackground />
       )}
 
-      {/* Scrim for legibility */}
-      <div className="absolute inset-0 bg-black/40" />
+      {/* Scrim — light vignette, darkens edges for text legibility */}
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          background:
+            'radial-gradient(ellipse 80% 70% at 50% 50%, transparent 30%, rgba(0,0,0,0.28) 100%)',
+        }}
+      />
+      <div className="absolute inset-0 bg-black/18 pointer-events-none" />
 
-      {/* ── Centered content ── */}
-      <div className="absolute inset-0 flex flex-col items-center justify-center gap-8 p-8">
+      {/* ── Main content ── */}
+      <div className="absolute inset-0 flex flex-col items-center justify-center gap-5 p-8">
+        {/* Logo with soft ambient glow */}
         {tenantLogoUrl && (
-          <img
-            src={tenantLogoUrl}
-            alt={tenantName ?? ''}
-            className="h-14 object-contain opacity-70 drop-shadow-xl"
-          />
+          <div className="relative mb-2">
+            <div
+              className="absolute -inset-8 rounded-full blur-3xl opacity-18 pointer-events-none"
+              style={{ background: 'rgb(var(--brand-primary))' }}
+            />
+            <img
+              src={tenantLogoUrl}
+              alt={tenantName ?? ''}
+              className="relative h-14 sm:h-18 w-auto object-contain"
+              style={{
+                filter: 'brightness(1.05) drop-shadow(0 0 24px rgba(255,255,255,0.18))',
+                maxWidth: '200px',
+              }}
+            />
+          </div>
         )}
 
+        {/* Clock — the primary element */}
         <LiveClock />
 
-        {tenantName && (
-          <p className="text-white/30 text-sm font-medium tracking-widest uppercase">
-            {tenantName}
-          </p>
-        )}
+        {/* Outlet / tenant labels */}
+        <div className="flex flex-col items-center gap-1 mt-1">
+          {outletName && (
+            <p className="text-white/50 text-sm font-medium tracking-[0.18em] uppercase">{outletName}</p>
+          )}
+          {tenantName && (
+            <p className="text-white/22 text-xs font-medium tracking-[0.28em] uppercase">{tenantName}</p>
+          )}
+        </div>
       </div>
 
-      {/* ── Wake hint ── */}
-      <div className="absolute bottom-8 inset-x-0 flex justify-center pointer-events-none">
-        <p className="animate-pulse text-white/30 text-sm tracking-wide">
-          Tap anywhere to continue
+      {/* ── Wake hint with animated ring ── */}
+      <div className="absolute bottom-8 sm:bottom-10 inset-x-0 flex flex-col items-center gap-3 pointer-events-none">
+        {/* Concentric pulsing rings */}
+        <div className="relative h-10 w-10 flex items-center justify-center">
+          {[0, 1, 2].map((i) => (
+            <div
+              key={i}
+              className="absolute rounded-full border transition-all duration-700"
+              style={{
+                width: `${10 + i * 10}px`,
+                height: `${10 + i * 10}px`,
+                borderColor: 'rgb(var(--brand-primary))',
+                opacity: ringPhase === i ? 0.65 : 0.15,
+                transform: `scale(${ringPhase === i ? 1.2 : 1})`,
+              }}
+            />
+          ))}
+          <div
+            className="h-3 w-3 rounded-full"
+            style={{ background: 'hsl(var(--primary) / 0.7)' }}
+          />
+        </div>
+        <p className="text-white/28 text-xs font-medium tracking-[0.22em] uppercase">
+          Touch to continue
         </p>
       </div>
     </div>
