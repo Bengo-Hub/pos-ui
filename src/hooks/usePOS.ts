@@ -286,10 +286,14 @@ export function useOrders(filters?: { status?: string }) {
   });
 }
 
+export type OrderSubtype = 'dine_in' | 'takeaway' | 'room_service' | 'delivery' | 'bar_tab';
+
 interface CreateOrderInput {
   outletId: string;
   deviceId?: string;
   currency?: string;
+  orderSubtype?: OrderSubtype;
+  tableId?: string;
   lines: Array<{
     catalog_item_id: string;
     sku: string;
@@ -311,6 +315,8 @@ export function useCreateOrder() {
         outlet_id: data.outletId,
         device_id: data.deviceId,
         currency: data.currency ?? 'KES',
+        order_subtype: data.orderSubtype ?? 'dine_in',
+        table_id: data.tableId,
         lines: data.lines,
       }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['pos-orders'] }),

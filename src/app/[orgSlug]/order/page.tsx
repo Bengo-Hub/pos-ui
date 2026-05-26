@@ -6,13 +6,14 @@ import { SplitPaymentModal, type OrderLineItem } from '@/components/pos/split-pa
 import { CourseSelector, CourseBadge, COURSES, type CourseValue } from '@/components/pos/course-selector';
 import { VoidOrderModal } from '@/components/pos/void-order-modal';
 import { ReceiptPreview, type ReceiptData } from '@/components/pos/receipt-preview';
+import { OrderTypeSelector } from '@/components/pos/order-type-selector';
 import { cn } from '@/lib/utils';
-import { useMenuItems, useCategories, useCreateOrder, useVoidOrder } from '@/hooks/usePOS';
+import { useMenuItems, useCategories, useCreateOrder, useVoidOrder, type OrderSubtype } from '@/hooks/usePOS';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useAuthStore } from '@/store/auth';
 import { apiClient } from '@/lib/api/client';
-import { useRouter, useParams } from 'next/navigation';
+import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import {
   AlertTriangle,
   Barcode,
@@ -76,6 +77,7 @@ function defaultDisplayMode(useCase?: string): DisplayMode {
 export default function OrderPage() {
   const router = useRouter();
   const params = useParams();
+  const searchParams = useSearchParams();
   const orgSlug = (params?.orgSlug as string) || '';
   const user = useAuthStore((s) => s.user);
   const outlet = useAuthStore((s) => s.outlet);
@@ -90,6 +92,15 @@ export default function OrderPage() {
   );
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 50;
+
+  // Table context from URL (set by tables page: /order?table_id=...&table_name=...)
+  const tableId = searchParams.get('table_id') ?? '';
+  const tableName = searchParams.get('table_name') ?? '';
+
+  // Order subtype — pre-select dine_in when arriving from table selection
+  const [orderSubtype, setOrderSubtype] = useState<OrderSubtype | null>(
+    tableId ? 'dine_in' : null
+  );
 
   // Modifier modal
   const [modifierItem, setModifierItem] = useState<MenuItem | null>(null);
@@ -311,10 +322,24 @@ export default function OrderPage() {
 
   const handlePlaceOrder = () => {
     if (cart.length === 0) return;
+
+    // Hospitality: enforce order type selection before placing
+    if (isHospitality && !orderSubtype) {
+      toast.error('Please select Dine-In or Takeaway before placing the order.');
+      return;
+    }
+    if (isHospitality && orderSubtype === 'dine_in' && !tableId) {
+      toast.error('Please select a table first.');
+      router.push(`/${orgSlug}/tables`);
+      return;
+    }
+
     const courses = [...new Set(cart.map((i) => (i.courseNumber ?? 0) as CourseValue).filter((c) => c > 0))].sort() as CourseValue[];
     createOrder.mutate(
       {
         outletId: outlet?.id ?? '',
+        orderSubtype: orderSubtype ?? undefined,
+        tableId: tableId || undefined,
         lines: cart.map((item) => ({
           catalog_item_id: item.id,
           sku: item.sku || '',
@@ -674,31 +699,41 @@ export default function OrderPage() {
       {/* ── Right Panel: Cart ── */}
       <div className="w-full lg:w-96 xl:w-104 border-t lg:border-t-0 lg:border-l border-border bg-card flex flex-col shrink-0 min-h-0 overflow-hidden">
         {/* Cart header */}
-        <div className="px-5 py-4 border-b border-border flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-2.5">
-            <div className="h-9 w-9 rounded-xl bg-primary/10 flex items-center justify-center">
-              <ShoppingCart className="h-4.5 w-4.5 text-primary" />
-            </div>
-            <div>
-              <h2 className="font-bold text-sm leading-none">Current Order</h2>
+        <div className="px-5 py-4 border-b border-border shrink-0 space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <div className="h-9 w-9 rounded-xl bg-primary/10 flex items-center justify-center">
+                <ShoppingCart className="h-4.5 w-4.5 text-primary" />
+              </div>
+              <div>
+                <h2 className="font-bold text-sm leading-none">Current Order</h2>
+                {cartItemCount > 0 && (
+                  <p className="text-xs text-muted-foreground mt-0.5">{cartItemCount} item{cartItemCount !== 1 ? 's' : ''}</p>
+                )}
+              </div>
               {cartItemCount > 0 && (
-                <p className="text-xs text-muted-foreground mt-0.5">{cartItemCount} item{cartItemCount !== 1 ? 's' : ''}</p>
+                <Badge variant="default" className="ml-1 h-6 min-w-6 px-2 text-xs font-bold">
+                  {cartItemCount}
+                </Badge>
               )}
             </div>
-            {cartItemCount > 0 && (
-              <Badge variant="default" className="ml-1 h-6 min-w-6 px-2 text-xs font-bold">
-                {cartItemCount}
-              </Badge>
+            {cart.length > 0 && (
+              <button
+                onClick={clearCart}
+                className="text-xs text-destructive hover:text-destructive/80 font-semibold min-h-11 px-2 hover:underline transition-colors"
+              >
+                Clear all
+              </button>
             )}
           </div>
-          {cart.length > 0 && (
-            <button
-              onClick={clearCart}
-              className="text-xs text-destructive hover:text-destructive/80 font-semibold min-h-11 px-2 hover:underline transition-colors"
-            >
-              Clear all
-            </button>
-          )}
+          {/* Order type selector — hospitality only */}
+          <OrderTypeSelector
+            value={orderSubtype}
+            onChange={setOrderSubtype}
+            tableName={tableName || undefined}
+            onSelectTable={() => router.push(`/${orgSlug}/tables`)}
+            useCase={outlet?.use_case}
+          />
         </div>
 
         {/* Cart items — scrollable */}
