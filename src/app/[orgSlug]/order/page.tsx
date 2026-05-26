@@ -8,7 +8,7 @@ import { VoidOrderModal } from '@/components/pos/void-order-modal';
 import { ReceiptPreview, type ReceiptData } from '@/components/pos/receipt-preview';
 import { OrderTypeSelector } from '@/components/pos/order-type-selector';
 import { cn } from '@/lib/utils';
-import { useMenuItems, useCategories, useCreateOrder, useVoidOrder, type OrderSubtype } from '@/hooks/usePOS';
+import { useMenuItems, useCategories, useCreateOrder, useVoidOrder, useAssignTable, useReleaseTable, type OrderSubtype } from '@/hooks/usePOS';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useAuthStore } from '@/store/auth';
@@ -114,6 +114,8 @@ export default function OrderPage() {
   // Void order modal
   const [voidOpen, setVoidOpen] = useState(false);
   const voidOrder = useVoidOrder();
+  const assignTable = useAssignTable();
+  const releaseTable = useReleaseTable();
 
   // Receipt
   const [receiptData, setReceiptData] = useState<ReceiptData | null>(null);
@@ -357,7 +359,8 @@ export default function OrderPage() {
       },
       {
         onSuccess: (data: any) => {
-          setCurrentOrderId(data.id || data.order_id || '');
+          const orderId = data.id || data.order_id || '';
+          setCurrentOrderId(orderId);
           setCurrentOrderNumber(data.order_number || '');
           setFiredCourses(0);
           setCurrentOrderCourses(courses);
@@ -369,10 +372,14 @@ export default function OrderPage() {
             totalPrice: (item.price + (item.modifierTotal ?? 0)) * item.quantity,
           })));
 
-          // Hospitality waiter: auto-logout back to PIN screen after placing the order.
-          // Waiters take orders; cashiers/managers handle payment separately.
-          const isWaiter = user?.roles?.includes('waiter') || user?.roles?.[0] === 'waiter';
-          if (isWaiter && orgSlug) {
+          // Mark table occupied when a dine-in order is created with a table
+          if (tableId && orderId) {
+            assignTable.mutate({ tableId, orderId });
+          }
+
+          // Hospitality: dine-in orders route back to PIN login — payment is handled
+          // separately by cashier. All roles placing a dine-in order follow this flow.
+          if (orderSubtype === 'dine_in' && orgSlug) {
             clearCart();
             toast.success('Order sent to kitchen!');
             router.replace(`/${orgSlug}/pin-login`);
@@ -395,6 +402,11 @@ export default function OrderPage() {
     setCurrentOrderId('');
     setCurrentOrderCourses([]);
     setFiredCourses(0);
+
+    // Release the table back to available after payment
+    if (tableId) {
+      releaseTable.mutate(tableId);
+    }
 
     // Fetch receipt data and show the receipt preview
     const tenantId = user?.tenant_id ?? '';
@@ -849,10 +861,16 @@ export default function OrderPage() {
             >
               {createOrder.isPending ? (
                 <Loader2 className="h-5 w-5 animate-spin" />
+              ) : orderSubtype === 'dine_in' ? (
+                <ChefHat className="h-5 w-5" />
               ) : (
                 <ShoppingCart className="h-5 w-5" />
               )}
-              {cart.length === 0 ? 'Add items to pay' : `Pay · KES ${total.toLocaleString()}`}
+              {cart.length === 0
+                ? 'Add items to pay'
+                : orderSubtype === 'dine_in'
+                  ? 'Send to Kitchen'
+                  : `Pay · KES ${total.toLocaleString()}`}
             </Button>
             {currentOrderId && can('pos.orders.void') && (
               <button

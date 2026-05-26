@@ -1,11 +1,11 @@
 'use client';
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { compare as bcryptCompare } from 'bcryptjs';
 import {
-  ArrowLeft, BedDouble, Building2, ChevronRight, Coffee, Delete, ExternalLink,
+  BedDouble, Building2, ChevronRight, Coffee, Delete, ExternalLink,
   Fingerprint, Pill, Scissors, Settings, ShoppingBag, Truck, UtensilsCrossed,
   Warehouse, Wine, WifiOff, Zap,
 } from 'lucide-react';
@@ -16,7 +16,6 @@ import { apiClient } from '@/lib/api/client';
 import { useAuthStore } from '@/store/auth';
 import { getCachedStaffProfiles, cacheStaffProfile, type CachedStaffProfile } from '@/lib/db/pos-db';
 import { Screensaver } from '@/components/pos/screensaver';
-import { PINKeypadLarge } from '@/components/pos/pin-keypad-large';
 import { LiveClock } from '@/components/pos/live-clock';
 import { useTenantBranding } from '@/providers/tenant-branding-provider';
 import { cn } from '@/lib/utils';
@@ -48,9 +47,6 @@ interface PINLoginResponse {
   };
 }
 
-// Use cases that support POS terminals — logistics/warehouse do not.
-const POS_OUTLET_USE_CASES = ['hospitality', 'quick_service', 'retail', 'pharmacy', 'services'];
-
 interface OutletInfo {
   id: string;
   name: string;
@@ -61,6 +57,9 @@ interface OutletInfo {
     screensaver_url?: string;
   };
 }
+
+// Use cases that support POS terminals — logistics/warehouse do not.
+const POS_OUTLET_USE_CASES = ['hospitality', 'quick_service', 'retail', 'pharmacy', 'services'];
 
 const TIMEOUT_OPTIONS = [
   { label: '15 s',  ms: 15_000 },
@@ -108,62 +107,17 @@ const USE_CASE_ICONS: Record<string, React.ComponentType<{ className?: string }>
   logistics:     Truck,
 };
 
-// Role display config
-const ROLE_CONFIG: Record<string, { label: string; accent: string; dot: string; tabOrder: number }> = {
-  admin:         { label: 'Admin',      accent: '#ef4444', dot: 'bg-red-400',     tabOrder: 0 },
-  pos_admin:     { label: 'Admin',      accent: '#ef4444', dot: 'bg-red-400',     tabOrder: 0 },
-  superuser:     { label: 'Superuser',  accent: '#a855f7', dot: 'bg-purple-400',  tabOrder: 0 },
-  manager:       { label: 'Manager',    accent: '#f59e0b', dot: 'bg-amber-400',   tabOrder: 1 },
-  store_manager: { label: 'Manager',    accent: '#f59e0b', dot: 'bg-amber-400',   tabOrder: 1 },
-  cashier:       { label: 'Cashier',    accent: '#3b82f6', dot: 'bg-blue-400',    tabOrder: 2 },
-  waiter:        { label: 'Waiter',     accent: '#10b981', dot: 'bg-emerald-400', tabOrder: 3 },
-  kitchen:       { label: 'Kitchen',    accent: '#f97316', dot: 'bg-orange-400',  tabOrder: 4 },
-  bar:           { label: 'Bar',        accent: '#8b5cf6', dot: 'bg-violet-400',  tabOrder: 5 },
-  receptionist:  { label: 'Reception',  accent: '#ec4899', dot: 'bg-pink-400',    tabOrder: 6 },
-};
-
-function roleMeta(role?: string) {
-  return ROLE_CONFIG[role ?? ''] ?? {
-    label: role ? role.charAt(0).toUpperCase() + role.slice(1) : 'Staff',
-    accent: '#ffffff',
-    dot: 'bg-white/40',
-    tabOrder: 99,
-  };
-}
-
-function initials(name: string) {
-  return name.split(' ').slice(0, 2).map((w) => w[0]).join('').toUpperCase();
-}
-
-// Ghost keypad shown before staff is selected
-function GhostKeypad() {
-  const keys = ['1','2','3','4','5','6','7','8','9','','0','⌫'];
-  return (
-    <div className="flex flex-col items-center gap-5 w-full opacity-[0.14] pointer-events-none select-none">
-      <div className="flex gap-5">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="h-[17px] w-[17px] rounded-full border-2 border-white/50 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]" />
-        ))}
-      </div>
-      <div className="h-3" />
-      <div className="grid grid-cols-3 gap-3 w-full">
-        {keys.map((k, i) => (
-          <div
-            key={i}
-            className={cn(
-              'h-[66px] rounded-2xl flex items-center justify-center',
-              k === ''
-                ? 'invisible'
-                : 'bg-white/10 border border-white/18 text-white/80 text-2xl font-bold shadow-[inset_0_1px_0_rgba(255,255,255,0.15),0_4px_14px_rgba(0,0,0,0.4)]'
-            )}
-          >
-            {k === '⌫' ? <Delete className="h-[18px] w-[18px]" /> : k}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
+// Demo hints — shown only on codevertex-demo tenant.
+// Gives testers a quick reference of which PIN maps to which role.
+const DEMO_HINTS = [
+  { pin: '1111', role: 'Admin',      accent: '#ef4444' },
+  { pin: '2222', role: 'Cashier',    accent: '#3b82f6' },
+  { pin: '3333', role: 'Waiter',     accent: '#10b981' },
+  { pin: '4444', role: 'Kitchen',    accent: '#f97316' },
+  { pin: '5555', role: 'Bar',        accent: '#a855f7' },
+  { pin: '6666', role: 'Reception',  accent: '#ec4899' },
+  { pin: '7777', role: 'Pharmacist', accent: '#14b8a6' },
+];
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 
@@ -179,16 +133,15 @@ export default function PINLoginPage() {
   const tenantUUID = tenant?.id && /^[0-9a-f-]{36}$/.test(tenant.id) ? tenant.id : '';
   const effectiveTenantID  = tenantID || tenantUUID;
 
-  const [selected, setSelected]               = useState<StaffProfile | null>(null);
-  const [pinError, setPinError]               = useState<string | null>(null);
+  const [pinDigits, setPinDigits]   = useState<string[]>([]);
+  const [pinError, setPinError]     = useState<string | null>(null);
+  const [isShaking, setIsShaking]   = useState(false);
   const [offlineProfiles, setOfflineProfiles] = useState<CachedStaffProfile[]>([]);
   const [screensaverActive, setScreensaverActive] = useState(false);
-  const [showSettings, setShowSettings]       = useState(false);
-  const [timeoutMs, setTimeoutMsState]        = useState<number>(30_000);
-  const [activeTab, setActiveTab]             = useState<string>('All');
-  const [showOutletModal, setShowOutletModal] = useState(false);
-  const [step, setStep]                       = useState<'outlet' | 'pin'>('pin');
-  const [storedEmail, setStoredEmail]          = useState<string | null>(null);
+  const [showSettings, setShowSettings] = useState(false);
+  const [timeoutMs, setTimeoutMsState]  = useState<number>(30_000);
+  const [step, setStep]             = useState<'outlet' | 'pin'>('pin');
+  const [storedEmail, setStoredEmail] = useState<string | null>(null);
 
   useEffect(() => { setTimeoutMsState(getScreensaverTimeoutMs()); }, []);
   useEffect(() => {
@@ -196,12 +149,18 @@ export default function PINLoginPage() {
   }, []);
 
   const hydrateFromWebAuthn = useAuthStore((s) => s.hydrateFromWebAuthn);
-  const { authenticate: biometricAuth, isSupported: biometricSupported, hasRegisteredCredential, isLoading: biometricLoading, error: biometricError } = useBiometric({
+  const {
+    authenticate: biometricAuth,
+    isSupported: biometricSupported,
+    hasRegisteredCredential,
+    isLoading: biometricLoading,
+    error: biometricError,
+  } = useBiometric({
     onAuthSuccess: (tokens) => {
       hydrateFromWebAuthn({
-        accessToken: tokens.accessToken,
+        accessToken:  tokens.accessToken,
         refreshToken: tokens.refreshToken,
-        expiresAt: new Date(Date.now() + tokens.expiresIn * 1000).toISOString(),
+        expiresAt:    new Date(Date.now() + tokens.expiresIn * 1000).toISOString(),
       });
     },
   });
@@ -216,9 +175,8 @@ export default function PINLoginPage() {
     setShowSettings(false);
   };
 
-  // ── Outlet info ────────────────────────────────────────────────────────────
+  // ── Outlet info ──────────────────────────────────────────────────────────────
 
-  // Read last-selected outlet ID from localStorage (set by SSO outlet selector)
   const storedOutletId = typeof window !== 'undefined'
     ? (localStorage.getItem('pos-selected-outlet-id') ?? '')
     : '';
@@ -241,7 +199,6 @@ export default function PINLoginPage() {
     retry: false,
   });
 
-  // Fetch all outlets for the tenant (public endpoint, no auth needed)
   const { data: allOutlets = [] } = useQuery<OutletInfo[]>({
     queryKey: ['pos-outlets-list', effectiveTenantID],
     queryFn: async () => {
@@ -259,12 +216,11 @@ export default function PINLoginPage() {
     retry: false,
   });
 
-  // Filter out non-POS outlet types (logistics, warehouse) before showing the outlet grid.
   const posOutlets = allOutlets.filter(
     (o) => !o.use_case || POS_OUTLET_USE_CASES.includes(o.use_case)
   );
 
-  // Show outlet selector if multiple POS outlets and none previously selected
+  // Show outlet selector when multiple outlets and none previously selected.
   useEffect(() => {
     if (tenantLoading || !effectiveTenantID) return;
     const hasStoredOutlet = typeof window !== 'undefined' && !!localStorage.getItem('pos-selected-outlet-id');
@@ -277,14 +233,13 @@ export default function PINLoginPage() {
     if (typeof window !== 'undefined') {
       localStorage.setItem('pos-selected-outlet-id', outlet.id);
     }
-    // Pre-set outlet ID on apiClient so the PIN login request includes X-Outlet-ID
     apiClient.setOutletID(outlet.id);
     setStep('pin');
   }
 
-  // ── Staff profiles ─────────────────────────────────────────────────────────
+  // ── Staff profiles (for IndexedDB offline cache) ─────────────────────────────
 
-  const { data: serverProfiles, isLoading } = useQuery<StaffProfile[]>({
+  const { } = useQuery<StaffProfile[]>({
     queryKey: ['pos-staff-profiles', effectiveTenantID, outletInfo?.id ?? ''],
     queryFn: async () => {
       const params = outletInfo?.id ? `?outlet_id=${outletInfo.id}` : '';
@@ -316,115 +271,112 @@ export default function PINLoginPage() {
     }
   }, [isOnline, effectiveTenantID, tenantLoading]);
 
-  const profiles: StaffProfile[] = isOnline
-    ? (serverProfiles ?? [])
-    : offlineProfiles.map((p) => ({
-        user_id:   p.user_id,
-        name:      p.name,
-        role:      p.roles?.[0],
-        tenant_id: p.tenant_id,
-        outlet_id: '',
-        has_pin:   !!p.pin_hash,
-      }));
+  // ── PIN login mutation (online) ──────────────────────────────────────────────
 
-  const roleTabs = useMemo(() => {
-    const roles = new Set(profiles.map((p) => p.role ?? 'staff'));
-    const sorted = Array.from(roles).sort(
-      (a, b) => (ROLE_CONFIG[a]?.tabOrder ?? 99) - (ROLE_CONFIG[b]?.tabOrder ?? 99)
-    );
-    return ['All', ...sorted];
-  }, [profiles]);
-
-  useEffect(() => {
-    if (!roleTabs.includes(activeTab)) setActiveTab('All');
-  }, [roleTabs]);
-
-  const filteredProfiles = useMemo(() =>
-    activeTab === 'All' ? profiles : profiles.filter((p) => (p.role ?? 'staff') === activeTab),
-    [profiles, activeTab]
-  );
-
-  // ── PIN login ──────────────────────────────────────────────────────────────
-
-  const loginMutation = useMutation({
-    mutationFn: (vars: { userId: string; pin: string }) =>
-      apiClient.post<PINLoginResponse>(
-        `/api/v1/${effectiveTenantID}/pos/auth/pin`,
-        { user_id: vars.userId, pin: vars.pin }
-      ),
-    onSuccess: (data) => {
-      setTerminalSession(data.access_token, {
-        id:              data.user.user_id,
-        email:           '',
-        fullName:        data.user.name,
-        roles:           data.user.role ? [data.user.role] : [],
-        permissions:     data.user.permissions ?? [],
-        tenant_id:       data.user.tenant_id,
-        tenant_slug:     orgSlug,
-        isPlatformOwner: false,
-        isSuperUser:     false,
-      });
-      // Store the outlet the staff logged into so the header chip shows the correct outlet.
-      // Prefer outletInfo (what was selected on screen) and enrich from API response.
-      const sessionOutlet = outletInfo ?? (data.user.outlet_id ? {
-        id:       data.user.outlet_id,
-        name:     data.user.outlet_id,
-        use_case: data.user.outlet_use_case,
-        is_hq:    data.user.is_hq_user ?? false,
-      } : null);
-      if (sessionOutlet) {
-        setOutlet({
-          id:       sessionOutlet.id,
-          code:     (sessionOutlet as OutletInfo & { code?: string }).code ?? '',
-          name:     sessionOutlet.name,
-          use_case: data.user.outlet_use_case ?? sessionOutlet.use_case,
-          is_hq:    data.user.is_hq_user ?? sessionOutlet.is_hq ?? false,
-          status:   'active',
-        });
-        apiClient.setOutletID(sessionOutlet.id);
-      }
-      router.push(`/${orgSlug}/dashboard`);
-    },
-    onError: () => setPinError('Incorrect PIN. Please try again.'),
-  });
-
-  const handlePIN = async (pin: string) => {
-    if (!selected) return;
-    setPinError(null);
-
-    if (!selected.has_pin) {
-      setPinError('No PIN set. Ask your manager to set your PIN.');
-      return;
-    }
-
-    if (isOnline) {
-      loginMutation.mutate({ userId: selected.user_id, pin });
-      return;
-    }
-
-    const cached = offlineProfiles.find((p) => p.user_id === selected.user_id);
-    if (!cached?.pin_hash) {
-      setPinError('PIN not available offline. Connect to log in.');
-      return;
-    }
-    const valid = await bcryptCompare(pin, cached.pin_hash);
-    if (!valid) {
-      setPinError('Incorrect PIN. Please try again.');
-      return;
-    }
-    setTerminalSession('offline-terminal-session', {
-      id:              cached.user_id,
-      email:           cached.email,
-      fullName:        cached.name,
-      roles:           cached.roles,
-      permissions:     cached.permissions,
-      tenant_id:       cached.tenant_id,
+  function handleLoginSuccess(data: PINLoginResponse) {
+    setTerminalSession(data.access_token, {
+      id:              data.user.user_id,
+      email:           '',
+      fullName:        data.user.name,
+      roles:           data.user.role ? [data.user.role] : [],
+      permissions:     data.user.permissions ?? [],
+      tenant_id:       data.user.tenant_id,
       tenant_slug:     orgSlug,
       isPlatformOwner: false,
       isSuperUser:     false,
     });
+    const sessionOutlet = outletInfo ?? (data.user.outlet_id ? {
+      id:       data.user.outlet_id,
+      name:     data.user.outlet_id,
+      use_case: data.user.outlet_use_case,
+      is_hq:    data.user.is_hq_user ?? false,
+    } : null);
+    if (sessionOutlet) {
+      setOutlet({
+        id:       sessionOutlet.id,
+        code:     (sessionOutlet as OutletInfo & { code?: string }).code ?? '',
+        name:     sessionOutlet.name,
+        use_case: data.user.outlet_use_case ?? sessionOutlet.use_case,
+        is_hq:    data.user.is_hq_user ?? sessionOutlet.is_hq ?? false,
+        status:   'active',
+      });
+      apiClient.setOutletID(sessionOutlet.id);
+    }
     router.push(`/${orgSlug}/dashboard`);
-  };
+  }
+
+  const loginMutation = useMutation({
+    mutationFn: (pin: string) => {
+      const outletId = outletInfo?.id ?? storedOutletId;
+      return apiClient.post<PINLoginResponse>(
+        `/api/v1/${effectiveTenantID}/pos/auth/pin/identify`,
+        { pin, outlet_id: outletId }
+      );
+    },
+    onSuccess: handleLoginSuccess,
+    onError: (err: any) => {
+      const msg = err?.status === 429
+        ? 'Too many attempts. Please wait.'
+        : 'Incorrect PIN. Please try again.';
+      triggerPinError(msg);
+    },
+  });
+
+  function triggerPinError(msg: string) {
+    setPinError(msg);
+    setIsShaking(true);
+    setTimeout(() => {
+      setIsShaking(false);
+      setPinDigits([]);
+    }, 600);
+  }
+
+  // ── PIN input handling ───────────────────────────────────────────────────────
+
+  async function handleDigit(digit: string) {
+    if (loginMutation.isPending) return;
+    const next = [...pinDigits, digit];
+    setPinDigits(next);
+    setPinError(null);
+
+    if (next.length === 4) {
+      const pin = next.join('');
+      if (isOnline) {
+        loginMutation.mutate(pin);
+        return;
+      }
+      // Offline: scan all cached profiles for a bcrypt match
+      let matched: CachedStaffProfile | null = null;
+      for (const cached of offlineProfiles) {
+        if (cached.pin_hash && await bcryptCompare(pin, cached.pin_hash)) {
+          matched = cached;
+          break;
+        }
+      }
+      if (!matched) {
+        triggerPinError('Incorrect PIN. Please try again.');
+        return;
+      }
+      setTerminalSession('offline-terminal-session', {
+        id:              matched.user_id,
+        email:           matched.email,
+        fullName:        matched.name,
+        roles:           matched.roles,
+        permissions:     matched.permissions,
+        tenant_id:       matched.tenant_id,
+        tenant_slug:     orgSlug,
+        isPlatformOwner: false,
+        isSuperUser:     false,
+      });
+      router.push(`/${orgSlug}/dashboard`);
+    }
+  }
+
+  function handleBackspace() {
+    if (loginMutation.isPending) return;
+    setPinDigits((d) => d.slice(0, -1));
+    setPinError(null);
+  }
 
   const tenantDisplayName = tenant?.orgName ?? tenant?.name ?? orgSlug;
   const outletName = outletInfo?.name ?? tenantDisplayName;
@@ -432,10 +384,10 @@ export default function PINLoginPage() {
   const pinLoginMessage = outletInfo?.settings?.pin_login_message;
   const useCaseColor = useCase ? USE_CASE_COLORS[useCase] : null;
   const useCaseLabel = useCase ? (USE_CASE_LABELS[useCase] ?? useCase) : null;
+  const isDemoTenant = orgSlug === 'codevertex-demo';
 
-  // ── Render ─────────────────────────────────────────────────────────────────
+  // ── Outlet selection step ────────────────────────────────────────────────────
 
-  // Outlet selection step — shown when multiple outlets and none stored
   if (step === 'outlet') {
     const colClass =
       posOutlets.length === 1 ? 'grid-cols-1 max-w-xs mx-auto' :
@@ -449,12 +401,10 @@ export default function PINLoginPage() {
           background: 'linear-gradient(160deg, rgb(var(--brand-dark)) 0%, color-mix(in srgb, rgb(var(--brand-dark)) 72%, rgb(var(--brand-emphasis))) 55%, rgb(var(--brand-dark)) 100%)',
         }}
       >
-        {/* Grain texture for depth */}
         <svg className="pointer-events-none absolute inset-0 h-full w-full opacity-[0.032]" xmlns="http://www.w3.org/2000/svg" aria-hidden>
           <filter id="grain-outlet"><feTurbulence type="fractalNoise" baseFrequency="0.82" numOctaves="4" stitchTiles="stitch"/></filter>
           <rect width="100%" height="100%" filter="url(#grain-outlet)"/>
         </svg>
-        {/* Ambient blobs */}
         <div className="pointer-events-none absolute inset-0 overflow-hidden">
           <div className="absolute -top-64 -left-64 h-[700px] w-[700px] rounded-full blur-3xl animate-breathe"
                style={{ background: 'hsl(var(--primary) / 0.1)' }} />
@@ -465,10 +415,7 @@ export default function PINLoginPage() {
         </div>
 
         <div className="relative z-10 flex flex-col flex-1 items-center px-4 sm:px-6 pt-12 pb-10 overflow-y-auto">
-
-          {/* ── Header ─────────────────────────────────────────────────────── */}
           <div className="flex flex-col items-center gap-5 mb-10 text-center">
-            {/* Logo with status dot */}
             <div className="relative">
               {tenant?.logoUrl ? (
                 <div className="h-20 w-20 rounded-3xl overflow-hidden ring-2 ring-white/15 shadow-2xl shadow-black/50">
@@ -485,14 +432,12 @@ export default function PINLoginPage() {
                 isOnline ? 'bg-emerald-400' : 'bg-amber-400'
               )} />
             </div>
-
             <div className="space-y-1">
               <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight leading-none">
                 {tenant?.orgName ?? orgSlug}
               </h1>
               <p className="text-white/40 text-sm font-medium">Select your outlet to continue</p>
             </div>
-
             {!isOnline && (
               <div className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-semibold">
                 <WifiOff className="h-3 w-3" />
@@ -501,7 +446,6 @@ export default function PINLoginPage() {
             )}
           </div>
 
-          {/* ── Outlet grid ─────────────────────────────────────────────────── */}
           <div className="w-full max-w-2xl">
             {posOutlets.length === 0 ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -533,31 +477,21 @@ export default function PINLoginPage() {
                       )}
                       style={{ animationDelay: `${idx * 55}ms` }}
                     >
-                      {/* Colored top accent bar */}
                       <div
                         className="absolute top-0 inset-x-0 h-0.5 opacity-70 group-hover:opacity-100 transition-opacity"
                         style={{ background: `linear-gradient(90deg, transparent, ${color.accent}, transparent)` }}
                       />
-
                       <div className="p-5 flex flex-col gap-4">
-                        {/* Icon row */}
                         <div className="flex items-start justify-between">
                           <div
                             className="h-12 w-12 rounded-xl flex items-center justify-center border transition-colors duration-200"
-                            style={{
-                              background: `${color.accent}18`,
-                              borderColor: `${color.accent}30`,
-                            }}
+                            style={{ background: `${color.accent}18`, borderColor: `${color.accent}30` }}
                           >
                             <OutletIcon className={cn('h-5 w-5 transition-transform duration-200 group-hover:scale-110', color.text)} />
                           </div>
-
-                          {/* Badges */}
                           <div className="flex flex-col items-end gap-1.5">
                             {outlet.is_hq && (
-                              <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-white/10 text-white/45 uppercase tracking-widest">
-                                HQ
-                              </span>
+                              <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-white/10 text-white/45 uppercase tracking-widest">HQ</span>
                             )}
                             {label && (
                               <span
@@ -569,15 +503,11 @@ export default function PINLoginPage() {
                             )}
                           </div>
                         </div>
-
-                        {/* Name + arrow */}
                         <div className="flex items-end justify-between gap-2">
                           <p className="font-bold text-white text-sm sm:text-base leading-snug group-hover:text-white/90 transition-colors">
                             {outlet.name}
                           </p>
-                          <ChevronRight
-                            className="h-4 w-4 text-white/20 group-hover:text-white/55 group-hover:translate-x-0.5 transition-all shrink-0 mb-0.5"
-                          />
+                          <ChevronRight className="h-4 w-4 text-white/20 group-hover:text-white/55 group-hover:translate-x-0.5 transition-all shrink-0 mb-0.5" />
                         </div>
                       </div>
                     </button>
@@ -587,7 +517,6 @@ export default function PINLoginPage() {
             )}
           </div>
 
-          {/* ── SSO fallback ────────────────────────────────────────────────── */}
           <div className="w-full max-w-xs mt-10 flex flex-col gap-3">
             <div className="flex items-center gap-3">
               <div className="flex-1 h-px bg-white/10" />
@@ -607,7 +536,6 @@ export default function PINLoginPage() {
               <ExternalLink className="h-4 w-4 group-hover:text-primary transition-colors" />
               Sign in with your account
             </button>
-
             {biometricSupported && hasRegisteredCredential && storedEmail && (
               <div className="flex flex-col gap-1">
                 <button
@@ -624,17 +552,19 @@ export default function PINLoginPage() {
                   <Fingerprint className="h-4 w-4" />
                   {biometricLoading ? 'Verifying…' : 'Sign in with fingerprint'}
                 </button>
-                {biometricError && (
-                  <p className="text-center text-xs text-red-400">{biometricError}</p>
-                )}
+                {biometricError && <p className="text-center text-xs text-red-400">{biometricError}</p>}
               </div>
             )}
           </div>
-
         </div>
       </div>
     );
   }
+
+  // ── PIN entry step (full-screen, PIN-first) ───────────────────────────────────
+
+  const PIN_LENGTH = 4;
+  const keypadKeys = ['1','2','3','4','5','6','7','8','9','','0','del'];
 
   return (
     <>
@@ -653,7 +583,7 @@ export default function PINLoginPage() {
           background: 'linear-gradient(135deg, rgb(var(--brand-dark)) 0%, color-mix(in srgb, rgb(var(--brand-dark)) 80%, rgb(var(--brand-emphasis))) 50%, rgb(var(--brand-dark)) 100%)',
         }}
       >
-        {/* Grain texture for premium depth */}
+        {/* Grain texture */}
         <svg className="pointer-events-none absolute inset-0 h-full w-full opacity-[0.032]" xmlns="http://www.w3.org/2000/svg" aria-hidden>
           <filter id="grain-pin"><feTurbulence type="fractalNoise" baseFrequency="0.82" numOctaves="4" stitchTiles="stitch"/></filter>
           <rect width="100%" height="100%" filter="url(#grain-pin)"/>
@@ -668,14 +598,12 @@ export default function PINLoginPage() {
                style={{ background: 'hsl(var(--primary) / 0.06)' }} />
         </div>
 
-        {/* ── Top nav ── */}
+        {/* ── Top nav (same as before — logo, outlet, clock, settings) ── */}
         <div className="relative z-20 shrink-0 px-4 sm:px-6 pt-4 pb-3">
           <div className="flex items-center justify-between gap-3">
 
-            {/* ── Left: Logo + Outlet identity + Switcher ── */}
+            {/* Left: Logo + Outlet identity */}
             <div className="flex items-center gap-3 min-w-0 flex-1">
-
-              {/* Logo — always visible: white backdrop ensures transparency doesn't hide it */}
               <div className="relative shrink-0">
                 <div className="h-10 w-10 rounded-xl bg-white/15 backdrop-blur-sm border border-white/20 flex items-center justify-center overflow-hidden shadow-lg">
                   {tenant?.logoUrl ? (
@@ -693,7 +621,6 @@ export default function PINLoginPage() {
                 </div>
               </div>
 
-              {/* Outlet name + badge + inline switch button */}
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2 flex-wrap">
                   <h1 className="text-base font-black text-white tracking-tight truncate leading-tight">
@@ -713,8 +640,6 @@ export default function PINLoginPage() {
                     </span>
                   )}
                 </div>
-
-                {/* Switch outlet button — always visible below outlet name */}
                 {posOutlets.length > 1 && (
                   <button
                     onClick={() => setStep('outlet')}
@@ -728,7 +653,6 @@ export default function PINLoginPage() {
                     Switch outlet
                   </button>
                 )}
-
                 {pinLoginMessage && (
                   <p className="hidden sm:block text-white/35 text-[11px] mt-0.5 truncate max-w-xs leading-tight">
                     {pinLoginMessage}
@@ -737,12 +661,12 @@ export default function PINLoginPage() {
               </div>
             </div>
 
-            {/* ── Center: Live clock (desktop only) ── */}
+            {/* Center: Live clock (desktop only) */}
             <div className="hidden md:block shrink-0">
               <LiveClock />
             </div>
 
-            {/* ── Right: Status + Settings ── */}
+            {/* Right: Status + Settings */}
             <div className="flex items-center gap-1.5 shrink-0">
               {!isOnline && (
                 <div className="flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-amber-500/12 border border-amber-500/25 text-amber-400 text-[11px] font-semibold">
@@ -786,394 +710,164 @@ export default function PINLoginPage() {
         {/* Divider */}
         <div className="relative z-10 mx-4 sm:mx-6 h-px bg-white/8 shrink-0" />
 
-        {/* ── Main content ── */}
-        <div className="relative z-10 flex-1 flex overflow-hidden min-h-0 gap-0">
+        {/* ── Main: Centered PIN entry ── */}
+        <div className="relative z-10 flex-1 flex items-center justify-center overflow-hidden">
+          <div className="flex flex-col items-center gap-6 w-full max-w-xs px-6">
 
-          {/* ═══ LEFT PANEL: Staff selector ═══ */}
-          <div className="flex flex-col w-full md:w-[45%] lg:w-[40%] border-r border-white/8 overflow-hidden">
-
-            <div className="px-6 pt-4 pb-3 shrink-0">
-              <h2 className="text-base font-bold text-white tracking-tight">Who&apos;s working?</h2>
-              <p className="text-white/35 text-xs mt-0.5">Select your name to enter your PIN</p>
+            {/* Prompt */}
+            <div className="text-center space-y-1">
+              <p className="text-white/50 text-xs font-semibold tracking-[0.2em] uppercase">
+                Enter your PIN
+              </p>
             </div>
 
-            {/* Role tabs */}
-            {!isLoading && roleTabs.length > 2 && (
-              <div className="px-4 pb-3 shrink-0">
-                <div className="flex gap-1.5 overflow-x-auto scrollbar-none pb-0.5">
-                  {roleTabs.map((tab) => {
-                    const isActive = activeTab === tab;
-                    const meta = tab === 'All' ? null : roleMeta(tab);
-                    const count = tab === 'All'
-                      ? profiles.length
-                      : profiles.filter((p) => (p.role ?? 'staff') === tab).length;
-                    return (
-                      <button
-                        key={tab}
-                        onClick={() => setActiveTab(tab)}
-                        className={cn(
-                          'flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all shrink-0 border',
-                          isActive
-                            ? 'bg-primary border-primary text-primary-foreground shadow-md shadow-primary/25'
-                            : 'bg-white/6 border-white/10 text-white/55 hover:text-white hover:bg-white/10 hover:border-white/18'
-                        )}
-                      >
-                        {meta && <span className={cn('h-1.5 w-1.5 rounded-full shrink-0', meta.dot)} />}
-                        {tab === 'All' ? 'All' : meta?.label ?? tab}
-                        <span className={cn(
-                          'text-[10px] rounded-full px-1 min-w-4 text-center font-bold',
-                          isActive ? 'bg-white/20 text-white' : 'bg-white/8 text-white/40'
-                        )}>
-                          {count}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
+            {/* PIN dots */}
+            <div
+              className={cn(
+                'flex items-center gap-4',
+                isShaking && 'animate-shake'
+              )}
+            >
+              {Array.from({ length: PIN_LENGTH }).map((_, i) => {
+                const filled = i < pinDigits.length;
+                return (
+                  <div
+                    key={i}
+                    className={cn(
+                      'h-5 w-5 rounded-full border-2 transition-all duration-150',
+                      filled
+                        ? pinError
+                          ? 'bg-red-400 border-red-400 scale-110'
+                          : 'border-white/0 scale-110'
+                        : 'bg-transparent border-white/30'
+                    )}
+                    style={filled && !pinError ? {
+                      background: 'hsl(var(--primary))',
+                      borderColor: 'hsl(var(--primary))',
+                      boxShadow: '0 0 8px hsl(var(--primary) / 0.5)',
+                    } : {}}
+                  />
+                );
+              })}
+            </div>
 
-            {/* Staff list */}
-            <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-2 scrollbar-none">
-              {isLoading || tenantLoading ? (
-                Array.from({ length: 5 }).map((_, i) => (
-                  <div key={i} className="h-18 rounded-2xl bg-white/5 animate-pulse" />
-                ))
-              ) : filteredProfiles.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-40 text-center px-4">
-                  <p className="text-white/30 text-sm leading-relaxed">
-                    {profiles.length === 0
-                      ? isOnline
-                        ? 'No staff profiles found for this outlet.'
-                        : 'No cached profiles. Connect to internet first.'
-                      : 'No staff in this role group.'}
-                  </p>
-                </div>
-              ) : (
-                filteredProfiles.map((p, idx) => {
-                  const rm = roleMeta(p.role);
-                  const isSelected = selected?.user_id === p.user_id;
-                  return (
-                    <button
-                      key={p.user_id}
-                      onClick={() => {
-                        setSelected(isSelected ? null : p);
-                        setPinError(null);
-                      }}
-                      className={cn(
-                        'w-full flex items-center gap-4 px-4 py-3.5 rounded-2xl border-2 transition-all duration-150 text-left group',
-                        'animate-fade-in touch-manipulation',
-                        isSelected
-                          ? 'bg-primary/18 border-primary/55 shadow-lg shadow-primary/10'
-                          : 'bg-white/5 border-white/8 hover:bg-white/9 hover:border-white/18 active:scale-[0.98]'
-                      )}
-                      style={{ animationDelay: `${idx * 40}ms` }}
-                    >
-                      <div
-                        className={cn(
-                          'h-11 w-11 rounded-xl flex items-center justify-center shrink-0 border-2 transition-all font-bold text-base',
-                          isSelected
-                            ? 'border-primary/60 text-primary'
-                            : 'border-white/10 text-white/70 group-hover:text-white group-hover:border-white/20'
-                        )}
-                        style={{ background: isSelected ? `${rm.accent}22` : 'rgba(255,255,255,0.06)' }}
-                      >
-                        {initials(p.name)}
-                      </div>
-
-                      <div className="flex-1 min-w-0">
-                        <p className={cn(
-                          'font-semibold text-sm truncate leading-tight transition-colors',
-                          isSelected ? 'text-white' : 'text-white/80 group-hover:text-white'
-                        )}>
-                          {p.name}
-                        </p>
-                        <div className="flex items-center gap-1.5 mt-1">
-                          {p.role && (
-                            <span
-                              className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full"
-                              style={{ background: `${rm.accent}22`, color: rm.accent }}
-                            >
-                              <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ background: rm.accent }} />
-                              {rm.label}
-                            </span>
-                          )}
-                          {!p.has_pin && (
-                            <span className="text-[10px] text-white/25 font-medium">No PIN set</span>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className={cn(
-                        'h-2 w-2 rounded-full shrink-0 transition-all',
-                        isSelected ? 'bg-primary scale-125' : 'bg-white/12 group-hover:bg-white/25'
-                      )} />
-                    </button>
-                  );
-                })
+            {/* Error message */}
+            <div className="h-4 flex items-center justify-center">
+              {pinError && (
+                <p className="text-red-400 text-xs font-medium animate-fade-in text-center">
+                  {pinError}
+                </p>
               )}
             </div>
-          </div>
 
-          {/* ═══ RIGHT PANEL: PIN keypad ═══ */}
-          <div className="hidden md:flex flex-col items-center flex-1 overflow-y-auto scrollbar-none px-8">
-          <div className="w-full max-w-72 flex flex-col items-center justify-center gap-5 py-8 min-h-full">
-            {selected ? (
-              <div className="flex flex-col items-center gap-5 w-full max-w-72 animate-scale-in">
-
-                {/* Avatar with ambient glow */}
-                <div className="flex flex-col items-center gap-2.5">
-                  <div className="relative">
-                    <div
-                      className="absolute -inset-5 rounded-full blur-xl opacity-30 transition-opacity"
-                      style={{ background: roleMeta(selected.role).accent }}
-                    />
-                    <div
-                      className="relative h-16 w-16 rounded-2xl flex items-center justify-center font-black text-2xl border-2 shadow-2xl"
-                      style={{
-                        background: `${roleMeta(selected.role).accent}1c`,
-                        borderColor: `${roleMeta(selected.role).accent}55`,
-                        color: roleMeta(selected.role).accent,
-                        boxShadow: `0 0 0 4px ${roleMeta(selected.role).accent}14, 0 20px 40px rgba(0,0,0,0.55)`,
-                      }}
+            {/* Numeric keypad */}
+            <div className="grid grid-cols-3 gap-3 w-full">
+              {keypadKeys.map((key, i) => {
+                if (key === '') {
+                  return <div key={i} />;
+                }
+                if (key === 'del') {
+                  return (
+                    <button
+                      key={i}
+                      onClick={handleBackspace}
+                      disabled={loginMutation.isPending || pinDigits.length === 0}
+                      className={cn(
+                        'h-[68px] rounded-2xl flex items-center justify-center transition-all duration-100 touch-manipulation',
+                        'bg-white/8 border border-white/10 text-white/55',
+                        'hover:bg-white/14 hover:text-white/80 active:scale-95',
+                        'disabled:opacity-30'
+                      )}
+                      aria-label="Delete"
                     >
-                      {initials(selected.name)}
-                    </div>
-                  </div>
-                  <div className="text-center space-y-1">
-                    <p className="font-bold text-white text-base leading-tight">{selected.name}</p>
-                    {selected.role && (
-                      <span
-                        className="inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-0.5 rounded-full"
-                        style={{ background: `${roleMeta(selected.role).accent}1c`, color: roleMeta(selected.role).accent }}
-                      >
-                        <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ background: roleMeta(selected.role).accent }} />
-                        {roleMeta(selected.role).label}
-                      </span>
+                      <Delete className="h-5 w-5" />
+                    </button>
+                  );
+                }
+                return (
+                  <button
+                    key={i}
+                    onClick={() => handleDigit(key)}
+                    disabled={loginMutation.isPending || pinDigits.length >= PIN_LENGTH}
+                    className={cn(
+                      'h-[68px] rounded-2xl flex items-center justify-center transition-all duration-100 touch-manipulation',
+                      'bg-white/10 border border-white/12 text-white text-2xl font-bold',
+                      'hover:bg-white/18 hover:border-white/22',
+                      'active:scale-95 active:bg-white/22',
+                      'shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_4px_14px_rgba(0,0,0,0.35)]',
+                      'disabled:opacity-40 disabled:cursor-not-allowed'
                     )}
-                  </div>
-                  {!selected.has_pin && (
-                    <p className="text-xs text-amber-400/80 bg-amber-500/10 border border-amber-500/20 px-3 py-1.5 rounded-xl text-center mt-1">
-                      No PIN configured — ask your manager
-                    </p>
-                  )}
-                </div>
+                  >
+                    {loginMutation.isPending && pinDigits.length === PIN_LENGTH ? (
+                      <span className="h-2 w-2 rounded-full bg-white/60 animate-pulse" />
+                    ) : key}
+                  </button>
+                );
+              })}
+            </div>
 
-                {selected.has_pin && (
-                  <p className="text-white/25 text-[10px] font-medium tracking-[0.18em] uppercase -mb-1">
-                    Enter your PIN
-                  </p>
-                )}
-
-                <div className="w-full">
-                  <PINKeypadLarge
-                    onConfirm={handlePIN}
-                    loading={loginMutation.isPending}
-                    error={pinError}
-                    disabled={false}
-                  />
-                </div>
-
-                <button
-                  onClick={() => { setSelected(null); setPinError(null); }}
-                  className="flex items-center gap-1.5 text-[11px] text-white/22 hover:text-white/55 transition-colors -mt-1"
-                >
-                  <ArrowLeft className="h-3 w-3" />
-                  Choose different person
-                </button>
-              </div>
-            ) : (
-              <div className="flex flex-col items-center gap-6 w-full max-w-72 animate-fade-in">
-                {/* Branded outlet identity */}
-                <div className="flex flex-col items-center gap-3 text-center">
-                  <div className="relative">
-                    <div
-                      className="absolute -inset-5 rounded-full blur-2xl opacity-18"
-                      style={{ background: 'rgb(var(--brand-primary))' }}
-                    />
-                    {tenant?.logoUrl ? (
-                      <div className="relative h-16 w-16 rounded-2xl overflow-hidden ring-1 ring-white/15 shadow-2xl shadow-black/60">
-                        <img src={tenant.logoUrl} alt={tenantDisplayName} className="h-full w-full object-cover" />
-                      </div>
-                    ) : (
-                      <div className="relative h-16 w-16 rounded-2xl bg-gradient-to-br from-primary/28 to-primary/8 border border-primary/22 flex items-center justify-center shadow-2xl shadow-black/60">
-                        <span className="text-xl font-black" style={{ color: 'hsl(var(--primary) / 0.75)' }}>
-                          {tenantDisplayName.slice(0, 2).toUpperCase()}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-white/75 font-bold text-sm leading-tight">{outletName}</p>
-                    <p className="text-white/22 text-xs tracking-wide">Select a team member to sign in</p>
-                  </div>
-                </div>
-                <GhostKeypad />
-              </div>
-            )}
-
-            {/* Sign in with account — secondary CTA */}
-            <div className="flex flex-col items-center gap-2 w-full">
+            {/* SSO + biometric fallback */}
+            <div className="flex flex-col items-center gap-2 w-full mt-2">
               <div className="flex items-center gap-3 w-full">
                 <div className="flex-1 h-px bg-white/10" />
-                <span className="text-[10px] text-white/25 font-medium tracking-wider uppercase">or</span>
+                <span className="text-[10px] text-white/22 font-medium tracking-wider uppercase">or</span>
                 <div className="flex-1 h-px bg-white/10" />
               </div>
               <button
                 onClick={() => redirectToSSO(orgSlug, window.location.href)}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-white/12 bg-white/4 text-xs text-white/50 hover:bg-white/10 hover:text-white/80 hover:border-white/22 transition-all font-medium group"
+                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-white/10 bg-white/4 text-xs text-white/45 hover:bg-white/9 hover:text-white/75 hover:border-white/20 transition-all font-medium group"
               >
                 <ExternalLink className="h-3.5 w-3.5 group-hover:text-primary transition-colors" />
                 Sign in with your account
               </button>
-            </div>
-          </div>{/* close inner wrapper */}
-          </div>{/* close right panel outer */}
-
-          {/* ═══ MOBILE: Full-screen PIN overlay ═══ */}
-          {selected && (
-            <div
-              className="md:hidden absolute inset-0 z-20 flex flex-col animate-slide-up"
-              style={{
-                background: 'linear-gradient(160deg, rgb(var(--brand-dark)) 0%, color-mix(in srgb, rgb(var(--brand-dark)) 78%, rgb(var(--brand-emphasis))) 100%)',
-              }}
-            >
-              {/* Back button row */}
-              <div className="flex items-center px-4 pt-5 pb-3 shrink-0">
+              {biometricSupported && hasRegisteredCredential && storedEmail && (
                 <button
-                  onClick={() => { setSelected(null); setPinError(null); }}
-                  className="flex items-center gap-1.5 text-xs text-white/35 hover:text-white/65 transition-colors"
+                  onClick={() => biometricAuth(storedEmail, orgSlug)}
+                  disabled={biometricLoading}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-primary/25 bg-primary/8 text-xs text-primary hover:bg-primary/18 hover:border-primary/45 transition-all font-medium disabled:opacity-50"
                 >
-                  <ArrowLeft className="h-3.5 w-3.5" />
-                  Back
+                  <Fingerprint className="h-3.5 w-3.5" />
+                  {biometricLoading ? 'Verifying…' : 'Sign in with fingerprint'}
                 </button>
-              </div>
-
-              {/* Avatar + keypad */}
-              <div className="flex-1 flex items-center justify-center px-8">
-                <div className="w-full max-w-xs flex flex-col items-center gap-5">
-                  {/* Avatar with glow */}
-                  <div className="flex flex-col items-center gap-2.5">
-                    <div className="relative">
-                      <div
-                        className="absolute -inset-4 rounded-full blur-xl opacity-28"
-                        style={{ background: roleMeta(selected.role).accent }}
-                      />
-                      <div
-                        className="relative h-14 w-14 rounded-xl flex items-center justify-center font-black text-xl border-2"
-                        style={{
-                          background: `${roleMeta(selected.role).accent}1c`,
-                          borderColor: `${roleMeta(selected.role).accent}55`,
-                          color: roleMeta(selected.role).accent,
-                          boxShadow: `0 0 0 4px ${roleMeta(selected.role).accent}12, 0 16px 32px rgba(0,0,0,0.5)`,
-                        }}
-                      >
-                        {initials(selected.name)}
-                      </div>
-                    </div>
-                    <div className="text-center">
-                      <p className="font-bold text-white text-sm">{selected.name}</p>
-                      {selected.role && (
-                        <span
-                          className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full mt-0.5"
-                          style={{ background: `${roleMeta(selected.role).accent}1c`, color: roleMeta(selected.role).accent }}
-                        >
-                          <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ background: roleMeta(selected.role).accent }} />
-                          {roleMeta(selected.role).label}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  {selected.has_pin && (
-                    <p className="text-white/22 text-[10px] font-medium tracking-[0.18em] uppercase -mb-1">Enter your PIN</p>
-                  )}
-
-                  <PINKeypadLarge
-                    onConfirm={handlePIN}
-                    loading={loginMutation.isPending}
-                    error={pinError}
-                    disabled={false}
-                  />
-
-                  <div className="flex flex-col items-center gap-2 w-full">
-                    <div className="flex items-center gap-3 w-full">
-                      <div className="flex-1 h-px bg-white/10" />
-                      <span className="text-[10px] text-white/22 font-medium tracking-wider uppercase">or</span>
-                      <div className="flex-1 h-px bg-white/10" />
-                    </div>
-                    <button
-                      onClick={() => redirectToSSO(orgSlug, window.location.href)}
-                      className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-white/10 bg-white/4 text-xs text-white/45 hover:bg-white/9 hover:text-white/75 transition-all font-medium"
-                    >
-                      <ExternalLink className="h-3.5 w-3.5" />
-                      Sign in with your account
-                    </button>
-                  </div>
-                </div>
-              </div>
+              )}
+              {biometricError && <p className="text-center text-xs text-red-400">{biometricError}</p>}
             </div>
-          )}
+          </div>
         </div>
 
-        {/* ── Bottom bar: clock on mobile only ── */}
+        {/* ── Bottom bar: clock (mobile) ── */}
         <div className="relative z-10 flex items-center justify-center px-6 pb-3 pt-1 shrink-0 md:hidden">
           <LiveClock />
         </div>
-      </div>
 
-      {/* Switch Outlet modal — real outlet list */}
-      {showOutletModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="w-full max-w-sm rounded-3xl border border-white/10 bg-slate-900/95 shadow-2xl p-6 flex flex-col gap-4">
-            <div className="flex items-center justify-between">
-              <h3 className="font-bold text-white text-base">Switch Outlet</h3>
-              <button
-                onClick={() => setShowOutletModal(false)}
-                className="h-8 w-8 rounded-xl flex items-center justify-center text-white/30 hover:text-white/70 hover:bg-white/8 transition-colors"
-              >
-                ✕
-              </button>
-            </div>
-            {posOutlets.length > 0 ? (
-              <div className="grid gap-2">
-                {posOutlets.map((outlet) => {
-                  const color = outlet.use_case ? USE_CASE_COLORS[outlet.use_case] : null;
-                  const label = outlet.use_case ? (USE_CASE_LABELS[outlet.use_case] ?? outlet.use_case) : null;
-                  const isCurrent = outletInfo?.id === outlet.id;
-                  return (
-                    <button
-                      key={outlet.id}
-                      onClick={() => {
-                        selectOutlet(outlet);
-                        setShowOutletModal(false);
-                      }}
-                      className={cn(
-                        'flex items-center gap-3 px-4 py-3 rounded-2xl border text-left transition-all',
-                        isCurrent
-                          ? 'border-primary/50 bg-primary/10'
-                          : 'border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20'
-                      )}
+        {/* ── Demo hints (codevertex-demo only) — floating bottom-right ── */}
+        {isDemoTenant && (
+          <div className="absolute bottom-4 right-4 z-30 hidden sm:block">
+            <div className="rounded-2xl border border-white/10 bg-black/55 backdrop-blur-xl shadow-2xl p-3 max-w-[220px]">
+              <p className="text-[9px] font-black text-white/30 uppercase tracking-widest mb-2">
+                Demo PINs
+              </p>
+              <div className="grid grid-cols-2 gap-1">
+                {DEMO_HINTS.map(({ pin, role, accent }) => (
+                  <div
+                    key={pin}
+                    className="flex items-center gap-1.5 px-2 py-1 rounded-lg"
+                    style={{ background: `${accent}14` }}
+                  >
+                    <span
+                      className="font-mono text-[11px] font-black"
+                      style={{ color: accent }}
                     >
-                      <Building2 className={cn('h-4 w-4 shrink-0', isCurrent ? 'text-primary' : 'text-white/40')} />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold text-white truncate">{outlet.name}</p>
-                        {label && color && (
-                          <span className={cn('text-[10px] font-bold', color.text)}>{label}</span>
-                        )}
-                      </div>
-                      {isCurrent && <span className="text-[10px] text-primary font-bold">Current</span>}
-                    </button>
-                  );
-                })}
+                      {pin}
+                    </span>
+                    <span className="text-[10px] text-white/40 truncate">{role}</span>
+                  </div>
+                ))}
               </div>
-            ) : (
-              <p className="text-white/40 text-sm text-center py-4">No outlets available.</p>
-            )}
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </>
   );
 }
-

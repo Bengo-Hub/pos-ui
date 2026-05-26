@@ -3,12 +3,17 @@ import { apiClient } from './client';
 export interface StaffMember {
   id: string;
   user_id: string;
-  tenant_id: string;
+  outlet_id: string;
   name: string;
-  email?: string;
   role: string;
+  employment_type: string;
   is_active: boolean;
   has_pin: boolean;
+  hourly_rate?: number;
+  daily_rate?: number;
+  monthly_salary?: number;
+  mpesa_phone?: string;
+  created_at: string;
 }
 
 export interface StaffProfile {
@@ -20,6 +25,30 @@ export interface StaffProfile {
   has_pin: boolean;
 }
 
+export interface CreateStaffInput {
+  user_id: string;
+  outlet_id: string;
+  name: string;
+  role: string;
+  employment_type?: string;
+  hourly_rate?: number;
+  daily_rate?: number;
+  monthly_salary?: number;
+  mpesa_phone?: string;
+}
+
+export interface UpdateStaffInput {
+  name?: string;
+  role?: string;
+  outlet_id?: string;
+  employment_type?: string;
+  is_active?: boolean;
+  hourly_rate?: number;
+  daily_rate?: number;
+  monthly_salary?: number;
+  mpesa_phone?: string;
+}
+
 function staffBase(tenantId: string) {
   return `/api/v1/${tenantId}/pos`;
 }
@@ -27,8 +56,20 @@ function staffBase(tenantId: string) {
 export const staffApi = {
   list: (tenantId: string, outletId?: string) => {
     const params = outletId ? `?outlet_id=${outletId}` : '';
-    return apiClient.get<StaffMember[]>(`${staffBase(tenantId)}/staff${params}`);
+    return apiClient.get<{ data: StaffProfile[] }>(`${staffBase(tenantId)}/staff${params}`);
   },
+
+  listAdmin: (tenantId: string) =>
+    apiClient.get<{ data: StaffMember[]; total: number }>(`${staffBase(tenantId)}/staff/admin`),
+
+  create: (tenantId: string, input: CreateStaffInput) =>
+    apiClient.post<{ id: string; name: string }>(`${staffBase(tenantId)}/staff`, input),
+
+  update: (tenantId: string, staffId: string, input: UpdateStaffInput) =>
+    apiClient.patch<void>(`${staffBase(tenantId)}/staff/${staffId}`, input),
+
+  deactivate: (tenantId: string, staffId: string) =>
+    apiClient.post<void>(`${staffBase(tenantId)}/staff/${staffId}/deactivate`, {}),
 
   profiles: (tenantId: string, outletId?: string) => {
     const params = outletId ? `?outlet_id=${outletId}` : '';
@@ -36,14 +77,8 @@ export const staffApi = {
   },
 
   setPin: (tenantId: string, userId: string, pin: string) =>
-    apiClient.post<{ message: string }>(`${staffBase(tenantId)}/auth/pin/set`, {
-      user_id: userId,
-      pin,
-    }),
+    apiClient.post<{ message: string }>(`${staffBase(tenantId)}/auth/pin/set`, { user_id: userId, pin }),
 
   verifyPin: (tenantId: string, userId: string, pin: string) =>
-    apiClient.post<{ token: string }>(`${staffBase(tenantId)}/auth/pin`, {
-      user_id: userId,
-      pin,
-    }),
+    apiClient.post<{ token: string }>(`${staffBase(tenantId)}/auth/pin`, { user_id: userId, pin }),
 };

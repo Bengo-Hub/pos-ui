@@ -335,9 +335,9 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
   const content = (
     <div className="flex flex-col h-full bg-sidebar border-r border-sidebar-border">
       {/* Logo / tenant — proportional logo contained in 72px band, or pill fallback */}
-      <div className="border-b border-sidebar-border shrink-0 overflow-hidden" style={{ height: '72px' }}>
+      <div className="border-b border-sidebar-border shrink-0 overflow-hidden" style={{ height: '88px' }}>
         {tenant?.logoUrl ? (
-          <div className="flex items-center h-full px-3 py-2">
+          <div className="flex items-center h-full px-3 py-1">
             <img
               src={tenant.logoUrl}
               alt={tenant.name ?? orgSlug}

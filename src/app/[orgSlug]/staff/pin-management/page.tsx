@@ -36,7 +36,8 @@ export default function PinManagementPage() {
 }
 
 function StaffPinList({ tenantId }: { tenantId: string }) {
-  const { data: staff, isLoading } = useStaffList(tenantId);
+  const { data: staffResponse, isLoading } = useStaffList(tenantId);
+  const staff = staffResponse?.data ?? [];
   const [selected, setSelected] = useState<string | null>(null);
 
   if (isLoading) {
@@ -47,7 +48,7 @@ function StaffPinList({ tenantId }: { tenantId: string }) {
     );
   }
 
-  if (!staff?.length) {
+  if (!staff.length) {
     return (
       <div className="text-center py-12 text-sm text-muted-foreground">
         No staff members found.
@@ -59,7 +60,7 @@ function StaffPinList({ tenantId }: { tenantId: string }) {
     <div className="space-y-3">
       {staff.map((member) => (
         <div
-          key={member.id}
+          key={member.user_id}
           className="border rounded-xl p-4 flex items-center justify-between gap-4"
         >
           <div className="flex items-center gap-3">
@@ -81,14 +82,14 @@ function StaffPinList({ tenantId }: { tenantId: string }) {
               <span className="text-xs text-muted-foreground">No PIN</span>
             )}
             <button
-              onClick={() => setSelected(selected === member.id ? null : member.id)}
+              onClick={() => setSelected(selected === member.user_id ? null : member.user_id)}
               className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-primary text-primary-foreground font-semibold hover:bg-primary/90 transition-colors"
             >
               <KeyRound className="h-3.5 w-3.5" />
               {member.has_pin ? 'Reset PIN' : 'Set PIN'}
             </button>
           </div>
-          {selected === member.id && (
+          {selected === member.user_id && (
             <div className="w-full mt-3 col-span-full">
               <PinSetForm
                 tenantId={tenantId}
