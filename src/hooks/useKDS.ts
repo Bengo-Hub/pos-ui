@@ -18,9 +18,12 @@ export type KDSTicketStatus = 'pending' | 'in_progress' | 'ready' | 'served' | '
 
 export type OrderSource = 'pos' | 'online';
 
+export type KDSStationType = 'kitchen' | 'bar' | 'cold' | 'expo' | 'all';
+
 export interface KDSStation {
   id: string;
   name: string;
+  station_type: KDSStationType;
   sort_order: number;
   is_active: boolean;
   category_filter: string[];
@@ -56,12 +59,14 @@ export interface KDSTicket {
 export interface CreateKDSStationInput {
   outlet_id: string;
   name: string;
+  station_type?: KDSStationType;
   category_filter?: string[];
   sort_order?: number;
 }
 
 export interface UpdateKDSStationInput {
   name?: string;
+  station_type?: KDSStationType;
   category_filter?: string[];
   sort_order?: number;
   is_active?: boolean;

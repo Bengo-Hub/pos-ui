@@ -15,19 +15,24 @@ import {
 } from '@/hooks/useKDS';
 import type { KDSTicket, KDSStation, OrderSource } from '@/hooks/useKDS';
 import {
+  Beer,
   CheckCircle,
   ChefHat,
   Circle,
   Clock,
   Globe,
+  Layers,
   Loader2,
   MonitorPlay,
   PhoneCall,
   PlayCircle,
+  Snowflake,
   Utensils,
   Wifi,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
+import { useAuthStore } from '@/store/auth';
+import type { KDSStationType } from '@/hooks/useKDS';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -269,6 +274,35 @@ function SourceFilterBar({
   );
 }
 
+// ─── Station type helpers ─────────────────────────────────────────────────────
+
+const STATION_TYPE_CONFIG: Record<KDSStationType, { icon: React.ReactNode; label: string; color: string }> = {
+  kitchen: { icon: <ChefHat className="h-3.5 w-3.5" />, label: 'Kitchen', color: 'text-orange-400 bg-orange-500/10 border-orange-500/20' },
+  bar:     { icon: <Beer className="h-3.5 w-3.5" />,    label: 'Bar',     color: 'text-amber-400 bg-amber-500/10 border-amber-500/20' },
+  cold:    { icon: <Snowflake className="h-3.5 w-3.5" />, label: 'Cold',  color: 'text-blue-400 bg-blue-500/10 border-blue-500/20' },
+  expo:    { icon: <Layers className="h-3.5 w-3.5" />,  label: 'Expo',    color: 'text-purple-400 bg-purple-500/10 border-purple-500/20' },
+  all:     { icon: <Layers className="h-3.5 w-3.5" />,  label: 'All',     color: 'text-slate-400 bg-slate-500/10 border-slate-500/20' },
+};
+
+// Maps KDS role name fragments to the station_type they should default to.
+const ROLE_STATION_TYPE: Record<string, KDSStationType> = {
+  bar:     'bar',
+  kitchen: 'kitchen',
+  chef:    'kitchen',
+  cook:    'kitchen',
+  cold:    'cold',
+  expo:    'expo',
+};
+
+function defaultStationTypeForRole(role: string | undefined): KDSStationType | null {
+  if (!role) return null;
+  const lower = role.toLowerCase();
+  for (const [key, type] of Object.entries(ROLE_STATION_TYPE)) {
+    if (lower.includes(key)) return type;
+  }
+  return null;
+}
+
 // ─── Station Tab ──────────────────────────────────────────────────────────────
 
 function StationTab({
@@ -282,11 +316,12 @@ function StationTab({
   isSelected: boolean;
   onClick: () => void;
 }) {
+  const typeConfig = STATION_TYPE_CONFIG[station.station_type] ?? STATION_TYPE_CONFIG.kitchen;
   return (
     <button
       onClick={onClick}
       className={cn(
-        'flex items-center gap-2 px-5 py-3 rounded-xl border transition-all min-h-13 shrink-0 touch-manipulation',
+        'flex items-center gap-2 px-4 py-2.5 rounded-xl border transition-all min-h-13 shrink-0 touch-manipulation',
         isSelected
           ? 'bg-muted border-border text-foreground shadow-md'
           : 'bg-card border-border text-muted-foreground hover:border-border/80 hover:text-foreground'
@@ -294,6 +329,11 @@ function StationTab({
     >
       <MonitorPlay className="h-4 w-4" />
       <span className="text-sm font-bold">{station.name}</span>
+      {/* Station type chip */}
+      <span className={cn('inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-md border font-semibold', typeConfig.color)}>
+        {typeConfig.icon}
+        {typeConfig.label}
+      </span>
       <span className={cn(
         'text-[11px] font-bold px-2 py-0.5 rounded-full',
         activeCount > 0 ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
@@ -309,6 +349,7 @@ function StationTab({
 function KDSPage() {
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all');
   const [selectedStation, setSelectedStation] = useState<string | null>(null);
+  const user = useAuthStore((s) => s.user);
 
   const { data: stationsData, isLoading: stationsLoading } = useKDSStations();
   const { data: ticketsData, isLoading: ticketsLoading } = useKDSTickets();
@@ -338,8 +379,15 @@ function KDSPage() {
   const activeFor = (station: KDSStation) =>
     ticketsForStation(station).filter((t) => t.status !== 'served' && t.status !== 'voided');
 
-  // Default to first station if none selected
-  const currentStationId = selectedStation ?? activeStations[0]?.id ?? null;
+  // Role-aware default: bar user → bar station, kitchen user → kitchen station, else first.
+  const roleDefaultStationId = useMemo(() => {
+    const primaryRole = user?.roles?.[0];
+    const preferredType = defaultStationTypeForRole(primaryRole);
+    if (!preferredType) return null;
+    return activeStations.find((s) => s.station_type === preferredType)?.id ?? null;
+  }, [activeStations, user?.roles]);
+
+  const currentStationId = selectedStation ?? roleDefaultStationId ?? activeStations[0]?.id ?? null;
   const currentStation = activeStations.find((s) => s.id === currentStationId);
   const currentTickets = currentStation ? activeFor(currentStation) : [];
 
