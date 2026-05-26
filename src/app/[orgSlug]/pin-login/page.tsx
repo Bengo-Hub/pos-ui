@@ -669,7 +669,7 @@ export default function PINLoginPage() {
         </div>
 
         {/* ── Top nav ── */}
-        <div className="relative z-10 shrink-0 px-4 sm:px-6 pt-4 pb-3">
+        <div className="relative z-20 shrink-0 px-4 sm:px-6 pt-4 pb-3">
           <div className="flex items-center justify-between gap-3">
 
             {/* ── Left: Logo + Outlet identity + Switcher ── */}
@@ -916,7 +916,8 @@ export default function PINLoginPage() {
           </div>
 
           {/* ═══ RIGHT PANEL: PIN keypad ═══ */}
-          <div className="hidden md:flex flex-col items-center justify-center flex-1 px-10 py-8 gap-6">
+          <div className="hidden md:flex flex-col items-center flex-1 overflow-y-auto scrollbar-none px-8">
+          <div className="w-full max-w-72 flex flex-col items-center justify-center gap-5 py-8 min-h-full">
             {selected ? (
               <div className="flex flex-col items-center gap-5 w-full max-w-72 animate-scale-in">
 
@@ -1012,7 +1013,7 @@ export default function PINLoginPage() {
             )}
 
             {/* Sign in with account — secondary CTA */}
-            <div className="flex flex-col items-center gap-2 w-full max-w-72">
+            <div className="flex flex-col items-center gap-2 w-full">
               <div className="flex items-center gap-3 w-full">
                 <div className="flex-1 h-px bg-white/10" />
                 <span className="text-[10px] text-white/25 font-medium tracking-wider uppercase">or</span>
@@ -1026,7 +1027,8 @@ export default function PINLoginPage() {
                 Sign in with your account
               </button>
             </div>
-          </div>
+          </div>{/* close inner wrapper */}
+          </div>{/* close right panel outer */}
 
           {/* ═══ MOBILE: Full-screen PIN overlay ═══ */}
           {selected && (

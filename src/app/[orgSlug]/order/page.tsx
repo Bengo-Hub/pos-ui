@@ -343,6 +343,17 @@ export default function OrderPage() {
             unitPrice: item.price + (item.modifierTotal ?? 0),
             totalPrice: (item.price + (item.modifierTotal ?? 0)) * item.quantity,
           })));
+
+          // Hospitality waiter: auto-logout back to PIN screen after placing the order.
+          // Waiters take orders; cashiers/managers handle payment separately.
+          const isWaiter = user?.roles?.includes('waiter') || user?.roles?.[0] === 'waiter';
+          if (isWaiter && orgSlug) {
+            clearCart();
+            toast.success('Order sent to kitchen!');
+            router.replace(`/${orgSlug}/pin-login`);
+            return;
+          }
+
           setPaymentOpen(true);
         },
         onError: () => {
@@ -359,13 +370,6 @@ export default function OrderPage() {
     setCurrentOrderId('');
     setCurrentOrderCourses([]);
     setFiredCourses(0);
-
-    // Waiter auto-logout: return to PIN selector after placing an order
-    const isWaiter = user?.roles?.includes('waiter') || user?.roles?.[0] === 'waiter';
-    if (isWaiter && orgSlug) {
-      router.replace(`/${orgSlug}/pin-login`);
-      return;
-    }
 
     // Fetch receipt data and show the receipt preview
     const tenantId = user?.tenant_id ?? '';
