@@ -273,13 +273,14 @@ export function useOrder(id: string) {
   });
 }
 
-export function useOrders(filters?: { status?: string }) {
+export function useOrders(filters?: { status?: string; staffId?: string }) {
   const tenantID = useTenantID();
   return useQuery({
     queryKey: ['pos-orders', tenantID, filters],
     queryFn: () =>
       apiClient.get<{ orders: POSOrder[]; total: number }>(`${basePath(tenantID)}/orders`, {
         status: filters?.status,
+        staff_id: filters?.staffId,
       }),
     enabled: !!tenantID,
     staleTime: 15_000,

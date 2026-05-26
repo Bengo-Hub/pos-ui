@@ -92,7 +92,7 @@ export function usePermissions() {
     canManageTables:  canAny([P.TABLES_MANAGE, P.TABLES_CHANGE]),
     canManageHotel:   can(P.HOTEL_MANAGE),
     canViewHotel:     canAny([P.HOTEL_VIEW, P.HOTEL_MANAGE]),
-    canViewKDS:       canAny([P.ORDERS_VIEW, P.ORDERS_VIEW_OWN]),
+    canViewKDS:       canAny([P.KDS_VIEW, P.KDS_CHANGE, P.KDS_MANAGE]),
     canManageDevices: can(P.DEVICES_MANAGE),
   };
 }

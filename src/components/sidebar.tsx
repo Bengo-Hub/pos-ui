@@ -210,12 +210,13 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
       items: [
         { label: 'Dashboard', icon: LayoutDashboard, href: '/dashboard', moduleKey: 'dashboard' },
         { label: 'New Order', icon: Plus, href: '/order', moduleKey: 'new_order', permission: P.ORDERS_ADD },
-        { label: 'Orders', icon: ClipboardList, href: '/orders', moduleKey: 'orders', permission: [P.ORDERS_VIEW, P.ORDERS_VIEW_OWN] },
+        // Orders list: requires add/change or reports access — excludes kitchen/bar who only have pos.orders.view for KDS context
+        { label: 'Orders', icon: ClipboardList, href: '/orders', moduleKey: 'orders', permission: [P.ORDERS_ADD, P.ORDERS_CHANGE_OWN, P.ORDERS_CHANGE, P.ORDERS_MANAGE, P.ORDERS_VIEW_OWN, P.REPORTS_VIEW] },
         { label: 'Cash Drawer', icon: Wallet, href: '/drawer', moduleKey: 'cash_drawer', permission: [P.DRAWERS_ADD, P.DRAWERS_MANAGE, P.DRAWERS_VIEW_OWN] },
         { label: 'Retail POS', icon: ShoppingCart, href: '/retail', moduleKey: 'retail', permission: [P.ORDERS_ADD, P.ORDERS_VIEW] },
-        { label: 'Clients', icon: Users, href: '/clients', moduleKey: 'clients', permission: [P.ORDERS_VIEW] },
-        { label: 'Layaway', icon: Package, href: '/layaway', moduleKey: 'layaway', permission: [P.ORDERS_VIEW, P.ORDERS_ADD], subFeature: 'layaway', subPlan: 'Growth' },
-        { label: 'Returns', icon: RotateCcw, href: '/returns', moduleKey: 'returns', permission: [P.ORDERS_VIEW, P.ORDERS_ADD] },
+        { label: 'Clients', icon: Users, href: '/clients', moduleKey: 'clients', permission: [P.CLIENTS_VIEW, P.CLIENTS_MANAGE] },
+        { label: 'Layaway', icon: Package, href: '/layaway', moduleKey: 'layaway', permission: [P.ORDERS_ADD, P.ORDERS_CHANGE_OWN, P.ORDERS_CHANGE, P.ORDERS_MANAGE], subFeature: 'layaway', subPlan: 'Growth' },
+        { label: 'Returns', icon: RotateCcw, href: '/returns', moduleKey: 'returns', permission: [P.ORDERS_CHANGE_OWN, P.ORDERS_CHANGE, P.ORDERS_MANAGE] },
         { label: 'Shifts', icon: Clock, href: '/shifts', moduleKey: 'shifts', permission: [P.SESSIONS_ADD, P.SESSIONS_VIEW, P.SESSIONS_VIEW_OWN], subFeature: 'shift_reports', subPlan: 'Pro' },
       ],
     },
@@ -223,9 +224,9 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
       label: 'Floor & Service',
       items: [
         { label: 'Tables', icon: Grid3x3, href: '/tables', moduleKey: 'tables', permission: [P.TABLES_VIEW, P.TABLES_MANAGE], subFeature: 'table_management', subPlan: 'Pro' },
-        { label: 'Appointments', icon: Calendar, href: '/appointments', moduleKey: 'appointments', permission: [P.APPOINTMENTS_VIEW, P.ORDERS_VIEW] },
-        { label: 'Walk-in Queue', icon: ClipboardList, href: '/queue', moduleKey: 'queue', permission: [P.ORDERS_VIEW, P.ORDERS_MANAGE] },
-        { label: 'Staff Schedule', icon: Users, href: '/staff-schedule', moduleKey: 'staff_schedule', permission: [P.SESSIONS_VIEW] },
+        { label: 'Appointments', icon: Calendar, href: '/appointments', moduleKey: 'appointments', permission: [P.APPOINTMENTS_VIEW, P.APPOINTMENTS_ADD, P.APPOINTMENTS_CHANGE, P.APPOINTMENTS_MANAGE] },
+        { label: 'Walk-in Queue', icon: ClipboardList, href: '/queue', moduleKey: 'queue', permission: [P.QUEUE_VIEW, P.QUEUE_CHANGE, P.QUEUE_MANAGE] },
+        { label: 'Staff Schedule', icon: Users, href: '/staff-schedule', moduleKey: 'staff_schedule', permission: [P.STAFF_VIEW, P.STAFF_MANAGE] },
         { label: 'Resources', icon: Sofa, href: '/resources', moduleKey: 'resources', permission: [P.CONFIG_VIEW] },
       ],
     },
@@ -233,7 +234,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
       label: 'Display Board',
       defaultCollapsed: true,
       items: [
-        { label: 'KDS', icon: ChefHat, href: '/kds', moduleKey: 'kds', permission: [P.ORDERS_VIEW, P.ORDERS_MANAGE] },
+        { label: 'KDS', icon: ChefHat, href: '/kds', moduleKey: 'kds', permission: [P.KDS_VIEW, P.KDS_CHANGE, P.KDS_MANAGE] },
       ],
     },
     {
@@ -248,23 +249,23 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
       label: 'Online Orders',
       defaultCollapsed: true,
       items: [
-        { label: 'Pickup Queue', icon: ShoppingBag, href: '/online-orders', moduleKey: 'online_orders', permission: [P.ORDERS_VIEW, P.ORDERS_MANAGE], subFeature: 'online_orders', subPlan: 'Pro' },
+        { label: 'Pickup Queue', icon: ShoppingBag, href: '/online-orders', moduleKey: 'online_orders', permission: [P.ORDERS_MANAGE, P.QUEUE_MANAGE], subFeature: 'online_orders', subPlan: 'Pro' },
       ],
     },
     {
       label: 'Pharmacy',
       defaultCollapsed: true,
       items: [
-        { label: 'Prescriptions', icon: Pill, href: '/pharmacy', moduleKey: 'pharmacy', permission: [P.PHARMACY_VIEW, P.ORDERS_VIEW] },
-        { label: 'Patient Profiles', icon: UserSquare, href: '/patients', moduleKey: 'patients', permission: [P.PHARMACY_VIEW] },
-        { label: 'Drug Inventory', icon: FlaskConical, href: '/drug-inventory', moduleKey: 'drug_inventory', permission: [P.CATALOG_VIEW] },
+        { label: 'Prescriptions', icon: Pill, href: '/pharmacy', moduleKey: 'pharmacy', permission: [P.PHARMACY_VIEW, P.PHARMACY_ADD, P.PHARMACY_CHANGE, P.PHARMACY_MANAGE] },
+        { label: 'Patient Profiles', icon: UserSquare, href: '/patients', moduleKey: 'patients', permission: [P.PHARMACY_VIEW, P.PHARMACY_MANAGE] },
+        { label: 'Drug Inventory', icon: FlaskConical, href: '/drug-inventory', moduleKey: 'drug_inventory', permission: [P.PHARMACY_VIEW, P.PHARMACY_MANAGE, P.CATALOG_MANAGE] },
       ],
     },
     {
       label: 'Inventory',
       defaultCollapsed: true,
       items: [
-        { label: 'Purchase Orders', icon: Truck, href: '/purchase-orders', moduleKey: 'purchase_orders', permission: [P.CATALOG_VIEW] },
+        { label: 'Purchase Orders', icon: Truck, href: '/purchase-orders', moduleKey: 'purchase_orders', permission: [P.CATALOG_MANAGE, P.CATALOG_CHANGE] },
       ],
     },
     {
@@ -272,8 +273,8 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
       defaultCollapsed: true,
       items: [
         { label: 'Reports', icon: BarChart3, href: '/reports', moduleKey: 'reports', permission: [P.REPORTS_VIEW, P.REPORTS_MANAGE], subFeature: 'shift_reports', subPlan: 'Pro' },
-        { label: 'Loyalty', icon: Gift, href: '/loyalty', moduleKey: 'loyalty', permission: [P.ORDERS_VIEW, P.ORDERS_ADD], subFeature: 'loyalty', subPlan: 'Growth' },
-        { label: 'Commissions', icon: TrendingUp, href: '/commissions', moduleKey: 'commissions', permission: [P.ORDERS_VIEW, P.ORDERS_MANAGE], subFeature: 'commissions', subPlan: 'Pro' },
+        { label: 'Loyalty', icon: Gift, href: '/loyalty', moduleKey: 'loyalty', permission: [P.LOYALTY_VIEW, P.LOYALTY_ADD, P.LOYALTY_MANAGE], subFeature: 'loyalty', subPlan: 'Growth' },
+        { label: 'Commissions', icon: TrendingUp, href: '/commissions', moduleKey: 'commissions', permission: [P.COMMISSIONS_VIEW, P.COMMISSIONS_VIEW_OWN, P.COMMISSIONS_MANAGE], subFeature: 'commissions', subPlan: 'Pro' },
         { label: 'Webhooks', icon: Webhook, href: '/webhooks', moduleKey: 'settings', permission: [P.CONFIG_VIEW, P.CONFIG_MANAGE], subFeature: 'webhooks', subPlan: 'Growth' },
         { label: 'Settings', icon: Settings, href: '/settings', moduleKey: 'settings', permission: [P.CONFIG_VIEW, P.CONFIG_CHANGE, P.CONFIG_MANAGE] },
       ],

@@ -4,9 +4,11 @@ import { ModuleGate } from '@/components/auth/module-gate';
 import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
 
 import { useCommissions, type CommissionRecord } from '@/hooks/useCommissions';
+import { usePermissions, P } from '@/hooks/usePermissions';
+import { useAuthStore } from '@/store/auth';
 import { cn } from '@/lib/utils';
 import { Loader2, TrendingUp } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { toast } from 'sonner';
 
 function formatCurrency(amount: number) {
@@ -18,11 +20,19 @@ function formatDate(iso: string) {
 }
 
 function CommissionsPage() {
+  const { can } = usePermissions();
+  const user = useAuthStore((s) => s.user);
+
+  // Roles with view_own only (stylist, therapist, technician) see their own commissions.
+  const viewOwnOnly = can(P.COMMISSIONS_VIEW_OWN) && !can(P.COMMISSIONS_VIEW);
   const [staffFilter, setStaffFilter] = useState('');
 
-  const { data: records = [], isLoading, error } = useCommissions(
-    staffFilter ? { staff_member_id: staffFilter } : undefined,
-  );
+  const effectiveFilter = useMemo(() => {
+    if (viewOwnOnly) return { staff_member_id: (user as any)?.staffId ?? (user as any)?.id ?? '' };
+    return staffFilter ? { staff_member_id: staffFilter } : undefined;
+  }, [viewOwnOnly, staffFilter, user]);
+
+  const { data: records = [], isLoading, error } = useCommissions(effectiveFilter);
 
   if (error) {
     toast.error('Failed to load commissions');
@@ -35,7 +45,7 @@ function CommissionsPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold">Commissions</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">Staff sales commission records</p>
+          <p className="text-sm text-muted-foreground mt-0.5">{viewOwnOnly ? 'Your commission records' : 'Staff sales commission records'}</p>
         </div>
         {records.length > 0 && (
           <div className="text-right">

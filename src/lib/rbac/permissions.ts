@@ -11,6 +11,7 @@ export const MODULES = [
   'sessions', 'cash_drawers', 'tables', 'gift_cards',
   'price_books', 'modifiers', 'channels', 'config', 'users',
   'reports', 'hotel', 'appointments', 'pharmacy',
+  'kds', 'commissions', 'queue', 'loyalty', 'staff',
 ] as const;
 
 export const ACTIONS = [
@@ -98,7 +99,28 @@ export const P = {
   PHARMACY_ADD:      'pos.pharmacy.add',
   PHARMACY_MANAGE:   'pos.pharmacy.manage',
 
+  // KDS (Kitchen Display System) — kitchen/bar staff only
+  KDS_VIEW:          'pos.kds.view',
+  KDS_CHANGE:        'pos.kds.change',
+  KDS_MANAGE:        'pos.kds.manage',
+
+  // Commissions — manager+ only
+  COMMISSIONS_VIEW:      'pos.commissions.view',
+  COMMISSIONS_VIEW_OWN:  'pos.commissions.view_own',
+  COMMISSIONS_MANAGE:    'pos.commissions.manage',
+
+  // Walk-in / service queue — front-desk and manager
+  QUEUE_VIEW:        'pos.queue.view',
+  QUEUE_CHANGE:      'pos.queue.change',
+  QUEUE_MANAGE:      'pos.queue.manage',
+
+  // Loyalty — manager+ only
+  LOYALTY_VIEW:      'pos.loyalty.view',
+  LOYALTY_ADD:       'pos.loyalty.add',
+  LOYALTY_MANAGE:    'pos.loyalty.manage',
+
   // Staff
+  STAFF_VIEW:        'pos.staff.view',
   STAFF_MANAGE:      'pos.staff.manage',
 
   // Outlets
@@ -110,6 +132,17 @@ export const P = {
   MODIFIERS_VIEW:    'pos.modifiers.view',
   GIFT_CARDS_VIEW:   'pos.gift_cards.view',
   PRICE_BOOKS_VIEW:  'pos.price_books.view',
+
+  // Clients (CRM profiles, loyalty lookup)
+  CLIENTS_VIEW:      'pos.clients.view',
+  CLIENTS_MANAGE:    'pos.clients.manage',
+
+  // Packages (pre-paid service bundles)
+  PACKAGES_VIEW:     'pos.packages.view',
+  PACKAGES_MANAGE:   'pos.packages.manage',
+
+  // Catalog management (purchase orders, stock)
+  CATALOG_MANAGE_OWN: 'pos.catalog.manage_own',
 } as const;
 
 export type Permission = typeof P[keyof typeof P];
@@ -127,13 +160,17 @@ export const ROLE_PERMISSIONS: Record<string, Permission[]> = {
     P.TABLES_VIEW, P.TABLES_CHANGE, P.TABLES_MANAGE,
     P.DRAWERS_ADD, P.DRAWERS_VIEW, P.DRAWERS_MANAGE,
     P.SESSIONS_ADD, P.SESSIONS_VIEW, P.SESSIONS_MANAGE,
-    P.STAFF_MANAGE,
+    P.STAFF_VIEW, P.STAFF_MANAGE,
     P.USERS_VIEW, P.USERS_CHANGE,
     P.DEVICES_VIEW,
     P.CONFIG_VIEW, P.CONFIG_CHANGE,
     P.REPORTS_VIEW,
     P.OUTLETS_VIEW, P.OUTLETS_CHANGE,
     P.MODIFIERS_VIEW, P.GIFT_CARDS_VIEW, P.PRICE_BOOKS_VIEW,
+    P.KDS_VIEW, P.KDS_CHANGE, P.KDS_MANAGE,
+    P.COMMISSIONS_VIEW, P.COMMISSIONS_MANAGE,
+    P.QUEUE_VIEW, P.QUEUE_CHANGE, P.QUEUE_MANAGE,
+    P.LOYALTY_VIEW, P.LOYALTY_ADD, P.LOYALTY_MANAGE,
     P.HOTEL_VIEW, P.HOTEL_CHANGE, P.HOTEL_MANAGE,
     P.APPOINTMENTS_ADD, P.APPOINTMENTS_VIEW, P.APPOINTMENTS_CHANGE, P.APPOINTMENTS_MANAGE,
     P.PHARMACY_ADD, P.PHARMACY_VIEW, P.PHARMACY_CHANGE, P.PHARMACY_MANAGE,
@@ -146,6 +183,9 @@ export const ROLE_PERMISSIONS: Record<string, Permission[]> = {
     P.TABLES_VIEW,
     P.SESSIONS_ADD, P.SESSIONS_VIEW_OWN,
     P.MODIFIERS_VIEW, P.GIFT_CARDS_VIEW,
+    P.LOYALTY_VIEW, P.LOYALTY_ADD,
+    P.CLIENTS_VIEW,
+    // No KDS, queue, commissions — cashier is till-side only
   ],
   waiter: [
     P.ORDERS_ADD, P.ORDERS_VIEW_OWN, P.ORDERS_CHANGE_OWN,
@@ -153,14 +193,21 @@ export const ROLE_PERMISSIONS: Record<string, Permission[]> = {
     P.TABLES_VIEW, P.TABLES_CHANGE_OWN,
     P.SESSIONS_ADD, P.SESSIONS_VIEW_OWN,
     P.MODIFIERS_VIEW,
+    P.QUEUE_VIEW, P.QUEUE_CHANGE,
+    P.CLIENTS_VIEW,
+    // No KDS — waiter manages tables, not the kitchen display
   ],
   kitchen: [
+    P.KDS_VIEW, P.KDS_CHANGE,
     P.ORDERS_VIEW,
     P.CATALOG_VIEW,
+    // No orders list access — KDS is the only interface for kitchen staff
   ],
   bar: [
+    P.KDS_VIEW, P.KDS_CHANGE,
     P.ORDERS_VIEW,
     P.CATALOG_VIEW,
+    // No orders list access — KDS is the only interface for bar staff
   ],
   receptionist: [
     P.ORDERS_ADD, P.ORDERS_VIEW, P.ORDERS_CHANGE_OWN,
@@ -168,7 +215,36 @@ export const ROLE_PERMISSIONS: Record<string, Permission[]> = {
     P.PAYMENTS_VIEW,
     P.TABLES_VIEW,
     P.SESSIONS_ADD, P.SESSIONS_VIEW_OWN,
+    P.QUEUE_VIEW, P.QUEUE_CHANGE,
+    P.CLIENTS_VIEW,
     P.HOTEL_VIEW, P.HOTEL_CHANGE, P.HOTEL_MANAGE,
+  ],
+  stylist: [
+    P.ORDERS_ADD, P.ORDERS_VIEW_OWN,
+    P.CATALOG_VIEW,
+    P.SESSIONS_ADD, P.SESSIONS_VIEW_OWN,
+    P.APPOINTMENTS_VIEW, P.APPOINTMENTS_CHANGE,
+    P.QUEUE_VIEW, P.QUEUE_CHANGE,
+    P.COMMISSIONS_VIEW_OWN,
+    P.CLIENTS_VIEW,
+  ],
+  therapist: [
+    P.ORDERS_ADD, P.ORDERS_VIEW_OWN,
+    P.CATALOG_VIEW,
+    P.SESSIONS_ADD, P.SESSIONS_VIEW_OWN,
+    P.APPOINTMENTS_VIEW, P.APPOINTMENTS_CHANGE,
+    P.QUEUE_VIEW, P.QUEUE_CHANGE,
+    P.COMMISSIONS_VIEW_OWN,
+    P.CLIENTS_VIEW,
+  ],
+  technician: [
+    P.ORDERS_ADD, P.ORDERS_VIEW_OWN,
+    P.CATALOG_VIEW,
+    P.SESSIONS_ADD, P.SESSIONS_VIEW_OWN,
+    P.APPOINTMENTS_VIEW, P.APPOINTMENTS_CHANGE,
+    P.QUEUE_VIEW, P.QUEUE_CHANGE,
+    P.COMMISSIONS_VIEW_OWN,
+    P.CLIENTS_VIEW,
   ],
   pharmacist: [
     P.ORDERS_ADD, P.ORDERS_VIEW, P.ORDERS_CHANGE_OWN,
@@ -176,6 +252,7 @@ export const ROLE_PERMISSIONS: Record<string, Permission[]> = {
     P.CATALOG_VIEW,
     P.SESSIONS_ADD, P.SESSIONS_VIEW_OWN,
     P.PHARMACY_ADD, P.PHARMACY_VIEW, P.PHARMACY_CHANGE, P.PHARMACY_MANAGE,
+    P.CLIENTS_VIEW,
   ],
   pharmacy_technician: [
     P.ORDERS_ADD, P.ORDERS_VIEW_OWN, P.ORDERS_CHANGE_OWN,
@@ -190,6 +267,11 @@ export const ROLE_PERMISSIONS: Record<string, Permission[]> = {
     P.DRAWERS_VIEW, P.TABLES_VIEW, P.GIFT_CARDS_VIEW,
     P.PRICE_BOOKS_VIEW, P.MODIFIERS_VIEW, P.CONFIG_VIEW,
     P.USERS_VIEW, P.REPORTS_VIEW,
+    P.KDS_VIEW,
+    P.QUEUE_VIEW,
+    P.LOYALTY_VIEW,
+    P.COMMISSIONS_VIEW,
+    P.CLIENTS_VIEW, P.PACKAGES_VIEW,
     P.HOTEL_VIEW, P.APPOINTMENTS_VIEW, P.PHARMACY_VIEW,
   ],
 };

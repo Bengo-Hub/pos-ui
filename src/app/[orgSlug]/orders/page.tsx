@@ -16,19 +16,28 @@ import {
   Search,
   X,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { TrackingIframeModal } from '@bengo-hub/shared-ui-lib';
+import { useAuthStore } from '@/store/auth';
 
 export default function OrdersPage() {
   const { orgSlug } = useParams<{ orgSlug: string }>();
-  const { can } = usePermissions();
+  const { can, canAny } = usePermissions();
+  const user = useAuthStore((s) => s.user);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
   const [trackingOpen, setTrackingOpen] = useState(false);
 
+  // Roles with only view_own should see their own orders; full view sees all.
+  const viewOwnOnly = can(P.ORDERS_VIEW_OWN) && !can(P.ORDERS_VIEW);
+  const staffId = viewOwnOnly ? (user as any)?.staffId ?? (user as any)?.id : undefined;
+
   const { data: ordersData, isLoading } = useOrders(
-    statusFilter !== 'all' ? { status: statusFilter } : undefined
+    useMemo(() => ({
+      status: statusFilter !== 'all' ? statusFilter : undefined,
+      staffId,
+    }), [statusFilter, staffId])
   );
 
   const orders = ordersData?.orders ?? [];
@@ -52,8 +61,8 @@ export default function OrdersPage() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Order History</h1>
-          <p className="text-muted-foreground mt-1">View and manage all orders.</p>
+          <h1 className="text-3xl font-bold tracking-tight">{viewOwnOnly ? 'My Orders' : 'Order History'}</h1>
+          <p className="text-muted-foreground mt-1">{viewOwnOnly ? 'Your orders and bills.' : 'View and manage all orders.'}</p>
         </div>
         <div className="flex items-center gap-2">
           {can(P.ORDERS_ADD) && (
