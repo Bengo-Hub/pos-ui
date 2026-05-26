@@ -250,6 +250,138 @@ export function useDeleteSection() {
 
 export type { Section, Table };
 
+// ─── Table Reservations ──────────────────────────────────────────────────────
+
+export interface TableReservation {
+  id: string;
+  tenant_id: string;
+  outlet_id: string;
+  table_id?: string;
+  guest_name: string;
+  guest_phone?: string;
+  guest_email?: string;
+  party_size: number;
+  scheduled_at: string;
+  duration_minutes: number;
+  status: 'pending' | 'confirmed' | 'checked_in' | 'cancelled' | 'no_show';
+  notes?: string;
+  special_requests?: string;
+  source: string;
+  cancellation_reason?: string;
+  confirmed_at?: string;
+  checked_in_at?: string;
+  cancelled_at?: string;
+  created_at: string;
+}
+
+export interface CreateReservationInput {
+  outlet_id: string;
+  table_id?: string;
+  guest_name: string;
+  guest_phone?: string;
+  guest_email?: string;
+  party_size: number;
+  scheduled_at: string; // RFC3339
+  duration_minutes?: number;
+  notes?: string;
+  special_requests?: string;
+  source?: string;
+}
+
+export function useReservations(filters?: { date?: string; status?: string; outletId?: string; tableId?: string }) {
+  const tenantID = useTenantID();
+  return useQuery({
+    queryKey: ['pos-reservations', tenantID, filters],
+    queryFn: () =>
+      apiClient.get<{ data: TableReservation[]; total: number }>(`${basePath(tenantID)}/reservations`, {
+        date: filters?.date,
+        status: filters?.status,
+        outlet_id: filters?.outletId,
+        table_id: filters?.tableId,
+      }),
+    enabled: !!tenantID,
+    staleTime: 15_000,
+  });
+}
+
+export function useAvailableSlots(params: { date: string; partySize?: number; outletId?: string }) {
+  const tenantID = useTenantID();
+  return useQuery({
+    queryKey: ['pos-available-slots', tenantID, params],
+    queryFn: () =>
+      apiClient.get<{ date: string; tables: any[] }>(`${basePath(tenantID)}/reservations/available`, {
+        date: params.date,
+        party_size: params.partySize,
+        outlet_id: params.outletId,
+      }),
+    enabled: !!tenantID && !!params.date,
+    staleTime: 30_000,
+  });
+}
+
+export function useCreateReservation() {
+  const tenantID = useTenantID();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateReservationInput) =>
+      apiClient.post<TableReservation>(`${basePath(tenantID)}/reservations`, input),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['pos-reservations'] });
+      qc.invalidateQueries({ queryKey: ['pos-available-slots'] });
+    },
+  });
+}
+
+export function useUpdateReservation() {
+  const tenantID = useTenantID();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: Partial<CreateReservationInput> }) =>
+      apiClient.patch<TableReservation>(`${basePath(tenantID)}/reservations/${id}`, input),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['pos-reservations'] }),
+  });
+}
+
+export function useConfirmReservation() {
+  const tenantID = useTenantID();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, tableId }: { id: string; tableId?: string }) =>
+      apiClient.post<TableReservation>(`${basePath(tenantID)}/reservations/${id}/confirm`, { table_id: tableId }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['pos-reservations'] });
+      qc.invalidateQueries({ queryKey: ['pos-tables'] });
+    },
+  });
+}
+
+export function useCheckInReservation() {
+  const tenantID = useTenantID();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      apiClient.post<TableReservation>(`${basePath(tenantID)}/reservations/${id}/check-in`, {}),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['pos-reservations'] });
+      qc.invalidateQueries({ queryKey: ['pos-tables'] });
+    },
+  });
+}
+
+export function useCancelReservation() {
+  const tenantID = useTenantID();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, reason }: { id: string; reason?: string }) =>
+      apiClient.post<TableReservation>(`${basePath(tenantID)}/reservations/${id}/cancel`, { reason }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['pos-reservations'] });
+      qc.invalidateQueries({ queryKey: ['pos-tables'] });
+      qc.invalidateQueries({ queryKey: ['pos-available-slots'] });
+    },
+  });
+}
+
 // ─── Orders ─────────────────────────────────────────────────────────────────
 
 interface POSOrder {

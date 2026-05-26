@@ -5,9 +5,11 @@ import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
 
 import { Badge, Button, Card, CardContent } from '@/components/ui/base';
 import { cn } from '@/lib/utils';
-import { useTables, useSections, useUpdateTableStatus, useReleaseTable } from '@/hooks/usePOS';
+import { useTables, useSections, useUpdateTableStatus, useReleaseTable, useReservations } from '@/hooks/usePOS';
 import { usePermissions, P } from '@/hooks/usePermissions';
+import { format } from 'date-fns';
 import {
+  Calendar,
   ClipboardList,
   Grid3x3,
   Loader2,
@@ -149,6 +151,23 @@ function TableCard({ table, orgSlug, onRelease, onChangeStatus, releaseLoading, 
                   <div className="text-left">
                     <p className="font-bold text-sm">New Order</p>
                     <p className="text-xs text-muted-foreground">Start a new order for this table</p>
+                  </div>
+                </button>
+              )}
+
+              {/* Reserve this table */}
+              {canChange && table.status !== 'occupied' && (
+                <button
+                  onClick={() => {
+                    setSheetOpen(false);
+                    router.push(`/${orgSlug}/reservations?table_id=${table.id}&table_name=${encodeURIComponent(table.name)}`);
+                  }}
+                  className="w-full flex items-center gap-3 px-4 py-4 rounded-2xl border-2 border-amber-400 bg-amber-400/5 hover:bg-amber-400/10 transition-colors min-h-14 touch-manipulation"
+                >
+                  <Calendar className="h-5 w-5 text-amber-600" />
+                  <div className="text-left">
+                    <p className="font-bold text-sm text-amber-700 dark:text-amber-400">Reserve Table</p>
+                    <p className="text-xs text-muted-foreground">Book this table for a future guest</p>
                   </div>
                 </button>
               )}
@@ -326,6 +345,7 @@ function SummaryBar({ tables }: { tables: any[] }) {
 
 function TablesPage() {
   const params = useParams();
+  const router = useRouter();
   const orgSlug = params?.orgSlug as string;
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const { canAny } = usePermissions();
@@ -335,6 +355,9 @@ function TablesPage() {
     statusFilter !== 'all' ? { status: statusFilter } : undefined
   );
   const { data: sectionsData } = useSections();
+  const { data: reservationsData } = useReservations({ date: format(new Date(), 'yyyy-MM-dd') });
+  const todayReservations = reservationsData?.data ?? [];
+  const pendingCount = todayReservations.filter((r) => r.status === 'pending').length;
   const updateStatus = useUpdateTableStatus();
   const releaseTable = useReleaseTable();
 
@@ -368,7 +391,19 @@ function TablesPage() {
               {tables.length} table{tables.length !== 1 ? 's' : ''} across {sections.length} section{sections.length !== 1 ? 's' : ''}
             </p>
           </div>
-          {tables.length > 0 && <SummaryBar tables={tables} />}
+          <div className="flex items-center gap-3 flex-wrap">
+            {tables.length > 0 && <SummaryBar tables={tables} />}
+            <button
+              onClick={() => router.push(`/${orgSlug}/reservations`)}
+              className="flex items-center gap-2 px-3 py-2 rounded-xl border border-amber-400 bg-amber-400/10 text-amber-700 dark:text-amber-400 text-xs font-bold hover:bg-amber-400/20 transition-colors"
+            >
+              <Calendar className="h-3.5 w-3.5" />
+              Reservations
+              {pendingCount > 0 && (
+                <span className="bg-amber-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">{pendingCount}</span>
+              )}
+            </button>
+          </div>
         </div>
 
         {/* Status filter pills — horizontal scroll */}
