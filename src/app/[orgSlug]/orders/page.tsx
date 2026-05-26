@@ -203,19 +203,50 @@ export default function OrdersPage() {
               {selectedOrder.edges?.lines && selectedOrder.edges.lines.length > 0 && (
                 <div className="space-y-2">
                   <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Items</p>
-                  {selectedOrder.edges.lines.map((line: any, i: number) => (
-                    <div key={line.id ?? i} className="flex items-center justify-between text-xs">
-                      <span className="text-foreground">
-                        {line.quantity}x {line.name ?? line.item_name ?? 'Item'}
-                      </span>
-                      <span className="text-muted-foreground">
-                        KES {(line.line_total ?? line.total ?? 0).toLocaleString()}
-                      </span>
+                  {selectedOrder.edges.lines.map((line: any, i: number) => {
+                    const lineTotal = line.total_price ?? (line.unit_price != null && line.quantity != null ? line.unit_price * line.quantity : 0);
+                    const unitPrice = line.unit_price ?? 0;
+                    return (
+                      <div key={line.id ?? i} className="space-y-0.5">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-foreground font-medium">
+                            {line.quantity}x {line.name ?? line.item_name ?? 'Item'}
+                          </span>
+                          <span className="font-medium">
+                            KES {lineTotal.toLocaleString()}
+                          </span>
+                        </div>
+                        {unitPrice > 0 && (
+                          <p className="text-[11px] text-muted-foreground pl-3">
+                            @ KES {unitPrice.toLocaleString()} each
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })}
+                  <div className="border-t pt-2 space-y-1">
+                    {(selectedOrder.subtotal ?? 0) > 0 && (
+                      <div className="flex items-center justify-between text-xs text-muted-foreground">
+                        <span>Subtotal</span>
+                        <span>KES {(selectedOrder.subtotal || 0).toLocaleString()}</span>
+                      </div>
+                    )}
+                    {(selectedOrder.tax_total ?? 0) > 0 && (
+                      <div className="flex items-center justify-between text-xs text-muted-foreground">
+                        <span>Tax (VAT)</span>
+                        <span>KES {(selectedOrder.tax_total || 0).toLocaleString()}</span>
+                      </div>
+                    )}
+                    {(selectedOrder.discount_total ?? 0) > 0 && (
+                      <div className="flex items-center justify-between text-xs text-green-600">
+                        <span>Discount</span>
+                        <span>- KES {(selectedOrder.discount_total || 0).toLocaleString()}</span>
+                      </div>
+                    )}
+                    <div className="flex items-center justify-between text-xs font-bold border-t pt-1">
+                      <span>Total</span>
+                      <span>KES {(selectedOrder.total_amount || 0).toLocaleString()}</span>
                     </div>
-                  ))}
-                  <div className="flex items-center justify-between border-t pt-2 text-xs font-bold">
-                    <span>Total</span>
-                    <span>KES {(selectedOrder.total_amount || 0).toLocaleString()}</span>
                   </div>
                 </div>
               )}
@@ -223,6 +254,9 @@ export default function OrdersPage() {
               {/* Order meta */}
               <div className="space-y-1 text-xs text-muted-foreground">
                 <p>Created: {formatTime(selectedOrder.created_at)}</p>
+                {selectedOrder.order_subtype && (
+                  <p>Type: <span className="capitalize">{selectedOrder.order_subtype.replace('_', ' ')}</span></p>
+                )}
                 {selectedOrder.currency && <p>Currency: {selectedOrder.currency}</p>}
               </div>
 

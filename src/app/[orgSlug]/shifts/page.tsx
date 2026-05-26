@@ -2,39 +2,156 @@
 
 import { ModuleGate } from '@/components/auth/module-gate';
 import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
-
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Card, CardContent } from '@/components/ui/base';
-import { BarChart3, Clock, DollarSign, LogIn, LogOut, Loader2, ShoppingCart } from 'lucide-react';
-import { useCurrentShift, useOpenShift, useCloseShift, useSessionSummary } from '@/hooks/useShifts';
+import { Button } from '@/components/ui/button';
+import {
+  BarChart3, Clock, DollarSign, Loader2, ShoppingCart,
+  AlertTriangle, History, LogIn, LogOut, RefreshCw,
+  CreditCard, Banknote, TrendingDown,
+} from 'lucide-react';
+import {
+  useCurrentShift, useOpenShift, useCloseShift,
+  useSessionSummary, useShiftHistory,
+} from '@/hooks/useShifts';
+import { usePermissions, P } from '@/hooks/usePermissions';
+import { ShiftCloseDialog } from '@/components/pos/shift-close-dialog';
 import { toast } from 'sonner';
+import type { ShiftHistoryRow } from '@/lib/api/shifts';
+
+type Tab = 'current' | 'history';
+
+function formatDuration(start: string, end?: string): string {
+  const from = new Date(start).getTime();
+  const to = end ? new Date(end).getTime() : Date.now();
+  const s = Math.floor((to - from) / 1000);
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  return `${h}h ${m}m`;
+}
+
+function ElapsedTimer({ since }: { since: string }) {
+  const [elapsed, setElapsed] = useState('');
+  useEffect(() => {
+    function tick() {
+      const s = Math.floor((Date.now() - new Date(since).getTime()) / 1000);
+      const h = Math.floor(s / 3600).toString().padStart(2, '0');
+      const m = Math.floor((s % 3600) / 60).toString().padStart(2, '0');
+      const sec = (s % 60).toString().padStart(2, '0');
+      setElapsed(`${h}:${m}:${sec}`);
+    }
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [since]);
+  return <span className="font-mono text-2xl font-bold text-primary">{elapsed}</span>;
+}
+
+function VarianceBadge({ variance }: { variance: number }) {
+  const abs = Math.abs(variance);
+  const label = `${variance >= 0 ? '+' : ''}KES ${variance.toLocaleString()}`;
+  if (abs === 0) return <span className="text-xs text-green-600 font-medium">{label}</span>;
+  if (abs <= 200) return (
+    <span className="inline-flex items-center gap-1 text-xs text-amber-600 font-medium">
+      <AlertTriangle className="h-3 w-3" />{label}
+    </span>
+  );
+  return (
+    <span className="inline-flex items-center gap-1 text-xs text-red-600 font-medium">
+      <AlertTriangle className="h-3 w-3" />{label}
+    </span>
+  );
+}
+
+function HistoryTable({ rows }: { rows: ShiftHistoryRow[] }) {
+  if (rows.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 text-center">
+        <History className="h-10 w-10 text-muted-foreground/40 mb-3" />
+        <p className="text-sm font-medium text-muted-foreground">No shift history yet</p>
+        <p className="text-xs text-muted-foreground mt-1">Closed shifts will appear here</p>
+      </div>
+    );
+  }
+  return (
+    <div className="space-y-3">
+      {rows.map((row) => (
+        <Card key={row.id}>
+          <CardContent className="p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <p className="text-sm font-semibold text-foreground">
+                    {new Date(row.opened_at).toLocaleDateString('en-KE', { weekday: 'short', day: 'numeric', month: 'short' })}
+                  </p>
+                  <span className="text-xs text-muted-foreground">
+                    {new Date(row.opened_at).toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' })}
+                    {row.closed_at && ` → ${new Date(row.closed_at).toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' })}`}
+                  </span>
+                  <span className="text-xs text-muted-foreground">· {formatDuration(row.opened_at, row.closed_at)}</span>
+                </div>
+                <div className="flex items-center gap-4 mt-2 flex-wrap">
+                  <span className="text-xs text-muted-foreground">
+                    <span className="font-medium text-foreground">{row.order_count}</span> orders
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    Revenue: <span className="font-medium text-foreground">KES {row.total_revenue.toLocaleString()}</span>
+                  </span>
+                  {row.closing_float !== undefined && (
+                    <span className="text-xs text-muted-foreground">
+                      Cash in: <span className="font-medium text-foreground">KES {row.closing_float.toLocaleString()}</span>
+                    </span>
+                  )}
+                  {row.variance !== undefined && (
+                    <VarianceBadge variance={row.variance} />
+                  )}
+                </div>
+                {row.notes && (
+                  <p className="text-xs text-muted-foreground mt-1.5 italic">"{row.notes}"</p>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      ))}
+    </div>
+  );
+}
 
 function ShiftsPage() {
-  const [float, setFloat] = useState('');
+  const [tab, setTab] = useState<Tab>('current');
+  const [openingFloat, setOpeningFloat] = useState('');
+  const [closeDialogOpen, setCloseDialogOpen] = useState(false);
+
+  const { can } = usePermissions();
+  const handlesCash = can(P.PAYMENTS_VIEW);
 
   const { data: session, isLoading } = useCurrentShift();
   const openShift = useOpenShift();
   const closeShift = useCloseShift();
-  const { data: summary } = useSessionSummary(session?.status === 'open');
+  const isOpen = session?.session_status === 'open';
+  const { data: summary, refetch: refetchSummary } = useSessionSummary(isOpen);
+  const { data: historyData, isLoading: historyLoading } = useShiftHistory();
 
-  const isOpen = session?.status === 'open';
   const busy = openShift.isPending || closeShift.isPending;
+  const historyRows = useMemo(() => historyData?.data ?? [], [historyData]);
 
   async function handleOpen() {
     try {
-      await openShift.mutateAsync(parseFloat(float) || 0);
+      const floatAmt = handlesCash ? (parseFloat(openingFloat) || 0) : 0;
+      await openShift.mutateAsync(floatAmt);
       toast.success('Shift opened');
-      setFloat('');
+      setOpeningFloat('');
     } catch {
       toast.error('Failed to open shift');
     }
   }
 
-  async function handleClose() {
+  async function handleClose(payload: { closing_float: number; notes?: string }) {
     try {
-      await closeShift.mutateAsync(parseFloat(float) || 0);
-      toast.success('Shift closed');
-      setFloat('');
+      await closeShift.mutateAsync(payload);
+      toast.success('Shift closed successfully');
+      setCloseDialogOpen(false);
     } catch {
       toast.error('Failed to close shift');
     }
@@ -49,99 +166,210 @@ function ShiftsPage() {
   }
 
   return (
-    <div className="p-6 max-w-lg mx-auto space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Shift Management</h1>
-        <p className="text-sm text-muted-foreground mt-1">Open or close your cashier shift</p>
+    <div className="p-4 sm:p-6 max-w-2xl mx-auto space-y-5">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Shifts</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            {isOpen ? 'Your shift is active' : 'No active shift'}
+          </p>
+        </div>
+        {isOpen && (
+          <button
+            onClick={() => refetchSummary()}
+            className="p-2 rounded-xl hover:bg-muted transition-colors text-muted-foreground"
+            title="Refresh"
+          >
+            <RefreshCw className="h-4 w-4" />
+          </button>
+        )}
       </div>
 
-      {/* Current status */}
-      <Card>
-        <CardContent className="p-6">
-          <div className="flex items-center gap-4">
-            <div className={`size-12 rounded-full flex items-center justify-center ${isOpen ? 'bg-green-500/10' : 'bg-muted'}`}>
-              <Clock className={`h-6 w-6 ${isOpen ? 'text-green-600' : 'text-muted-foreground'}`} />
-            </div>
-            <div>
-              <p className="font-semibold text-foreground">{isOpen ? 'Shift Open' : 'No Active Shift'}</p>
-              {session?.opened_at && (
-                <p className="text-sm text-muted-foreground">
-                  Opened: {new Date(session.opened_at).toLocaleTimeString()}
-                </p>
-              )}
-              {session?.opening_float !== undefined && (
-                <p className="text-sm text-muted-foreground">
-                  Float: KES {session.opening_float.toLocaleString()}
-                </p>
-              )}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Tabs */}
+      <div className="flex gap-1 bg-muted rounded-xl p-1">
+        {(['current', 'history'] as Tab[]).map((t) => (
+          <button
+            key={t}
+            onClick={() => setTab(t)}
+            className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors capitalize ${
+              tab === t
+                ? 'bg-background text-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            {t === 'current' ? 'Current Shift' : 'History'}
+          </button>
+        ))}
+      </div>
 
-      {/* Session summary — shown when shift is open */}
-      {isOpen && summary && (
-        <div className="grid grid-cols-3 gap-3">
-          {[
-            { label: 'Orders', value: summary.order_count.toString(), icon: ShoppingCart },
-            { label: 'Revenue', value: `KES ${summary.total_revenue.toLocaleString()}`, icon: BarChart3 },
-            { label: 'Expected Cash', value: `KES ${summary.expected_cash.toLocaleString()}`, icon: DollarSign },
-          ].map(({ label, value, icon: Icon }) => (
-            <Card key={label}>
-              <CardContent className="p-4 flex flex-col gap-1">
-                <div className="flex items-center gap-1.5 text-muted-foreground">
-                  <Icon className="h-3.5 w-3.5" />
-                  <span className="text-xs">{label}</span>
+      {/* Current Shift Tab */}
+      {tab === 'current' && (
+        <div className="space-y-4">
+          {/* Status card */}
+          <Card>
+            <CardContent className="p-5">
+              {isOpen && session ? (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="size-2.5 rounded-full bg-green-500 animate-pulse" />
+                      <span className="text-sm font-semibold text-green-700">Shift Active</span>
+                    </div>
+                    <ElapsedTimer since={session.opened_at} />
+                  </div>
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                    <span>Started: {new Date(session.opened_at).toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' })}</span>
+                    {handlesCash && session.float_amount > 0 && (
+                      <span>Float: KES {session.float_amount.toLocaleString()}</span>
+                    )}
+                  </div>
                 </div>
-                <p className="font-bold text-sm truncate">{value}</p>
-              </CardContent>
-            </Card>
-          ))}
+              ) : (
+                <div className="flex items-center gap-4">
+                  <div className="size-12 rounded-full bg-muted flex items-center justify-center shrink-0">
+                    <Clock className="h-5 w-5 text-muted-foreground" />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-foreground">No Active Shift</p>
+                    <p className="text-sm text-muted-foreground mt-0.5">
+                      {handlesCash ? 'Enter your opening float and start your shift' : 'Start your shift to begin tracking orders'}
+                    </p>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Stats row — shown when open */}
+          {isOpen && summary && (
+            <>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {[
+                  { label: 'Orders', value: summary.order_count.toString(), icon: ShoppingCart },
+                  { label: 'Revenue', value: `KES ${summary.total_revenue.toLocaleString()}`, icon: BarChart3 },
+                  { label: 'Expected Cash', value: `KES ${summary.expected_cash.toLocaleString()}`, icon: DollarSign },
+                  { label: 'Voids', value: summary.void_count.toString(), icon: TrendingDown },
+                ].map(({ label, value, icon: Icon }) => (
+                  <Card key={label}>
+                    <CardContent className="p-3 flex flex-col gap-1">
+                      <div className="flex items-center gap-1.5 text-muted-foreground">
+                        <Icon className="h-3.5 w-3.5" />
+                        <span className="text-xs">{label}</span>
+                      </div>
+                      <p className="font-bold text-sm truncate">{value}</p>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+
+              {/* Tender breakdown */}
+              {summary.tender_breakdown && summary.tender_breakdown.length > 0 && (
+                <Card>
+                  <CardContent className="p-4">
+                    <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3">
+                      Payment Breakdown
+                    </p>
+                    <div className="space-y-2">
+                      {summary.tender_breakdown.map((t) => (
+                        <div key={t.type} className="flex items-center justify-between text-sm">
+                          <div className="flex items-center gap-2">
+                            {t.type === 'cash'
+                              ? <Banknote className="h-4 w-4 text-green-600" />
+                              : <CreditCard className="h-4 w-4 text-blue-600" />
+                            }
+                            <span className="text-foreground capitalize">{t.name || t.type}</span>
+                            <span className="text-xs text-muted-foreground">×{t.count}</span>
+                          </div>
+                          <span className="font-medium">KES {t.amount.toLocaleString()}</span>
+                        </div>
+                      ))}
+                    </div>
+                    {summary.total_refunds > 0 && (
+                      <div className="flex items-center justify-between text-sm border-t mt-3 pt-3 text-muted-foreground">
+                        <span>Refunds ({summary.refund_count})</span>
+                        <span className="text-red-500">- KES {summary.total_refunds.toLocaleString()}</span>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+            </>
+          )}
+
+          {/* Action area */}
+          <Card>
+            <CardContent className="p-5 space-y-4">
+              {!isOpen && handlesCash && (
+                <label className="block">
+                  <span className="text-sm font-medium text-foreground">Opening Float (KES)</span>
+                  <div className="relative mt-1.5">
+                    <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <input
+                      type="number"
+                      min="0"
+                      step="100"
+                      value={openingFloat}
+                      onChange={(e) => setOpeningFloat(e.target.value)}
+                      placeholder="0.00"
+                      className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring text-sm"
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">Cash placed in the drawer at shift start</p>
+                </label>
+              )}
+
+              {isOpen ? (
+                <Button
+                  onClick={() => handlesCash ? setCloseDialogOpen(true) : handleClose({ closing_float: 0 })}
+                  disabled={busy}
+                  className="w-full bg-destructive text-destructive-foreground hover:bg-destructive/90 py-6 text-base font-semibold"
+                >
+                  {busy
+                    ? <Loader2 className="h-5 w-5 animate-spin mr-2" />
+                    : <LogOut className="h-5 w-5 mr-2" />
+                  }
+                  End Shift
+                </Button>
+              ) : (
+                <Button
+                  onClick={handleOpen}
+                  disabled={busy}
+                  className="w-full py-6 text-base font-semibold"
+                >
+                  {busy
+                    ? <Loader2 className="h-5 w-5 animate-spin mr-2" />
+                    : <LogIn className="h-5 w-5 mr-2" />
+                  }
+                  Start Shift
+                </Button>
+              )}
+            </CardContent>
+          </Card>
         </div>
       )}
 
-      {/* Float entry + action */}
-      <Card>
-        <CardContent className="p-6 space-y-4">
-          <label className="block">
-            <span className="text-sm font-medium text-foreground">
-              {isOpen ? 'Closing Float (KES)' : 'Opening Float (KES)'}
-            </span>
-            <div className="relative mt-1">
-              <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                value={float}
-                onChange={(e) => setFloat(e.target.value)}
-                placeholder="0.00"
-                className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-              />
+      {/* History Tab */}
+      {tab === 'history' && (
+        <div>
+          {historyLoading ? (
+            <div className="flex items-center justify-center py-16">
+              <Loader2 className="h-6 w-6 animate-spin text-primary" />
             </div>
-          </label>
-
-          {isOpen ? (
-            <button
-              onClick={handleClose}
-              disabled={busy}
-              className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-destructive text-destructive-foreground font-semibold hover:bg-destructive/90 disabled:opacity-50 transition-colors"
-            >
-              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogOut className="h-4 w-4" />}
-              Close Shift
-            </button>
           ) : (
-            <button
-              onClick={handleOpen}
-              disabled={busy}
-              className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-primary text-primary-foreground font-semibold hover:bg-primary/90 disabled:opacity-50 transition-colors"
-            >
-              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogIn className="h-4 w-4" />}
-              Open Shift
-            </button>
+            <HistoryTable rows={historyRows} />
           )}
-        </CardContent>
-      </Card>
+        </div>
+      )}
+
+      {/* Close shift dialog (cashier only) */}
+      <ShiftCloseDialog
+        open={closeDialogOpen}
+        onOpenChange={setCloseDialogOpen}
+        expectedCash={summary?.expected_cash ?? 0}
+        onConfirm={handleClose}
+        isLoading={closeShift.isPending}
+      />
     </div>
   );
 }

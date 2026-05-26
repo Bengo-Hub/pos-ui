@@ -189,7 +189,7 @@ export function Header({ onMenuClick }: HeaderProps) {
 
   async function handleEndShift() {
     try {
-      await closeShift.mutateAsync(0);
+      await closeShift.mutateAsync({ closing_float: 0 });
       if (isTerminalSession) {
         // Terminal session: logout and redirect back to PIN login.
         await logout();
