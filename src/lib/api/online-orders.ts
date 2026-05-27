@@ -16,8 +16,8 @@ function onlineBase(tenantID: string) {
 }
 
 export const onlineOrdersApi = {
-  listPickup: (tenantID: string) =>
-    apiClient.get<PickupOrder[]>(`${onlineBase(tenantID)}/pickup`),
+  listPickup: (tenantID: string, params?: { status?: string }) =>
+    apiClient.get<PickupOrder[]>(`${onlineBase(tenantID)}/pickup`, params),
 
   markReady: (tenantID: string, orderID: string) =>
     apiClient.post(`${onlineBase(tenantID)}/${orderID}/ready`, {}),
