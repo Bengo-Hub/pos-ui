@@ -951,6 +951,7 @@ export default function OrderPage() {
         total={total}
         tenantSlug={user?.tenant_slug ?? ''}
         orderLines={currentOrderLines}
+        isHospitality={isHospitality}
         onPaymentConfirmed={handlePaymentConfirmed}
       />
 

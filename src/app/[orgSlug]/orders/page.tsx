@@ -28,6 +28,8 @@ export default function OrdersPage() {
   const { can, canAny } = usePermissions();
   const user = useAuthStore((s) => s.user);
   const tenantID = useAuthStore((s) => s.user?.tenant_id ?? '');
+  const outlet = useAuthStore((s) => s.outlet);
+  const isHospitality = ['hospitality', 'quick_service', 'hotel'].includes((outlet?.use_case ?? '').toLowerCase());
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('pending_payment');
@@ -324,6 +326,7 @@ export default function OrdersPage() {
           orderNumber={selectedOrder.order_number}
           total={selectedOrder.total_amount ?? 0}
           tenantSlug={orgSlug}
+          isHospitality={isHospitality}
           onPaymentConfirmed={() => {
             setPaymentOpen(false);
             setSelectedOrder(null);

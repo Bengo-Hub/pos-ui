@@ -28,6 +28,8 @@ interface SplitPaymentModalProps {
   tenantSlug: string;
   tenderId?: string;
   orderLines?: OrderLineItem[];
+  isHospitality?: boolean;
+  customerEmail?: string;
   onPaymentConfirmed: () => void;
 }
 
@@ -40,6 +42,8 @@ export function SplitPaymentModal({
   tenantSlug,
   tenderId,
   orderLines = [],
+  isHospitality = false,
+  customerEmail,
   onPaymentConfirmed,
 }: SplitPaymentModalProps) {
   const [mode, setMode] = useState<SplitMode>('full');
@@ -125,6 +129,8 @@ export function SplitPaymentModal({
         total={payAmount}
         tenantSlug={tenantSlug}
         tenderId={tenderId}
+        isHospitality={isHospitality}
+        customerEmail={customerEmail}
         onPaymentConfirmed={mode === 'equal' ? handleEqualPayerDone : () => handleCustomPayerDone(currentPayer)}
       />
     );
@@ -142,6 +148,8 @@ export function SplitPaymentModal({
         total={amt}
         tenantSlug={tenantSlug}
         tenderId={tenderId}
+        isHospitality={isHospitality}
+        customerEmail={customerEmail}
         onPaymentConfirmed={() => handleItemGuestPaid(itemSplitPayer)}
       />
     );
