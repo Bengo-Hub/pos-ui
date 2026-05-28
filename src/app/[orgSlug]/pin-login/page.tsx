@@ -107,17 +107,22 @@ const USE_CASE_ICONS: Record<string, React.ComponentType<{ className?: string }>
   logistics:     Truck,
 };
 
-// Demo hints — shown only on codevertex-demo tenant.
-// Gives testers a quick reference of which PIN maps to which role.
-const DEMO_HINTS = [
-  { pin: '1111', role: 'Admin',      accent: '#ef4444' },
-  { pin: '2222', role: 'Cashier',    accent: '#3b82f6' },
-  { pin: '3333', role: 'Waiter',     accent: '#10b981' },
-  { pin: '4444', role: 'Kitchen',    accent: '#f97316' },
-  { pin: '5555', role: 'Bar',        accent: '#a855f7' },
-  { pin: '6666', role: 'Reception',  accent: '#ec4899' },
-  { pin: '7777', role: 'Pharmacist', accent: '#14b8a6' },
+// Demo PINs — shown only on codevertex-demo tenant, filtered to the selected outlet's use_case.
+// Pin assignments mirror the seeded demo staff roles in auth-api/cmd/seed/seed_users.go.
+const DEMO_HINTS_ALL = [
+  { pin: '1111', role: 'Admin',      accent: '#ef4444', useCases: ['hospitality', 'quick_service', 'retail', 'pharmacy', 'services'] },
+  { pin: '2222', role: 'Cashier',    accent: '#3b82f6', useCases: ['hospitality', 'quick_service', 'retail', 'pharmacy', 'services'] },
+  { pin: '3333', role: 'Waiter',     accent: '#10b981', useCases: ['hospitality'] },
+  { pin: '4444', role: 'Kitchen',    accent: '#f97316', useCases: ['hospitality', 'quick_service'] },
+  { pin: '5555', role: 'Bar',        accent: '#a855f7', useCases: ['hospitality'] },
+  { pin: '6666', role: 'Reception',  accent: '#ec4899', useCases: ['hospitality', 'services'] },
+  { pin: '7777', role: 'Pharmacist', accent: '#14b8a6', useCases: ['pharmacy'] },
 ];
+
+function getDemoHints(useCase: string | undefined | null) {
+  if (!useCase) return DEMO_HINTS_ALL.slice(0, 2); // no outlet yet — show Admin + Cashier
+  return DEMO_HINTS_ALL.filter((h) => h.useCases.includes(useCase));
+}
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 
@@ -844,11 +849,16 @@ export default function PINLoginPage() {
         {isDemoTenant && (
           <div className="absolute bottom-4 right-4 z-30 hidden sm:block">
             <div className="rounded-2xl border border-white/10 bg-black/55 backdrop-blur-xl shadow-2xl p-3 max-w-[220px]">
-              <p className="text-[9px] font-black text-white/30 uppercase tracking-widest mb-2">
+              <p className="text-[9px] font-black text-white/30 uppercase tracking-widest mb-1">
                 Demo PINs
               </p>
+              {useCase && (
+                <p className="text-[8px] text-white/20 uppercase tracking-wider mb-2">
+                  {USE_CASE_LABELS[useCase] ?? useCase}
+                </p>
+              )}
               <div className="grid grid-cols-2 gap-1">
-                {DEMO_HINTS.map(({ pin, role, accent }) => (
+                {getDemoHints(useCase).map(({ pin, role, accent }) => (
                   <div
                     key={pin}
                     className="flex items-center gap-1.5 px-2 py-1 rounded-lg"
