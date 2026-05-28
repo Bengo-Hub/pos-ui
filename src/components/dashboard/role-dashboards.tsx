@@ -4,7 +4,11 @@ import { apiClient } from '@/lib/api/client';
 import { useModuleAccess } from '@/hooks/use-module-access';
 import { cn } from '@/lib/utils';
 import { QuickAction, KPICard, RecentOrdersCard, useDashboardSummary, useTenantID, fmt, fmtNum } from './widgets';
+import { CashierOverviewTab } from './cashier-overview-tab';
+import { CashierBillsTab } from './cashier-bills-tab';
+import { CashierShiftTab } from './cashier-shift-tab';
 import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
 import {
   ArrowRight, BarChart3, BedDouble, Calendar, ChefHat,
   ClipboardList, Clock, CreditCard, Grid3x3, Package,
@@ -75,54 +79,42 @@ export function AdminDashboard({ orgSlug }: { orgSlug: string }) {
   );
 }
 
+const CASHIER_TABS = ['Overview', 'Open Bills', 'My Shift'] as const;
+type CashierTab = typeof CASHIER_TABS[number];
+
 export function CashierDashboard({ orgSlug }: { orgSlug: string }) {
-  const tenantID = useTenantID();
-  const { hasModule } = useModuleAccess();
-  const { data: drawerData } = useQuery({
-    queryKey: ['dashboard-drawer', tenantID],
-    queryFn: () => apiClient.get<any>(`/api/v1/${tenantID}/pos/drawers/current`),
-    enabled: !!tenantID, retry: false, staleTime: 30_000,
-  });
-  const { data: currentShift } = useQuery({
-    queryKey: ['shift-current', tenantID],
-    queryFn: () => apiClient.get<any>(`/api/v1/${tenantID}/pos/devices/current/sessions/current`),
-    enabled: !!tenantID,
-    retry: (count, err: any) => err?.response?.status !== 404 && count < 2,
-    staleTime: 30_000,
-  });
-  const drawer = drawerData?.data ?? drawerData;
-  const drawerOpen = drawer?.isOpen === true || drawer?.status === 'open' || !!currentShift?.id;
+  const [activeTab, setActiveTab] = useState<CashierTab>('Overview');
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-6 space-y-5">
       <div>
         <h1 className="text-xl font-bold font-display">Good {greeting()}</h1>
         <p className="text-sm text-muted-foreground mt-0.5">Ready to serve customers</p>
       </div>
-      <div className={cn('flex items-center gap-4 p-4 rounded-2xl border', drawerOpen ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-amber-500/5 border-amber-500/20')}>
-        <div className={cn('h-10 w-10 rounded-xl flex items-center justify-center', drawerOpen ? 'bg-emerald-500/15' : 'bg-amber-500/15')}>
-          <Wallet className={cn('h-5 w-5', drawerOpen ? 'text-emerald-500' : 'text-amber-500')} />
-        </div>
-        <div className="flex-1">
-          <p className="font-semibold text-sm">{drawerOpen ? 'Drawer is open' : 'Drawer is closed'}</p>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            {drawerOpen ? `Float: ${fmt(drawer?.opening_cash ?? 0)}` : 'Open a drawer to start taking payments'}
-          </p>
-        </div>
-        <Link href={`/${orgSlug}/drawer`} className="text-xs font-semibold text-primary hover:underline">
-          {drawerOpen ? 'View' : 'Open'}
-        </Link>
+
+      {/* Tab bar */}
+      <div className="flex gap-1 bg-accent/30 p-1 rounded-xl w-fit">
+        {CASHIER_TABS.map((tab) => (
+          <button
+            key={tab}
+            type="button"
+            onClick={() => setActiveTab(tab)}
+            className={cn(
+              'px-4 py-2 rounded-lg text-sm font-semibold transition-all',
+              activeTab === tab
+                ? 'bg-background text-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground',
+            )}
+          >
+            {tab}
+          </button>
+        ))}
       </div>
-      <div className="space-y-3">
-        <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Actions</p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <QuickAction icon={Plus} label="New Order" desc="Start a new sale" href={`/${orgSlug}/order`} accent />
-          <QuickAction icon={ClipboardList} label="Orders" desc="View open bills" href={`/${orgSlug}/orders`} />
-          {hasModule('shifts') && <QuickAction icon={Clock} label="Shifts" desc="View shift status" href={`/${orgSlug}/shifts`} />}
-          <QuickAction icon={Wallet} label="Cash Drawer" desc="Manage drawer" href={`/${orgSlug}/drawer`} />
-        </div>
-      </div>
-      <RecentOrdersCard orgSlug={orgSlug} />
+
+      {/* Tab content */}
+      {activeTab === 'Overview' && <CashierOverviewTab />}
+      {activeTab === 'Open Bills' && <CashierBillsTab orgSlug={orgSlug} />}
+      {activeTab === 'My Shift' && <CashierShiftTab orgSlug={orgSlug} />}
     </div>
   );
 }

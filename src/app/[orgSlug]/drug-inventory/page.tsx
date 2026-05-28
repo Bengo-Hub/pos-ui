@@ -48,7 +48,7 @@ function useDrugInventory(filter: string) {
   const tenantID = user?.tenant_id ?? '';
   return useQuery({
     queryKey: ['drug-inventory', tenantID, filter],
-    queryFn: () => apiClient.get<{ data: DrugItem[] }>(`/api/v1/${tenantID}/pos/catalog/items?category=medication${filter === 'low_stock' ? '&low_stock=true' : filter === 'expiring' ? '&expiring_days=30' : ''}`),
+    queryFn: () => apiClient.get<{ data: DrugItem[] }>(`/api/v1/${tenantID}/pos/catalog/items?category=medication,pharmaceutical&item_type=GOODS${filter === 'low_stock' ? '&low_stock=true' : filter === 'expiring' ? '&expiring_days=30' : ''}`),
     enabled: !!tenantID,
     staleTime: 2 * 60_000,
   });

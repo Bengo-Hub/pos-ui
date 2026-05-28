@@ -12,6 +12,7 @@ import {
   useUpdateAppointmentStatus,
 } from '@/hooks/useAppointments';
 import type { Appointment, AppointmentStatus, CreateAppointmentInput } from '@/hooks/useAppointments';
+import { useMenuItems } from '@/hooks/usePOS';
 import {
   Calendar,
   Loader2,
@@ -65,6 +66,16 @@ function BookingForm({
   const { data: staffData } = useStaffList();
   const staffList = staffData?.data ?? [];
 
+  const [serviceSearch, setServiceSearch] = useState('');
+  const [serviceDropdownOpen, setServiceDropdownOpen] = useState(false);
+  const [selectedServiceName, setSelectedServiceName] = useState('');
+  const { data: serviceData } = useMenuItems({
+    itemType: 'SERVICE',
+    search: serviceSearch || undefined,
+    limit: 20,
+  });
+  const serviceList = serviceData?.data ?? [];
+
   const [form, setForm] = useState<CreateAppointmentInput & { deposit_amount?: number }>({
     date: new Date().toISOString().split('T')[0],
     time: '09:00',
@@ -84,6 +95,10 @@ function BookingForm({
     e.preventDefault();
     if (!form.customer_name || !form.date || !form.time) {
       toast.error('Please fill in required fields');
+      return;
+    }
+    if (!form.service_id) {
+      toast.error('Please select a service');
       return;
     }
     const { deposit_amount, ...rest } = form;
@@ -131,6 +146,54 @@ function BookingForm({
             <div>
               <label className="text-xs font-bold text-muted-foreground mb-1 block">Customer Phone</label>
               <input type="tel" value={form.customer_phone ?? ''} onChange={(e) => set('customer_phone', e.target.value)} placeholder="+254..." className={inputClass} />
+            </div>
+            <div>
+              <label className="text-xs font-bold text-muted-foreground mb-1 block">Service *</label>
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="Search services…"
+                  value={selectedServiceName || serviceSearch}
+                  onChange={(e) => {
+                    setServiceSearch(e.target.value);
+                    setSelectedServiceName('');
+                    setForm((prev) => ({ ...prev, service_id: '' }));
+                    setServiceDropdownOpen(true);
+                  }}
+                  onFocus={() => setServiceDropdownOpen(true)}
+                  className={cn(inputClass, !form.service_id && 'border-amber-400/60')}
+                  autoComplete="off"
+                />
+                {!form.service_id && (
+                  <p className="text-[10px] text-amber-500 mt-0.5">Required — select a service</p>
+                )}
+                {serviceDropdownOpen && serviceList.length > 0 && (
+                  <div className="absolute z-50 w-full mt-1 bg-background border border-border rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                    {serviceList.map((svc) => (
+                      <button
+                        key={svc.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedServiceName(svc.name);
+                          setServiceSearch('');
+                          setServiceDropdownOpen(false);
+                          setForm((prev) => ({
+                            ...prev,
+                            service_id: svc.id,
+                            duration_minutes: svc.duration_minutes ?? prev.duration_minutes,
+                          }));
+                        }}
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-accent transition-colors flex items-center justify-between gap-2"
+                      >
+                        <span className="font-medium truncate">{svc.name}</span>
+                        <span className="text-xs text-muted-foreground shrink-0">
+                          {svc.duration_minutes ? `${svc.duration_minutes}min` : ''}{svc.price ? ` · KES ${svc.price.toLocaleString()}` : ''}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
             <div>
               <label className="text-xs font-bold text-muted-foreground mb-1 block">Staff Member</label>

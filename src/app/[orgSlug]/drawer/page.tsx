@@ -1,7 +1,7 @@
 'use client';
 
 import { Badge, Button, Card, CardContent } from '@/components/ui/base';
-import { useCurrentDrawer, useOpenDrawer, useCloseDrawer, useDrawerHistory } from '@/hooks/usePOS';
+import { useCurrentDrawer, useOpenDrawer, useCloseDrawer, useDrawerHistory, useShiftSummary } from '@/hooks/usePOS';
 import { useAuthStore } from '@/store/auth';
 import {
   Banknote,
@@ -14,7 +14,7 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 
 export default function DrawerPage() {
-  const [openingAmount, setOpeningAmount] = useState('5000');
+  const [openingAmount, setOpeningAmount] = useState('');
   const [closingAmount, setClosingAmount] = useState('');
 
   const outlet = useAuthStore((s) => s.outlet);
@@ -22,6 +22,7 @@ export default function DrawerPage() {
 
   const { data: currentData, isLoading } = useCurrentDrawer();
   const { data: historyData } = useDrawerHistory();
+  const { data: shiftSummary } = useShiftSummary();
   const openDrawer = useOpenDrawer();
   const closeDrawer = useCloseDrawer();
 
@@ -31,7 +32,7 @@ export default function DrawerPage() {
 
   const handleOpen = () => {
     openDrawer.mutate(
-      { outletId, startingCash: parseFloat(openingAmount) || 0 },
+      { outletId, startingCash: openingAmount.trim() === '' ? 0 : parseFloat(openingAmount) },
       {
         onSuccess: () => toast.success('Drawer opened!'),
         onError: () => toast.error('Failed to open drawer'),
@@ -101,7 +102,7 @@ export default function DrawerPage() {
                 </div>
                 <div className="p-4 rounded-xl bg-accent/30">
                   <p className="text-xs text-muted-foreground font-bold uppercase tracking-wider">Expected Balance</p>
-                  <p className="text-2xl font-bold mt-1">KES {(drawer.starting_cash || 0).toLocaleString()}</p>
+                  <p className="text-2xl font-bold mt-1">KES {((drawer.starting_cash || 0) + (shiftSummary?.cash_in_total || 0)).toLocaleString()}</p>
                 </div>
               </div>
               <div className="border-t pt-6">

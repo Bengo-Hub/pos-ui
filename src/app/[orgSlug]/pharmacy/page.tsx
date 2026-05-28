@@ -8,6 +8,7 @@ import { usePrescriptions, useDispensePrescription, useCreatePrescription } from
 import { useMenuItems, type CatalogItem } from '@/hooks/usePOS';
 import { useAuthStore } from '@/store/auth';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { WalkInSaleModal } from '@/components/pos/walk-in-sale-modal';
 import { ChevronDown, Loader2, Pill, Plus, Eye, ShoppingCart, Trash2, X } from 'lucide-react';
 import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
@@ -413,6 +414,8 @@ function PharmacyPage() {
   const [statusFilter, setStatusFilter] = useState('');
   const [patientSearch, setPatientSearch] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
+  const [walkInOpen, setWalkInOpen] = useState(false);
+  const tenantSlug = useAuthStore((s) => s.user?.tenant_slug ?? orgSlug);
 
   // ?new=1 from redirect (e.g. navigating to /pharmacy/new)
   useEffect(() => {
@@ -454,13 +457,14 @@ function PharmacyPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Link
-            href={`/${orgSlug}/order`}
+          <button
+            type="button"
+            onClick={() => setWalkInOpen(true)}
             className="inline-flex items-center gap-2 border border-border bg-background text-foreground px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-accent transition-colors"
           >
             <ShoppingCart className="h-4 w-4" />
             Walk-In Sale
-          </Link>
+          </button>
           <button
             onClick={() => setCreateOpen(true)}
             className="inline-flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-primary/90 transition-colors"
@@ -567,6 +571,7 @@ function PharmacyPage() {
       )}
 
       {createOpen && <NewPrescriptionModal onClose={() => setCreateOpen(false)} />}
+      <WalkInSaleModal open={walkInOpen} onClose={() => setWalkInOpen(false)} tenantSlug={tenantSlug} />
     </div>
   );
 }

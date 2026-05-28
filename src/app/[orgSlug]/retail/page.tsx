@@ -8,7 +8,8 @@ import { useParams } from 'next/navigation';
 import { Loader2, Search, Trash2, ShoppingCart, Tag, X } from 'lucide-react';
 import { useAuthStore } from '@/store/auth';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
-import { useMenuItems } from '@/hooks/usePOS';
+import { useMenuItems, useCreateOrder } from '@/hooks/usePOS';
+import { SplitPaymentModal } from '@/components/pos/split-payment-modal';
 import { lookupItemByBarcode } from '@/lib/api/retail';
 import type { CatalogItem } from '@/lib/api/retail';
 import { BarcodeInput } from '@/components/retail/BarcodeInput';
@@ -31,6 +32,12 @@ interface PendingSerialItem {
   lineId: string;
 }
 
+interface CompletedOrder {
+  id: string;
+  order_number: string;
+  total: number;
+}
+
 interface PendingOverrideItem {
   item: CatalogItem;
   qty: number;
@@ -42,6 +49,8 @@ function RetailPage() {
   const params = useParams();
   const orgSlug = params?.orgSlug as string;
   const tenantSlug = useAuthStore((s) => s.user?.tenant_slug ?? orgSlug);
+  const outlet = useAuthStore((s) => s.outlet);
+  const outletId = outlet?.id ?? '';
   const { data: posSettings } = usePOSSettings();
   const taxRate = (posSettings?.vat_rate ?? 16) / 100;
 
@@ -51,7 +60,10 @@ function RetailPage() {
   const [scaleDeviceId, setScaleDeviceId] = useState<string>('');
   const [pendingSerial, setPendingSerial] = useState<PendingSerialItem | null>(null);
   const [pendingOverride, setPendingOverride] = useState<PendingOverrideItem | null>(null);
-  const [checkoutDone, setCheckoutDone] = useState(false);
+  const [completedOrder, setCompletedOrder] = useState<CompletedOrder | null>(null);
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
+
+  const createOrder = useCreateOrder();
 
   // ── Rich search ──────────────────────────────────────────────────────────
   const [searchQuery, setSearchQuery] = useState('');
@@ -64,6 +76,7 @@ function RetailPage() {
 
   const { data: catalogData, isLoading: catalogLoading } = useMenuItems({
     search: debouncedSearch || undefined,
+    itemType: 'GOODS',
     limit: 50,
   });
 
@@ -170,7 +183,9 @@ function RetailPage() {
 
   // ── Checkout ─────────────────────────────────────────────────────────────
 
-  const handleCheckout = () => {
+  const handleCheckout = async () => {
+    if (cart.length === 0 || checkoutLoading) return;
+
     // Check if any items require serial numbers — if so open modal for first one
     const firstSerialItem = cart.find((l) => l.item.track_serial_numbers);
     if (firstSerialItem) {
@@ -183,8 +198,35 @@ function RetailPage() {
       });
       return;
     }
-    setCheckoutDone(true);
-    setCart([]);
+
+    setCheckoutLoading(true);
+    createOrder.mutate(
+      {
+        outletId,
+        orderSubtype: 'retail' as any,
+        lines: cart.map((l) => ({
+          catalog_item_id: l.item.id,
+          sku: l.item.sku,
+          name: l.item.name,
+          quantity: l.quantity,
+          unit_price: l.item.price,
+          total_price: l.item.price * l.quantity,
+        })),
+      },
+      {
+        onSuccess: (order: any) => {
+          setCompletedOrder({
+            id: order.id,
+            order_number: order.order_number ?? order.id,
+            total,
+          });
+        },
+        onError: () => {
+          import('sonner').then(({ toast }) => toast.error('Failed to create order'));
+        },
+        onSettled: () => setCheckoutLoading(false),
+      },
+    );
   };
 
   const fmt = (n: number) =>
@@ -192,22 +234,33 @@ function RetailPage() {
 
   // ── Render ───────────────────────────────────────────────────────────────
 
-  if (checkoutDone) {
+  if (completedOrder) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
-        <div className="h-16 w-16 rounded-full bg-green-100 flex items-center justify-center">
-          <ShoppingCart className="h-8 w-8 text-green-600" />
+      <>
+        <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
+          <div className="h-16 w-16 rounded-full bg-green-100 flex items-center justify-center">
+            <ShoppingCart className="h-8 w-8 text-green-600" />
+          </div>
+          <h2 className="text-xl font-bold">Order Created</h2>
+          <p className="text-muted-foreground text-sm">Complete payment to finish the sale.</p>
+          <button
+            type="button"
+            onClick={() => { setCompletedOrder(null); setCart([]); }}
+            className="px-6 py-3 rounded-xl bg-primary text-primary-foreground font-semibold hover:bg-primary/90 transition-colors"
+          >
+            New Sale
+          </button>
         </div>
-        <h2 className="text-xl font-bold">Order Complete</h2>
-        <p className="text-muted-foreground text-sm">The order has been processed.</p>
-        <button
-          type="button"
-          onClick={() => setCheckoutDone(false)}
-          className="px-6 py-3 rounded-xl bg-primary text-primary-foreground font-semibold hover:bg-primary/90 transition-colors"
-        >
-          New Sale
-        </button>
-      </div>
+        <SplitPaymentModal
+          open
+          onClose={() => { setCompletedOrder(null); setCart([]); }}
+          onPaymentConfirmed={() => { setCompletedOrder(null); setCart([]); }}
+          orderId={completedOrder.id}
+          orderNumber={completedOrder.order_number}
+          total={completedOrder.total}
+          tenantSlug={tenantSlug}
+        />
+      </>
     );
   }
 
@@ -387,11 +440,12 @@ function RetailPage() {
 
           <button
             type="button"
-            disabled={cart.length === 0}
+            disabled={cart.length === 0 || checkoutLoading}
             onClick={handleCheckout}
-            className="w-full py-3.5 rounded-xl bg-primary text-primary-foreground font-semibold text-sm hover:bg-primary/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className="w-full py-3.5 rounded-xl bg-primary text-primary-foreground font-semibold text-sm hover:bg-primary/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
-            Checkout
+            {checkoutLoading && <Loader2 className="h-4 w-4 animate-spin" />}
+            {checkoutLoading ? 'Creating Order…' : 'Checkout'}
           </button>
         </div>
       </div>

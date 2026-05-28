@@ -51,6 +51,7 @@ export interface PaginatedResponse<T> {
 export function useMenuItems(filters?: {
   category?: string;
   search?: string;
+  itemType?: string;
   page?: number;
   limit?: number;
 }) {
@@ -58,11 +59,12 @@ export function useMenuItems(filters?: {
   const page = filters?.page ?? 1;
   const limit = filters?.limit ?? 50;
   return useQuery({
-    queryKey: ['pos-catalog-items', tenantID, filters?.category, filters?.search, page, limit],
+    queryKey: ['pos-catalog-items', tenantID, filters?.category, filters?.search, filters?.itemType, page, limit],
     queryFn: () =>
       apiClient.get<PaginatedResponse<CatalogItem>>(`${basePath(tenantID)}/catalog/items`, {
         category: filters?.category,
         search: filters?.search,
+        item_type: filters?.itemType,
         page,
         limit,
       }),
@@ -614,6 +616,82 @@ export function useCurrentDrawer() {
       apiClient.get<{ drawer: CashDrawer | null; isOpen: boolean }>(`${basePath(tenantID)}/drawers/current`),
     enabled: !!tenantID,
     staleTime: 5_000,
+    refetchInterval: 30_000,
+  });
+}
+
+// ─── Device Sessions (Shifts) ────────────────────────────────────────────────
+
+interface DeviceSession {
+  id: string;
+  status: string;
+  session_status: string;
+  float_amount: number;
+  opened_at: string;
+  closed_at?: string;
+  user_id?: string;
+}
+
+interface SessionSummary {
+  cash_in_total: number;
+  card_total: number;
+  mpesa_total: number;
+  total_revenue: number;
+  order_count: number;
+}
+
+export function useCurrentShift() {
+  const tenantID = useTenantID();
+  return useQuery({
+    queryKey: ['pos-session-current', tenantID],
+    queryFn: () =>
+      apiClient.get<DeviceSession>(`${basePath(tenantID)}/devices/current/sessions/current`),
+    enabled: !!tenantID,
+    retry: (count, err: any) => err?.response?.status !== 404 && count < 2,
+    staleTime: 30_000,
+  });
+}
+
+export function useShiftSummary() {
+  const tenantID = useTenantID();
+  return useQuery({
+    queryKey: ['pos-session-summary', tenantID],
+    queryFn: () =>
+      apiClient.get<SessionSummary>(`${basePath(tenantID)}/devices/current/sessions/current/summary`),
+    enabled: !!tenantID,
+    retry: (count, err: any) => err?.response?.status !== 404 && count < 2,
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+  });
+}
+
+export function useOpenShift() {
+  const tenantID = useTenantID();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { floatAmount?: number }) =>
+      apiClient.post<DeviceSession>(`${basePath(tenantID)}/devices/current/sessions/open`, {
+        float_amount: data.floatAmount ?? 0,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['pos-session-current'] });
+      qc.invalidateQueries({ queryKey: ['pos-session-summary'] });
+    },
+  });
+}
+
+export function useCloseShift() {
+  const tenantID = useTenantID();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { endingCash?: number }) =>
+      apiClient.post<DeviceSession>(`${basePath(tenantID)}/devices/current/sessions/close`, {
+        ending_cash: data.endingCash ?? 0,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['pos-session-current'] });
+      qc.invalidateQueries({ queryKey: ['pos-session-summary'] });
+    },
   });
 }
 
@@ -621,9 +699,12 @@ export function useOpenDrawer() {
   const tenantID = useTenantID();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: { outletId: string; startingCash: number }) =>
+    mutationFn: (data: { outletId: string; startingCash: number; deviceId?: string }) =>
       apiClient.post(`${basePath(tenantID)}/drawers/open`, data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['pos-drawer-current'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['pos-drawer-current'] });
+      qc.invalidateQueries({ queryKey: ['pos-session-current'] });
+    },
   });
 }
 
