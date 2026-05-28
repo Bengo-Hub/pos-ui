@@ -132,14 +132,16 @@ export function useModuleAccess() {
     if (isSuperUser) return true;
     if (!useCase) return false; // not yet resolved — hide everything
     if (!enabledModules.includes(moduleKey as ModuleKey)) return false;
-    // Overlay backend toggle flags from outlet settings
+    // Overlay backend toggle flags from outlet settings.
+    // NOTE: 'shifts' is intentionally NOT gated by shift_reports_enabled.
+    // shift_reports_enabled controls manager-level shift *reporting* features (reports tab),
+    // NOT the staff shift open/close page which every role (waiter, cashier, kitchen) must access.
     if (posSettings) {
       if (moduleKey === 'hotel'        && !posSettings.hotel_module_enabled)   return false;
       if (moduleKey === 'layaway'      && !posSettings.layaway_enabled)         return false;
       if (moduleKey === 'kds'          && !posSettings.enable_kds)              return false;
       if (moduleKey === 'bar'          && !posSettings.enable_kds)              return false; // bar shares KDS toggle
       if (moduleKey === 'appointments' && !posSettings.enable_appointments)     return false;
-      if (moduleKey === 'shifts'       && !posSettings.shift_reports_enabled)   return false;
     }
     return true;
   }
