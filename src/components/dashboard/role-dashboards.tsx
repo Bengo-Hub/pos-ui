@@ -128,20 +128,36 @@ export function CashierDashboard({ orgSlug }: { orgSlug: string }) {
 }
 
 export function WaiterDashboard({ orgSlug }: { orgSlug: string }) {
+  const router = useRouter();
   const { hasModule } = useModuleAccess();
   const showTables = hasModule('tables');
+
+  // Redirect waiters directly to the tables page — no dashboard needed.
+  useEffect(() => {
+    if (showTables) router.replace(`/${orgSlug}/tables`);
+  }, [orgSlug, router, showTables]);
+
+  if (showTables) {
+    return (
+      <div className="flex-1 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3 text-muted-foreground">
+          <Grid3x3 className="h-10 w-10 animate-pulse" />
+          <p className="text-sm">Loading Tables…</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Fallback for non-table use cases (appointments-only, etc.)
   const showAppointments = hasModule('appointments');
   return (
     <div className="p-6 space-y-6">
       <div>
         <h1 className="text-xl font-bold font-display">Good {greeting()}</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">
-          {showTables ? 'Manage your tables and orders' : 'Manage your orders and appointments'}
-        </p>
+        <p className="text-sm text-muted-foreground mt-0.5">Manage your orders and appointments</p>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        {showTables && <QuickAction icon={Grid3x3} label="Tables" desc="View your section" href={`/${orgSlug}/tables`} accent />}
-        {!showTables && showAppointments && <QuickAction icon={Calendar} label="Appointments" desc="View today's schedule" href={`/${orgSlug}/appointments`} accent />}
+        {showAppointments && <QuickAction icon={Calendar} label="Appointments" desc="View today's schedule" href={`/${orgSlug}/appointments`} accent />}
         <QuickAction icon={Plus} label="New Order" desc="Take a new order" href={`/${orgSlug}/order`} />
         <QuickAction icon={ClipboardList} label="Open Bills" desc="Manage running orders" href={`/${orgSlug}/orders`} />
       </div>

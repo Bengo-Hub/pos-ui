@@ -429,6 +429,7 @@ interface CreateOrderInput {
   currency?: string;
   orderSubtype?: OrderSubtype;
   tableId?: string;
+  coversCount?: number;
   lines: Array<{
     catalog_item_id: string;
     sku: string;
@@ -452,6 +453,7 @@ export function useCreateOrder() {
         currency: data.currency ?? 'KES',
         order_subtype: data.orderSubtype ?? 'dine_in',
         table_id: data.tableId,
+        covers_count: data.coversCount,
         lines: data.lines,
       }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['pos-orders'] }),
@@ -475,6 +477,46 @@ export function useVoidOrder() {
     mutationFn: ({ orderId, reason }: { orderId: string; reason: string }) =>
       apiClient.patch(`${basePath(tenantID)}/orders/${orderId}/void`, { reason }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['pos-orders'] }),
+  });
+}
+
+export function useAddOrderLines() {
+  const tenantID = useTenantID();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ orderId, lines }: { orderId: string; lines: CreateOrderInput['lines'] }) =>
+      apiClient.post(`${basePath(tenantID)}/orders/${orderId}/lines`, { lines }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['pos-orders'] });
+      qc.invalidateQueries({ queryKey: ['pos-tables'] });
+    },
+  });
+}
+
+export function useMergeTables() {
+  const tenantID = useTenantID();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ primaryTableId, secondaryTableId }: { primaryTableId: string; secondaryTableId: string }) =>
+      apiClient.post(`${basePath(tenantID)}/tables/merge`, {
+        primary_table_id: primaryTableId,
+        secondary_table_id: secondaryTableId,
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['pos-tables'] }),
+  });
+}
+
+export function useUnmergeTables() {
+  const tenantID = useTenantID();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ primaryTableId, secondaryTableId, lineIds }: { primaryTableId: string; secondaryTableId: string; lineIds: string[] }) =>
+      apiClient.post(`${basePath(tenantID)}/tables/unmerge`, {
+        primary_table_id: primaryTableId,
+        secondary_table_id: secondaryTableId,
+        line_ids: lineIds,
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['pos-tables'] }),
   });
 }
 

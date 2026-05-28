@@ -8,7 +8,8 @@ import { VoidOrderModal } from '@/components/pos/void-order-modal';
 import { ReceiptPreview, type ReceiptData } from '@/components/pos/receipt-preview';
 import { OrderTypeSelector } from '@/components/pos/order-type-selector';
 import { cn } from '@/lib/utils';
-import { useMenuItems, useCategories, useCreateOrder, useVoidOrder, useAssignTable, useReleaseTable, type OrderSubtype } from '@/hooks/usePOS';
+import { useMenuItems, useCategories, useCreateOrder, useAddOrderLines, useVoidOrder, useAssignTable, useReleaseTable, type OrderSubtype } from '@/hooks/usePOS';
+import { OrderPlacedDialog } from '@/components/pos/order-placed-dialog';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useAuthStore } from '@/store/auth';
@@ -96,6 +97,13 @@ export default function OrderPage() {
   const tableId = searchParams.get('table_id') ?? '';
   const tableName = searchParams.get('table_name') ?? '';
 
+  // Add-to-bill mode params
+  const mode = searchParams.get('mode') ?? '';
+  const billOrderId = searchParams.get('order_id') ?? '';
+  const billOrderTotal = parseFloat(searchParams.get('order_total') ?? '0');
+  const coversParam = parseInt(searchParams.get('covers') ?? '1', 10);
+  const isAddToBill = mode === 'add_to_bill';
+
   // Order subtype — pre-select dine_in when arriving from table selection
   const [orderSubtype, setOrderSubtype] = useState<OrderSubtype | null>(
     tableId ? 'dine_in' : null
@@ -119,6 +127,11 @@ export default function OrderPage() {
   // Receipt
   const [receiptData, setReceiptData] = useState<ReceiptData | null>(null);
   const [receiptOpen, setReceiptOpen] = useState(false);
+
+  // Order placed dialog (dine-in + add-to-bill success)
+  const [orderPlacedOpen, setOrderPlacedOpen] = useState(false);
+  const [orderPlacedId, setOrderPlacedId] = useState('');
+  const [orderPlacedNumber, setOrderPlacedNumber] = useState('');
 
   // Course management (hospitality only)
   const isHospitality = ['hospitality', 'quick_service', 'hotel'].includes((outlet?.use_case ?? '').toLowerCase());
@@ -147,6 +160,7 @@ export default function OrderPage() {
     limit: PAGE_SIZE,
   });
   const createOrder = useCreateOrder();
+  const addOrderLines = useAddOrderLines();
 
   const menuItems: MenuItem[] = useMemo(() => {
     const items = catalogData?.data ?? [];
@@ -335,8 +349,40 @@ export default function OrderPage() {
     }
   };
 
+  const orderLines = cart.map((item) => ({
+    catalog_item_id: item.id,
+    sku: item.sku || '',
+    name: item.name,
+    quantity: item.quantity,
+    unit_price: item.price + (item.modifierTotal ?? 0),
+    total_price: (item.price + (item.modifierTotal ?? 0)) * item.quantity,
+    course_number: item.courseNumber ?? 0,
+    metadata: {
+      ...(item.selectedModifiers ? { modifiers: item.selectedModifiers } : {}),
+      ...(item.notes ? { notes: item.notes } : {}),
+      ...(item.serialNumber ? { serial_number: item.serialNumber } : {}),
+    },
+  }));
+
   const handlePlaceOrder = () => {
     if (cart.length === 0) return;
+
+    // Add-to-bill mode: append lines to existing order
+    if (isAddToBill && billOrderId) {
+      addOrderLines.mutate(
+        { orderId: billOrderId, lines: orderLines },
+        {
+          onSuccess: () => {
+            clearCart();
+            setOrderPlacedId(billOrderId);
+            setOrderPlacedNumber('');
+            setOrderPlacedOpen(true);
+          },
+          onError: () => toast.error('Failed to add items to bill. Please try again.'),
+        }
+      );
+      return;
+    }
 
     // Hospitality: enforce order type selection before placing
     if (isHospitality && !orderSubtype) {
@@ -355,20 +401,8 @@ export default function OrderPage() {
         outletId: outlet?.id ?? '',
         orderSubtype: orderSubtype ?? undefined,
         tableId: tableId || undefined,
-        lines: cart.map((item) => ({
-          catalog_item_id: item.id,
-          sku: item.sku || '',
-          name: item.name,
-          quantity: item.quantity,
-          unit_price: item.price + (item.modifierTotal ?? 0),
-          total_price: (item.price + (item.modifierTotal ?? 0)) * item.quantity,
-          course_number: item.courseNumber ?? 0,
-          metadata: {
-            ...(item.selectedModifiers ? { modifiers: item.selectedModifiers } : {}),
-            ...(item.notes ? { notes: item.notes } : {}),
-            ...(item.serialNumber ? { serial_number: item.serialNumber } : {}),
-          },
-        })),
+        coversCount: coversParam > 1 ? coversParam : undefined,
+        lines: orderLines,
       },
       {
         onSuccess: (data: any) => {
@@ -390,12 +424,12 @@ export default function OrderPage() {
             assignTable.mutate({ tableId, orderId });
           }
 
-          // Hospitality: dine-in orders route back to PIN login — payment is handled
-          // separately by cashier. All roles placing a dine-in order follow this flow.
-          if (orderSubtype === 'dine_in' && orgSlug) {
+          // Dine-in: show OrderPlacedDialog (handles logout on OK/print)
+          if (orderSubtype === 'dine_in') {
             clearCart();
-            toast.success('Order sent to kitchen!');
-            router.replace(`/${orgSlug}/pin-login`);
+            setOrderPlacedId(orderId);
+            setOrderPlacedNumber(data.order_number || '');
+            setOrderPlacedOpen(true);
             return;
           }
 
@@ -519,6 +553,16 @@ export default function OrderPage() {
             </button>
           </div>
         </div>
+
+        {/* Add-to-bill banner */}
+        {isAddToBill && (
+          <div className="mx-4 mb-3 px-4 py-2.5 rounded-xl bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 shrink-0 flex items-center gap-2">
+            <span className="text-blue-600 dark:text-blue-400 font-bold text-sm">Current bill:</span>
+            <span className="text-sm text-blue-700 dark:text-blue-300">
+              KSh {billOrderTotal.toLocaleString()}
+            </span>
+          </div>
+        )}
 
         {/* Items area — scrolls internally */}
         <div className="flex-1 overflow-y-auto min-h-0 px-4 pb-4">
@@ -724,7 +768,7 @@ export default function OrderPage() {
                 <ShoppingCart className="h-4.5 w-4.5 text-primary" />
               </div>
               <div>
-                <h2 className="font-bold text-sm leading-none">Current Order</h2>
+                <h2 className="font-bold text-sm leading-none">{isAddToBill ? 'Adding to Bill' : 'Current Order'}</h2>
                 {cartItemCount > 0 && (
                   <p className="text-xs text-muted-foreground mt-0.5">{cartItemCount} item{cartItemCount !== 1 ? 's' : ''}</p>
                 )}
@@ -857,7 +901,7 @@ export default function OrderPage() {
           <div className="p-5 pt-3 space-y-2">
             <Button
               onClick={handlePlaceOrder}
-              disabled={cart.length === 0 || createOrder.isPending}
+              disabled={cart.length === 0 || createOrder.isPending || addOrderLines.isPending}
               className={cn(
                 'w-full min-h-14 text-base font-bold rounded-2xl gap-2.5 transition-all',
                 cart.length > 0
@@ -865,8 +909,10 @@ export default function OrderPage() {
                   : 'opacity-50 cursor-not-allowed'
               )}
             >
-              {createOrder.isPending ? (
+              {(createOrder.isPending || addOrderLines.isPending) ? (
                 <Loader2 className="h-5 w-5 animate-spin" />
+              ) : isAddToBill ? (
+                <ChefHat className="h-5 w-5" />
               ) : orderSubtype === 'dine_in' ? (
                 <ChefHat className="h-5 w-5" />
               ) : (
@@ -874,9 +920,11 @@ export default function OrderPage() {
               )}
               {cart.length === 0
                 ? 'Add items to pay'
-                : orderSubtype === 'dine_in'
-                  ? 'Send to Kitchen'
-                  : `Pay · KES ${total.toLocaleString()}`}
+                : isAddToBill
+                  ? 'Add to Bill →'
+                  : orderSubtype === 'dine_in'
+                    ? 'Send to Kitchen'
+                    : `Pay · KES ${total.toLocaleString()}`}
             </Button>
             {currentOrderId && can('pos.orders.void') && (
               <button
@@ -976,6 +1024,15 @@ export default function OrderPage() {
           setReceiptOpen(false);
           setReceiptData(null);
         }}
+      />
+
+      <OrderPlacedDialog
+        open={orderPlacedOpen}
+        orderNumber={orderPlacedNumber}
+        orderId={orderPlacedId}
+        tenantId={user?.tenant_id ?? ''}
+        orgSlug={orgSlug}
+        onClose={() => setOrderPlacedOpen(false)}
       />
 
       {/* Age Verification */}

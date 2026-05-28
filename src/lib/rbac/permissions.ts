@@ -190,11 +190,12 @@ export const ROLE_PERMISSIONS: Record<string, Permission[]> = {
   waiter: [
     P.ORDERS_ADD, P.ORDERS_VIEW_OWN, P.ORDERS_CHANGE_OWN,
     P.CATALOG_VIEW,
-    P.TABLES_VIEW, P.TABLES_CHANGE_OWN,
+    P.TABLES_VIEW, P.TABLES_CHANGE_OWN, P.TABLES_MANAGE,
     P.SESSIONS_ADD, P.SESSIONS_VIEW_OWN,
     P.MODIFIERS_VIEW,
     P.QUEUE_VIEW, P.QUEUE_CHANGE,
     P.CLIENTS_VIEW,
+    // TABLES_MANAGE enables merge, unmerge, transfer
     // No KDS — waiter manages tables, not the kitchen display
   ],
   kitchen: [
