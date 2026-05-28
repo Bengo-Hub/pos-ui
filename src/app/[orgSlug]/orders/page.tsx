@@ -2,7 +2,7 @@
 
 import { Badge, Button, Card, CardContent, CardHeader } from '@/components/ui/base';
 import { cn } from '@/lib/utils';
-import { useOrders } from '@/hooks/usePOS';
+import { useOrders, useReleaseTable } from '@/hooks/usePOS';
 import { usePermissions, P } from '@/hooks/usePermissions';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
@@ -51,6 +51,7 @@ export default function OrdersPage() {
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
   const [trackingOpen, setTrackingOpen] = useState(false);
   const [paymentOpen, setPaymentOpen] = useState(false);
+  const releaseTable = useReleaseTable();
 
   // Roles with only view_own should see their own orders; full view sees all.
   const viewOwnOnly = can(P.ORDERS_VIEW_OWN) && !can(P.ORDERS_VIEW);
@@ -361,10 +362,14 @@ export default function OrdersPage() {
           tenantSlug={orgSlug}
           isHospitality={isHospitality}
           onPaymentConfirmed={() => {
+            const tableId = selectedOrder?.table_id;
             setPaymentOpen(false);
             setSelectedOrder(null);
             queryClient.invalidateQueries({ queryKey: ['pos-orders'] });
             queryClient.invalidateQueries({ queryKey: ['dashboard-recent-orders'] });
+            if (tableId) {
+              releaseTable.mutate(tableId);
+            }
           }}
         />
       )}

@@ -184,7 +184,7 @@ export default function OrderPage() {
   const { data: serverCategories } = useCategories();
   const categories = useMemo(() => {
     if (serverCategories && serverCategories.length > 0) {
-      return ['All', ...serverCategories];
+      return ['All', ...serverCategories.map((c: any) => (typeof c === 'string' ? c : c.name))];
     }
     const cats = new Set(menuItems.map((i) => i.category));
     return ['All', ...Array.from(cats).sort()];
