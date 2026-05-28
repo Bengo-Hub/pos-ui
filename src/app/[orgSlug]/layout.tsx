@@ -16,6 +16,8 @@ import { useSyncOfflineOrders } from '@/hooks/use-sync-offline-orders';
 import { useEffect } from 'react';
 import { registerBackgroundSync } from '@/lib/sw/register-sync';
 import { usePathname, useParams } from 'next/navigation';
+import { useNotificationStream } from '@/hooks/use-notification-stream';
+import { useAuthStore } from '@/store/auth';
 
 function ManifestInjector() {
   const params = useParams();
@@ -39,6 +41,14 @@ function ManifestInjector() {
 function OfflineSyncWorker() {
   useSyncOfflineOrders();
   useEffect(() => { registerBackgroundSync(); }, []);
+  return null;
+}
+
+function NotificationListener() {
+  const user = useAuthStore((s) => s.user);
+  const tenantID = (user as any)?.tenant_id ?? '';
+  const userID = (user as any)?.staff_id ?? (user as any)?.id ?? '';
+  useNotificationStream({ tenantID, userID });
   return null;
 }
 
@@ -75,6 +85,7 @@ export default function OrgLayout({ children }: { children: ReactNode }) {
           <PWAUpdateBanner />
           <OfflineBanner />
           <OfflineSyncWorker />
+          <NotificationListener />
           <PWARegistration />
 
           {kiosk ? (

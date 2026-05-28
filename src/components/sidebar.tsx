@@ -202,6 +202,11 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
   const userRoles = user?.roles ?? [];
   const isHQUser = isPlatformOwner || userRoles.some((r) => ['admin', 'pos_admin', 'manager', 'store_manager', 'superuser', 'super_admin'].includes(r));
 
+  const outlet = useAuthStore((s) => s.outlet);
+  const outletUseCase = (outlet?.use_case ?? (user as any)?.outlet_use_case ?? '').toLowerCase();
+  const isServices = outletUseCase === 'services';
+  const isPharmacy = outletUseCase === 'pharmacy';
+
   // ── Nav groups ────────────────────────────────────────────────────────────
 
   const navGroups: NavGroup[] = [
@@ -299,13 +304,23 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
   const visibleGroups = navGroups
     .map((group) => ({
       ...group,
-      items: group.items.filter((item) => {
-        if (!hasModule(item.moduleKey)) return false;
-        if (!item.permission) return true;
-        if (isSuperuser || isSuperUser) return true;
-        const perms = Array.isArray(item.permission) ? item.permission : [item.permission];
-        return canAny(perms);
-      }),
+      items: group.items
+        .filter((item) => {
+          if (!hasModule(item.moduleKey)) return false;
+          // Services outlets: hide order-entry items (they use Appointments/Queue instead)
+          if (isServices && ['new_order', 'orders'].includes(item.moduleKey)) return false;
+          if (!item.permission) return true;
+          if (isSuperuser || isSuperUser) return true;
+          const perms = Array.isArray(item.permission) ? item.permission : [item.permission];
+          return canAny(perms);
+        })
+        .map((item) => {
+          // Pharmacy outlets: rename "New Order" to "Walk-In Sale"
+          if (isPharmacy && item.moduleKey === 'new_order') {
+            return { ...item, label: 'Walk-In Sale' };
+          }
+          return item;
+        }),
     }))
     .filter((g) => g.items.length > 0);
 

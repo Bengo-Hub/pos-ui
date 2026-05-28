@@ -51,6 +51,21 @@ export function useUpdateShiftSettings() {
   });
 }
 
+export function useUpdateTableSettings() {
+  const tenantID = useTenantID();
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: { table_max_occupation_minutes?: number }) =>
+      posSettingsApi.patchTables(tenantID, input),
+    onSuccess: (data) => {
+      qc.setQueryData(['pos-settings', tenantID], data);
+      toast.success('Table settings saved');
+    },
+    onError: () => toast.error('Failed to save table settings'),
+  });
+}
+
 export function useUpdatePOSModules() {
   const tenantID = useTenantID();
   const qc = useQueryClient();

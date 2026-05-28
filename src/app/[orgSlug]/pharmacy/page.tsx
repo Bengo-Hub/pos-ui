@@ -5,12 +5,13 @@ import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
 
 import { cn } from '@/lib/utils';
 import { usePrescriptions, useDispensePrescription, useCreatePrescription } from '@/hooks/usePharmacy';
+import { useMenuItems, type CatalogItem } from '@/hooks/usePOS';
 import { useAuthStore } from '@/store/auth';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Loader2, Pill, Plus, Eye, Trash2, X } from 'lucide-react';
+import { ChevronDown, Loader2, Pill, Plus, Eye, ShoppingCart, Trash2, X } from 'lucide-react';
 import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useFieldArray, useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import { z } from 'zod';
@@ -38,6 +39,104 @@ function StatusBadge({ status }: { status: Prescription['status'] }) {
     >
       {STATUS_LABELS[status]}
     </span>
+  );
+}
+
+// ─── Drug search combobox ─────────────────────────────────────────────────────
+
+function DrugSearchCombobox({
+  selectedName,
+  onSelect,
+}: {
+  selectedName: string;
+  onSelect: (item: CatalogItem) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const ref = useRef<HTMLDivElement>(null);
+
+  const { data: catalog, isFetching } = useMenuItems({ category: 'pharmaceutical', search, limit: 30 });
+  const items = catalog?.data ?? [];
+
+  const handleSelect = useCallback(
+    (item: CatalogItem) => {
+      onSelect(item);
+      setOpen(false);
+      setSearch('');
+    },
+    [onSelect],
+  );
+
+  useEffect(() => {
+    function onClickOutside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    if (open) document.addEventListener('mousedown', onClickOutside);
+    return () => document.removeEventListener('mousedown', onClickOutside);
+  }, [open]);
+
+  const inputCls =
+    'w-full bg-background border border-border rounded-xl py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40';
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className={cn(
+          inputCls,
+          'flex items-center justify-between text-left cursor-pointer',
+          !selectedName && 'text-muted-foreground',
+        )}
+      >
+        <span className="truncate">{selectedName || 'Search drugs…'}</span>
+        <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground ml-2" />
+      </button>
+
+      {open && (
+        <div className="absolute z-50 mt-1 w-full rounded-xl border border-border bg-card shadow-xl overflow-hidden">
+          <div className="p-2 border-b border-border">
+            <input
+              autoFocus
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Type to search…"
+              className="w-full bg-background border border-border rounded-lg py-1.5 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+            />
+          </div>
+          <div className="max-h-52 overflow-y-auto">
+            {isFetching ? (
+              <div className="flex items-center justify-center py-6 gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Searching…
+              </div>
+            ) : items.length === 0 ? (
+              <p className="text-center text-sm text-muted-foreground py-6">No drugs found</p>
+            ) : (
+              items.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => handleSelect(item)}
+                  className="w-full flex items-center justify-between px-3 py-2.5 text-sm hover:bg-accent transition-colors text-left"
+                >
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium truncate">{item.name}</p>
+                    <p className="text-xs text-muted-foreground">{item.sku}</p>
+                  </div>
+                  {item.price !== undefined && (
+                    <span className="text-xs font-semibold text-muted-foreground ml-3 shrink-0">
+                      {item.price.toFixed(2)}
+                    </span>
+                  )}
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -78,6 +177,8 @@ function NewPrescriptionModal({ onClose }: { onClose: () => void }) {
     register,
     handleSubmit,
     control,
+    setValue,
+    watch,
     formState: { errors, isSubmitting },
   } = useForm<PrescriptionFormValues>({
     resolver: zodResolver(prescriptionSchema),
@@ -85,6 +186,8 @@ function NewPrescriptionModal({ onClose }: { onClose: () => void }) {
       lines: [{ drug_name: '', dosage: '', form: '', instructions: '', quantity_prescribed: 1 }],
     },
   });
+
+  const watchedLines = watch('lines');
 
   const { fields, append, remove } = useFieldArray({ control, name: 'lines' });
 
@@ -207,7 +310,7 @@ function NewPrescriptionModal({ onClose }: { onClose: () => void }) {
                 <h4 className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Drug Lines</h4>
                 <button
                   type="button"
-                  onClick={() => append({ drug_name: '', dosage: '', form: '', instructions: '', quantity_prescribed: 1 })}
+                  onClick={() => append({ drug_name: '', dosage: '', form: '', instructions: '', quantity_prescribed: 1, catalog_item_id: '', unit_price: undefined })}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-primary/30 text-primary text-xs font-semibold hover:bg-primary/5 transition-colors"
                 >
                   <Plus className="h-3.5 w-3.5" />
@@ -233,8 +336,19 @@ function NewPrescriptionModal({ onClose }: { onClose: () => void }) {
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
-                      <label className={labelCls}>Drug Name <span className="text-destructive">*</span></label>
-                      <input {...register(`lines.${idx}.drug_name`)} placeholder="e.g. Amoxicillin" className={inputCls} />
+                      <label className={labelCls}>Drug <span className="text-destructive">*</span></label>
+                      <DrugSearchCombobox
+                        selectedName={watchedLines?.[idx]?.drug_name ?? ''}
+                        onSelect={(item) => {
+                          setValue(`lines.${idx}.drug_name`, item.name, { shouldValidate: true });
+                          setValue(`lines.${idx}.catalog_item_id`, item.id);
+                          if (item.price !== undefined) {
+                            setValue(`lines.${idx}.unit_price`, item.price);
+                          }
+                        }}
+                      />
+                      {/* hidden field keeps RHF validation working */}
+                      <input type="hidden" {...register(`lines.${idx}.drug_name`)} />
                       {errors.lines?.[idx]?.drug_name && <p className={errorCls}>{errors.lines[idx]?.drug_name?.message}</p>}
                     </div>
                     <div>
@@ -339,13 +453,22 @@ function PharmacyPage() {
             <p className="text-sm text-muted-foreground mt-0.5">Manage prescriptions and dispensing</p>
           </div>
         </div>
-        <button
-          onClick={() => setCreateOpen(true)}
-          className="inline-flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-primary/90 transition-colors"
-        >
-          <Plus className="h-4 w-4" />
-          New Prescription
-        </button>
+        <div className="flex items-center gap-2">
+          <Link
+            href={`/${orgSlug}/order`}
+            className="inline-flex items-center gap-2 border border-border bg-background text-foreground px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-accent transition-colors"
+          >
+            <ShoppingCart className="h-4 w-4" />
+            Walk-In Sale
+          </Link>
+          <button
+            onClick={() => setCreateOpen(true)}
+            className="inline-flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-primary/90 transition-colors"
+          >
+            <Plus className="h-4 w-4" />
+            Fill Prescription
+          </button>
+        </div>
       </div>
 
       <div className="flex flex-wrap gap-3 mb-5">
@@ -379,7 +502,7 @@ function PharmacyPage() {
           <Pill className="h-10 w-10 opacity-30" />
           <p className="font-medium">No prescriptions found</p>
           <button onClick={() => setCreateOpen(true)} className="text-sm text-primary underline">
-            Create one
+            Fill a prescription
           </button>
         </div>
       ) : (

@@ -291,7 +291,7 @@ export const useAuthStore = create<AuthState>()(
           try { localStorage.removeItem('tenantId'); } catch { /* no-op */ }
           try { localStorage.removeItem('tenantSlug'); } catch { /* no-op */ }
           try { localStorage.removeItem('pos-auth-storage'); } catch { /* no-op */ }
-          try { localStorage.removeItem(POS_SELECTED_OUTLET_KEY); } catch { /* no-op */ }
+          // Intentionally retain POS_SELECTED_OUTLET_KEY so pin-login auto-selects the last outlet.
           try { sessionStorage.clear(); } catch { /* no-op */ }
           // Always redirect to PIN login so staff re-authenticate locally.
           // No need to invalidate SSO sessions — pos-api HMAC and SSO tokens are both short-lived.

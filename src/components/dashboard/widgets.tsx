@@ -7,8 +7,10 @@ import { useQuery } from '@tanstack/react-query';
 import {
   ArrowRight,
   ClipboardList,
+  Clock,
   ShoppingBag,
   TrendingUp,
+  UtensilsCrossed,
 } from 'lucide-react';
 import Link from 'next/link';
 import React from 'react';
@@ -126,15 +128,49 @@ export function KPICard({
   );
 }
 
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function timeAgo(dateStr: string): string {
+  const diff = Math.floor((Date.now() - new Date(dateStr).getTime()) / 60_000);
+  if (diff < 1) return 'just now';
+  if (diff < 60) return `${diff} min ago`;
+  return `${Math.floor(diff / 60)}h ago`;
+}
+
+const subtypeLabels: Record<string, string> = {
+  dine_in: 'Dine-in',
+  takeaway: 'Takeaway',
+  delivery: 'Delivery',
+  room_service: 'Room Svc',
+  bar_tab: 'Bar Tab',
+  walk_in: 'Walk-in',
+};
+
+function statusVariantClass(status: string) {
+  if (status === 'pending_payment') return 'bg-amber-100 text-amber-700';
+  if (status === 'completed') return 'bg-emerald-100 text-emerald-700';
+  if (status === 'cancelled') return 'bg-red-100 text-red-700';
+  return 'bg-blue-100 text-blue-700';
+}
+
+function statusLabel(status: string) {
+  if (status === 'pending_payment') return 'Ready';
+  return status.charAt(0).toUpperCase() + status.slice(1);
+}
+
 // ── Recent orders mini-list ───────────────────────────────────────────────────
 
 export function RecentOrdersCard({ orgSlug }: { orgSlug: string }) {
   const tenantID = useTenantID();
   const { data, isLoading } = useQuery({
     queryKey: ['dashboard-recent-orders', tenantID],
-    queryFn: () => apiClient.get<{ data: any[] }>(`/api/v1/${tenantID}/pos/orders`, { limit: 5, status: 'open' }),
+    queryFn: () =>
+      apiClient.get<{ data: any[] }>(`/api/v1/${tenantID}/pos/orders`, {
+        limit: 8,
+        status: 'open,pending_payment',
+      }),
     enabled: !!tenantID,
-    refetchInterval: 30_000,
+    refetchInterval: 15_000,
   });
   const orders = data?.data ?? [];
 
@@ -151,7 +187,7 @@ export function RecentOrdersCard({ orgSlug }: { orgSlug: string }) {
       </div>
       {isLoading ? (
         <div className="p-5 space-y-3">
-          {[1, 2, 3].map((i) => <div key={i} className="h-12 bg-muted rounded-xl animate-pulse" />)}
+          {[1, 2, 3].map((i) => <div key={i} className="h-16 bg-muted rounded-xl animate-pulse" />)}
         </div>
       ) : orders.length === 0 ? (
         <div className="p-8 text-center">
@@ -160,23 +196,65 @@ export function RecentOrdersCard({ orgSlug }: { orgSlug: string }) {
         </div>
       ) : (
         <div className="divide-y divide-border">
-          {orders.map((order: any) => (
-            <Link key={order.id} href={`/${orgSlug}/orders`} className="flex items-center gap-4 px-5 py-3.5 hover:bg-accent/50 transition-colors">
-              <div className="h-8 w-8 rounded-lg bg-primary/8 flex items-center justify-center shrink-0">
-                <span className="text-xs font-bold text-primary">#{order.order_number ?? order.id?.slice(-3)}</span>
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-foreground truncate">
-                  {order.order_type === 'dine_in' ? `Table ${order.table_number ?? '—'}` : order.order_type ?? 'Order'}
-                </p>
-                <p className="text-xs text-muted-foreground">{order.items_count ?? 0} items</p>
-              </div>
-              <div className="text-right shrink-0">
-                <p className="text-sm font-semibold text-foreground tabular-nums">{fmt(order.total_amount ?? 0)}</p>
-                <p className="text-xs text-muted-foreground capitalize">{order.status}</p>
-              </div>
-            </Link>
-          ))}
+          {orders.map((order: any) => {
+            const subtype = order.order_subtype ?? order.order_type;
+            const lineCount = order.edges?.lines?.length ?? order.items_count ?? 0;
+            const tableRef = order.table_reference ?? order.table_name ?? order.edges?.table?.name;
+            return (
+              <Link
+                key={order.id}
+                href={`/${orgSlug}/orders?order_id=${order.id}`}
+                className="flex items-start gap-3 px-5 py-4 hover:bg-accent/50 transition-colors"
+              >
+                {/* Order number badge */}
+                <div className="h-9 w-9 rounded-lg bg-primary/8 flex items-center justify-center shrink-0 mt-0.5">
+                  <UtensilsCrossed className="h-4 w-4 text-primary" />
+                </div>
+
+                <div className="flex-1 min-w-0 space-y-1">
+                  {/* Row 1: order number + pills */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs font-bold font-mono text-foreground">
+                      #{order.order_number ?? order.id?.slice(-6)}
+                    </span>
+                    {subtype && (
+                      <span className="text-[10px] font-semibold bg-secondary/60 text-secondary-foreground px-1.5 py-0.5 rounded">
+                        {subtypeLabels[subtype] ?? subtype}
+                      </span>
+                    )}
+                    {tableRef && (
+                      <span className="text-[10px] font-semibold bg-accent text-accent-foreground px-1.5 py-0.5 rounded">
+                        {tableRef}
+                      </span>
+                    )}
+                  </div>
+                  {/* Row 2: item count + time */}
+                  <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                    <span>{lineCount} item{lineCount !== 1 ? 's' : ''}</span>
+                    {order.created_at && (
+                      <span className="flex items-center gap-0.5">
+                        <Clock className="h-3 w-3" />
+                        {timeAgo(order.created_at)}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Right: total + status */}
+                <div className="text-right shrink-0 space-y-1">
+                  <p className="text-sm font-bold tabular-nums text-foreground">
+                    {fmt(order.total_amount ?? 0)}
+                  </p>
+                  <span className={cn(
+                    'text-[10px] font-semibold px-1.5 py-0.5 rounded',
+                    statusVariantClass(order.status)
+                  )}>
+                    {statusLabel(order.status)}
+                  </span>
+                </div>
+              </Link>
+            );
+          })}
         </div>
       )}
     </div>

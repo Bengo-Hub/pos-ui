@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuthStore } from '@/store/auth';
 import {
   useSections,
@@ -16,9 +16,10 @@ import {
 } from '@/hooks/usePOS';
 import { usePermissions } from '@/hooks/usePermissions';
 import { P } from '@/lib/rbac/permissions';
+import { usePOSSettings, useUpdateTableSettings } from '@/hooks/usePOSSettings';
 import { Card, CardContent } from '@/components/ui/base';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
-import { LayoutGrid, Loader2, Map, Pencil, Plus, Trash2, X, Check } from 'lucide-react';
+import { LayoutGrid, Loader2, Map, Pencil, Plus, Trash2, X, Check, Clock } from 'lucide-react';
 import { toast } from 'sonner';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -61,6 +62,66 @@ interface EditState {
   name: string;
   capacity: number;
   sectionId: string;
+}
+
+function TableAgingSettings({ canEdit }: { canEdit: boolean }) {
+  const { data: settings } = usePOSSettings();
+  const updateTables = useUpdateTableSettings();
+  const [mins, setMins] = useState<string>('');
+
+  useEffect(() => {
+    if (settings?.table_max_occupation_minutes !== undefined) {
+      setMins(String(settings.table_max_occupation_minutes));
+    }
+  }, [settings?.table_max_occupation_minutes]);
+
+  async function handleSave() {
+    const val = parseInt(mins) || 0;
+    try {
+      await updateTables.mutateAsync({ table_max_occupation_minutes: val });
+    } catch {
+      // toast handled by hook
+    }
+  }
+
+  return (
+    <Card className="mb-4">
+      <CardContent className="p-4">
+        <div className="flex items-center gap-2 mb-3">
+          <Clock className="h-4 w-4 text-primary" />
+          <p className="text-sm font-semibold">Table Aging</p>
+        </div>
+        <div className="flex items-end gap-3">
+          <div className="flex-1">
+            <label className={labelCls}>Max Occupation Time (minutes, 0 = disabled)</label>
+            <input
+              type="number"
+              min={0}
+              max={1440}
+              value={mins}
+              disabled={!canEdit}
+              onChange={(e) => setMins(e.target.value)}
+              placeholder="240"
+              className={inputCls}
+            />
+            <p className="text-[11px] text-muted-foreground mt-1">
+              Tables occupied beyond this time show an aging badge (green → amber → red). 0 disables it.
+            </p>
+          </div>
+          {canEdit && (
+            <button
+              onClick={handleSave}
+              disabled={updateTables.isPending}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 disabled:opacity-50 whitespace-nowrap"
+            >
+              {updateTables.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+              Save
+            </button>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
 }
 
 export function TablesSettingsTab() {
@@ -312,7 +373,10 @@ export function TablesSettingsTab() {
   const hasDirty = Object.values(positions).some((p) => p.dirty);
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+    <div className="space-y-4">
+      <TableAgingSettings canEdit={canEdit} />
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
 
       {/* ── Sections panel ──────────────────────────────────────────────── */}
       <div className="md:col-span-1 space-y-2">
@@ -756,6 +820,7 @@ export function TablesSettingsTab() {
         loading={deleteTable.isPending}
         onConfirm={doDeleteTable}
       />
+      </div>
     </div>
   );
 }

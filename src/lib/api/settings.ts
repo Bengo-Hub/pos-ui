@@ -36,6 +36,7 @@ export interface POSSettings {
   shift_reports_enabled: boolean;
   shift_auto_end_enabled: boolean;
   shift_max_hours: number;
+  table_max_occupation_minutes: number;
   updated_at: string;
 }
 
@@ -80,6 +81,9 @@ export const posSettingsApi = {
 
   patchShifts: (tenantID: string, body: { shift_auto_end_enabled?: boolean; shift_max_hours?: number }) =>
     apiClient.patch<POSSettings>(`${settingsBase(tenantID)}/shifts`, body),
+
+  patchTables: (tenantID: string, body: { table_max_occupation_minutes?: number }) =>
+    apiClient.patch<POSSettings>(`${settingsBase(tenantID)}/tables`, body),
 
   patchOutletConfig: (tenantID: string, body: { use_case?: string | null }) =>
     apiClient.patch<POSSettings>(`${settingsBase(tenantID)}/outlet`, body),

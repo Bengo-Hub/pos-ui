@@ -129,6 +129,7 @@ interface Table {
   x_position?: number;
   y_position?: number;
   tags?: string[];
+  occupied_since?: string;
   edges?: { section?: Section };
 }
 
@@ -405,14 +406,15 @@ export function useOrder(id: string) {
   });
 }
 
-export function useOrders(filters?: { status?: string; staffId?: string }) {
+export function useOrders(filters?: { status?: string; staffId?: string; limit?: number }) {
   const tenantID = useTenantID();
   return useQuery({
     queryKey: ['pos-orders', tenantID, filters],
     queryFn: () =>
-      apiClient.get<{ orders: POSOrder[]; total: number }>(`${basePath(tenantID)}/orders`, {
+      apiClient.get<{ data: POSOrder[]; total: number }>(`${basePath(tenantID)}/orders`, {
         status: filters?.status,
         staff_id: filters?.staffId,
+        limit: filters?.limit,
       }),
     enabled: !!tenantID,
     staleTime: 15_000,

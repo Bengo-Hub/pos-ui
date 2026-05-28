@@ -7,10 +7,12 @@ import { Badge, Button, Card, CardContent } from '@/components/ui/base';
 import { cn } from '@/lib/utils';
 import { useTables, useSections, useUpdateTableStatus, useReleaseTable, useReservations } from '@/hooks/usePOS';
 import { usePermissions, P } from '@/hooks/usePermissions';
+import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { format } from 'date-fns';
 import {
   Calendar,
   ClipboardList,
+  Clock,
   Grid3x3,
   Loader2,
   Plus,
@@ -19,6 +21,23 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
+
+function tableAgingClass(elapsedMinutes: number, maxMinutes: number): string {
+  if (maxMinutes <= 0) return '';
+  const ratio = elapsedMinutes / maxMinutes;
+  if (ratio >= 1) return 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400';
+  if (ratio >= 0.7) return 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400';
+  return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400';
+}
+
+function tableElapsedMinutes(occupiedSince: string): number {
+  return Math.floor((Date.now() - new Date(occupiedSince).getTime()) / 60_000);
+}
+
+function formatElapsed(minutes: number): string {
+  if (minutes < 60) return `${minutes}m`;
+  return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
+}
 
 // ─── Status config ─────────────────────────────────────────────────────────────
 
@@ -53,9 +72,10 @@ interface TableCardProps {
   onChangeStatus: (status: string) => void;
   releaseLoading: boolean;
   canChange: boolean;
+  maxOccupationMinutes?: number;
 }
 
-function TableCard({ table, orgSlug, onRelease, onChangeStatus, releaseLoading, canChange }: TableCardProps) {
+function TableCard({ table, orgSlug, onRelease, onChangeStatus, releaseLoading, canChange, maxOccupationMinutes = 0 }: TableCardProps) {
   const [sheetOpen, setSheetOpen] = useState(false);
   const router = useRouter();
   const cfg = getStatusCfg(table.status);
@@ -86,6 +106,23 @@ function TableCard({ table, orgSlug, onRelease, onChangeStatus, releaseLoading, 
         <span className={cn('text-[10px] px-2.5 py-1 rounded-full font-semibold capitalize', cfg.badge)}>
           {cfg.label}
         </span>
+
+        {/* Aging badge for occupied tables */}
+        {table.status === 'occupied' && table.occupied_since && (
+          (() => {
+            const elapsed = tableElapsedMinutes(table.occupied_since);
+            const agingCls = tableAgingClass(elapsed, maxOccupationMinutes);
+            return (
+              <span className={cn(
+                'flex items-center gap-0.5 text-[10px] font-semibold px-2 py-0.5 rounded-full mt-1.5',
+                agingCls || 'bg-muted text-muted-foreground'
+              )}>
+                <Clock className="h-2.5 w-2.5" />
+                {formatElapsed(elapsed)}
+              </span>
+            );
+          })()
+        )}
 
         {/* Tags */}
         {table.tags && table.tags.length > 0 && (
@@ -260,6 +297,7 @@ function SectionGroup({
   updateStatus,
   releaseTable,
   canChange,
+  maxOccupationMinutes = 0,
 }: {
   title: string;
   type?: string;
@@ -268,6 +306,7 @@ function SectionGroup({
   updateStatus: any;
   releaseTable: any;
   canChange: boolean;
+  maxOccupationMinutes?: number;
 }) {
   const counts = tables.reduce<Record<string, number>>((acc, t) => {
     acc[t.status] = (acc[t.status] || 0) + 1;
@@ -309,6 +348,7 @@ function SectionGroup({
             onChangeStatus={(status) => updateStatus.mutate({ tableId: table.id, status })}
             releaseLoading={releaseTable.isPending}
             canChange={canChange}
+            maxOccupationMinutes={maxOccupationMinutes}
           />
         ))}
       </div>
@@ -355,6 +395,8 @@ function TablesPage() {
     statusFilter !== 'all' ? { status: statusFilter } : undefined
   );
   const { data: sectionsData } = useSections();
+  const { data: posSettings } = usePOSSettings();
+  const maxOccupationMinutes = posSettings?.table_max_occupation_minutes ?? 0;
   const { data: reservationsData } = useReservations({ date: format(new Date(), 'yyyy-MM-dd') });
   const todayReservations = reservationsData?.data ?? [];
   const pendingCount = todayReservations.filter((r) => r.status === 'pending').length;
@@ -458,6 +500,7 @@ function TablesPage() {
                     updateStatus={updateStatus}
                     releaseTable={releaseTable}
                     canChange={canChange}
+                    maxOccupationMinutes={maxOccupationMinutes}
                   />
                 )
             )}
@@ -471,6 +514,7 @@ function TablesPage() {
                 updateStatus={updateStatus}
                 releaseTable={releaseTable}
                 canChange={canChange}
+                maxOccupationMinutes={maxOccupationMinutes}
               />
             )}
           </div>

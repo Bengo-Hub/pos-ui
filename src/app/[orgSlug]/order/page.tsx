@@ -16,7 +16,6 @@ import { apiClient } from '@/lib/api/client';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import {
   AlertTriangle,
-  Barcode,
   Ban,
   ChefHat,
   Flame,
@@ -134,8 +133,7 @@ export default function OrderPage() {
   // Age verification prompt
   const [agePrompt, setAgePrompt] = useState<{ item: MenuItem; callback: () => void } | null>(null);
 
-  // Barcode scanner
-  const barcodeInputRef = useRef<HTMLInputElement>(null);
+  // Barcode scanner buffer (global keydown listener — fires when no input focused)
   const [barcodeBuffer, setBarcodeBuffer] = useState('');
 
   // Reset to page 1 when search/category changes
@@ -250,11 +248,12 @@ export default function OrderPage() {
     [addItemToCart]
   );
 
-  // ─── Barcode Scanner ────────────────────────────────────────────────────
+  // ─── Barcode Scanner (global — only fires when no input is focused) ────────
 
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout>;
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Only active when focus is NOT on any input
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
       if (e.key === 'Enter' && barcodeBuffer.length >= 4) {
         const match = menuItems.find((m) => m.sku === barcodeBuffer);
@@ -280,6 +279,20 @@ export default function OrderPage() {
       clearTimeout(timer);
     };
   }, [barcodeBuffer, menuItems, handleItemTap]);
+
+  // Handle Enter in the search box to attempt barcode lookup
+  const handleSearchKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && searchQuery.length >= 4) {
+      // Attempt barcode match by SKU
+      const match = menuItems.find((m) => m.sku === searchQuery.trim());
+      if (match) {
+        handleItemTap(match);
+        handleSearchChange('');
+        toast.success(`Scanned: ${match.name}`);
+        e.preventDefault();
+      }
+    }
+  }, [searchQuery, menuItems, handleItemTap, handleSearchChange]);
 
   // ─── Cart Operations ────────────────────────────────────────────────────
 
@@ -439,6 +452,7 @@ export default function OrderPage() {
               className="w-full bg-card border border-border rounded-2xl py-3.5 pl-11 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 transition-all min-h-13 font-medium placeholder:text-muted-foreground/60"
               value={searchQuery}
               onChange={(e) => handleSearchChange(e.target.value)}
+              onKeyDown={handleSearchKeyDown}
             />
             {searchQuery && (
               <button
@@ -503,15 +517,7 @@ export default function OrderPage() {
             >
               <ImageIcon className="h-4 w-4" />
             </button>
-            <button
-              onClick={() => barcodeInputRef.current?.focus()}
-              className="p-2 rounded-lg text-muted-foreground hover:text-foreground transition-colors"
-              title="Barcode scan"
-            >
-              <Barcode className="h-4 w-4" />
-            </button>
           </div>
-          <input ref={barcodeInputRef} className="sr-only" aria-label="Barcode input" />
         </div>
 
         {/* Items area — scrolls internally */}

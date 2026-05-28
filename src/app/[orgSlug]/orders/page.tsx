@@ -25,7 +25,7 @@ export default function OrdersPage() {
   const { can, canAny } = usePermissions();
   const user = useAuthStore((s) => s.user);
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [statusFilter, setStatusFilter] = useState<string>('pending_payment');
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
   const [trackingOpen, setTrackingOpen] = useState(false);
 
@@ -40,7 +40,7 @@ export default function OrdersPage() {
     }), [statusFilter, staffId])
   );
 
-  const orders = ordersData?.orders ?? [];
+  const orders = ordersData?.data ?? [];
 
   const filtered = orders.filter((order: any) => {
     if (!searchQuery) return true;
@@ -93,15 +93,21 @@ export default function OrdersPage() {
             </div>
             <div className="flex items-center gap-2 flex-wrap">
               <Filter className="h-3.5 w-3.5 text-muted-foreground" />
-              {['all', 'completed', 'draft', 'pending', 'cancelled'].map((s) => (
+              {[
+                { value: 'pending_payment', label: 'Ready for Payment' },
+                { value: 'open', label: 'Open' },
+                { value: 'all', label: 'All' },
+                { value: 'completed', label: 'Completed' },
+                { value: 'cancelled', label: 'Cancelled' },
+              ].map(({ value, label }) => (
                 <button
-                  key={s}
-                  onClick={() => setStatusFilter(s)}
-                  className={cn("px-3 py-1 rounded-full text-xs font-bold capitalize transition-all",
-                    statusFilter === s ? "bg-primary text-primary-foreground" : "bg-accent/30 text-muted-foreground hover:text-foreground"
+                  key={value}
+                  onClick={() => setStatusFilter(value)}
+                  className={cn("px-3 py-1 rounded-full text-xs font-bold transition-all",
+                    statusFilter === value ? "bg-primary text-primary-foreground" : "bg-accent/30 text-muted-foreground hover:text-foreground"
                   )}
                 >
-                  {s}
+                  {label}
                 </button>
               ))}
             </div>
@@ -140,10 +146,10 @@ export default function OrdersPage() {
                         <td className="px-6 py-4 text-center">
                           <Badge variant={
                             order.status === 'completed' ? 'success' :
-                              order.status === 'draft' ? 'warning' :
+                              order.status === 'pending_payment' ? 'warning' :
                                 order.status === 'cancelled' ? 'error' : 'default'
                           }>
-                            {order.status}
+                            {order.status === 'pending_payment' ? 'Ready for Payment' : order.status}
                           </Badge>
                         </td>
                         <td className="px-6 py-4 text-right text-xs text-muted-foreground">{formatTime(order.created_at)}</td>
@@ -181,12 +187,12 @@ export default function OrdersPage() {
                 <Badge
                   variant={
                     selectedOrder.status === 'completed' ? 'success' :
-                      selectedOrder.status === 'draft' ? 'warning' :
+                      selectedOrder.status === 'pending_payment' ? 'warning' :
                         selectedOrder.status === 'cancelled' ? 'error' : 'default'
                   }
                   className="mt-1"
                 >
-                  {selectedOrder.status}
+                  {selectedOrder.status === 'pending_payment' ? 'Ready for Payment' : selectedOrder.status}
                 </Badge>
               </div>
               <Button
