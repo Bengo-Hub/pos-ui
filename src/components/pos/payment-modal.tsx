@@ -13,9 +13,11 @@ import {
   Minus,
   Plus,
   Smartphone,
+  Wallet,
   WifiOff,
   X,
   XCircle,
+  Zap,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
@@ -42,7 +44,6 @@ export interface POSPaymentModalProps {
 
 type ModalStep =
   | 'select'
-  | 'mpesa_choice'
   | 'cash'
   | 'manual'
   | 'treasury'
@@ -222,7 +223,8 @@ export function POSPaymentModal({
   const change = (parseFloat(cashTendered) || 0) - activeAmount;
 
   const filteredRooms = occupiedRooms.filter((r) =>
-    !roomSearch || r.room_number.toLowerCase().includes(roomSearch.toLowerCase()) ||
+    !roomSearch ||
+    r.room_number.toLowerCase().includes(roomSearch.toLowerCase()) ||
     (r.edges?.guests?.[0]?.guest_name ?? '').toLowerCase().includes(roomSearch.toLowerCase())
   );
 
@@ -255,7 +257,7 @@ export function POSPaymentModal({
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
         <div className="bg-card rounded-2xl w-full max-w-md max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
 
-          {/* ── Purple amount banner ───────────────────────────────────── */}
+          {/* ── Purple amount banner ─────────────────────────────────── */}
           <div className="relative bg-gradient-to-br from-violet-600 to-purple-700 px-6 pt-6 pb-5">
             <button
               onClick={onClose}
@@ -264,9 +266,9 @@ export function POSPaymentModal({
               <X className="h-4 w-4 text-white" />
             </button>
             <p className="text-white/70 text-xs font-semibold uppercase tracking-widest mb-1">
-              {step === 'select' || step === 'mpesa_choice' ? 'Settle Bill' :
+              {step === 'select' ? 'Settle Bill' :
                step === 'cash' ? 'Cash Payment' :
-               step === 'manual' ? 'M-Pesa Manual' :
+               step === 'manual' ? 'M-Pesa Reference' :
                step === 'room_select' || step === 'room_confirm' ? 'Room Charge' :
                step === 'confirmed' ? 'Payment Successful' :
                step === 'offline_queued' ? 'Payment Queued' :
@@ -283,9 +285,10 @@ export function POSPaymentModal({
 
           <div className="flex-1 overflow-y-auto">
 
-            {/* ── Method selection ──────────────────────────────────────── */}
+            {/* ── Method selection ─────────────────────────────────────── */}
             {step === 'select' && (
               <div className="p-5 space-y-4">
+
                 {/* Pay mode tabs */}
                 <div className="flex gap-1 bg-accent/30 rounded-xl p-1">
                   {(['full', 'split'] as PayMode[]).map((mode) => (
@@ -294,7 +297,9 @@ export function POSPaymentModal({
                       onClick={() => setPayMode(mode)}
                       className={cn(
                         'flex-1 py-2 rounded-lg text-xs font-bold transition-all',
-                        payMode === mode ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground'
+                        payMode === mode
+                          ? 'bg-background shadow-sm text-foreground'
+                          : 'text-muted-foreground'
                       )}
                     >
                       {mode === 'full' ? 'Full' : 'Split Equal'}
@@ -327,105 +332,102 @@ export function POSPaymentModal({
                   </div>
                 )}
 
-                {/* Payment method tiles */}
-                <div className="grid grid-cols-2 gap-3">
-                  {/* Cash */}
-                  <PayTile
-                    icon={<Banknote className="h-7 w-7" />}
-                    color="text-emerald-600"
-                    bg="bg-emerald-500/10"
-                    label="Cash"
-                    sub={isOnline ? 'Accept cash' : 'Offline mode'}
-                    disabled={false}
-                    loading={false}
-                    onClick={() => { setCashTendered(String(activeAmount)); setStep('cash'); }}
-                  />
-
-                  {/* M-Pesa */}
-                  {gateways?.mpesa && (
+                {/* ── Always-available methods ─────────────────────────── */}
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">
+                    Always available
+                  </p>
+                  <div className="grid grid-cols-2 gap-3">
                     <PayTile
-                      icon={<Smartphone className="h-7 w-7" />}
-                      color="text-green-600"
-                      bg="bg-green-500/10"
-                      label="M-Pesa"
-                      sub={isOnline ? 'STK or code' : 'Enter code'}
+                      icon={<Banknote className="h-7 w-7" />}
+                      color="text-emerald-600"
+                      bg="bg-emerald-500/10"
+                      label="Cash"
+                      sub="Accept cash"
                       disabled={false}
-                      loading={createIntent.isPending}
-                      onClick={() => isOnline ? setStep('mpesa_choice') : setStep('manual')}
-                    />
-                  )}
-
-                  {/* Card */}
-                  {gateways?.paystack && (
-                    <PayTile
-                      icon={<CreditCard className="h-7 w-7" />}
-                      color="text-blue-600"
-                      bg="bg-blue-500/10"
-                      label="Card"
-                      sub={isOnline ? 'Debit / credit' : 'Requires internet'}
-                      disabled={!isOnline}
-                      loading={createIntent.isPending}
-                      offlineBadge={!isOnline}
-                      onClick={() => handleDigital('card')}
-                    />
-                  )}
-
-                  {/* Room Charge */}
-                  {isHospitality && (
-                    <PayTile
-                      icon={<Building2 className="h-7 w-7" />}
-                      color="text-indigo-600"
-                      bg="bg-indigo-500/10"
-                      label="Room"
-                      sub={isOnline ? 'Charge to room' : 'Requires internet'}
-                      disabled={!isOnline}
                       loading={false}
-                      offlineBadge={!isOnline}
-                      onClick={() => setStep('room_select')}
+                      onClick={() => { setCashTendered(String(activeAmount)); setStep('cash'); }}
                     />
-                  )}
+                    <PayTile
+                      icon={<Hash className="h-7 w-7" />}
+                      color="text-yellow-600"
+                      bg="bg-yellow-500/10"
+                      label="M-Pesa Code"
+                      sub="Enter ref code"
+                      disabled={false}
+                      loading={false}
+                      onClick={() => setStep('manual')}
+                    />
+                    {isHospitality && (
+                      <PayTile
+                        icon={<Building2 className="h-7 w-7" />}
+                        color="text-indigo-600"
+                        bg="bg-indigo-500/10"
+                        label="Room"
+                        sub="Charge to room"
+                        disabled={!isOnline}
+                        loading={false}
+                        offlineBadge={!isOnline}
+                        onClick={() => setStep('room_select')}
+                      />
+                    )}
+                  </div>
                 </div>
+
+                {/* ── Online gateways (treasury-synced) ────────────────── */}
+                {isOnline && (gateways?.mpesa || gateways?.paystack || gateways?.wallet) && (
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2 flex items-center gap-1.5">
+                      <Zap className="h-3 w-3 text-primary" />
+                      Online payments
+                    </p>
+                    <div className="grid grid-cols-2 gap-3">
+                      {gateways?.mpesa && (
+                        <PayTile
+                          icon={<Smartphone className="h-7 w-7" />}
+                          color="text-green-600"
+                          bg="bg-green-500/10"
+                          label="M-Pesa STK"
+                          sub="Prompt to phone"
+                          disabled={false}
+                          loading={createIntent.isPending}
+                          onClick={() => handleDigital('mpesa')}
+                        />
+                      )}
+                      {gateways?.paystack && (
+                        <PayTile
+                          icon={<CreditCard className="h-7 w-7" />}
+                          color="text-blue-600"
+                          bg="bg-blue-500/10"
+                          label="Card"
+                          sub="Debit / credit"
+                          disabled={false}
+                          loading={createIntent.isPending}
+                          onClick={() => handleDigital('card')}
+                        />
+                      )}
+                      {gateways?.wallet && (
+                        <PayTile
+                          icon={<Wallet className="h-7 w-7" />}
+                          color="text-purple-600"
+                          bg="bg-purple-500/10"
+                          label="Wallet"
+                          sub="Airtel Money & more"
+                          disabled={false}
+                          loading={createIntent.isPending}
+                          onClick={() => handleDigital('wallet')}
+                        />
+                      )}
+                    </div>
+                  </div>
+                )}
 
                 {!isOnline && (
                   <div className="flex items-center gap-2 rounded-xl bg-amber-500/10 border border-amber-400/20 px-4 py-3 text-xs text-amber-700 dark:text-amber-400 font-medium">
                     <WifiOff className="h-4 w-4 shrink-0" />
-                    Offline — cash &amp; manual M-Pesa only. Digital methods available when reconnected.
+                    Offline — cash &amp; M-Pesa code entry available. Online gateways will appear when reconnected.
                   </div>
                 )}
-              </div>
-            )}
-
-            {/* ── M-Pesa sub-choice ─────────────────────────────────────── */}
-            {step === 'mpesa_choice' && (
-              <div className="p-5 space-y-3">
-                <button
-                  onClick={() => handleDigital('mpesa')}
-                  disabled={createIntent.isPending}
-                  className="w-full flex items-center gap-4 px-5 py-4 rounded-xl border-2 border-green-500/40 bg-green-500/5 hover:bg-green-500/10 transition-all disabled:opacity-50"
-                >
-                  <div className="h-10 w-10 rounded-lg bg-green-500/10 flex items-center justify-center shrink-0">
-                    {createIntent.isPending ? <Loader2 className="h-5 w-5 animate-spin text-green-600" /> : <Smartphone className="h-5 w-5 text-green-600" />}
-                  </div>
-                  <div className="text-left">
-                    <p className="font-bold text-sm">STK Push</p>
-                    <p className="text-xs text-muted-foreground">Prompt sent to customer phone</p>
-                  </div>
-                </button>
-                <button
-                  onClick={() => setStep('manual')}
-                  className="w-full flex items-center gap-4 px-5 py-4 rounded-xl border-2 border-border hover:border-yellow-500/40 hover:bg-yellow-500/5 transition-all"
-                >
-                  <div className="h-10 w-10 rounded-lg bg-yellow-500/10 flex items-center justify-center shrink-0">
-                    <Hash className="h-5 w-5 text-yellow-600" />
-                  </div>
-                  <div className="text-left">
-                    <p className="font-bold text-sm">Enter Code Manually</p>
-                    <p className="text-xs text-muted-foreground">Paybill or till number reference</p>
-                  </div>
-                </button>
-                <button onClick={() => setStep('select')} className="w-full py-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
-                  ← Back
-                </button>
               </div>
             )}
 
@@ -478,7 +480,9 @@ export function POSPaymentModal({
                   disabled={parseFloat(cashTendered) < activeAmount || createIntent.isPending}
                   className="w-full min-h-12 rounded-xl bg-primary text-primary-foreground font-bold flex items-center justify-center gap-2 disabled:opacity-40 hover:bg-primary/90 transition-colors"
                 >
-                  {createIntent.isPending ? <Loader2 className="h-5 w-5 animate-spin" /> : <CheckCircle2 className="h-5 w-5" />}
+                  {createIntent.isPending
+                    ? <Loader2 className="h-5 w-5 animate-spin" />
+                    : <CheckCircle2 className="h-5 w-5" />}
                   {isOnline ? 'Confirm Cash' : 'Save & Sync Later'}
                 </button>
                 <button onClick={() => setStep('select')} className="w-full py-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
@@ -487,16 +491,16 @@ export function POSPaymentModal({
               </div>
             )}
 
-            {/* ── Manual M-Pesa ─────────────────────────────────────────── */}
+            {/* ── M-Pesa reference (offline code entry) ─────────────────── */}
             {step === 'manual' && (
               <div className="p-5 space-y-4">
                 <p className="text-sm text-muted-foreground">
-                  Enter the M-Pesa transaction code from the customer&apos;s SMS after paying via paybill or till number.
+                  Enter the M-Pesa transaction code from the customer&apos;s SMS (paybill or till number payment).
                 </p>
                 {!isOnline && (
                   <div className="flex items-center gap-2 rounded-xl bg-amber-500/10 px-4 py-3 text-xs text-amber-700 dark:text-amber-400 font-medium">
                     <WifiOff className="h-4 w-4 shrink-0" />
-                    Offline — code verified when connection is restored.
+                    Offline — code saved locally and verified when connection is restored.
                   </div>
                 )}
                 <label className="block">
@@ -516,7 +520,9 @@ export function POSPaymentModal({
                   disabled={!manualRef.trim() || createIntent.isPending}
                   className="w-full min-h-12 rounded-xl bg-primary text-primary-foreground font-bold flex items-center justify-center gap-2 disabled:opacity-40 hover:bg-primary/90 transition-colors"
                 >
-                  {createIntent.isPending ? <Loader2 className="h-5 w-5 animate-spin" /> : <CheckCircle2 className="h-5 w-5" />}
+                  {createIntent.isPending
+                    ? <Loader2 className="h-5 w-5 animate-spin" />
+                    : <CheckCircle2 className="h-5 w-5" />}
                   {isOnline ? 'Confirm M-Pesa' : 'Record & Verify Later'}
                 </button>
                 <button onClick={() => setStep('select')} className="w-full py-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
@@ -529,18 +535,18 @@ export function POSPaymentModal({
             {step === 'room_select' && (
               <div className="p-5 space-y-3">
                 <p className="text-sm text-muted-foreground">Select the occupied room to post this bill to:</p>
-                <div className="relative">
-                  <input
-                    type="text"
-                    placeholder="Search room or guest name…"
-                    value={roomSearch}
-                    onChange={(e) => setRoomSearch(e.target.value)}
-                    className="w-full bg-accent/30 border-none rounded-xl py-2 px-4 text-sm focus:ring-1 focus:ring-primary transition-all"
-                    autoFocus
-                  />
-                </div>
+                <input
+                  type="text"
+                  placeholder="Search room or guest name…"
+                  value={roomSearch}
+                  onChange={(e) => setRoomSearch(e.target.value)}
+                  className="w-full bg-accent/30 border-none rounded-xl py-2 px-4 text-sm focus:ring-1 focus:ring-primary transition-all"
+                  autoFocus
+                />
                 {roomsLoading ? (
-                  <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-primary" /></div>
+                  <div className="flex justify-center py-8">
+                    <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                  </div>
                 ) : filteredRooms.length === 0 ? (
                   <p className="text-center py-8 text-sm text-muted-foreground">No occupied rooms found.</p>
                 ) : (
@@ -558,11 +564,13 @@ export function POSPaymentModal({
                           </div>
                           <div className="flex-1 min-w-0">
                             <p className="font-bold text-sm">Room {room.room_number}</p>
-                            <p className="text-xs text-muted-foreground truncate">{guest?.guest_name ?? room.room_type}</p>
+                            <p className="text-xs text-muted-foreground truncate">
+                              {guest?.guest_name ?? room.room_type}
+                            </p>
                           </div>
-                          <div className="text-right">
-                            <span className="text-xs bg-emerald-500/10 text-emerald-600 font-semibold px-2 py-0.5 rounded-full">Occupied</span>
-                          </div>
+                          <span className="text-xs bg-emerald-500/10 text-emerald-600 font-semibold px-2 py-0.5 rounded-full">
+                            Occupied
+                          </span>
                         </button>
                       );
                     })}
@@ -612,7 +620,9 @@ export function POSPaymentModal({
                   disabled={postRoomCharge.isPending}
                   className="w-full min-h-12 rounded-xl bg-indigo-600 text-white font-bold flex items-center justify-center gap-2 disabled:opacity-40 hover:bg-indigo-700 transition-colors"
                 >
-                  {postRoomCharge.isPending ? <Loader2 className="h-5 w-5 animate-spin" /> : <Building2 className="h-5 w-5" />}
+                  {postRoomCharge.isPending
+                    ? <Loader2 className="h-5 w-5 animate-spin" />
+                    : <Building2 className="h-5 w-5" />}
                   Post to Room {selectedRoom.room_number}
                 </button>
                 <button onClick={() => setStep('room_select')} className="w-full py-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
@@ -629,8 +639,13 @@ export function POSPaymentModal({
                 </div>
                 <h3 className="text-xl font-bold mb-1">Payment Successful</h3>
                 <p className="text-sm text-muted-foreground">Order {orderNumber} has been settled.</p>
-                <p className="text-2xl font-bold text-foreground mt-2 tabular-nums">KES {roundedTotal.toLocaleString()}</p>
-                <button onClick={onClose} className="mt-6 px-8 py-2.5 rounded-xl bg-primary text-primary-foreground font-bold hover:bg-primary/90 transition-colors">
+                <p className="text-2xl font-bold text-foreground mt-2 tabular-nums">
+                  KES {roundedTotal.toLocaleString()}
+                </p>
+                <button
+                  onClick={onClose}
+                  className="mt-6 px-8 py-2.5 rounded-xl bg-primary text-primary-foreground font-bold hover:bg-primary/90 transition-colors"
+                >
                   Done
                 </button>
               </div>
@@ -646,7 +661,10 @@ export function POSPaymentModal({
                 <p className="text-sm text-muted-foreground">
                   You are offline. Payment for {orderNumber} saved locally — syncs automatically when reconnected.
                 </p>
-                <button onClick={onClose} className="mt-6 px-8 py-2.5 rounded-xl bg-primary text-primary-foreground font-bold hover:bg-primary/90 transition-colors">
+                <button
+                  onClick={onClose}
+                  className="mt-6 px-8 py-2.5 rounded-xl bg-primary text-primary-foreground font-bold hover:bg-primary/90 transition-colors"
+                >
                   Done
                 </button>
               </div>
@@ -706,7 +724,9 @@ function PayTile({
       </div>
       <div className="text-center">
         <p className="font-bold text-sm">{label}</p>
-        <p className="text-[10px] text-muted-foreground">{offlineBadge ? 'Unavailable offline' : sub}</p>
+        <p className="text-[10px] text-muted-foreground">
+          {offlineBadge ? 'Requires internet' : sub}
+        </p>
       </div>
     </button>
   );
