@@ -7,6 +7,7 @@ import { usePermissions, P } from '@/hooks/usePermissions';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import {
+  CreditCard,
   Download,
   Eye,
   Filter,
@@ -17,17 +18,22 @@ import {
   X,
 } from 'lucide-react';
 import { useState, useMemo } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { TrackingIframeModal } from '@bengo-hub/shared-ui-lib';
+import { POSPaymentModal } from '@/components/pos/payment-modal';
 import { useAuthStore } from '@/store/auth';
 
 export default function OrdersPage() {
   const { orgSlug } = useParams<{ orgSlug: string }>();
   const { can, canAny } = usePermissions();
   const user = useAuthStore((s) => s.user);
+  const tenantID = useAuthStore((s) => s.user?.tenant_id ?? '');
+  const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('pending_payment');
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
   const [trackingOpen, setTrackingOpen] = useState(false);
+  const [paymentOpen, setPaymentOpen] = useState(false);
 
   // Roles with only view_own should see their own orders; full view sees all.
   const viewOwnOnly = can(P.ORDERS_VIEW_OWN) && !can(P.ORDERS_VIEW);
@@ -199,7 +205,7 @@ export default function OrdersPage() {
                 variant="ghost"
                 size="sm"
                 className="h-8 w-8 p-0"
-                onClick={() => setSelectedOrder(null)}
+                onClick={() => { setSelectedOrder(null); setPaymentOpen(false); }}
               >
                 <X className="h-4 w-4" />
               </Button>
@@ -263,10 +269,27 @@ export default function OrdersPage() {
                 {selectedOrder.order_subtype && (
                   <p>Type: <span className="capitalize">{selectedOrder.order_subtype.replace('_', ' ')}</span></p>
                 )}
+                {selectedOrder.table_reference && <p>Table: {selectedOrder.table_reference}</p>}
                 {selectedOrder.currency && <p>Currency: {selectedOrder.currency}</p>}
               </div>
 
-              {/* Track Delivery button — uses order ID as tracking code */}
+              {/* Payment action — cashier/manager only */}
+              {['pending_payment', 'open'].includes(selectedOrder.status) && can(P.PAYMENTS_ADD) && (
+                <Button
+                  className="w-full gap-2"
+                  onClick={() => setPaymentOpen(true)}
+                >
+                  <CreditCard className="h-4 w-4" />
+                  Collect Payment
+                  {(selectedOrder.total_amount ?? 0) > 0 && (
+                    <span className="ml-auto font-bold text-sm">
+                      KES {(selectedOrder.total_amount ?? 0).toLocaleString()}
+                    </span>
+                  )}
+                </Button>
+              )}
+
+              {/* Track Delivery button — uses order tracking_code */}
               {isDeliveryOrder(selectedOrder) && (
                 <Button
                   variant="outline"
@@ -278,19 +301,6 @@ export default function OrdersPage() {
                 </Button>
               )}
 
-              {/* Always show Track button for non-terminal orders as fallback
-                  (order_type may not always be present in response) */}
-              {!isDeliveryOrder(selectedOrder) &&
-                !['completed', 'cancelled', 'draft'].includes(selectedOrder.status) && (
-                <Button
-                  variant="outline"
-                  className="w-full gap-2"
-                  onClick={() => setTrackingOpen(true)}
-                >
-                  <Map className="h-4 w-4" />
-                  Track Delivery
-                </Button>
-              )}
             </CardContent>
           </Card>
         )}
@@ -302,6 +312,24 @@ export default function OrdersPage() {
           open={trackingOpen}
           onOpenChange={setTrackingOpen}
           trackingCode={selectedOrder.tracking_code ?? selectedOrder.id}
+        />
+      )}
+
+      {/* Payment modal */}
+      {selectedOrder && (
+        <POSPaymentModal
+          open={paymentOpen}
+          onClose={() => setPaymentOpen(false)}
+          orderId={selectedOrder.id}
+          orderNumber={selectedOrder.order_number}
+          total={selectedOrder.total_amount ?? 0}
+          tenantSlug={orgSlug}
+          onPaymentConfirmed={() => {
+            setPaymentOpen(false);
+            setSelectedOrder(null);
+            queryClient.invalidateQueries({ queryKey: ['pos-orders'] });
+            queryClient.invalidateQueries({ queryKey: ['dashboard-recent-orders'] });
+          }}
         />
       )}
     </div>
