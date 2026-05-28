@@ -55,6 +55,9 @@ export function POSPaymentModal({
   allowedMethods,
   onPaymentConfirmed,
 }: POSPaymentModalProps) {
+  // Always collect whole-number amounts — round up any fractional totals (e.g. 1252.8 → 1253)
+  const roundedTotal = Math.ceil(total);
+
   const [step, setStep] = useState<ModalStep>('select');
   const [cashTendered, setCashTendered] = useState('');
   const [manualRef, setManualRef] = useState('');
@@ -79,8 +82,8 @@ export function POSPaymentModal({
 
   // ── Cash confirm ─────────────────────────────────────────────────────────────
   const handleCashConfirm = useCallback(async () => {
-    const tendered = parseFloat(cashTendered) || total;
-    if (tendered < total) return;
+    const tendered = parseFloat(cashTendered) || roundedTotal;
+    if (tendered < roundedTotal) return;
 
     if (!isOnline) {
       try {
@@ -88,7 +91,7 @@ export function POSPaymentModal({
           server_order_id: orderId,
           tender_id: tenderId,
           tender_method: 'cash',
-          amount: total,
+          amount: roundedTotal,
           currency: 'KES',
           tenant_slug: tenantSlug,
           created_at: new Date().toISOString(),
@@ -104,7 +107,7 @@ export function POSPaymentModal({
     }
 
     createIntent.mutate(
-      { orderId, tenderMethod: 'cash', amount: total },
+      { orderId, tenderMethod: 'cash', amount: roundedTotal },
       {
         onSuccess: () => { setStep('confirmed'); onPaymentConfirmed(); },
         onError: (err: any) => {
@@ -125,7 +128,7 @@ export function POSPaymentModal({
           server_order_id: orderId,
           tender_id: tenderId,
           tender_method: 'manual',
-          amount: total,
+          amount: roundedTotal,
           currency: 'KES',
           external_ref: manualRef.trim(),
           tenant_slug: tenantSlug,
@@ -142,7 +145,7 @@ export function POSPaymentModal({
     }
 
     createIntent.mutate(
-      { orderId, tenderMethod: 'manual', amount: total, externalRef: manualRef.trim() },
+      { orderId, tenderMethod: 'manual', amount: roundedTotal, externalRef: manualRef.trim() },
       {
         onSuccess: () => { setStep('confirmed'); onPaymentConfirmed(); },
         onError: (err: any) => {
@@ -157,7 +160,7 @@ export function POSPaymentModal({
   const handleDigital = useCallback(
     (method: string) => {
       createIntent.mutate(
-        { orderId, tenderMethod: method, amount: total },
+        { orderId, tenderMethod: method, amount: roundedTotal },
         {
           onSuccess: (data) => {
             setIntentId(data.payment_intent_id);
@@ -174,7 +177,7 @@ export function POSPaymentModal({
     [orderId, total, createIntent]
   );
 
-  const change = (parseFloat(cashTendered) || 0) - total;
+  const change = (parseFloat(cashTendered) || 0) - roundedTotal;
 
   if (!open) return null;
 
@@ -188,7 +191,7 @@ export function POSPaymentModal({
           paymentIntentId={intentId}
           tenantSlug={tenantSlug}
           initiateUrl={initiateUrl}
-          amount={total}
+          amount={roundedTotal}
           currency="KES"
           description={`Order ${orderNumber}`}
           customerEmail={customerEmail}
@@ -217,7 +220,7 @@ export function POSPaymentModal({
                  step === 'failed' ? 'Payment Failed' : 'Payment'}
               </h3>
               <p className="text-2xl font-bold text-foreground mt-0.5 tabular-nums">
-                KES {total.toLocaleString()}
+                KES {roundedTotal.toLocaleString()}
               </p>
               <p className="text-xs text-muted-foreground">{orderNumber}</p>
             </div>
@@ -242,7 +245,7 @@ export function POSPaymentModal({
                   desc={isOnline ? 'Accept cash payment' : 'Offline — will sync automatically'}
                   loading={false}
                   disabled={false}
-                  onClick={() => { setCashTendered(String(total)); setStep('cash'); }}
+                  onClick={() => { setCashTendered(String(roundedTotal)); setStep('cash'); }}
                 />
 
                 {/* M-Pesa STK push — online only */}
@@ -339,7 +342,7 @@ export function POSPaymentModal({
 
                 {/* Quick amounts */}
                 <div className="grid grid-cols-3 gap-2">
-                  {[total, Math.ceil(total / 100) * 100, Math.ceil(total / 500) * 500].filter((v, i, a) => a.indexOf(v) === i).map((amt) => (
+                  {[roundedTotal, Math.ceil(roundedTotal / 100) * 100, Math.ceil(roundedTotal / 500) * 500].filter((v, i, a) => a.indexOf(v) === i).map((amt) => (
                     <button
                       key={amt}
                       type="button"
@@ -370,7 +373,7 @@ export function POSPaymentModal({
                 )}
                 <Button
                   onClick={handleCashConfirm}
-                  disabled={parseFloat(cashTendered) < total || createIntent.isPending}
+                  disabled={parseFloat(cashTendered) < roundedTotal || createIntent.isPending}
                   className="w-full min-h-12 font-bold"
                 >
                   {createIntent.isPending
@@ -432,7 +435,7 @@ export function POSPaymentModal({
                 </div>
                 <h3 className="text-xl font-bold mb-1">Payment Successful</h3>
                 <p className="text-sm text-muted-foreground">Order {orderNumber} has been paid in full.</p>
-                <p className="text-2xl font-bold text-foreground mt-2 tabular-nums">KES {total.toLocaleString()}</p>
+                <p className="text-2xl font-bold text-foreground mt-2 tabular-nums">KES {roundedTotal.toLocaleString()}</p>
                 <Button className="mt-6 min-w-32" onClick={onClose}>Done</Button>
               </div>
             )}
