@@ -5,7 +5,6 @@ import { useModuleAccess } from '@/hooks/use-module-access';
 import { cn } from '@/lib/utils';
 import { QuickAction, KPICard, RecentOrdersCard, useDashboardSummary, useTenantID, fmt, fmtNum } from './widgets';
 import { CashierOverviewTab } from './cashier-overview-tab';
-import { CashierBillsTab } from './cashier-bills-tab';
 import { CashierShiftTab } from './cashier-shift-tab';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
@@ -79,7 +78,7 @@ export function AdminDashboard({ orgSlug }: { orgSlug: string }) {
   );
 }
 
-const CASHIER_TABS = ['Overview', 'Open Bills', 'My Shift'] as const;
+const CASHIER_TABS = ['Overview', 'My Shift'] as const;
 type CashierTab = typeof CASHIER_TABS[number];
 
 export function CashierDashboard({ orgSlug }: { orgSlug: string }) {
@@ -87,9 +86,18 @@ export function CashierDashboard({ orgSlug }: { orgSlug: string }) {
 
   return (
     <div className="p-6 space-y-5">
-      <div>
-        <h1 className="text-xl font-bold font-display">Good {greeting()}</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">Ready to serve customers</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-bold font-display">Good {greeting()}</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">Ready to serve customers</p>
+        </div>
+        <Link
+          href={`/${orgSlug}/orders`}
+          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors"
+        >
+          <ClipboardList className="h-4 w-4" />
+          Open Bills
+        </Link>
       </div>
 
       {/* Tab bar */}
@@ -113,7 +121,6 @@ export function CashierDashboard({ orgSlug }: { orgSlug: string }) {
 
       {/* Tab content */}
       {activeTab === 'Overview' && <CashierOverviewTab />}
-      {activeTab === 'Open Bills' && <CashierBillsTab orgSlug={orgSlug} />}
       {activeTab === 'My Shift' && <CashierShiftTab orgSlug={orgSlug} />}
     </div>
   );

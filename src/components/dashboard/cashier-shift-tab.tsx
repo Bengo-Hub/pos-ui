@@ -1,6 +1,7 @@
 'use client';
 
 import { useCurrentShift, useShiftSummary, useCloseShift, useOpenShift } from '@/hooks/usePOS';
+import { useAuthStore } from '@/store/auth';
 import { fmt } from './widgets';
 import { Clock, Loader2, Wallet } from 'lucide-react';
 import Link from 'next/link';
@@ -29,16 +30,20 @@ export function CashierShiftTab({ orgSlug }: { orgSlug: string }) {
   const { data: summary } = useShiftSummary();
   const closeShift = useCloseShift();
   const openShift = useOpenShift();
+  const logout = useAuthStore((s) => s.logout);
   const elapsed = useElapsed(shift?.opened_at);
 
   const isOpen = shift?.session_status === 'open' || shift?.status === 'open';
 
   const handleClose = () => {
-    if (!confirm('Close this shift?')) return;
+    if (!confirm('Close this shift? You will be logged out.')) return;
     closeShift.mutate(
       { endingCash: 0 },
       {
-        onSuccess: () => toast.success('Shift closed'),
+        onSuccess: () => {
+          toast.success('Shift closed');
+          logout();
+        },
         onError: () => toast.error('Failed to close shift'),
       },
     );
@@ -146,7 +151,7 @@ export function CashierShiftTab({ orgSlug }: { orgSlug: string }) {
           className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-destructive/10 text-destructive border border-destructive/20 text-sm font-semibold hover:bg-destructive/20 transition-colors disabled:opacity-40"
         >
           {closeShift.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-          Close Shift
+          End Shift &amp; Sign Out
         </button>
       </div>
     </div>

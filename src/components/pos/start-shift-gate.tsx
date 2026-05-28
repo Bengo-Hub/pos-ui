@@ -5,6 +5,7 @@ import { useAuthStore } from '@/store/auth';
 import { cn } from '@/lib/utils';
 import { Loader2, Play } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { useRouter, useParams } from 'next/navigation';
 import { toast } from 'sonner';
 
 // Roles that always require an explicit shift start (with or without float)
@@ -21,9 +22,16 @@ interface StartShiftGateProps {
 
 export function StartShiftGate({ children }: StartShiftGateProps) {
   const user = useAuthStore((s) => s.user);
+  const outlet = useAuthStore((s) => s.outlet);
   const isTerminalSession = useAuthStore((s) => s.isTerminalSession);
+  const router = useRouter();
+  const params = useParams();
+  const orgSlug = params?.orgSlug as string | undefined;
 
   const role = user?.roles?.[0] ?? '';
+  const outletUseCase = (outlet?.use_case ?? (user as any)?.outlet_use_case ?? '').toLowerCase();
+  const isCashierHospOrQSR = role === 'cashier' && ['hospitality', 'quick_service'].includes(outletUseCase);
+
   const needsShiftGate = SHIFT_ROLES.includes(role);
   const needsFloat = FLOAT_ROLES.includes(role);
   const isAutoShift = AUTO_SHIFT_ROLES.includes(role);
@@ -52,6 +60,11 @@ export function StartShiftGate({ children }: StartShiftGateProps) {
       await openShift.mutateAsync(opening);
       setSubmitted(true);
       toast.success('Shift started');
+      // Cashiers in hospitality/quick_service go straight to the Orders page
+      // (their only workflow is clearing bills, not taking new orders).
+      if (isCashierHospOrQSR && orgSlug) {
+        router.push(`/${orgSlug}/orders`);
+      }
     } catch {
       toast.error('Failed to open shift');
     }

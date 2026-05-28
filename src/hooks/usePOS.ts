@@ -408,16 +408,22 @@ export function useOrder(id: string) {
   });
 }
 
-export function useOrders(filters?: { status?: string; staffId?: string; limit?: number }) {
+export function useOrders(filters?: { status?: string; staffId?: string; limit?: number; page?: number }) {
   const tenantID = useTenantID();
   return useQuery({
     queryKey: ['pos-orders', tenantID, filters],
     queryFn: () =>
-      apiClient.get<{ data: POSOrder[]; total: number }>(`${basePath(tenantID)}/orders`, {
-        status: filters?.status,
-        staff_id: filters?.staffId,
-        limit: filters?.limit,
-      }),
+      apiClient.get<{ data: POSOrder[]; total: number; meta?: { total: number; page: number; limit: number } }>(
+        `${basePath(tenantID)}/orders`,
+        {
+          status: filters?.status,
+          staff_id: filters?.staffId,
+          limit: filters?.limit ?? 20,
+          page: filters?.page ?? 1,
+          sort: 'created_at',
+          order: 'desc',
+        },
+      ),
     enabled: !!tenantID,
     staleTime: 15_000,
   });
@@ -638,6 +644,9 @@ interface SessionSummary {
   mpesa_total: number;
   total_revenue: number;
   order_count: number;
+  void_count: number;
+  expected_cash: number;
+  opening_float: number;
 }
 
 export function useCurrentShift() {

@@ -69,6 +69,8 @@ interface NavItem {
   subPlan?: string;
   /** Hidden for waiter role — waiter sees Tables + Shifts only */
   waiterHidden?: boolean;
+  /** Hidden for cashier in hospitality/quick_service — they work from the Orders page only */
+  cashierHospHidden?: boolean;
 }
 
 interface NavGroup {
@@ -212,13 +214,14 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
   // ── Nav groups ────────────────────────────────────────────────────────────
 
   const isWaiter = !isHQUser && userRoles.includes('waiter');
+  const isCashierHospOrQSR = !isHQUser && userRoles.includes('cashier') && ['hospitality', 'quick_service'].includes(outletUseCase);
 
   const navGroups: NavGroup[] = [
     {
       label: 'Operations',
       items: [
         { label: 'Dashboard', icon: LayoutDashboard, href: '/dashboard', moduleKey: 'dashboard', waiterHidden: true },
-        { label: 'New Order', icon: Plus, href: '/order', moduleKey: 'new_order', permission: P.ORDERS_ADD, waiterHidden: true },
+        { label: 'New Order', icon: Plus, href: '/order', moduleKey: 'new_order', permission: P.ORDERS_ADD, waiterHidden: true, cashierHospHidden: true },
         // Orders list: requires add/change or reports access — excludes kitchen/bar who only have pos.orders.view for KDS context
         { label: 'Orders', icon: ClipboardList, href: '/orders', moduleKey: 'orders', permission: [P.ORDERS_ADD, P.ORDERS_CHANGE_OWN, P.ORDERS_CHANGE, P.ORDERS_MANAGE, P.ORDERS_VIEW_OWN, P.REPORTS_VIEW], waiterHidden: true },
         { label: 'Cash Drawer', icon: Wallet, href: '/drawer', moduleKey: 'cash_drawer', permission: [P.DRAWERS_ADD, P.DRAWERS_MANAGE, P.DRAWERS_VIEW_OWN], waiterHidden: true },
@@ -226,13 +229,13 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
         { label: 'Clients', icon: Users, href: '/clients', moduleKey: 'clients', permission: [P.CLIENTS_VIEW, P.CLIENTS_MANAGE], waiterHidden: true },
         { label: 'Layaway', icon: Package, href: '/layaway', moduleKey: 'layaway', permission: [P.ORDERS_ADD, P.ORDERS_CHANGE_OWN, P.ORDERS_CHANGE, P.ORDERS_MANAGE], subFeature: 'layaway', subPlan: 'Growth', waiterHidden: true },
         { label: 'Returns', icon: RotateCcw, href: '/returns', moduleKey: 'returns', permission: [P.ORDERS_CHANGE_OWN, P.ORDERS_CHANGE, P.ORDERS_MANAGE], waiterHidden: true },
-        { label: isWaiter ? 'My Shifts' : 'Shifts', icon: Clock, href: '/shifts', moduleKey: 'shifts', permission: [P.SESSIONS_ADD, P.SESSIONS_VIEW, P.SESSIONS_VIEW_OWN], subFeature: 'shift_reports', subPlan: 'Pro' },
+        { label: isWaiter ? 'My Shifts' : 'Shifts', icon: Clock, href: '/shifts', moduleKey: 'shifts', permission: [P.SESSIONS_ADD, P.SESSIONS_VIEW, P.SESSIONS_VIEW_OWN], subFeature: 'shift_reports', subPlan: 'Pro', cashierHospHidden: true },
       ],
     },
     {
       label: 'Floor & Service',
       items: [
-        { label: 'Tables', icon: Grid3x3, href: '/tables', moduleKey: 'tables', permission: [P.TABLES_VIEW, P.TABLES_MANAGE], subFeature: 'table_management', subPlan: 'Pro' },
+        { label: 'Tables', icon: Grid3x3, href: '/tables', moduleKey: 'tables', permission: [P.TABLES_VIEW, P.TABLES_MANAGE], subFeature: 'table_management', subPlan: 'Pro', cashierHospHidden: true },
         { label: 'Appointments', icon: Calendar, href: '/appointments', moduleKey: 'appointments', permission: [P.APPOINTMENTS_VIEW, P.APPOINTMENTS_ADD, P.APPOINTMENTS_CHANGE, P.APPOINTMENTS_MANAGE], waiterHidden: true },
         { label: 'Walk-in Queue', icon: ClipboardList, href: '/queue', moduleKey: 'queue', permission: [P.QUEUE_VIEW, P.QUEUE_CHANGE, P.QUEUE_MANAGE], waiterHidden: true },
         { label: 'Staff Schedule', icon: Users, href: '/staff-schedule', moduleKey: 'staff_schedule', permission: [P.STAFF_VIEW, P.STAFF_MANAGE], waiterHidden: true },
@@ -282,7 +285,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
       defaultCollapsed: true,
       items: [
         { label: 'Reports', icon: BarChart3, href: '/reports', moduleKey: 'reports', permission: [P.REPORTS_VIEW, P.REPORTS_MANAGE], subFeature: 'shift_reports', subPlan: 'Pro', waiterHidden: true },
-        { label: 'Loyalty', icon: Gift, href: '/loyalty', moduleKey: 'loyalty', permission: [P.LOYALTY_VIEW, P.LOYALTY_ADD, P.LOYALTY_MANAGE], subFeature: 'loyalty', subPlan: 'Growth', waiterHidden: true },
+        { label: 'Loyalty', icon: Gift, href: '/loyalty', moduleKey: 'loyalty', permission: [P.LOYALTY_VIEW, P.LOYALTY_ADD, P.LOYALTY_MANAGE], subFeature: 'loyalty', subPlan: 'Growth', waiterHidden: true, cashierHospHidden: true },
         { label: 'Commissions', icon: TrendingUp, href: '/commissions', moduleKey: 'commissions', permission: [P.COMMISSIONS_VIEW, P.COMMISSIONS_VIEW_OWN, P.COMMISSIONS_MANAGE], subFeature: 'commissions', subPlan: 'Pro', waiterHidden: true },
         { label: 'Webhooks', icon: Webhook, href: '/webhooks', moduleKey: 'settings', permission: [P.CONFIG_VIEW, P.CONFIG_MANAGE], subFeature: 'webhooks', subPlan: 'Growth', waiterHidden: true },
         { label: 'Settings', icon: Settings, href: '/settings', moduleKey: 'settings', permission: [P.CONFIG_VIEW, P.CONFIG_CHANGE, P.CONFIG_MANAGE], waiterHidden: true },
@@ -313,6 +316,8 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
           if (!hasModule(item.moduleKey)) return false;
           // Waiter role: only Tables + Shifts
           if (isWaiter && item.waiterHidden) return false;
+          // Cashier in hospitality/quick_service: focused on clearing bills only
+          if (isCashierHospOrQSR && item.cashierHospHidden) return false;
           // Services outlets: hide order-entry items (they use Appointments/Queue instead)
           if (isServices && ['new_order', 'orders'].includes(item.moduleKey)) return false;
           if (!item.permission) return true;
