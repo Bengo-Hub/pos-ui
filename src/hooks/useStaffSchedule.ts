@@ -36,7 +36,13 @@ export function useStaffSchedule(staffId: string) {
   return useQuery({
     queryKey: ['staff-schedule', tenantID, staffId],
     queryFn: () =>
-      apiClient.get<StaffScheduleEntry[]>(`/api/v1/${tenantID}/pos/staff/${staffId}/schedule`),
+      apiClient
+        .get<StaffScheduleEntry[] | { data: StaffScheduleEntry[] }>(
+          `/api/v1/${tenantID}/pos/staff/${staffId}/schedule`,
+        )
+        .then((res): StaffScheduleEntry[] =>
+          Array.isArray(res) ? res : ((res as { data: StaffScheduleEntry[] }).data ?? []),
+        ),
     enabled: !!tenantID && !!staffId,
     staleTime: 60_000,
   });

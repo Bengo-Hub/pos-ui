@@ -77,11 +77,8 @@ function StaffScheduleRow({
             ) : entry?.is_available ? (
               <div className="flex flex-col items-center gap-0.5">
                 <span className="inline-block w-2 h-2 rounded-full bg-green-500" />
-                <p className="text-[10px] text-muted-foreground leading-tight font-mono">
-                  {entry.start_time.slice(0, 5)}
-                </p>
-                <p className="text-[10px] text-muted-foreground leading-tight font-mono">
-                  {entry.end_time.slice(0, 5)}
+                <p className="text-[10px] text-green-700 dark:text-green-400 leading-tight font-mono whitespace-nowrap">
+                  {entry.start_time.slice(0, 5)}–{entry.end_time.slice(0, 5)}
                 </p>
               </div>
             ) : (

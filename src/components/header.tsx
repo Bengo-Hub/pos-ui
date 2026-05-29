@@ -1,7 +1,9 @@
 'use client';
 
 import { useAuthStore } from '@/store/auth';
-import { BookOpen, Building2, Check, ChevronDown, ExternalLink, Globe, LogOut, MapPin, Menu, Package, Search, Settings, ShoppingCart, Square, Tag, User } from 'lucide-react';
+import { BookOpen, Building2, Check, ChevronDown, ExternalLink, Globe, LogOut, MapPin, Menu, Package, Search, Settings, ShoppingCart, Square, Tag, User, Users } from 'lucide-react';
+import { usePermissions } from '@/hooks/usePermissions';
+import { P } from '@/lib/rbac/permissions';
 import { NotificationBell } from './notifications/NotificationBell';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
@@ -20,13 +22,15 @@ const TREASURY_URL = process.env.NEXT_PUBLIC_TREASURY_UI_URL ?? 'https://books.c
 const PRICING_URL = process.env.NEXT_PUBLIC_SUBSCRIPTIONS_UI_URL ?? 'https://pricing.codevertexitsolutions.com';
 const ORDERING_URL = process.env.NEXT_PUBLIC_ORDERING_UI_URL ?? 'https://order.codevertexitsolutions.com';
 const AUTH_URL = process.env.NEXT_PUBLIC_AUTH_UI_URL ?? 'https://accounts.codevertexitsolutions.com';
+const CRM_URL = process.env.NEXT_PUBLIC_CRM_UI_URL ?? 'https://crm.codevertexitsolutions.com';
 
 const SERVICES = [
   { label: 'Inventory', href: (slug: string) => `${INVENTORY_URL}/${slug}`, Icon: Package },
+  { label: 'CRM', href: (slug: string) => `${CRM_URL}/${slug}`, Icon: Users },
   { label: 'Treasury', href: (slug: string) => `${TREASURY_URL}/${slug}`, Icon: BookOpen },
   { label: 'Online Store', href: (slug: string) => `${ORDERING_URL}/${slug}`, Icon: ShoppingCart },
   { label: 'Subscriptions', href: (slug: string) => `${PRICING_URL}/${slug}`, Icon: Tag },
-  { label: 'Account Portal', href: (slug: string) => `${AUTH_URL}/${slug}`, Icon: Globe },
+  { label: 'Client Portal', href: (slug: string) => `${AUTH_URL}/${slug}`, Icon: Globe },
 ] as const;
 
 const USE_CASE_LABELS: Record<string, string> = {
@@ -183,6 +187,12 @@ export function Header({ onMenuClick }: HeaderProps) {
   const name = displayName(user);
   const role = user?.roles?.[0];
 
+  const { can, isSuperuser } = usePermissions();
+  const isHQUser = isSuperuser || (user?.roles ?? []).some((r) =>
+    ['admin', 'pos_admin', 'manager', 'store_manager', 'superuser', 'super_admin'].includes(r)
+  );
+  const showSettings = isHQUser || can(P.CONFIG_VIEW) || can(P.CONFIG_CHANGE) || can(P.CONFIG_MANAGE);
+
   const { data: currentShift } = useCurrentShift();
   const closeShift = useCloseShift();
   const hasActiveShift = !!currentShift;
@@ -286,40 +296,48 @@ export function Header({ onMenuClick }: HeaderProps) {
 
                 <div className="h-px bg-slate-100 dark:bg-white/5 my-2 mx-1" />
 
-                <div className="grid gap-1">
-                  <Link
-                    href={`/${orgSlug}/settings`}
-                    onClick={() => setProfileOpen(false)}
-                    className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5 transition-all group"
-                  >
-                    <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-white/10 flex items-center justify-center group-hover:text-primary transition-colors">
-                      <Settings className="h-4 w-4" />
-                    </div>
-                    Settings
-                  </Link>
-                </div>
-
-                <div className="h-px bg-slate-100 dark:bg-white/5 my-2 mx-1" />
-
-                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 px-3 mb-1.5">Services</p>
-                <div className="grid gap-1">
-                  {SERVICES.map(({ label, href, Icon }) => (
-                    <a
-                      key={label}
-                      href={href(orgSlug)}
-                      target="_blank"
-                      rel="noopener noreferrer"
+                {showSettings && (
+                  <div className="grid gap-1">
+                    <Link
+                      href={`/${orgSlug}/settings`}
                       onClick={() => setProfileOpen(false)}
                       className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5 transition-all group"
                     >
                       <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-white/10 flex items-center justify-center group-hover:text-primary transition-colors">
-                        <Icon className="h-4 w-4" />
+                        <Settings className="h-4 w-4" />
                       </div>
-                      <span className="flex-1">{label}</span>
-                      <ExternalLink className="h-3 w-3 text-slate-400 opacity-60" />
-                    </a>
-                  ))}
-                </div>
+                      Settings
+                    </Link>
+                  </div>
+                )}
+
+                {(showSettings || isHQUser) && (
+                  <div className="h-px bg-slate-100 dark:bg-white/5 my-2 mx-1" />
+                )}
+
+                {isHQUser && (
+                  <>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 px-3 mb-1.5">Services</p>
+                    <div className="grid gap-1">
+                      {SERVICES.map(({ label, href, Icon }) => (
+                        <a
+                          key={label}
+                          href={href(orgSlug)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={() => setProfileOpen(false)}
+                          className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5 transition-all group"
+                        >
+                          <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-white/10 flex items-center justify-center group-hover:text-primary transition-colors">
+                            <Icon className="h-4 w-4" />
+                          </div>
+                          <span className="flex-1">{label}</span>
+                          <ExternalLink className="h-3 w-3 text-slate-400 opacity-60" />
+                        </a>
+                      ))}
+                    </div>
+                  </>
+                )}
 
                 <div className="h-px bg-slate-100 dark:bg-white/5 my-2 mx-1" />
 
