@@ -37,6 +37,7 @@ export interface POSSettings {
   shift_auto_end_enabled: boolean;
   shift_max_hours: number;
   table_max_occupation_minutes: number;
+  return_window_days: number;
   updated_at: string;
 }
 
@@ -55,6 +56,7 @@ export interface UpdatePOSSettingsInput {
   auto_print_order?: boolean;
   auto_print_kitchen?: boolean;
   printer_profiles?: PrinterProfile[];
+  return_window_days?: number;
 }
 
 export interface UpdatePOSModulesInput {

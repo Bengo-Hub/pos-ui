@@ -6,6 +6,7 @@ import { useAuthStore } from '@/store/auth';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api/client';
 import { useState } from 'react';
+import { useParams, useRouter } from 'next/navigation';
 import { Loader2, Plus, RotateCcw, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -50,7 +51,7 @@ function useInitiateReturn() {
   const tenantID = user?.tenant_id ?? '';
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (payload: { original_order_id: string; reason: string; refund_method: string }) =>
+    mutationFn: (payload: { original_order_id: string; reason: string; reason_code?: string; refund_method: string }) =>
       apiClient.post(`/api/v1/${tenantID}/pos/returns`, payload),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['returns', tenantID] }),
   });
@@ -73,17 +74,32 @@ const RETURN_REASONS = [
   'Item not as described',
   'Other',
 ];
+const REASON_CODES: { value: string; label: string }[] = [
+  { value: '',             label: '— Select code —'   },
+  { value: 'changed_mind', label: 'Changed mind'       },
+  { value: 'defective',    label: 'Defective item'     },
+  { value: 'damaged',      label: 'Damaged item'       },
+  { value: 'wrong_item',   label: 'Wrong item'         },
+  { value: 'expired',      label: 'Expired product'    },
+  { value: 'other',        label: 'Other'              },
+];
 
 function InitiateReturnModal({ onClose }: { onClose: () => void }) {
   const [orderId, setOrderId] = useState('');
   const [reason, setReason] = useState(RETURN_REASONS[0]);
+  const [reasonCode, setReasonCode] = useState('');
   const [refundMethod, setRefundMethod] = useState('cash');
   const { mutate, isPending, isError } = useInitiateReturn();
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!orderId.trim()) return;
-    mutate({ original_order_id: orderId.trim(), reason, refund_method: refundMethod }, { onSuccess: onClose });
+    mutate({
+      original_order_id: orderId.trim(),
+      reason,
+      ...(reasonCode ? { reason_code: reasonCode } : {}),
+      refund_method: refundMethod,
+    }, { onSuccess: onClose });
   }
 
   return (
@@ -114,6 +130,16 @@ function InitiateReturnModal({ onClose }: { onClose: () => void }) {
               className="mt-1 w-full bg-background border border-border rounded-xl py-2.5 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
             >
               {RETURN_REASONS.map((r) => <option key={r} value={r}>{r}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-muted-foreground">Reason Code <span className="font-normal text-muted-foreground">(optional)</span></label>
+            <select
+              value={reasonCode}
+              onChange={(e) => setReasonCode(e.target.value)}
+              className="mt-1 w-full bg-background border border-border rounded-xl py-2.5 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+            >
+              {REASON_CODES.map((rc) => <option key={rc.value} value={rc.value}>{rc.label}</option>)}
             </select>
           </div>
           <div>
@@ -164,6 +190,9 @@ function ReturnsPage() {
   const [showModal, setShowModal] = useState(false);
   const { data, isLoading } = useReturns(statusFilter);
   const returns = data?.data ?? [];
+  const params = useParams<{ orgSlug: string }>();
+  const router = useRouter();
+  const orgSlug = params?.orgSlug ?? '';
 
   return (
     <div className="p-6">
@@ -235,8 +264,12 @@ function ReturnsPage() {
               {returns.map((ret) => {
                 const cfg = STATUS_CONFIG[ret.status] ?? { label: ret.status, className: 'bg-muted text-muted-foreground' };
                 return (
-                  <tr key={ret.id} className="hover:bg-accent/20 transition-colors">
-                    <td className="px-4 py-3.5 font-mono text-xs font-semibold">{ret.return_number}</td>
+                  <tr
+                    key={ret.id}
+                    className="hover:bg-accent/20 transition-colors cursor-pointer"
+                    onClick={() => router.push(`/${orgSlug}/returns/${ret.id}`)}
+                  >
+                    <td className="px-4 py-3.5 font-mono text-xs font-semibold text-primary underline-offset-2 hover:underline">{ret.return_number}</td>
                     <td className="px-4 py-3.5">{ret.customer_name ?? '—'}</td>
                     <td className="px-4 py-3.5 text-muted-foreground max-w-[180px] truncate">{ret.reason}</td>
                     <td className="px-4 py-3.5">

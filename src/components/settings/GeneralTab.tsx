@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Globe, Loader2, Lock, Palette, Save } from 'lucide-react';
+import { Globe, Loader2, Lock, Palette, RotateCcw, Save } from 'lucide-react';
 import { Button, Card, CardContent, CardHeader } from '@/components/ui/base';
 import { useTenantBranding } from '@/providers/tenant-branding-provider';
 import { usePOSSettings, useUpdatePOSSettings } from '@/hooks/usePOSSettings';
@@ -19,12 +19,14 @@ export function GeneralTab() {
   const [currency, setCurrency] = useState('KES');
   const [vatRate, setVatRate] = useState('16');
   const [vatEnabled, setVatEnabled] = useState(true);
+  const [returnWindowDays, setReturnWindowDays] = useState('30');
 
   useEffect(() => {
     if (settings) {
       setCurrency(settings.currency || 'KES');
       setVatRate(String(settings.vat_rate ?? 16));
       setVatEnabled(settings.vat_enabled ?? true);
+      setReturnWindowDays(String(settings.return_window_days ?? 30));
     }
   }, [settings]);
 
@@ -33,6 +35,7 @@ export function GeneralTab() {
       currency,
       vat_rate: parseFloat(vatRate) || 16,
       vat_enabled: vatEnabled,
+      return_window_days: parseInt(returnWindowDays, 10) || 30,
     });
   };
 
@@ -72,6 +75,45 @@ export function GeneralTab() {
           </CardContent>
         </Card>
       )}
+
+      {/* Returns Policy */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <RotateCcw className="h-4 w-4 text-primary" />
+            <span className="font-bold text-sm">Returns Policy</span>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <div className="h-16 flex items-center justify-center text-muted-foreground">
+              <Loader2 className="h-5 w-5 animate-spin" />
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <label className={labelClass}>Return Window (days)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={365}
+                    step={1}
+                    value={returnWindowDays}
+                    onChange={(e) => setReturnWindowDays(e.target.value)}
+                    disabled={!canEdit}
+                    placeholder="30"
+                    className={`${inputClass} font-mono`}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Maximum days after purchase to accept a return. Set to 0 for no limit.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Currency & VAT */}
       <Card>
