@@ -76,7 +76,7 @@ function RetailPage() {
   const { data: catalogData, isLoading: catalogLoading } = useMenuItems({
     search: debouncedSearch || undefined,
     itemType: 'GOODS',
-    limit: 50,
+    limit: 20,
   });
 
   const catalogItems: CatalogItem[] = useMemo(() => {
@@ -265,9 +265,9 @@ function RetailPage() {
   }
 
   return (
-    <div className="flex flex-col lg:flex-row gap-4 p-4 min-h-0">
+    <div className="flex flex-col lg:flex-row gap-4 p-4 h-[calc(100vh-5rem)] min-h-0">
       {/* ── Left panel: scan + search + catalog ── */}
-      <div className="flex-1 flex flex-col gap-4 min-w-0">
+      <div className="flex-1 flex flex-col gap-3 min-w-0 overflow-hidden">
         {/* Unified barcode + search input */}
         <div className="relative group flex items-center gap-2">
           <div className="relative flex-1">
@@ -323,8 +323,9 @@ function RetailPage() {
           />
         )}
 
-        {/* Catalog item list */}
-        <div className="bg-card border border-border rounded-2xl overflow-hidden max-h-64 overflow-y-auto">
+        {/* Catalog item list — fixed height tray, scrolls on overflow */}
+        <div className="bg-card border border-border rounded-2xl overflow-hidden shrink-0" style={{maxHeight: '11rem'}}>
+          <div className="overflow-y-auto h-full">
           {catalogLoading ? (
             <div className="flex items-center justify-center py-8 gap-2 text-muted-foreground text-sm">
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -355,11 +356,12 @@ function RetailPage() {
               ))}
             </div>
           )}
+          </div>
         </div>
 
-        {/* Cart items */}
-        <div className="flex-1 bg-card border border-border rounded-2xl overflow-hidden">
-          <div className="px-4 py-3 border-b border-border flex items-center gap-2">
+        {/* Cart items — flex-1 so it fills remaining height; inner list scrolls */}
+        <div className="flex-1 bg-card border border-border rounded-2xl overflow-hidden flex flex-col min-h-0">
+          <div className="px-4 py-3 border-b border-border flex items-center gap-2 shrink-0">
             <ShoppingCart className="h-4.5 w-4.5 text-muted-foreground" />
             <span className="font-semibold text-sm">Cart</span>
             {cart.length > 0 && (
@@ -375,7 +377,7 @@ function RetailPage() {
               <p className="text-sm text-muted-foreground">Scan a barcode to add items</p>
             </div>
           ) : (
-            <div className="divide-y divide-border">
+            <div className="overflow-y-auto flex-1 divide-y divide-border">
               {cart.map((line, idx) => (
                 <div key={`${line.item.id}-${idx}`} className="flex items-center gap-3 px-4 py-3">
                   <div className="flex-1 min-w-0">
