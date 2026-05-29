@@ -231,52 +231,55 @@ export function ModulesTab() {
         )}
       </div>
 
-      {/* Configurable modules */}
+      {/* Configurable modules — 2-column grid on wider screens */}
       {activeDef.configurable.length > 0 && (
         <div className="space-y-3">
           <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground px-1">Configurable Modules</p>
-          {activeDef.configurable.map((feat) => {
-            const Icon = feat.icon;
-            const on = modules[feat.key];
-            return (
-              <label
-                key={feat.key}
-                className={`flex items-start gap-4 p-4 rounded-2xl border cursor-pointer transition-colors select-none
-                  ${on ? 'border-primary/30 bg-primary/5' : 'border-border bg-card'}
-                  ${!canEdit ? 'cursor-default opacity-70' : ''}`}
-              >
-                <div className={`h-9 w-9 rounded-xl flex items-center justify-center shrink-0 mt-0.5 ${on ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground'}`}>
-                  {saving === feat.key
-                    ? <Loader2 className="h-4 w-4 animate-spin" />
-                    : <Icon className="h-4 w-4" />}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-bold">{feat.label}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">{feat.description}</p>
-                </div>
-                <input
-                  type="checkbox"
-                  checked={on}
-                  disabled={!canEdit || saving === feat.key}
-                  onChange={(e) => toggle(feat.key)(e.target.checked)}
-                  className="h-4 w-4 mt-1 rounded accent-primary shrink-0 cursor-pointer disabled:cursor-not-allowed"
-                />
-              </label>
-            );
-          })}
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
+            {activeDef.configurable.map((feat) => {
+              const Icon = feat.icon;
+              const on = modules[feat.key];
+              return (
+                <label
+                  key={feat.key}
+                  className={`flex items-start gap-4 p-4 rounded-2xl border cursor-pointer transition-colors select-none
+                    ${on ? 'border-primary/30 bg-primary/5' : 'border-border bg-card'}
+                    ${!canEdit ? 'cursor-default opacity-70' : ''}`}
+                >
+                  <div className={`h-9 w-9 rounded-xl flex items-center justify-center shrink-0 mt-0.5 ${on ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground'}`}>
+                    {saving === feat.key
+                      ? <Loader2 className="h-4 w-4 animate-spin" />
+                      : <Icon className="h-4 w-4" />}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold">{feat.label}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{feat.description}</p>
+                  </div>
+                  <Toggle
+                    checked={on}
+                    onChange={(v) => toggle(feat.key)(v)}
+                    disabled={!canEdit || saving === feat.key}
+                  />
+                </label>
+              );
+            })}
+          </div>
         </div>
       )}
 
-      {/* Always-on */}
+      {/* Always-on — grid of cards */}
       {activeDef.alwaysOn.length > 0 && (
-        <div className="space-y-2">
+        <div className="space-y-3">
           <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground px-1">Always Included</p>
-          <div className="flex flex-wrap gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2">
             {activeDef.alwaysOn.map((feat) => (
-              <span key={feat} className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border bg-muted/50 text-xs font-semibold text-muted-foreground">
-                <BadgeCheck className="h-3 w-3 text-primary shrink-0" />
-                {feat}
-              </span>
+              <div
+                key={feat}
+                className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl border border-border bg-card text-xs font-semibold text-muted-foreground"
+              >
+                <BadgeCheck className="h-3.5 w-3.5 text-primary shrink-0" />
+                <span className="truncate">{feat}</span>
+              </div>
             ))}
           </div>
         </div>

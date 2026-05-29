@@ -76,7 +76,7 @@ export function ReceiptTab() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <Card>
         <CardHeader>
           <div className="flex items-center gap-2">
@@ -119,19 +119,21 @@ export function ReceiptTab() {
             <span className="font-bold text-sm">Auto-Print Behavior</span>
           </div>
         </CardHeader>
-        <CardContent className="space-y-3">
-          {[
-            { key: 'autoPrintOrder' as const, label: 'Auto-Print Receipt on Completion', desc: 'Automatically print customer receipt when a sale is completed.' },
-            { key: 'autoPrintKitchen' as const, label: 'Auto-Print Kitchen Ticket', desc: 'Send a kitchen order ticket when an order is created.' },
-          ].map((item) => (
-            <div key={item.key} className="flex items-center justify-between p-4 rounded-xl bg-accent/10 border border-border">
-              <div>
-                <h4 className="text-sm font-bold">{item.label}</h4>
-                <p className="text-xs text-muted-foreground mt-0.5">{item.desc}</p>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {[
+              { key: 'autoPrintOrder' as const, label: 'Auto-Print Receipt on Completion', desc: 'Automatically print customer receipt when a sale is completed.' },
+              { key: 'autoPrintKitchen' as const, label: 'Auto-Print Kitchen Ticket', desc: 'Send a kitchen order ticket when an order is created.' },
+            ].map((item) => (
+              <div key={item.key} className="flex items-center justify-between p-4 rounded-xl bg-accent/10 border border-border gap-4">
+                <div className="min-w-0">
+                  <h4 className="text-sm font-bold">{item.label}</h4>
+                  <p className="text-xs text-muted-foreground mt-0.5">{item.desc}</p>
+                </div>
+                <Toggle checked={form[item.key]} onChange={(v) => set(item.key, v)} disabled={!canEdit} />
               </div>
-              <Toggle checked={form[item.key]} onChange={(v) => set(item.key, v)} disabled={!canEdit} />
-            </div>
-          ))}
+            ))}
+          </div>
         </CardContent>
       </Card>
 
@@ -145,7 +147,8 @@ export function ReceiptTab() {
             Configure separate printers for customer receipts, kitchen tickets, and bar orders.
           </p>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
           {RECEIPT_PRINTER_ROLES.map((role) => {
             const p = getProfile(role.id);
             return (
@@ -196,6 +199,7 @@ export function ReceiptTab() {
               </div>
             );
           })}
+          </div>
         </CardContent>
       </Card>
 

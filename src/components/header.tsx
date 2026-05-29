@@ -1,28 +1,28 @@
 'use client';
 
-import { useAuthStore } from '@/store/auth';
-import { BookOpen, Building2, Check, ChevronDown, ExternalLink, Globe, LogOut, MapPin, Menu, Package, Search, Settings, ShoppingCart, Square, Tag, User, Users } from 'lucide-react';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useCloseShift, useCurrentShift } from '@/hooks/useShifts';
+import { apiClient } from '@/lib/api/client';
 import { P } from '@/lib/rbac/permissions';
-import { NotificationBell } from './notifications/NotificationBell';
+import { cn } from '@/lib/utils';
+import { useTenantBranding } from '@/providers/tenant-branding-provider';
+import { useAuthStore } from '@/store/auth';
+import { useOutletFilterStore } from '@/store/outlet-filter';
+import { useQuery } from '@tanstack/react-query';
+import { BookOpen, Building2, Check, ChevronDown, ExternalLink, Globe, LogOut, MapPin, Menu, Package, Search, Settings, ShoppingCart, Square, Tag, User, Users } from 'lucide-react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
-import { ThemeToggle } from './theme-toggle';
-import { useTenantBranding } from '@/providers/tenant-branding-provider';
-import { useOutletFilterStore } from '@/store/outlet-filter';
-import { useQuery } from '@tanstack/react-query';
-import { apiClient } from '@/lib/api/client';
-import { cn } from '@/lib/utils';
-import { useCurrentShift, useCloseShift } from '@/hooks/useShifts';
 import { toast } from 'sonner';
+import { NotificationBell } from './notifications/NotificationBell';
+import { ThemeToggle } from './theme-toggle';
 
 const INVENTORY_URL = process.env.NEXT_PUBLIC_INVENTORY_UI_URL ?? 'https://inventory.codevertexitsolutions.com';
 const TREASURY_URL = process.env.NEXT_PUBLIC_TREASURY_UI_URL ?? 'https://books.codevertexitsolutions.com';
 const PRICING_URL = process.env.NEXT_PUBLIC_SUBSCRIPTIONS_UI_URL ?? 'https://pricing.codevertexitsolutions.com';
-const ORDERING_URL = process.env.NEXT_PUBLIC_ORDERING_UI_URL ?? 'https://order.codevertexitsolutions.com';
+const ORDERING_URL = process.env.NEXT_PUBLIC_ORDERING_UI_URL ?? 'https://ordersapp.codevertexitsolutions.com';
 const AUTH_URL = process.env.NEXT_PUBLIC_AUTH_UI_URL ?? 'https://accounts.codevertexitsolutions.com';
-const CRM_URL = process.env.NEXT_PUBLIC_CRM_UI_URL ?? 'https://crm.codevertexitsolutions.com';
+const CRM_URL = process.env.NEXT_PUBLIC_CRM_UI_URL ?? 'https://markeflow.codevertexitsolutions.com';
 
 const SERVICES = [
   { label: 'Inventory', href: (slug: string) => `${INVENTORY_URL}/${slug}`, Icon: Package },

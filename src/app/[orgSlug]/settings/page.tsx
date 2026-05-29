@@ -31,17 +31,17 @@ type Tab =
   | 'platform'
   | 'team';
 
-const ALL_TABS: { id: Tab; label: string; icon: React.ElementType; requireModule?: string }[] = [
-  { id: 'general',      label: 'General',          icon: Settings  },
-  { id: 'receipt',      label: 'Receipt & Printing',icon: Receipt   },
-  { id: 'modules',      label: 'Modules',           icon: Layers    },
-  { id: 'shifts',       label: 'Shifts',            icon: Clock     },
-  { id: 'kds_stations', label: 'KDS Stations',      icon: ChefHat,  requireModule: 'kds'    },
-  { id: 'tables',       label: 'Tables',            icon: Table2,   requireModule: 'tables' },
-  { id: 'integrations', label: 'Integrations',      icon: Link2     },
-  { id: 'loyalty',      label: 'Loyalty',           icon: Gift,     requireModule: 'loyalty' },
-  { id: 'team',         label: 'Team',              icon: Users     },
-  { id: 'platform',     label: 'Platform',          icon: ShieldCheck },
+const ALL_TABS: { id: Tab; label: string; icon: React.ElementType; requireModule?: string; description: string }[] = [
+  { id: 'general',      label: 'Outlet Config',      icon: Settings,   description: 'Currency, tax, and returns policy' },
+  { id: 'receipt',      label: 'Receipt & Printing',  icon: Receipt,    description: 'Receipt format and printer profiles' },
+  { id: 'modules',      label: 'Modules',             icon: Layers,     description: 'Use case and feature toggles' },
+  { id: 'shifts',       label: 'Shifts',              icon: Clock,      description: 'Float rules and shift visibility' },
+  { id: 'kds_stations', label: 'KDS Stations',        icon: ChefHat,    description: 'Kitchen and bar display screens', requireModule: 'kds' },
+  { id: 'tables',       label: 'Tables',              icon: Table2,     description: 'Floor plan and table configuration', requireModule: 'tables' },
+  { id: 'integrations', label: 'Integrations',        icon: Link2,      description: 'Webhooks and third-party services' },
+  { id: 'loyalty',      label: 'Loyalty',             icon: Gift,       description: 'Points, tiers, and earn rates', requireModule: 'loyalty' },
+  { id: 'team',         label: 'Team',                icon: Users,      description: 'Staff members and roles' },
+  { id: 'platform',     label: 'Platform',            icon: ShieldCheck, description: 'Admin and tenant management' },
 ];
 
 export default function SettingsPage() {
@@ -56,17 +56,20 @@ export default function SettingsPage() {
     return true;
   });
 
+  const activeTabDef = visibleTabs.find((t) => t.id === activeTab) ?? visibleTabs[0];
+
   return (
-    <div className="p-4 sm:p-8 space-y-6">
-      <div>
+    <div className="p-4 sm:p-6 xl:p-8 max-w-6xl mx-auto">
+      {/* Page header */}
+      <div className="mb-6">
         <h1 className="text-2xl font-black tracking-tight">POS Settings</h1>
-        <p className="text-muted-foreground mt-1 text-sm">
-          Manage receipt format, printer, modules, and integrations.
+        <p className="text-sm text-muted-foreground mt-1">
+          Configure outlet behaviour, modules, printers, and integrations.
         </p>
       </div>
 
-      {/* Tab bar */}
-      <div className="flex gap-1 p-1 rounded-2xl bg-muted/50 border border-border overflow-x-auto scrollbar-hide">
+      {/* Mobile: horizontal scrollable tabs */}
+      <div className="md:hidden mb-5 flex gap-1 p-1 rounded-2xl bg-muted/50 border border-border overflow-x-auto scrollbar-hide">
         {visibleTabs.map((tab) => {
           const Icon = tab.icon;
           const active = activeTab === tab.id;
@@ -85,18 +88,51 @@ export default function SettingsPage() {
         })}
       </div>
 
-      {/* Tab content */}
-      <div>
-        {activeTab === 'general'      && <GeneralTab />}
-        {activeTab === 'receipt'      && <ReceiptTab />}
-        {activeTab === 'modules'      && <ModulesTab />}
-        {activeTab === 'shifts'       && <ShiftsSettingsTab />}
-        {activeTab === 'kds_stations' && <KDSStationsTab />}
-        {activeTab === 'tables'       && <TablesSettingsTab />}
-        {activeTab === 'integrations' && <IntegrationsTab />}
-        {activeTab === 'loyalty'      && <LoyaltySettingsTab />}
-        {activeTab === 'team'         && <TeamTab />}
-        {activeTab === 'platform'     && isPlatformOwner && <PlatformTab />}
+      {/* Desktop: sidebar nav + content */}
+      <div className="flex flex-col md:flex-row gap-6 items-start">
+        {/* Sidebar navigation */}
+        <nav className="hidden md:block w-52 shrink-0 sticky top-6">
+          <div className="bg-card rounded-2xl border border-border p-2 space-y-0.5">
+            {visibleTabs.map((tab) => {
+              const Icon = tab.icon;
+              const active = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all text-left
+                    ${active
+                      ? 'bg-primary/10 text-primary'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-accent/50'}`}
+                >
+                  <Icon className="h-4 w-4 shrink-0" />
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
+        </nav>
+
+        {/* Main content area */}
+        <div className="flex-1 min-w-0 space-y-1">
+          {/* Section heading above each tab */}
+          <div className="mb-5">
+            <h2 className="text-lg font-bold">{activeTabDef?.label}</h2>
+            <p className="text-sm text-muted-foreground">{activeTabDef?.description}</p>
+          </div>
+
+          {activeTab === 'general'      && <GeneralTab />}
+          {activeTab === 'receipt'      && <ReceiptTab />}
+          {activeTab === 'modules'      && <ModulesTab />}
+          {activeTab === 'shifts'       && <ShiftsSettingsTab />}
+          {activeTab === 'kds_stations' && <KDSStationsTab />}
+          {activeTab === 'tables'       && <TablesSettingsTab />}
+          {activeTab === 'integrations' && <IntegrationsTab />}
+          {activeTab === 'loyalty'      && <LoyaltySettingsTab />}
+          {activeTab === 'team'         && <TeamTab />}
+          {activeTab === 'platform'     && isPlatformOwner && <PlatformTab />}
+        </div>
       </div>
     </div>
   );

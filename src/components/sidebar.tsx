@@ -1,20 +1,24 @@
 'use client';
 
+import { useModuleAccess } from '@/hooks/use-module-access';
+import { useSubscription } from '@/hooks/use-subscription';
+import { usePermissions } from '@/hooks/usePermissions';
+import type { Permission } from '@/lib/rbac/permissions';
+import { P } from '@/lib/rbac/permissions';
 import { cn } from '@/lib/utils';
+import { useTenantBranding } from '@/providers/tenant-branding-provider';
+import { useAuthStore } from '@/store/auth';
 import {
   BarChart3,
   BedDouble,
-  BookOpen,
   Calendar,
   ChefHat,
   ChevronDown,
   ClipboardList,
-  ExternalLink,
-  FlaskConical,
-  Gift,
-  TrendingUp,
   Clock,
   Cpu,
+  FlaskConical,
+  Gift,
   Grid3x3,
   Key,
   LayoutDashboard,
@@ -29,30 +33,21 @@ import {
   ShoppingBag,
   ShoppingCart,
   Sofa,
+  TrendingUp,
   Truck,
   UserSquare,
   Users,
   Wallet,
   Webhook,
-  Wine,
-  X,
+  X
 } from 'lucide-react';
 import Link from 'next/link';
 import { useParams, usePathname } from 'next/navigation';
 import { useState } from 'react';
-import { useTenantBranding } from '@/providers/tenant-branding-provider';
-import { useAuthStore } from '@/store/auth';
-import { useModuleAccess } from '@/hooks/use-module-access';
-import { usePermissions } from '@/hooks/usePermissions';
-import { useSubscription } from '@/hooks/use-subscription';
-import { P } from '@/lib/rbac/permissions';
-import type { Permission } from '@/lib/rbac/permissions';
 import { OutletSwitcher } from './outlet-switcher';
 
 const SUBSCRIBE_URL = process.env.NEXT_PUBLIC_SUBSCRIPTIONS_UI_URL || 'https://pricing.codevertexitsolutions.com';
 const INVENTORY_URL = process.env.NEXT_PUBLIC_INVENTORY_UI_URL || 'https://inventory.codevertexitsolutions.com';
-const CRM_URL = process.env.NEXT_PUBLIC_CRM_UI_URL || 'https://crm.codevertexitsolutions.com';
-const TREASURY_URL = process.env.NEXT_PUBLIC_TREASURY_UI_URL || 'https://books.codevertexitsolutions.com';
 
 interface SidebarProps {
   open?: boolean;
@@ -285,6 +280,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
       defaultCollapsed: true,
       items: [
         { label: 'Purchase Orders', icon: Truck, href: '/purchase-orders', moduleKey: 'purchase_orders', permission: [P.CATALOG_MANAGE, P.CATALOG_CHANGE], waiterHidden: true },
+        { label: 'Manage Inventory', icon: Truck, href: `${INVENTORY_URL}/${orgSlug}`, moduleKey: 'inventory', permission: [P.CATALOG_MANAGE, P.CATALOG_CHANGE], waiterHidden: true },
       ],
     },
     {
@@ -447,35 +443,6 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
               {isHospOrQSR && (
                 <NavLink item={{ label: 'KDS Stations', icon: ChefHat, href: '/platform?tab=kds', moduleKey: 'platform' }} orgSlug={orgSlug} onClose={onClose} />
               )}
-            </div>
-          </div>
-        )}
-
-        {/* External services — opens in new tab with current tenant slug */}
-        {isHQUser && (
-          <div>
-            <p className="px-3 mb-1.5 text-[10px] font-bold uppercase tracking-[0.15em] text-sidebar-foreground/25">
-              Services
-            </p>
-            <div className="space-y-0.5">
-              {[
-                { label: 'Manage Inventory', href: `${INVENTORY_URL}/${orgSlug}`, Icon: Package },
-                { label: 'CRM', href: `${CRM_URL}/${orgSlug}`, Icon: Users },
-                { label: 'Treasury', href: `${TREASURY_URL}/${orgSlug}`, Icon: BookOpen },
-              ].map(({ label, href, Icon }) => (
-                <a
-                  key={label}
-                  href={href}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={onClose}
-                  className="group flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 text-sm text-sidebar-foreground/55 hover:text-sidebar-foreground hover:bg-sidebar-foreground/8 font-medium"
-                >
-                  <Icon className="h-4.5 w-4.5 shrink-0 transition-transform duration-200 group-hover:scale-110" />
-                  <span className="truncate flex-1">{label}</span>
-                  <ExternalLink className="h-3 w-3 opacity-40 shrink-0" />
-                </a>
-              ))}
             </div>
           </div>
         )}

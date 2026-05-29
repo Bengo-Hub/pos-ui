@@ -40,8 +40,8 @@ export function GeneralTab() {
   };
 
   return (
-    <div className="space-y-6">
-      {/* Branding (read-only) */}
+    <div className="space-y-4">
+      {/* Branding strip */}
       {!brandingLoading && tenant && (
         <Card>
           <CardHeader>
@@ -51,86 +51,47 @@ export function GeneralTab() {
             </div>
           </CardHeader>
           <CardContent>
-            <p className="text-sm text-muted-foreground mb-4">
-              Branding is managed in the auth portal. Contact your platform admin to update the logo or colors.
-            </p>
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-4 flex-wrap">
               {tenant.logoUrl && (
-                <img src={tenant.logoUrl} alt={tenant.name ?? ''} className="h-10 object-contain" />
+                <img src={tenant.logoUrl} alt={tenant.name ?? ''} className="h-10 object-contain rounded" />
               )}
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold">{tenant.orgName ?? tenant.name}</p>
+                <p className="text-xs text-muted-foreground">{tenant.slug}</p>
+              </div>
               {tenant.primaryColor && (
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 shrink-0">
                   <div
-                    className="h-8 w-8 rounded-lg border border-border"
+                    className="h-7 w-7 rounded-lg border border-border"
                     style={{ backgroundColor: tenant.primaryColor }}
                   />
                   <span className="text-xs font-mono text-muted-foreground">{tenant.primaryColor}</span>
                 </div>
               )}
-              <div>
-                <p className="text-sm font-semibold">{tenant.orgName ?? tenant.name}</p>
-                <p className="text-xs text-muted-foreground">{tenant.slug}</p>
-              </div>
+              <p className="text-xs text-muted-foreground shrink-0 hidden sm:block">
+                Manage in auth portal
+              </p>
             </div>
           </CardContent>
         </Card>
       )}
 
-      {/* Returns Policy */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-2">
-            <RotateCcw className="h-4 w-4 text-primary" />
-            <span className="font-bold text-sm">Returns Policy</span>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <div className="h-16 flex items-center justify-center text-muted-foreground">
-              <Loader2 className="h-5 w-5 animate-spin" />
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <label className={labelClass}>Return Window (days)</label>
-                  <input
-                    type="number"
-                    min={0}
-                    max={365}
-                    step={1}
-                    value={returnWindowDays}
-                    onChange={(e) => setReturnWindowDays(e.target.value)}
-                    disabled={!canEdit}
-                    placeholder="30"
-                    className={`${inputClass} font-mono`}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Maximum days after purchase to accept a return. Set to 0 for no limit.
-                  </p>
+      {isLoading ? (
+        <div className="h-40 flex items-center justify-center text-muted-foreground">
+          <Loader2 className="h-6 w-6 animate-spin" />
+        </div>
+      ) : (
+        <>
+          {/* Currency & VAT + Returns side-by-side */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <Card>
+              <CardHeader>
+                <div className="flex items-center gap-2">
+                  <Globe className="h-4 w-4 text-primary" />
+                  <span className="font-bold text-sm">Currency & Tax</span>
                 </div>
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Currency & VAT */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-2">
-            <Globe className="h-4 w-4 text-primary" />
-            <span className="font-bold text-sm">Currency & Tax</span>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <div className="h-24 flex items-center justify-center text-muted-foreground">
-              <Loader2 className="h-5 w-5 animate-spin" />
-            </div>
-          ) : (
-            <div className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              </CardHeader>
+              <CardContent className="space-y-4">
                 <div className="space-y-2">
                   <label className={labelClass}>Currency</label>
                   <select
@@ -161,39 +122,64 @@ export function GeneralTab() {
                     className={`${inputClass} font-mono`}
                   />
                 </div>
-              </div>
+                <div className="flex items-center justify-between pt-1">
+                  <div>
+                    <p className="text-sm font-medium">Show VAT on Receipts</p>
+                    <p className="text-xs text-muted-foreground">Display VAT as a line item</p>
+                  </div>
+                  <Toggle checked={vatEnabled} onChange={setVatEnabled} disabled={!canEdit} />
+                </div>
+              </CardContent>
+            </Card>
 
-              <div className="flex items-center justify-between p-4 rounded-xl bg-accent/10 border border-border">
-                <div>
-                  <h4 className="text-sm font-bold">Show VAT Breakdown on Receipts</h4>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Display VAT as a separate line item on customer receipts.
+            <Card>
+              <CardHeader>
+                <div className="flex items-center gap-2">
+                  <RotateCcw className="h-4 w-4 text-primary" />
+                  <span className="font-bold text-sm">Returns Policy</span>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <label className={labelClass}>Return Window (days)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={365}
+                    step={1}
+                    value={returnWindowDays}
+                    onChange={(e) => setReturnWindowDays(e.target.value)}
+                    disabled={!canEdit}
+                    placeholder="30"
+                    className={`${inputClass} font-mono`}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Maximum days after purchase to accept a return. Set 0 for no limit.
                   </p>
                 </div>
-                <Toggle checked={vatEnabled} onChange={setVatEnabled} disabled={!canEdit} />
-              </div>
+              </CardContent>
+            </Card>
+          </div>
 
-              <div className="flex items-center justify-end gap-3">
-                {!canEdit && (
-                  <p className="text-xs text-muted-foreground flex items-center gap-1.5">
-                    <Lock className="h-3 w-3" /> View only
-                  </p>
-                )}
-                <Button
-                  onClick={handleSave}
-                  disabled={!canEdit || updateSettings.isPending}
-                  className="gap-2 px-8 shadow-lg shadow-primary/10"
-                >
-                  {updateSettings.isPending
-                    ? <Loader2 className="h-4 w-4 animate-spin" />
-                    : <Save className="h-4 w-4" />}
-                  {updateSettings.isPending ? 'Saving…' : 'Save'}
-                </Button>
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+          <div className="flex items-center justify-end gap-3 pt-1">
+            {!canEdit && (
+              <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                <Lock className="h-3 w-3" /> View only
+              </p>
+            )}
+            <Button
+              onClick={handleSave}
+              disabled={!canEdit || updateSettings.isPending}
+              className="gap-2 px-8 shadow-lg shadow-primary/10"
+            >
+              {updateSettings.isPending
+                ? <Loader2 className="h-4 w-4 animate-spin" />
+                : <Save className="h-4 w-4" />}
+              {updateSettings.isPending ? 'Saving…' : 'Save'}
+            </Button>
+          </div>
+        </>
+      )}
     </div>
   );
 }
