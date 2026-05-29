@@ -208,7 +208,8 @@ function RetailPage() {
     createOrder.mutate(
       {
         outletId,
-        orderSubtype: 'retail' as any,
+        orderSubtype: 'retail',
+        discountAmount: loyaltyState?.redeemDiscount ?? 0,
         customerPhone: loyaltyState?.customerPhone,
         customerName: loyaltyState?.customerName,
         lines: cart.map((l) => ({
@@ -225,7 +226,9 @@ function RetailPage() {
           setCompletedOrder({
             id: order.id,
             order_number: order.order_number ?? order.id,
-            total,
+            total: typeof order.total_amount === 'string'
+              ? parseFloat(order.total_amount)
+              : (order.total_amount ?? total),
           });
         },
         onError: () => {

@@ -5,6 +5,7 @@ import { ArrowLeft, Calendar, Gift, Phone, ShoppingBag, Star, UserX } from 'luci
 import { ModuleGate } from '@/components/auth/module-gate';
 import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
 import { useClient, useClientOrders } from '@/hooks/useClients';
+import { useModuleAccess } from '@/hooks/use-module-access';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api/client';
 import { useAuthStore } from '@/store/auth';
@@ -60,6 +61,7 @@ export default function ClientDetailPage() {
   const router = useRouter();
   const orgSlug = (params?.orgSlug as string) || '';
   const accountID = (params?.id as string) || '';
+  const { isRetail } = useModuleAccess();
 
   const { data: account, isLoading } = useClient(accountID);
   const { data: apptData } = useClientAppointments(account?.customer_name ?? '');
@@ -233,7 +235,7 @@ export default function ClientDetailPage() {
             <div className="flex gap-3">
               <button
                 type="button"
-                onClick={() => router.push(`/${orgSlug}/order`)}
+                onClick={() => router.push(`/${orgSlug}/${isRetail ? 'retail' : 'order'}`)}
                 className="flex-1 py-3 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors"
               >
                 Start New Order

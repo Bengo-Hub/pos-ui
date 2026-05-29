@@ -11,6 +11,7 @@ import {
 } from '@/hooks/useStaffSchedule';
 import { useStaffOverrides, useCreateShiftOverride, useDeleteShiftOverride } from '@/hooks/useShiftOverrides';
 import { useStaffLeaveRequests, useCreateLeaveRequest } from '@/hooks/useLeaveRequests';
+import { useAuthStore } from '@/store/auth';
 import { cn } from '@/lib/utils';
 import type { StaffMember } from '@/lib/api/staff';
 import type { OverrideType } from '@/lib/api/shift-overrides';
@@ -82,6 +83,7 @@ export interface StaffShiftDrawerProps {
 
 export function StaffShiftDrawer({ staff, open, onClose }: StaffShiftDrawerProps) {
   const [activeTab, setActiveTab] = useState<Tab>('schedule');
+  const outletId = useAuthStore((s) => s.outlet?.id ?? '');
 
   // ── Weekly schedule tab ──────────────────────────────────────────────────
   const { data: schedule, isLoading: schedLoading } = useStaffSchedule(staff?.id ?? '');
@@ -99,6 +101,7 @@ export function StaffShiftDrawer({ staff, open, onClose }: StaffShiftDrawerProps
 
   async function handleSaveSchedule() {
     const entries: UpsertScheduleEntry[] = rows.map((r) => ({
+      outlet_id: outletId || undefined,
       day_of_week: r.day,
       start_time: r.startTime,
       end_time: r.endTime,

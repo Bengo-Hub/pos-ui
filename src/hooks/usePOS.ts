@@ -435,8 +435,9 @@ interface CreateOrderInput {
   outletId: string;
   deviceId?: string;
   currency?: string;
-  orderSubtype?: OrderSubtype;
+  orderSubtype?: OrderSubtype | 'retail';
   tableId?: string;
+  discountAmount?: number;
   coversCount?: number;
   customerPhone?: string;
   customerName?: string;
