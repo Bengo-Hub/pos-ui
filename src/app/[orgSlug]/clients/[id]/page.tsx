@@ -1,10 +1,10 @@
 'use client';
 
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Calendar, Gift, Phone, Star, UserX } from 'lucide-react';
+import { ArrowLeft, Calendar, Gift, Phone, ShoppingBag, Star, UserX } from 'lucide-react';
 import { ModuleGate } from '@/components/auth/module-gate';
 import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
-import { useClient } from '@/hooks/useClients';
+import { useClient, useClientOrders } from '@/hooks/useClients';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api/client';
 import { useAuthStore } from '@/store/auth';
@@ -37,6 +37,15 @@ function useClientAppointments(customerName: string) {
   });
 }
 
+const ORDER_STATUS_COLORS: Record<string, string> = {
+  paid:       'text-emerald-600',
+  completed:  'text-emerald-600',
+  pending:    'text-amber-600',
+  voided:     'text-red-500',
+  refunded:   'text-blue-500',
+  cancelled:  'text-muted-foreground/60',
+};
+
 const STATUS_COLORS: Record<string, string> = {
   completed:   'text-emerald-600',
   confirmed:   'text-blue-600',
@@ -54,7 +63,9 @@ export default function ClientDetailPage() {
 
   const { data: account, isLoading } = useClient(accountID);
   const { data: apptData } = useClientAppointments(account?.customer_name ?? '');
+  const { data: ordersData } = useClientOrders(account?.customer_phone);
   const appointments = apptData?.data ?? [];
+  const orders = ordersData?.data ?? [];
   const noShowCount = appointments.filter((a) => a.status === 'no_show').length;
   const completedCount = appointments.filter((a) => a.status === 'completed').length;
   const serviceFrequency = appointments.reduce<Record<string, number>>((acc, a) => {
@@ -181,6 +192,42 @@ export default function ClientDetailPage() {
                 </div>
               </div>
             )}
+
+            {/* Purchase history */}
+            <div className="bg-card border border-border rounded-2xl overflow-hidden">
+              <div className="px-4 py-3 border-b border-border flex items-center gap-2">
+                <ShoppingBag className="h-4 w-4 text-muted-foreground" />
+                <p className="text-xs font-bold text-muted-foreground">Purchase History</p>
+                {ordersData && (
+                  <span className="ml-auto text-xs text-muted-foreground">{ordersData.total} orders</span>
+                )}
+              </div>
+              {orders.length === 0 ? (
+                <div className="px-4 py-6 text-center text-sm text-muted-foreground">No orders yet</div>
+              ) : (
+                <div className="divide-y divide-border">
+                  {orders.map((o) => (
+                    <div key={o.id} className="flex items-center justify-between px-4 py-3">
+                      <div>
+                        <p className="text-sm font-medium">
+                          {o.order_number ? `#${o.order_number}` : o.id.slice(0, 8).toUpperCase()}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {new Date(o.created_at).toLocaleDateString('en-KE', { dateStyle: 'medium' })}
+                          {o.order_subtype ? ` · ${o.order_subtype.replace('_', ' ')}` : ''}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm font-semibold tabular-nums">{fmt(parseFloat(o.total_amount))}</p>
+                        <span className={cn('text-[10px] font-bold capitalize', ORDER_STATUS_COLORS[o.status] ?? 'text-muted-foreground')}>
+                          {o.status}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
 
             {/* Action buttons */}
             <div className="flex gap-3">

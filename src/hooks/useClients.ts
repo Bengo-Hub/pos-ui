@@ -2,6 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { clientsApi } from '@/lib/api/clients';
+export type { ClientOrder } from '@/lib/api/clients';
 import { apiClient } from '@/lib/api/client';
 import { useAuthStore } from '@/store/auth';
 
@@ -49,6 +50,16 @@ export function useAddLoyaltyPoints() {
       qc.invalidateQueries({ queryKey: ['pos-client', tenantID, vars.accountID] });
       qc.invalidateQueries({ queryKey: ['pos-clients', tenantID] });
     },
+  });
+}
+
+export function useClientOrders(phone?: string, page = 1) {
+  const tenantID = useTenantID();
+  return useQuery({
+    queryKey: ['client-orders', tenantID, phone, page],
+    queryFn: () => clientsApi.getClientOrders(tenantID, phone!, page),
+    enabled: !!tenantID && !!phone,
+    staleTime: 30_000,
   });
 }
 
