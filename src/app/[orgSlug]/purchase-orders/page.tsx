@@ -2,24 +2,10 @@
 
 import { ModuleGate } from '@/components/auth/module-gate';
 import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
-import { useAuthStore } from '@/store/auth';
-import { useQuery } from '@tanstack/react-query';
-import { apiClient } from '@/lib/api/client';
 import { useState } from 'react';
 import { Loader2, Truck } from 'lucide-react';
 import { cn } from '@/lib/utils';
-
-interface PurchaseOrder {
-  id: string;
-  po_number: string;
-  supplier_name?: string;
-  status: 'draft' | 'sent' | 'partial' | 'received' | 'cancelled';
-  total_amount?: number;
-  currency?: string;
-  expected_date?: string;
-  created_at: string;
-  line_item_count?: number;
-}
+import { usePurchaseOrders, type PurchaseOrder } from '@/hooks/usePurchaseOrders';
 
 const STATUS_CONFIG: Record<PurchaseOrder['status'], { label: string; className: string }> = {
   draft:     { label: 'Draft',     className: 'bg-muted text-muted-foreground' },
@@ -28,20 +14,6 @@ const STATUS_CONFIG: Record<PurchaseOrder['status'], { label: string; className:
   received:  { label: 'Received',  className: 'bg-emerald-500/10 text-emerald-700' },
   cancelled: { label: 'Cancelled', className: 'bg-red-500/10 text-red-600' },
 };
-
-function usePurchaseOrders(status: string) {
-  const user = useAuthStore((s) => s.user);
-  const tenantID = user?.tenant_id ?? '';
-  return useQuery({
-    queryKey: ['purchase-orders', tenantID, status],
-    queryFn: () =>
-      apiClient.get<{ data: PurchaseOrder[] }>(
-        `/api/v1/${tenantID}/inventory/purchase-orders${status ? `?status=${status}` : ''}`
-      ),
-    enabled: !!tenantID,
-    staleTime: 2 * 60_000,
-  });
-}
 
 const FILTERS: { key: string; label: string }[] = [
   { key: '',          label: 'All'       },
@@ -54,7 +26,7 @@ const FILTERS: { key: string; label: string }[] = [
 
 function PurchaseOrdersPage() {
   const [statusFilter, setStatusFilter] = useState('');
-  const { data, isLoading } = usePurchaseOrders(statusFilter);
+  const { data, isLoading } = usePurchaseOrders(statusFilter || undefined);
   const orders = data?.data ?? [];
 
   return (
