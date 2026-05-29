@@ -5,14 +5,13 @@ import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useParams } from 'next/navigation';
-import { Loader2, Search, Trash2, ShoppingCart, Tag, X } from 'lucide-react';
+import { Loader2, Search, Trash2, ShoppingCart, Tag, X, Camera } from 'lucide-react';
 import { useAuthStore } from '@/store/auth';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { useMenuItems, useCreateOrder } from '@/hooks/usePOS';
 import { SplitPaymentModal } from '@/components/pos/split-payment-modal';
 import { lookupItemByBarcode } from '@/lib/api/retail';
 import type { CatalogItem } from '@/lib/api/retail';
-import { BarcodeInput } from '@/components/retail/BarcodeInput';
 import { ScaleDisplay } from '@/components/retail/ScaleDisplay';
 import { SerialCaptureModal } from '@/components/retail/SerialCaptureModal';
 import { StockBadge } from '@/components/retail/StockBadge';
@@ -65,14 +64,14 @@ function RetailPage() {
 
   const createOrder = useCreateOrder();
 
-  // ── Rich search ──────────────────────────────────────────────────────────
-  const [searchQuery, setSearchQuery] = useState('');
+  // ── Unified search (barcode + text) ─────────────────────────────────────
+  const [searchValue, setSearchValue] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const searchRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
-    const t = setTimeout(() => setDebouncedSearch(searchQuery), 300);
+    const t = setTimeout(() => setDebouncedSearch(searchValue), 300);
     return () => clearTimeout(t);
-  }, [searchQuery]);
+  }, [searchValue]);
 
   const { data: catalogData, isLoading: catalogLoading } = useMenuItems({
     search: debouncedSearch || undefined,
@@ -152,6 +151,7 @@ function RetailPage() {
     try {
       const item = await lookupItemByBarcode(tenantSlug, barcode);
       addToCart(item);
+      setSearchValue('');
     } catch {
       setScanError(`Item not found for barcode: ${barcode}`);
     } finally {
@@ -268,12 +268,47 @@ function RetailPage() {
     <div className="flex flex-col lg:flex-row gap-4 p-4 min-h-0">
       {/* ── Left panel: scan + search + catalog ── */}
       <div className="flex-1 flex flex-col gap-4 min-w-0">
-        {/* Barcode input */}
-        <BarcodeInput
-          onScan={handleScan}
-          placeholder="Scan barcode or enter manually…"
-          loading={scanLoading}
-        />
+        {/* Unified barcode + search input */}
+        <div className="relative group flex items-center gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
+            <input
+              ref={searchRef}
+              autoFocus
+              type="text"
+              value={searchValue}
+              disabled={scanLoading}
+              onChange={(e) => setSearchValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && searchValue.trim()) {
+                  handleScan(searchValue.trim());
+                }
+              }}
+              placeholder="Scan barcode or search by name, SKU…"
+              className="w-full bg-card border border-border rounded-2xl py-3.5 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 transition-all disabled:opacity-50"
+            />
+            {searchValue && !scanLoading && (
+              <button
+                type="button"
+                onClick={() => { setSearchValue(''); setScanError(null); }}
+                className="absolute right-3 top-1/2 -translate-y-1/2 h-6 w-6 rounded-full bg-muted flex items-center justify-center hover:bg-destructive/10 hover:text-destructive transition-colors"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            )}
+          </div>
+          <button
+            type="button"
+            disabled={scanLoading || !searchValue.trim()}
+            onClick={() => searchValue.trim() && handleScan(searchValue.trim())}
+            className="h-12 w-12 flex items-center justify-center rounded-2xl bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50 shrink-0"
+            title="Scan / Add"
+          >
+            {scanLoading
+              ? <span className="h-4 w-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
+              : <Camera className="h-5 w-5" />}
+          </button>
+        </div>
 
         {scanError && (
           <p className="text-sm text-destructive px-1">{scanError}</p>
@@ -287,28 +322,6 @@ function RetailPage() {
             onAddToCart={handleScaleAddToCart}
           />
         )}
-
-        {/* Rich text search */}
-        <div className="relative group">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
-          <input
-            ref={searchRef}
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search by name, SKU, description…"
-            className="w-full bg-card border border-border rounded-2xl py-3 pl-10 pr-9 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 transition-all"
-          />
-          {searchQuery && (
-            <button
-              type="button"
-              onClick={() => setSearchQuery('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 h-6 w-6 rounded-full bg-muted flex items-center justify-center hover:bg-destructive/10 hover:text-destructive transition-colors"
-            >
-              <X className="h-3 w-3" />
-            </button>
-          )}
-        </div>
 
         {/* Catalog item list */}
         <div className="bg-card border border-border rounded-2xl overflow-hidden max-h-64 overflow-y-auto">

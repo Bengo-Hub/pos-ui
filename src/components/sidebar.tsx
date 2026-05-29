@@ -210,6 +210,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
   const outletUseCase = (outlet?.use_case ?? (user as any)?.outlet_use_case ?? '').toLowerCase();
   const isServices = outletUseCase === 'services';
   const isPharmacy = outletUseCase === 'pharmacy';
+  const isRetail = outletUseCase === 'retail';
 
   // ── Nav groups ────────────────────────────────────────────────────────────
 
@@ -320,6 +321,8 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
           if (isCashierHospOrQSR && item.cashierHospHidden) return false;
           // Services outlets: hide order-entry items (they use Appointments/Queue instead)
           if (isServices && ['new_order', 'orders'].includes(item.moduleKey)) return false;
+          // Retail outlets use Retail POS page, not the hospitality New Order flow
+          if (isRetail && item.moduleKey === 'new_order') return false;
           if (!item.permission) return true;
           if (isSuperuser || isSuperUser) return true;
           const perms = Array.isArray(item.permission) ? item.permission : [item.permission];
