@@ -54,11 +54,24 @@ export function useLoyaltyPrograms() {
   });
 }
 
+interface PaginatedResponse<T> {
+  data: T[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
 export function useLoyaltyAccounts(phone?: string) {
   const tenantID = useTenantID();
   return useQuery({
     queryKey: ['loyalty-accounts', tenantID, phone],
-    queryFn: () => apiClient.get<LoyaltyAccount[]>(`${base(tenantID)}/accounts`, phone ? { phone } : undefined),
+    queryFn: () =>
+      apiClient
+        .get<PaginatedResponse<LoyaltyAccount>>(
+          `${base(tenantID)}/accounts`,
+          phone ? { phone } : undefined,
+        )
+        .then((res) => (Array.isArray(res) ? res : res.data ?? [])),
     enabled: !!tenantID,
     staleTime: 15_000,
   });
