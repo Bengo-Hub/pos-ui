@@ -16,6 +16,7 @@ import { ScaleDisplay } from '@/components/retail/ScaleDisplay';
 import { SerialCaptureModal } from '@/components/retail/SerialCaptureModal';
 import { StockBadge } from '@/components/retail/StockBadge';
 import { ManagerPINOverrideModal } from '@/components/retail/ManagerPINOverrideModal';
+import { LoyaltyPanel, type LoyaltyState } from '@/components/retail/LoyaltyPanel';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -61,6 +62,7 @@ function RetailPage() {
   const [pendingOverride, setPendingOverride] = useState<PendingOverrideItem | null>(null);
   const [completedOrder, setCompletedOrder] = useState<CompletedOrder | null>(null);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [loyaltyState, setLoyaltyState] = useState<LoyaltyState | null>(null);
 
   const createOrder = useCreateOrder();
 
@@ -179,7 +181,8 @@ function RetailPage() {
 
   const subtotal = cart.reduce((sum, l) => sum + l.item.price * l.quantity, 0);
   const tax = subtotal * taxRate;
-  const total = subtotal + tax;
+  const loyaltyDiscount = loyaltyState?.redeemDiscount ?? 0;
+  const total = Math.max(0, subtotal + tax - loyaltyDiscount);
 
   // ── Checkout ─────────────────────────────────────────────────────────────
 
@@ -204,6 +207,8 @@ function RetailPage() {
       {
         outletId,
         orderSubtype: 'retail' as any,
+        customerPhone: loyaltyState?.customerPhone,
+        customerName: loyaltyState?.customerName,
         lines: cart.map((l) => ({
           catalog_item_id: l.item.id,
           sku: l.item.sku,
@@ -245,7 +250,7 @@ function RetailPage() {
           <p className="text-muted-foreground text-sm">Complete payment to finish the sale.</p>
           <button
             type="button"
-            onClick={() => { setCompletedOrder(null); setCart([]); }}
+            onClick={() => { setCompletedOrder(null); setCart([]); setLoyaltyState(null); }}
             className="px-6 py-3 rounded-xl bg-primary text-primary-foreground font-semibold hover:bg-primary/90 transition-colors"
           >
             New Sale
@@ -253,8 +258,8 @@ function RetailPage() {
         </div>
         <SplitPaymentModal
           open
-          onClose={() => { setCompletedOrder(null); setCart([]); }}
-          onPaymentConfirmed={() => { setCompletedOrder(null); setCart([]); }}
+          onClose={() => { setCompletedOrder(null); setCart([]); setLoyaltyState(null); }}
+          onPaymentConfirmed={() => { setCompletedOrder(null); setCart([]); setLoyaltyState(null); }}
           orderId={completedOrder.id}
           orderNumber={completedOrder.order_number}
           total={completedOrder.total}
@@ -433,8 +438,11 @@ function RetailPage() {
         </div>
       </div>
 
-      {/* ── Right panel: order summary ── */}
+      {/* ── Right panel: loyalty + order summary ── */}
       <div className="w-full lg:w-80 shrink-0 flex flex-col gap-4">
+        {/* Loyalty panel — phone lookup, register, redeem */}
+        <LoyaltyPanel onStateChange={setLoyaltyState} />
+
         <div className="bg-card border border-border rounded-2xl p-5">
           <h2 className="font-bold text-base mb-4">Order Summary</h2>
 
@@ -447,6 +455,12 @@ function RetailPage() {
               <span className="text-muted-foreground">VAT ({Math.round(taxRate * 100)}%)</span>
               <span className="font-semibold">{fmt(tax)}</span>
             </div>
+            {loyaltyDiscount > 0 && (
+              <div className="flex justify-between text-green-600">
+                <span>Loyalty Discount</span>
+                <span className="font-semibold">−{fmt(loyaltyDiscount)}</span>
+              </div>
+            )}
             <div className="flex justify-between border-t border-border pt-2.5">
               <span className="font-bold">Total</span>
               <span className="font-bold text-lg">{fmt(total)}</span>

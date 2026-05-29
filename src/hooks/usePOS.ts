@@ -438,6 +438,8 @@ interface CreateOrderInput {
   orderSubtype?: OrderSubtype;
   tableId?: string;
   coversCount?: number;
+  customerPhone?: string;
+  customerName?: string;
   lines: Array<{
     catalog_item_id: string;
     sku: string;
@@ -462,6 +464,8 @@ export function useCreateOrder() {
         order_subtype: data.orderSubtype ?? 'dine_in',
         table_id: data.tableId,
         covers_count: data.coversCount,
+        customer_phone: data.customerPhone,
+        customer_name: data.customerName,
         lines: data.lines,
       }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['pos-orders'] }),

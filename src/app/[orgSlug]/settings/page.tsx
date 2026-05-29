@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import {
-  ChefHat, Clock, Link2, Layers, Receipt,
+  ChefHat, Clock, Gift, Link2, Layers, Receipt,
   Settings, ShieldCheck, Table2, Users,
 } from 'lucide-react';
 import { useAuthStore } from '@/store/auth';
@@ -17,6 +17,7 @@ import { TablesSettingsTab } from '@/components/settings/TablesSettingsTab';
 import { IntegrationsTab } from '@/components/settings/IntegrationsTab';
 import { TeamTab } from '@/components/settings/TeamTab';
 import { PlatformTab } from '@/components/settings/PlatformTab';
+import { LoyaltySettingsTab } from '@/components/settings/LoyaltySettingsTab';
 
 type Tab =
   | 'general'
@@ -26,6 +27,7 @@ type Tab =
   | 'kds_stations'
   | 'tables'
   | 'integrations'
+  | 'loyalty'
   | 'platform'
   | 'team';
 
@@ -37,6 +39,7 @@ const ALL_TABS: { id: Tab; label: string; icon: React.ElementType; requireModule
   { id: 'kds_stations', label: 'KDS Stations',      icon: ChefHat,  requireModule: 'kds'    },
   { id: 'tables',       label: 'Tables',            icon: Table2,   requireModule: 'tables' },
   { id: 'integrations', label: 'Integrations',      icon: Link2     },
+  { id: 'loyalty',      label: 'Loyalty',           icon: Gift,     requireModule: 'loyalty' },
   { id: 'team',         label: 'Team',              icon: Users     },
   { id: 'platform',     label: 'Platform',          icon: ShieldCheck },
 ];
@@ -91,6 +94,7 @@ export default function SettingsPage() {
         {activeTab === 'kds_stations' && <KDSStationsTab />}
         {activeTab === 'tables'       && <TablesSettingsTab />}
         {activeTab === 'integrations' && <IntegrationsTab />}
+        {activeTab === 'loyalty'      && <LoyaltySettingsTab />}
         {activeTab === 'team'         && <TeamTab />}
         {activeTab === 'platform'     && isPlatformOwner && <PlatformTab />}
       </div>

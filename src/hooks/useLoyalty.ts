@@ -21,7 +21,9 @@ export interface LoyaltyProgram {
   redeem_rate: number;
   min_redeem_points: number;
   is_active: boolean;
+  tier_thresholds?: Record<string, number>;
   created_at: string;
+  updated_at: string;
 }
 
 export interface LoyaltyAccount {
@@ -49,8 +51,31 @@ export function useLoyaltyPrograms() {
   const tenantID = useTenantID();
   return useQuery({
     queryKey: ['loyalty-programs', tenantID],
-    queryFn: () => apiClient.get<LoyaltyProgram[]>(`${base(tenantID)}/programs`),
+    queryFn: () =>
+      apiClient
+        .get<PaginatedResponse<LoyaltyProgram>>(`${base(tenantID)}/programs`)
+        .then((res) => (Array.isArray(res) ? res : res.data ?? [])),
     enabled: !!tenantID,
+  });
+}
+
+export function useCreateLoyaltyProgram() {
+  const tenantID = useTenantID();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: Omit<LoyaltyProgram, 'id' | 'tenant_id' | 'created_at' | 'updated_at'>) =>
+      apiClient.post<LoyaltyProgram>(`${base(tenantID)}/programs`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['loyalty-programs', tenantID] }),
+  });
+}
+
+export function useUpdateLoyaltyProgram(programId: string) {
+  const tenantID = useTenantID();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: Partial<Omit<LoyaltyProgram, 'id' | 'tenant_id' | 'created_at' | 'updated_at'>>) =>
+      apiClient.put<LoyaltyProgram>(`${base(tenantID)}/programs/${programId}`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['loyalty-programs', tenantID] }),
   });
 }
 
