@@ -85,7 +85,7 @@ function RotationCard({ rotation, staffNames }: { rotation: ShiftRotation; staff
             <div className="min-w-0">
               <p className="text-sm font-semibold truncate">{rotation.name}</p>
               <p className="text-xs text-muted-foreground">
-                {rotation.cycle_days}-day cycle · starts {rotation.start_date}
+                {rotation.cycle_days}-day cycle · starts {rotation.start_date.slice(0, 10)}
               </p>
             </div>
           </button>

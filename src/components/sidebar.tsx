@@ -20,7 +20,6 @@ import {
   FlaskConical,
   Gift,
   Grid3x3,
-  Key,
   LayoutDashboard,
   Lock,
   LogOut,
@@ -90,9 +89,11 @@ function NavLink({ item, orgSlug, onClose, locked, subPlan }: {
   subPlan?: string;
 }) {
   const pathname = usePathname();
-  const href = `/${orgSlug}${item.href}`;
-  const active =
-    item.href === '/dashboard'
+  const isExternal = item.href.startsWith('http://') || item.href.startsWith('https://');
+  const href = isExternal ? item.href : `/${orgSlug}${item.href}`;
+  const active = isExternal
+    ? false
+    : item.href === '/dashboard'
       ? pathname === href
       : pathname.startsWith(href);
   const Icon = item.icon;
@@ -111,6 +112,24 @@ function NavLink({ item, orgSlug, onClose, locked, subPlan }: {
           <Lock className="h-2.5 w-2.5" />
           {subPlan ?? 'Pro'}
         </span>
+      </a>
+    );
+  }
+
+  if (isExternal) {
+    return (
+      <a
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={onClose}
+        className="group flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 text-sm text-sidebar-foreground/55 hover:text-sidebar-foreground hover:bg-sidebar-foreground/8 font-medium"
+      >
+        <Icon className="h-4.5 w-4.5 shrink-0 group-hover:scale-110 transition-transform duration-200" />
+        <span className="truncate flex-1">{item.label}</span>
+        <svg className="h-3 w-3 shrink-0 opacity-40" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+        </svg>
       </a>
     );
   }
@@ -417,32 +436,26 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
           />
         ))}
 
-        {/* Platform section — Devices + Licenses: platform owners only */}
+        {/* Platform section — single entry for platform owners; all tabs are inside the page */}
         {isPlatformOwner && (
           <div>
             <p className="px-3 mb-1.5 text-[10px] font-bold uppercase tracking-[0.15em] text-sidebar-foreground/25">
               Platform
             </p>
             <div className="space-y-0.5">
-              <NavLink item={{ label: 'Devices', icon: Monitor, href: '/platform', moduleKey: 'platform' }} orgSlug={orgSlug} onClose={onClose} />
-              <NavLink item={{ label: 'Licenses', icon: Key, href: '/platform?tab=licenses', moduleKey: 'platform' }} orgSlug={orgSlug} onClose={onClose} />
+              <NavLink item={{ label: 'Platform', icon: Monitor, href: '/platform', moduleKey: 'platform' }} orgSlug={orgSlug} onClose={onClose} />
             </div>
           </div>
         )}
 
-        {/* Configuration section — outlet/tax/modules: all HQ admin users */}
-        {isHQUser && (
+        {/* Configuration section — HQ admins who are not platform owners; links to the same platform page (shows outlet/tax/modules tabs only) */}
+        {isHQUser && !isPlatformOwner && (
           <div>
             <p className="px-3 mb-1.5 text-[10px] font-bold uppercase tracking-[0.15em] text-sidebar-foreground/25">
               Configuration
             </p>
             <div className="space-y-0.5">
-              <NavLink item={{ label: 'Outlet Config', icon: Settings, href: '/platform?tab=outlet', moduleKey: 'platform' }} orgSlug={orgSlug} onClose={onClose} />
-              <NavLink item={{ label: 'Tax & VAT', icon: Grid3x3, href: '/platform?tab=tax', moduleKey: 'platform' }} orgSlug={orgSlug} onClose={onClose} />
-              <NavLink item={{ label: 'Modules', icon: LayoutDashboard, href: '/platform?tab=modules', moduleKey: 'platform' }} orgSlug={orgSlug} onClose={onClose} />
-              {isHospOrQSR && (
-                <NavLink item={{ label: 'KDS Stations', icon: ChefHat, href: '/platform?tab=kds', moduleKey: 'platform' }} orgSlug={orgSlug} onClose={onClose} />
-              )}
+              <NavLink item={{ label: 'Configuration', icon: Settings, href: '/platform', moduleKey: 'platform' }} orgSlug={orgSlug} onClose={onClose} />
             </div>
           </div>
         )}

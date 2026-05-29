@@ -40,6 +40,7 @@ export type ModuleKey =
   | 'patients'
   | 'drug_inventory'
   | 'purchase_orders'
+  | 'inventory'
   | 'returns'
   | 'clients'
   | 'staff_schedule'
@@ -62,6 +63,7 @@ const COMMON_MODULES: ModuleKey[] = [
   'cash_drawer',
   'settings',
   'platform',
+  'inventory',
 ];
 
 const USE_CASE_MODULES: Record<UseCaseType, ModuleKey[]> = {
