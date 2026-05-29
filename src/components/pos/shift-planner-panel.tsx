@@ -6,7 +6,7 @@ import { useStaffAdmin } from '@/hooks/useStaff';
 import { useStaffSchedule } from '@/hooks/useStaffSchedule';
 import { useAllShiftOverrides } from '@/hooks/useShiftOverrides';
 import { useLeaveRequests } from '@/hooks/useLeaveRequests';
-import { useShiftRotations, useShiftRotationDetail } from '@/hooks/useShiftRotations';
+import { useAllActiveRotationDetails } from '@/hooks/useShiftRotations';
 import { useAuthStore } from '@/store/auth';
 import type { StaffMember } from '@/lib/api/staff';
 import type { ShiftOverride } from '@/lib/api/shift-overrides';
@@ -117,8 +117,7 @@ function CellIndicator({
 }
 
 function StaffScheduleRow({
-  staff, weekStart, today, onSelect, overrideByKey, leaveByKey,
-  rotationSlotByKey, primaryRotation,
+  staff, weekStart, today, onSelect, overrideByKey, leaveByKey, weekSlotMap,
 }: {
   staff: StaffMember;
   weekStart: Date;
@@ -126,8 +125,7 @@ function StaffScheduleRow({
   onSelect: (staff: StaffMember) => void;
   overrideByKey: Record<string, ShiftOverride>;
   leaveByKey: Record<string, LeaveRequest>;
-  rotationSlotByKey: Record<string, ShiftRotationSlot>;
-  primaryRotation: { start_date: string; cycle_days: number } | null;
+  weekSlotMap: Record<string, ShiftRotationSlot>;
 }) {
   const { data: schedule, isLoading } = useStaffSchedule(staff.id);
   const scheduleByDay = schedule
@@ -159,11 +157,7 @@ function StaffScheduleRow({
         const key = `${staff.id}_${dateStr}`;
         const entry = scheduleByDay[dayOfWeek];
         const isToday = date.toDateString() === today.toDateString();
-
-        const cycleDay = primaryRotation
-          ? resolveCycleDay(date, primaryRotation.start_date, primaryRotation.cycle_days)
-          : 0;
-        const rotationSlot = cycleDay > 0 ? rotationSlotByKey[`${staff.id}_${cycleDay}`] : undefined;
+        const rotationSlot = weekSlotMap[key];
 
         return (
           <td key={i} className={`px-2 py-3 text-center ${isToday ? 'bg-primary/5' : ''}`}>
@@ -210,10 +204,8 @@ export function ShiftPlannerPanel() {
   const { data: rawOverrides = [] } = useAllShiftOverrides(weekFromStr, weekToStr);
   const { data: rawLeaves = [] } = useLeaveRequests('approved');
 
-  // Rotation: fetch the first active rotation + its slots
-  const { data: activeRotations = [] } = useShiftRotations(true);
-  const primaryRotation = activeRotations[0] ?? null;
-  const { data: rotationDetail } = useShiftRotationDetail(primaryRotation?.id ?? '');
+  // All active rotations + their slots (covers staff split across multiple rotations)
+  const { rotationsWithSlots, activeRotations } = useAllActiveRotationDetails();
 
   const overrideByKey = useMemo(() => {
     const m: Record<string, ShiftOverride> = {};
@@ -223,13 +215,26 @@ export function ShiftPlannerPanel() {
     return m;
   }, [rawOverrides]);
 
-  const rotationSlotByKey = useMemo(() => {
+  // Pre-compute rotation slots for each staff × calendar date in the visible week.
+  // Key: `${staffId}_${dateStr}`. First matching rotation wins (staff should be in one rotation).
+  const weekSlotMap = useMemo(() => {
     const m: Record<string, ShiftRotationSlot> = {};
-    for (const slot of rotationDetail?.slots ?? []) {
-      m[`${slot.staff_member_id}_${slot.cycle_day}`] = slot;
+    for (let i = 0; i < 7; i++) {
+      const date = new Date(weekStart);
+      date.setDate(weekStart.getDate() + i);
+      const dateStr = date.toISOString().slice(0, 10);
+      for (const { rotation, slots } of rotationsWithSlots) {
+        const cycleDay = resolveCycleDay(date, rotation.start_date, rotation.cycle_days);
+        for (const slot of slots) {
+          if (slot.cycle_day === cycleDay) {
+            const key = `${slot.staff_member_id}_${dateStr}`;
+            if (!m[key]) m[key] = slot;
+          }
+        }
+      }
     }
     return m;
-  }, [rotationDetail]);
+  }, [rotationsWithSlots, weekStart]);
 
   const leaveByKey = useMemo(() => {
     const m: Record<string, LeaveRequest> = {};
@@ -283,13 +288,17 @@ export function ShiftPlannerPanel() {
         ))}
       </div>
 
-      {/* Active rotation chip */}
-      {primaryRotation && (
-        <div className="flex items-center gap-2 text-[11px] text-violet-700 dark:text-violet-400 bg-violet-50 dark:bg-violet-900/20 border border-violet-200 dark:border-violet-700/30 px-3 py-1.5 rounded-full w-fit">
-          <span className="inline-block w-1.5 h-1.5 rounded-full bg-violet-500" />
-          Rotation: <span className="font-semibold">{primaryRotation.name}</span>
-          <span className="text-violet-500 dark:text-violet-500">·</span>
-          {primaryRotation.cycle_days}-day cycle
+      {/* Active rotation chips */}
+      {activeRotations.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {activeRotations.map((r) => (
+            <div key={r.id} className="flex items-center gap-2 text-[11px] text-violet-700 dark:text-violet-400 bg-violet-50 dark:bg-violet-900/20 border border-violet-200 dark:border-violet-700/30 px-3 py-1.5 rounded-full">
+              <span className="inline-block w-1.5 h-1.5 rounded-full bg-violet-500" />
+              <span className="font-semibold">{r.name}</span>
+              <span className="text-violet-400">·</span>
+              {r.cycle_days}-day cycle
+            </div>
+          ))}
         </div>
       )}
 
@@ -374,8 +383,7 @@ export function ShiftPlannerPanel() {
                     onSelect={setSelectedStaff}
                     overrideByKey={overrideByKey}
                     leaveByKey={leaveByKey}
-                    rotationSlotByKey={rotationSlotByKey}
-                    primaryRotation={primaryRotation}
+                    weekSlotMap={weekSlotMap}
                   />
                 ))}
               </tbody>

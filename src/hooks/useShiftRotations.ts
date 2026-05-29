@@ -1,8 +1,8 @@
 'use client';
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueries, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '@/store/auth';
-import { shiftRotationsApi, type CreateRotationInput, type RotationSlotInput } from '@/lib/api/shift-rotations';
+import { shiftRotationsApi, type CreateRotationInput, type RotationSlotInput, type ShiftRotation, type ShiftRotationSlot } from '@/lib/api/shift-rotations';
 
 function useTenantID() {
   return useAuthStore((s) => s.user?.tenant_id ?? '');
@@ -47,6 +47,30 @@ export function useUpdateShiftRotation(rotationId: string) {
       qc.invalidateQueries({ queryKey: ['shift-rotation', tenantID, rotationId] });
     },
   });
+}
+
+/** Fetches ALL active rotations and their slots; merges into a week-slot map. */
+export function useAllActiveRotationDetails() {
+  const tenantID = useTenantID();
+  const { data: rotations = [] } = useShiftRotations(true);
+
+  const results = useQueries({
+    queries: rotations.map((r) => ({
+      queryKey: ['shift-rotation', tenantID, r.id],
+      queryFn: () => shiftRotationsApi.get(tenantID, r.id),
+      enabled: !!tenantID && !!r.id,
+      staleTime: 60_000,
+    })),
+  });
+
+  return {
+    rotationsWithSlots: rotations.map((rotation: ShiftRotation, i: number) => ({
+      rotation,
+      slots: (results[i]?.data?.slots ?? []) as ShiftRotationSlot[],
+    })),
+    activeRotations: rotations,
+    isLoading: results.some((r) => r.isLoading),
+  };
 }
 
 export function useUpsertRotationSlots(rotationId: string) {
