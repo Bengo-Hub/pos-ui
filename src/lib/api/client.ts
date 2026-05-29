@@ -115,6 +115,18 @@ class ApiClient {
         this.outletId = outletId;
     }
 
+  /** Returns current auth headers for use with raw fetch() (e.g. SSE streams). */
+  public getAuthHeaders(): Record<string, string> {
+    const h: Record<string, string> = {};
+    if (this.accessToken) h['Authorization'] = `Bearer ${this.accessToken}`;
+    if (!this.platformOwner) {
+      if (this.tenantId) h['X-Tenant-ID'] = this.tenantId;
+      if (this.tenantSlug) h['X-Tenant-Slug'] = this.tenantSlug;
+    }
+    if (this.outletId) h['X-Outlet-ID'] = this.outletId;
+    return h;
+  }
+
   public get<T>(url: string, params?: any): Promise<T> {
     return this.instance.get<T>(url, { params }).then((res: AxiosResponse<T>) => res.data);
   }

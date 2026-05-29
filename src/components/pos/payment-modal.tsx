@@ -23,6 +23,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { useCreatePaymentIntent } from '@/hooks/usePOS';
 import { useOnline } from '@/hooks/use-online';
+import { usePaymentStream } from '@/hooks/usePaymentStream';
 import { savePendingPayment } from '@/lib/db/pos-db';
 import { usePOSGateways } from '@/hooks/use-pos-gateways';
 import { useHotelRooms } from '@/hooks/useHotel';
@@ -84,6 +85,16 @@ export function POSPaymentModal({
   const createIntent = useCreatePaymentIntent();
   const isOnline = useOnline();
   const { data: gateways } = usePOSGateways();
+
+  // SSE-based payment detection: fires as soon as pos-api records the payment,
+  // eliminating polling latency for M-Pesa STK push confirmations.
+  const { status: streamStatus } = usePaymentStream(step === 'treasury' ? orderId : null);
+  useEffect(() => {
+    if (streamStatus === 'paid' && step === 'treasury') {
+      setStep('confirmed');
+      onPaymentConfirmed();
+    }
+  }, [streamStatus, step, onPaymentConfirmed]);
   const { data: occupiedRooms = [], isLoading: roomsLoading } = useHotelRooms(
     isHospitality && step === 'room_select' ? 'occupied' : undefined
   );
