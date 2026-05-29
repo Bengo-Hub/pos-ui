@@ -6,9 +6,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { Card, CardContent } from '@/components/ui/base';
 import { Button } from '@/components/ui/button';
 import {
-  AlertTriangle, Banknote, BarChart3, CalendarDays, Clock,
+  AlertTriangle, Banknote, BarChart3, CalendarDays, CalendarOff, Clock,
   CreditCard, DollarSign, History, Loader2, LogIn, LogOut,
-  RefreshCw, ShoppingCart, TrendingDown,
+  RefreshCw, RotateCcw, ShoppingCart, TrendingDown,
 } from 'lucide-react';
 import {
   useCurrentShift, useOpenShift, useCloseShift,
@@ -17,10 +17,12 @@ import {
 import { usePermissions, P } from '@/hooks/usePermissions';
 import { ShiftCloseDialog } from '@/components/pos/shift-close-dialog';
 import { ShiftPlannerPanel } from '@/components/pos/shift-planner-panel';
+import { LeaveApprovalPanel } from '@/components/pos/leave-approval-panel';
+import { ShiftRotationPanel } from '@/components/pos/shift-rotation-panel';
 import { toast } from 'sonner';
 import type { ShiftHistoryRow } from '@/lib/api/shifts';
 
-type Tab = 'current' | 'history' | 'planner';
+type Tab = 'current' | 'history' | 'planner' | 'leave' | 'rotations';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -191,9 +193,11 @@ function ShiftsPage() {
   const tabs: { id: Tab; label: string; icon: React.ElementType }[] = [
     { id: 'current', label: 'My Shift', icon: Clock },
     { id: 'history', label: 'History', icon: History },
-    ...(canManageShifts
-      ? [{ id: 'planner' as Tab, label: 'Planner', icon: CalendarDays }]
-      : []),
+    ...(canManageShifts ? [
+      { id: 'planner' as Tab, label: 'Planner', icon: CalendarDays },
+      { id: 'leave' as Tab, label: 'Leave', icon: CalendarOff },
+      { id: 'rotations' as Tab, label: 'Rotations', icon: RotateCcw },
+    ] : []),
   ];
 
   return (
@@ -202,13 +206,17 @@ function ShiftsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">
-            {tab === 'planner' ? 'Shift Planner' : tab === 'history' ? 'Shift History' : 'My Shift'}
+            {tab === 'planner' ? 'Shift Planner'
+              : tab === 'history' ? 'Shift History'
+              : tab === 'leave' ? 'Leave Requests'
+              : tab === 'rotations' ? 'Shift Rotations'
+              : 'My Shift'}
           </h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            {tab === 'planner'
-              ? 'Manage team weekly schedules'
-              : isOpen
-              ? 'Your shift is currently active'
+            {tab === 'planner' ? 'Manage team weekly schedules'
+              : tab === 'leave' ? 'Review and approve leave requests'
+              : tab === 'rotations' ? 'Manage recurring shift rotation patterns'
+              : isOpen ? 'Your shift is currently active'
               : 'No active shift'}
           </p>
         </div>
@@ -432,6 +440,12 @@ function ShiftsPage() {
 
       {/* ── Planner Tab (manager+) ─────────────────────────────────────── */}
       {tab === 'planner' && <ShiftPlannerPanel />}
+
+      {/* ── Leave Approval Tab (manager+) ──────────────────────────────── */}
+      {tab === 'leave' && <LeaveApprovalPanel />}
+
+      {/* ── Rotations Tab (manager+) ────────────────────────────────────── */}
+      {tab === 'rotations' && <ShiftRotationPanel />}
 
       {/* Close shift dialog (cashier only) */}
       <ShiftCloseDialog

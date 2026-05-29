@@ -1,11 +1,15 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight, Calendar, Loader2 } from 'lucide-react';
 import { useStaffAdmin } from '@/hooks/useStaff';
 import { useStaffSchedule } from '@/hooks/useStaffSchedule';
+import { useAllShiftOverrides } from '@/hooks/useShiftOverrides';
+import { useLeaveRequests } from '@/hooks/useLeaveRequests';
 import { useAuthStore } from '@/store/auth';
 import type { StaffMember } from '@/lib/api/staff';
+import type { ShiftOverride } from '@/lib/api/shift-overrides';
+import type { LeaveRequest } from '@/lib/api/leave-requests';
 import { StaffShiftDrawer } from './staff-shift-drawer';
 
 const DAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -30,16 +34,66 @@ function formatWeekRange(start: Date): string {
   return `${start.toLocaleDateString('en-KE', opts)} – ${end.toLocaleDateString('en-KE', opts)}`;
 }
 
+function CellIndicator({
+  override, leave, isLoading, isAvailable, startTime, endTime,
+}: {
+  override?: ShiftOverride;
+  leave?: LeaveRequest;
+  isLoading: boolean;
+  isAvailable: boolean;
+  startTime?: string;
+  endTime?: string;
+}) {
+  if (override?.override_type === 'off_duty') {
+    return (
+      <div className="flex flex-col items-center gap-0.5">
+        <span className="inline-block w-2 h-2 rounded-full bg-red-500" />
+        <p className="text-[10px] text-red-600 dark:text-red-400 leading-tight font-semibold">Off</p>
+      </div>
+    );
+  }
+  if ((override?.override_type === 'manual_shift' || override?.override_type === 'half_day') && override.start_time && override.end_time) {
+    const color = override.override_type === 'half_day' ? 'amber' : 'blue';
+    return (
+      <div className="flex flex-col items-center gap-0.5">
+        <span className={`inline-block w-2 h-2 rounded-full bg-${color}-500`} />
+        <p className={`text-[10px] text-${color}-700 dark:text-${color}-400 leading-tight font-mono whitespace-nowrap`}>
+          {override.start_time.slice(0, 5)}–{override.end_time.slice(0, 5)}
+        </p>
+      </div>
+    );
+  }
+  if (leave) {
+    return (
+      <div className="flex flex-col items-center gap-0.5">
+        <span className="inline-block w-2 h-2 rounded-full bg-slate-400" />
+        <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-tight">Leave</p>
+      </div>
+    );
+  }
+  if (isLoading) return <span className="inline-block w-3 h-3 rounded-full bg-muted animate-pulse" />;
+  if (isAvailable && startTime && endTime) {
+    return (
+      <div className="flex flex-col items-center gap-0.5">
+        <span className="inline-block w-2 h-2 rounded-full bg-green-500" />
+        <p className="text-[10px] text-green-700 dark:text-green-400 leading-tight font-mono whitespace-nowrap">
+          {startTime.slice(0, 5)}–{endTime.slice(0, 5)}
+        </p>
+      </div>
+    );
+  }
+  return <span className="inline-block w-2 h-2 rounded-full bg-muted/60" />;
+}
+
 function StaffScheduleRow({
-  staff,
-  weekStart,
-  today,
-  onSelect,
+  staff, weekStart, today, onSelect, overrideByKey, leaveByKey,
 }: {
   staff: StaffMember;
   weekStart: Date;
   today: Date;
   onSelect: (staff: StaffMember) => void;
+  overrideByKey: Record<string, ShiftOverride>;
+  leaveByKey: Record<string, LeaveRequest>;
 }) {
   const { data: schedule, isLoading } = useStaffSchedule(staff.id);
   const scheduleByDay = schedule
@@ -67,23 +121,21 @@ function StaffScheduleRow({
         const date = new Date(weekStart);
         date.setDate(weekStart.getDate() + i);
         const dayOfWeek = date.getDay();
+        const dateStr = date.toISOString().slice(0, 10);
+        const key = `${staff.id}_${dateStr}`;
         const entry = scheduleByDay[dayOfWeek];
         const isToday = date.toDateString() === today.toDateString();
 
         return (
           <td key={i} className={`px-2 py-3 text-center ${isToday ? 'bg-primary/5' : ''}`}>
-            {isLoading ? (
-              <span className="inline-block w-3 h-3 rounded-full bg-muted animate-pulse" />
-            ) : entry?.is_available ? (
-              <div className="flex flex-col items-center gap-0.5">
-                <span className="inline-block w-2 h-2 rounded-full bg-green-500" />
-                <p className="text-[10px] text-green-700 dark:text-green-400 leading-tight font-mono whitespace-nowrap">
-                  {entry.start_time.slice(0, 5)}–{entry.end_time.slice(0, 5)}
-                </p>
-              </div>
-            ) : (
-              <span className="inline-block w-2 h-2 rounded-full bg-muted/60" />
-            )}
+            <CellIndicator
+              override={overrideByKey[key]}
+              leave={leaveByKey[key]}
+              isLoading={isLoading}
+              isAvailable={entry?.is_available ?? false}
+              startTime={entry?.start_time}
+              endTime={entry?.end_time}
+            />
           </td>
         );
       })}
@@ -110,6 +162,34 @@ export function ShiftPlannerPanel() {
   const today = new Date();
   const isCurrentWeek = weekStart.toDateString() === getWeekStart(today).toDateString();
 
+  const weekFromStr = weekStart.toISOString().slice(0, 10);
+  const weekEnd = new Date(weekStart);
+  weekEnd.setDate(weekStart.getDate() + 6);
+  const weekToStr = weekEnd.toISOString().slice(0, 10);
+
+  const { data: rawOverrides = [] } = useAllShiftOverrides(weekFromStr, weekToStr);
+  const { data: rawLeaves = [] } = useLeaveRequests('approved');
+
+  const overrideByKey = useMemo(() => {
+    const m: Record<string, ShiftOverride> = {};
+    for (const ov of rawOverrides) {
+      m[`${ov.staff_member_id}_${ov.date.slice(0, 10)}`] = ov;
+    }
+    return m;
+  }, [rawOverrides]);
+
+  const leaveByKey = useMemo(() => {
+    const m: Record<string, LeaveRequest> = {};
+    for (const lv of rawLeaves) {
+      const start = new Date(lv.start_date);
+      const end = new Date(lv.end_date);
+      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        m[`${lv.staff_member_id}_${d.toISOString().slice(0, 10)}`] = lv;
+      }
+    }
+    return m;
+  }, [rawLeaves]);
+
   function prevWeek() {
     const d = new Date(weekStart);
     d.setDate(d.getDate() - 7);
@@ -133,6 +213,22 @@ export function ShiftPlannerPanel() {
 
   return (
     <div className="space-y-4">
+      {/* Legend */}
+      <div className="flex items-center gap-4 flex-wrap">
+        {[
+          { dot: 'bg-green-500', label: 'Scheduled' },
+          { dot: 'bg-blue-500', label: 'Override' },
+          { dot: 'bg-amber-500', label: 'Half Day' },
+          { dot: 'bg-red-500', label: 'Off Duty' },
+          { dot: 'bg-slate-400', label: 'On Leave' },
+        ].map(({ dot, label }) => (
+          <div key={label} className="flex items-center gap-1.5">
+            <span className={`inline-block w-2 h-2 rounded-full ${dot}`} />
+            <span className="text-[11px] text-muted-foreground">{label}</span>
+          </div>
+        ))}
+      </div>
+
       {/* Week navigator */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-2">
@@ -212,6 +308,8 @@ export function ShiftPlannerPanel() {
                     weekStart={weekStart}
                     today={today}
                     onSelect={setSelectedStaff}
+                    overrideByKey={overrideByKey}
+                    leaveByKey={leaveByKey}
                   />
                 ))}
               </tbody>
@@ -221,7 +319,7 @@ export function ShiftPlannerPanel() {
       )}
 
       <p className="text-xs text-center text-muted-foreground">
-        Click any staff row to edit their recurring weekly schedule.
+        Click any staff row to edit their schedule, overrides, and leave.
       </p>
 
       <StaffShiftDrawer
