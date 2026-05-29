@@ -152,7 +152,7 @@ export function POSPaymentModal({
     }
 
     createIntent.mutate(
-      { orderId, tenderMethod: 'cash', amount: roundedTotal },
+      { orderId, tenderMethod: 'cash', amount: roundedTotal, tenderId },
       {
         onSuccess: () => { setStep('confirmed'); onPaymentConfirmed(); },
         onError: (err: any) => {
@@ -189,7 +189,7 @@ export function POSPaymentModal({
     }
 
     createIntent.mutate(
-      { orderId, tenderMethod: 'manual', amount: roundedTotal, externalRef: manualRef.trim() },
+      { orderId, tenderMethod: 'manual', amount: roundedTotal, externalRef: manualRef.trim(), tenderId },
       {
         onSuccess: () => { setStep('confirmed'); onPaymentConfirmed(); },
         onError: (err: any) => {
@@ -202,7 +202,7 @@ export function POSPaymentModal({
 
   const handleDigital = useCallback((method: string) => {
     createIntent.mutate(
-      { orderId, tenderMethod: method, amount: roundedTotal },
+      { orderId, tenderMethod: method, amount: roundedTotal, tenderId },
       {
         onSuccess: (data) => {
           setIntentId(data.payment_intent_id);
@@ -215,7 +215,7 @@ export function POSPaymentModal({
         },
       }
     );
-  }, [orderId, roundedTotal, createIntent]);
+  }, [orderId, roundedTotal, tenderId, createIntent]);
 
   const handleRoomCharge = useCallback(() => {
     if (!selectedRoom) return;

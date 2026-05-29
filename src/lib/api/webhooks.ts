@@ -42,7 +42,14 @@ function webhookBase(tenantID: string) {
 
 export const webhooksApi = {
   list: (tenantID: string, eventType?: string) =>
-    apiClient.get<WebhookSubscription[]>(webhookBase(tenantID), eventType ? { event_type: eventType } : {}),
+    apiClient
+      .get<{ data: WebhookSubscription[]; total: number } | WebhookSubscription[]>(
+        webhookBase(tenantID),
+        eventType ? { event_type: eventType } : {},
+      )
+      .then((res): WebhookSubscription[] =>
+        Array.isArray(res) ? res : ((res as { data: WebhookSubscription[] }).data ?? []),
+      ),
 
   create: (tenantID: string, body: CreateWebhookInput) =>
     apiClient.post<WebhookSubscription>(webhookBase(tenantID), body),

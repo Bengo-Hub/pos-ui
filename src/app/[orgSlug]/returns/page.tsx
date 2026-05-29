@@ -5,9 +5,9 @@ import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
 import { useAuthStore } from '@/store/auth';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api/client';
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { Loader2, Plus, RotateCcw, X } from 'lucide-react';
+import { Loader2, Plus, RotateCcw, Search, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface ReturnItem {
@@ -46,13 +46,29 @@ function useReturns(status: string) {
   });
 }
 
+interface ReturnLinePayload {
+  order_line_id: string;
+  sku: string;
+  name: string;
+  quantity: number;
+  unit_price: number;
+  total_price: number;
+}
+
+interface InitiateReturnPayload {
+  return_type: string;
+  reason: string;
+  reason_code?: string;
+  lines: ReturnLinePayload[];
+}
+
 function useInitiateReturn() {
   const user = useAuthStore((s) => s.user);
   const tenantID = user?.tenant_id ?? '';
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (payload: { original_order_id: string; reason: string; reason_code?: string; refund_method: string }) =>
-      apiClient.post(`/api/v1/${tenantID}/pos/returns`, payload),
+    mutationFn: ({ orderId, payload }: { orderId: string; payload: InitiateReturnPayload }) =>
+      apiClient.post(`/api/v1/${tenantID}/pos/orders/${orderId}/returns`, payload),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['returns', tenantID] }),
   });
 }
@@ -65,7 +81,6 @@ const FILTERS: { key: string; label: string }[] = [
   { key: 'rejected',  label: 'Rejected'  },
 ];
 
-const REFUND_METHODS = ['cash', 'card', 'store_credit', 'mpesa'];
 const RETURN_REASONS = [
   'Defective / damaged',
   'Wrong item received',
@@ -75,95 +90,325 @@ const RETURN_REASONS = [
   'Other',
 ];
 const REASON_CODES: { value: string; label: string }[] = [
-  { value: '',             label: '— Select code —'   },
-  { value: 'changed_mind', label: 'Changed mind'       },
-  { value: 'defective',    label: 'Defective item'     },
-  { value: 'damaged',      label: 'Damaged item'       },
-  { value: 'wrong_item',   label: 'Wrong item'         },
-  { value: 'expired',      label: 'Expired product'    },
-  { value: 'other',        label: 'Other'              },
+  { value: '',             label: '— Select code —'  },
+  { value: 'changed_mind', label: 'Changed mind'      },
+  { value: 'defective',    label: 'Defective item'    },
+  { value: 'damaged',      label: 'Damaged item'      },
+  { value: 'wrong_item',   label: 'Wrong item'        },
+  { value: 'expired',      label: 'Expired product'   },
+  { value: 'other',        label: 'Other'             },
+];
+const RETURN_TYPES: { value: string; label: string }[] = [
+  { value: 'refund',       label: 'Refund'        },
+  { value: 'exchange',     label: 'Exchange'      },
+  { value: 'store_credit', label: 'Store Credit'  },
 ];
 
 function InitiateReturnModal({ onClose }: { onClose: () => void }) {
-  const [orderId, setOrderId] = useState('');
+  const user = useAuthStore((s) => s.user);
+  const tenantID = user?.tenant_id ?? '';
+
+  const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedQuery, setDebouncedQuery] = useState('');
+  const [selectedOrder, setSelectedOrder] = useState<any>(null);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [selectedLines, setSelectedLines] = useState<Record<string, { checked: boolean; qty: number }>>({});
+
+  const [returnType, setReturnType] = useState('refund');
   const [reason, setReason] = useState(RETURN_REASONS[0]);
   const [reasonCode, setReasonCode] = useState('');
-  const [refundMethod, setRefundMethod] = useState('cash');
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
   const { mutate, isPending, isError } = useInitiateReturn();
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQuery(searchQuery), 400);
+    return () => clearTimeout(t);
+  }, [searchQuery]);
+
+  const { data: searchData, isFetching: searching } = useQuery({
+    queryKey: ['order-search', tenantID, debouncedQuery],
+    queryFn: () =>
+      apiClient.get<{ data: any[] }>(
+        `/api/v1/${tenantID}/pos/orders`,
+        { order_number: debouncedQuery, limit: 8 } as any,
+      ),
+    enabled: !!tenantID && debouncedQuery.length >= 2 && !selectedOrder,
+    staleTime: 30_000,
+  });
+
+  const searchResults: any[] = (searchData as any)?.data ?? [];
+
+  function handleSelectOrder(order: any) {
+    setSelectedOrder(order);
+    setSearchQuery(order.order_number ?? order.id);
+    setShowDropdown(false);
+    const lines: any[] = order.edges?.lines ?? [];
+    const init: Record<string, { checked: boolean; qty: number }> = {};
+    lines.forEach((l: any) => { init[l.id] = { checked: true, qty: l.quantity ?? 1 }; });
+    setSelectedLines(init);
+  }
+
+  function clearOrder() {
+    setSelectedOrder(null);
+    setSearchQuery('');
+    setDebouncedQuery('');
+    setSelectedLines({});
+  }
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!orderId.trim()) return;
-    mutate({
-      original_order_id: orderId.trim(),
-      reason,
-      ...(reasonCode ? { reason_code: reasonCode } : {}),
-      refund_method: refundMethod,
-    }, { onSuccess: onClose });
+    if (!selectedOrder) return;
+    const lines: any[] = selectedOrder.edges?.lines ?? [];
+    const returnLines: ReturnLinePayload[] = lines
+      .filter((l: any) => selectedLines[l.id]?.checked)
+      .map((l: any) => {
+        const qty = selectedLines[l.id]?.qty ?? l.quantity ?? 1;
+        const unitPrice = l.unit_price ?? 0;
+        return {
+          order_line_id: l.id,
+          sku: l.sku ?? '',
+          name: l.name ?? l.item_name ?? 'Item',
+          quantity: qty,
+          unit_price: unitPrice,
+          total_price: unitPrice * qty,
+        };
+      });
+    if (returnLines.length === 0) return;
+    mutate(
+      {
+        orderId: selectedOrder.id,
+        payload: {
+          return_type: returnType,
+          reason,
+          ...(reasonCode ? { reason_code: reasonCode } : {}),
+          lines: returnLines,
+        },
+      },
+      { onSuccess: onClose },
+    );
   }
 
+  const orderLines: any[] = selectedOrder?.edges?.lines ?? [];
+  const selectedCount = Object.values(selectedLines).filter((s) => s.checked).length;
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="bg-background rounded-2xl border border-border shadow-2xl w-full max-w-md mx-4">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+      <div className="bg-background rounded-2xl border border-border shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border sticky top-0 bg-background z-10">
           <h2 className="text-base font-bold">Initiate Return</h2>
           <button onClick={onClose} className="h-8 w-8 rounded-xl hover:bg-accent flex items-center justify-center">
             <X className="h-4 w-4" />
           </button>
         </div>
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+
+        <form onSubmit={handleSubmit} className="p-6 space-y-5">
+          {/* Order search */}
           <div>
-            <label className="text-xs font-semibold text-muted-foreground">Original Order ID / Receipt #</label>
-            <input
-              value={orderId}
-              onChange={(e) => setOrderId(e.target.value)}
-              placeholder="Order ID or receipt number"
-              required
-              className="mt-1 w-full bg-background border border-border rounded-xl py-2.5 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
-            />
+            <label className="text-xs font-semibold text-muted-foreground">Search Order</label>
+            <div className="relative mt-1" ref={dropdownRef}>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <input
+                  value={searchQuery}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    if (selectedOrder) clearOrder();
+                    setShowDropdown(true);
+                  }}
+                  onFocus={() => setShowDropdown(true)}
+                  placeholder="Type order # or receipt number…"
+                  className="w-full bg-background border border-border rounded-xl py-2.5 pl-9 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+                  autoComplete="off"
+                />
+                {searching && (
+                  <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
+                )}
+                {selectedOrder && !searching && (
+                  <button
+                    type="button"
+                    onClick={clearOrder}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 rounded-full bg-muted flex items-center justify-center hover:bg-destructive/10 hover:text-destructive transition-colors"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                )}
+              </div>
+
+              {/* Dropdown results */}
+              {showDropdown && !selectedOrder && searchResults.length > 0 && (
+                <div className="absolute z-20 top-full mt-1 w-full bg-background border border-border rounded-xl shadow-lg overflow-hidden">
+                  {searchResults.map((order: any) => (
+                    <button
+                      key={order.id}
+                      type="button"
+                      onClick={() => handleSelectOrder(order)}
+                      className="w-full flex items-center justify-between px-4 py-3 hover:bg-accent transition-colors text-left border-b border-border last:border-0"
+                    >
+                      <div>
+                        <p className="text-sm font-semibold font-mono">{order.order_number}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {new Date(order.created_at).toLocaleDateString()} · {order.edges?.lines?.length ?? 0} item(s)
+                        </p>
+                      </div>
+                      <span className="text-sm font-bold text-primary shrink-0 ml-4">
+                        KES {(order.total_amount ?? 0).toLocaleString()}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
+
+          {/* Selected order + items table */}
+          {selectedOrder && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between px-4 py-3 rounded-xl bg-primary/5 border border-primary/20">
+                <div>
+                  <p className="text-sm font-bold font-mono">{selectedOrder.order_number}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {new Date(selectedOrder.created_at).toLocaleDateString()} · KES {(selectedOrder.total_amount ?? 0).toLocaleString()}
+                  </p>
+                </div>
+                <span className="text-xs bg-primary/10 text-primary font-semibold px-2 py-1 rounded-lg capitalize">
+                  {selectedOrder.status}
+                </span>
+              </div>
+
+              {orderLines.length > 0 ? (
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground mb-2">
+                    Select Items to Return ({selectedCount} of {orderLines.length} selected)
+                  </p>
+                  <div className="rounded-xl border border-border overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="bg-accent/30 border-b border-border">
+                          <th className="w-8 px-3 py-2 text-left">
+                            <input
+                              type="checkbox"
+                              checked={orderLines.every((l: any) => selectedLines[l.id]?.checked)}
+                              onChange={(e) => {
+                                const updated: Record<string, { checked: boolean; qty: number }> = {};
+                                orderLines.forEach((l: any) => {
+                                  updated[l.id] = { checked: e.target.checked, qty: selectedLines[l.id]?.qty ?? l.quantity ?? 1 };
+                                });
+                                setSelectedLines(updated);
+                              }}
+                              className="rounded"
+                            />
+                          </th>
+                          <th className="px-3 py-2 text-left text-xs font-semibold text-muted-foreground">Item</th>
+                          <th className="px-3 py-2 text-center text-xs font-semibold text-muted-foreground">Orig. Qty</th>
+                          <th className="px-3 py-2 text-center text-xs font-semibold text-muted-foreground">Return Qty</th>
+                          <th className="px-3 py-2 text-right text-xs font-semibold text-muted-foreground">Unit Price</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border">
+                        {orderLines.map((line: any) => {
+                          const sel = selectedLines[line.id] ?? { checked: false, qty: line.quantity ?? 1 };
+                          return (
+                            <tr key={line.id} className={cn('transition-colors', sel.checked ? 'bg-background' : 'opacity-50 bg-muted/20')}>
+                              <td className="px-3 py-2.5">
+                                <input
+                                  type="checkbox"
+                                  checked={sel.checked}
+                                  onChange={(e) =>
+                                    setSelectedLines((prev) => ({
+                                      ...prev,
+                                      [line.id]: { ...prev[line.id], checked: e.target.checked, qty: prev[line.id]?.qty ?? line.quantity ?? 1 },
+                                    }))
+                                  }
+                                  className="rounded"
+                                />
+                              </td>
+                              <td className="px-3 py-2.5">
+                                <p className="font-medium truncate max-w-[200px]">{line.name ?? line.item_name ?? 'Item'}</p>
+                                {line.sku && <p className="text-xs text-muted-foreground">{line.sku}</p>}
+                              </td>
+                              <td className="px-3 py-2.5 text-center text-muted-foreground">{line.quantity ?? 1}</td>
+                              <td className="px-3 py-2.5 text-center">
+                                <input
+                                  type="number"
+                                  min={1}
+                                  max={line.quantity ?? 1}
+                                  value={sel.qty}
+                                  disabled={!sel.checked}
+                                  onChange={(e) => {
+                                    const v = Math.min(Math.max(1, parseInt(e.target.value) || 1), line.quantity ?? 1);
+                                    setSelectedLines((prev) => ({ ...prev, [line.id]: { ...prev[line.id], qty: v } }));
+                                  }}
+                                  className="w-16 text-center bg-background border border-border rounded-lg py-1 px-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary/40 disabled:opacity-40"
+                                />
+                              </td>
+                              <td className="px-3 py-2.5 text-right font-medium">
+                                KES {(line.unit_price ?? 0).toLocaleString()}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground text-center py-4">No line items found on this order.</p>
+              )}
+            </div>
+          )}
+
+          {/* Return type */}
           <div>
-            <label className="text-xs font-semibold text-muted-foreground">Return Reason</label>
-            <select
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              className="mt-1 w-full bg-background border border-border rounded-xl py-2.5 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
-            >
-              {RETURN_REASONS.map((r) => <option key={r} value={r}>{r}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="text-xs font-semibold text-muted-foreground">Reason Code <span className="font-normal text-muted-foreground">(optional)</span></label>
-            <select
-              value={reasonCode}
-              onChange={(e) => setReasonCode(e.target.value)}
-              className="mt-1 w-full bg-background border border-border rounded-xl py-2.5 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
-            >
-              {REASON_CODES.map((rc) => <option key={rc.value} value={rc.value}>{rc.label}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="text-xs font-semibold text-muted-foreground">Refund Method</label>
-            <div className="flex gap-2 mt-1 flex-wrap">
-              {REFUND_METHODS.map((m) => (
+            <label className="text-xs font-semibold text-muted-foreground">Return Type</label>
+            <div className="flex gap-2 mt-1">
+              {RETURN_TYPES.map((rt) => (
                 <button
-                  key={m}
+                  key={rt.value}
                   type="button"
-                  onClick={() => setRefundMethod(m)}
+                  onClick={() => setReturnType(rt.value)}
                   className={cn(
-                    'px-3 py-1.5 rounded-xl text-xs font-semibold border transition-colors capitalize',
-                    refundMethod === m
+                    'flex-1 py-2 rounded-xl text-xs font-semibold border transition-colors',
+                    returnType === rt.value
                       ? 'bg-primary text-primary-foreground border-primary'
                       : 'border-border text-muted-foreground hover:text-foreground'
                   )}
                 >
-                  {m.replace('_', ' ')}
+                  {rt.label}
                 </button>
               ))}
             </div>
           </div>
+
+          {/* Reason */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground">Return Reason</label>
+              <select
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                className="mt-1 w-full bg-background border border-border rounded-xl py-2.5 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+              >
+                {RETURN_REASONS.map((r) => <option key={r} value={r}>{r}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground">
+                Reason Code <span className="font-normal">(optional)</span>
+              </label>
+              <select
+                value={reasonCode}
+                onChange={(e) => setReasonCode(e.target.value)}
+                className="mt-1 w-full bg-background border border-border rounded-xl py-2.5 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+              >
+                {REASON_CODES.map((rc) => <option key={rc.value} value={rc.value}>{rc.label}</option>)}
+              </select>
+            </div>
+          </div>
+
           {isError && <p className="text-xs text-red-500">Failed to initiate return. Please try again.</p>}
-          <div className="flex gap-3 pt-2">
+
+          <div className="flex gap-3 pt-1">
             <button
               type="button"
               onClick={onClose}
@@ -173,10 +418,10 @@ function InitiateReturnModal({ onClose }: { onClose: () => void }) {
             </button>
             <button
               type="submit"
-              disabled={isPending || !orderId.trim()}
+              disabled={isPending || !selectedOrder || selectedCount === 0}
               className="flex-1 px-4 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50"
             >
-              {isPending ? 'Submitting…' : 'Submit Return'}
+              {isPending ? 'Submitting…' : `Submit Return${selectedCount > 0 ? ` (${selectedCount} item${selectedCount > 1 ? 's' : ''})` : ''}`}
             </button>
           </div>
         </form>

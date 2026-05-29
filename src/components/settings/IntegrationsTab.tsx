@@ -4,6 +4,8 @@ import { useState } from 'react';
 import { Globe, Link2, Loader2, Save } from 'lucide-react';
 import { Button, Card, CardContent, CardHeader } from '@/components/ui/base';
 import { apiClient } from '@/lib/api/client';
+import { useAuthStore } from '@/store/auth';
+import { useModuleAccess } from '@/hooks/use-module-access';
 import { toast } from 'sonner';
 import { inputClass, labelClass } from './shared';
 
@@ -11,6 +13,10 @@ const AUTH_API_URL_DEFAULT = process.env.NEXT_PUBLIC_AUTH_API_URL || 'https://ss
 const POS_API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://posapi.codevertexitsolutions.com';
 
 export function IntegrationsTab() {
+  const { isSuperUser } = useModuleAccess();
+  const user = useAuthStore((s) => s.user);
+  const isPlatformOwner = isSuperUser || user?.isPlatformOwner || user?.isSuperUser;
+
   const [authApiUrl, setAuthApiUrl] = useState(AUTH_API_URL_DEFAULT);
   const [allowedOrigins, setAllowedOrigins] = useState('');
   const [testStatus, setTestStatus] = useState<'idle' | 'loading' | 'ok' | 'fail'>('idle');
@@ -91,20 +97,28 @@ export function IntegrationsTab() {
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <label className={labelClass}>Allowed Origins</label>
-            <input
-              value={allowedOrigins}
-              onChange={(e) => setAllowedOrigins(e.target.value)}
-              placeholder="https://app.example.com, https://admin.example.com"
-              className={inputClass}
-            />
-            <p className="text-xs text-muted-foreground">Comma-separated list of allowed CORS origins.</p>
-          </div>
-          <Button size="sm" onClick={handleSave} disabled={saving} className="gap-2">
-            {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-            {saving ? 'Saving…' : 'Save'}
-          </Button>
+          {isPlatformOwner ? (
+            <>
+              <div className="space-y-2">
+                <label className={labelClass}>Allowed Origins</label>
+                <input
+                  value={allowedOrigins}
+                  onChange={(e) => setAllowedOrigins(e.target.value)}
+                  placeholder="https://app.example.com, https://admin.example.com"
+                  className={inputClass}
+                />
+                <p className="text-xs text-muted-foreground">Comma-separated list of allowed CORS origins.</p>
+              </div>
+              <Button size="sm" onClick={handleSave} disabled={saving} className="gap-2">
+                {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                {saving ? 'Saving…' : 'Save'}
+              </Button>
+            </>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              CORS configuration is managed by the platform administrator.
+            </p>
+          )}
         </CardContent>
       </Card>
     </div>

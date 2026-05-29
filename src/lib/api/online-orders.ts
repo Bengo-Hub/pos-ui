@@ -17,7 +17,9 @@ function onlineBase(tenantID: string) {
 
 export const onlineOrdersApi = {
   listPickup: (tenantID: string, params?: { status?: string }) =>
-    apiClient.get<PickupOrder[]>(`${onlineBase(tenantID)}/pickup`, params),
+    apiClient
+      .get<{ data: PickupOrder[]; total: number } | PickupOrder[]>(`${onlineBase(tenantID)}/pickup`, params)
+      .then((res): PickupOrder[] => Array.isArray(res) ? res : ((res as { data: PickupOrder[] }).data ?? [])),
 
   markReady: (tenantID: string, orderID: string) =>
     apiClient.post(`${onlineBase(tenantID)}/${orderID}/ready`, {}),

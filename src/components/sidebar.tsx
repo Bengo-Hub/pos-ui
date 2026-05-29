@@ -211,6 +211,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
   const isServices = outletUseCase === 'services';
   const isPharmacy = outletUseCase === 'pharmacy';
   const isRetail = outletUseCase === 'retail';
+  const isHospOrQSR = ['hospitality', 'quick_service'].includes(outletUseCase);
 
   // ── Nav groups ────────────────────────────────────────────────────────────
 
@@ -415,7 +416,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
           />
         ))}
 
-        {/* Platform section — always expanded, superuser only */}
+        {/* Platform section — Devices + Licenses: platform owners only */}
         {isPlatformOwner && (
           <div>
             <p className="px-3 mb-1.5 text-[10px] font-bold uppercase tracking-[0.15em] text-sidebar-foreground/25">
@@ -424,6 +425,23 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
             <div className="space-y-0.5">
               <NavLink item={{ label: 'Devices', icon: Monitor, href: '/platform', moduleKey: 'platform' }} orgSlug={orgSlug} onClose={onClose} />
               <NavLink item={{ label: 'Licenses', icon: Key, href: '/platform?tab=licenses', moduleKey: 'platform' }} orgSlug={orgSlug} onClose={onClose} />
+            </div>
+          </div>
+        )}
+
+        {/* Configuration section — outlet/tax/modules: all HQ admin users */}
+        {isHQUser && (
+          <div>
+            <p className="px-3 mb-1.5 text-[10px] font-bold uppercase tracking-[0.15em] text-sidebar-foreground/25">
+              Configuration
+            </p>
+            <div className="space-y-0.5">
+              <NavLink item={{ label: 'Outlet Config', icon: Settings, href: '/platform?tab=outlet', moduleKey: 'platform' }} orgSlug={orgSlug} onClose={onClose} />
+              <NavLink item={{ label: 'Tax & VAT', icon: Grid3x3, href: '/platform?tab=tax', moduleKey: 'platform' }} orgSlug={orgSlug} onClose={onClose} />
+              <NavLink item={{ label: 'Modules', icon: LayoutDashboard, href: '/platform?tab=modules', moduleKey: 'platform' }} orgSlug={orgSlug} onClose={onClose} />
+              {isHospOrQSR && (
+                <NavLink item={{ label: 'KDS Stations', icon: ChefHat, href: '/platform?tab=kds', moduleKey: 'platform' }} orgSlug={orgSlug} onClose={onClose} />
+              )}
             </div>
           </div>
         )}

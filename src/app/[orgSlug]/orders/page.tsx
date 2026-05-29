@@ -44,6 +44,7 @@ export default function OrdersPage() {
   const isHospOrQSR = ['hospitality', 'quick_service'].includes(outletUseCase);
   const isCashierHospOrQSR = isHospOrQSR && (user?.roles ?? []).includes('cashier');
   const isHospitality = ['hospitality', 'quick_service', 'hotel'].includes(outletUseCase);
+  const isRetail = outletUseCase === 'retail';
 
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -99,7 +100,7 @@ export default function OrdersPage() {
           {/* Hide New Order button for cashier in hospitality/quick_service — they clear bills, not take orders */}
           {can(P.ORDERS_ADD) && !isCashierHospOrQSR && (
             <Button asChild className="gap-2">
-              <Link href={`/${orgSlug}/order`}>
+              <Link href={`/${orgSlug}/${isRetail ? 'retail' : 'order'}`}>
                 <span className="h-4 w-4">+</span> New Order
               </Link>
             </Button>

@@ -8,7 +8,7 @@ import { useParams } from 'next/navigation';
 import { Loader2, Search, Trash2, ShoppingCart, Tag, X, Camera } from 'lucide-react';
 import { useAuthStore } from '@/store/auth';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
-import { useMenuItems, useCreateOrder } from '@/hooks/usePOS';
+import { useMenuItems, useCreateOrder, useTenders } from '@/hooks/usePOS';
 import { SplitPaymentModal } from '@/components/pos/split-payment-modal';
 import { lookupItemByBarcode } from '@/lib/api/retail';
 import type { CatalogItem } from '@/lib/api/retail';
@@ -65,6 +65,8 @@ function RetailPage() {
   const [loyaltyState, setLoyaltyState] = useState<LoyaltyState | null>(null);
 
   const createOrder = useCreateOrder();
+  const { data: tendersData } = useTenders();
+  const defaultTenderId = tendersData?.data?.find((t: any) => t.is_active)?.id;
 
   // ── Unified search (barcode + text) ─────────────────────────────────────
   const [searchValue, setSearchValue] = useState('');
@@ -264,6 +266,7 @@ function RetailPage() {
           orderNumber={completedOrder.order_number}
           total={completedOrder.total}
           tenantSlug={tenantSlug}
+          tenderId={defaultTenderId}
         />
       </>
     );

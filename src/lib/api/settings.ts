@@ -28,6 +28,8 @@ export interface POSSettings {
   paper_width: string;
   auto_print_order: boolean;
   auto_print_kitchen: boolean;
+  pin_login_message?: string | null;
+  screensaver_url?: string | null;
   printer_profiles: PrinterProfile[];
   enable_kds: boolean;
   enable_appointments: boolean;
@@ -43,6 +45,7 @@ export interface POSSettings {
 
 export interface UpdatePOSSettingsInput {
   display_mode?: string;
+  default_view?: string;
   show_images?: boolean;
   show_barcode_scanner?: boolean;
   receipt_header?: string | null;
@@ -55,6 +58,8 @@ export interface UpdatePOSSettingsInput {
   paper_width?: string;
   auto_print_order?: boolean;
   auto_print_kitchen?: boolean;
+  pin_login_message?: string | null;
+  screensaver_url?: string | null;
   printer_profiles?: PrinterProfile[];
   return_window_days?: number;
 }

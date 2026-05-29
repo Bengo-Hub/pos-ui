@@ -33,7 +33,7 @@ function tiersToRecord(rows: TierRow[]): Record<string, number> {
 
 export function LoyaltySettingsTab() {
   const { can } = usePermissions();
-  const canEdit = can(P.CONFIG_MANAGE);
+  const canEdit = can(P.CONFIG_MANAGE) || can(P.CONFIG_CHANGE);
 
   const { data: programs, isLoading } = useLoyaltyPrograms();
   const program: LoyaltyProgram | undefined = programs?.[0];

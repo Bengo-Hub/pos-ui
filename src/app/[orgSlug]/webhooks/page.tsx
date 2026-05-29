@@ -4,12 +4,14 @@ import { cn } from '@/lib/utils';
 import { webhooksApi, type WebhookSubscription, type WebhookDelivery, type CreateWebhookInput } from '@/lib/api/webhooks';
 import { useAuthStore } from '@/store/auth';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { usePermissions, P } from '@/hooks/usePermissions';
 import {
   Activity,
   ChevronDown,
   ChevronRight,
   Loader2,
   Plus,
+  ShieldAlert,
   Trash2,
   Webhook,
   X,
@@ -157,6 +159,19 @@ export default function WebhooksPage() {
   const orgSlug = params?.orgSlug as string;
   const tenantID = useAuthStore((s) => s.user?.tenant_id ?? '');
   const qc = useQueryClient();
+  const { can } = usePermissions();
+
+  if (!can(P.CONFIG_MANAGE)) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4 text-muted-foreground">
+        <ShieldAlert className="h-12 w-12 opacity-30" />
+        <div className="text-center">
+          <p className="font-semibold text-foreground">Access Restricted</p>
+          <p className="text-sm mt-1">Webhooks are only accessible to administrators.</p>
+        </div>
+      </div>
+    );
+  }
 
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState<CreateWebhookInput>({ event_type: EVENT_TYPES[0], target_url: '', secret: '' });
