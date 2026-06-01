@@ -10,6 +10,7 @@ interface ReceiptPrintProps {
   tenantAddress?: string;
   tenantPhone?: string;
   tenantPin?: string; // KRA PIN for eTIMS
+  paymentMethods?: ReceiptData['payment_methods'];
 }
 
 /**
@@ -30,6 +31,7 @@ export function ReceiptPrint({
   tenantAddress,
   tenantPhone,
   tenantPin,
+  paymentMethods,
 }: ReceiptPrintProps) {
   const fmt = (n: number) => `KES ${n.toFixed(2)}`;
   const fmtDate = (s: string) =>
@@ -149,6 +151,43 @@ export function ReceiptPrint({
               alt="eTIMS QR Code"
               className="receipt-qr"
             />
+          )}
+        </>
+      )}
+
+      {/* Payment methods HOW TO PAY section */}
+      {paymentMethods && Object.values(paymentMethods).some(Boolean) && (
+        <>
+          <hr className="receipt-divider" style={{ marginTop: 6 }} />
+          <p className="receipt-center receipt-bold" style={{ fontSize: 10, marginBottom: 3 }}>
+            HOW TO PAY
+          </p>
+          {paymentMethods.mpesa_paybill && (
+            <div className="receipt-row" style={{ fontSize: 10 }}>
+              <span className="receipt-row-name">M-PESA Paybill</span>
+              <span className="receipt-row-value receipt-bold">{paymentMethods.mpesa_paybill}</span>
+            </div>
+          )}
+          {paymentMethods.mpesa_account_reference && (
+            <div className="receipt-row" style={{ fontSize: 10 }}>
+              <span className="receipt-row-name">Account No.</span>
+              <span className="receipt-row-value receipt-bold">{paymentMethods.mpesa_account_reference}</span>
+            </div>
+          )}
+          {paymentMethods.airtel_money_number && (
+            <div className="receipt-row" style={{ fontSize: 10 }}>
+              <span className="receipt-row-name">Airtel Money</span>
+              <span className="receipt-row-value receipt-bold">{paymentMethods.airtel_money_number}</span>
+            </div>
+          )}
+          {paymentMethods.bank_account_number && (
+            <div className="receipt-row" style={{ fontSize: 10 }}>
+              <span className="receipt-row-name">{paymentMethods.bank_name || 'Bank'}</span>
+              <span className="receipt-row-value receipt-bold">{paymentMethods.bank_account_number}</span>
+            </div>
+          )}
+          {paymentMethods.bank_account_name && (
+            <p className="receipt-center receipt-small">{paymentMethods.bank_account_name}</p>
           )}
         </>
       )}

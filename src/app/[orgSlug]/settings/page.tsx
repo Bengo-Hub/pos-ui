@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import {
-  ChefHat, Clock, Gift, Link2, Layers, Receipt,
+  ChefHat, Clock, CreditCard, Gift, Link2, Layers, Receipt,
   Settings, ShieldCheck, Table2, Users,
 } from 'lucide-react';
 import { useAuthStore } from '@/store/auth';
@@ -18,10 +18,12 @@ import { IntegrationsTab } from '@/components/settings/IntegrationsTab';
 import { TeamTab } from '@/components/settings/TeamTab';
 import { PlatformTab } from '@/components/settings/PlatformTab';
 import { LoyaltySettingsTab } from '@/components/settings/LoyaltySettingsTab';
+import { PaymentDisplayTab } from '@/components/settings/PaymentDisplayTab';
 
 type Tab =
   | 'general'
   | 'receipt'
+  | 'payment_display'
   | 'modules'
   | 'shifts'
   | 'kds_stations'
@@ -32,9 +34,10 @@ type Tab =
   | 'team';
 
 const ALL_TABS: { id: Tab; label: string; icon: React.ElementType; requireModule?: string; description: string }[] = [
-  { id: 'general',      label: 'Outlet Config',      icon: Settings,   description: 'Currency, tax, and returns policy' },
-  { id: 'receipt',      label: 'Receipt & Printing',  icon: Receipt,    description: 'Receipt format and printer profiles' },
-  { id: 'modules',      label: 'Modules',             icon: Layers,     description: 'Use case and feature toggles' },
+  { id: 'general',          label: 'Outlet Config',      icon: Settings,    description: 'Currency, tax, and returns policy' },
+  { id: 'receipt',          label: 'Receipt & Printing', icon: Receipt,     description: 'Receipt format and printer profiles' },
+  { id: 'payment_display',  label: 'Payment Display',    icon: CreditCard,  description: 'Paybill, till, and bank details on receipts' },
+  { id: 'modules',          label: 'Modules',            icon: Layers,      description: 'Use case and feature toggles' },
   { id: 'shifts',       label: 'Shifts',              icon: Clock,      description: 'Float rules and shift visibility' },
   { id: 'kds_stations', label: 'KDS Stations',        icon: ChefHat,    description: 'Kitchen and bar display screens', requireModule: 'kds' },
   { id: 'tables',       label: 'Tables',              icon: Table2,     description: 'Floor plan and table configuration', requireModule: 'tables' },
@@ -122,9 +125,10 @@ export default function SettingsPage() {
             <p className="text-sm text-muted-foreground">{activeTabDef?.description}</p>
           </div>
 
-          {activeTab === 'general'      && <GeneralTab />}
-          {activeTab === 'receipt'      && <ReceiptTab />}
-          {activeTab === 'modules'      && <ModulesTab />}
+          {activeTab === 'general'          && <GeneralTab />}
+          {activeTab === 'receipt'          && <ReceiptTab />}
+          {activeTab === 'payment_display'  && <PaymentDisplayTab />}
+          {activeTab === 'modules'          && <ModulesTab />}
           {activeTab === 'shifts'       && <ShiftsSettingsTab />}
           {activeTab === 'kds_stations' && <KDSStationsTab />}
           {activeTab === 'tables'       && <TablesSettingsTab />}

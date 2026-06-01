@@ -31,6 +31,15 @@ export interface ReceiptData {
   cashier_name?: string;
   etims_invoice_number?: string;
   etims_qr_code_url?: string;
+  // payment display (populated from OutletSetting when show_payment_info_on_receipt=true)
+  payment_methods?: {
+    mpesa_paybill?: string;
+    mpesa_account_reference?: string;
+    airtel_money_number?: string;
+    bank_name?: string;
+    bank_account_number?: string;
+    bank_account_name?: string;
+  } | null;
 }
 
 interface ReceiptPreviewProps {
@@ -81,7 +90,12 @@ export function ReceiptPreview({ receipt, open, onClose, outletName, tenantName 
     <>
       {/* Hidden printable version — isolated by #receipt-print-root in receipt.css */}
       <div id="receipt-print-root" style={{ display: 'none' }}>
-        <ReceiptPrint receipt={receipt} outletName={outletName} tenantName={tenantName} />
+        <ReceiptPrint
+          receipt={receipt}
+          outletName={outletName}
+          tenantName={tenantName}
+          paymentMethods={receipt.payment_methods}
+        />
       </div>
 
       {/* Modal overlay */}
@@ -172,6 +186,42 @@ export function ReceiptPreview({ receipt, open, onClose, outletName, tenantName 
                     alt="eTIMS QR"
                     className="mx-auto mt-1 h-16 w-16"
                   />
+                )}
+              </>
+            )}
+
+            {receipt.payment_methods && Object.values(receipt.payment_methods).some(Boolean) && (
+              <>
+                <div className="border-t border-dashed border-border my-2" />
+                <p className="text-center font-semibold text-[10px] mb-1">HOW TO PAY</p>
+                {receipt.payment_methods.mpesa_paybill && (
+                  <div className="flex justify-between py-0.5 text-[10px]">
+                    <span>M-PESA Paybill</span>
+                    <span className="font-semibold">{receipt.payment_methods.mpesa_paybill}</span>
+                  </div>
+                )}
+                {receipt.payment_methods.mpesa_account_reference && (
+                  <div className="flex justify-between py-0.5 text-[10px]">
+                    <span>Account No.</span>
+                    <span className="font-semibold">{receipt.payment_methods.mpesa_account_reference}</span>
+                  </div>
+                )}
+                {receipt.payment_methods.airtel_money_number && (
+                  <div className="flex justify-between py-0.5 text-[10px]">
+                    <span>Airtel Money</span>
+                    <span className="font-semibold">{receipt.payment_methods.airtel_money_number}</span>
+                  </div>
+                )}
+                {receipt.payment_methods.bank_account_number && (
+                  <div className="flex justify-between py-0.5 text-[10px]">
+                    <span>{receipt.payment_methods.bank_name || 'Bank'}</span>
+                    <span className="font-semibold">{receipt.payment_methods.bank_account_number}</span>
+                  </div>
+                )}
+                {receipt.payment_methods.bank_account_name && (
+                  <p className="text-center text-muted-foreground text-[10px]">
+                    {receipt.payment_methods.bank_account_name}
+                  </p>
                 )}
               </>
             )}

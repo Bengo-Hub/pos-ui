@@ -40,6 +40,14 @@ export interface POSSettings {
   shift_max_hours: number;
   table_max_occupation_minutes: number;
   return_window_days: number;
+  // payment display — shown on printed receipts
+  mpesa_paybill?: string | null;
+  mpesa_account_reference?: string | null;
+  airtel_money_number?: string | null;
+  bank_name?: string | null;
+  bank_account_number?: string | null;
+  bank_account_name?: string | null;
+  show_payment_info_on_receipt: boolean;
   updated_at: string;
 }
 
@@ -62,6 +70,14 @@ export interface UpdatePOSSettingsInput {
   screensaver_url?: string | null;
   printer_profiles?: PrinterProfile[];
   return_window_days?: number;
+  // payment display
+  mpesa_paybill?: string | null;
+  mpesa_account_reference?: string | null;
+  airtel_money_number?: string | null;
+  bank_name?: string | null;
+  bank_account_number?: string | null;
+  bank_account_name?: string | null;
+  show_payment_info_on_receipt?: boolean;
 }
 
 export interface UpdatePOSModulesInput {
