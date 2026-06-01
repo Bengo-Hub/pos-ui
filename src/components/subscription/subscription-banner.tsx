@@ -3,6 +3,7 @@
 import { SubscriptionBanner as SharedSubscriptionBanner } from '@bengo-hub/shared-ui-lib/subscription';
 import { useSubscription } from '@/hooks/use-subscription';
 import { useUsageAlerts } from '@/hooks/use-usage-alerts';
+import { useTenantBranding } from '@/providers/tenant-branding-provider';
 
 const SUBSCRIPTIONS_UI_URL =
   process.env.NEXT_PUBLIC_SUBSCRIPTIONS_UI_URL || 'https://pricing.codevertexitsolutions.com';
@@ -13,6 +14,8 @@ const BILLING_URL = `${SUBSCRIPTIONS_UI_URL}/billing`;
 export function SubscriptionBanner() {
   const sub = useSubscription();
   const usageAlerts = useUsageAlerts();
+  const { tenant } = useTenantBranding();
+  const brandColor = tenant?.primaryColor ?? undefined;
   return (
     <SharedSubscriptionBanner
       status={sub.status}
@@ -32,6 +35,7 @@ export function SubscriptionBanner() {
       upgradeUrl={UPGRADE_URL}
       billingUrl={BILLING_URL}
       usageAlerts={usageAlerts}
+      brandColor={brandColor}
     />
   );
 }
