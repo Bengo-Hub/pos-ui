@@ -5,6 +5,7 @@ import { Loader2, Lock, Printer, Receipt, Save } from 'lucide-react';
 import { Button, Card, CardContent, CardHeader } from '@/components/ui/base';
 import { usePOSSettings, useUpdatePOSSettings } from '@/hooks/usePOSSettings';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useTenantBranding } from '@/providers/tenant-branding-provider';
 import { P } from '@/lib/rbac/permissions';
 import type { PrinterProfile } from '@/lib/api/settings';
 import { Toggle, inputClass, labelClass } from './shared';
@@ -16,11 +17,16 @@ const RECEIPT_PRINTER_ROLES = [
   { id: 'waiter', label: 'Waiter Copy', desc: 'Order summary for the serving staff' },
 ];
 
+// Sensible default footer when the tenant hasn't set one yet.
+const DEFAULT_RECEIPT_FOOTER = 'Thank you for your business!';
+
 export function ReceiptTab() {
   const { data: settings, isLoading } = usePOSSettings();
   const updateSettings = useUpdatePOSSettings();
   const { can } = usePermissions();
+  const { tenant } = useTenantBranding();
   const canEdit = can(P.CONFIG_CHANGE) || can(P.CONFIG_MANAGE);
+  const tenantName = tenant?.orgName || tenant?.name || '';
 
   const [form, setForm] = useState({
     receiptHeader: '',
@@ -32,15 +38,18 @@ export function ReceiptTab() {
 
   useEffect(() => {
     if (settings) {
+      // Prefill sensible defaults when the tenant hasn't configured the text yet:
+      // header → tenant/business name, footer → a friendly default. These become editable
+      // form values so the operator sees them and persists them on Save.
       setForm({
-        receiptHeader: settings.receipt_header ?? '',
-        receiptFooter: settings.receipt_footer ?? '',
+        receiptHeader: settings.receipt_header ?? tenantName,
+        receiptFooter: settings.receipt_footer ?? DEFAULT_RECEIPT_FOOTER,
         autoPrintOrder: settings.auto_print_order ?? false,
         autoPrintKitchen: settings.auto_print_kitchen ?? false,
       });
       setProfiles(settings.printer_profiles ?? []);
     }
-  }, [settings]);
+  }, [settings, tenantName]);
 
   const set = (k: keyof typeof form, v: unknown) =>
     setForm((f) => ({ ...f, [k]: v }));

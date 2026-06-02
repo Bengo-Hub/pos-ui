@@ -6,15 +6,16 @@ import { useModuleAccess } from '@/hooks/use-module-access';
 import { useSubscription } from '@/hooks/use-subscription';
 import { DevicesTab } from '@/components/settings/DevicesTab';
 import { SubscriptionTab } from '@/components/settings/SubscriptionTab';
+import { IntegrationsTab } from '@/components/settings/IntegrationsTab';
 import { Badge } from '@/components/ui/base';
 import { cn } from '@/lib/utils';
-import { Key, Monitor, Shield } from 'lucide-react';
+import { Key, Link2, Monitor, Shield } from 'lucide-react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
 /* ─── Types ──────────────────────────────────────────────────────────── */
 
-type TabKey = 'devices' | 'licenses';
+type TabKey = 'devices' | 'licenses' | 'integrations';
 
 /* ─── Page ───────────────────────────────────────────────────────────── */
 
@@ -42,7 +43,7 @@ export default function PlatformPage() {
 
   useEffect(() => {
     const raw = searchParams?.get('tab') as TabKey | null;
-    if (raw === 'devices' || raw === 'licenses') setActiveTab(raw);
+    if (raw === 'devices' || raw === 'licenses' || raw === 'integrations') setActiveTab(raw);
   }, [searchParams]);
 
   // Platform management is platform-owner only. Tenant admins/managers see their licence and
@@ -67,6 +68,7 @@ export default function PlatformPage() {
   const tabs: { key: TabKey; label: string; icon: typeof Monitor }[] = [
     { key: 'devices', label: 'Devices', icon: Monitor },
     { key: 'licenses', label: 'Licenses', icon: Key },
+    { key: 'integrations', label: 'Integrations', icon: Link2 },
   ];
 
   return (
@@ -77,7 +79,7 @@ export default function PlatformPage() {
         </div>
         <h1 className="text-3xl font-bold tracking-tight">Platform Management</h1>
         <p className="text-muted-foreground mt-1">
-          Device provisioning and subscription licensing. Outlet behaviour is configured under{' '}
+          Device provisioning, subscription licensing, and integrations. Outlet behaviour is configured under{' '}
           <button
             type="button"
             onClick={() => router.push(`/${orgSlug}/settings`)}
@@ -113,6 +115,7 @@ export default function PlatformPage() {
 
       {activeTab === 'devices' && <DevicesTab />}
       {activeTab === 'licenses' && <SubscriptionTab />}
+      {activeTab === 'integrations' && <IntegrationsTab />}
     </div>
   );
 }

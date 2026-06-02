@@ -21,6 +21,7 @@ import { useState, useMemo } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { TrackingIframeModal } from '@bengo-hub/shared-ui-lib';
 import { POSPaymentModal } from '@/components/pos/payment-modal';
+import { PrintReceiptButton } from '@/components/pos/print-receipt-button';
 import { useAuthStore } from '@/store/auth';
 
 const PAGE_SIZE = 20;
@@ -182,17 +183,20 @@ export default function OrdersPage() {
                           </td>
                           <td className="px-6 py-4 text-right text-xs text-muted-foreground">{formatTime(order.created_at)}</td>
                           <td className="px-6 py-4">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-8 w-8 p-0"
-                              onClick={(e: React.MouseEvent) => {
-                                e.stopPropagation();
-                                setSelectedOrder(order);
-                              }}
-                            >
-                              <Eye className="h-3.5 w-3.5" />
-                            </Button>
+                            <div className="flex items-center justify-end gap-1">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 w-8 p-0"
+                                onClick={(e: React.MouseEvent) => {
+                                  e.stopPropagation();
+                                  setSelectedOrder(order);
+                                }}
+                              >
+                                <Eye className="h-3.5 w-3.5" />
+                              </Button>
+                              <PrintReceiptButton orderId={order.id} size="icon" variant="ghost" className="h-8 w-8 p-0" />
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -334,6 +338,14 @@ export default function OrdersPage() {
                   )}
                 </Button>
               )}
+
+              {/* Print receipt (completed orders) or the current bill (open/unpaid) — available to
+                  waiters, cashiers, managers and admins for (re)printing at any time. */}
+              <PrintReceiptButton
+                orderId={selectedOrder.id}
+                label={selectedOrder.status === 'completed' ? 'Print Receipt' : 'Print Bill'}
+                className="w-full justify-center"
+              />
 
               {isDeliveryOrder(selectedOrder) && (
                 <Button variant="outline" className="w-full gap-2" onClick={() => setTrackingOpen(true)}>

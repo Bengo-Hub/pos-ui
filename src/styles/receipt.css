@@ -19,6 +19,14 @@
     background: #fff !important;
   }
 
+  /* 58mm thermal rolls — narrower print width (set via paper_width POS setting) */
+  #receipt-print-root.paper-58 {
+    width: 58mm !important;
+  }
+  #receipt-print-root.paper-58 .receipt-root {
+    width: 50mm;
+  }
+
   @page {
     size: 80mm auto;
     margin: 3mm 4mm;

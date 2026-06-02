@@ -448,17 +448,6 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
           </div>
         )}
 
-        {/* Configuration section — HQ admins who are not platform owners; links to the same platform page (shows outlet/tax/modules tabs only) */}
-        {isHQUser && !isPlatformOwner && (
-          <div>
-            <p className="px-3 mb-1.5 text-[10px] font-bold uppercase tracking-[0.15em] text-sidebar-foreground/25">
-              Configuration
-            </p>
-            <div className="space-y-0.5">
-              <NavLink item={{ label: 'Configuration', icon: Settings, href: '/platform', moduleKey: 'platform' }} orgSlug={orgSlug} onClose={onClose} />
-            </div>
-          </div>
-        )}
       </nav>
 
       {/* User footer */}

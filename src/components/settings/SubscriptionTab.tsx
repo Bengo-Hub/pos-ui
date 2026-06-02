@@ -18,7 +18,7 @@ export function SubscriptionTab() {
   const statusLabel = isActive ? (status === 'trial' ? 'Trial' : 'Active') : status ?? 'None';
 
   return (
-    <div className="space-y-6 max-w-3xl">
+    <div className="space-y-6 w-full">
       <Card>
         <CardHeader className="flex flex-row items-center gap-2 py-4">
           <Key className="h-4 w-4 text-primary" />
@@ -56,7 +56,7 @@ export function SubscriptionTab() {
               {info?.limits && Object.keys(info.limits).length > 0 && (
                 <div>
                   <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-3">Plan Limits</p>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
                     {Object.entries(info.limits).map(([k, v]) => (
                       <div key={k} className="flex items-center justify-between p-3 rounded-lg border border-border bg-card text-sm">
                         <span className="text-muted-foreground capitalize">{k.replace(/_/g, ' ')}</span>

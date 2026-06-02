@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import {
-  ChefHat, Clock, CreditCard, Gift, Key, Link2, Layers, Monitor, Receipt,
+  ChefHat, Clock, CreditCard, Gift, Key, Layers, Monitor, Receipt,
   Settings, ShieldCheck, Table2, Users,
 } from 'lucide-react';
 import { useAuthStore } from '@/store/auth';
@@ -15,7 +15,6 @@ import { ModulesTab } from '@/components/settings/ModulesTab';
 import { ShiftsSettingsTab } from '@/components/settings/ShiftsSettingsTab';
 import { KDSStationsTab } from '@/components/settings/KDSStationsTab';
 import { TablesSettingsTab } from '@/components/settings/TablesSettingsTab';
-import { IntegrationsTab } from '@/components/settings/IntegrationsTab';
 import { TeamTab } from '@/components/settings/TeamTab';
 import { PlatformTab } from '@/components/settings/PlatformTab';
 import { LoyaltySettingsTab } from '@/components/settings/LoyaltySettingsTab';
@@ -31,7 +30,6 @@ type Tab =
   | 'shifts'
   | 'kds_stations'
   | 'tables'
-  | 'integrations'
   | 'loyalty'
   | 'subscription'
   | 'devices'
@@ -48,7 +46,6 @@ const ALL_TABS: { id: Tab; label: string; icon: React.ElementType; requireModule
   { id: 'shifts',           label: 'Shifts',             icon: Clock,       description: 'Float rules and shift visibility' },
   { id: 'kds_stations',     label: 'KDS Stations',       icon: ChefHat,     description: 'Kitchen and bar display screens', requireModule: 'kds' },
   { id: 'tables',           label: 'Tables',             icon: Table2,      description: 'Floor plan and table configuration', requireModule: 'tables' },
-  { id: 'integrations',     label: 'Integrations',       icon: Link2,       description: 'Webhooks and third-party services' },
   { id: 'loyalty',          label: 'Loyalty',            icon: Gift,        description: 'Points, tiers, and earn rates', requireModule: 'loyalty' },
   { id: 'subscription',     label: 'Subscription',       icon: Key,         description: 'Your POS plan, limits, and features (view only)', requireAdmin: true },
   { id: 'devices',          label: 'Devices',            icon: Monitor,     description: 'POS terminals linked to this outlet (view only)', requireAdmin: true },
@@ -124,7 +121,6 @@ export default function SettingsPage() {
         {activeTab === 'shifts'           && <ShiftsSettingsTab />}
         {activeTab === 'kds_stations'     && <KDSStationsTab />}
         {activeTab === 'tables'           && <TablesSettingsTab />}
-        {activeTab === 'integrations'     && <IntegrationsTab />}
         {activeTab === 'loyalty'          && <LoyaltySettingsTab />}
         {activeTab === 'subscription'     && isAdminOrManager && <SubscriptionTab />}
         {activeTab === 'devices'          && isAdminOrManager && <DevicesTab />}

@@ -33,7 +33,12 @@ export function ReceiptPrint({
   tenantPin,
   paymentMethods,
 }: ReceiptPrintProps) {
-  const fmt = (n: number) => `KES ${n.toFixed(2)}`;
+  const currency = receipt.currency || 'KES';
+  const fmt = (n: number) => `${currency} ${n.toFixed(2)}`;
+  const resolvedOutlet = outletName || receipt.outlet_name;
+  const vatRate = receipt.vat_rate ?? 16;
+  const showVat = receipt.vat_enabled !== false && receipt.tax_amount > 0;
+  const footerText = receipt.receipt_footer || 'Thank you for your business!';
   const fmtDate = (s: string) =>
     new Date(s).toLocaleString('en-KE', {
       day: '2-digit',
@@ -51,19 +56,25 @@ export function ReceiptPrint({
           {tenantName}
         </p>
       )}
-      {outletName && (
+      {resolvedOutlet && (
         <p className="receipt-center" style={{ marginBottom: 1 }}>
-          {outletName}
+          {resolvedOutlet}
         </p>
       )}
-      {tenantAddress && (
-        <p className="receipt-center receipt-small">{tenantAddress}</p>
+      {(tenantAddress || receipt.outlet_address) && (
+        <p className="receipt-center receipt-small">{tenantAddress || receipt.outlet_address}</p>
       )}
       {tenantPhone && (
         <p className="receipt-center receipt-small">Tel: {tenantPhone}</p>
       )}
       {tenantPin && (
         <p className="receipt-center receipt-small">PIN: {tenantPin}</p>
+      )}
+      {/* Configurable header text from POS settings (slogan, extra address lines…) */}
+      {receipt.receipt_header && (
+        <p className="receipt-center receipt-small" style={{ whiteSpace: 'pre-wrap', marginTop: 2 }}>
+          {receipt.receipt_header}
+        </p>
       )}
 
       <hr className="receipt-divider" style={{ marginTop: 6 }} />
@@ -102,10 +113,12 @@ export function ReceiptPrint({
         <span className="receipt-row-name">Subtotal</span>
         <span className="receipt-row-value">{fmt(receipt.subtotal)}</span>
       </div>
-      <div className="receipt-row">
-        <span className="receipt-row-name">VAT (16%)</span>
-        <span className="receipt-row-value">{fmt(receipt.tax_amount)}</span>
-      </div>
+      {showVat && (
+        <div className="receipt-row">
+          <span className="receipt-row-name">VAT ({vatRate}%)</span>
+          <span className="receipt-row-value">{fmt(receipt.tax_amount)}</span>
+        </div>
+      )}
       {receipt.discount_amount > 0 && (
         <div className="receipt-row">
           <span className="receipt-row-name">Discount</span>
@@ -193,8 +206,8 @@ export function ReceiptPrint({
       )}
 
       <hr className="receipt-divider" style={{ marginTop: 6 }} />
-      <p className="receipt-center" style={{ marginTop: 4, marginBottom: 2, fontSize: 10 }}>
-        Thank you for your business!
+      <p className="receipt-center" style={{ marginTop: 4, marginBottom: 2, fontSize: 10, whiteSpace: 'pre-wrap' }}>
+        {footerText}
       </p>
     </div>
   );
