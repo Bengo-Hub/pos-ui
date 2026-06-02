@@ -12,7 +12,9 @@ import {
   Building2,
   CheckCircle,
   Loader2,
+  Presentation,
   Users,
+  Wine,
   Wrench,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -102,6 +104,32 @@ function HotelPage() {
           <div>
             <p className="font-semibold text-foreground">Facilities</p>
             <p className="text-sm text-muted-foreground">Pool, gym, conference bookings</p>
+          </div>
+        </Link>
+
+        <Link
+          href={`/${orgSlug}/hotel/conference`}
+          className="group flex items-center gap-4 p-5 rounded-2xl border border-border bg-card hover:border-primary/40 hover:shadow-md transition-all"
+        >
+          <div className="size-12 rounded-xl bg-primary/10 flex items-center justify-center group-hover:bg-primary/20 transition-colors">
+            <Presentation className="h-6 w-6 text-primary" />
+          </div>
+          <div>
+            <p className="font-semibold text-foreground">Conferences &amp; Events</p>
+            <p className="text-sm text-muted-foreground">BEO bookings, delegate meal cards</p>
+          </div>
+        </Link>
+
+        <Link
+          href={`/${orgSlug}/hotel/happy-hour`}
+          className="group flex items-center gap-4 p-5 rounded-2xl border border-border bg-card hover:border-primary/40 hover:shadow-md transition-all"
+        >
+          <div className="size-12 rounded-xl bg-primary/10 flex items-center justify-center group-hover:bg-primary/20 transition-colors">
+            <Wine className="h-6 w-6 text-primary" />
+          </div>
+          <div>
+            <p className="font-semibold text-foreground">Happy Hour</p>
+            <p className="text-sm text-muted-foreground">Time-windowed bar/lounge discounts</p>
           </div>
         </Link>
       </div>
