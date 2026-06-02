@@ -251,6 +251,18 @@ export function useEventReconciliation(eventId: string, enabled: boolean) {
   });
 }
 
+// ─── Inventory master picker ────────────────────────────────────────────────────
+
+export function useInventoryServiceItems(useCase: string, enabled = true) {
+  const slug = useTenantSlug();
+  return useQuery({
+    queryKey: ['inventory-service-items', slug, useCase],
+    queryFn: () => hotelApi.listInventoryServiceItems(slug, useCase),
+    enabled: !!slug && !!useCase && enabled,
+    staleTime: 5 * 60_000,
+  });
+}
+
 // ─── Happy hour ────────────────────────────────────────────────────────────────
 
 export function useActiveHappyHours() {

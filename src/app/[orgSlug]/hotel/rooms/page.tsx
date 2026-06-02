@@ -4,7 +4,7 @@ import { ModuleGate } from '@/components/auth/module-gate';
 import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { cn } from '@/lib/utils';
-import { useHotelRooms, useCreateRoom, useUpdateRoom, useDeleteRoom } from '@/hooks/useHotel';
+import { useHotelRooms, useCreateRoom, useUpdateRoom, useDeleteRoom, useInventoryServiceItems } from '@/hooks/useHotel';
 import type { Room, CreateRoomInput } from '@/lib/api/hotel';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
@@ -53,10 +53,12 @@ function RoomFormModal({ room, onClose }: RoomFormProps) {
     rate_per_night: room?.rate_per_night ?? 0,
     name: room?.name ?? '',
     currency: room?.currency ?? 'KES',
+    inventory_item_id: room?.inventory_item_id ?? undefined,
   });
 
   const createRoom = useCreateRoom();
   const updateRoom = useUpdateRoom(room?.id ?? '');
+  const { data: roomTypeItems = [] } = useInventoryServiceItems('HOSPITALITY_ROOM');
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -123,6 +125,24 @@ function RoomFormModal({ room, onClose }: RoomFormProps) {
                 <option key={t.value} value={t.value}>{t.label}</option>
               ))}
             </select>
+          </label>
+
+          {/* Inventory room-type master link — authoritative rate comes from inventory when set */}
+          <label className="block">
+            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Inventory Room-Type (rate master)</span>
+            <select
+              value={form.inventory_item_id ?? ''}
+              onChange={(e) => setForm((f) => ({ ...f, inventory_item_id: e.target.value || undefined }))}
+              className="mt-1.5 w-full px-3 py-2.5 rounded-xl border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            >
+              <option value="">— Not linked (use manual rate) —</option>
+              {roomTypeItems.map((it) => (
+                <option key={it.id} value={it.id}>{it.name} ({it.sku})</option>
+              ))}
+            </select>
+            {form.inventory_item_id && (
+              <span className="mt-1 block text-[11px] text-muted-foreground">Nightly rate will be resolved from inventory pricing at check-in.</span>
+            )}
           </label>
 
           <label className="block">

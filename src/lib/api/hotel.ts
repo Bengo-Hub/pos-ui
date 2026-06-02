@@ -277,7 +277,18 @@ export const hotelApi = {
 
   reconcileEvent: (tenantSlug: string, eventId: string) =>
     apiClient.get<{ event_booking_id: string; rows: ReconciliationRow[] }>(`${hotelBase(tenantSlug)}/events/${eventId}/reconciliation`),
+
+  // Inventory master picker — list SERVICE items by hospitality use_case for linking
+  listInventoryServiceItems: (tenantSlug: string, useCase: string) =>
+    apiClient.get<InventoryServiceItem[]>(`${hotelBase(tenantSlug)}/inventory-service-items`, { use_case: useCase }),
 };
+
+export interface InventoryServiceItem {
+  id: string;
+  sku: string;
+  name: string;
+  image_url?: string;
+}
 
 // ─── Happy-hour promotions ────────────────────────────────────────────────────
 

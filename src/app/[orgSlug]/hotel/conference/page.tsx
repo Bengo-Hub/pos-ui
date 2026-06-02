@@ -1,6 +1,8 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
+import { useParams } from 'next/navigation';
 import { Card, CardContent } from '@/components/ui/base';
 import {
   useFacilities,
@@ -25,6 +27,8 @@ const MEAL_PERIODS = [
 const inputCls = 'mt-1 w-full px-4 py-2.5 rounded-xl border border-input bg-background focus:outline-none focus:ring-2 focus:ring-ring';
 
 export default function ConferencePage() {
+  const params = useParams();
+  const orgSlug = params?.orgSlug as string;
   const { data: facilities = [] } = useFacilities();
   const { data: events = [], isLoading } = useEventBookings();
   const createMut = useCreateEventBooking();
@@ -171,7 +175,10 @@ export default function ConferencePage() {
                         {ev.event_type} · {ev.delegate_count} delegates · {ev.conference_days} day(s)
                       </p>
                     </div>
-                    <span className="text-xs px-2 py-1 rounded-full bg-muted text-muted-foreground">{ev.status}</span>
+                    <span className="flex items-center gap-2">
+                      <Link href={`/${orgSlug}/hotel/conference/${ev.id}`} onClick={(e) => e.stopPropagation()} className="text-xs text-primary hover:underline">Open ↗</Link>
+                      <span className="text-xs px-2 py-1 rounded-full bg-muted text-muted-foreground">{ev.status}</span>
+                    </span>
                   </button>
                   {selected?.id === ev.id && <EventPanel event={ev} />}
                 </li>
