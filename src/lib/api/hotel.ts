@@ -8,6 +8,8 @@ export interface Room {
   floor: number;
   rate_per_night: number;
   currency?: string;
+  /** Ref to inventory-api SERVICE Item (use_case=HOSPITALITY_ROOM) — authoritative room-type/rate master. */
+  inventory_item_id?: string | null;
   status: 'available' | 'occupied' | 'cleaning' | 'maintenance' | 'reserved' | 'checkout';
   edges?: {
     guests?: RoomGuest[];
@@ -56,6 +58,7 @@ export interface CheckInInput {
   expected_departure_at?: string;
   source?: string;
   booking_id?: string;
+  crm_contact_id?: string;
   checked_in_by?: string;
 }
 
@@ -141,6 +144,9 @@ export interface FolioItem {
   description: string;
   amount: number;
   charge_type: string;
+  inventory_sku?: string;
+  inventory_bundle_id?: string | null;
+  pos_order_id?: string | null;
   created_at: string;
 }
 
@@ -150,8 +156,14 @@ export interface Facility {
   facility_type: string;
   capacity: number;
   rate_per_session: number | null;
+  currency?: string;
   opening_time: string;
   closing_time: string;
+  /** Ref to inventory-api SERVICE Item (HOSPITALITY_FACILITY/CONFERENCE). */
+  inventory_item_id?: string | null;
+  setup_styles?: string[];
+  divisible?: boolean;
+  parent_facility_id?: string | null;
   status: 'available' | 'occupied' | 'maintenance' | 'closed';
 }
 
@@ -162,6 +174,8 @@ export interface CreateRoomInput {
   rate_per_night: number;
   name?: string;
   currency?: string;
+  /** Optional link to the inventory room-type SERVICE item (authoritative rate master). */
+  inventory_item_id?: string;
 }
 
 export interface FacilityBooking {

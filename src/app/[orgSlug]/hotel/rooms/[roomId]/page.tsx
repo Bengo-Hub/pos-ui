@@ -130,10 +130,14 @@ export default function RoomDetailPage() {
             <p className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">Current Guest</p>
             <div className="grid grid-cols-2 gap-3 text-sm">
               {[
-                { label: 'Name', value: guest.guest_name },
+                { label: 'Name', value: [guest.first_name, guest.last_name].filter(Boolean).join(' ') || guest.guest_name },
+                { label: 'Email', value: guest.email || '—' },
                 { label: 'Phone', value: guest.phone },
-                { label: 'Check-In', value: new Date(guest.check_in_date).toLocaleDateString() },
-                { label: 'Check-Out', value: new Date(guest.check_out_date).toLocaleDateString() },
+                { label: 'Nationality', value: guest.nationality || '—' },
+                { label: guest.id_type ? guest.id_type.replace('_', ' ').replace(/\b\w/g, (c) => c.toUpperCase()) : 'ID', value: guest.id_number },
+                { label: 'Guests', value: `${guest.adults ?? 1} adult(s)${(guest.children ?? 0) > 0 ? `, ${guest.children} child(ren)` : ''}` },
+                { label: 'Check-In', value: new Date(guest.expected_arrival_at || guest.check_in_date).toLocaleString() },
+                { label: 'Check-Out', value: new Date(guest.expected_departure_at || guest.check_out_date).toLocaleString() },
                 { label: 'Nights', value: String(guest.nights) },
                 { label: 'Room Total', value: `KES ${guest.total_room_charge.toLocaleString()}`, highlight: true },
               ].map(({ label, value, highlight }) => (
@@ -143,6 +147,11 @@ export default function RoomDetailPage() {
                 </div>
               ))}
             </div>
+            {guest.id_document_url && (
+              <a href={guest.id_document_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
+                <Receipt className="h-3 w-3" /> View ID document
+              </a>
+            )}
           </CardContent>
         </Card>
       )}
@@ -160,7 +169,10 @@ export default function RoomDetailPage() {
                 <li key={item.id} className="flex items-center justify-between py-2.5 text-sm">
                   <div>
                     <p className="font-medium text-foreground">{item.description}</p>
-                    <p className="text-xs text-muted-foreground capitalize">{item.charge_type.replace('_', ' ')}</p>
+                    <p className="text-xs text-muted-foreground capitalize">
+                      {item.charge_type.replace('_', ' ')}
+                      {item.inventory_sku ? ` · ${item.inventory_sku}` : ''}
+                    </p>
                   </div>
                   <p className="font-semibold text-foreground">KES {item.amount.toLocaleString()}</p>
                 </li>

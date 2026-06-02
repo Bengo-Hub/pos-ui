@@ -108,6 +108,19 @@ function HotelPage() {
         </Link>
 
         <Link
+          href={`/${orgSlug}/hotel/bookings`}
+          className="group flex items-center gap-4 p-5 rounded-2xl border border-border bg-card hover:border-primary/40 hover:shadow-md transition-all"
+        >
+          <div className="size-12 rounded-xl bg-primary/10 flex items-center justify-center group-hover:bg-primary/20 transition-colors">
+            <Users className="h-6 w-6 text-primary" />
+          </div>
+          <div>
+            <p className="font-semibold text-foreground">Group Bookings</p>
+            <p className="text-sm text-muted-foreground">Multi-room reservations</p>
+          </div>
+        </Link>
+
+        <Link
           href={`/${orgSlug}/hotel/conference`}
           className="group flex items-center gap-4 p-5 rounded-2xl border border-border bg-card hover:border-primary/40 hover:shadow-md transition-all"
         >
