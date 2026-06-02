@@ -3,6 +3,7 @@
 import { ModuleGate } from '@/components/auth/module-gate';
 import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
 import { SeatGuestsModal } from '@/components/pos/seat-guests-modal';
+import { PrintReceiptButton } from '@/components/pos/print-receipt-button';
 import { Badge, Button } from '@/components/ui/base';
 import { cn } from '@/lib/utils';
 import { useTables, useSections, useUpdateTableStatus, useReleaseTable, useMergeTables, useUnmergeTables, useOrders } from '@/hooks/usePOS';
@@ -495,6 +496,13 @@ function MyBillsTab({ orgSlug }: { orgSlug: string }) {
               <div className="flex items-center justify-between mt-2 pt-2 border-t border-border">
                 <span className="text-xs text-muted-foreground">{itemCount} item{itemCount !== 1 ? 's' : ''}</span>
                 <span className="font-bold text-sm text-primary">{fmt(order.total_amount ?? 0)}</span>
+              </div>
+              <div className="mt-2">
+                <PrintReceiptButton
+                  orderId={order.id}
+                  label={order.status === 'completed' ? 'Print Receipt' : 'Print Bill'}
+                  className="w-full justify-center"
+                />
               </div>
             </div>
           );

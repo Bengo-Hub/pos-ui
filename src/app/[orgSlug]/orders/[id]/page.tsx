@@ -2,6 +2,7 @@
 
 import { Badge } from '@/components/ui/base';
 import { useOrder } from '@/hooks/usePOS';
+import { PrintReceiptButton } from '@/components/pos/print-receipt-button';
 import { Loader2 } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
 
@@ -50,12 +51,15 @@ export default function OrderDetailPage() {
             </span>
           </div>
         </div>
-        <button
-          onClick={() => router.back()}
-          className="text-sm text-primary underline shrink-0"
-        >
-          Back
-        </button>
+        <div className="flex items-center gap-3 shrink-0">
+          <PrintReceiptButton orderId={id} label="Print Receipt" />
+          <button
+            onClick={() => router.back()}
+            className="text-sm text-primary underline"
+          >
+            Back
+          </button>
+        </div>
       </div>
 
       <div className="bg-card rounded-2xl border border-border p-5 space-y-4">

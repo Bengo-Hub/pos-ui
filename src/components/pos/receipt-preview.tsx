@@ -29,8 +29,17 @@ export interface ReceiptData {
   amount_tendered: number;
   change_due: number;
   cashier_name?: string;
+  currency?: string;
   etims_invoice_number?: string;
   etims_qr_code_url?: string;
+  // outlet + configurable receipt settings (populated by the pos-api receipt endpoint from OutletSetting)
+  outlet_name?: string;
+  outlet_address?: string;
+  receipt_header?: string;
+  receipt_footer?: string;
+  vat_enabled?: boolean;
+  vat_rate?: number;
+  paper_width?: string; // '58mm' | '80mm'
   // payment display (populated from OutletSetting when show_payment_info_on_receipt=true)
   payment_methods?: {
     mpesa_paybill?: string;
@@ -88,8 +97,13 @@ export function ReceiptPreview({ receipt, open, onClose, outletName, tenantName 
 
   return (
     <>
-      {/* Hidden printable version — isolated by #receipt-print-root in receipt.css */}
-      <div id="receipt-print-root" style={{ display: 'none' }}>
+      {/* Hidden printable version — isolated by #receipt-print-root in receipt.css.
+          paper-58 narrows the print width for 58mm thermal rolls (default is 80mm). */}
+      <div
+        id="receipt-print-root"
+        className={receipt.paper_width === '58mm' ? 'paper-58' : undefined}
+        style={{ display: 'none' }}
+      >
         <ReceiptPrint
           receipt={receipt}
           outletName={outletName}
@@ -118,8 +132,11 @@ export function ReceiptPreview({ receipt, open, onClose, outletName, tenantName 
             {tenantName && (
               <p className="text-center font-semibold text-sm mb-1">{tenantName}</p>
             )}
-            {outletName && (
-              <p className="text-center text-muted-foreground mb-1">{outletName}</p>
+            {(outletName || receipt.outlet_name) && (
+              <p className="text-center text-muted-foreground mb-1">{outletName || receipt.outlet_name}</p>
+            )}
+            {receipt.receipt_header && (
+              <p className="text-center text-muted-foreground text-[10px] whitespace-pre-wrap mb-1">{receipt.receipt_header}</p>
             )}
             <p className="text-center text-muted-foreground mb-3">{formatDate(receipt.issued_at)}</p>
 
@@ -145,10 +162,12 @@ export function ReceiptPreview({ receipt, open, onClose, outletName, tenantName 
               <span>Subtotal</span>
               <span>{formatCurrency(receipt.subtotal)}</span>
             </div>
-            <div className="flex justify-between py-0.5">
-              <span>Tax (16%)</span>
-              <span>{formatCurrency(receipt.tax_amount)}</span>
-            </div>
+            {receipt.vat_enabled !== false && receipt.tax_amount > 0 && (
+              <div className="flex justify-between py-0.5">
+                <span>VAT ({receipt.vat_rate ?? 16}%)</span>
+                <span>{formatCurrency(receipt.tax_amount)}</span>
+              </div>
+            )}
             {receipt.discount_amount > 0 && (
               <div className="flex justify-between py-0.5 text-green-600">
                 <span>Discount</span>
@@ -231,8 +250,8 @@ export function ReceiptPreview({ receipt, open, onClose, outletName, tenantName 
                 Served by: {receipt.cashier_name}
               </p>
             )}
-            <p className="text-center text-muted-foreground mt-2 text-[10px]">
-              Thank you for your business!
+            <p className="text-center text-muted-foreground mt-2 text-[10px] whitespace-pre-wrap">
+              {receipt.receipt_footer || 'Thank you for your business!'}
             </p>
           </div>
 
