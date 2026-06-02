@@ -22,8 +22,17 @@ export default function RoomDetailPage() {
   const roomId = params?.roomId as string;
   const router = useRouter();
 
-  const [checkInForm, setCheckInForm] = useState({ guest_name: '', phone: '', id_number: '', nights: '1' });
+  const [checkInForm, setCheckInForm] = useState({
+    first_name: '', last_name: '', email: '', phone: '',
+    nationality: '', id_type: 'national_id', id_number: '', id_document_url: '',
+    adults: '1', children: '0',
+    expected_arrival_at: '', expected_departure_at: '', nights: '1',
+  });
   const [showCheckIn, setShowCheckIn] = useState(false);
+
+  function setField(key: keyof typeof checkInForm, value: string) {
+    setCheckInForm((f) => ({ ...f, [key]: value }));
+  }
 
   const { data: room, isLoading: roomLoading } = useHotelRoom(roomId);
   const isOccupied = room?.status === 'occupied';
@@ -34,10 +43,35 @@ export default function RoomDetailPage() {
   const checkOut = useCheckOut(roomId);
 
   async function handleCheckIn() {
+    const f = checkInForm;
+    const guestName = `${f.first_name} ${f.last_name}`.trim() || f.first_name;
+    if (!guestName) { toast.error('Guest name is required'); return; }
+
+    // Derive nights from the date pickers when both are provided.
+    let nights = parseInt(f.nights) || 1;
+    if (f.expected_arrival_at && f.expected_departure_at) {
+      const ms = new Date(f.expected_departure_at).getTime() - new Date(f.expected_arrival_at).getTime();
+      const d = Math.ceil(ms / 86_400_000);
+      if (d > 0) nights = d;
+    }
+    const childrenCount = parseInt(f.children) || 0;
     try {
       await checkIn.mutateAsync({
-        ...checkInForm,
-        nights: parseInt(checkInForm.nights),
+        guest_name: guestName,
+        first_name: f.first_name || undefined,
+        last_name: f.last_name || undefined,
+        email: f.email || undefined,
+        phone: f.phone,
+        nationality: f.nationality || undefined,
+        id_type: f.id_type || undefined,
+        id_number: f.id_number,
+        id_document_url: f.id_document_url || undefined,
+        adults: parseInt(f.adults) || 1,
+        children: childrenCount,
+        nights,
+        expected_arrival_at: f.expected_arrival_at ? new Date(f.expected_arrival_at).toISOString() : undefined,
+        expected_departure_at: f.expected_departure_at ? new Date(f.expected_departure_at).toISOString() : undefined,
+        source: 'staff',
       });
       toast.success('Guest checked in');
       setShowCheckIn(false);
@@ -155,30 +189,42 @@ export default function RoomDetailPage() {
           <Card>
             <CardContent className="p-5 space-y-4">
               <p className="font-semibold text-foreground">Guest Check-In</p>
-              {[
-                { key: 'guest_name', label: 'Guest Name', placeholder: 'Full name' },
-                { key: 'phone', label: 'Phone', placeholder: '+254...' },
-                { key: 'id_number', label: 'ID / Passport', placeholder: 'Document number' },
-                { key: 'nights', label: 'Nights', placeholder: '1', type: 'number' },
-              ].map(({ key, label, placeholder, type }) => (
-                <label key={key} className="block">
-                  <span className="text-sm font-medium text-foreground">{label}</span>
-                  <input
-                    type={type ?? 'text'}
-                    value={(checkInForm as any)[key]}
-                    onChange={(e) => setCheckInForm((f) => ({ ...f, [key]: e.target.value }))}
-                    placeholder={placeholder}
+
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="First Name" value={checkInForm.first_name} onChange={(v) => setField('first_name', v)} placeholder="First name" />
+                <Field label="Last Name" value={checkInForm.last_name} onChange={(v) => setField('last_name', v)} placeholder="Last name" />
+                <Field label="Email" type="email" value={checkInForm.email} onChange={(v) => setField('email', v)} placeholder="guest@email.com" />
+                <Field label="Phone" value={checkInForm.phone} onChange={(v) => setField('phone', v)} placeholder="+254..." />
+                <Field label="Nationality" value={checkInForm.nationality} onChange={(v) => setField('nationality', v)} placeholder="e.g. Kenyan" />
+                <label className="block">
+                  <span className="text-sm font-medium text-foreground">ID Type</span>
+                  <select
+                    value={checkInForm.id_type}
+                    onChange={(e) => setField('id_type', e.target.value)}
                     className="mt-1 w-full px-4 py-2.5 rounded-xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                  />
+                  >
+                    <option value="national_id">National ID</option>
+                    <option value="passport">Passport</option>
+                    <option value="driving_licence">Driving Licence</option>
+                    <option value="other">Other</option>
+                  </select>
                 </label>
-              ))}
+                <Field label="ID Number" value={checkInForm.id_number} onChange={(v) => setField('id_number', v)} placeholder="Document number" />
+                <Field label="ID Document URL" value={checkInForm.id_document_url} onChange={(v) => setField('id_document_url', v)} placeholder="Uploaded scan link (optional)" />
+                <Field label="Check-In Date & Time" type="datetime-local" value={checkInForm.expected_arrival_at} onChange={(v) => setField('expected_arrival_at', v)} />
+                <Field label="Check-Out Date & Time" type="datetime-local" value={checkInForm.expected_departure_at} onChange={(v) => setField('expected_departure_at', v)} />
+                <Field label="Adults" type="number" value={checkInForm.adults} onChange={(v) => setField('adults', v)} placeholder="1" />
+                <Field label="Children" type="number" value={checkInForm.children} onChange={(v) => setField('children', v)} placeholder="0" />
+                <Field label="Nights (if no dates)" type="number" value={checkInForm.nights} onChange={(v) => setField('nights', v)} placeholder="1" />
+              </div>
+
               <div className="flex gap-3 pt-1">
                 <button onClick={() => setShowCheckIn(false)} className="flex-1 py-2.5 rounded-xl border border-border text-foreground font-medium hover:bg-muted transition-colors">
                   Cancel
                 </button>
                 <button
                   onClick={handleCheckIn}
-                  disabled={checkIn.isPending || !checkInForm.guest_name}
+                  disabled={checkIn.isPending || !checkInForm.first_name}
                   className="flex-1 py-2.5 rounded-xl bg-primary text-primary-foreground font-semibold hover:bg-primary/90 disabled:opacity-50 transition-colors"
                 >
                   {checkIn.isPending ? 'Checking in…' : 'Confirm Check-In'}
@@ -200,5 +246,26 @@ export default function RoomDetailPage() {
         )}
       </div>
     </div>
+  );
+}
+
+function Field({ label, value, onChange, placeholder, type = 'text' }: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  type?: string;
+}) {
+  return (
+    <label className="block">
+      <span className="text-sm font-medium text-foreground">{label}</span>
+      <input
+        type={type}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="mt-1 w-full px-4 py-2.5 rounded-xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+      />
+    </label>
   );
 }

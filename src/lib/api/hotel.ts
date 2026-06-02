@@ -18,13 +18,122 @@ export interface Room {
 export interface RoomGuest {
   id: string;
   guest_name: string;
+  first_name?: string;
+  last_name?: string;
+  email?: string;
   phone: string;
+  nationality?: string;
+  id_type?: 'national_id' | 'passport' | 'driving_licence' | 'other';
   id_number: string;
+  id_document_url?: string;
+  adults?: number;
+  children?: number;
+  child_ages?: number[];
   check_in_date: string;
   check_out_date: string;
+  expected_arrival_at?: string;
+  expected_departure_at?: string;
   nights: number;
   total_room_charge: number;
   status: 'active' | 'checked_out';
+}
+
+export interface CheckInInput {
+  guest_name: string;
+  first_name?: string;
+  last_name?: string;
+  email?: string;
+  phone: string;
+  nationality?: string;
+  id_type?: string;
+  id_number: string;
+  id_document_url?: string;
+  adults?: number;
+  children?: number;
+  child_ages?: number[];
+  nights: number;
+  expected_arrival_at?: string;
+  expected_departure_at?: string;
+  source?: string;
+  booking_id?: string;
+  checked_in_by?: string;
+}
+
+export interface RoomBooking {
+  id: string;
+  confirmation_no: string;
+  lead_guest_name: string;
+  email?: string;
+  phone?: string;
+  rooms_count: number;
+  arrival_date: string;
+  departure_date: string;
+  status: string;
+}
+
+export interface CreateRoomBookingInput {
+  lead_guest_name: string;
+  email?: string;
+  phone?: string;
+  rooms_count: number;
+  arrival_date: string;
+  departure_date: string;
+  inventory_rate_plan_bundle_id?: string;
+  market_segment?: string;
+  source?: string;
+}
+
+export interface EventBooking {
+  id: string;
+  facility_id: string;
+  inventory_bundle_id?: string;
+  event_type: string;
+  title: string;
+  client_name: string;
+  contact_phone?: string;
+  contact_email?: string;
+  start_at: string;
+  end_at: string;
+  conference_days: number;
+  delegate_count: number;
+  setup_style?: string;
+  total_amount: number;
+  status: string;
+}
+
+export interface CreateEventBookingInput {
+  facility_id: string;
+  inventory_bundle_id?: string;
+  event_type?: string;
+  title: string;
+  client_name: string;
+  contact_phone?: string;
+  contact_email?: string;
+  start_at: string;
+  end_at: string;
+  conference_days: number;
+  delegate_count: number;
+  setup_style?: string;
+  deposit_amount?: number;
+  total_amount?: number;
+  special_requests?: string;
+}
+
+export interface MealEntitlement {
+  id: string;
+  delegate_ref?: string;
+  conference_day: string;
+  meal_period: string;
+  code: string;
+  status: 'issued' | 'redeemed' | 'expired' | 'void';
+  redeemed_at?: string;
+}
+
+export interface ReconciliationRow {
+  conference_day: string;
+  meal_period: string;
+  issued: number;
+  redeemed: number;
 }
 
 export interface FolioItem {
@@ -93,7 +202,7 @@ export const hotelApi = {
   updateRoomStatus: (tenantSlug: string, roomId: string, status: string) =>
     apiClient.patch<Room>(`${hotelBase(tenantSlug)}/rooms/${roomId}/status`, { status }),
 
-  checkIn: (tenantSlug: string, roomId: string, body: { guest_name: string; phone: string; id_number: string; nights: number }) =>
+  checkIn: (tenantSlug: string, roomId: string, body: CheckInInput) =>
     apiClient.post(`${hotelBase(tenantSlug)}/rooms/${roomId}/check-in`, body),
 
   checkOut: (tenantSlug: string, roomId: string) =>
@@ -123,4 +232,75 @@ export const hotelApi = {
   listFacilityBookings: (tenantSlug: string) =>
     apiClient.get<{ data: FacilityBooking[]; total: number }>(`${hotelBase(tenantSlug)}/facilities/bookings`)
       .then((r) => r.data ?? []),
+
+  // ─── Multi-room (group) bookings ──────────────────────────────────────────
+
+  listBookings: (tenantSlug: string) =>
+    apiClient.get<RoomBooking[]>(`${hotelBase(tenantSlug)}/bookings`),
+
+  getBooking: (tenantSlug: string, id: string) =>
+    apiClient.get<RoomBooking & { edges?: { guests?: RoomGuest[] } }>(`${hotelBase(tenantSlug)}/bookings/${id}`),
+
+  createBooking: (tenantSlug: string, body: CreateRoomBookingInput) =>
+    apiClient.post<RoomBooking>(`${hotelBase(tenantSlug)}/bookings`, body),
+
+  // ─── Conference / events (BEO) + meal cards ───────────────────────────────
+
+  listEvents: (tenantSlug: string) =>
+    apiClient.get<EventBooking[]>(`${hotelBase(tenantSlug)}/events`),
+
+  getEvent: (tenantSlug: string, id: string) =>
+    apiClient.get<EventBooking & { edges?: { meal_entitlements?: MealEntitlement[] } }>(`${hotelBase(tenantSlug)}/events/${id}`),
+
+  createEvent: (tenantSlug: string, body: CreateEventBookingInput) =>
+    apiClient.post<EventBooking>(`${hotelBase(tenantSlug)}/events`, body),
+
+  generateMealCards: (tenantSlug: string, eventId: string, body: { meal_periods: string[]; delegate_refs?: string[] }) =>
+    apiClient.post<{ event_booking_id: string; cards_issued: number }>(`${hotelBase(tenantSlug)}/events/${eventId}/generate-mealcards`, body),
+
+  redeemMealCard: (tenantSlug: string, code: string, body: { redeemed_by?: string; pos_order_id?: string }) =>
+    apiClient.post<MealEntitlement>(`${hotelBase(tenantSlug)}/mealcards/${code}/redeem`, body),
+
+  reconcileEvent: (tenantSlug: string, eventId: string) =>
+    apiClient.get<{ event_booking_id: string; rows: ReconciliationRow[] }>(`${hotelBase(tenantSlug)}/events/${eventId}/reconciliation`),
+};
+
+// ─── Happy-hour promotions ────────────────────────────────────────────────────
+
+export interface HappyHourPromotion {
+  id: string;
+  name: string;
+  promo_kind: string;
+  days_of_week?: number[];
+  window_start?: string;
+  window_end?: string;
+  auto_apply: boolean;
+  status: string;
+}
+
+export interface CreateHappyHourInput {
+  name: string;
+  promo_kind: 'happy_hour';
+  outlet_id?: string;
+  days_of_week: number[];
+  window_start: string;
+  window_end: string;
+  auto_apply: boolean;
+  scope_type?: 'all' | 'category' | 'item';
+  scope_ids?: string[];
+  discount_type?: 'percentage' | 'fixed_amount' | 'fixed_price';
+  discount_value: number;
+  max_discount?: number;
+}
+
+export const happyHourApi = {
+  listActive: (tenantSlug: string) =>
+    apiClient.get<HappyHourPromotion[]>(`/api/v1/${tenantSlug}/pos/promotions/happy-hour/active`),
+
+  list: (tenantSlug: string) =>
+    apiClient.get<{ data: HappyHourPromotion[]; total: number }>(`/api/v1/${tenantSlug}/pos/promotions`)
+      .then((r) => r.data ?? []),
+
+  create: (tenantSlug: string, body: CreateHappyHourInput) =>
+    apiClient.post<HappyHourPromotion>(`/api/v1/${tenantSlug}/pos/promotions`, body),
 };

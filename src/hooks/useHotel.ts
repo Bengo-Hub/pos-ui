@@ -2,7 +2,15 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '@/store/auth';
-import { hotelApi, type Room, type FolioItem, type Facility, type FacilityBooking, type CreateRoomInput } from '@/lib/api/hotel';
+import {
+  hotelApi,
+  happyHourApi,
+  type CreateRoomInput,
+  type CheckInInput,
+  type CreateRoomBookingInput,
+  type CreateEventBookingInput,
+  type CreateHappyHourInput,
+} from '@/lib/api/hotel';
 
 function useTenantSlug() {
   return useAuthStore((s) => s.user?.tenant_id ?? '');
@@ -85,7 +93,7 @@ export function useCheckIn(roomId: string) {
   const slug = useTenantSlug();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: { guest_name: string; phone: string; id_number: string; nights: number }) =>
+    mutationFn: (body: CheckInInput) =>
       hotelApi.checkIn(slug, roomId, body),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['hotel-rooms', slug] });
@@ -158,5 +166,122 @@ export function useFacilityBookings() {
     queryFn: () => hotelApi.listFacilityBookings(slug),
     enabled: !!slug,
     staleTime: 30_000,
+  });
+}
+
+// ─── Multi-room (group) bookings ──────────────────────────────────────────────
+
+export function useRoomBookings() {
+  const slug = useTenantSlug();
+  return useQuery({
+    queryKey: ['room-bookings', slug],
+    queryFn: () => hotelApi.listBookings(slug),
+    enabled: !!slug,
+    staleTime: 30_000,
+  });
+}
+
+export function useCreateRoomBooking() {
+  const slug = useTenantSlug();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: CreateRoomBookingInput) => hotelApi.createBooking(slug, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['room-bookings', slug] }),
+  });
+}
+
+// ─── Conference / events (BEO) + meal cards ────────────────────────────────────
+
+export function useEventBookings() {
+  const slug = useTenantSlug();
+  return useQuery({
+    queryKey: ['event-bookings', slug],
+    queryFn: () => hotelApi.listEvents(slug),
+    enabled: !!slug,
+    staleTime: 30_000,
+  });
+}
+
+export function useEventBooking(eventId: string) {
+  const slug = useTenantSlug();
+  return useQuery({
+    queryKey: ['event-booking', slug, eventId],
+    queryFn: () => hotelApi.getEvent(slug, eventId),
+    enabled: !!slug && !!eventId,
+    staleTime: 15_000,
+  });
+}
+
+export function useCreateEventBooking() {
+  const slug = useTenantSlug();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: CreateEventBookingInput) => hotelApi.createEvent(slug, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['event-bookings', slug] }),
+  });
+}
+
+export function useGenerateMealCards(eventId: string) {
+  const slug = useTenantSlug();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { meal_periods: string[]; delegate_refs?: string[] }) =>
+      hotelApi.generateMealCards(slug, eventId, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['event-booking', slug, eventId] }),
+  });
+}
+
+export function useRedeemMealCard() {
+  const slug = useTenantSlug();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ code, body }: { code: string; body: { redeemed_by?: string; pos_order_id?: string } }) =>
+      hotelApi.redeemMealCard(slug, code, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['event-bookings', slug] }),
+  });
+}
+
+export function useEventReconciliation(eventId: string, enabled: boolean) {
+  const slug = useTenantSlug();
+  return useQuery({
+    queryKey: ['event-reconciliation', slug, eventId],
+    queryFn: () => hotelApi.reconcileEvent(slug, eventId),
+    enabled: !!slug && !!eventId && enabled,
+    staleTime: 15_000,
+  });
+}
+
+// ─── Happy hour ────────────────────────────────────────────────────────────────
+
+export function useActiveHappyHours() {
+  const slug = useTenantSlug();
+  return useQuery({
+    queryKey: ['happy-hours-active', slug],
+    queryFn: () => happyHourApi.listActive(slug),
+    enabled: !!slug,
+    staleTime: 60_000,
+    refetchInterval: 5 * 60_000,
+  });
+}
+
+export function useHappyHours() {
+  const slug = useTenantSlug();
+  return useQuery({
+    queryKey: ['happy-hours', slug],
+    queryFn: () => happyHourApi.list(slug),
+    enabled: !!slug,
+    staleTime: 60_000,
+  });
+}
+
+export function useCreateHappyHour() {
+  const slug = useTenantSlug();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: CreateHappyHourInput) => happyHourApi.create(slug, body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['happy-hours', slug] });
+      qc.invalidateQueries({ queryKey: ['happy-hours-active', slug] });
+    },
   });
 }
