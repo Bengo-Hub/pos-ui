@@ -6,13 +6,15 @@ import { useActiveHappyHours, useHappyHours, useCreateHappyHour } from '@/hooks/
 import type { CreateHappyHourInput } from '@/lib/api/hotel';
 import { Loader2, Plus, Wine } from 'lucide-react';
 import { toast } from 'sonner';
+import { ModuleGate } from '@/components/auth/module-gate';
+import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
 
 const DAYS = [
   { v: 1, l: 'Mon' }, { v: 2, l: 'Tue' }, { v: 3, l: 'Wed' },
   { v: 4, l: 'Thu' }, { v: 5, l: 'Fri' }, { v: 6, l: 'Sat' }, { v: 0, l: 'Sun' },
 ];
 
-export default function HappyHourPage() {
+function HappyHourPageInner() {
   const { data: active = [] } = useActiveHappyHours();
   const { data: all = [], isLoading } = useHappyHours();
   const createMut = useCreateHappyHour();
@@ -174,5 +176,13 @@ export default function HappyHourPage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+export default function HappyHourPage() {
+  return (
+    <ModuleGate moduleKey="hotel" fallback={<ModuleUnavailablePage moduleKey="hotel" />}>
+      <HappyHourPageInner />
+    </ModuleGate>
   );
 }

@@ -8,10 +8,12 @@ import { useRoomBookings, useCreateRoomBooking } from '@/hooks/useHotel';
 import type { CreateRoomBookingInput } from '@/lib/api/hotel';
 import { ArrowLeft, Loader2, Plus, Users } from 'lucide-react';
 import { toast } from 'sonner';
+import { ModuleGate } from '@/components/auth/module-gate';
+import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
 
 const inputCls = 'mt-1 w-full px-4 py-2.5 rounded-xl border border-input bg-background focus:outline-none focus:ring-2 focus:ring-ring';
 
-export default function RoomBookingsPage() {
+function RoomBookingsPageInner() {
   const params = useParams();
   const orgSlug = params?.orgSlug as string;
   const { data: bookings = [], isLoading } = useRoomBookings();
@@ -104,5 +106,13 @@ export default function RoomBookingsPage() {
         )}
       </CardContent></Card>
     </div>
+  );
+}
+
+export default function RoomBookingsPage() {
+  return (
+    <ModuleGate moduleKey="hotel" fallback={<ModuleUnavailablePage moduleKey="hotel" />}>
+      <RoomBookingsPageInner />
+    </ModuleGate>
   );
 }

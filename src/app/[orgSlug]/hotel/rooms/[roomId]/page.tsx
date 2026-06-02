@@ -15,8 +15,10 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
+import { ModuleGate } from '@/components/auth/module-gate';
+import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
 
-export default function RoomDetailPage() {
+function RoomDetailPageInner() {
   const params = useParams();
   const orgSlug = params?.orgSlug as string;
   const roomId = params?.roomId as string;
@@ -279,5 +281,13 @@ function Field({ label, value, onChange, placeholder, type = 'text' }: {
         className="mt-1 w-full px-4 py-2.5 rounded-xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
       />
     </label>
+  );
+}
+
+export default function RoomDetailPage() {
+  return (
+    <ModuleGate moduleKey="hotel" fallback={<ModuleUnavailablePage moduleKey="hotel" />}>
+      <RoomDetailPageInner />
+    </ModuleGate>
   );
 }

@@ -12,6 +12,8 @@ import {
 } from '@/hooks/useHotel';
 import { ArrowLeft, Loader2, Presentation, Ticket } from 'lucide-react';
 import { toast } from 'sonner';
+import { ModuleGate } from '@/components/auth/module-gate';
+import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
 
 const MEAL_PERIODS = [
   { v: 'breakfast', l: 'Breakfast' },
@@ -21,7 +23,7 @@ const MEAL_PERIODS = [
   { v: 'dinner', l: 'Dinner' },
 ];
 
-export default function EventDetailPage() {
+function EventDetailPageInner() {
   const params = useParams();
   const orgSlug = params?.orgSlug as string;
   const eventId = params?.eventId as string;
@@ -139,5 +141,13 @@ export default function EventDetailPage() {
         </CardContent></Card>
       )}
     </div>
+  );
+}
+
+export default function EventDetailPage() {
+  return (
+    <ModuleGate moduleKey="hotel" fallback={<ModuleUnavailablePage moduleKey="hotel" />}>
+      <EventDetailPageInner />
+    </ModuleGate>
   );
 }

@@ -87,6 +87,18 @@ export const P = {
   HOTEL_CHANGE:      'pos.hotel.change',
   HOTEL_MANAGE:      'pos.hotel.manage',
 
+  // Conference / events (BEO) + delegate meal cards
+  CONFERENCE_VIEW:   'pos.conference.view',
+  CONFERENCE_ADD:    'pos.conference.add',
+  CONFERENCE_CHANGE: 'pos.conference.change',
+  CONFERENCE_MANAGE: 'pos.conference.manage',
+
+  // Promotions / happy hour
+  PROMOTIONS_VIEW:   'pos.promotions.view',
+  PROMOTIONS_ADD:    'pos.promotions.add',
+  PROMOTIONS_CHANGE: 'pos.promotions.change',
+  PROMOTIONS_MANAGE: 'pos.promotions.manage',
+
   // Appointments
   APPOINTMENTS_ADD:    'pos.appointments.add',
   APPOINTMENTS_VIEW:   'pos.appointments.view',

@@ -15,6 +15,8 @@ import {
 import type { CreateEventBookingInput, EventBooking } from '@/lib/api/hotel';
 import { Loader2, Plus, Presentation, Ticket } from 'lucide-react';
 import { toast } from 'sonner';
+import { ModuleGate } from '@/components/auth/module-gate';
+import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
 
 const MEAL_PERIODS = [
   { v: 'breakfast', l: 'Breakfast' },
@@ -26,7 +28,7 @@ const MEAL_PERIODS = [
 
 const inputCls = 'mt-1 w-full px-4 py-2.5 rounded-xl border border-input bg-background focus:outline-none focus:ring-2 focus:ring-ring';
 
-export default function ConferencePage() {
+function ConferencePageInner() {
   const params = useParams();
   const orgSlug = params?.orgSlug as string;
   const { data: facilities = [] } = useFacilities();
@@ -279,5 +281,13 @@ function EventPanel({ event }: { event: EventBooking }) {
         </div>
       )}
     </div>
+  );
+}
+
+export default function ConferencePage() {
+  return (
+    <ModuleGate moduleKey="hotel" fallback={<ModuleUnavailablePage moduleKey="hotel" />}>
+      <ConferencePageInner />
+    </ModuleGate>
   );
 }
