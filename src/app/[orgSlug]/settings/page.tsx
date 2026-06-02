@@ -2,11 +2,12 @@
 
 import { useState } from 'react';
 import {
-  ChefHat, Clock, CreditCard, Gift, Link2, Layers, Receipt,
+  ChefHat, Clock, CreditCard, Gift, Key, Link2, Layers, Monitor, Receipt,
   Settings, ShieldCheck, Table2, Users,
 } from 'lucide-react';
 import { useAuthStore } from '@/store/auth';
 import { useModuleAccess } from '@/hooks/use-module-access';
+import { cn } from '@/lib/utils';
 
 import { GeneralTab } from '@/components/settings/GeneralTab';
 import { ReceiptTab } from '@/components/settings/ReceiptTab';
@@ -19,6 +20,8 @@ import { TeamTab } from '@/components/settings/TeamTab';
 import { PlatformTab } from '@/components/settings/PlatformTab';
 import { LoyaltySettingsTab } from '@/components/settings/LoyaltySettingsTab';
 import { PaymentDisplayTab } from '@/components/settings/PaymentDisplayTab';
+import { SubscriptionTab } from '@/components/settings/SubscriptionTab';
+import { DevicesTab } from '@/components/settings/DevicesTab';
 
 type Tab =
   | 'general'
@@ -30,31 +33,42 @@ type Tab =
   | 'tables'
   | 'integrations'
   | 'loyalty'
+  | 'subscription'
+  | 'devices'
   | 'platform'
   | 'team';
 
-const ALL_TABS: { id: Tab; label: string; icon: React.ElementType; requireModule?: string; description: string }[] = [
+// requireModule → only shown when the module is enabled (or to superusers).
+// requireAdmin  → read-only account views shown to tenant admins/managers (and platform owners).
+const ALL_TABS: { id: Tab; label: string; icon: React.ElementType; requireModule?: string; requireAdmin?: boolean; description: string }[] = [
   { id: 'general',          label: 'Outlet Config',      icon: Settings,    description: 'Currency, tax, and returns policy' },
   { id: 'receipt',          label: 'Receipt & Printing', icon: Receipt,     description: 'Receipt format and printer profiles' },
   { id: 'payment_display',  label: 'Payment Display',    icon: CreditCard,  description: 'Paybill, till, and bank details on receipts' },
   { id: 'modules',          label: 'Modules',            icon: Layers,      description: 'Use case and feature toggles' },
-  { id: 'shifts',       label: 'Shifts',              icon: Clock,      description: 'Float rules and shift visibility' },
-  { id: 'kds_stations', label: 'KDS Stations',        icon: ChefHat,    description: 'Kitchen and bar display screens', requireModule: 'kds' },
-  { id: 'tables',       label: 'Tables',              icon: Table2,     description: 'Floor plan and table configuration', requireModule: 'tables' },
-  { id: 'integrations', label: 'Integrations',        icon: Link2,      description: 'Webhooks and third-party services' },
-  { id: 'loyalty',      label: 'Loyalty',             icon: Gift,       description: 'Points, tiers, and earn rates', requireModule: 'loyalty' },
-  { id: 'team',         label: 'Team',                icon: Users,      description: 'Staff members and roles' },
-  { id: 'platform',     label: 'Platform',            icon: ShieldCheck, description: 'Admin and tenant management' },
+  { id: 'shifts',           label: 'Shifts',             icon: Clock,       description: 'Float rules and shift visibility' },
+  { id: 'kds_stations',     label: 'KDS Stations',       icon: ChefHat,     description: 'Kitchen and bar display screens', requireModule: 'kds' },
+  { id: 'tables',           label: 'Tables',             icon: Table2,      description: 'Floor plan and table configuration', requireModule: 'tables' },
+  { id: 'integrations',     label: 'Integrations',       icon: Link2,       description: 'Webhooks and third-party services' },
+  { id: 'loyalty',          label: 'Loyalty',            icon: Gift,        description: 'Points, tiers, and earn rates', requireModule: 'loyalty' },
+  { id: 'subscription',     label: 'Subscription',       icon: Key,         description: 'Your POS plan, limits, and features (view only)', requireAdmin: true },
+  { id: 'devices',          label: 'Devices',            icon: Monitor,     description: 'POS terminals linked to this outlet (view only)', requireAdmin: true },
+  { id: 'team',             label: 'Team',               icon: Users,       description: 'Staff members and roles' },
+  { id: 'platform',         label: 'Platform',           icon: ShieldCheck, description: 'Admin and tenant management' },
 ];
+
+const ADMIN_ROLES = ['admin', 'pos_admin', 'manager', 'store_manager', 'owner', 'super_admin', 'superuser'];
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<Tab>('general');
   const user = useAuthStore((s) => s.user);
   const { isSuperUser, hasModule } = useModuleAccess();
   const isPlatformOwner = isSuperUser || user?.isPlatformOwner;
+  const isAdminOrManager =
+    isPlatformOwner || (user?.roles ?? []).some((r) => ADMIN_ROLES.includes(r));
 
   const visibleTabs = ALL_TABS.filter((t) => {
     if (t.id === 'platform') return isPlatformOwner;
+    if (t.requireAdmin) return isAdminOrManager;
     if (t.requireModule) return isSuperUser || hasModule(t.requireModule);
     return true;
   });
@@ -71,8 +85,8 @@ export default function SettingsPage() {
         </p>
       </div>
 
-      {/* Mobile: horizontal scrollable tabs */}
-      <div className="md:hidden mb-5 flex gap-1 p-1 rounded-2xl bg-muted/50 border border-border overflow-x-auto scrollbar-hide">
+      {/* Top-nav tabs — wraps responsively; mirrors the Platform page tab design */}
+      <div className="mb-6 flex flex-wrap gap-1 p-1 rounded-lg bg-accent/30 border border-border">
         {visibleTabs.map((tab) => {
           const Icon = tab.icon;
           const active = activeTab === tab.id;
@@ -81,8 +95,12 @@ export default function SettingsPage() {
               key={tab.id}
               type="button"
               onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold whitespace-nowrap transition-all
-                ${active ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+              className={cn(
+                'flex items-center gap-1.5 px-3.5 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap',
+                active
+                  ? 'bg-card shadow-sm text-foreground'
+                  : 'text-muted-foreground hover:text-foreground'
+              )}
             >
               <Icon className="h-4 w-4 shrink-0" />
               {tab.label}
@@ -91,52 +109,27 @@ export default function SettingsPage() {
         })}
       </div>
 
-      {/* Desktop: sidebar nav + content */}
-      <div className="flex flex-col md:flex-row gap-6 items-start">
-        {/* Sidebar navigation */}
-        <nav className="hidden md:block w-52 shrink-0 sticky top-6">
-          <div className="bg-card rounded-2xl border border-border p-2 space-y-0.5">
-            {visibleTabs.map((tab) => {
-              const Icon = tab.icon;
-              const active = activeTab === tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  type="button"
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all text-left
-                    ${active
-                      ? 'bg-primary/10 text-primary'
-                      : 'text-muted-foreground hover:text-foreground hover:bg-accent/50'}`}
-                >
-                  <Icon className="h-4 w-4 shrink-0" />
-                  {tab.label}
-                </button>
-              );
-            })}
-          </div>
-        </nav>
-
-        {/* Main content area */}
-        <div className="flex-1 min-w-0 space-y-1">
-          {/* Section heading above each tab */}
-          <div className="mb-5">
-            <h2 className="text-lg font-bold">{activeTabDef?.label}</h2>
-            <p className="text-sm text-muted-foreground">{activeTabDef?.description}</p>
-          </div>
-
-          {activeTab === 'general'          && <GeneralTab />}
-          {activeTab === 'receipt'          && <ReceiptTab />}
-          {activeTab === 'payment_display'  && <PaymentDisplayTab />}
-          {activeTab === 'modules'          && <ModulesTab />}
-          {activeTab === 'shifts'       && <ShiftsSettingsTab />}
-          {activeTab === 'kds_stations' && <KDSStationsTab />}
-          {activeTab === 'tables'       && <TablesSettingsTab />}
-          {activeTab === 'integrations' && <IntegrationsTab />}
-          {activeTab === 'loyalty'      && <LoyaltySettingsTab />}
-          {activeTab === 'team'         && <TeamTab />}
-          {activeTab === 'platform'     && isPlatformOwner && <PlatformTab />}
+      {/* Content area — full width now that the nav is on top */}
+      <div className="min-w-0 space-y-1">
+        {/* Section heading above each tab */}
+        <div className="mb-5">
+          <h2 className="text-lg font-bold">{activeTabDef?.label}</h2>
+          <p className="text-sm text-muted-foreground">{activeTabDef?.description}</p>
         </div>
+
+        {activeTab === 'general'          && <GeneralTab />}
+        {activeTab === 'receipt'          && <ReceiptTab />}
+        {activeTab === 'payment_display'  && <PaymentDisplayTab />}
+        {activeTab === 'modules'          && <ModulesTab />}
+        {activeTab === 'shifts'           && <ShiftsSettingsTab />}
+        {activeTab === 'kds_stations'     && <KDSStationsTab />}
+        {activeTab === 'tables'           && <TablesSettingsTab />}
+        {activeTab === 'integrations'     && <IntegrationsTab />}
+        {activeTab === 'loyalty'          && <LoyaltySettingsTab />}
+        {activeTab === 'subscription'     && isAdminOrManager && <SubscriptionTab />}
+        {activeTab === 'devices'          && isAdminOrManager && <DevicesTab />}
+        {activeTab === 'team'             && <TeamTab />}
+        {activeTab === 'platform'         && isPlatformOwner && <PlatformTab />}
       </div>
     </div>
   );
