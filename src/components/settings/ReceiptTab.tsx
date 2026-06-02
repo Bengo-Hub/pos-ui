@@ -6,6 +6,8 @@ import { Button, Card, CardContent, CardHeader } from '@/components/ui/base';
 import { usePOSSettings, useUpdatePOSSettings } from '@/hooks/usePOSSettings';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useTenantBranding } from '@/providers/tenant-branding-provider';
+import { useAuthStore } from '@/store/auth';
+import { useOutletFilterStore } from '@/store/outlet-filter';
 import { P } from '@/lib/rbac/permissions';
 import type { PrinterProfile } from '@/lib/api/settings';
 import { Toggle, inputClass, labelClass } from './shared';
@@ -25,8 +27,13 @@ export function ReceiptTab() {
   const updateSettings = useUpdatePOSSettings();
   const { can } = usePermissions();
   const { tenant } = useTenantBranding();
+  const authOutlet = useAuthStore((s) => s.outlet);
+  const selectedOutlet = useOutletFilterStore((s) => s.selectedOutlet);
   const canEdit = can(P.CONFIG_CHANGE) || can(P.CONFIG_MANAGE);
   const tenantName = tenant?.orgName || tenant?.name || '';
+  // Prefer the currently-active outlet's name (HQ drill-down aware), falling back to the
+  // tenant/business name. Receipts are per-outlet, so the outlet name is the better header default.
+  const defaultHeader = selectedOutlet?.name || authOutlet?.name || tenantName;
 
   const [form, setForm] = useState({
     receiptHeader: '',
@@ -38,18 +45,18 @@ export function ReceiptTab() {
 
   useEffect(() => {
     if (settings) {
-      // Prefill sensible defaults when the tenant hasn't configured the text yet:
-      // header → tenant/business name, footer → a friendly default. These become editable
-      // form values so the operator sees them and persists them on Save.
+      // Prefill sensible defaults when the outlet hasn't configured the text yet:
+      // header → current outlet name (or business name), footer → a friendly default. These become
+      // editable form values so the operator sees them and persists them on Save.
       setForm({
-        receiptHeader: settings.receipt_header ?? tenantName,
+        receiptHeader: settings.receipt_header ?? defaultHeader,
         receiptFooter: settings.receipt_footer ?? DEFAULT_RECEIPT_FOOTER,
         autoPrintOrder: settings.auto_print_order ?? false,
         autoPrintKitchen: settings.auto_print_kitchen ?? false,
       });
       setProfiles(settings.printer_profiles ?? []);
     }
-  }, [settings, tenantName]);
+  }, [settings, defaultHeader]);
 
   const set = (k: keyof typeof form, v: unknown) =>
     setForm((f) => ({ ...f, [k]: v }));
