@@ -2,6 +2,7 @@
 
 import { Badge, Button, Card, CardContent } from '@/components/ui/base';
 import { useCurrentDrawer, useOpenDrawer, useCloseDrawer, useDrawerHistory, useShiftSummary } from '@/hooks/usePOS';
+import { usePermissions, P } from '@/hooks/usePermissions';
 import { useAuthStore } from '@/store/auth';
 import {
   Banknote,
@@ -19,6 +20,9 @@ export default function DrawerPage() {
 
   const outlet = useAuthStore((s) => s.outlet);
   const outletId = outlet?.id ?? '';
+  const { can } = usePermissions();
+  const canOpen = can(P.DRAWERS_ADD);
+  const canClose = can(P.DRAWERS_MANAGE);
 
   const { data: currentData, isLoading } = useCurrentDrawer();
   const { data: historyData } = useDrawerHistory();
@@ -105,43 +109,51 @@ export default function DrawerPage() {
                   <p className="text-2xl font-bold mt-1">KES {((drawer.starting_cash || 0) + (shiftSummary?.cash_in_total || 0)).toLocaleString()}</p>
                 </div>
               </div>
-              <div className="border-t pt-6">
-                <p className="text-sm font-bold mb-3">Close Drawer</p>
-                <div className="flex gap-3">
-                  <div className="relative flex-1">
-                    <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <input
-                      type="number"
-                      placeholder="Counted cash amount"
-                      value={closingAmount}
-                      onChange={(e) => setClosingAmount(e.target.value)}
-                      className="w-full bg-accent/30 border-none rounded-lg py-3 pl-10 pr-4 text-sm focus:ring-1 focus:ring-primary"
-                    />
+              {canClose && (
+                <div className="border-t pt-6">
+                  <p className="text-sm font-bold mb-3">Close Drawer</p>
+                  <div className="flex gap-3">
+                    <div className="relative flex-1">
+                      <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <input
+                        type="number"
+                        placeholder="Counted cash amount"
+                        value={closingAmount}
+                        onChange={(e) => setClosingAmount(e.target.value)}
+                        className="w-full bg-accent/30 border-none rounded-lg py-3 pl-10 pr-4 text-sm focus:ring-1 focus:ring-primary"
+                      />
+                    </div>
+                    <Button onClick={handleClose} disabled={closeDrawer.isPending} className="min-h-[48px] px-6 gap-2" variant="destructive">
+                      <Lock className="h-4 w-4" /> Close Drawer
+                    </Button>
                   </div>
-                  <Button onClick={handleClose} disabled={closeDrawer.isPending} className="min-h-[48px] px-6 gap-2" variant="destructive">
-                    <Lock className="h-4 w-4" /> Close Drawer
-                  </Button>
                 </div>
-              </div>
+              )}
             </div>
           ) : (
             <div className="space-y-4">
-              <p className="text-sm text-muted-foreground">Enter your opening float to start a new session.</p>
-              <div className="flex gap-3">
-                <div className="relative flex-1">
-                  <Banknote className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <input
-                    type="number"
-                    placeholder="Opening float (KES)"
-                    value={openingAmount}
-                    onChange={(e) => setOpeningAmount(e.target.value)}
-                    className="w-full bg-accent/30 border-none rounded-lg py-3 pl-10 pr-4 text-sm focus:ring-1 focus:ring-primary"
-                  />
-                </div>
-                <Button onClick={handleOpen} disabled={openDrawer.isPending} className="min-h-[48px] px-6 gap-2">
-                  <Unlock className="h-4 w-4" /> Open Drawer
-                </Button>
-              </div>
+              {canOpen ? (
+                <>
+                  <p className="text-sm text-muted-foreground">Enter your opening float to start a new session.</p>
+                  <div className="flex gap-3">
+                    <div className="relative flex-1">
+                      <Banknote className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <input
+                        type="number"
+                        placeholder="Opening float (KES)"
+                        value={openingAmount}
+                        onChange={(e) => setOpeningAmount(e.target.value)}
+                        className="w-full bg-accent/30 border-none rounded-lg py-3 pl-10 pr-4 text-sm focus:ring-1 focus:ring-primary"
+                      />
+                    </div>
+                    <Button onClick={handleOpen} disabled={openDrawer.isPending} className="min-h-[48px] px-6 gap-2">
+                      <Unlock className="h-4 w-4" /> Open Drawer
+                    </Button>
+                  </div>
+                </>
+              ) : (
+                <p className="text-sm text-muted-foreground">You don&apos;t have permission to open a cash drawer.</p>
+              )}
             </div>
           )}
         </CardContent>

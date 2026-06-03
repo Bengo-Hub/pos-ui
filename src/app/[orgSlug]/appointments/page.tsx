@@ -13,6 +13,7 @@ import {
 } from '@/hooks/useAppointments';
 import type { Appointment, AppointmentStatus, CreateAppointmentInput } from '@/hooks/useAppointments';
 import { useMenuItems } from '@/hooks/usePOS';
+import { usePermissions, P } from '@/hooks/usePermissions';
 import {
   Calendar,
   Loader2,
@@ -230,9 +231,11 @@ function BookingForm({
 }
 
 function AppointmentsPage() {
+  const { can } = usePermissions();
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [dateFilter, setDateFilter] = useState(new Date().toISOString().split('T')[0]);
   const [showBooking, setShowBooking] = useState(false);
+  const canChange = can(P.APPOINTMENTS_CHANGE);
 
   const { data, isLoading, refetch } = useAppointments({
     date: dateFilter,
@@ -262,10 +265,12 @@ function AppointmentsPage() {
           <h1 className="text-3xl font-bold tracking-tight">Appointments</h1>
           <p className="text-muted-foreground mt-1">Manage bookings and scheduling.</p>
         </div>
-        <Button variant="primary" onClick={() => setShowBooking(true)}>
-          <Plus className="h-4 w-4 mr-1.5" />
-          Book Appointment
-        </Button>
+        {can(P.APPOINTMENTS_ADD) && (
+          <Button variant="primary" onClick={() => setShowBooking(true)}>
+            <Plus className="h-4 w-4 mr-1.5" />
+            Book Appointment
+          </Button>
+        )}
       </div>
 
       {/* Filters */}
@@ -346,7 +351,7 @@ function AppointmentsPage() {
                     <Badge variant={STATUS_BADGE[apt.status]} className="text-[10px]">
                       {apt.status.replace('_', ' ')}
                     </Badge>
-                    {(apt.status === 'scheduled' || apt.status === 'confirmed') && (
+                    {canChange && (apt.status === 'scheduled' || apt.status === 'confirmed') && (
                       <button
                         type="button"
                         onClick={() => {
@@ -360,19 +365,21 @@ function AppointmentsPage() {
                         No Show
                       </button>
                     )}
-                    <select
-                      value={apt.status}
-                      onChange={(e) =>
-                        handleStatusChange(apt.id, e.target.value as AppointmentStatus)
-                      }
-                      className="rounded-lg border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
-                    >
-                      {STATUS_OPTIONS.map((s) => (
-                        <option key={s} value={s}>
-                          {s.replace('_', ' ')}
-                        </option>
-                      ))}
-                    </select>
+                    {canChange && (
+                      <select
+                        value={apt.status}
+                        onChange={(e) =>
+                          handleStatusChange(apt.id, e.target.value as AppointmentStatus)
+                        }
+                        className="rounded-lg border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+                      >
+                        {STATUS_OPTIONS.map((s) => (
+                          <option key={s} value={s}>
+                            {s.replace('_', ' ')}
+                          </option>
+                        ))}
+                      </select>
+                    )}
                   </div>
                 </div>
               </CardContent>

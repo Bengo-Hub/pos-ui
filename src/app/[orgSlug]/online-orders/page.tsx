@@ -4,6 +4,7 @@ import { ModuleGate } from '@/components/auth/module-gate';
 import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
 
 import { onlineOrdersApi, type PickupOrder } from '@/lib/api/online-orders';
+import { usePermissions, P } from '@/hooks/usePermissions';
 import { useAuthStore } from '@/store/auth';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
@@ -24,6 +25,7 @@ const STATUS_LABEL: Record<string, string> = {
 
 function OrderCard({ order, tenantID }: { order: PickupOrder; tenantID: string }) {
   const qc = useQueryClient();
+  const { can } = usePermissions();
 
   const markReady = useMutation({
     mutationFn: () => onlineOrdersApi.markReady(tenantID, order.id),
@@ -76,7 +78,7 @@ function OrderCard({ order, tenantID }: { order: PickupOrder; tenantID: string }
           KES {order.total_amount.toLocaleString()}
         </p>
         <div className="flex gap-2">
-          {status !== 'ready_for_pickup' && (
+          {status !== 'ready_for_pickup' && can(P.ORDERS_CHANGE) && (
             <button
               onClick={() => markReady.mutate()}
               disabled={markReady.isPending}
@@ -86,7 +88,7 @@ function OrderCard({ order, tenantID }: { order: PickupOrder; tenantID: string }
               Ready
             </button>
           )}
-          {status === 'ready_for_pickup' && (
+          {status === 'ready_for_pickup' && can(P.ORDERS_MANAGE) && (
             <button
               onClick={() => markCollected.mutate()}
               disabled={markCollected.isPending}

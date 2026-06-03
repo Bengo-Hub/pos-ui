@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { Card, CardContent } from '@/components/ui/base';
 import { useRoomBookings, useCreateRoomBooking } from '@/hooks/useHotel';
+import { usePermissions, P } from '@/hooks/usePermissions';
 import type { CreateRoomBookingInput } from '@/lib/api/hotel';
 import { ArrowLeft, Loader2, Plus, Users } from 'lucide-react';
 import { toast } from 'sonner';
@@ -18,6 +19,8 @@ function RoomBookingsPageInner() {
   const orgSlug = params?.orgSlug as string;
   const { data: bookings = [], isLoading } = useRoomBookings();
   const createMut = useCreateRoomBooking();
+  const { can } = usePermissions();
+  const canManage = can(P.HOTEL_MANAGE);
 
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<CreateRoomBookingInput>({
@@ -52,12 +55,14 @@ function RoomBookingsPageInner() {
             <p className="text-sm text-muted-foreground">Multi-room reservations</p>
           </div>
         </div>
-        <button onClick={() => setShowForm((s) => !s)} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-primary-foreground font-semibold hover:bg-primary/90 transition-colors">
-          <Plus className="h-4 w-4" /> New Booking
-        </button>
+        {canManage && (
+          <button onClick={() => setShowForm((s) => !s)} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-primary-foreground font-semibold hover:bg-primary/90 transition-colors">
+            <Plus className="h-4 w-4" /> New Booking
+          </button>
+        )}
       </div>
 
-      {showForm && (
+      {showForm && canManage && (
         <Card><CardContent className="p-5 space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <label className="block col-span-2"><span className="text-sm font-medium">Lead Guest Name</span>

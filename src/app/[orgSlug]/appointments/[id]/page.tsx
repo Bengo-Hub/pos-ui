@@ -2,6 +2,7 @@
 
 import { ModuleGate } from '@/components/auth/module-gate';
 import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
+import { usePermissions, P } from '@/hooks/usePermissions';
 
 import { cn } from '@/lib/utils';
 import {
@@ -82,6 +83,7 @@ function AppointmentDetailPage() {
   const orgSlug = params?.orgSlug as string;
   const id = params?.id as string;
 
+  const { can } = usePermissions();
   const { data: appt, isLoading } = useAppointment(id);
   const checkIn   = useCheckInAppointment();
   const start     = useStartAppointment();
@@ -174,8 +176,8 @@ function AppointmentDetailPage() {
         )}
       </div>
 
-      {/* Action buttons — contextual by status */}
-      {status !== 'completed' && status !== 'cancelled' && (
+      {/* Action buttons — contextual by status (requires change permission) */}
+      {status !== 'completed' && status !== 'cancelled' && can(P.APPOINTMENTS_CHANGE) && (
         <div className="space-y-3">
           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Actions</p>
           <div className="flex flex-wrap gap-3">

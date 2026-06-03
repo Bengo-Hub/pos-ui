@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Card, CardContent } from '@/components/ui/base';
 import { useActiveHappyHours, useHappyHours, useCreateHappyHour } from '@/hooks/useHotel';
+import { usePermissions, P } from '@/hooks/usePermissions';
 import type { CreateHappyHourInput } from '@/lib/api/hotel';
 import { Loader2, Plus, Wine } from 'lucide-react';
 import { toast } from 'sonner';
@@ -18,6 +19,8 @@ function HappyHourPageInner() {
   const { data: active = [] } = useActiveHappyHours();
   const { data: all = [], isLoading } = useHappyHours();
   const createMut = useCreateHappyHour();
+  const { can } = usePermissions();
+  const canManage = can(P.PROMOTIONS_ADD);
 
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState('');
@@ -68,12 +71,14 @@ function HappyHourPageInner() {
             <p className="text-sm text-muted-foreground">Time-windowed bar &amp; lounge discounts</p>
           </div>
         </div>
-        <button
-          onClick={() => setShowForm((s) => !s)}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-primary-foreground font-semibold hover:bg-primary/90 transition-colors"
-        >
-          <Plus className="h-4 w-4" /> New
-        </button>
+        {canManage && (
+          <button
+            onClick={() => setShowForm((s) => !s)}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-primary-foreground font-semibold hover:bg-primary/90 transition-colors"
+          >
+            <Plus className="h-4 w-4" /> New
+          </button>
+        )}
       </div>
 
       {active.length > 0 && (
@@ -92,7 +97,7 @@ function HappyHourPageInner() {
         </Card>
       )}
 
-      {showForm && (
+      {showForm && canManage && (
         <Card>
           <CardContent className="p-5 space-y-4">
             <label className="block">

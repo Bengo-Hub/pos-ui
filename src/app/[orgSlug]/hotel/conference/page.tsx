@@ -13,6 +13,7 @@ import {
   useEventReconciliation,
 } from '@/hooks/useHotel';
 import type { CreateEventBookingInput, EventBooking } from '@/lib/api/hotel';
+import { usePermissions, P } from '@/hooks/usePermissions';
 import { Loader2, Plus, Presentation, Ticket } from 'lucide-react';
 import { toast } from 'sonner';
 import { ModuleGate } from '@/components/auth/module-gate';
@@ -34,6 +35,8 @@ function ConferencePageInner() {
   const { data: facilities = [] } = useFacilities();
   const { data: events = [], isLoading } = useEventBookings();
   const createMut = useCreateEventBooking();
+  const { can } = usePermissions();
+  const canAdd = can(P.CONFERENCE_ADD);
 
   const [showForm, setShowForm] = useState(false);
   const [selected, setSelected] = useState<EventBooking | null>(null);
@@ -78,13 +81,15 @@ function ConferencePageInner() {
             <p className="text-sm text-muted-foreground">BEO bookings &amp; delegate meal cards</p>
           </div>
         </div>
-        <button onClick={() => setShowForm((s) => !s)}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-primary-foreground font-semibold hover:bg-primary/90 transition-colors">
-          <Plus className="h-4 w-4" /> New Event
-        </button>
+        {canAdd && (
+          <button onClick={() => setShowForm((s) => !s)}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-primary-foreground font-semibold hover:bg-primary/90 transition-colors">
+            <Plus className="h-4 w-4" /> New Event
+          </button>
+        )}
       </div>
 
-      {showForm && (
+      {showForm && canAdd && (
         <Card>
           <CardContent className="p-5 space-y-4">
             <div className="grid grid-cols-2 gap-3">
@@ -199,6 +204,9 @@ function EventPanel({ event }: { event: EventBooking }) {
   const genMut = useGenerateMealCards(event.id);
   const redeemMut = useRedeemMealCard();
   const { data: recon } = useEventReconciliation(event.id, true);
+  const { can } = usePermissions();
+  const canManage = can(P.CONFERENCE_MANAGE);
+  const canRedeem = can(P.CONFERENCE_CHANGE);
 
   function togglePeriod(p: string) {
     setPeriods((prev) => prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p]);
@@ -228,34 +236,38 @@ function EventPanel({ event }: { event: EventBooking }) {
   return (
     <div className="mt-3 space-y-4 rounded-xl border border-border bg-muted/30 p-4">
       {/* Generate meal cards */}
-      <div className="space-y-2">
-        <p className="text-sm font-semibold flex items-center gap-2"><Ticket className="h-4 w-4" /> Generate Meal Cards</p>
-        <div className="flex flex-wrap gap-2">
-          {MEAL_PERIODS.map((m) => (
-            <button key={m.v} type="button" onClick={() => togglePeriod(m.v)}
-              className={`px-3 py-1.5 rounded-lg text-sm border transition-colors ${periods.includes(m.v) ? 'bg-primary text-primary-foreground border-primary' : 'border-input hover:bg-muted'}`}>
-              {m.l}
-            </button>
-          ))}
-        </div>
-        <button onClick={handleGenerate} disabled={genMut.isPending}
-          className="px-4 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 disabled:opacity-50 transition-colors">
-          {genMut.isPending ? 'Generating…' : `Generate (${event.delegate_count} × ${event.conference_days}d × ${periods.length})`}
-        </button>
-      </div>
-
-      {/* Redeem */}
-      <div className="space-y-2">
-        <p className="text-sm font-semibold">Redeem Meal Card</p>
-        <div className="flex gap-2">
-          <input value={redeemCode} onChange={(e) => setRedeemCode(e.target.value)} placeholder="Scan / enter code (MC-…)"
-            className="flex-1 px-4 py-2 rounded-xl border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
-          <button onClick={handleRedeem} disabled={redeemMut.isPending}
-            className="px-4 py-2 rounded-xl border border-border text-sm font-medium hover:bg-muted disabled:opacity-50 transition-colors">
-            Redeem
+      {canManage && (
+        <div className="space-y-2">
+          <p className="text-sm font-semibold flex items-center gap-2"><Ticket className="h-4 w-4" /> Generate Meal Cards</p>
+          <div className="flex flex-wrap gap-2">
+            {MEAL_PERIODS.map((m) => (
+              <button key={m.v} type="button" onClick={() => togglePeriod(m.v)}
+                className={`px-3 py-1.5 rounded-lg text-sm border transition-colors ${periods.includes(m.v) ? 'bg-primary text-primary-foreground border-primary' : 'border-input hover:bg-muted'}`}>
+                {m.l}
+              </button>
+            ))}
+          </div>
+          <button onClick={handleGenerate} disabled={genMut.isPending}
+            className="px-4 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 disabled:opacity-50 transition-colors">
+            {genMut.isPending ? 'Generating…' : `Generate (${event.delegate_count} × ${event.conference_days}d × ${periods.length})`}
           </button>
         </div>
-      </div>
+      )}
+
+      {/* Redeem */}
+      {canRedeem && (
+        <div className="space-y-2">
+          <p className="text-sm font-semibold">Redeem Meal Card</p>
+          <div className="flex gap-2">
+            <input value={redeemCode} onChange={(e) => setRedeemCode(e.target.value)} placeholder="Scan / enter code (MC-…)"
+              className="flex-1 px-4 py-2 rounded-xl border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+            <button onClick={handleRedeem} disabled={redeemMut.isPending}
+              className="px-4 py-2 rounded-xl border border-border text-sm font-medium hover:bg-muted disabled:opacity-50 transition-colors">
+              Redeem
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Reconciliation */}
       {recon && recon.rows.length > 0 && (

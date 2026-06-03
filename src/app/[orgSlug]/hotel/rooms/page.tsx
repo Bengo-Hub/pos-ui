@@ -5,6 +5,7 @@ import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { cn } from '@/lib/utils';
 import { useHotelRooms, useCreateRoom, useUpdateRoom, useDeleteRoom, useInventoryServiceItems } from '@/hooks/useHotel';
+import { usePermissions, P } from '@/hooks/usePermissions';
 import type { Room, CreateRoomInput } from '@/lib/api/hotel';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
@@ -205,6 +206,8 @@ function RoomFormModal({ room, onClose }: RoomFormProps) {
 function RoomsPage() {
   const params = useParams();
   const orgSlug = params?.orgSlug as string;
+  const { can } = usePermissions();
+  const canManage = can(P.HOTEL_MANAGE);
   const [filter, setFilter] = useState<string | undefined>(undefined);
   const [formRoom, setFormRoom] = useState<Room | null | 'new'>(null);
   const [deleteTarget, setDeleteTarget] = useState<Room | null>(null);
@@ -230,13 +233,15 @@ function RoomsPage() {
           <h1 className="text-2xl font-bold text-foreground">Rooms</h1>
           <p className="text-sm text-muted-foreground mt-1">{rooms.length} room{rooms.length !== 1 ? 's' : ''}</p>
         </div>
-        <button
-          onClick={() => setFormRoom('new')}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors"
-        >
-          <Plus className="h-4 w-4" />
-          Add Room
-        </button>
+        {canManage && (
+          <button
+            onClick={() => setFormRoom('new')}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors"
+          >
+            <Plus className="h-4 w-4" />
+            Add Room
+          </button>
+        )}
       </div>
 
       {/* Status filter */}
@@ -266,22 +271,24 @@ function RoomsPage() {
           {rooms.map((room) => (
             <div key={room.id} className="group relative block p-4 rounded-2xl border border-border bg-card hover:border-primary/40 hover:shadow-md transition-all">
               {/* Edit / Delete actions */}
-              <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                <button
-                  onClick={() => setFormRoom(room)}
-                  className="h-7 w-7 rounded-lg bg-background/80 border border-border flex items-center justify-center hover:bg-primary/10 hover:text-primary transition-colors"
-                  title="Edit room"
-                >
-                  <Edit2 className="h-3.5 w-3.5" />
-                </button>
-                <button
-                  onClick={() => setDeleteTarget(room)}
-                  className="h-7 w-7 rounded-lg bg-background/80 border border-border flex items-center justify-center hover:bg-destructive/10 hover:text-destructive transition-colors"
-                  title="Delete room"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
-              </div>
+              {canManage && (
+                <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button
+                    onClick={() => setFormRoom(room)}
+                    className="h-7 w-7 rounded-lg bg-background/80 border border-border flex items-center justify-center hover:bg-primary/10 hover:text-primary transition-colors"
+                    title="Edit room"
+                  >
+                    <Edit2 className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    onClick={() => setDeleteTarget(room)}
+                    className="h-7 w-7 rounded-lg bg-background/80 border border-border flex items-center justify-center hover:bg-destructive/10 hover:text-destructive transition-colors"
+                    title="Delete room"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              )}
 
               <Link href={`/${orgSlug}/hotel/rooms/${room.id}`} className="block">
                 <div className="flex items-start justify-between mb-3">
@@ -309,12 +316,14 @@ function RoomsPage() {
         <div className="flex flex-col items-center justify-center h-48 text-muted-foreground gap-3">
           <BedDouble className="h-12 w-12 opacity-30" />
           <p>No rooms found</p>
-          <button
-            onClick={() => setFormRoom('new')}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
-          >
-            <Plus className="h-4 w-4" /> Add your first room
-          </button>
+          {canManage && (
+            <button
+              onClick={() => setFormRoom('new')}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
+            >
+              <Plus className="h-4 w-4" /> Add your first room
+            </button>
+          )}
         </div>
       )}
 
