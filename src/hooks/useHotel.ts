@@ -12,6 +12,9 @@ import {
   type UpdateRoomBookingInput,
   type CreateEventBookingInput,
   type CreateHappyHourInput,
+  type LateCheckoutInput,
+  type CreateHousekeepingInput,
+  type UpdateHousekeepingInput,
 } from '@/lib/api/hotel';
 
 function useTenantSlug() {
@@ -136,6 +139,63 @@ export function usePostFolioCharge(roomId: string) {
     mutationFn: (body: { description: string; amount: number; charge_type: string }) =>
       hotelApi.postFolioCharge(slug, roomId, body),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['room-folio', slug, roomId] }),
+  });
+}
+
+export function useLateCheckout(roomId: string) {
+  const slug = useTenantSlug();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: LateCheckoutInput) => hotelApi.lateCheckout(slug, roomId, body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['hotel-room', slug, roomId] });
+      qc.invalidateQueries({ queryKey: ['room-guest', slug, roomId] });
+      qc.invalidateQueries({ queryKey: ['room-folio', slug, roomId] });
+    },
+  });
+}
+
+export function useBatchCheckout() {
+  const slug = useTenantSlug();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { room_ids: string[]; checked_out_by?: string }) => hotelApi.batchCheckout(slug, body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['hotel-rooms', slug] });
+      qc.invalidateQueries({ queryKey: ['housekeeping', slug] });
+    },
+  });
+}
+
+// ─── Housekeeping ─────────────────────────────────────────────────────────────
+
+export function useHousekeepingTasks(params?: { status?: string; room_id?: string; assigned_to?: string }) {
+  const slug = useTenantSlug();
+  return useQuery({
+    queryKey: ['housekeeping', slug, params ?? {}],
+    queryFn: () => hotelApi.listHousekeeping(slug, params),
+    enabled: !!slug,
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+  });
+}
+
+export function useCreateHousekeepingTask() {
+  const slug = useTenantSlug();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: CreateHousekeepingInput) => hotelApi.createHousekeeping(slug, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['housekeeping', slug] }),
+  });
+}
+
+export function useUpdateHousekeepingTask() {
+  const slug = useTenantSlug();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ taskID, body }: { taskID: string; body: UpdateHousekeepingInput }) =>
+      hotelApi.updateHousekeeping(slug, taskID, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['housekeeping', slug] }),
   });
 }
 

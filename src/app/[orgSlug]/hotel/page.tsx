@@ -13,6 +13,7 @@ import {
   CheckCircle,
   Loader2,
   Presentation,
+  Sparkles,
   Users,
   Wine,
   Wrench,
@@ -143,6 +144,19 @@ function HotelPage() {
           <div>
             <p className="font-semibold text-foreground">Happy Hour</p>
             <p className="text-sm text-muted-foreground">Time-windowed bar/lounge discounts</p>
+          </div>
+        </Link>
+
+        <Link
+          href={`/${orgSlug}/hotel/housekeeping`}
+          className="group flex items-center gap-4 p-5 rounded-2xl border border-border bg-card hover:border-primary/40 hover:shadow-md transition-all"
+        >
+          <div className="size-12 rounded-xl bg-primary/10 flex items-center justify-center group-hover:bg-primary/20 transition-colors">
+            <Sparkles className="h-6 w-6 text-primary" />
+          </div>
+          <div>
+            <p className="font-semibold text-foreground">Housekeeping</p>
+            <p className="text-sm text-muted-foreground">Room cleaning &amp; maintenance tasks</p>
           </div>
         </Link>
       </div>

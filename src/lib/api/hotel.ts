@@ -240,6 +240,47 @@ export interface FacilityBooking {
   status: string;
 }
 
+export interface LateCheckoutInput {
+  surcharge_amount: number;
+  notes?: string;
+}
+
+export interface BatchCheckoutResult {
+  room_id: string;
+  guest_name?: string;
+  total_folio?: number;
+  error?: string;
+}
+
+export interface HousekeepingTask {
+  id: string;
+  room_id: string;
+  task_type: string; // routine_clean | checkout_clean | deep_clean | maintenance | inspection
+  status: string; // pending | in_progress | completed | cancelled
+  priority: string; // normal | urgent
+  assigned_to?: string;
+  notes?: string;
+  due_at?: string;
+  completed_at?: string;
+  created_at: string;
+}
+
+export interface CreateHousekeepingInput {
+  room_id: string;
+  task_type?: string;
+  priority?: string;
+  assigned_to?: string;
+  notes?: string;
+  due_at?: string;
+}
+
+export interface UpdateHousekeepingInput {
+  status?: string;
+  assigned_to?: string;
+  notes?: string;
+  priority?: string;
+}
+
 function hotelBase(tenantSlug: string) {
   return `/api/v1/${tenantSlug}/hotel`;
 }
@@ -280,6 +321,27 @@ export const hotelApi = {
 
   postFolioCharge: (tenantSlug: string, roomId: string, body: { description: string; amount: number; charge_type: string }) =>
     apiClient.post(`${hotelBase(tenantSlug)}/rooms/${roomId}/folio`, body),
+
+  lateCheckout: (tenantSlug: string, roomId: string, body: LateCheckoutInput) =>
+    apiClient.post<{ guest_id: string; late_checkout_approved: boolean; surcharge_amount: number }>(
+      `${hotelBase(tenantSlug)}/rooms/${roomId}/late-checkout`,
+      body,
+    ),
+
+  batchCheckout: (tenantSlug: string, body: { room_ids: string[]; checked_out_by?: string }) =>
+    apiClient.post<{ results: BatchCheckoutResult[] }>(`${hotelBase(tenantSlug)}/rooms/batch-checkout`, body),
+
+  // ─── Housekeeping ─────────────────────────────────────────────────────────
+  listHousekeeping: (tenantSlug: string, params?: { status?: string; room_id?: string; assigned_to?: string }) =>
+    apiClient
+      .get<{ data: HousekeepingTask[]; total: number }>(`${hotelBase(tenantSlug)}/housekeeping`, params ?? {})
+      .then((r) => r?.data ?? []),
+
+  createHousekeeping: (tenantSlug: string, body: CreateHousekeepingInput) =>
+    apiClient.post<HousekeepingTask>(`${hotelBase(tenantSlug)}/housekeeping`, body),
+
+  updateHousekeeping: (tenantSlug: string, taskID: string, body: UpdateHousekeepingInput) =>
+    apiClient.patch<HousekeepingTask>(`${hotelBase(tenantSlug)}/housekeeping/${taskID}`, body),
 
   // ─── Facilities ────────────────────────────────────────────────────────────
 

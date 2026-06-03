@@ -2,16 +2,18 @@
 
 import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { useHotelRoom, useRoomFolio, useCheckIn, useCheckOut } from '@/hooks/useHotel';
+import { useHotelRoom, useRoomFolio, useCheckIn, useCheckOut, useLateCheckout } from '@/hooks/useHotel';
 import { Card, CardContent } from '@/components/ui/base';
 import { cn } from '@/lib/utils';
 import {
   ArrowLeft,
   BedDouble,
+  Clock,
   Loader2,
   LogIn,
   LogOut,
   Receipt,
+  X,
 } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
@@ -43,6 +45,20 @@ function RoomDetailPageInner() {
 
   const checkIn  = useCheckIn(roomId);
   const checkOut = useCheckOut(roomId);
+  const lateCheckout = useLateCheckout(roomId);
+  const [showLate, setShowLate] = useState(false);
+  const [lateForm, setLateForm] = useState({ surcharge_amount: 0, notes: '' });
+
+  async function handleLateCheckout() {
+    try {
+      await lateCheckout.mutateAsync({ surcharge_amount: lateForm.surcharge_amount, notes: lateForm.notes || undefined });
+      toast.success('Late checkout approved');
+      setShowLate(false);
+      setLateForm({ surcharge_amount: 0, notes: '' });
+    } catch {
+      toast.error('Failed to approve late checkout');
+    }
+  }
 
   async function handleCheckIn() {
     const f = checkInForm;
@@ -249,14 +265,67 @@ function RoomDetailPageInner() {
         )}
 
         {isOccupied && (
-          <button
-            onClick={handleCheckOut}
-            disabled={checkOut.isPending}
-            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-destructive text-destructive-foreground font-semibold hover:bg-destructive/90 disabled:opacity-50 transition-colors"
-          >
-            {checkOut.isPending ? <Loader2 className="h-5 w-5 animate-spin" /> : <LogOut className="h-5 w-5" />}
-            Check Out
-          </button>
+          <div className="flex flex-col sm:flex-row gap-3">
+            <button
+              onClick={() => setShowLate(true)}
+              className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl border border-border font-semibold hover:bg-muted transition-colors"
+            >
+              <Clock className="h-5 w-5" />
+              Late Checkout
+            </button>
+            <button
+              onClick={handleCheckOut}
+              disabled={checkOut.isPending}
+              className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-destructive text-destructive-foreground font-semibold hover:bg-destructive/90 disabled:opacity-50 transition-colors"
+            >
+              {checkOut.isPending ? <Loader2 className="h-5 w-5 animate-spin" /> : <LogOut className="h-5 w-5" />}
+              Check Out
+            </button>
+          </div>
+        )}
+
+        {showLate && (
+          <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center bg-black/50 backdrop-blur-sm" onClick={() => setShowLate(false)}>
+            <div className="w-full max-w-sm sm:rounded-2xl rounded-t-2xl bg-card border border-border shadow-2xl" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+                <h2 className="text-base font-bold text-foreground">Approve Late Checkout</h2>
+                <button type="button" onClick={() => setShowLate(false)} className="h-8 w-8 rounded-full bg-muted flex items-center justify-center hover:bg-destructive/10 hover:text-destructive transition-colors">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <div className="p-5 space-y-4">
+                <label className="block">
+                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Surcharge Amount ({room.currency ?? 'KES'})</span>
+                  <input
+                    type="number" min={0} step={0.01}
+                    value={lateForm.surcharge_amount}
+                    onChange={(e) => setLateForm((f) => ({ ...f, surcharge_amount: parseFloat(e.target.value) || 0 }))}
+                    className="mt-1.5 w-full px-3 py-2.5 rounded-xl border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Notes (optional)</span>
+                  <input
+                    value={lateForm.notes}
+                    onChange={(e) => setLateForm((f) => ({ ...f, notes: e.target.value }))}
+                    placeholder="e.g. 2pm departure agreed"
+                    className="mt-1.5 w-full px-3 py-2.5 rounded-xl border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  />
+                </label>
+                <p className="text-[11px] text-muted-foreground">The surcharge (if any) is posted to the guest&apos;s folio.</p>
+                <div className="flex gap-3 pt-1">
+                  <button type="button" onClick={() => setShowLate(false)} className="flex-1 py-2.5 rounded-xl border border-border text-sm font-medium hover:bg-muted transition-colors">Cancel</button>
+                  <button
+                    onClick={handleLateCheckout}
+                    disabled={lateCheckout.isPending}
+                    className="flex-1 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 disabled:opacity-50 transition-colors"
+                  >
+                    {lateCheckout.isPending ? <Loader2 className="h-4 w-4 animate-spin mx-auto" /> : 'Approve'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </div>

@@ -4,12 +4,12 @@ import { ModuleGate } from '@/components/auth/module-gate';
 import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { cn } from '@/lib/utils';
-import { useHotelRooms, useCreateRoom, useUpdateRoom, useDeleteRoom, useInventoryServiceItems } from '@/hooks/useHotel';
+import { useHotelRooms, useCreateRoom, useUpdateRoom, useDeleteRoom, useInventoryServiceItems, useBatchCheckout } from '@/hooks/useHotel';
 import { usePermissions, P } from '@/hooks/usePermissions';
 import type { Room, CreateRoomInput } from '@/lib/api/hotel';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { BedDouble, Edit2, Loader2, Plus, Trash2, X } from 'lucide-react';
+import { BedDouble, Edit2, Loader2, LogOut, Plus, Trash2, X } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 
@@ -201,6 +201,77 @@ function RoomFormModal({ room, onClose }: RoomFormProps) {
   );
 }
 
+// ─── Batch Check-out Modal ──────────────────────────────────────────────────
+
+function BatchCheckoutModal({ occupiedRooms, onClose }: { occupiedRooms: Room[]; onClose: () => void }) {
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const batch = useBatchCheckout();
+
+  const toggle = (id: string) =>
+    setSelected((s) => {
+      const next = new Set(s);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+
+  async function handleConfirm() {
+    if (selected.size === 0) { toast.error('Select at least one room'); return; }
+    try {
+      const res = await batch.mutateAsync({ room_ids: Array.from(selected) });
+      const errors = (res?.results ?? []).filter((r) => r.error);
+      if (errors.length > 0) {
+        toast.warning(`${selected.size - errors.length} checked out, ${errors.length} failed`);
+      } else {
+        toast.success(`${selected.size} room(s) checked out`);
+      }
+      onClose();
+    } catch {
+      toast.error('Batch check-out failed');
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center bg-black/50 backdrop-blur-sm" onClick={onClose}>
+      <div className="w-full max-w-md sm:rounded-2xl rounded-t-2xl bg-card border border-border shadow-2xl overflow-y-auto max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+          <h2 className="text-base font-bold text-foreground">Batch Check-out</h2>
+          <button type="button" onClick={onClose} className="h-8 w-8 rounded-full bg-muted flex items-center justify-center hover:bg-destructive/10 hover:text-destructive transition-colors">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <div className="p-5 space-y-3">
+          {occupiedRooms.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-6 text-center">No occupied rooms to check out.</p>
+          ) : (
+            <>
+              <p className="text-xs text-muted-foreground">Select occupied rooms to check out together (e.g. a tour group).</p>
+              <div className="space-y-2 max-h-72 overflow-y-auto">
+                {occupiedRooms.map((room) => (
+                  <label key={room.id} className="flex items-center gap-3 p-3 rounded-xl border border-border cursor-pointer hover:bg-muted/50">
+                    <input type="checkbox" checked={selected.has(room.id)} onChange={() => toggle(room.id)} className="h-4 w-4" />
+                    <span className="font-medium text-foreground">Room {room.room_number}</span>
+                    <span className="text-xs text-muted-foreground capitalize ml-auto">{room.room_type}</span>
+                  </label>
+                ))}
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button type="button" onClick={onClose} className="flex-1 py-2.5 rounded-xl border border-border text-sm font-medium hover:bg-muted transition-colors">Cancel</button>
+                <button
+                  onClick={handleConfirm}
+                  disabled={batch.isPending || selected.size === 0}
+                  className="flex-1 py-2.5 rounded-xl bg-destructive text-destructive-foreground text-sm font-semibold hover:bg-destructive/90 disabled:opacity-50 transition-colors"
+                >
+                  {batch.isPending ? <Loader2 className="h-4 w-4 animate-spin mx-auto" /> : `Check out ${selected.size || ''}`.trim()}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 function RoomsPage() {
@@ -208,11 +279,15 @@ function RoomsPage() {
   const orgSlug = params?.orgSlug as string;
   const { can } = usePermissions();
   const canManage = can(P.HOTEL_MANAGE);
+  const canChange = can(P.HOTEL_CHANGE) || canManage;
   const [filter, setFilter] = useState<string | undefined>(undefined);
   const [formRoom, setFormRoom] = useState<Room | null | 'new'>(null);
   const [deleteTarget, setDeleteTarget] = useState<Room | null>(null);
+  const [showBatch, setShowBatch] = useState(false);
 
   const { data: rooms = [], isLoading } = useHotelRooms(filter);
+  const { data: allRooms = [] } = useHotelRooms();
+  const occupiedRooms = allRooms.filter((r) => r.status === 'occupied');
   const deleteRoom = useDeleteRoom();
 
   async function handleDelete() {
@@ -233,15 +308,26 @@ function RoomsPage() {
           <h1 className="text-2xl font-bold text-foreground">Rooms</h1>
           <p className="text-sm text-muted-foreground mt-1">{rooms.length} room{rooms.length !== 1 ? 's' : ''}</p>
         </div>
-        {canManage && (
-          <button
-            onClick={() => setFormRoom('new')}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors"
-          >
-            <Plus className="h-4 w-4" />
-            Add Room
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {canChange && occupiedRooms.length > 0 && (
+            <button
+              onClick={() => setShowBatch(true)}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-border text-sm font-semibold hover:bg-muted transition-colors"
+            >
+              <LogOut className="h-4 w-4" />
+              Batch Check-out
+            </button>
+          )}
+          {canManage && (
+            <button
+              onClick={() => setFormRoom('new')}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors"
+            >
+              <Plus className="h-4 w-4" />
+              Add Room
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Status filter */}
@@ -333,6 +419,11 @@ function RoomsPage() {
           room={formRoom === 'new' ? undefined : formRoom}
           onClose={() => setFormRoom(null)}
         />
+      )}
+
+      {/* Batch check-out modal */}
+      {showBatch && (
+        <BatchCheckoutModal occupiedRooms={occupiedRooms} onClose={() => setShowBatch(false)} />
       )}
 
       {/* Delete confirmation */}
