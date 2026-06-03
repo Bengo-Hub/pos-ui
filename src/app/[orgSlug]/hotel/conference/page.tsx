@@ -276,8 +276,8 @@ function EventPanel({ event }: { event: EventBooking }) {
 
   return (
     <div className="mt-3 space-y-4 rounded-xl border border-border bg-muted/30 p-4">
-      {/* Generate meal cards */}
-      {canManage && (
+      {/* Generate meal cards — only for an active event */}
+      {canManage && event.status !== 'cancelled' && event.status !== 'completed' && (
         <div className="space-y-2">
           <p className="text-sm font-semibold flex items-center gap-2"><Ticket className="h-4 w-4" /> Generate Meal Cards</p>
           <div className="flex flex-wrap gap-2">
@@ -295,8 +295,8 @@ function EventPanel({ event }: { event: EventBooking }) {
         </div>
       )}
 
-      {/* Redeem */}
-      {canRedeem && (
+      {/* Redeem — not on a cancelled event */}
+      {canRedeem && event.status !== 'cancelled' && (
         <div className="space-y-2">
           <p className="text-sm font-semibold">Redeem Meal Card</p>
           <div className="flex gap-2">

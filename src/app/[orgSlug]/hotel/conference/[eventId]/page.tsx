@@ -196,8 +196,8 @@ function EventDetailPageInner() {
         </CardContent></Card>
       )}
 
-      {/* Generate / top-up meal cards */}
-      {canManage && (
+      {/* Generate / top-up meal cards — only for an active event */}
+      {canManage && event.status !== 'cancelled' && event.status !== 'completed' && (
         <Card><CardContent className="p-5 space-y-3">
           <p className="text-sm font-semibold flex items-center gap-2"><Ticket className="h-4 w-4" /> Generate / Top-up Meal Cards</p>
           <p className="text-xs text-muted-foreground">
@@ -218,16 +218,18 @@ function EventDetailPageInner() {
         </CardContent></Card>
       )}
 
-      {/* Redeem */}
-      <Card><CardContent className="p-5 space-y-2">
-        <p className="text-sm font-semibold">Redeem Meal Card</p>
-        <div className="flex gap-2">
-          <input value={redeemCode} onChange={(e) => setRedeemCode(e.target.value)} placeholder="Scan / enter code (MC-…)"
-            className="flex-1 px-4 py-2 rounded-xl border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
-          <button onClick={handleRedeem} disabled={redeemMut.isPending}
-            className="px-4 py-2 rounded-xl border border-border text-sm font-medium hover:bg-muted disabled:opacity-50 transition-colors">Redeem</button>
-        </div>
-      </CardContent></Card>
+      {/* Redeem — requires conference change permission and a non-cancelled event */}
+      {canEdit && event.status !== 'cancelled' && (
+        <Card><CardContent className="p-5 space-y-2">
+          <p className="text-sm font-semibold">Redeem Meal Card</p>
+          <div className="flex gap-2">
+            <input value={redeemCode} onChange={(e) => setRedeemCode(e.target.value)} placeholder="Scan / enter code (MC-…)"
+              className="flex-1 px-4 py-2 rounded-xl border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+            <button onClick={handleRedeem} disabled={redeemMut.isPending}
+              className="px-4 py-2 rounded-xl border border-border text-sm font-medium hover:bg-muted disabled:opacity-50 transition-colors">Redeem</button>
+          </div>
+        </CardContent></Card>
+      )}
 
       {/* Reconciliation */}
       {recon && recon.rows.length > 0 && (
