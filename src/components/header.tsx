@@ -22,7 +22,7 @@ const TREASURY_URL = process.env.NEXT_PUBLIC_TREASURY_UI_URL ?? 'https://books.c
 const PRICING_URL = process.env.NEXT_PUBLIC_SUBSCRIPTIONS_UI_URL ?? 'https://pricing.codevertexitsolutions.com';
 const ORDERING_URL = process.env.NEXT_PUBLIC_ORDERING_UI_URL ?? 'https://ordersapp.codevertexitsolutions.com';
 const AUTH_URL = process.env.NEXT_PUBLIC_AUTH_UI_URL ?? 'https://accounts.codevertexitsolutions.com';
-const CRM_URL = process.env.NEXT_PUBLIC_CRM_UI_URL ?? 'https://markeflow.codevertexitsolutions.com';
+const CRM_URL = process.env.NEXT_PUBLIC_CRM_UI_URL ?? 'https://marketflow.codevertexitsolutions.com';
 
 const SERVICES = [
   { label: 'Inventory', href: (slug: string) => `${INVENTORY_URL}/${slug}`, Icon: Package },

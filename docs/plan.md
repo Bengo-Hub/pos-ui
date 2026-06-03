@@ -235,4 +235,4 @@ pos-ui is a touch-optimized, offline-capable Progressive Web App (PWA) built on 
 - **Helm/ArgoCD config**: `devops-k8s/apps/pos-ui/` (`values.yaml`, `app.yaml`)
 - **Image tags**: managed by `build.sh` — never edit `values.yaml` image tags manually
 - **Build**: `pnpm build` → Next.js standalone output
-- **Live URL**: `https://posapp.codevertexitsolutions.com`
+- **Live URL**: `https://pos.codevertexitsolutions.com`
