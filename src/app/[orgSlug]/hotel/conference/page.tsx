@@ -76,7 +76,7 @@ function ConferencePageInner() {
   }
 
   return (
-    <div className="p-6 max-w-4xl mx-auto space-y-6">
+    <div className="mx-auto w-full max-w-6xl space-y-6 p-4 sm:p-6 lg:px-8">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="size-10 rounded-xl bg-primary/10 flex items-center justify-center">
@@ -98,7 +98,7 @@ function ConferencePageInner() {
       {showForm && canAdd && (
         <Card>
           <CardContent className="p-5 space-y-4">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
               <label className="block">
                 <span className="text-sm font-medium">Venue</span>
                 <div className="mt-1 flex gap-2">
@@ -128,7 +128,7 @@ function ConferencePageInner() {
                   <option value="meeting">Meeting</option>
                 </select>
               </label>
-              <label className="block col-span-2">
+              <label className="block sm:col-span-2 lg:col-span-3">
                 <span className="text-sm font-medium">Title</span>
                 <input value={form.title} onChange={(e) => set('title', e.target.value)} placeholder="e.g. ABC Ltd Annual Conference" className={inputCls} />
               </label>

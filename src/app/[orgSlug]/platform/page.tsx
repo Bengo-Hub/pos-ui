@@ -7,15 +7,16 @@ import { useSubscription } from '@/hooks/use-subscription';
 import { DevicesTab } from '@/components/settings/DevicesTab';
 import { SubscriptionTab } from '@/components/settings/SubscriptionTab';
 import { IntegrationsTab } from '@/components/settings/IntegrationsTab';
+import { WebhooksTab } from '@/components/settings/WebhooksTab';
 import { Badge } from '@/components/ui/base';
 import { cn } from '@/lib/utils';
-import { Key, Link2, Monitor, Shield } from 'lucide-react';
+import { Key, Link2, Monitor, Shield, Webhook } from 'lucide-react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
 /* ─── Types ──────────────────────────────────────────────────────────── */
 
-type TabKey = 'devices' | 'licenses' | 'integrations';
+type TabKey = 'devices' | 'licenses' | 'integrations' | 'webhooks';
 
 /* ─── Page ───────────────────────────────────────────────────────────── */
 
@@ -43,7 +44,7 @@ export default function PlatformPage() {
 
   useEffect(() => {
     const raw = searchParams?.get('tab') as TabKey | null;
-    if (raw === 'devices' || raw === 'licenses' || raw === 'integrations') setActiveTab(raw);
+    if (raw === 'devices' || raw === 'licenses' || raw === 'integrations' || raw === 'webhooks') setActiveTab(raw);
   }, [searchParams]);
 
   // Platform management is platform-owner only. Tenant admins/managers see their licence and
@@ -69,6 +70,7 @@ export default function PlatformPage() {
     { key: 'devices', label: 'Devices', icon: Monitor },
     { key: 'licenses', label: 'Licenses', icon: Key },
     { key: 'integrations', label: 'Integrations', icon: Link2 },
+    { key: 'webhooks', label: 'Webhooks', icon: Webhook },
   ];
 
   return (
@@ -116,6 +118,7 @@ export default function PlatformPage() {
       {activeTab === 'devices' && <DevicesTab />}
       {activeTab === 'licenses' && <SubscriptionTab />}
       {activeTab === 'integrations' && <IntegrationsTab />}
+      {activeTab === 'webhooks' && <WebhooksTab />}
     </div>
   );
 }

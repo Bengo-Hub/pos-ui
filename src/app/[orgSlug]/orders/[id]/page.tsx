@@ -52,7 +52,9 @@ export default function OrderDetailPage() {
           </div>
         </div>
         <div className="flex items-center gap-3 shrink-0">
-          <PrintReceiptButton orderId={id} label="Print Receipt" />
+          {order.status !== 'cancelled' && (
+            <PrintReceiptButton orderId={id} label={order.status === 'completed' ? 'Print Receipt' : 'Print Bill'} />
+          )}
           <button
             onClick={() => router.back()}
             className="text-sm text-primary underline"

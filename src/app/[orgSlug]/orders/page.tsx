@@ -195,7 +195,15 @@ export default function OrdersPage() {
                               >
                                 <Eye className="h-3.5 w-3.5" />
                               </Button>
-                              <PrintReceiptButton orderId={order.id} size="icon" variant="ghost" className="h-8 w-8 p-0" />
+                              {order.status !== 'cancelled' && (
+                                <PrintReceiptButton
+                                  orderId={order.id}
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-8 w-8 p-0"
+                                  label={order.status === 'completed' ? 'Print Receipt' : 'Print Bill'}
+                                />
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -339,13 +347,15 @@ export default function OrdersPage() {
                 </Button>
               )}
 
-              {/* Print receipt (completed orders) or the current bill (open/unpaid) — available to
-                  waiters, cashiers, managers and admins for (re)printing at any time. */}
-              <PrintReceiptButton
-                orderId={selectedOrder.id}
-                label={selectedOrder.status === 'completed' ? 'Print Receipt' : 'Print Bill'}
-                className="w-full justify-center"
-              />
+              {/* Print receipt (completed orders) or the current bill (open/unpaid). Cancelled
+                  orders have nothing to print. */}
+              {selectedOrder.status !== 'cancelled' && (
+                <PrintReceiptButton
+                  orderId={selectedOrder.id}
+                  label={selectedOrder.status === 'completed' ? 'Print Receipt' : 'Print Bill'}
+                  className="w-full justify-center"
+                />
+              )}
 
               {isDeliveryOrder(selectedOrder) && (
                 <Button variant="outline" className="w-full gap-2" onClick={() => setTrackingOpen(true)}>

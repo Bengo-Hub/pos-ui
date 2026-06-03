@@ -62,7 +62,7 @@ function HappyHourPageInner() {
   const happyHours = all.filter((p) => p.promo_kind === 'happy_hour');
 
   return (
-    <div className="p-6 max-w-3xl mx-auto space-y-6">
+    <div className="mx-auto w-full max-w-5xl space-y-6 p-4 sm:p-6 lg:px-8">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="size-10 rounded-xl bg-primary/10 flex items-center justify-center">
@@ -120,7 +120,7 @@ function HappyHourPageInner() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <label className="block">
                 <span className="text-sm font-medium">Window Start</span>
                 <input type="time" value={windowStart} onChange={(e) => setWindowStart(e.target.value)}

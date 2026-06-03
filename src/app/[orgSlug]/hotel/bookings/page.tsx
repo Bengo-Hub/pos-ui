@@ -239,7 +239,7 @@ function BookingsPageInner() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-3xl space-y-6 p-4 sm:p-6">
+    <div className="mx-auto w-full max-w-5xl space-y-6 p-4 sm:p-6 lg:px-8">
       <div className="flex items-center gap-3">
         <Link href={`/${orgSlug}/hotel`} className="rounded-lg p-2 transition-colors hover:bg-muted"><ArrowLeft className="h-5 w-5" /></Link>
         <div className="flex flex-1 items-center gap-3">

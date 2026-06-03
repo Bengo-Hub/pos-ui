@@ -136,7 +136,7 @@ export function ReceiptPrint({
       {/* Payment */}
       <div className="receipt-row">
         <span className="receipt-row-name" style={{ textTransform: 'capitalize' }}>
-          {receipt.payment_method.replace(/_/g, ' ')}
+          {(receipt.payment_method ?? 'cash').replace(/_/g, ' ')}
         </span>
         <span className="receipt-row-value">{fmt(receipt.amount_tendered)}</span>
       </div>

@@ -182,7 +182,7 @@ export function ReceiptPreview({ receipt, open, onClose, outletName, tenantName 
               <span>{formatCurrency(receipt.total_amount)}</span>
             </div>
             <div className="flex justify-between py-0.5">
-              <span className="capitalize">{receipt.payment_method.replace(/_/g, ' ')}</span>
+              <span className="capitalize">{(receipt.payment_method ?? 'cash').replace(/_/g, ' ')}</span>
               <span>{formatCurrency(receipt.amount_tendered)}</span>
             </div>
             {receipt.change_due > 0 && (
