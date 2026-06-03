@@ -9,6 +9,7 @@ import {
   type CreateFacilityInput,
   type CheckInInput,
   type CreateRoomBookingInput,
+  type UpdateRoomBookingInput,
   type CreateEventBookingInput,
   type CreateHappyHourInput,
 } from '@/lib/api/hotel';
@@ -228,6 +229,15 @@ export function useCreateRoomBooking() {
   });
 }
 
+export function useUpdateRoomBooking(bookingId: string) {
+  const slug = useTenantSlug();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: UpdateRoomBookingInput) => hotelApi.updateBooking(slug, bookingId, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['room-bookings', slug] }),
+  });
+}
+
 // ─── Conference / events (BEO) + meal cards ────────────────────────────────────
 
 export function useEventBookings() {
@@ -256,6 +266,18 @@ export function useCreateEventBooking() {
   return useMutation({
     mutationFn: (body: CreateEventBookingInput) => hotelApi.createEvent(slug, body),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['event-bookings', slug] }),
+  });
+}
+
+export function useUpdateEventBooking(eventId: string) {
+  const slug = useTenantSlug();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: Partial<CreateEventBookingInput> & { status?: string }) => hotelApi.updateEvent(slug, eventId, body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['event-bookings', slug] });
+      qc.invalidateQueries({ queryKey: ['event-booking', slug, eventId] });
+    },
   });
 }
 

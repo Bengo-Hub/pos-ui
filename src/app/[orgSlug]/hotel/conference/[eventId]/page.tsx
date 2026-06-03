@@ -9,8 +9,11 @@ import {
   useGenerateMealCards,
   useRedeemMealCard,
   useEventReconciliation,
+  useUpdateEventBooking,
 } from '@/hooks/useHotel';
-import { ArrowLeft, Loader2, Presentation, Ticket } from 'lucide-react';
+import { usePermissions, P } from '@/hooks/usePermissions';
+import type { EventBooking } from '@/lib/api/hotel';
+import { ArrowLeft, Loader2, Pencil, Presentation, Ticket, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { ModuleGate } from '@/components/auth/module-gate';
 import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
@@ -23,11 +26,94 @@ const MEAL_PERIODS = [
   { v: 'dinner', l: 'Dinner' },
 ];
 
+const EVENT_STATUSES = ['inquiry', 'tentative', 'confirmed', 'in_progress', 'completed', 'cancelled'];
+const editInputCls = 'mt-1 w-full px-3 py-2.5 rounded-xl border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring';
+
+function toLocalInput(iso: string) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const off = d.getTimezoneOffset();
+  return new Date(d.getTime() - off * 60000).toISOString().slice(0, 16);
+}
+
+function EventEditModal({ event, onClose }: { event: EventBooking; onClose: () => void }) {
+  const update = useUpdateEventBooking(event.id);
+  const [form, setForm] = useState({
+    title: event.title,
+    delegate_count: event.delegate_count,
+    conference_days: event.conference_days,
+    setup_style: event.setup_style ?? 'theatre',
+    status: event.status,
+    start_at: toLocalInput(event.start_at),
+    end_at: toLocalInput(event.end_at),
+  });
+  function set<K extends keyof typeof form>(k: K, v: (typeof form)[K]) { setForm((f) => ({ ...f, [k]: v })); }
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    try {
+      await update.mutateAsync({
+        title: form.title,
+        delegate_count: form.delegate_count,
+        conference_days: form.conference_days,
+        setup_style: form.setup_style,
+        status: form.status,
+        start_at: form.start_at ? new Date(form.start_at).toISOString() : undefined,
+        end_at: form.end_at ? new Date(form.end_at).toISOString() : undefined,
+      });
+      toast.success('Event updated. Re-run “Generate / Top up” to issue cards for any added delegates or days.');
+      onClose();
+    } catch { toast.error('Failed to update event'); }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 backdrop-blur-sm sm:items-center" onClick={onClose}>
+      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-t-2xl border border-border bg-card shadow-2xl sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between border-b border-border px-5 py-4">
+          <h2 className="text-base font-bold">Edit Event</h2>
+          <button onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-full bg-muted hover:bg-destructive/10 hover:text-destructive"><X className="h-4 w-4" /></button>
+        </div>
+        <form onSubmit={submit} className="space-y-4 p-5">
+          <label className="block"><span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Title</span>
+            <input value={form.title} onChange={(e) => set('title', e.target.value)} className={editInputCls} /></label>
+          <div className="grid grid-cols-2 gap-4">
+            <label className="block"><span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Delegates</span>
+              <input type="number" min={0} value={form.delegate_count} onChange={(e) => set('delegate_count', parseInt(e.target.value) || 0)} className={editInputCls} /></label>
+            <label className="block"><span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Conference Days</span>
+              <input type="number" min={1} value={form.conference_days} onChange={(e) => set('conference_days', parseInt(e.target.value) || 1)} className={editInputCls} /></label>
+            <label className="block"><span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Start</span>
+              <input type="datetime-local" value={form.start_at} onChange={(e) => set('start_at', e.target.value)} className={editInputCls} /></label>
+            <label className="block"><span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">End</span>
+              <input type="datetime-local" value={form.end_at} onChange={(e) => set('end_at', e.target.value)} className={editInputCls} /></label>
+            <label className="block"><span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Setup Style</span>
+              <select value={form.setup_style} onChange={(e) => set('setup_style', e.target.value)} className={editInputCls}>
+                {['theatre', 'classroom', 'boardroom', 'u_shape', 'cabaret', 'banquet'].map((s) => <option key={s} value={s}>{s}</option>)}
+              </select></label>
+            <label className="block"><span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Status</span>
+              <select value={form.status} onChange={(e) => set('status', e.target.value)} className={editInputCls}>
+                {EVENT_STATUSES.map((s) => <option key={s} value={s} className="capitalize">{s}</option>)}
+              </select></label>
+          </div>
+          <div className="flex gap-3 pt-1">
+            <button type="button" onClick={onClose} className="flex-1 rounded-xl border border-border py-2.5 text-sm font-medium hover:bg-muted">Cancel</button>
+            <button type="submit" disabled={update.isPending} className="flex-1 rounded-xl bg-primary py-2.5 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
+              {update.isPending ? 'Saving…' : 'Save Changes'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 function EventDetailPageInner() {
   const params = useParams();
   const orgSlug = params?.orgSlug as string;
   const eventId = params?.eventId as string;
 
+  const { can } = usePermissions();
+  const canManage = can(P.CONFERENCE_MANAGE);
+  const canEdit = can(P.CONFERENCE_CHANGE) || canManage;
   const { data: event, isLoading } = useEventBooking(eventId);
   const { data: recon } = useEventReconciliation(eventId, true);
   const genMut = useGenerateMealCards(eventId);
@@ -35,6 +121,7 @@ function EventDetailPageInner() {
 
   const [periods, setPeriods] = useState<string[]>(['breakfast', 'lunch']);
   const [redeemCode, setRedeemCode] = useState('');
+  const [editing, setEditing] = useState(false);
 
   function togglePeriod(p: string) {
     setPeriods((prev) => prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p]);
@@ -43,8 +130,8 @@ function EventDetailPageInner() {
     if (periods.length === 0) { toast.error('Select at least one meal period'); return; }
     try {
       const res = await genMut.mutateAsync({ meal_periods: periods });
-      toast.success(`${res.cards_issued} meal cards generated`);
-    } catch { toast.error('Failed (already generated?)'); }
+      toast.success(res.cards_issued > 0 ? `${res.cards_issued} meal card(s) issued` : 'All meal cards already up to date');
+    } catch { toast.error('Failed to generate meal cards'); }
   }
   async function handleRedeem() {
     if (!redeemCode.trim()) return;
@@ -72,6 +159,11 @@ function EventDetailPageInner() {
           </div>
         </div>
         <span className="ml-auto text-xs px-3 py-1 rounded-full bg-muted text-muted-foreground capitalize">{event.status}</span>
+        {canEdit && (
+          <button onClick={() => setEditing(true)} className="flex items-center gap-1.5 rounded-xl border border-border px-3 py-1.5 text-sm font-medium hover:bg-muted">
+            <Pencil className="h-3.5 w-3.5" /> Edit
+          </button>
+        )}
       </div>
 
       <Card><CardContent className="p-5">
@@ -93,22 +185,38 @@ function EventDetailPageInner() {
         </div>
       </CardContent></Card>
 
-      {/* Generate meal cards */}
-      <Card><CardContent className="p-5 space-y-3">
-        <p className="text-sm font-semibold flex items-center gap-2"><Ticket className="h-4 w-4" /> Generate Meal Cards</p>
-        <div className="flex flex-wrap gap-2">
-          {MEAL_PERIODS.map((m) => (
-            <button key={m.v} type="button" onClick={() => togglePeriod(m.v)}
-              className={`px-3 py-1.5 rounded-lg text-sm border transition-colors ${periods.includes(m.v) ? 'bg-primary text-primary-foreground border-primary' : 'border-input hover:bg-muted'}`}>
-              {m.l}
-            </button>
-          ))}
-        </div>
-        <button onClick={handleGenerate} disabled={genMut.isPending || cards.length > 0}
-          className="px-4 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 disabled:opacity-50 transition-colors">
-          {cards.length > 0 ? `${cards.length} cards already issued` : genMut.isPending ? 'Generating…' : `Generate (${event.delegate_count} × ${event.conference_days}d × ${periods.length})`}
-        </button>
-      </CardContent></Card>
+      {/* Meal card summary */}
+      {cards.length > 0 && (
+        <Card><CardContent className="p-5">
+          <div className="grid grid-cols-3 gap-3 text-sm">
+            <div><p className="text-muted-foreground">Issued</p><p className="text-lg font-bold text-foreground">{cards.length}</p></div>
+            <div><p className="text-muted-foreground">Redeemed</p><p className="text-lg font-bold text-green-600">{cards.filter((c) => c.status === 'redeemed').length}</p></div>
+            <div><p className="text-muted-foreground">Remaining</p><p className="text-lg font-bold text-primary">{cards.filter((c) => c.status === 'issued').length}</p></div>
+          </div>
+        </CardContent></Card>
+      )}
+
+      {/* Generate / top-up meal cards */}
+      {canManage && (
+        <Card><CardContent className="p-5 space-y-3">
+          <p className="text-sm font-semibold flex items-center gap-2"><Ticket className="h-4 w-4" /> Generate / Top-up Meal Cards</p>
+          <p className="text-xs text-muted-foreground">
+            Re-running tops up cards for any new delegates, added meal periods, or extra days — existing cards are never duplicated.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {MEAL_PERIODS.map((m) => (
+              <button key={m.v} type="button" onClick={() => togglePeriod(m.v)}
+                className={`px-3 py-1.5 rounded-lg text-sm border transition-colors ${periods.includes(m.v) ? 'bg-primary text-primary-foreground border-primary' : 'border-input hover:bg-muted'}`}>
+                {m.l}
+              </button>
+            ))}
+          </div>
+          <button onClick={handleGenerate} disabled={genMut.isPending}
+            className="px-4 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 disabled:opacity-50 transition-colors">
+            {genMut.isPending ? 'Generating…' : `Generate / Top up (${event.delegate_count} × ${event.conference_days}d × ${periods.length})`}
+          </button>
+        </CardContent></Card>
+      )}
 
       {/* Redeem */}
       <Card><CardContent className="p-5 space-y-2">
@@ -140,6 +248,8 @@ function EventDetailPageInner() {
           </table>
         </CardContent></Card>
       )}
+
+      {editing && <EventEditModal event={event} onClose={() => setEditing(false)} />}
     </div>
   );
 }

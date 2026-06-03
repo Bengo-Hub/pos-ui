@@ -98,6 +98,24 @@ export interface CreateRoomBookingInput {
   metadata?: BookingMeta;
 }
 
+export interface UpdateRoomBookingInput {
+  lead_guest_name?: string;
+  email?: string;
+  phone?: string;
+  rooms_count?: number;
+  arrival_date?: string;
+  departure_date?: string;
+  market_segment?: string;
+  status?: string;
+  metadata?: BookingMeta;
+}
+
+export interface BookingUpdateResult {
+  booking: RoomBooking;
+  applied_fee: number;
+  fee_currency: string;
+}
+
 export interface EventBooking {
   id: string;
   facility_id: string;
@@ -302,6 +320,9 @@ export const hotelApi = {
   createBooking: (tenantSlug: string, body: CreateRoomBookingInput) =>
     apiClient.post<RoomBooking>(`${hotelBase(tenantSlug)}/bookings`, body),
 
+  updateBooking: (tenantSlug: string, id: string, body: UpdateRoomBookingInput) =>
+    apiClient.patch<BookingUpdateResult>(`${hotelBase(tenantSlug)}/bookings/${id}`, body),
+
   // ─── Conference / events (BEO) + meal cards ───────────────────────────────
 
   listEvents: (tenantSlug: string) =>
@@ -312,6 +333,9 @@ export const hotelApi = {
 
   createEvent: (tenantSlug: string, body: CreateEventBookingInput) =>
     apiClient.post<EventBooking>(`${hotelBase(tenantSlug)}/events`, body),
+
+  updateEvent: (tenantSlug: string, id: string, body: Partial<CreateEventBookingInput> & { status?: string }) =>
+    apiClient.patch<EventBooking>(`${hotelBase(tenantSlug)}/events/${id}`, body),
 
   generateMealCards: (tenantSlug: string, eventId: string, body: { meal_periods: string[]; delegate_refs?: string[] }) =>
     apiClient.post<{ event_booking_id: string; cards_issued: number }>(`${hotelBase(tenantSlug)}/events/${eventId}/generate-mealcards`, body),

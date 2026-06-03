@@ -5,10 +5,11 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { Card, CardContent } from '@/components/ui/base';
 import { Combobox } from '@/components/ui/combobox';
-import { useRoomBookings, useCreateRoomBooking, useInventoryBundles } from '@/hooks/useHotel';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { useRoomBookings, useCreateRoomBooking, useUpdateRoomBooking, useInventoryBundles } from '@/hooks/useHotel';
 import { usePermissions, P } from '@/hooks/usePermissions';
 import type { CreateRoomBookingInput, RoomBooking } from '@/lib/api/hotel';
-import { ArrowLeft, ChevronDown, ChevronRight, Loader2, Plus, Users } from 'lucide-react';
+import { ArrowLeft, ChevronDown, ChevronRight, Loader2, Pencil, Plus, Users, X, XCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { ModuleGate } from '@/components/auth/module-gate';
@@ -33,9 +34,99 @@ const emptyForm = (): CreateRoomBookingInput & { adults: number; children: numbe
   booking_type: 'group', adults: 1, children: 0, notes: '', package_inclusions: '',
 });
 
-function BookingRow({ b }: { b: RoomBooking }) {
-  const [open, setOpen] = useState(false);
+function toLocalInput(iso: string) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+}
+
+const BOOKING_STATUSES = ['confirmed', 'checked_in', 'checked_out', 'cancelled', 'no_show'];
+
+function BookingEditModal({ b, onClose }: { b: RoomBooking; onClose: () => void }) {
+  const update = useUpdateRoomBooking(b.id);
   const meta = b.metadata ?? {};
+  const [form, setForm] = useState({
+    lead_guest_name: b.lead_guest_name, email: b.email ?? '', phone: b.phone ?? '',
+    rooms_count: b.rooms_count, status: b.status, market_segment: b.market_segment ?? '',
+    arrival_date: toLocalInput(b.arrival_date), departure_date: toLocalInput(b.departure_date),
+    adults: meta.adults ?? 1, children: meta.children ?? 0, notes: meta.notes ?? '',
+  });
+  function set<K extends keyof typeof form>(k: K, v: (typeof form)[K]) { setForm((f) => ({ ...f, [k]: v })); }
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    try {
+      const res = await update.mutateAsync({
+        lead_guest_name: form.lead_guest_name, email: form.email, phone: form.phone,
+        rooms_count: form.rooms_count, status: form.status, market_segment: form.market_segment,
+        arrival_date: form.arrival_date ? new Date(form.arrival_date).toISOString() : undefined,
+        departure_date: form.departure_date ? new Date(form.departure_date).toISOString() : undefined,
+        metadata: { ...meta, adults: form.adults, children: form.children, notes: form.notes || undefined },
+      });
+      toast.success(res.applied_fee > 0 ? `Booking amended — ${res.fee_currency} ${res.applied_fee.toLocaleString()} amendment fee applies` : 'Booking updated');
+      onClose();
+    } catch { toast.error('Failed to update booking'); }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 backdrop-blur-sm sm:items-center" onClick={onClose}>
+      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-t-2xl border border-border bg-card shadow-2xl sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between border-b border-border px-5 py-4">
+          <h2 className="text-base font-bold">Amend Booking <span className="text-xs font-normal text-muted-foreground">({b.confirmation_no})</span></h2>
+          <button onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-full bg-muted hover:bg-destructive/10 hover:text-destructive"><X className="h-4 w-4" /></button>
+        </div>
+        <form onSubmit={submit} className="grid grid-cols-1 gap-3 p-5 sm:grid-cols-2">
+          <label className="block sm:col-span-2"><span className="text-sm font-medium">Lead Guest</span>
+            <input value={form.lead_guest_name} onChange={(e) => set('lead_guest_name', e.target.value)} className={inputCls} /></label>
+          <label className="block"><span className="text-sm font-medium">Email</span>
+            <input type="email" value={form.email} onChange={(e) => set('email', e.target.value)} className={inputCls} /></label>
+          <label className="block"><span className="text-sm font-medium">Phone</span>
+            <input value={form.phone} onChange={(e) => set('phone', e.target.value)} className={inputCls} /></label>
+          <label className="block"><span className="text-sm font-medium">Rooms</span>
+            <input type="number" min={1} value={form.rooms_count} onChange={(e) => set('rooms_count', parseInt(e.target.value) || 1)} className={inputCls} /></label>
+          <label className="block"><span className="text-sm font-medium">Status</span>
+            <select value={form.status} onChange={(e) => set('status', e.target.value)} className={inputCls}>
+              {BOOKING_STATUSES.map((s) => <option key={s} value={s} className="capitalize">{s.replace('_', ' ')}</option>)}
+            </select></label>
+          <label className="block"><span className="text-sm font-medium">Adults</span>
+            <input type="number" min={1} value={form.adults} onChange={(e) => set('adults', parseInt(e.target.value) || 1)} className={inputCls} /></label>
+          <label className="block"><span className="text-sm font-medium">Children</span>
+            <input type="number" min={0} value={form.children} onChange={(e) => set('children', parseInt(e.target.value) || 0)} className={inputCls} /></label>
+          <label className="block"><span className="text-sm font-medium">Arrival</span>
+            <input type="datetime-local" value={form.arrival_date} onChange={(e) => set('arrival_date', e.target.value)} className={inputCls} /></label>
+          <label className="block"><span className="text-sm font-medium">Departure</span>
+            <input type="datetime-local" value={form.departure_date} onChange={(e) => set('departure_date', e.target.value)} className={inputCls} /></label>
+          <label className="block sm:col-span-2"><span className="text-sm font-medium">Notes</span>
+            <textarea value={form.notes} onChange={(e) => set('notes', e.target.value)} rows={2} className={inputCls} /></label>
+          <p className="text-[11px] text-muted-foreground sm:col-span-2">Amendments made close to arrival may incur a fee per your booking policy.</p>
+          <div className="flex gap-3 sm:col-span-2">
+            <button type="button" onClick={onClose} className="flex-1 rounded-xl border border-border py-2.5 text-sm font-medium hover:bg-muted">Cancel</button>
+            <button type="submit" disabled={update.isPending} className="flex-1 rounded-xl bg-primary py-2.5 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
+              {update.isPending ? 'Saving…' : 'Save Changes'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function BookingRow({ b, canManage }: { b: RoomBooking; canManage: boolean }) {
+  const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [confirmCancel, setConfirmCancel] = useState(false);
+  const cancelMut = useUpdateRoomBooking(b.id);
+  const meta = b.metadata ?? {};
+  const isCancelled = b.status === 'cancelled';
+
+  async function handleCancel() {
+    try {
+      const res = await cancelMut.mutateAsync({ status: 'cancelled' });
+      toast.success(res.applied_fee > 0 ? `Booking cancelled — ${res.fee_currency} ${res.applied_fee.toLocaleString()} cancellation fee applies` : 'Booking cancelled');
+      setConfirmCancel(false);
+    } catch { toast.error('Failed to cancel booking'); }
+  }
+
   return (
     <li className="px-5 py-3">
       <div className="flex items-center justify-between gap-3">
@@ -51,10 +142,20 @@ function BookingRow({ b }: { b: RoomBooking }) {
           </span>
         </button>
         <div className="flex items-center gap-2">
-          <span className="rounded-full bg-muted px-2 py-0.5 text-xs capitalize text-muted-foreground">{(meta.booking_type ?? 'group')}</span>
+          <span className="hidden rounded-full bg-muted px-2 py-0.5 text-xs capitalize text-muted-foreground sm:inline">{(meta.booking_type ?? 'group')}</span>
           <span className={cn('rounded-full px-2 py-1 text-xs font-medium capitalize', STATUS_COLOR[b.status] ?? 'bg-muted text-muted-foreground')}>
             {b.status.replace('_', ' ')}
           </span>
+          {canManage && !isCancelled && (
+            <>
+              <button onClick={() => setEditing(true)} title="Amend booking" className="flex h-7 w-7 items-center justify-center rounded-lg border border-border hover:bg-primary/10 hover:text-primary">
+                <Pencil className="h-3.5 w-3.5" />
+              </button>
+              <button onClick={() => setConfirmCancel(true)} title="Cancel booking" className="flex h-7 w-7 items-center justify-center rounded-lg border border-border hover:bg-destructive/10 hover:text-destructive">
+                <XCircle className="h-3.5 w-3.5" />
+              </button>
+            </>
+          )}
         </div>
       </div>
       {open && (
@@ -68,6 +169,18 @@ function BookingRow({ b }: { b: RoomBooking }) {
           {meta.notes && <Detail label="Notes" value={meta.notes} full />}
         </div>
       )}
+
+      {editing && <BookingEditModal b={b} onClose={() => setEditing(false)} />}
+      <ConfirmDialog
+        open={confirmCancel}
+        onOpenChange={setConfirmCancel}
+        title={`Cancel booking ${b.confirmation_no}?`}
+        description="A cancellation fee may apply if this is within the policy window before arrival. The guest will be notified."
+        confirmLabel="Cancel Booking"
+        variant="danger"
+        onConfirm={handleCancel}
+        loading={cancelMut.isPending}
+      />
     </li>
   );
 }
@@ -220,7 +333,7 @@ function BookingsPageInner() {
           <div className="py-12 text-center text-sm text-muted-foreground">No bookings yet.</div>
         ) : (
           <ul className="divide-y divide-border">
-            {bookings.map((b) => <BookingRow key={b.id} b={b} />)}
+            {bookings.map((b) => <BookingRow key={b.id} b={b} canManage={canManage} />)}
           </ul>
         )}
       </CardContent></Card>
