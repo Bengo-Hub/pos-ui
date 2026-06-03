@@ -6,6 +6,22 @@ import { Button } from '@/components/ui/base';
 import { Printer, Download, X } from 'lucide-react';
 import { ReceiptPrint } from './receipt-print';
 
+// Thermal-receipt styles inlined into the dedicated print window (mirrors src/styles/receipt.css).
+const RECEIPT_PRINT_CSS = `
+  @page { size: 80mm auto; margin: 3mm 4mm; }
+  html, body { margin: 0; padding: 0; background: #fff; }
+  .receipt-root { font-family: 'Courier New', Courier, monospace; font-size: 11px; line-height: 1.4; color: #000; background: #fff; width: 72mm; padding: 4mm 0; margin: 0 auto; }
+  .receipt-center { text-align: center; }
+  .receipt-bold { font-weight: bold; }
+  .receipt-divider { border: none; border-top: 1px dashed #000; margin: 3px 0; }
+  .receipt-row { display: flex; justify-content: space-between; align-items: baseline; padding: 1px 0; }
+  .receipt-row-name { flex: 1; padding-right: 6px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .receipt-row-value { flex-shrink: 0; white-space: nowrap; }
+  .receipt-total-row { font-weight: bold; font-size: 13px; border-top: 1px solid #000; margin-top: 2px; padding-top: 2px; }
+  .receipt-small { font-size: 9px; color: #444; }
+  .receipt-qr { display: block; margin: 4px auto; width: 20mm; height: 20mm; object-fit: contain; }
+`;
+
 export interface ReceiptLine {
   sku: string;
   name: string;
@@ -64,23 +80,52 @@ export function ReceiptPreview({ receipt, open, onClose, outletName, tenantName 
 
   if (!receipt || !open) return null;
 
+  // Print the receipt via a dedicated window so the modal/app chrome never wins the print context
+  // (the previous window.print() printed a blank page). The window contains ONLY the receipt markup
+  // plus the inlined thermal styles; the browser's "Save as PDF" destination yields a real PDF.
+  const openReceiptPrintWindow = () => {
+    const node = typeof document !== 'undefined' ? document.getElementById('receipt-print-root') : null;
+    if (!node) {
+      window.print();
+      return;
+    }
+    const win = window.open('', '_blank', 'width=380,height=640');
+    if (!win) {
+      window.print(); // popup blocked — fall back to in-page print
+      return;
+    }
+    win.document.write(
+      `<!doctype html><html><head><meta charset="utf-8"/>` +
+        `<title>Receipt ${receipt.order_number}</title>` +
+        `<style>${RECEIPT_PRINT_CSS}</style></head>` +
+        `<body>${node.innerHTML}</body></html>`,
+    );
+    win.document.close();
+
+    let printed = false;
+    const doPrint = () => {
+      if (printed) return;
+      printed = true;
+      win.focus();
+      win.print();
+      setTimeout(() => win.close(), 400);
+    };
+    win.onload = doPrint;
+    // Fallback: document.write can complete before onload binds in some browsers.
+    setTimeout(doPrint, 600);
+  };
+
   const handlePrint = () => {
     setPrinting(true);
-    window.print();
+    openReceiptPrintWindow();
     setTimeout(() => setPrinting(false), 1000);
   };
 
-  const handleDownloadPDF = async () => {
-    // Calls pos-api GET /{tenant}/pos/orders/{orderID}/receipt?format=pdf
-    try {
-      const link = document.createElement('a');
-      link.href = `${window.location.origin}/api/receipt/${receipt.order_number}?format=pdf`;
-      link.download = `receipt-${receipt.order_number}.html`;
-      link.click();
-    } catch {
-      // If API download fails, fall back to print
-      handlePrint();
-    }
+  // Real PDF: the print window's "Save as PDF" destination produces a proper PDF with the 80mm
+  // thermal layout. (The pos-api endpoint GET /{tenant}/pos/orders/{orderID}/receipt?format=pdf also
+  // returns a real application/pdf for programmatic/email use.)
+  const handleDownloadPDF = () => {
+    openReceiptPrintWindow();
   };
 
   const formatCurrency = (amount: number) =>
