@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import {
   ChefHat, Clock, CreditCard, Gift, Key, Layers, Monitor, Receipt,
-  Settings, ShieldCheck, Table2, Users,
+  Settings, ShieldCheck, Table2, Users, Webhook,
 } from 'lucide-react';
 import { useAuthStore } from '@/store/auth';
 import { useModuleAccess } from '@/hooks/use-module-access';
@@ -21,6 +21,7 @@ import { LoyaltySettingsTab } from '@/components/settings/LoyaltySettingsTab';
 import { PaymentDisplayTab } from '@/components/settings/PaymentDisplayTab';
 import { SubscriptionTab } from '@/components/settings/SubscriptionTab';
 import { DevicesTab } from '@/components/settings/DevicesTab';
+import { WebhooksTab } from '@/components/settings/WebhooksTab';
 
 type Tab =
   | 'general'
@@ -33,6 +34,7 @@ type Tab =
   | 'loyalty'
   | 'subscription'
   | 'devices'
+  | 'webhooks'
   | 'platform'
   | 'team';
 
@@ -49,6 +51,7 @@ const ALL_TABS: { id: Tab; label: string; icon: React.ElementType; requireModule
   { id: 'loyalty',          label: 'Loyalty',            icon: Gift,        description: 'Points, tiers, and earn rates', requireModule: 'loyalty' },
   { id: 'subscription',     label: 'Subscription',       icon: Key,         description: 'Your POS plan, limits, and features (view only)', requireAdmin: true },
   { id: 'devices',          label: 'Devices',            icon: Monitor,     description: 'POS terminals linked to this outlet (view only)', requireAdmin: true },
+  { id: 'webhooks',         label: 'Webhooks',           icon: Webhook,     description: 'Subscribe external endpoints to POS events', requireAdmin: true },
   { id: 'team',             label: 'Team',               icon: Users,       description: 'Staff members and roles' },
   { id: 'platform',         label: 'Platform',           icon: ShieldCheck, description: 'Admin and tenant management' },
 ];
@@ -124,6 +127,7 @@ export default function SettingsPage() {
         {activeTab === 'loyalty'          && <LoyaltySettingsTab />}
         {activeTab === 'subscription'     && isAdminOrManager && <SubscriptionTab />}
         {activeTab === 'devices'          && isAdminOrManager && <DevicesTab />}
+        {activeTab === 'webhooks'         && isAdminOrManager && <WebhooksTab />}
         {activeTab === 'team'             && <TeamTab />}
         {activeTab === 'platform'         && isPlatformOwner && <PlatformTab />}
       </div>

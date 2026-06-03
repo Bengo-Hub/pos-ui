@@ -11,9 +11,12 @@ import {
   useGenerateMealCards,
   useRedeemMealCard,
   useEventReconciliation,
+  useInventoryBundles,
 } from '@/hooks/useHotel';
-import type { CreateEventBookingInput, EventBooking } from '@/lib/api/hotel';
+import type { CreateEventBookingInput, EventBooking, Facility } from '@/lib/api/hotel';
 import { usePermissions, P } from '@/hooks/usePermissions';
+import { Combobox } from '@/components/ui/combobox';
+import { FacilityFormModal } from '@/components/hotel/facility-form-modal';
 import { Loader2, Plus, Presentation, Ticket } from 'lucide-react';
 import { toast } from 'sonner';
 import { ModuleGate } from '@/components/auth/module-gate';
@@ -34,11 +37,14 @@ function ConferencePageInner() {
   const orgSlug = params?.orgSlug as string;
   const { data: facilities = [] } = useFacilities();
   const { data: events = [], isLoading } = useEventBookings();
+  const { data: bundles = [] } = useInventoryBundles();
   const createMut = useCreateEventBooking();
   const { can } = usePermissions();
   const canAdd = can(P.CONFERENCE_ADD);
+  const canManageVenue = can(P.HOTEL_MANAGE);
 
   const [showForm, setShowForm] = useState(false);
+  const [showVenueModal, setShowVenueModal] = useState(false);
   const [selected, setSelected] = useState<EventBooking | null>(null);
   const [form, setForm] = useState<CreateEventBookingInput>({
     facility_id: '', title: '', client_name: '', contact_phone: '', contact_email: '',
@@ -95,10 +101,22 @@ function ConferencePageInner() {
             <div className="grid grid-cols-2 gap-3">
               <label className="block">
                 <span className="text-sm font-medium">Venue</span>
-                <select value={form.facility_id} onChange={(e) => set('facility_id', e.target.value)} className={inputCls}>
-                  <option value="">— Select venue —</option>
-                  {facilities.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
-                </select>
+                <div className="mt-1 flex gap-2">
+                  <select value={form.facility_id} onChange={(e) => set('facility_id', e.target.value)} className={`${inputCls} flex-1`}>
+                    <option value="">— Select venue —</option>
+                    {facilities.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
+                  </select>
+                  {canManageVenue && (
+                    <button
+                      type="button"
+                      onClick={() => setShowVenueModal(true)}
+                      title="Add a new venue"
+                      className="flex shrink-0 items-center gap-1 rounded-xl border border-input px-3 text-sm font-medium text-primary hover:bg-primary/10"
+                    >
+                      <Plus className="h-4 w-4" /> New
+                    </button>
+                  )}
+                </div>
               </label>
               <label className="block">
                 <span className="text-sm font-medium">Event Type</span>
@@ -150,8 +168,21 @@ function ConferencePageInner() {
                 </select>
               </label>
               <label className="block">
-                <span className="text-sm font-medium">Package Bundle ID (optional)</span>
-                <input value={form.inventory_bundle_id ?? ''} onChange={(e) => set('inventory_bundle_id', e.target.value)} placeholder="inventory Bundle UUID" className={inputCls} />
+                <span className="text-sm font-medium">Package (optional)</span>
+                <div className="mt-1">
+                  <Combobox
+                    options={bundles.map((b) => ({
+                      value: b.id,
+                      label: b.name,
+                      hint: [b.sku, b.price ? `KES ${b.price.toLocaleString()}` : null].filter(Boolean).join(' · '),
+                    }))}
+                    value={form.inventory_bundle_id ?? ''}
+                    onChange={(v) => set('inventory_bundle_id', v)}
+                    placeholder="Select a package…"
+                    searchPlaceholder="Search packages…"
+                    emptyText="No inventory packages found"
+                  />
+                </div>
               </label>
             </div>
             <div className="flex gap-3">
@@ -194,6 +225,13 @@ function ConferencePageInner() {
           )}
         </CardContent>
       </Card>
+
+      {showVenueModal && (
+        <FacilityFormModal
+          onClose={() => setShowVenueModal(false)}
+          onCreated={(f: Facility) => set('facility_id', f.id)}
+        />
+      )}
     </div>
   );
 }

@@ -39,7 +39,6 @@ import {
   UserSquare,
   Users,
   Wallet,
-  Webhook,
   X
 } from 'lucide-react';
 import Link from 'next/link';
@@ -277,7 +276,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
       defaultCollapsed: true,
       items: [
         { label: 'Rooms', icon: BedDouble, href: '/hotel/rooms', moduleKey: 'hotel', permission: [P.HOTEL_VIEW, P.HOTEL_MANAGE], subFeature: 'hotel_module', subPlan: 'Pro', waiterHidden: true },
-        { label: 'Group Bookings', icon: Users, href: '/hotel/bookings', moduleKey: 'hotel', permission: [P.HOTEL_VIEW, P.HOTEL_MANAGE], subFeature: 'hotel_module', subPlan: 'Pro', waiterHidden: true },
+        { label: 'Bookings', icon: Users, href: '/hotel/bookings', moduleKey: 'hotel', permission: [P.HOTEL_VIEW, P.HOTEL_MANAGE], subFeature: 'hotel_module', subPlan: 'Pro', waiterHidden: true },
         { label: 'Facilities', icon: Cpu, href: '/hotel/facilities', moduleKey: 'hotel', permission: [P.HOTEL_VIEW, P.HOTEL_MANAGE], subFeature: 'hotel_module', subPlan: 'Pro', waiterHidden: true },
         { label: 'Conferences', icon: Presentation, href: '/hotel/conference', moduleKey: 'hotel', permission: [P.CONFERENCE_VIEW, P.CONFERENCE_MANAGE, P.HOTEL_MANAGE], subFeature: 'conference_events', subPlan: 'Pro', waiterHidden: true },
         { label: 'Happy Hour', icon: Wine, href: '/hotel/happy-hour', moduleKey: 'hotel', permission: [P.PROMOTIONS_VIEW, P.PROMOTIONS_MANAGE, P.HOTEL_MANAGE], subFeature: 'happy_hour', subPlan: 'Pro', waiterHidden: true },
@@ -314,7 +313,6 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
         { label: 'Reports', icon: BarChart3, href: '/reports', moduleKey: 'reports', permission: [P.REPORTS_VIEW, P.REPORTS_MANAGE], subFeature: 'shift_reports', subPlan: 'Pro', waiterHidden: true },
         { label: 'Loyalty', icon: Gift, href: '/loyalty', moduleKey: 'loyalty', permission: [P.LOYALTY_VIEW, P.LOYALTY_ADD, P.LOYALTY_MANAGE], subFeature: 'loyalty', subPlan: 'Growth', waiterHidden: true, cashierHospHidden: true },
         { label: 'Commissions', icon: TrendingUp, href: '/commissions', moduleKey: 'commissions', permission: [P.COMMISSIONS_VIEW, P.COMMISSIONS_VIEW_OWN, P.COMMISSIONS_MANAGE], subFeature: 'commissions', subPlan: 'Pro', waiterHidden: true },
-        { label: 'Webhooks', icon: Webhook, href: '/webhooks', moduleKey: 'settings', permission: [P.CONFIG_VIEW, P.CONFIG_MANAGE], subFeature: 'webhooks', subPlan: 'Growth', waiterHidden: true },
         { label: 'Settings', icon: Settings, href: '/settings', moduleKey: 'settings', permission: [P.CONFIG_VIEW, P.CONFIG_CHANGE, P.CONFIG_MANAGE], waiterHidden: true },
       ],
     },

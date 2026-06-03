@@ -62,6 +62,14 @@ export interface CheckInInput {
   checked_in_by?: string;
 }
 
+export interface BookingMeta {
+  booking_type?: 'group' | 'individual';
+  adults?: number;
+  children?: number;
+  notes?: string;
+  package_inclusions?: string;
+}
+
 export interface RoomBooking {
   id: string;
   confirmation_no: string;
@@ -71,7 +79,10 @@ export interface RoomBooking {
   rooms_count: number;
   arrival_date: string;
   departure_date: string;
+  market_segment?: string;
+  inventory_rate_plan_bundle_id?: string | null;
   status: string;
+  metadata?: BookingMeta;
 }
 
 export interface CreateRoomBookingInput {
@@ -84,6 +95,7 @@ export interface CreateRoomBookingInput {
   inventory_rate_plan_bundle_id?: string;
   market_segment?: string;
   source?: string;
+  metadata?: BookingMeta;
 }
 
 export interface EventBooking {
@@ -178,6 +190,26 @@ export interface CreateRoomInput {
   inventory_item_id?: string;
 }
 
+export interface CreateFacilityInput {
+  name: string;
+  facility_type: string;
+  capacity: number;
+  rate_per_session: number;
+  currency?: string;
+  opening_time?: string;
+  closing_time?: string;
+  status?: string;
+}
+
+/** Inventory package/bundle option for the conference package picker. */
+export interface InventoryBundle {
+  id: string;
+  name: string;
+  sku: string;
+  package_type: string;
+  price: number;
+}
+
 export interface FacilityBooking {
   id: string;
   facility_id: string;
@@ -240,6 +272,18 @@ export const hotelApi = {
   getFacility: (tenantSlug: string, facilityId: string) =>
     apiClient.get<Facility>(`${hotelBase(tenantSlug)}/facilities/${facilityId}`),
 
+  createFacility: (tenantSlug: string, body: CreateFacilityInput) =>
+    apiClient.post<Facility>(`${hotelBase(tenantSlug)}/facilities`, body),
+
+  updateFacility: (tenantSlug: string, facilityId: string, body: Partial<CreateFacilityInput>) =>
+    apiClient.patch<Facility>(`${hotelBase(tenantSlug)}/facilities/${facilityId}`, body),
+
+  deleteFacility: (tenantSlug: string, facilityId: string) =>
+    apiClient.delete(`${hotelBase(tenantSlug)}/facilities/${facilityId}`),
+
+  listInventoryBundles: (tenantSlug: string) =>
+    apiClient.get<InventoryBundle[]>(`${hotelBase(tenantSlug)}/inventory-bundles`).then((r) => r ?? []),
+
   bookFacility: (tenantSlug: string, facilityId: string, body: { guest_name: string; phone: string; session_date: string; start_time: string; end_time: string; guests_count: number }) =>
     apiClient.post<FacilityBooking>(`${hotelBase(tenantSlug)}/facilities/${facilityId}/book`, body),
 
@@ -250,7 +294,7 @@ export const hotelApi = {
   // ─── Multi-room (group) bookings ──────────────────────────────────────────
 
   listBookings: (tenantSlug: string) =>
-    apiClient.get<RoomBooking[]>(`${hotelBase(tenantSlug)}/bookings`),
+    apiClient.get<RoomBooking[]>(`${hotelBase(tenantSlug)}/bookings`).then((r) => r ?? []),
 
   getBooking: (tenantSlug: string, id: string) =>
     apiClient.get<RoomBooking & { edges?: { guests?: RoomGuest[] } }>(`${hotelBase(tenantSlug)}/bookings/${id}`),
@@ -261,7 +305,7 @@ export const hotelApi = {
   // ─── Conference / events (BEO) + meal cards ───────────────────────────────
 
   listEvents: (tenantSlug: string) =>
-    apiClient.get<EventBooking[]>(`${hotelBase(tenantSlug)}/events`),
+    apiClient.get<EventBooking[]>(`${hotelBase(tenantSlug)}/events`).then((r) => r ?? []),
 
   getEvent: (tenantSlug: string, id: string) =>
     apiClient.get<EventBooking & { edges?: { meal_entitlements?: MealEntitlement[] } }>(`${hotelBase(tenantSlug)}/events/${id}`),
@@ -280,7 +324,7 @@ export const hotelApi = {
 
   // Inventory master picker — list SERVICE items by hospitality use_case for linking
   listInventoryServiceItems: (tenantSlug: string, useCase: string) =>
-    apiClient.get<InventoryServiceItem[]>(`${hotelBase(tenantSlug)}/inventory-service-items`, { use_case: useCase }),
+    apiClient.get<InventoryServiceItem[]>(`${hotelBase(tenantSlug)}/inventory-service-items`, { use_case: useCase }).then((r) => r ?? []),
 };
 
 export interface InventoryServiceItem {
@@ -320,7 +364,7 @@ export interface CreateHappyHourInput {
 
 export const happyHourApi = {
   listActive: (tenantSlug: string) =>
-    apiClient.get<HappyHourPromotion[]>(`/api/v1/${tenantSlug}/pos/promotions/happy-hour/active`),
+    apiClient.get<HappyHourPromotion[]>(`/api/v1/${tenantSlug}/pos/promotions/happy-hour/active`).then((r) => r ?? []),
 
   list: (tenantSlug: string) =>
     apiClient.get<{ data: HappyHourPromotion[]; total: number }>(`/api/v1/${tenantSlug}/pos/promotions`)

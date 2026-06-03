@@ -6,6 +6,7 @@ import {
   hotelApi,
   happyHourApi,
   type CreateRoomInput,
+  type CreateFacilityInput,
   type CheckInInput,
   type CreateRoomBookingInput,
   type CreateEventBookingInput,
@@ -146,6 +147,43 @@ export function useFacilities() {
     queryFn: () => hotelApi.listFacilities(slug),
     enabled: !!slug,
     staleTime: 60_000,
+  });
+}
+
+export function useCreateFacility() {
+  const slug = useTenantSlug();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: CreateFacilityInput) => hotelApi.createFacility(slug, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['facilities', slug] }),
+  });
+}
+
+export function useUpdateFacility(facilityId: string) {
+  const slug = useTenantSlug();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: Partial<CreateFacilityInput>) => hotelApi.updateFacility(slug, facilityId, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['facilities', slug] }),
+  });
+}
+
+export function useDeleteFacility() {
+  const slug = useTenantSlug();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (facilityId: string) => hotelApi.deleteFacility(slug, facilityId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['facilities', slug] }),
+  });
+}
+
+export function useInventoryBundles(enabled = true) {
+  const slug = useTenantSlug();
+  return useQuery({
+    queryKey: ['inventory-bundles', slug],
+    queryFn: () => hotelApi.listInventoryBundles(slug),
+    enabled: !!slug && enabled,
+    staleTime: 5 * 60_000,
   });
 }
 
