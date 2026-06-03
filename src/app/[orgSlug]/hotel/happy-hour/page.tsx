@@ -27,8 +27,9 @@ function HappyHourPageInner() {
   const [days, setDays] = useState<number[]>([1, 2, 3, 4, 5]);
   const [windowStart, setWindowStart] = useState('16:00');
   const [windowEnd, setWindowEnd] = useState('18:00');
-  const [discountType, setDiscountType] = useState<'percentage' | 'fixed_amount'>('percentage');
+  const [discountType, setDiscountType] = useState<'percentage' | 'fixed_amount' | 'fixed_price'>('percentage');
   const [discountValue, setDiscountValue] = useState('20');
+  const [mealPeriod, setMealPeriod] = useState('');
 
   function toggleDay(d: number) {
     setDays((prev) => prev.includes(d) ? prev.filter((x) => x !== d) : [...prev, d]);
@@ -46,6 +47,7 @@ function HappyHourPageInner() {
       scope_type: 'all',
       discount_type: discountType,
       discount_value: parseFloat(discountValue) || 0,
+      ...(mealPeriod ? { meal_period: mealPeriod as CreateHappyHourInput['meal_period'] } : {}),
     };
     try {
       await createMut.mutateAsync(body);
@@ -131,16 +133,29 @@ function HappyHourPageInner() {
               </label>
               <label className="block">
                 <span className="text-sm font-medium">Discount Type</span>
-                <select value={discountType} onChange={(e) => setDiscountType(e.target.value as 'percentage' | 'fixed_amount')}
+                <select value={discountType} onChange={(e) => setDiscountType(e.target.value as typeof discountType)}
                   className="mt-1 w-full px-4 py-2.5 rounded-xl border border-input bg-background focus:outline-none focus:ring-2 focus:ring-ring">
                   <option value="percentage">Percentage (%)</option>
-                  <option value="fixed_amount">Fixed Amount (KES)</option>
+                  <option value="fixed_amount">Fixed Amount off (KES)</option>
+                  <option value="fixed_price">Fixed Price — negotiated rate (KES)</option>
                 </select>
               </label>
               <label className="block">
-                <span className="text-sm font-medium">Discount Value</span>
+                <span className="text-sm font-medium">{discountType === 'percentage' ? 'Percentage' : discountType === 'fixed_price' ? 'Negotiated Price' : 'Amount off'}</span>
                 <input type="number" min="0" value={discountValue} onChange={(e) => setDiscountValue(e.target.value)}
                   className="mt-1 w-full px-4 py-2.5 rounded-xl border border-input bg-background focus:outline-none focus:ring-2 focus:ring-ring" />
+              </label>
+              <label className="block col-span-2">
+                <span className="text-sm font-medium">Meal Period <span className="text-xs text-muted-foreground">(optional — tag a negotiated lunch/dinner rate)</span></span>
+                <select value={mealPeriod} onChange={(e) => setMealPeriod(e.target.value)}
+                  className="mt-1 w-full px-4 py-2.5 rounded-xl border border-input bg-background focus:outline-none focus:ring-2 focus:ring-ring">
+                  <option value="">— Not meal-specific —</option>
+                  <option value="breakfast">Breakfast</option>
+                  <option value="am_break">AM Break</option>
+                  <option value="lunch">Lunch</option>
+                  <option value="pm_break">PM Break</option>
+                  <option value="dinner">Dinner</option>
+                </select>
               </label>
             </div>
 

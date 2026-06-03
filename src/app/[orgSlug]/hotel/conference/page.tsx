@@ -183,6 +183,9 @@ function ConferencePageInner() {
                     emptyText="No inventory packages found"
                   />
                 </div>
+                <span className="mt-1 block text-[11px] text-muted-foreground">
+                  Total is calculated from the package rate — flat hall hire stays fixed within capacity; per-delegate packages scale with delegates × days.
+                </span>
               </label>
             </div>
             <div className="flex gap-3">

@@ -384,6 +384,8 @@ export interface CreateHappyHourInput {
   discount_type?: 'percentage' | 'fixed_amount' | 'fixed_price';
   discount_value: number;
   max_discount?: number;
+  /** Optional meal-period target for negotiated lunch/dinner rates. */
+  meal_period?: 'breakfast' | 'am_break' | 'lunch' | 'pm_break' | 'dinner';
 }
 
 export const happyHourApi = {
