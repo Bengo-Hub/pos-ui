@@ -199,6 +199,9 @@ export const ROLE_PERMISSIONS: Record<string, Permission[]> = {
     P.MODIFIERS_VIEW, P.GIFT_CARDS_VIEW,
     P.LOYALTY_VIEW, P.LOYALTY_ADD,
     P.CLIENTS_VIEW,
+    // Hotel F&B: view rooms/events + redeem conference delegate meal cards at the till (mirror backend seed)
+    P.HOTEL_VIEW, P.CONFERENCE_VIEW, P.CONFERENCE_CHANGE,
+    P.PROMOTIONS_VIEW,
     // No KDS, queue, commissions — cashier is till-side only
   ],
   waiter: [
@@ -233,6 +236,10 @@ export const ROLE_PERMISSIONS: Record<string, Permission[]> = {
     P.QUEUE_VIEW, P.QUEUE_CHANGE,
     P.CLIENTS_VIEW,
     P.HOTEL_VIEW, P.HOTEL_CHANGE, P.HOTEL_MANAGE,
+    // Front-desk conference handling + active promotions + appointments (mirror backend seed)
+    P.CONFERENCE_VIEW, P.CONFERENCE_ADD, P.CONFERENCE_CHANGE,
+    P.PROMOTIONS_VIEW,
+    P.APPOINTMENTS_VIEW, P.APPOINTMENTS_CHANGE,
   ],
   stylist: [
     P.ORDERS_ADD, P.ORDERS_VIEW_OWN,
