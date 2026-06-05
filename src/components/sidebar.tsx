@@ -3,6 +3,7 @@
 import { useModuleAccess } from '@/hooks/use-module-access';
 import { useSubscription } from '@/hooks/use-subscription';
 import { usePermissions } from '@/hooks/usePermissions';
+import { isPlatformOwner as checkPlatformOwner } from '@/lib/auth/permissions';
 import type { Permission } from '@/lib/rbac/permissions';
 import { P } from '@/lib/rbac/permissions';
 import { cn } from '@/lib/utils';
@@ -219,8 +220,11 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
   const user = useAuthStore((s) => s.user);
   const { hasModule, isSuperUser, isResolved } = useModuleAccess();
   const { canAny, isSuperuser } = usePermissions();
-  const { hasFeature, isActive, isPlatformOwner: isSubPlatform } = useSubscription();
-  const isPlatformOwner = isSuperuser || isSuperUser || isSubPlatform || orgSlug === 'codevertex';
+  const { hasFeature, isActive } = useSubscription();
+  // Platform-owner-only (device fleet, platform config, licensing). A tenant `admin` is
+  // NOT a platform owner — only the is_platform_owner claim, the superuser role, or the
+  // codevertex tenant (verified via the server-returned tenant slug, not the URL) qualifies.
+  const isPlatformOwner = checkPlatformOwner(user);
 
   // HQ users (admin/manager/superuser) can switch between outlets; everyone else is locked to their outlet.
   const userRoles = user?.roles ?? [];

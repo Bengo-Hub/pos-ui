@@ -1,14 +1,15 @@
 'use client';
 
 import { useState } from 'react';
-import { CalendarDays, Check, Loader2, Pencil, Trash2, Users, X } from 'lucide-react';
+import { CalendarDays, Check, Loader2, Pencil, Plus, Trash2, Users, X } from 'lucide-react';
 import { Button, Card, CardContent, CardHeader } from '@/components/ui/base';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import {
-  useStaffAdmin, useDeactivateStaff, useUpdateStaff, useSetStaffPIN,
+  useStaffAdmin, useDeactivateStaff, useUpdateStaff, useSetStaffPIN, useCreateStaff,
 } from '@/hooks/useStaff';
+import { usePermissions } from '@/hooks/usePermissions';
 import { useAuthStore } from '@/store/auth';
-import type { StaffMember, UpdateStaffInput } from '@/lib/api/staff';
+import type { StaffMember, UpdateStaffInput, CreateStaffInput } from '@/lib/api/staff';
 import { StaffShiftDrawer } from '@/components/pos/staff-shift-drawer';
 import { toast } from 'sonner';
 import { inputClass } from './shared';
@@ -34,6 +35,18 @@ export function TeamTab() {
   const deactivate = useDeactivateStaff(tenantId);
   const update = useUpdateStaff(tenantId);
   const setPin = useSetStaffPIN(tenantId);
+  const create = useCreateStaff(tenantId);
+
+  const { canManageStaff } = usePermissions();
+  const isManager = requesterRole === 'manager';
+  const selectedOutletId = useAuthStore((s) => s.selectedOutletId);
+  const outlet = useAuthStore((s) => s.outlet);
+  const outletId = selectedOutletId || outlet?.id || '';
+
+  const [showAdd, setShowAdd] = useState(false);
+  const [addForm, setAddForm] = useState({
+    name: '', role: 'cashier', employment_type: 'full_time', pin: '', mpesa_phone: '',
+  });
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<UpdateStaffInput>({});
@@ -67,6 +80,30 @@ export function TeamTab() {
     }
   }
 
+  async function handleAddMember() {
+    if (!addForm.name.trim()) { toast.error('Name is required'); return; }
+    if (!outletId) { toast.error('Select an outlet before adding staff'); return; }
+    if (addForm.pin && addForm.pin.length < 4) { toast.error('PIN must be at least 4 digits'); return; }
+    try {
+      // No user_id → pos-api creates a local PIN-only staff member (terminal login only).
+      const input: CreateStaffInput = {
+        name: addForm.name.trim(),
+        role: addForm.role,
+        outlet_id: outletId,
+        employment_type: addForm.employment_type,
+        pin: addForm.pin || undefined,
+        mpesa_phone: addForm.mpesa_phone.trim() || undefined,
+      };
+      await create.mutateAsync(input);
+      toast.success('Team member added');
+      setShowAdd(false);
+      setAddForm({ name: '', role: 'cashier', employment_type: 'full_time', pin: '', mpesa_phone: '' });
+    } catch (err) {
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      toast.error(msg || 'Failed to add team member');
+    }
+  }
+
   async function handleSetPin(userId: string) {
     if (newPin.length < 4) { toast.error('PIN must be at least 4 digits'); return; }
     try {
@@ -89,6 +126,11 @@ export function TeamTab() {
               <span className="font-bold text-sm">Team Members</span>
               {data && <span className="text-xs text-muted-foreground">({data.total})</span>}
             </div>
+            {canManageStaff && (
+              <Button size="sm" className="h-8 px-3 text-xs" onClick={() => setShowAdd(true)}>
+                <Plus className="h-3.5 w-3.5 mr-1" /> Add team member
+              </Button>
+            )}
           </div>
         </CardHeader>
         <CardContent className="p-0">
@@ -255,6 +297,95 @@ export function TeamTab() {
           )}
         </CardContent>
       </Card>
+
+      {showAdd && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowAdd(false)} />
+          <div className="relative z-50 w-full max-w-md mx-4 bg-card border border-border rounded-xl shadow-xl p-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-sm flex items-center gap-2">
+                <Users className="h-4 w-4 text-primary" /> Add Team Member
+              </h3>
+              <button onClick={() => setShowAdd(false)} className="text-muted-foreground hover:text-foreground">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-medium text-muted-foreground">Name *</label>
+                <input
+                  className={inputClass}
+                  value={addForm.name}
+                  onChange={(e) => setAddForm((f) => ({ ...f, name: e.target.value }))}
+                  placeholder="Full name"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground">Role</label>
+                  <select
+                    className={inputClass}
+                    value={addForm.role}
+                    onChange={(e) => setAddForm((f) => ({ ...f, role: e.target.value }))}
+                  >
+                    {Object.entries(ROLE_LABELS)
+                      // Managers cannot create admin/manager-level staff (also enforced server-side).
+                      .filter(([v]) => !(isManager && (v === 'admin' || v === 'manager')))
+                      .map(([v, l]) => (
+                        <option key={v} value={v}>{l}</option>
+                      ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground">Employment</label>
+                  <select
+                    className={inputClass}
+                    value={addForm.employment_type}
+                    onChange={(e) => setAddForm((f) => ({ ...f, employment_type: e.target.value }))}
+                  >
+                    {Object.entries(EMP_TYPE_LABELS).map(([v, l]) => (
+                      <option key={v} value={v}>{l}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground">Terminal PIN</label>
+                  <input
+                    type="password"
+                    maxLength={6}
+                    className={inputClass}
+                    value={addForm.pin}
+                    onChange={(e) => setAddForm((f) => ({ ...f, pin: e.target.value.replace(/\D/g, '') }))}
+                    placeholder="4-6 digits (optional)"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground">M-Pesa phone</label>
+                  <input
+                    className={inputClass}
+                    value={addForm.mpesa_phone}
+                    onChange={(e) => setAddForm((f) => ({ ...f, mpesa_phone: e.target.value }))}
+                    placeholder="Optional"
+                  />
+                </div>
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                Creates a local POS staff member who clocks in with the PIN on a terminal. No SSO login is created.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-1">
+              <Button variant="ghost" size="sm" onClick={() => setShowAdd(false)}>Cancel</Button>
+              <Button size="sm" onClick={handleAddMember} disabled={create.isPending}>
+                {create.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Add member'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <ConfirmDialog
         open={!!confirmId}

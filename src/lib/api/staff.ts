@@ -26,11 +26,14 @@ export interface StaffProfile {
 }
 
 export interface CreateStaffInput {
-  user_id: string;
+  /** Optional — omit to create a local PIN-only staff member (no SSO account). */
+  user_id?: string;
   outlet_id: string;
   name: string;
   role: string;
   employment_type?: string;
+  /** Optional 4-6 digit terminal PIN; lets the new member clock in without an SSO login. */
+  pin?: string;
   hourly_rate?: number;
   daily_rate?: number;
   monthly_salary?: number;

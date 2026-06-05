@@ -1,9 +1,7 @@
 'use client';
 
 import { useAuthStore } from '@/store/auth';
-import { usePermissions } from '@/hooks/usePermissions';
-import { useModuleAccess } from '@/hooks/use-module-access';
-import { useSubscription } from '@/hooks/use-subscription';
+import { isPlatformOwner as checkPlatformOwner } from '@/lib/auth/permissions';
 import { DevicesTab } from '@/components/settings/DevicesTab';
 import { SubscriptionTab } from '@/components/settings/SubscriptionTab';
 import { IntegrationsTab } from '@/components/settings/IntegrationsTab';
@@ -29,16 +27,15 @@ type TabKey = 'devices' | 'licenses' | 'integrations' | 'webhooks';
  */
 export default function PlatformPage() {
   const user = useAuthStore((state) => state.user);
-  const { isSuperuser } = usePermissions();
-  const { isSuperUser } = useModuleAccess();
-  const { isPlatformOwner: isSubPlatform } = useSubscription();
   const router = useRouter();
   const params = useParams();
   const orgSlug = params?.orgSlug as string;
   const searchParams = useSearchParams();
 
-  const isPlatformOwner =
-    isSuperuser || isSuperUser || isSubPlatform || user?.isPlatformOwner || user?.isSuperUser || orgSlug === 'codevertex';
+  // Platform-owner-only. A tenant `admin` is NOT a platform owner; only the
+  // is_platform_owner claim, the superuser role, or the codevertex tenant (verified via
+  // the server-returned tenant slug, not the URL) qualifies. See isPlatformOwner().
+  const isPlatformOwner = checkPlatformOwner(user);
 
   const [activeTab, setActiveTab] = useState<TabKey>('devices');
 
