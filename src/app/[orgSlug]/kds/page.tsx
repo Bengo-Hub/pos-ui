@@ -32,6 +32,7 @@ import {
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useAuthStore } from '@/store/auth';
+import { usePermissions, P } from '@/hooks/usePermissions';
 import type { KDSStationType } from '@/hooks/useKDS';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -135,6 +136,10 @@ function TicketCard({ ticket }: { ticket: KDSTicket }) {
   const ready      = useReadyTicket();
   const serve      = useServeTicket();
   const callWaiter = useCallWaiter();
+  const { can }    = usePermissions();
+  // Read-only viewers (e.g. waiters with pos.kds.view) can monitor the board
+  // but cannot fire/bump tickets — only KDS_CHANGE holders see prep actions.
+  const canChange  = can(P.KDS_CHANGE);
 
   const mins        = elapsedMinutes(ticket.received_at);
   const isPending   = ticket.status === 'pending';
@@ -187,43 +192,46 @@ function TicketCard({ ticket }: { ticket: KDSTicket }) {
         ))}
       </ul>
 
-      {/* Action footer */}
-      <div className="px-4 pb-4 pt-2 flex gap-2">
-        {isPending && (
+      {/* Action footer — only for staff who can transition tickets (KDS_CHANGE).
+          Read-only viewers (waiters) see the board without prep controls. */}
+      {canChange && (
+        <div className="px-4 pb-4 pt-2 flex gap-2">
+          {isPending && (
+            <ActionButton
+              icon={<PlayCircle className="h-4 w-4" />}
+              label="Start"
+              onClick={() => start.mutate(ticket.id)}
+              loading={start.isPending}
+              className="flex-1 bg-amber-500 hover:bg-amber-400 shadow-md shadow-amber-500/20"
+            />
+          )}
+          {isInProgress && (
+            <ActionButton
+              icon={<CheckCircle className="h-4 w-4" />}
+              label="Ready"
+              onClick={() => ready.mutate(ticket.id)}
+              loading={ready.isPending}
+              className="flex-1 bg-emerald-600 hover:bg-emerald-500 shadow-md shadow-emerald-500/20"
+            />
+          )}
+          {isReady && (
+            <ActionButton
+              icon={<CheckCircle className="h-4 w-4" />}
+              label="Served"
+              onClick={() => serve.mutate(ticket.id)}
+              loading={serve.isPending}
+              className="flex-1 bg-blue-600 hover:bg-blue-500 shadow-md shadow-blue-500/20"
+            />
+          )}
           <ActionButton
-            icon={<PlayCircle className="h-4 w-4" />}
-            label="Start"
-            onClick={() => start.mutate(ticket.id)}
-            loading={start.isPending}
-            className="flex-1 bg-amber-500 hover:bg-amber-400 shadow-md shadow-amber-500/20"
+            icon={<PhoneCall className="h-3.5 w-3.5" />}
+            label="Waiter"
+            onClick={() => callWaiter.mutate(ticket.id)}
+            loading={callWaiter.isPending}
+            className="bg-muted hover:bg-muted/80 text-muted-foreground shrink-0"
           />
-        )}
-        {isInProgress && (
-          <ActionButton
-            icon={<CheckCircle className="h-4 w-4" />}
-            label="Ready"
-            onClick={() => ready.mutate(ticket.id)}
-            loading={ready.isPending}
-            className="flex-1 bg-emerald-600 hover:bg-emerald-500 shadow-md shadow-emerald-500/20"
-          />
-        )}
-        {isReady && (
-          <ActionButton
-            icon={<CheckCircle className="h-4 w-4" />}
-            label="Served"
-            onClick={() => serve.mutate(ticket.id)}
-            loading={serve.isPending}
-            className="flex-1 bg-blue-600 hover:bg-blue-500 shadow-md shadow-blue-500/20"
-          />
-        )}
-        <ActionButton
-          icon={<PhoneCall className="h-3.5 w-3.5" />}
-          label="Waiter"
-          onClick={() => callWaiter.mutate(ticket.id)}
-          loading={callWaiter.isPending}
-          className="bg-muted hover:bg-muted/80 text-muted-foreground shrink-0"
-        />
-      </div>
+        </div>
+      )}
     </div>
   );
 }
