@@ -137,6 +137,9 @@ export default function PINLoginPage() {
   const setTerminalSession = useAuthStore((s) => s.setTerminalSession);
   const setOutlet          = useAuthStore((s) => s.setOutlet);
   const redirectToSSO      = useAuthStore((s) => s.redirectToSSO);
+  const authStatus         = useAuthStore((s) => s.status);
+  const hasSession         = useAuthStore((s) => !!s.session);
+  const isTerminalSession  = useAuthStore((s) => s.isTerminalSession);
   const tenantID = useAuthStore((s) => s.user?.tenant_id ?? '');
   const tenantUUID = tenant?.id && /^[0-9a-f-]{36}$/.test(tenant.id) ? tenant.id : '';
   const effectiveTenantID  = tenantID || tenantUUID;
@@ -155,6 +158,17 @@ export default function PINLoginPage() {
   useEffect(() => {
     if (typeof window !== 'undefined') setStoredEmail(localStorage.getItem('sso_last_email'));
   }, []);
+
+  // Forward an already-authenticated SSO (non-terminal) session off the kiosk.
+  // Tenant/platform admins who complete "Sign in with your account" land back here
+  // (the SSO returnTo and the org root both point at pin-login, and this kiosk page
+  // never advances an SSO session on its own). Without this they'd be stuck staring
+  // at the PIN keypad despite a valid session. Terminal PIN sessions stay put.
+  useEffect(() => {
+    if (authStatus === 'authenticated' && hasSession && !isTerminalSession) {
+      router.replace(`/${orgSlug}/dashboard`);
+    }
+  }, [authStatus, hasSession, isTerminalSession, orgSlug, router]);
 
   const hydrateFromWebAuthn = useAuthStore((s) => s.hydrateFromWebAuthn);
   const {
@@ -532,7 +546,7 @@ export default function PINLoginPage() {
               <div className="flex-1 h-px bg-white/10" />
             </div>
             <button
-              onClick={() => redirectToSSO(orgSlug, window.location.href)}
+              onClick={() => redirectToSSO(orgSlug, `/${orgSlug}/dashboard`)}
               className={cn(
                 'w-full flex items-center justify-center gap-2.5 px-5 py-3 rounded-2xl',
                 'border border-white/10 bg-white/3',
@@ -822,7 +836,7 @@ export default function PINLoginPage() {
                 <div className="flex-1 h-px bg-white/10" />
               </div>
               <button
-                onClick={() => redirectToSSO(orgSlug, window.location.href)}
+                onClick={() => redirectToSSO(orgSlug, `/${orgSlug}/dashboard`)}
                 className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-white/10 bg-white/4 text-xs text-white/45 hover:bg-white/9 hover:text-white/75 hover:border-white/20 transition-all font-medium group"
               >
                 <ExternalLink className="h-3.5 w-3.5 group-hover:text-primary transition-colors" />
