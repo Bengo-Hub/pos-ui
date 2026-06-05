@@ -250,7 +250,8 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
         { label: 'New Order', icon: Plus, href: '/order', moduleKey: 'new_order', permission: P.ORDERS_ADD, waiterHidden: true, cashierHospHidden: true },
         // Orders list: requires add/change or reports access — excludes kitchen/bar who only have pos.orders.view for KDS context
         { label: 'Orders', icon: ClipboardList, href: '/orders', moduleKey: 'orders', permission: [P.ORDERS_ADD, P.ORDERS_CHANGE_OWN, P.ORDERS_CHANGE, P.ORDERS_MANAGE, P.ORDERS_VIEW_OWN, P.REPORTS_VIEW], waiterHidden: true },
-        { label: 'Cash Drawer', icon: Wallet, href: '/drawer', moduleKey: 'cash_drawer', permission: [P.DRAWERS_ADD, P.DRAWERS_MANAGE, P.DRAWERS_VIEW_OWN], waiterHidden: true },
+        // Waiters who settle bills run their own cash float, so they need the drawer.
+        { label: 'Cash Drawer', icon: Wallet, href: '/drawer', moduleKey: 'cash_drawer', permission: [P.DRAWERS_ADD, P.DRAWERS_MANAGE, P.DRAWERS_VIEW_OWN] },
         { label: 'Retail POS', icon: ShoppingCart, href: '/retail', moduleKey: 'retail', permission: P.ORDERS_ADD, waiterHidden: true },
         { label: 'Clients', icon: Users, href: '/clients', moduleKey: 'clients', permission: [P.CLIENTS_VIEW, P.CLIENTS_MANAGE], waiterHidden: true },
         { label: 'Layaway', icon: Package, href: '/layaway', moduleKey: 'layaway', permission: [P.ORDERS_ADD, P.ORDERS_CHANGE_OWN, P.ORDERS_CHANGE, P.ORDERS_MANAGE], subFeature: 'layaway', subPlan: 'Growth', waiterHidden: true },
@@ -274,7 +275,8 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
       label: 'Display Board',
       defaultCollapsed: true,
       items: [
-        { label: 'KDS', icon: ChefHat, href: '/kds', moduleKey: 'kds', permission: [P.KDS_VIEW, P.KDS_CHANGE, P.KDS_MANAGE], waiterHidden: true },
+        // Waiters get read-only KDS (P.KDS_VIEW) to see what's ready to serve/hand off.
+        { label: 'KDS', icon: ChefHat, href: '/kds', moduleKey: 'kds', permission: [P.KDS_VIEW, P.KDS_CHANGE, P.KDS_MANAGE] },
       ],
     },
     {
@@ -293,7 +295,8 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
       label: 'Online Orders',
       defaultCollapsed: true,
       items: [
-        { label: 'Pickup Queue', icon: ShoppingBag, href: '/online-orders', moduleKey: 'online_orders', permission: [P.ORDERS_MANAGE, P.QUEUE_MANAGE], subFeature: 'online_orders', subPlan: 'Pro', waiterHidden: true },
+        // Waiters handle pickup hand-off + delivery rider assignment (P.ORDERS_CHANGE).
+        { label: 'Pickup Queue', icon: ShoppingBag, href: '/online-orders', moduleKey: 'online_orders', permission: [P.ORDERS_MANAGE, P.ORDERS_CHANGE, P.QUEUE_MANAGE], subFeature: 'online_orders', subPlan: 'Pro' },
       ],
     },
     {

@@ -4,6 +4,7 @@ import { ModuleGate } from '@/components/auth/module-gate';
 import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
 import { SeatGuestsModal } from '@/components/pos/seat-guests-modal';
 import { PrintReceiptButton } from '@/components/pos/print-receipt-button';
+import { POSPaymentModal } from '@/components/pos/payment-modal';
 import { Badge, Button } from '@/components/ui/base';
 import { cn } from '@/lib/utils';
 import { useTables, useSections, useUpdateTableStatus, useReleaseTable, useMergeTables, useUnmergeTables, useOrders } from '@/hooks/usePOS';
@@ -15,6 +16,7 @@ import {
   CheckSquare,
   ClipboardList,
   Clock,
+  CreditCard,
   GitMerge,
   Layers,
   Loader2,
@@ -26,6 +28,7 @@ import {
   X,
 } from 'lucide-react';
 import { useState, useMemo } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 
@@ -389,6 +392,13 @@ function MyBillsTab({ orgSlug }: { orgSlug: string }) {
   const [filter, setFilter] = useState<'active' | 'settled' | 'voided'>('active');
   const { can } = usePermissions();
   const user = useAuthStore((s) => s.user);
+  const outlet = useAuthStore((s) => s.outlet);
+  const queryClient = useQueryClient();
+  const releaseTable = useReleaseTable();
+  const [payOrder, setPayOrder] = useState<any | null>(null);
+  const isHospitality = ['hospitality', 'quick_service', 'hotel'].includes(
+    (outlet?.use_case ?? (user as any)?.outlet_use_case ?? '').toLowerCase()
+  );
   const viewOwnOnly = can(P.ORDERS_VIEW_OWN) && !can(P.ORDERS_VIEW);
   const staffId = viewOwnOnly ? ((user as any)?.staffId ?? (user as any)?.id) : undefined;
 
@@ -497,7 +507,19 @@ function MyBillsTab({ orgSlug }: { orgSlug: string }) {
                 <span className="text-xs text-muted-foreground">{itemCount} item{itemCount !== 1 ? 's' : ''}</span>
                 <span className="font-bold text-sm text-primary">{fmt(order.total_amount ?? 0)}</span>
               </div>
-              <div className="mt-2">
+              <div className="mt-2 space-y-2">
+                {(order.status === 'open' || order.status === 'pending_payment') && can(P.PAYMENTS_ADD) && (
+                  <Button
+                    className="w-full gap-2 justify-center"
+                    onClick={() => setPayOrder(order)}
+                  >
+                    <CreditCard className="h-4 w-4" />
+                    Settle Bill
+                    {(order.total_amount ?? 0) > 0 && (
+                      <span className="ml-auto font-bold text-sm">{fmt(order.total_amount ?? 0)}</span>
+                    )}
+                  </Button>
+                )}
                 <PrintReceiptButton
                   orderId={order.id}
                   label={order.status === 'completed' ? 'Print Receipt' : 'Print Bill'}
@@ -508,6 +530,27 @@ function MyBillsTab({ orgSlug }: { orgSlug: string }) {
           );
         })}
       </div>
+
+      {payOrder && (
+        <POSPaymentModal
+          open={!!payOrder}
+          onClose={() => setPayOrder(null)}
+          orderId={payOrder.id}
+          orderNumber={payOrder.order_number}
+          total={payOrder.total_amount ?? 0}
+          tenantSlug={orgSlug}
+          isHospitality={isHospitality}
+          onPaymentConfirmed={() => {
+            const tableId = payOrder?.table_id;
+            setPayOrder(null);
+            queryClient.invalidateQueries({ queryKey: ['pos-orders'] });
+            queryClient.invalidateQueries({ queryKey: ['dashboard-recent-orders'] });
+            if (tableId) {
+              releaseTable.mutate(tableId);
+            }
+          }}
+        />
+      )}
     </div>
   );
 }

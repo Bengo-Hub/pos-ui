@@ -70,7 +70,7 @@ function OrderHeader({ order }: { order: PickupOrder }) {
 
 function OrderCard({ order, tenantID }: { order: PickupOrder; tenantID: string }) {
   const qc = useQueryClient();
-  const { can } = usePermissions();
+  const { can, canAny } = usePermissions();
 
   const markReady = useMutation({
     mutationFn: () => onlineOrdersApi.markReady(tenantID, order.id),
@@ -111,7 +111,7 @@ function OrderCard({ order, tenantID }: { order: PickupOrder; tenantID: string }
               Ready
             </button>
           )}
-          {status === 'ready_for_pickup' && can(P.ORDERS_MANAGE) && (
+          {status === 'ready_for_pickup' && canAny([P.ORDERS_MANAGE, P.ORDERS_CHANGE]) && (
             <button
               onClick={() => markCollected.mutate()}
               disabled={markCollected.isPending}
@@ -128,7 +128,7 @@ function OrderCard({ order, tenantID }: { order: PickupOrder; tenantID: string }
 }
 
 function DeliveryOrderCard({ order, onAssign }: { order: DeliveryOrder; onAssign: (o: DeliveryOrder) => void }) {
-  const { can } = usePermissions();
+  const { canAny } = usePermissions();
 
   const assignedRiderName =
     (order.metadata?.rider_name as string | undefined) ??
@@ -157,7 +157,7 @@ function DeliveryOrderCard({ order, onAssign }: { order: DeliveryOrder; onAssign
               {assignedRiderName}
             </span>
           )}
-          {can(P.ORDERS_MANAGE) && (
+          {canAny([P.ORDERS_MANAGE, P.ORDERS_CHANGE]) && (
             <button
               onClick={() => onAssign(order)}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 disabled:opacity-50 transition-colors"

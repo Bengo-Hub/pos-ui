@@ -205,15 +205,22 @@ export const ROLE_PERMISSIONS: Record<string, Permission[]> = {
     // No KDS, queue, commissions — cashier is till-side only
   ],
   waiter: [
-    P.ORDERS_ADD, P.ORDERS_VIEW_OWN, P.ORDERS_CHANGE_OWN,
+    // ORDERS_CHANGE (not just _own) lets waiters act on unassigned online
+    // pickup/delivery orders (mark ready, collected, assign rider).
+    P.ORDERS_ADD, P.ORDERS_VIEW_OWN, P.ORDERS_CHANGE, P.ORDERS_CHANGE_OWN,
+    // Settle bills at the table — cash or mobile-money ref (e.g. M-Pesa).
+    P.PAYMENTS_ADD, P.PAYMENTS_VIEW_OWN,
     P.CATALOG_VIEW,
     P.TABLES_VIEW, P.TABLES_CHANGE_OWN, P.TABLES_MANAGE,
     P.SESSIONS_ADD, P.SESSIONS_VIEW_OWN,
+    // Own cash float so recorded cash reconciles at shift close.
+    P.DRAWERS_ADD, P.DRAWERS_VIEW_OWN, P.DRAWERS_CHANGE_OWN,
     P.MODIFIERS_VIEW,
     P.QUEUE_VIEW, P.QUEUE_CHANGE,
+    // Read-only KDS so waiters can see which tickets are ready to serve/hand off.
+    P.KDS_VIEW,
     P.CLIENTS_VIEW,
     // TABLES_MANAGE enables merge, unmerge, transfer
-    // No KDS — waiter manages tables, not the kitchen display
   ],
   kitchen: [
     P.KDS_VIEW, P.KDS_CHANGE,
