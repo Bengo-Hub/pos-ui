@@ -11,6 +11,10 @@ const SUBSCRIPTIONS_API_URL =
 export function useUsageAlerts(): UsageAlert[] {
   const token = useAuthStore((s) => s.session?.accessToken);
   const user = useAuthStore((s) => s.user);
+  // Terminal (PIN) sessions carry a pos-api HMAC JWT the pricing service can't
+  // validate — skip the call entirely (it would 401). Subscription usage alerts
+  // are an account-owner/admin concern, not a POS terminal one.
+  const isTerminalSession = useAuthStore((s) => s.isTerminalSession);
   const isPlatformOwner =
     !!(user as any)?.is_platform_owner || (user as any)?.tenant_slug === 'codevertex';
 
@@ -28,7 +32,7 @@ export function useUsageAlerts(): UsageAlert[] {
       const json = await resp.json();
       return (json.alerts ?? []) as UsageAlert[];
     },
-    enabled: !!token && !!user && !isPlatformOwner,
+    enabled: !!token && !!user && !isPlatformOwner && !isTerminalSession,
     staleTime: 5 * 60 * 1000,
     refetchInterval: 10 * 60 * 1000,
   });

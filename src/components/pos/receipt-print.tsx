@@ -84,7 +84,7 @@ export function ReceiptPrint({
       </p>
       <p className="receipt-center receipt-small">{fmtDate(receipt.issued_at)}</p>
       {receipt.cashier_name && (
-        <p className="receipt-center receipt-small">Cashier: {receipt.cashier_name}</p>
+        <p className="receipt-center receipt-small">Served by: {receipt.cashier_name}</p>
       )}
 
       <hr className="receipt-divider" />
