@@ -579,10 +579,13 @@ function MyBillsTab({ orgSlug }: { orgSlug: string }) {
           tenantSlug={orgSlug}
           isHospitality={isHospitality}
           onPaymentConfirmed={() => {
-            const tableId = payOrder?.table_id;
+            const tableId = payOrder?.table_id ?? payOrder?.metadata?.table_id;
             setPayOrder(null);
             queryClient.invalidateQueries({ queryKey: ['pos-orders'] });
             queryClient.invalidateQueries({ queryKey: ['dashboard-recent-orders'] });
+            // pos-api releases the table on order completion; refresh the grid to
+            // reflect it. Also fire the explicit release when we know the table id.
+            queryClient.invalidateQueries({ queryKey: ['pos-tables'] });
             if (tableId) {
               releaseTable.mutate(tableId);
             }
