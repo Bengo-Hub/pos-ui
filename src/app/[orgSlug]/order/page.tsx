@@ -462,7 +462,8 @@ export default function OrderPage() {
         const data = await apiClient.get<ReceiptData>(
           `/api/v1/${tenantId}/pos/orders/${currentOrderId}/receipt`
         );
-        setReceiptData(data);
+        // "Served by" — fall back to the logged-in user when the API omits it.
+        setReceiptData({ ...data, cashier_name: data.cashier_name || user?.fullName || user?.email });
         setReceiptOpen(true);
       } catch {
         // Receipt fetch failed — not critical, payment already confirmed

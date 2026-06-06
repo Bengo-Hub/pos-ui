@@ -53,7 +53,9 @@ export function PrintReceiptButton({
       const data = await apiClient.get<ReceiptData>(
         `/api/v1/${tenantId}/pos/orders/${orderId}/receipt`,
       );
-      setReceipt(data);
+      // "Served by" — trace the receipt to the staff member handling it. Prefer the
+      // server name from the API; fall back to the currently logged-in user.
+      setReceipt({ ...data, cashier_name: data.cashier_name || user?.fullName || user?.email });
       setOpen(true);
     } catch {
       toast.error('Failed to load receipt');

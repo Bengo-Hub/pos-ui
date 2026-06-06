@@ -101,6 +101,11 @@ class ApiClient {
         this.accessToken = token;
     }
 
+    /** Current access token — used to authenticate WebSocket URLs via ?access_token= */
+    public getAccessToken(): string | null {
+        return this.accessToken;
+    }
+
     public setTenantInfo(id: string | null, slug: string | null) {
         this.tenantId = id;
         this.tenantSlug = slug;

@@ -3,6 +3,10 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import type { KDSTicket } from './useKDS';
+import { apiClient } from '@/lib/api/client';
+
+// Stream against the API host (matches REST/SSE), not the UI host.
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://posapi.codevertexitsolutions.com';
 
 export type KDSWSMessage =
   | { type: 'ticket_created'; payload: KDSTicket }
@@ -47,10 +51,15 @@ export function useKDSWebSocket({ tenantID, outletID, onMessage }: UseKDSWebSock
     if (unmountedRef.current || !tenantID) return;
     if (typeof WebSocket === 'undefined') return;
 
-    const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
-    const host = window.location.host;
-    const qs = outletID ? `?outlet_id=${outletID}` : '';
-    const url = `${proto}://${host}/api/v1/${tenantID}/pos/kds/stream${qs}`;
+    // https→wss, http→ws. Auth header can't be set on a browser WS, so the
+    // access token rides as a query param (pos-api promotes it server-side).
+    const wsBase = API_BASE.replace(/^http/, 'ws');
+    const params = new URLSearchParams();
+    if (outletID) params.set('outlet_id', outletID);
+    const token = apiClient.getAccessToken();
+    if (token) params.set('access_token', token);
+    const qs = params.toString();
+    const url = `${wsBase}/api/v1/${tenantID}/pos/kds/stream${qs ? `?${qs}` : ''}`;
 
     const ws = new WebSocket(url);
     wsRef.current = ws;

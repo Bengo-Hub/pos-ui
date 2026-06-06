@@ -14,6 +14,8 @@ import { useAuthStore } from '@/store/auth';
 import {
   Calendar,
   CheckSquare,
+  ChevronLeft,
+  ChevronRight,
   ClipboardList,
   Clock,
   CreditCard,
@@ -408,15 +410,24 @@ function MyBillsTab({ orgSlug }: { orgSlug: string }) {
     voided: 'voided,cancelled',
   };
 
+  // 9 cards per page → 3 rows of 3 on wide screens.
+  const PAGE_SIZE = 9;
+  const [page, setPage] = useState(1);
+  const selectFilter = (key: 'active' | 'settled' | 'voided') => { setFilter(key); setPage(1); };
+
   const { data: activeData } = useOrders(useMemo(() => ({ status: 'open,pending_payment', staffId }), [staffId]));
   const { data: settledData } = useOrders(useMemo(() => ({ status: 'completed', staffId }), [staffId]));
   const { data: voidedData } = useOrders(useMemo(() => ({ status: 'voided,cancelled', staffId }), [staffId]));
-  const { data: currentData, isLoading } = useOrders(useMemo(() => ({ status: statusMap[filter], staffId }), [filter, staffId]));
+  const { data: currentData, isLoading } = useOrders(
+    useMemo(() => ({ status: statusMap[filter], staffId, page, limit: PAGE_SIZE }), [filter, staffId, page])
+  );
 
   const activeCnt = activeData?.total ?? 0;
   const settledCnt = settledData?.total ?? 0;
   const voidedCnt = voidedData?.total ?? 0;
   const orders = currentData?.data ?? [];
+  const total = currentData?.meta?.total ?? currentData?.total ?? orders.length;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   const formatTime = (dateStr: string) => {
     if (!dateStr) return '';
@@ -445,7 +456,7 @@ function MyBillsTab({ orgSlug }: { orgSlug: string }) {
         ] as const).map(({ key, label, count, dot }) => (
           <button
             key={key}
-            onClick={() => setFilter(key)}
+            onClick={() => selectFilter(key)}
             className={cn(
               'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold transition-all',
               filter === key
@@ -463,7 +474,7 @@ function MyBillsTab({ orgSlug }: { orgSlug: string }) {
       </div>
 
       {/* Orders list */}
-      <div className="flex-1 overflow-y-auto px-6 py-3 space-y-2">
+      <div className="flex-1 overflow-y-auto px-6 py-3">
         {isLoading && (
           <div className="flex items-center justify-center h-32">
             <Loader2 className="h-6 w-6 animate-spin text-primary" />
@@ -475,6 +486,7 @@ function MyBillsTab({ orgSlug }: { orgSlug: string }) {
             <p className="text-sm">No {filter} bills</p>
           </div>
         )}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 items-start">
         {orders.map((order: any) => {
           const tableName = order.metadata?.table_name ?? order.metadata?.table_number ?? '—';
           const itemCount = order.edges?.lines?.length ?? order.lines?.length ?? 0;
@@ -529,7 +541,33 @@ function MyBillsTab({ orgSlug }: { orgSlug: string }) {
             </div>
           );
         })}
+        </div>
       </div>
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="shrink-0 px-6 py-3 border-t border-border flex items-center justify-between">
+          <span className="text-xs text-muted-foreground">
+            Page {page} of {totalPages} · {total} bill{total !== 1 ? 's' : ''}
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page <= 1}
+              className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-border text-sm font-semibold disabled:opacity-40 hover:bg-accent transition-colors"
+            >
+              <ChevronLeft className="h-4 w-4" /> Prev
+            </button>
+            <button
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page >= totalPages}
+              className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-border text-sm font-semibold disabled:opacity-40 hover:bg-accent transition-colors"
+            >
+              Next <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {payOrder && (
         <POSPaymentModal
