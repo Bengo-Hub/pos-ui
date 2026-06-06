@@ -385,11 +385,13 @@ export default function OrdersPage() {
           tenantSlug={orgSlug}
           isHospitality={isHospitality}
           onPaymentConfirmed={() => {
-            const tableId = selectedOrder?.table_id;
+            const tableId = selectedOrder?.table_id ?? selectedOrder?.metadata?.table_id;
             setPaymentOpen(false);
             setSelectedOrder(null);
             queryClient.invalidateQueries({ queryKey: ['pos-orders'] });
             queryClient.invalidateQueries({ queryKey: ['dashboard-recent-orders'] });
+            // pos-api frees the table on completion; refresh the grid to reflect it.
+            queryClient.invalidateQueries({ queryKey: ['pos-tables'] });
             if (tableId) {
               releaseTable.mutate(tableId);
             }
