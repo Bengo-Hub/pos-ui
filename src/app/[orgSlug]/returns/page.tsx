@@ -9,6 +9,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Loader2, Plus, RotateCcw, Search, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 
 interface ReturnItem {
   id: string;
@@ -430,9 +431,160 @@ function InitiateReturnModal({ onClose }: { onClose: () => void }) {
   );
 }
 
+// ReturnByInvoiceModal looks a sale up by its exact receipt/invoice number (pos-api
+// GET /pos/orders/by-number/{n}) and initiates a full return for it — the godigital
+// "Sell Return by Invoice No." flow. Partial / line-level returns use Initiate Return.
+function ReturnByInvoiceModal({ onClose }: { onClose: () => void }) {
+  const user = useAuthStore((s) => s.user);
+  const tenantID = user?.tenant_id ?? '';
+  const [invoiceNo, setInvoiceNo] = useState('');
+  const [query, setQuery] = useState('');
+  const [returnType, setReturnType] = useState('refund');
+  const [reason, setReason] = useState(RETURN_REASONS[0]);
+  const initiate = useInitiateReturn();
+
+  const { data: order, isFetching, isError } = useQuery({
+    queryKey: ['order-by-number', tenantID, query],
+    queryFn: () => apiClient.get<any>(`/api/v1/${tenantID}/pos/orders/by-number/${encodeURIComponent(query)}`),
+    enabled: !!tenantID && !!query,
+    retry: false,
+    staleTime: 30_000,
+  });
+
+  const lines: any[] = order?.edges?.lines ?? order?.lines ?? [];
+
+  async function handleProcess() {
+    if (!order) return;
+    const payload: InitiateReturnPayload = {
+      return_type: returnType,
+      reason,
+      lines: lines.map((l) => ({
+        order_line_id: l.id,
+        sku: l.sku ?? '',
+        name: l.name ?? l.item_name ?? '',
+        quantity: l.quantity ?? 1,
+        unit_price: l.unit_price ?? 0,
+        total_price: (l.unit_price ?? 0) * (l.quantity ?? 1),
+      })),
+    };
+    try {
+      await initiate.mutateAsync({ orderId: order.id, payload });
+      toast.success(`Return initiated for ${order.order_number}`);
+      onClose();
+    } catch (e: any) {
+      toast.error(e?.message ?? 'Failed to initiate return');
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4" onClick={onClose}>
+      <div
+        className="bg-card rounded-2xl border border-border shadow-2xl w-full max-w-lg p-6 max-h-[85vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center gap-3 mb-5">
+          <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+            <RotateCcw className="h-5 w-5 text-primary" />
+          </div>
+          <div>
+            <h2 className="font-bold text-base">Return by Invoice</h2>
+            <p className="text-xs text-muted-foreground">Look up a sale by its receipt / invoice number</p>
+          </div>
+        </div>
+
+        <div className="flex gap-2 mb-4">
+          <input
+            type="text"
+            placeholder="e.g. POS-000123"
+            value={invoiceNo}
+            onChange={(e) => setInvoiceNo(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') setQuery(invoiceNo.trim()); }}
+            className="flex-1 bg-background border border-border rounded-xl py-2.5 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+            autoFocus
+          />
+          <button
+            type="button"
+            onClick={() => setQuery(invoiceNo.trim())}
+            disabled={!invoiceNo.trim()}
+            className="px-4 rounded-xl bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-40 flex items-center"
+          >
+            {isFetching ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Find'}
+          </button>
+        </div>
+
+        {query && !isFetching && (isError || !order) && (
+          <div className="rounded-xl bg-red-500/10 px-4 py-3 text-sm text-red-600">
+            No sale found for &ldquo;{query}&rdquo;.
+          </div>
+        )}
+
+        {order && (
+          <div className="space-y-4">
+            <div className="rounded-xl border border-border p-3">
+              <p className="text-sm font-bold font-mono">{order.order_number}</p>
+              <p className="text-xs text-muted-foreground">
+                {order.created_at ? new Date(order.created_at).toLocaleString() : ''} · KES{' '}
+                {(order.total_amount ?? 0).toLocaleString()} · {order.status}
+              </p>
+              <div className="mt-2 space-y-1">
+                {lines.map((l) => (
+                  <div key={l.id} className="flex justify-between text-xs">
+                    <span className="truncate">{(l.name ?? l.item_name ?? l.sku)} × {l.quantity ?? 1}</span>
+                    <span className="tabular-nums">KES {((l.unit_price ?? 0) * (l.quantity ?? 1)).toLocaleString()}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <label className="block">
+                <span className="text-xs font-medium text-muted-foreground">Return type</span>
+                <select
+                  value={returnType}
+                  onChange={(e) => setReturnType(e.target.value)}
+                  className="mt-1 w-full bg-background border border-border rounded-xl py-2 px-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+                >
+                  <option value="refund">Refund</option>
+                  <option value="store_credit">Store credit</option>
+                  <option value="exchange">Exchange</option>
+                </select>
+              </label>
+              <label className="block">
+                <span className="text-xs font-medium text-muted-foreground">Reason</span>
+                <select
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                  className="mt-1 w-full bg-background border border-border rounded-xl py-2 px-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+                >
+                  {RETURN_REASONS.map((r) => <option key={r} value={r}>{r}</option>)}
+                </select>
+              </label>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleProcess}
+              disabled={initiate.isPending || lines.length === 0}
+              className="w-full min-h-11 rounded-xl bg-primary text-primary-foreground font-bold flex items-center justify-center gap-2 disabled:opacity-40 hover:bg-primary/90 transition-colors"
+            >
+              {initiate.isPending ? <Loader2 className="h-5 w-5 animate-spin" /> : null}
+              Process full return
+            </button>
+          </div>
+        )}
+
+        <button onClick={onClose} className="w-full py-2 mt-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
+          Close
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function ReturnsPage() {
   const [statusFilter, setStatusFilter] = useState('pending');
   const [showModal, setShowModal] = useState(false);
+  const [showInvoice, setShowInvoice] = useState(false);
   const { data, isLoading } = useReturns(statusFilter);
   const returns = data?.data ?? [];
   const params = useParams<{ orgSlug: string }>();
@@ -442,6 +594,7 @@ function ReturnsPage() {
   return (
     <div className="p-6">
       {showModal && <InitiateReturnModal onClose={() => setShowModal(false)} />}
+      {showInvoice && <ReturnByInvoiceModal onClose={() => setShowInvoice(false)} />}
 
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
@@ -454,13 +607,22 @@ function ReturnsPage() {
             <p className="text-sm text-muted-foreground mt-0.5">Process refunds and manage return requests</p>
           </div>
         </div>
-        <button
-          onClick={() => setShowModal(true)}
-          className="inline-flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-primary/90 transition-colors"
-        >
-          <Plus className="h-4 w-4" />
-          Initiate Return
-        </button>
+        <div className="flex gap-3">
+          <button
+            onClick={() => setShowInvoice(true)}
+            className="inline-flex items-center gap-2 bg-secondary text-secondary-foreground px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-secondary/80 transition-colors"
+          >
+            <Search className="h-4 w-4" />
+            Return by Invoice
+          </button>
+          <button
+            onClick={() => setShowModal(true)}
+            className="inline-flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-primary/90 transition-colors"
+          >
+            <Plus className="h-4 w-4" />
+            Initiate Return
+          </button>
+        </div>
       </div>
 
       {/* Filters */}
