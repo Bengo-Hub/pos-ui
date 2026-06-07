@@ -13,6 +13,18 @@ function basePath(tenantID: string) {
   return `/api/v1/${tenantID}/pos`;
 }
 
+// ─── Expenses ─────────────────────────────────────────────────────────────────
+
+// useAddExpense records a petty-cash expense entered at the register straight to treasury
+// (via pos-api POST /pos/expenses → treasury S2S). No money moves through the till.
+export function useAddExpense() {
+  const tenantID = useTenantID();
+  return useMutation({
+    mutationFn: (data: { description: string; amount: number; category_id?: string; currency?: string }) =>
+      apiClient.post(`${basePath(tenantID)}/expenses`, data),
+  });
+}
+
 // ─── Catalog Items ──────────────────────────────────────────────────────────
 
 export interface CatalogItem {

@@ -5,6 +5,7 @@ import { ModifierModal, type ModifierGroup } from '@/components/pos/modifier-mod
 import { SplitPaymentModal, type OrderLineItem } from '@/components/pos/split-payment-modal';
 import { CourseSelector, CourseBadge, COURSES, type CourseValue } from '@/components/pos/course-selector';
 import { VoidOrderModal } from '@/components/pos/void-order-modal';
+import { AddExpenseModal } from '@/components/pos/add-expense-modal';
 import { ReceiptPreview, type ReceiptData } from '@/components/pos/receipt-preview';
 import { OrderTypeSelector } from '@/components/pos/order-type-selector';
 import { cn } from '@/lib/utils';
@@ -26,6 +27,7 @@ import {
   Loader2,
   Minus,
   Plus,
+  Receipt,
   Search,
   ShoppingCart,
   Trash2,
@@ -87,6 +89,7 @@ export default function OrderPage() {
   const [activeCategory, setActiveCategory] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [cart, setCart] = useState<CartItem[]>([]);
+  const [expenseOpen, setExpenseOpen] = useState(false);
   const [displayMode, setDisplayMode] = useState<DisplayMode>(() =>
     defaultDisplayMode(outlet?.use_case)
   );
@@ -937,6 +940,14 @@ export default function OrderPage() {
                 Void Order #{currentOrderNumber}
               </button>
             )}
+            <button
+              type="button"
+              onClick={() => setExpenseOpen(true)}
+              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-border text-sm font-semibold hover:bg-accent transition-colors"
+            >
+              <Receipt className="h-4 w-4" />
+              Add Expense
+            </button>
             {isHospitality && currentOrderId && currentOrderCourses.length > 0 && (
               <div className="rounded-xl border border-border bg-muted/30 p-3 space-y-2">
                 <div className="flex items-center gap-1.5 text-xs font-bold text-muted-foreground uppercase tracking-wide">
@@ -977,6 +988,8 @@ export default function OrderPage() {
       </div>
 
       {/* ─── Modals ────────────────────────────────────────────────────────── */}
+
+      <AddExpenseModal open={expenseOpen} onClose={() => setExpenseOpen(false)} />
 
       {modifierItem && (
         <ModifierModal
