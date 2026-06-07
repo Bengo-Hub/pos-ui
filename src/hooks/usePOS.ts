@@ -25,6 +25,54 @@ export function useAddExpense() {
   });
 }
 
+// ─── M-Pesa C2B (paybill / till reconciliation) ───────────────────────────────
+
+export interface C2BPayment {
+  id: string;
+  trans_id: string;
+  amount: number | string; // treasury serializes the decimal as a quoted string
+  business_shortcode: string;
+  bill_ref_number?: string;
+  msisdn?: string;
+  payer_name?: string;
+  status: string;
+}
+
+// useListC2BPayments queries unreconciled M-Pesa C2B (paybill/Buy-Goods till) inbox payments from
+// treasury (via pos-api), optionally narrowed to a target amount, so the cashier can match one to
+// the open sale. Polls while enabled so a payment that lands mid-checkout appears automatically.
+export function useListC2BPayments(amount?: number, enabled = true) {
+  const tenantID = useTenantID();
+  return useQuery({
+    queryKey: ['pos-c2b', tenantID, amount],
+    queryFn: () => {
+      const qs = new URLSearchParams({ status: 'unreconciled' });
+      if (amount && amount > 0) qs.set('amount', String(amount));
+      return apiClient.get<{ candidates: C2BPayment[]; count: number }>(
+        `${basePath(tenantID)}/c2b/payments?${qs.toString()}`
+      );
+    },
+    enabled: enabled && !!tenantID,
+    refetchInterval: enabled ? 4000 : false,
+  });
+}
+
+// useClaimC2BPayment binds a C2B payment to a POS order AND settles the order (pos-api records a
+// completed payment of `amount` referencing the M-Pesa TransID).
+export function useClaimC2BPayment() {
+  const tenantID = useTenantID();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ transID, posOrderId, amount, tenderId }: { transID: string; posOrderId: string; amount: number; tenderId?: string }) =>
+      apiClient.post(`${basePath(tenantID)}/c2b/payments/${transID}/claim`, {
+        pos_order_id: posOrderId,
+        amount,
+        tender_id: tenderId,
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['pos-c2b'] }),
+  });
+}
+
 // ─── Catalog Items ──────────────────────────────────────────────────────────
 
 export interface CatalogItem {

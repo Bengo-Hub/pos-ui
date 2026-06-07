@@ -9,6 +9,7 @@ import {
   Clock,
   CreditCard,
   Hash,
+  Landmark,
   Loader2,
   Minus,
   Plus,
@@ -21,7 +22,7 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
-import { useCreatePaymentIntent } from '@/hooks/usePOS';
+import { useCreatePaymentIntent, useListC2BPayments, useClaimC2BPayment } from '@/hooks/usePOS';
 import { useOnline } from '@/hooks/use-online';
 import { usePaymentStream } from '@/hooks/usePaymentStream';
 import { savePendingPayment } from '@/lib/db/pos-db';
@@ -47,6 +48,7 @@ type ModalStep =
   | 'select'
   | 'cash'
   | 'manual'
+  | 'c2b'
   | 'treasury'
   | 'room_select'
   | 'room_confirm'
@@ -110,6 +112,23 @@ export function POSPaymentModal({
 
   const splitAmount = useMemo(() => Math.ceil(roundedTotal / splitCount), [roundedTotal, splitCount]);
   const activeAmount = payMode === 'split' ? splitAmount : roundedTotal;
+
+  // M-Pesa C2B (paybill/till): poll unreconciled inbox payments matching the active amount, then
+  // claim + settle the one the cashier picks.
+  const c2bQuery = useListC2BPayments(activeAmount, open && step === 'c2b' && isOnline);
+  const claimC2B = useClaimC2BPayment();
+  const handleClaimC2B = useCallback(
+    (transID: string) => {
+      claimC2B.mutate(
+        { transID, posOrderId: orderId, amount: activeAmount, tenderId },
+        {
+          onSuccess: () => { setStep('confirmed'); onPaymentConfirmed(); },
+          onError: (err: any) => { setErrorMsg(err?.message ?? 'Could not claim that payment.'); setStep('failed'); },
+        }
+      );
+    },
+    [claimC2B, orderId, activeAmount, tenderId, onPaymentConfirmed]
+  );
 
   useEffect(() => {
     if (open) {
@@ -405,6 +424,18 @@ export function POSPaymentModal({
                           onClick={() => handleDigital('mpesa')}
                         />
                       )}
+                      {gateways?.mpesa && (
+                        <PayTile
+                          icon={<Landmark className="h-7 w-7" />}
+                          color="text-green-700"
+                          bg="bg-green-500/10"
+                          label="M-Pesa Paybill"
+                          sub="Match till / paybill"
+                          disabled={false}
+                          loading={false}
+                          onClick={() => setStep('c2b')}
+                        />
+                      )}
                       {gateways?.paystack && (
                         <PayTile
                           icon={<CreditCard className="h-7 w-7" />}
@@ -536,6 +567,56 @@ export function POSPaymentModal({
                     : <CheckCircle2 className="h-5 w-5" />}
                   {isOnline ? 'Confirm M-Pesa' : 'Record & Verify Later'}
                 </button>
+                <button onClick={() => setStep('select')} className="w-full py-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
+                  ← Back
+                </button>
+              </div>
+            )}
+
+            {/* ── M-Pesa C2B (paybill / till reconciliation) ───────────────── */}
+            {step === 'c2b' && (
+              <div className="p-5 space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  Match the customer&apos;s M-Pesa paybill/till payment to this sale. Showing unreconciled
+                  payments of KES {activeAmount.toLocaleString()}.
+                </p>
+                {c2bQuery.isLoading ? (
+                  <div className="flex justify-center py-8">
+                    <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                  </div>
+                ) : (c2bQuery.data?.candidates?.length ?? 0) === 0 ? (
+                  <div className="rounded-xl bg-muted/40 px-4 py-6 text-center text-sm text-muted-foreground">
+                    No matching payment yet. Ask the customer to pay to your paybill/till — it will
+                    appear here automatically.
+                  </div>
+                ) : (
+                  <div className="space-y-2 max-h-72 overflow-y-auto">
+                    {c2bQuery.data!.candidates.map((c) => (
+                      <button
+                        key={c.trans_id}
+                        type="button"
+                        disabled={claimC2B.isPending}
+                        onClick={() => handleClaimC2B(c.trans_id)}
+                        className="w-full flex items-center justify-between gap-3 rounded-xl border border-border hover:border-primary/50 hover:bg-accent px-4 py-3 text-left transition-colors disabled:opacity-50"
+                      >
+                        <div className="min-w-0">
+                          <p className="font-semibold text-sm truncate">{c.payer_name || c.msisdn || 'M-Pesa payer'}</p>
+                          <p className="text-xs text-muted-foreground truncate">
+                            {c.trans_id}{c.bill_ref_number ? ` · ${c.bill_ref_number}` : ''}
+                          </p>
+                        </div>
+                        <span className="font-bold text-sm tabular-nums shrink-0">
+                          KES {parseFloat(String(c.amount)).toLocaleString()}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {claimC2B.isPending && (
+                  <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin" /> Settling…
+                  </div>
+                )}
                 <button onClick={() => setStep('select')} className="w-full py-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
                   ← Back
                 </button>
