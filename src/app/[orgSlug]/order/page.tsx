@@ -6,6 +6,7 @@ import { SplitPaymentModal, type OrderLineItem } from '@/components/pos/split-pa
 import { CourseSelector, CourseBadge, COURSES, type CourseValue } from '@/components/pos/course-selector';
 import { VoidOrderModal } from '@/components/pos/void-order-modal';
 import { AddExpenseModal } from '@/components/pos/add-expense-modal';
+import { ParkedSalesModal } from '@/components/pos/parked-sales-modal';
 import { ReceiptPreview, type ReceiptData } from '@/components/pos/receipt-preview';
 import { OrderTypeSelector } from '@/components/pos/order-type-selector';
 import { cn } from '@/lib/utils';
@@ -24,7 +25,9 @@ import {
   Grid3x3,
   Image as ImageIcon,
   LayoutList,
+  ListChecks,
   Loader2,
+  PauseCircle,
   Minus,
   Plus,
   Receipt,
@@ -120,6 +123,11 @@ export default function OrderPage() {
   const [currentOrderId, setCurrentOrderId] = useState('');
   const [currentOrderNumber, setCurrentOrderNumber] = useState('');
   const [currentOrderLines, setCurrentOrderLines] = useState<OrderLineItem[]>([]);
+
+  // Parked sales (suspend/resume): a parked sale is persisted as a draft order; resuming opens its
+  // payment modal, using resumeTotal to override the (now-empty) cart total.
+  const [parkedOpen, setParkedOpen] = useState(false);
+  const [resumeTotal, setResumeTotal] = useState<number | null>(null);
 
   // Void order modal
   const [voidOpen, setVoidOpen] = useState(false);
@@ -443,6 +451,46 @@ export default function OrderPage() {
         },
       }
     );
+  };
+
+  // Park the current cart as a draft order (retail orders persist as "draft") and clear the register.
+  const handlePark = () => {
+    if (cart.length === 0) return;
+    createOrder.mutate(
+      {
+        outletId: outlet?.id ?? '',
+        orderSubtype: orderSubtype ?? undefined,
+        tableId: tableId || undefined,
+        coversCount: coversParam > 1 ? coversParam : undefined,
+        lines: orderLines,
+      },
+      {
+        onSuccess: () => {
+          clearCart();
+          toast.success('Sale parked — resume it from Parked Sales.');
+        },
+        onError: () => toast.error('Failed to park sale. Please try again.'),
+      }
+    );
+  };
+
+  // Resume a parked (draft) sale: load it as the current order and open its payment modal.
+  const handleResumeParked = (order: any) => {
+    const lines: any[] = order.edges?.lines ?? order.lines ?? [];
+    setCurrentOrderId(order.id);
+    setCurrentOrderNumber(order.order_number ?? '');
+    setCurrentOrderLines(
+      lines.map((l) => ({
+        id: l.id,
+        name: l.name ?? l.item_name ?? l.sku ?? 'Item',
+        quantity: l.quantity ?? 1,
+        unitPrice: l.unit_price ?? 0,
+        totalPrice: (l.unit_price ?? 0) * (l.quantity ?? 1),
+      }))
+    );
+    setResumeTotal(order.total_amount ?? 0);
+    setParkedOpen(false);
+    setPaymentOpen(true);
   };
 
   const handlePaymentConfirmed = useCallback(async () => {
@@ -948,6 +996,25 @@ export default function OrderPage() {
               <Receipt className="h-4 w-4" />
               Add Expense
             </button>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={handlePark}
+                disabled={cart.length === 0 || createOrder.isPending}
+                className="flex items-center justify-center gap-2 py-2.5 rounded-xl border border-border text-sm font-semibold hover:bg-accent transition-colors disabled:opacity-40"
+              >
+                <PauseCircle className="h-4 w-4" />
+                Park Sale
+              </button>
+              <button
+                type="button"
+                onClick={() => setParkedOpen(true)}
+                className="flex items-center justify-center gap-2 py-2.5 rounded-xl border border-border text-sm font-semibold hover:bg-accent transition-colors"
+              >
+                <ListChecks className="h-4 w-4" />
+                Parked Sales
+              </button>
+            </div>
             {isHospitality && currentOrderId && currentOrderCourses.length > 0 && (
               <div className="rounded-xl border border-border bg-muted/30 p-3 space-y-2">
                 <div className="flex items-center gap-1.5 text-xs font-bold text-muted-foreground uppercase tracking-wide">
@@ -991,6 +1058,8 @@ export default function OrderPage() {
 
       <AddExpenseModal open={expenseOpen} onClose={() => setExpenseOpen(false)} />
 
+      {parkedOpen && <ParkedSalesModal onClose={() => setParkedOpen(false)} onResume={handleResumeParked} />}
+
       {modifierItem && (
         <ModifierModal
           open
@@ -1007,10 +1076,10 @@ export default function OrderPage() {
 
       <SplitPaymentModal
         open={paymentOpen}
-        onClose={() => setPaymentOpen(false)}
+        onClose={() => { setPaymentOpen(false); setResumeTotal(null); }}
         orderId={currentOrderId}
         orderNumber={currentOrderNumber}
-        total={total}
+        total={resumeTotal ?? total}
         tenantSlug={user?.tenant_slug ?? ''}
         orderLines={currentOrderLines}
         isHospitality={isHospitality}
