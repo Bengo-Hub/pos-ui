@@ -12,6 +12,7 @@ import {
   Landmark,
   Loader2,
   Minus,
+  NotebookPen,
   Plus,
   Smartphone,
   Wallet,
@@ -236,6 +237,21 @@ export function POSPaymentModal({
     );
   }, [orderId, roundedTotal, tenderId, createIntent]);
 
+  // On Account (credit sale): the backend posts to the customer's treasury AR balance (credit limit
+  // enforced) and settles the order immediately — so it behaves like cash here, not a digital intent.
+  const handleOnAccount = useCallback(() => {
+    createIntent.mutate(
+      { orderId, tenderMethod: 'on_account', amount: roundedTotal, tenderId },
+      {
+        onSuccess: () => { setStep('confirmed'); onPaymentConfirmed(); },
+        onError: (err: any) => {
+          setErrorMsg(err?.message ?? 'Could not charge to account — check the customer and their credit limit.');
+          setStep('failed');
+        },
+      }
+    );
+  }, [orderId, roundedTotal, tenderId, createIntent, onPaymentConfirmed]);
+
   const handleRoomCharge = useCallback(() => {
     if (!selectedRoom) return;
     postRoomCharge.mutate(
@@ -387,6 +403,17 @@ export function POSPaymentModal({
                       disabled={false}
                       loading={false}
                       onClick={() => setStep('manual')}
+                    />
+                    <PayTile
+                      icon={<NotebookPen className="h-7 w-7" />}
+                      color="text-orange-600"
+                      bg="bg-orange-500/10"
+                      label="On Account"
+                      sub="Credit sale (AR)"
+                      disabled={!isOnline}
+                      loading={createIntent.isPending}
+                      offlineBadge={!isOnline}
+                      onClick={handleOnAccount}
                     />
                     {isHospitality && (
                       <PayTile
