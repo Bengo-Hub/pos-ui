@@ -239,7 +239,7 @@ function RoomDetailPageInner() {
                     <option value="other">Other</option>
                   </select>
                 </label>
-                <Field label="ID Number" value={checkInForm.id_number} onChange={(v) => setField('id_number', v)} placeholder="Document number" />
+                <Field label="ID Number *" value={checkInForm.id_number} onChange={(v) => setField('id_number', v)} placeholder="Required — guest ID/passport number" />
                 <Field label="ID Document URL" value={checkInForm.id_document_url} onChange={(v) => setField('id_document_url', v)} placeholder="Uploaded scan link (optional)" />
                 <Field label="Check-In Date & Time" type="datetime-local" value={checkInForm.expected_arrival_at} onChange={(v) => setField('expected_arrival_at', v)} />
                 <Field label="Check-Out Date & Time" type="datetime-local" value={checkInForm.expected_departure_at} onChange={(v) => setField('expected_departure_at', v)} />
@@ -254,7 +254,7 @@ function RoomDetailPageInner() {
                 </button>
                 <button
                   onClick={handleCheckIn}
-                  disabled={checkIn.isPending || !checkInForm.first_name}
+                  disabled={checkIn.isPending || !checkInForm.first_name.trim() || !checkInForm.id_number.trim()}
                   className="flex-1 py-2.5 rounded-xl bg-primary text-primary-foreground font-semibold hover:bg-primary/90 disabled:opacity-50 transition-colors"
                 >
                   {checkIn.isPending ? 'Checking in…' : 'Confirm Check-In'}
