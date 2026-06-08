@@ -92,6 +92,9 @@ export default function OrderPage() {
   const [activeCategory, setActiveCategory] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [cart, setCart] = useState<CartItem[]>([]);
+  // Pricing profile (Retail/Wholesale) — switching it re-prices the cart via inventory tier prices.
+  const [pricingProfile, setPricingProfile] = useState<'RETAIL' | 'WHOLESALE'>('RETAIL');
+  const [repricing, setRepricing] = useState(false);
   const [expenseOpen, setExpenseOpen] = useState(false);
   const [displayMode, setDisplayMode] = useState<DisplayMode>(() =>
     defaultDisplayMode(outlet?.use_case)
@@ -332,6 +335,38 @@ export default function OrderPage() {
   };
 
   const clearCart = () => setCart([]);
+
+  // repriceCart switches the pricing profile and re-resolves each cart line's base price against the
+  // matching inventory pricing tier (RETAIL/WHOLESALE). On any failure a line keeps its current price.
+  const repriceCart = useCallback(
+    async (profile: 'RETAIL' | 'WHOLESALE') => {
+      setPricingProfile(profile);
+      const tenantId = user?.tenant_id ?? '';
+      if (cart.length === 0 || !tenantId) return;
+      setRepricing(true);
+      try {
+        const updated = await Promise.all(
+          cart.map(async (c) => {
+            try {
+              const res = await apiClient.get<{ unit_price?: number }>(
+                `/api/v1/${tenantId}/pos/catalog/pricing/resolve?item_id=${encodeURIComponent(c.id)}&quantity=${c.quantity}&profile=${profile}`
+              );
+              if (res && typeof res.unit_price === 'number' && res.unit_price > 0) {
+                return { ...c, price: res.unit_price };
+              }
+            } catch {
+              /* keep current price on failure */
+            }
+            return c;
+          })
+        );
+        setCart(updated);
+      } finally {
+        setRepricing(false);
+      }
+    },
+    [cart, user]
+  );
 
   const updateCourse = (index: number, course: CourseValue) => {
     setCart((prev) => prev.map((c, i) => i === index ? { ...c, courseNumber: course } : c));
@@ -848,6 +883,28 @@ export default function OrderPage() {
             onSelectTable={() => router.push(`/${orgSlug}/tables`)}
             useCase={outlet?.use_case}
           />
+          {!isHospitality && (
+            <div className="flex items-center gap-1.5 mt-2">
+              <span className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Price</span>
+              {(['RETAIL', 'WHOLESALE'] as const).map((p) => (
+                <button
+                  key={p}
+                  type="button"
+                  onClick={() => repriceCart(p)}
+                  disabled={repricing}
+                  className={cn(
+                    'px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors disabled:opacity-50',
+                    pricingProfile === p
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-card border border-border text-muted-foreground hover:text-foreground'
+                  )}
+                >
+                  {p === 'RETAIL' ? 'Retail' : 'Wholesale'}
+                </button>
+              ))}
+              {repricing && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
+            </div>
+          )}
         </div>
 
         {/* Cart items — scrollable */}
