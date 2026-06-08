@@ -705,6 +705,12 @@ export default function OrderPage() {
                             {item.duration_minutes ? `Service · ${item.duration_minutes}min` : 'Service'}
                           </span>
                         )}
+                        {item.item_type === 'GOODS' && (
+                          <span className="text-[10px] text-amber-600 dark:text-amber-400 font-semibold">Goods</span>
+                        )}
+                        {item.item_type === 'RECIPE' && (
+                          <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">Menu</span>
+                        )}
                         {item.modifierGroups?.length ? (
                           <span className="text-[10px] text-primary">Has options</span>
                         ) : null}
