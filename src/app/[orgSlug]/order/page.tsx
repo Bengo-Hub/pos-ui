@@ -861,7 +861,7 @@ export default function OrderPage() {
                 <ShoppingCart className="h-4.5 w-4.5 text-primary" />
               </div>
               <div>
-                <h2 className="font-bold text-sm leading-none">{isAddToBill ? 'Adding to Bill' : 'Current Order'}</h2>
+                <h2 className="font-bold text-sm leading-none">{isAddToBill ? 'Adding to Bill' : cfg.terminalTitle}</h2>
                 {cartItemCount > 0 && (
                   <p className="text-xs text-muted-foreground mt-0.5">{cartItemCount} item{cartItemCount !== 1 ? 's' : ''}</p>
                 )}
@@ -933,7 +933,7 @@ export default function OrderPage() {
                     <div className="flex-1 min-w-0 pt-0.5">
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <p className="text-sm font-bold truncate leading-tight">{item.name}</p>
-                        {isHospitality && item.courseNumber ? <CourseBadge course={item.courseNumber} /> : null}
+                        {cfg.showCourses && item.courseNumber ? <CourseBadge course={item.courseNumber} /> : null}
                       </div>
                       {item.selectedModifiers && item.modifierGroups && (
                         <p className="text-xs text-primary mt-0.5 truncate">
@@ -954,7 +954,7 @@ export default function OrderPage() {
                         <p className="text-xs font-bold font-mono text-primary">
                           KES {((item.price + (item.modifierTotal ?? 0)) * item.quantity).toLocaleString()}
                         </p>
-                        {isHospitality && (
+                        {cfg.showCourses && (
                           <CourseSelector
                             value={item.courseNumber ?? 0}
                             onChange={(c) => updateCourse(idx, c)}
@@ -1078,7 +1078,7 @@ export default function OrderPage() {
                 Parked Sales
               </button>
             </div>
-            {isHospitality && currentOrderId && currentOrderCourses.length > 0 && (
+            {cfg.showCourses && currentOrderId && currentOrderCourses.length > 0 && (
               <div className="rounded-xl border border-border bg-muted/30 p-3 space-y-2">
                 <div className="flex items-center gap-1.5 text-xs font-bold text-muted-foreground uppercase tracking-wide">
                   <ChefHat className="h-3.5 w-3.5" /> Fire Courses
