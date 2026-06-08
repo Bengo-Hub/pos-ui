@@ -132,6 +132,25 @@ export interface TaxRow {
   tax_collected: number;
 }
 
+export interface ProfitableItem {
+  sku: string;
+  name: string;
+  units_sold: number;
+  revenue: number;
+  unit_cost: number;
+  profit: number;
+  margin_pct: number;
+}
+
+export interface MostProfitableReport {
+  currency: string;
+  from: string;
+  to: string;
+  total_revenue: number;
+  total_profit: number;
+  items: ProfitableItem[];
+}
+
 export interface HourRow {
   hour: number;
   order_count: number;
@@ -161,6 +180,7 @@ export const reportKeys = {
   eodList: (tid: string, outletId: string, from: string, to: string) => ['reports', tid, 'eod', outletId, from, to] as const,
   stockConsumption: (tid: string, from: string, to: string) => ['reports', tid, 'stock-consumption', from, to] as const,
   returnsDetail: (tid: string, from: string, to: string) => ['reports', tid, 'returns-detail', from, to] as const,
+  mostProfitable: (tid: string, from: string, to: string, limit: number) => ['reports', tid, 'most-profitable', from, to, limit] as const,
 };
 
 // ─── Hooks ────────────────────────────────────────────────────────────────────
@@ -294,6 +314,16 @@ export function useStockConsumptionReport(from: string, to: string) {
   return useQuery({
     queryKey: reportKeys.stockConsumption(tenantID, from, to),
     queryFn: () => apiClient.get<StockConsumptionRow[]>(`${basePath(tenantID)}/stock-consumption`, { from, to }),
+    enabled: !!tenantID && !!from && !!to,
+    staleTime: 2 * 60_000,
+  });
+}
+
+export function useMostProfitable(from: string, to: string, limit = 20) {
+  const tenantID = useTenantID();
+  return useQuery({
+    queryKey: reportKeys.mostProfitable(tenantID, from, to, limit),
+    queryFn: () => apiClient.get<MostProfitableReport>(`${basePath(tenantID)}/most-profitable`, { from, to, limit }),
     enabled: !!tenantID && !!from && !!to,
     staleTime: 2 * 60_000,
   });
