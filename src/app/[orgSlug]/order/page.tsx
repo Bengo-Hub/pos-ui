@@ -10,6 +10,7 @@ import { ParkedSalesModal } from '@/components/pos/parked-sales-modal';
 import { ReceiptPreview, type ReceiptData } from '@/components/pos/receipt-preview';
 import { OrderTypeSelector } from '@/components/pos/order-type-selector';
 import { cn } from '@/lib/utils';
+import { terminalConfigFor } from '@/lib/use-case-config';
 import { useMenuItems, useCategories, useCreateOrder, useAddOrderLines, useVoidOrder, useAssignTable, useReleaseTable, type OrderSubtype } from '@/hooks/usePOS';
 import { OrderPlacedDialog } from '@/components/pos/order-placed-dialog';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
@@ -67,15 +68,8 @@ interface CartItem extends MenuItem {
 
 type DisplayMode = 'card' | 'list' | 'image_grid';
 
-const HOSPITALITY_USE_CASES = ['hospitality', 'hotel', 'bar', 'cafe', 'restaurant'];
-const QUICK_USE_CASES = ['quick_service', 'quick service'];
-
-function defaultDisplayMode(useCase?: string): DisplayMode {
-  const uc = (useCase ?? '').toLowerCase();
-  if (HOSPITALITY_USE_CASES.some((h) => uc.includes(h))) return 'image_grid';
-  if (QUICK_USE_CASES.some((q) => uc.includes(q))) return 'card';
-  return 'list'; // retail, pharmacy, services → datatable
-}
+// Display-mode + the rest of the use-case terminal config now live in @/lib/use-case-config
+// (terminalConfigFor) so a single /order terminal adapts to every vertical.
 
 // ─── Page ───────────────────────────────────────────────────────────────────
 
@@ -86,6 +80,13 @@ export default function OrderPage() {
   const orgSlug = (params?.orgSlug as string) || '';
   const user = useAuthStore((s) => s.user);
   const outlet = useAuthStore((s) => s.outlet);
+  // Terminal adapts to the outlet use_case (display mode, scan-first, pricing profile, courses…).
+  const cfg = terminalConfigFor(outlet?.use_case);
+  const scanInputRef = useRef<HTMLInputElement>(null);
+  // Retail/pharmacy: focus the scan field on load for fast keyboard-first checkout.
+  useEffect(() => {
+    if (cfg.barcodeFirst) scanInputRef.current?.focus();
+  }, [cfg.barcodeFirst]);
   const { can } = usePermissions();
   const { data: posSettings } = usePOSSettings();
   const taxRate = (posSettings?.vat_rate ?? 16) / 100;
@@ -96,9 +97,7 @@ export default function OrderPage() {
   const [pricingProfile, setPricingProfile] = useState<'RETAIL' | 'WHOLESALE'>('RETAIL');
   const [repricing, setRepricing] = useState(false);
   const [expenseOpen, setExpenseOpen] = useState(false);
-  const [displayMode, setDisplayMode] = useState<DisplayMode>(() =>
-    defaultDisplayMode(outlet?.use_case)
-  );
+  const [displayMode, setDisplayMode] = useState<DisplayMode>(() => cfg.defaultDisplayMode);
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 50;
 
@@ -569,6 +568,7 @@ export default function OrderPage() {
           <div className="relative group">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4.5 w-4.5 text-muted-foreground group-focus-within:text-primary transition-colors" />
             <input
+              ref={scanInputRef}
               placeholder="Search items or scan barcode..."
               className="w-full bg-card border border-border rounded-2xl py-3.5 pl-11 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 transition-all min-h-13 font-medium placeholder:text-muted-foreground/60"
               value={searchQuery}
@@ -883,7 +883,7 @@ export default function OrderPage() {
             onSelectTable={() => router.push(`/${orgSlug}/tables`)}
             useCase={outlet?.use_case}
           />
-          {!isHospitality && (
+          {cfg.showPricingProfile && (
             <div className="flex items-center gap-1.5 mt-2">
               <span className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Price</span>
               {(['RETAIL', 'WHOLESALE'] as const).map((p) => (
