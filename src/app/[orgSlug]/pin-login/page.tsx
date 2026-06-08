@@ -221,7 +221,7 @@ export default function PINLoginPage() {
     retry: false,
   });
 
-  const { data: allOutlets = [] } = useQuery<OutletInfo[]>({
+  const { data: allOutlets = [], isLoading: outletsLoading } = useQuery<OutletInfo[]>({
     queryKey: ['pos-outlets-list', effectiveTenantID],
     queryFn: async () => {
       try {
@@ -469,11 +469,17 @@ export default function PINLoginPage() {
           </div>
 
           <div className="w-full max-w-2xl">
-            {posOutlets.length === 0 ? (
+            {posOutlets.length === 0 && (outletsLoading || tenantLoading) ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {Array.from({ length: 4 }).map((_, i) => (
                   <div key={i} className="h-36 rounded-2xl bg-white/5 animate-pulse" style={{ animationDelay: `${i * 80}ms` }} />
                 ))}
+              </div>
+            ) : posOutlets.length === 0 ? (
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-8 text-center">
+                <Building2 className="mx-auto mb-3 h-10 w-10 text-white/30" />
+                <p className="text-white/80 font-medium">No POS outlets available</p>
+                <p className="mt-1 text-sm text-white/50">No point-of-sale outlets are configured for this business yet. Ask an administrator to create an outlet in the admin console.</p>
               </div>
             ) : (
               <div className={cn('grid gap-3', colClass)}>
