@@ -72,8 +72,13 @@ export function SplitPaymentModal({
     }
   }
 
-  function customRemaining() {
-    return customSplits.reduce((sum, s) => sum + (s.paid ? 0 : parseFloat(s.amount) || 0), 0);
+  // Sum of all entered split amounts. The splits must cover the full order total before any
+  // payer can be charged, otherwise the bill could be settled while underpaid.
+  function customEnteredTotal() {
+    return customSplits.reduce((sum, s) => sum + (parseFloat(s.amount) || 0), 0);
+  }
+  function splitsBalanced() {
+    return Math.abs(customEnteredTotal() - total) < 0.01;
   }
 
   function handleCustomPayerDone(idx: number) {
@@ -386,7 +391,8 @@ export function SplitPaymentModal({
                   ) : (
                     <button
                       type="button"
-                      disabled={!split.amount || parseFloat(split.amount) <= 0}
+                      disabled={!split.amount || parseFloat(split.amount) <= 0 || !splitsBalanced()}
+                      title={!splitsBalanced() ? 'Split amounts must add up to the order total before charging' : undefined}
                       onClick={() => setCurrentPayer(i)}
                       className="px-2 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-semibold disabled:opacity-40 hover:bg-primary/90 transition-colors whitespace-nowrap"
                     >
@@ -412,11 +418,16 @@ export function SplitPaymentModal({
                 + Add payer
               </button>
               <div className="flex justify-between text-xs text-muted-foreground px-1">
-                <span>Entered: {fmt(customSplits.reduce((s, x) => s + (parseFloat(x.amount) || 0), 0))}</span>
-                <span className={customRemaining() > total ? 'text-destructive' : ''}>
-                  Total: {fmt(total)}
-                </span>
+                <span>Entered: {fmt(customEnteredTotal())}</span>
+                <span>Total: {fmt(total)}</span>
               </div>
+              {!splitsBalanced() && (
+                <p className="text-xs text-destructive px-1">
+                  {customEnteredTotal() < total
+                    ? `Short by ${fmt(total - customEnteredTotal())} — add or increase a payer before charging.`
+                    : `Over by ${fmt(customEnteredTotal() - total)} — reduce a payer.`}
+                </p>
+              )}
             </div>
           )}
         </div>
