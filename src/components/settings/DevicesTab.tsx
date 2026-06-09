@@ -6,7 +6,6 @@ import { useAuthStore } from '@/store/auth';
 import { apiClient } from '@/lib/api/client';
 import { Badge, Button, Card, CardContent } from '@/components/ui/base';
 import { cn } from '@/lib/utils';
-import { useDeviceConfig } from '@/hooks/useDeviceConfig';
 
 interface POSDevice {
   id: string;
@@ -47,7 +46,6 @@ const statusVariant = (s: string) =>
 export function DevicesTab() {
   const user = useAuthStore((s) => s.user);
   const tenantID = user?.tenant_id ?? '';
-  const { config, update, loaded } = useDeviceConfig();
 
   const { data, isLoading, refetch, isFetching } = useQuery<{ data: POSDevice[]; total: number }>({
     queryKey: ['pos-devices', tenantID],
@@ -115,50 +113,6 @@ export function DevicesTab() {
           })}
         </div>
       )}
-
-      {/* This-till peripherals (cash drawer / printer / scanner) — saved on this device. */}
-      {loaded && (
-        <div className="pt-2">
-          <h3 className="text-sm font-semibold mb-3">Peripherals (this till)</h3>
-          <Card>
-            <CardContent className="p-5 divide-y divide-border">
-              <PeriphToggle label="Cash drawer connected" desc="ESC/POS kick via the receipt printer" checked={config.cashDrawerEnabled} onChange={(v) => update({ cashDrawerEnabled: v })} />
-              <PeriphToggle label="Open drawer on cash sale" checked={config.openDrawerOnCash} onChange={(v) => update({ openDrawerOnCash: v })} />
-              <PeriphToggle label="Blind cash-up at shift end" desc="Count without seeing the expected total — the single most effective shrinkage control" checked={config.blindClose} onChange={(v) => update({ blindClose: v })} />
-              <div className="flex items-center justify-between py-3">
-                <p className="text-sm font-medium">Receipt width</p>
-                <div className="flex gap-1.5">
-                  {(['58', '80'] as const).map((w) => (
-                    <button key={w} type="button" onClick={() => update({ receiptWidth: w })}
-                      className={cn('px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors', config.receiptWidth === w ? 'border-primary bg-primary/5 text-primary' : 'border-border text-muted-foreground hover:bg-accent')}>
-                      {w}mm
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <PeriphToggle label="Auto-print receipt on sale" checked={config.autoPrintReceipt} onChange={(v) => update({ autoPrintReceipt: v })} />
-              <PeriphToggle label="Keyboard-wedge scanner" desc="USB/Bluetooth wedge scanners type the barcode + Enter" checked={config.scannerEnabled} onChange={(v) => update({ scannerEnabled: v })} />
-            </CardContent>
-          </Card>
-          <p className="text-xs text-muted-foreground mt-2">
-            Payment gateways (DPO Pay) are configured under Accounting → Payment gateways (treasury). DPO Network POS / card PDQ need a manual application.
-          </p>
-        </div>
-      )}
     </div>
-  );
-}
-
-function PeriphToggle({ label, desc, checked, onChange }: { label: string; desc?: string; checked: boolean; onChange: (v: boolean) => void }) {
-  return (
-    <button type="button" onClick={() => onChange(!checked)} className="w-full flex items-center justify-between gap-4 py-3 text-left">
-      <div>
-        <p className="text-sm font-medium">{label}</p>
-        {desc && <p className="text-xs text-muted-foreground mt-0.5">{desc}</p>}
-      </div>
-      <span className={cn('relative h-6 w-11 rounded-full transition-colors shrink-0', checked ? 'bg-primary' : 'bg-muted')}>
-        <span className={cn('absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform', checked ? 'translate-x-5' : 'translate-x-0.5')} />
-      </span>
-    </button>
   );
 }
