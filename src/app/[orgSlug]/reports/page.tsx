@@ -12,6 +12,8 @@ import {
   useReportExportUrl,
 } from '@/hooks/useReports';
 import { useAuthStore } from '@/store/auth';
+import { useParams } from 'next/navigation';
+import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import {
   BarChart3,
@@ -45,6 +47,7 @@ const PERIOD_LABELS: Record<Period, string> = { today: 'Today', week: 'This Week
 
 function ReportsPage() {
   const tenantID = useAuthStore((s) => s.user?.tenant_id ?? '');
+  const orgSlug = (useParams()?.orgSlug as string) || '';
   const [period, setPeriod] = useState<Period>('today');
   const { from, to } = periodToRange(period);
 
@@ -94,6 +97,13 @@ function ReportsPage() {
             <Download className="h-3.5 w-3.5" />
             Export CSV
           </a>
+          <Link
+            href={`/${orgSlug}/reports/analytics`}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium bg-muted text-muted-foreground hover:bg-muted/80 transition-colors"
+          >
+            <BarChart3 className="h-3.5 w-3.5" />
+            Analytics
+          </Link>
         </div>
       </div>
 
