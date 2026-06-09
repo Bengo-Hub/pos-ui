@@ -18,6 +18,9 @@ import { toast } from 'sonner';
 
 // Public online-store/menu base — the same URL the header's "Online Store" link uses.
 const ORDERING_URL = process.env.NEXT_PUBLIC_ORDERING_UI_URL ?? 'https://ordersapp.codevertexitsolutions.com';
+// Absolute pos-api base — the menu document is served by pos-api, NOT the pos-ui Next.js host, so
+// these links must be absolute (a relative /api/v1 path 404s on the pos-ui domain). Matches apiClient.
+const POS_API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'https://posapi.codevertexitsolutions.com';
 
 const STATUS_COLOR: Record<string, string> = {
   pending:           'bg-amber-500/10 text-amber-700 dark:text-amber-400',
@@ -213,7 +216,7 @@ function OnlineOrdersPage() {
         {outletId && (
           <div className="flex items-center gap-2 shrink-0">
             <a
-              href={`/api/v1/${tenantID}/pos/outlets/${outletId}/menu.pdf`}
+              href={`${POS_API_BASE}/api/v1/${tenantID}/pos/outlets/${outletId}/menu.pdf`}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-sm font-semibold bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
@@ -221,7 +224,7 @@ function OnlineOrdersPage() {
               <QrCode className="h-4 w-4" /> Menu PDF
             </a>
             <a
-              href={`/api/v1/${tenantID}/pos/outlets/${outletId}/menu.html`}
+              href={`${POS_API_BASE}/api/v1/${tenantID}/pos/outlets/${outletId}/menu.html`}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-sm font-semibold border border-border hover:bg-accent transition-colors"
