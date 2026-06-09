@@ -35,7 +35,6 @@ import {
   RotateCcw,
   Settings,
   ShoppingBag,
-  ShoppingCart,
   Sofa,
   TrendingUp,
   Truck,
@@ -242,7 +241,6 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
   const outletUseCase = (outlet?.use_case ?? (user as any)?.outlet_use_case ?? '').toLowerCase();
   const isServices = outletUseCase === 'services';
   const isPharmacy = outletUseCase === 'pharmacy';
-  const isRetail = outletUseCase === 'retail';
   const isHospOrQSR = ['hospitality', 'quick_service'].includes(outletUseCase);
 
   // ── Nav groups ────────────────────────────────────────────────────────────
@@ -270,7 +268,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
         { label: 'POS Terminal', icon: Plus, href: '/order', moduleKey: 'new_order', permission: P.ORDERS_ADD, waiterHidden: true, cashierHospHidden: true },
         // Back-office full sale form (wholesaler/credit/delivery) — distinct from the fast terminal.
         { label: 'Add Sale', icon: FilePlus, href: '/sell/add', moduleKey: 'new_order', permission: [P.ORDERS_ADD, P.ORDERS_MANAGE], waiterHidden: true, cashierHospHidden: true },
-        { label: 'POS', icon: ShoppingCart, href: '/retail', moduleKey: 'retail', permission: P.ORDERS_ADD, waiterHidden: true },
+        // (Legacy standalone /retail POS retired — retail outlets now use the adaptive /order terminal above.)
         // All sales (the sale/order list) — add/change or reports access; excludes kitchen/bar (KDS-only view).
         { label: 'All Sales', icon: ClipboardList, href: '/orders', moduleKey: 'orders', permission: [P.ORDERS_ADD, P.ORDERS_CHANGE_OWN, P.ORDERS_CHANGE, P.ORDERS_MANAGE, P.ORDERS_VIEW_OWN, P.REPORTS_VIEW], waiterHidden: true },
         // Drafts = saved-but-unpaid sales (POSOrder status=draft) from terminal Park / Add Sale.
@@ -405,8 +403,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
           if (isCashierHospOrQSR && item.cashierHospHidden) return false;
           // Services outlets: hide order-entry items (they use Appointments/Queue instead)
           if (isServices && ['new_order', 'orders'].includes(item.moduleKey)) return false;
-          // Retail outlets use Retail POS page, not the hospitality New Order flow
-          if (isRetail && item.moduleKey === 'new_order') return false;
+          // Retail outlets now use the adaptive /order terminal (legacy /retail page retired).
           if (!item.permission) return true;
           if (isSuperuser || isSuperUser) return true;
           const perms = Array.isArray(item.permission) ? item.permission : [item.permission];

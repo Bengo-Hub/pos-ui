@@ -31,6 +31,12 @@ export interface TerminalConfig {
   keyboardCheckout: boolean;
   /** Show the brand grid filter (retail). */
   showBrandGrid: boolean;
+  /** Show per-item stock level badges (retail/pharmacy — requires backend stock_quantity projection). */
+  showStockBadge: boolean;
+  /** Wire the hardware ScaleDisplay (retail/pharmacy weighed goods, gated on pos_scale_device_id). */
+  showScale: boolean;
+  /** Intercept out-of-stock adds with a manager PIN override modal (retail/pharmacy). */
+  managerOverride: boolean;
   /** Title shown on the terminal header / new-order action. */
   terminalTitle: string;
 }
@@ -56,32 +62,37 @@ export function terminalConfigFor(useCase?: string | null): TerminalConfig {
       return {
         profile, defaultDisplayMode: 'image_grid', barcodeFirst: false, showPricingProfile: false,
         showOrderType: true, showCourses: true, showStaffAttribution: false, showCalculator: false,
-        keyboardCheckout: false, showBrandGrid: false, terminalTitle: 'New Order',
+        keyboardCheckout: false, showBrandGrid: false,
+        showStockBadge: false, showScale: false, managerOverride: false, terminalTitle: 'New Order',
       };
     case 'quick_service':
       return {
         profile, defaultDisplayMode: 'card', barcodeFirst: false, showPricingProfile: false,
         showOrderType: true, showCourses: false, showStaffAttribution: false, showCalculator: false,
-        keyboardCheckout: false, showBrandGrid: false, terminalTitle: 'New Order',
+        keyboardCheckout: false, showBrandGrid: false,
+        showStockBadge: false, showScale: false, managerOverride: false, terminalTitle: 'New Order',
       };
     case 'pharmacy':
       return {
         profile, defaultDisplayMode: 'list', barcodeFirst: true, showPricingProfile: true,
         showOrderType: false, showCourses: false, showStaffAttribution: false, showCalculator: true,
-        keyboardCheckout: true, showBrandGrid: false, terminalTitle: 'Walk-In Sale',
+        keyboardCheckout: true, showBrandGrid: false,
+        showStockBadge: true, showScale: true, managerOverride: true, terminalTitle: 'Walk-In Sale',
       };
     case 'services':
       return {
         profile, defaultDisplayMode: 'card', barcodeFirst: false, showPricingProfile: false,
         showOrderType: false, showCourses: false, showStaffAttribution: true, showCalculator: false,
-        keyboardCheckout: false, showBrandGrid: false, terminalTitle: 'New Sale',
+        keyboardCheckout: false, showBrandGrid: false,
+        showStockBadge: false, showScale: false, managerOverride: false, terminalTitle: 'New Sale',
       };
     case 'retail':
     default:
       return {
         profile: 'retail', defaultDisplayMode: 'list', barcodeFirst: true, showPricingProfile: true,
         showOrderType: false, showCourses: false, showStaffAttribution: false, showCalculator: true,
-        keyboardCheckout: true, showBrandGrid: true, terminalTitle: 'New Sale',
+        keyboardCheckout: true, showBrandGrid: true,
+        showStockBadge: true, showScale: true, managerOverride: true, terminalTitle: 'New Sale',
       };
   }
 }
