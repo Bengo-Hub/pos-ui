@@ -15,6 +15,7 @@ import { useClientSearch } from '@/hooks/useClients';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { SplitPaymentModal } from '@/components/pos/split-payment-modal';
 import { useAuthStore } from '@/store/auth';
+import { apiClient } from '@/lib/api/client';
 import { Button } from '@/components/ui/base';
 import { toast } from 'sonner';
 
@@ -32,6 +33,7 @@ export default function AddSalePage() {
   const orgSlug = (params?.orgSlug as string) || '';
   const outlet = useAuthStore((s) => s.outlet);
   const outletId = outlet?.id ?? '';
+  const tenantId = useAuthStore((s) => s.user?.tenant_id ?? '');
   const { data: posSettings } = usePOSSettings();
   const taxRate = (posSettings?.vat_rate ?? 16) / 100;
 
@@ -52,6 +54,7 @@ export default function AddSalePage() {
   // tender in the payment modal posts the total to the customer's AR (treasury enforces the limit).
   const [creditSale, setCreditSale] = useState(searchParams.get('credit') === '1');
   const [notes, setNotes] = useState('');
+  const [quotationSaving, setQuotationSaving] = useState(false);
 
   const createOrder = useCreateOrder();
   const [payOrder, setPayOrder] = useState<{ id: string; number: string; total: number } | null>(null);
@@ -112,6 +115,27 @@ export default function AddSalePage() {
   }
   function reset() {
     setLines([]); setDiscount(0); setNotes(''); setCustPhone(''); setCustName(''); setCreditSale(false);
+  }
+
+  // Save as Quotation: forward the cart to treasury via the pos-api proxy (treasury owns quotations;
+  // pos persists nothing). pos-ui → pos-api → treasury S2S.
+  async function saveQuotation() {
+    if (lines.length === 0) return;
+    setQuotationSaving(true);
+    try {
+      await apiClient.post(`/api/v1/${tenantId}/pos/quotations`, {
+        customer_name: custName || undefined,
+        customer_phone: custPhone || undefined,
+        notes: notes || undefined,
+        lines: lines.map((l) => ({ name: l.item.name, sku: l.item.sku, quantity: l.quantity, unit_price: l.unitPrice })),
+      });
+      toast.success('Quotation saved to Treasury');
+      reset();
+    } catch (e: any) {
+      toast.error(e?.message ?? 'Failed to save quotation');
+    } finally {
+      setQuotationSaving(false);
+    }
   }
 
   if (payOrder) {
@@ -247,6 +271,9 @@ export default function AddSalePage() {
             </Button>
             <Button variant="outline" onClick={() => save('draft')} disabled={lines.length === 0 || createOrder.isPending} className="w-full rounded-xl">
               Save as Draft
+            </Button>
+            <Button variant="outline" onClick={saveQuotation} disabled={lines.length === 0 || quotationSaving} className="w-full rounded-xl">
+              {quotationSaving ? 'Saving…' : 'Save as Quotation'}
             </Button>
           </div>
         </div>
