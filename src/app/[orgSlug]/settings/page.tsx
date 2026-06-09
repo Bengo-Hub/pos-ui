@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import {
-  ChefHat, Clock, CreditCard, Gift, Key, Layers, Monitor, Receipt,
+  ChefHat, Clock, CreditCard, Gift, Key, Layers, Monitor, Receipt, Truck,
   Settings, ShieldCheck, Table2, Users,
 } from 'lucide-react';
 import { useAuthStore } from '@/store/auth';
@@ -21,6 +21,7 @@ import { LoyaltySettingsTab } from '@/components/settings/LoyaltySettingsTab';
 import { PaymentDisplayTab } from '@/components/settings/PaymentDisplayTab';
 import { SubscriptionTab } from '@/components/settings/SubscriptionTab';
 import { DevicesTab } from '@/components/settings/DevicesTab';
+import { ChannelsTab } from '@/components/settings/ChannelsTab';
 import { BookingPolicyTab } from '@/components/settings/BookingPolicyTab';
 
 type Tab =
@@ -32,6 +33,7 @@ type Tab =
   | 'kds_stations'
   | 'tables'
   | 'loyalty'
+  | 'channels'
   | 'subscription'
   | 'devices'
   | 'booking_policy'
@@ -49,6 +51,7 @@ const ALL_TABS: { id: Tab; label: string; icon: React.ElementType; requireModule
   { id: 'kds_stations',     label: 'KDS Stations',       icon: ChefHat,     description: 'Kitchen and bar display screens', requireModule: 'kds' },
   { id: 'tables',           label: 'Tables',             icon: Table2,      description: 'Floor plan and table configuration', requireModule: 'tables' },
   { id: 'loyalty',          label: 'Loyalty',            icon: Gift,        description: 'Points, tiers, and earn rates', requireModule: 'loyalty' },
+  { id: 'channels',         label: 'Delivery Channels',  icon: Truck,       description: '3rd-party delivery integrations & catalogue sync', requireModule: 'online_orders' },
   { id: 'subscription',     label: 'Subscription',       icon: Key,         description: 'Your POS plan, limits, and features (view only)', requireAdmin: true },
   { id: 'devices',          label: 'Devices',            icon: Monitor,     description: 'POS terminals linked to this outlet (view only)', requireAdmin: true },
   { id: 'booking_policy',   label: 'Booking Policy',     icon: Clock,       description: 'Amendment & cancellation windows and fees for hotel bookings', requireModule: 'hotel' },
@@ -125,6 +128,7 @@ export default function SettingsPage() {
         {activeTab === 'kds_stations'     && <KDSStationsTab />}
         {activeTab === 'tables'           && <TablesSettingsTab />}
         {activeTab === 'loyalty'          && <LoyaltySettingsTab />}
+        {activeTab === 'channels'         && <ChannelsTab />}
         {activeTab === 'subscription'     && isAdminOrManager && <SubscriptionTab />}
         {activeTab === 'devices'          && isAdminOrManager && <DevicesTab />}
         {activeTab === 'booking_policy'   && <BookingPolicyTab />}
