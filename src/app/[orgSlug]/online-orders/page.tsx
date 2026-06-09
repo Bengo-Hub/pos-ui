@@ -13,7 +13,7 @@ import { usePermissions, P } from '@/hooks/usePermissions';
 import { useAuthStore } from '@/store/auth';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
-import { Bike, CheckCircle2, Clock, Loader2, MapPin, Package, Phone, UserCheck } from 'lucide-react';
+import { Bike, CheckCircle2, Clock, Loader2, MapPin, Package, Phone, QrCode, UserCheck } from 'lucide-react';
 import { toast } from 'sonner';
 
 // Public online-store/menu base — the same URL the header's "Online Store" link uses.
@@ -179,6 +179,7 @@ function DeliveryOrderCard({ order, onAssign }: { order: DeliveryOrder; onAssign
 
 function OnlineOrdersPage() {
   const tenantID = useAuthStore((s) => s.user?.tenant_id ?? '');
+  const outletId = useAuthStore((s) => s.outlet?.id ?? '');
   const orgSlug = (useParams()?.orgSlug as string) || '';
 
   const { data: pickupOrders = [], isLoading: pickupLoading } = useQuery({
@@ -201,12 +202,24 @@ function OnlineOrdersPage() {
 
   return (
     <div className="p-6 space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Online Orders</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Click-and-collect pickups and online delivery orders. Assign a rider to delivery
-          orders from here. Auto-refreshes every 15s.
-        </p>
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-bold">Online Orders</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Click-and-collect pickups and online delivery orders. Assign a rider to delivery
+            orders from here. Auto-refreshes every 15s.
+          </p>
+        </div>
+        {outletId && (
+          <a
+            href={`/api/v1/${tenantID}/pos/outlets/${outletId}/menu.html`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-sm font-semibold border border-border hover:bg-accent transition-colors shrink-0"
+          >
+            <QrCode className="h-4 w-4" /> View / Print Menu
+          </a>
+        )}
       </div>
 
       {orgSlug && <MenuQRCard url={`${ORDERING_URL}/${orgSlug}`} />}
