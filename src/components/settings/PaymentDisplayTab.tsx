@@ -17,7 +17,8 @@ export function PaymentDisplayTab() {
   const [form, setForm] = useState({
     mpesaPaybill: '',
     mpesaAccountRef: '',
-    airtelNumber: '',
+    mpesaTill: '',
+    mpesaPochi: '',
     bankName: '',
     bankAccountNumber: '',
     bankAccountName: '',
@@ -29,7 +30,8 @@ export function PaymentDisplayTab() {
       setForm({
         mpesaPaybill:       settings.mpesa_paybill ?? '',
         mpesaAccountRef:    settings.mpesa_account_reference ?? '',
-        airtelNumber:       settings.airtel_money_number ?? '',
+        mpesaTill:          settings.mpesa_till ?? '',
+        mpesaPochi:         settings.mpesa_pochi ?? '',
         bankName:           settings.bank_name ?? '',
         bankAccountNumber:  settings.bank_account_number ?? '',
         bankAccountName:    settings.bank_account_name ?? '',
@@ -45,7 +47,8 @@ export function PaymentDisplayTab() {
     updateSettings.mutate({
       mpesa_paybill:             form.mpesaPaybill   || null,
       mpesa_account_reference:   form.mpesaAccountRef || null,
-      airtel_money_number:       form.airtelNumber    || null,
+      mpesa_till:                form.mpesaTill       || null,
+      mpesa_pochi:               form.mpesaPochi      || null,
       bank_name:                 form.bankName        || null,
       bank_account_number:       form.bankAccountNumber || null,
       bank_account_name:         form.bankAccountName  || null,
@@ -95,27 +98,32 @@ export function PaymentDisplayTab() {
                 Shown in M-PESA prompt as the account reference
               </p>
             </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader className="pb-3">
-          <div className="flex items-center gap-2">
-            <CreditCard className="h-4 w-4 text-muted-foreground" />
-            <span className="font-semibold text-sm">Airtel Money</span>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div>
-            <label className={labelClass}>Airtel Money Number</label>
-            <input
-              className={inputClass}
-              value={form.airtelNumber}
-              onChange={(e) => set('airtelNumber', e.target.value)}
-              placeholder="e.g. 522533"
-              disabled={!canEdit}
-            />
+            <div>
+              <label className={labelClass}>Till Number</label>
+              <input
+                className={inputClass}
+                value={form.mpesaTill}
+                onChange={(e) => set('mpesaTill', e.target.value)}
+                placeholder="e.g. 123456"
+                disabled={!canEdit}
+              />
+              <p className="text-[11px] text-muted-foreground mt-1">
+                Buy Goods (Till) number
+              </p>
+            </div>
+            <div>
+              <label className={labelClass}>Pochi Number</label>
+              <input
+                className={inputClass}
+                value={form.mpesaPochi}
+                onChange={(e) => set('mpesaPochi', e.target.value)}
+                placeholder="e.g. 0712345678"
+                disabled={!canEdit}
+              />
+              <p className="text-[11px] text-muted-foreground mt-1">
+                Pochi la Biashara number
+              </p>
+            </div>
           </div>
         </CardContent>
       </Card>
