@@ -7,8 +7,8 @@
  */
 
 import { useState } from 'react';
-import { BarChart3, Users, Clock, Tag } from 'lucide-react';
-import { useSalesByStaff, useSalesByHour, useSalesByCategory } from '@/hooks/useReports';
+import { BarChart3, Users, Clock, Tag, Package, Ban } from 'lucide-react';
+import { useSalesByStaff, useSalesByHour, useSalesByCategory, useProductMix, useVoidSummary } from '@/hooks/useReports';
 
 function isoDaysAgo(days: number): string {
   const d = new Date();
@@ -24,6 +24,8 @@ export default function AnalyticsReportPage() {
   const staff = useSalesByStaff(from, to);
   const hours = useSalesByHour(from, to);
   const cats = useSalesByCategory(from, to);
+  const mix = useProductMix(from, to);
+  const voids = useVoidSummary(from, to);
 
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-6">
@@ -50,6 +52,14 @@ export default function AnalyticsReportPage() {
       <Section title="Sales by Category" icon={Tag} loading={cats.isLoading} empty={!cats.data?.length}
         head={['Category', 'Qty Sold', 'Revenue']}
         rows={(cats.data ?? []).map((r) => [r.category_name, String(r.quantity_sold), fmt(r.revenue)])} />
+
+      <Section title="Product Mix" icon={Package} loading={mix.isLoading} empty={!mix.data?.length}
+        head={['Product', 'Qty', 'Orders', 'Revenue']}
+        rows={(mix.data ?? []).map((r) => [r.label, String(r.quantity), String(r.order_count), fmt(r.revenue)])} />
+
+      <Section title="Voids" icon={Ban} loading={voids.isLoading} empty={!voids.data?.length}
+        head={['Staff', 'Voids', 'Amount', 'Reasons']}
+        rows={(voids.data ?? []).map((r) => [`${(r.voided_by || '').slice(0, 8)}…`, String(r.void_count), fmt(r.total_voided_amount), Object.keys(r.reasons || {}).join(', ') || '—'])} />
     </div>
   );
 }
