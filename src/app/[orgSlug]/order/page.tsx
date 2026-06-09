@@ -10,6 +10,9 @@ import { ParkedSalesModal } from '@/components/pos/parked-sales-modal';
 import { ReceiptPreview, type ReceiptData } from '@/components/pos/receipt-preview';
 import { OrderTypeSelector } from '@/components/pos/order-type-selector';
 import { LoyaltyPanel, type LoyaltyState } from '@/components/retail/LoyaltyPanel';
+import { StockBadge } from '@/components/retail/StockBadge';
+import { ScaleDisplay } from '@/components/retail/ScaleDisplay';
+import { ManagerPINOverrideModal } from '@/components/retail/ManagerPINOverrideModal';
 import { CalculatorOverlay } from '@/components/pos/calculator-overlay';
 import { CategoryNav } from '@/components/pos/category-nav';
 import { cn } from '@/lib/utils';
@@ -59,6 +62,9 @@ interface MenuItem {
   requiresAgeVerification?: boolean;
   trackSerialNumber?: boolean;
   modifierGroups?: ModifierGroup[];
+  /** On-hand stock for the StockBadge / out-of-stock override (retail/pharmacy). Only present
+   *  when the backend catalog list projects stock_quantity — see integrator note. */
+  stockQuantity?: number;
 }
 
 interface CartItem extends MenuItem {
@@ -91,9 +97,19 @@ export default function OrderPage() {
   useEffect(() => {
     if (cfg.barcodeFirst) scanInputRef.current?.focus();
   }, [cfg.barcodeFirst]);
+  // Read the configured scale device once (retail/pharmacy weighed-goods checkout).
+  useEffect(() => {
+    if (cfg.showScale && typeof window !== 'undefined') {
+      setScaleDeviceId(localStorage.getItem('pos_scale_device_id') ?? '');
+    }
+  }, [cfg.showScale]);
   // Retail loyalty panel (customer lookup + points redemption) — absorbed from /retail into the
   // adaptive terminal; its redeemDiscount applies as an order discount and posts the customer.
   const [loyaltyState, setLoyaltyState] = useState<LoyaltyState | null>(null);
+  // Retail/pharmacy hardware scale (gated on cfg.showScale + a configured pos_scale_device_id).
+  const [scaleDeviceId, setScaleDeviceId] = useState('');
+  // Out-of-stock add interception → manager PIN override (retail/pharmacy, gated on cfg.managerOverride).
+  const [pendingOverride, setPendingOverride] = useState<MenuItem | null>(null);
   const { can, isSuperuser } = usePermissions();
   const { data: posSettings } = usePOSSettings();
   const taxRate = (posSettings?.vat_rate ?? 16) / 100;
@@ -208,9 +224,13 @@ export default function OrderPage() {
       price: item.price ?? 0,
       category: item.category || 'Uncategorized',
       image: item.image_url,
+      item_type: item.item_type,
+      duration_minutes: item.duration_minutes,
       requiresAgeVerification: item.requires_age_verification,
       trackSerialNumber: item.track_serial_numbers,
       modifierGroups: item.modifier_groups,
+      // stock_quantity is only populated if the backend projects it on the catalog list (see note).
+      stockQuantity: item.stock_quantity,
     }));
   }, [catalogData]);
 
@@ -263,6 +283,16 @@ export default function OrderPage() {
   );
 
   const handleItemTap = useCallback((item: MenuItem) => {
+    // Retail/pharmacy: intercept out-of-stock adds for a manager PIN override (mirrors legacy /retail).
+    if (
+      cfg.managerOverride &&
+      item.item_type !== 'SERVICE' &&
+      item.stockQuantity !== undefined &&
+      item.stockQuantity === 0
+    ) {
+      setPendingOverride(item);
+      return;
+    }
     if (item.requiresAgeVerification) {
       setAgePrompt({
         item,
@@ -274,7 +304,7 @@ export default function OrderPage() {
       return;
     }
     proceedWithItem(item);
-  }, []);
+  }, [cfg.managerOverride]);
 
   const proceedWithItem = useCallback(
     (item: MenuItem) => {
@@ -300,6 +330,21 @@ export default function OrderPage() {
     },
     [addItemToCart]
   );
+
+  // Weighed-goods add: the scale returns grams; we add a generic line priced by weight (kg as qty),
+  // mirroring the legacy /retail scale flow. Operators set the unit price from the cart afterwards.
+  const handleScaleAddToCart = useCallback((weightGrams: number) => {
+    const weightKg = weightGrams / 1000;
+    const weighedItem: MenuItem = {
+      id: `scale-${Date.now()}`,
+      name: 'Weighed Item',
+      sku: 'SCALE',
+      price: 0,
+      category: 'Weighed',
+      item_type: 'GOODS',
+    };
+    addItemToCart(weighedItem, undefined, weightKg);
+  }, [addItemToCart]);
 
   // ─── Barcode Scanner (global — only fires when no input is focused) ────────
 
@@ -683,6 +728,17 @@ export default function OrderPage() {
           </div>
         )}
 
+        {/* Hardware scale — retail/pharmacy only, when a scale device is configured */}
+        {cfg.showScale && scaleDeviceId && (
+          <div className="px-4 pb-3 shrink-0">
+            <ScaleDisplay
+              tenantSlug={user?.tenant_slug ?? orgSlug}
+              deviceId={scaleDeviceId}
+              onAddToCart={handleScaleAddToCart}
+            />
+          </div>
+        )}
+
         {/* Items area — scrolls internally (extra bottom padding clears the mobile cart bar) */}
         <div className="flex-1 overflow-y-auto min-h-0 px-4 pb-24 lg:pb-4">
           {menuLoading ? (
@@ -746,6 +802,11 @@ export default function OrderPage() {
                         {item.modifierGroups?.length ? (
                           <span className="text-[10px] text-primary">Has options</span>
                         ) : null}
+                        {cfg.showStockBadge && item.stockQuantity !== undefined && (
+                          <span className="block mt-0.5">
+                            <StockBadge quantity={item.stockQuantity} itemType={item.item_type} />
+                          </span>
+                        )}
                       </div>
                     </div>
                     <span className="text-sm font-bold font-mono text-right w-24">
@@ -1289,6 +1350,25 @@ export default function OrderPage() {
         orgSlug={orgSlug}
         onClose={() => setOrderPlacedOpen(false)}
       />
+
+      {/* Manager override — out-of-stock add interception (retail/pharmacy) */}
+      {pendingOverride && (
+        <ManagerPINOverrideModal
+          tenantId={user?.tenant_slug ?? orgSlug}
+          itemName={pendingOverride.name}
+          onApprove={() => {
+            const item = pendingOverride;
+            setPendingOverride(null);
+            // Override approved — continue the normal add flow (serial/modifier/age still apply).
+            if (item.requiresAgeVerification || item.trackSerialNumber || item.modifierGroups?.length) {
+              proceedWithItem(item);
+            } else {
+              addItemToCart(item);
+            }
+          }}
+          onCancel={() => setPendingOverride(null)}
+        />
+      )}
 
       {/* Age Verification */}
       {agePrompt && (
