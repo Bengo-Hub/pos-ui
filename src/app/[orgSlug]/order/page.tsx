@@ -93,9 +93,19 @@ export default function OrderPage() {
   // Retail loyalty panel (customer lookup + points redemption) — absorbed from /retail into the
   // adaptive terminal; its redeemDiscount applies as an order discount and posts the customer.
   const [loyaltyState, setLoyaltyState] = useState<LoyaltyState | null>(null);
-  const { can } = usePermissions();
+  const { can, isSuperuser } = usePermissions();
   const { data: posSettings } = usePOSSettings();
   const taxRate = (posSettings?.vat_rate ?? 16) / 100;
+
+  // Phase 1b: in hospitality/quick_service, cashiers settle from the orders list — waiters create
+  // orders from tables. A non-superuser cashier landing on /order directly is redirected to /orders.
+  useEffect(() => {
+    const roles = user?.roles ?? [];
+    const uc = (outlet?.use_case ?? '').toLowerCase();
+    if (!isSuperuser && roles.includes('cashier') && ['hospitality', 'quick_service'].includes(uc)) {
+      router.replace(`/${orgSlug}/orders`);
+    }
+  }, [user, outlet, isSuperuser, orgSlug, router]);
   const [activeCategory, setActiveCategory] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [cart, setCart] = useState<CartItem[]>([]);
