@@ -163,6 +163,20 @@ export interface CategoryRow {
   revenue: number;
 }
 
+export interface ProductMixRow {
+  label: string;
+  quantity: number;
+  revenue: number;
+  order_count: number;
+}
+
+export interface VoidRow {
+  voided_by: string;
+  void_count: number;
+  total_voided_amount: number;
+  reasons: Record<string, number>;
+}
+
 // ─── Query keys ───────────────────────────────────────────────────────────────
 
 export const reportKeys = {
@@ -177,6 +191,8 @@ export const reportKeys = {
   tax: (tid: string, from: string, to: string) => ['reports', tid, 'tax', from, to] as const,
   salesByHour: (tid: string, from: string, to: string) => ['reports', tid, 'sales-by-hour', from, to] as const,
   salesByCategory: (tid: string, from: string, to: string) => ['reports', tid, 'sales-by-category', from, to] as const,
+  productMix: (tid: string, from: string, to: string) => ['reports', tid, 'product-mix', from, to] as const,
+  voidSummary: (tid: string, from: string, to: string) => ['reports', tid, 'void-summary', from, to] as const,
   eodList: (tid: string, outletId: string, from: string, to: string) => ['reports', tid, 'eod', outletId, from, to] as const,
   stockConsumption: (tid: string, from: string, to: string) => ['reports', tid, 'stock-consumption', from, to] as const,
   returnsDetail: (tid: string, from: string, to: string) => ['reports', tid, 'returns-detail', from, to] as const,
@@ -277,6 +293,26 @@ export function useSalesByCategory(from: string, to: string) {
   return useQuery({
     queryKey: reportKeys.salesByCategory(tenantID, from, to),
     queryFn: () => apiClient.get<CategoryRow[]>(`${basePath(tenantID)}/sales-by-category`, { from, to }),
+    enabled: !!tenantID && !!from && !!to,
+    staleTime: 2 * 60_000,
+  });
+}
+
+export function useProductMix(from: string, to: string) {
+  const tenantID = useTenantID();
+  return useQuery({
+    queryKey: reportKeys.productMix(tenantID, from, to),
+    queryFn: () => apiClient.get<ProductMixRow[]>(`${basePath(tenantID)}/product-mix`, { from, to }),
+    enabled: !!tenantID && !!from && !!to,
+    staleTime: 2 * 60_000,
+  });
+}
+
+export function useVoidSummary(from: string, to: string) {
+  const tenantID = useTenantID();
+  return useQuery({
+    queryKey: reportKeys.voidSummary(tenantID, from, to),
+    queryFn: () => apiClient.get<VoidRow[]>(`${basePath(tenantID)}/void-summary`, { from, to }),
     enabled: !!tenantID && !!from && !!to,
     staleTime: 2 * 60_000,
   });
