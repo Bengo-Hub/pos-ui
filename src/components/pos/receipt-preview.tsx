@@ -60,7 +60,8 @@ export interface ReceiptData {
   payment_methods?: {
     mpesa_paybill?: string;
     mpesa_account_reference?: string;
-    airtel_money_number?: string;
+    mpesa_till?: string;
+    mpesa_pochi?: string;
     bank_name?: string;
     bank_account_number?: string;
     bank_account_name?: string;
@@ -270,10 +271,16 @@ export function ReceiptPreview({ receipt, open, onClose, outletName, tenantName 
                     <span className="font-semibold">{receipt.payment_methods.mpesa_account_reference}</span>
                   </div>
                 )}
-                {receipt.payment_methods.airtel_money_number && (
+                {receipt.payment_methods.mpesa_till && (
                   <div className="flex justify-between py-0.5 text-[10px]">
-                    <span>Airtel Money</span>
-                    <span className="font-semibold">{receipt.payment_methods.airtel_money_number}</span>
+                    <span>M-PESA Till</span>
+                    <span className="font-semibold">{receipt.payment_methods.mpesa_till}</span>
+                  </div>
+                )}
+                {receipt.payment_methods.mpesa_pochi && (
+                  <div className="flex justify-between py-0.5 text-[10px]">
+                    <span>M-PESA Pochi</span>
+                    <span className="font-semibold">{receipt.payment_methods.mpesa_pochi}</span>
                   </div>
                 )}
                 {receipt.payment_methods.bank_account_number && (

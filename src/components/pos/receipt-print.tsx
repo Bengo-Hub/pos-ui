@@ -187,10 +187,16 @@ export function ReceiptPrint({
               <span className="receipt-row-value receipt-bold">{paymentMethods.mpesa_account_reference}</span>
             </div>
           )}
-          {paymentMethods.airtel_money_number && (
+          {paymentMethods.mpesa_till && (
             <div className="receipt-row" style={{ fontSize: 10 }}>
-              <span className="receipt-row-name">Airtel Money</span>
-              <span className="receipt-row-value receipt-bold">{paymentMethods.airtel_money_number}</span>
+              <span className="receipt-row-name">M-PESA Till</span>
+              <span className="receipt-row-value receipt-bold">{paymentMethods.mpesa_till}</span>
+            </div>
+          )}
+          {paymentMethods.mpesa_pochi && (
+            <div className="receipt-row" style={{ fontSize: 10 }}>
+              <span className="receipt-row-name">M-PESA Pochi</span>
+              <span className="receipt-row-value receipt-bold">{paymentMethods.mpesa_pochi}</span>
             </div>
           )}
           {paymentMethods.bank_account_number && (

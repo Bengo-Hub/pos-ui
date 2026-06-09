@@ -44,6 +44,8 @@ export interface POSSettings {
   mpesa_paybill?: string | null;
   mpesa_account_reference?: string | null;
   airtel_money_number?: string | null;
+  mpesa_till?: string | null;
+  mpesa_pochi?: string | null;
   bank_name?: string | null;
   bank_account_number?: string | null;
   bank_account_name?: string | null;
@@ -74,6 +76,8 @@ export interface UpdatePOSSettingsInput {
   mpesa_paybill?: string | null;
   mpesa_account_reference?: string | null;
   airtel_money_number?: string | null;
+  mpesa_till?: string | null;
+  mpesa_pochi?: string | null;
   bank_name?: string | null;
   bank_account_number?: string | null;
   bank_account_name?: string | null;
