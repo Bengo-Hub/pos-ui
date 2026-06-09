@@ -211,14 +211,24 @@ function OnlineOrdersPage() {
           </p>
         </div>
         {outletId && (
-          <a
-            href={`/api/v1/${tenantID}/pos/outlets/${outletId}/menu.html`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-sm font-semibold border border-border hover:bg-accent transition-colors shrink-0"
-          >
-            <QrCode className="h-4 w-4" /> View / Print Menu
-          </a>
+          <div className="flex items-center gap-2 shrink-0">
+            <a
+              href={`/api/v1/${tenantID}/pos/outlets/${outletId}/menu.pdf`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-sm font-semibold bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+            >
+              <QrCode className="h-4 w-4" /> Menu PDF
+            </a>
+            <a
+              href={`/api/v1/${tenantID}/pos/outlets/${outletId}/menu.html`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-sm font-semibold border border-border hover:bg-accent transition-colors"
+            >
+              Web menu
+            </a>
+          </div>
         )}
       </div>
 
