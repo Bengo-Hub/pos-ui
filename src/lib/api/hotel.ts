@@ -319,8 +319,11 @@ export const hotelApi = {
   getRoomFolio: (tenantSlug: string, roomId: string) =>
     apiClient.get<FolioItem[]>(`${hotelBase(tenantSlug)}/rooms/${roomId}/folio`),
 
-  postFolioCharge: (tenantSlug: string, roomId: string, body: { description: string; amount: number; charge_type: string }) =>
-    apiClient.post(`${hotelBase(tenantSlug)}/rooms/${roomId}/folio`, body),
+  postFolioCharge: (
+    tenantSlug: string,
+    roomId: string,
+    body: { description: string; amount: number; charge_type: string; inventory_sku?: string; quantity?: number },
+  ) => apiClient.post(`${hotelBase(tenantSlug)}/rooms/${roomId}/folio`, body),
 
   lateCheckout: (tenantSlug: string, roomId: string, body: LateCheckoutInput) =>
     apiClient.post<{ guest_id: string; late_checkout_approved: boolean; surcharge_amount: number }>(

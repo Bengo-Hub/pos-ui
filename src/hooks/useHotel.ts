@@ -136,9 +136,12 @@ export function usePostFolioCharge(roomId: string) {
   const slug = useTenantSlug();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: { description: string; amount: number; charge_type: string }) =>
+    mutationFn: (body: { description: string; amount: number; charge_type: string; inventory_sku?: string; quantity?: number }) =>
       hotelApi.postFolioCharge(slug, roomId, body),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['room-folio', slug, roomId] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['room-folio', slug, roomId] });
+      qc.invalidateQueries({ queryKey: ['hotel-room', slug, roomId] });
+    },
   });
 }
 
