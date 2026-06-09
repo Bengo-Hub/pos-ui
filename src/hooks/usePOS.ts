@@ -144,15 +144,42 @@ export function useCreateMenuItem() {
   });
 }
 
+export interface POSCategory {
+  name: string;
+  /** Emoji or icon-class name for inline display. */
+  icon?: string;
+  /** Resolved image URL; render as <img> when present. */
+  image_url?: string;
+}
+
+// Raw categories may arrive in the new typed shape ({name, icon, image_url})
+// or the legacy shape (bare string names). Normalize both to POSCategory[].
+type RawCategory = string | { name?: string; icon?: string; image_url?: string };
+
+function normalizeCategories(raw: RawCategory[] | undefined): POSCategory[] {
+  if (!raw) return [];
+  return raw
+    .map((c): POSCategory | null => {
+      if (typeof c === 'string') {
+        return c ? { name: c } : null;
+      }
+      if (c && typeof c.name === 'string' && c.name) {
+        return { name: c.name, icon: c.icon || undefined, image_url: c.image_url || undefined };
+      }
+      return null;
+    })
+    .filter((c): c is POSCategory => c !== null);
+}
+
 export function useCategories() {
   const tenantID = useTenantID();
   return useQuery({
     queryKey: ['pos-categories', tenantID],
     queryFn: () =>
-      apiClient.get<{ data: string[] }>(`${basePath(tenantID)}/catalog/categories`),
+      apiClient.get<{ data: RawCategory[] }>(`${basePath(tenantID)}/catalog/categories`),
     enabled: !!tenantID,
     staleTime: 10 * 60_000,
-    select: (res) => res.data ?? [],
+    select: (res) => normalizeCategories(res.data),
   });
 }
 

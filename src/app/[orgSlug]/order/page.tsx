@@ -11,6 +11,7 @@ import { ReceiptPreview, type ReceiptData } from '@/components/pos/receipt-previ
 import { OrderTypeSelector } from '@/components/pos/order-type-selector';
 import { LoyaltyPanel, type LoyaltyState } from '@/components/retail/LoyaltyPanel';
 import { CalculatorOverlay } from '@/components/pos/calculator-overlay';
+import { CategoryNav } from '@/components/pos/category-nav';
 import { cn } from '@/lib/utils';
 import { terminalConfigFor } from '@/lib/use-case-config';
 import { useMenuItems, useCategories, useCreateOrder, useAddOrderLines, useVoidOrder, useAssignTable, useReleaseTable, type OrderSubtype } from '@/hooks/usePOS';
@@ -114,6 +115,9 @@ export default function OrderPage() {
   const [repricing, setRepricing] = useState(false);
   const [expenseOpen, setExpenseOpen] = useState(false);
   const [calcOpen, setCalcOpen] = useState(false);
+  // Mobile-only: the cart renders as a slide-up bottom sheet (toggled by the
+  // sticky bar). On lg+ it is always a static side panel and this flag is unused.
+  const [cartOpen, setCartOpen] = useState(false);
   // Keeps the latest handlePlaceOrder for the keyboard-checkout listener (avoids stale closure).
   const placeOrderRef = useRef<() => void>(() => {});
   const [displayMode, setDisplayMode] = useState<DisplayMode>(() => cfg.defaultDisplayMode);
@@ -214,12 +218,15 @@ export default function OrderPage() {
   const totalPages = Math.max(1, Math.ceil(totalItems / PAGE_SIZE));
 
   const { data: serverCategories } = useCategories();
+  // Typed category list (with icons) consumed by CategoryNav. CategoryNav owns
+  // the "All" tab, so it is not included here. Falls back to deriving categories
+  // from item names (no icons) when the server returns none.
   const categories = useMemo(() => {
     if (serverCategories && serverCategories.length > 0) {
-      return ['All', ...serverCategories.map((c: any) => (typeof c === 'string' ? c : c.name))];
+      return serverCategories;
     }
-    const cats = new Set(menuItems.map((i) => i.category));
-    return ['All', ...Array.from(cats).sort()];
+    const names = Array.from(new Set(menuItems.map((i) => i.category))).sort();
+    return names.map((name) => ({ name }));
   }, [serverCategories, menuItems]);
 
   // Server-side filtering — items returned by the API are already filtered
@@ -445,6 +452,7 @@ export default function OrderPage() {
         {
           onSuccess: () => {
             clearCart();
+            setCartOpen(false);
             setOrderPlacedId(billOrderId);
             setOrderPlacedNumber('');
             setOrderPlacedOpen(true);
@@ -501,12 +509,14 @@ export default function OrderPage() {
           // Dine-in: show OrderPlacedDialog (handles logout on OK/print)
           if (orderSubtype === 'dine_in') {
             clearCart();
+            setCartOpen(false);
             setOrderPlacedId(orderId);
             setOrderPlacedNumber(data.order_number || '');
             setOrderPlacedOpen(true);
             return;
           }
 
+          setCartOpen(false);
           setPaymentOpen(true);
         },
         onError: () => {
@@ -619,25 +629,15 @@ export default function OrderPage() {
           </div>
         </div>
 
-        {/* Category tabs + display mode toggle */}
+        {/* Category nav (icon + label) + display mode toggle */}
         <div className="px-4 pb-3 flex items-center gap-3 shrink-0">
-          {/* Horizontal scrolling pill tabs */}
-          <div className="flex gap-2 overflow-x-auto flex-1 pb-0.5 scrollbar-none">
-            {categories.map((cat) => (
-              <button
-                key={cat}
-                onClick={() => handleCategoryChange(cat)}
-                className={cn(
-                  'px-4 py-2 rounded-full text-sm font-semibold whitespace-nowrap transition-all min-h-9.5 shrink-0',
-                  activeCategory === cat
-                    ? 'bg-primary text-primary-foreground shadow-md shadow-primary/20'
-                    : 'bg-card border border-border text-muted-foreground hover:text-foreground hover:border-primary/40'
-                )}
-              >
-                {cat}
-              </button>
-            ))}
-          </div>
+          {/* Modern icon + label category navigation (CategoryNav owns the All tab) */}
+          <CategoryNav
+            categories={categories}
+            active={activeCategory}
+            onSelect={handleCategoryChange}
+            className="flex-1"
+          />
           {/* Display mode toggle */}
           <div className="flex gap-0.5 shrink-0 border border-border rounded-xl p-1 bg-card">
             <button
@@ -683,8 +683,8 @@ export default function OrderPage() {
           </div>
         )}
 
-        {/* Items area — scrolls internally */}
-        <div className="flex-1 overflow-y-auto min-h-0 px-4 pb-4">
+        {/* Items area — scrolls internally (extra bottom padding clears the mobile cart bar) */}
+        <div className="flex-1 overflow-y-auto min-h-0 px-4 pb-24 lg:pb-4">
           {menuLoading ? (
             <div className="flex flex-col items-center justify-center h-48 gap-3">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -766,7 +766,7 @@ export default function OrderPage() {
             </div>
           ) : displayMode === 'image_grid' ? (
             /* ─── IMAGE GRID MODE ─── */
-            <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3">
               {filteredItems.map((item) => {
                 const inCart = cart.find((c) => c.id === item.id && !c.selectedModifiers);
                 return (
@@ -809,8 +809,8 @@ export default function OrderPage() {
               })}
             </div>
           ) : (
-            /* ─── CARD MODE (default) — 3-col landscape, 2-col portrait ─── */
-            <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3">
+            /* ─── CARD MODE (default) — 2-col portrait → 5-col wide desktop ─── */
+            <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3">
               {filteredItems.map((item) => {
                 const inCart = cart.find((c) => c.id === item.id && !c.selectedModifiers);
                 return (
@@ -883,8 +883,61 @@ export default function OrderPage() {
         )}
       </div>
 
-      {/* ── Right Panel: Cart ── */}
-      <div className="w-full lg:w-96 xl:w-104 border-t lg:border-t-0 lg:border-l border-border bg-card flex flex-col shrink-0 min-h-0 overflow-hidden">
+      {/* ── Mobile sticky cart bar (hidden on lg+) ── */}
+      <div className="lg:hidden fixed bottom-0 inset-x-0 z-30 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 bg-gradient-to-t from-background via-background to-transparent">
+        <button
+          type="button"
+          onClick={() => setCartOpen(true)}
+          className="w-full min-h-14 rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/25 flex items-center justify-between px-5 font-bold active:scale-[0.99] transition-transform"
+        >
+          <span className="flex items-center gap-2.5">
+            <span className="relative">
+              <ShoppingCart className="h-5 w-5" />
+              {cartItemCount > 0 && (
+                <span className="absolute -top-2 -right-2 h-5 min-w-5 px-1 rounded-full bg-background text-primary text-[11px] font-bold flex items-center justify-center">
+                  {cartItemCount}
+                </span>
+              )}
+            </span>
+            <span>{cart.length === 0 ? 'View cart' : `${cartItemCount} item${cartItemCount !== 1 ? 's' : ''}`}</span>
+          </span>
+          <span className="tabular-nums">KES {total.toLocaleString()}</span>
+        </button>
+      </div>
+
+      {/* Mobile cart backdrop */}
+      {cartOpen && (
+        <div
+          className="lg:hidden fixed inset-0 z-40 bg-black/50 backdrop-blur-sm"
+          onClick={() => setCartOpen(false)}
+          aria-hidden
+        />
+      )}
+
+      {/* ── Right Panel: Cart ──
+          Desktop: static side panel. Mobile: slide-up bottom sheet toggled by cartOpen. */}
+      <div
+        className={cn(
+          'bg-card flex flex-col min-h-0 overflow-hidden border-border',
+          // Desktop side panel
+          'lg:relative lg:w-96 xl:w-104 lg:border-l lg:shrink-0 lg:translate-y-0 lg:rounded-none lg:max-h-none',
+          // Mobile bottom sheet
+          'fixed inset-x-0 bottom-0 z-50 w-full max-h-[85vh] rounded-t-3xl border-t shadow-2xl transition-transform duration-300 ease-out lg:shadow-none',
+          cartOpen ? 'translate-y-0' : 'translate-y-full lg:translate-y-0'
+        )}
+      >
+        {/* Mobile sheet grabber + close */}
+        <div className="lg:hidden relative pt-3 pb-1 shrink-0">
+          <div className="mx-auto h-1.5 w-12 rounded-full bg-border" />
+          <button
+            type="button"
+            onClick={() => setCartOpen(false)}
+            className="absolute right-4 top-2 h-9 w-9 rounded-full flex items-center justify-center text-muted-foreground hover:bg-accent"
+            aria-label="Close cart"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
         {/* Cart header */}
         <div className="px-5 py-4 border-b border-border shrink-0 space-y-3">
           <div className="flex items-center justify-between">
