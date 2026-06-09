@@ -52,6 +52,10 @@ import { OutletSwitcher } from './outlet-switcher';
 
 const SUBSCRIBE_URL = process.env.NEXT_PUBLIC_SUBSCRIPTIONS_UI_URL || 'https://pricing.codevertexitsolutions.com';
 const INVENTORY_URL = process.env.NEXT_PUBLIC_INVENTORY_UI_URL || 'https://inventory.codevertexitsolutions.com';
+// Cross-service UIs we LINK to (never duplicate their pages). Code fallback is the real safety net
+// since NEXT_PUBLIC URLs are baked at build time.
+const TREASURY_URL = process.env.NEXT_PUBLIC_TREASURY_UI_URL || 'https://books.codevertexitsolutions.com';
+const MARKETFLOW_URL = process.env.NEXT_PUBLIC_MARKETFLOW_UI_URL || 'https://marketflow.codevertexitsolutions.com';
 
 interface SidebarProps {
   open?: boolean;
@@ -272,6 +276,8 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
         { label: 'Drafts', icon: FileText, href: '/sell/drafts', moduleKey: 'orders', permission: [P.ORDERS_ADD, P.ORDERS_CHANGE_OWN, P.ORDERS_CHANGE, P.ORDERS_MANAGE], waiterHidden: true },
         // Credit Sale = sell on account (on_account tender → treasury AR; credit limit enforced).
         { label: 'Credit Sale', icon: HandCoins, href: '/sell/add?credit=1', moduleKey: 'new_order', permission: [P.ORDERS_ADD, P.ORDERS_MANAGE], waiterHidden: true, cashierHospHidden: true },
+        // Quotations are owned by treasury — link to its UI rather than duplicating the page.
+        { label: 'Quotations', icon: FileText, href: `${TREASURY_URL}/${orgSlug}/quotations`, moduleKey: 'orders', permission: [P.ORDERS_ADD, P.ORDERS_MANAGE, P.REPORTS_VIEW], waiterHidden: true },
         { label: 'Layaway', icon: Package, href: '/layaway', moduleKey: 'layaway', permission: [P.ORDERS_ADD, P.ORDERS_CHANGE_OWN, P.ORDERS_CHANGE, P.ORDERS_MANAGE], subFeature: 'layaway', subPlan: 'Growth', waiterHidden: true },
         { label: 'Sell Returns', icon: RotateCcw, href: '/returns', moduleKey: 'returns', permission: [P.ORDERS_CHANGE_OWN, P.ORDERS_CHANGE, P.ORDERS_MANAGE], waiterHidden: true },
       ],
@@ -331,6 +337,28 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
       items: [
         { label: 'Purchase Orders', icon: Truck, href: '/purchase-orders', moduleKey: 'purchase_orders', permission: [P.CATALOG_MANAGE, P.CATALOG_CHANGE], waiterHidden: true },
         { label: 'Manage Inventory', icon: Truck, href: `${INVENTORY_URL}/${orgSlug}`, moduleKey: 'inventory', permission: [P.CATALOG_MANAGE, P.CATALOG_CHANGE], waiterHidden: true },
+      ],
+    },
+    {
+      // Accounting lives in treasury-ui — LINK, don't duplicate. Gated by a manager permission;
+      // treasury-ui enforces its own RBAC on arrival.
+      label: 'Accounting',
+      defaultCollapsed: true,
+      items: [
+        { label: 'Invoices', icon: FileText, href: `${TREASURY_URL}/${orgSlug}/invoices`, moduleKey: 'accounting', permission: [P.REPORTS_VIEW, P.REPORTS_MANAGE, P.CONFIG_MANAGE], waiterHidden: true },
+        { label: 'Expenses', icon: Wallet, href: `${TREASURY_URL}/${orgSlug}/expenses`, moduleKey: 'accounting', permission: [P.REPORTS_VIEW, P.REPORTS_MANAGE, P.CONFIG_MANAGE], waiterHidden: true },
+        { label: 'Credit Notes', icon: RotateCcw, href: `${TREASURY_URL}/${orgSlug}/credit-notes`, moduleKey: 'accounting', permission: [P.REPORTS_VIEW, P.REPORTS_MANAGE, P.CONFIG_MANAGE], waiterHidden: true },
+        { label: 'Finance Reports', icon: BarChart3, href: `${TREASURY_URL}/${orgSlug}/reports`, moduleKey: 'accounting', permission: [P.REPORTS_VIEW, P.REPORTS_MANAGE, P.CONFIG_MANAGE], waiterHidden: true },
+      ],
+    },
+    {
+      // CRM + bulk SMS live in marketflow-ui — LINK, don't duplicate.
+      label: 'CRM & Marketing',
+      defaultCollapsed: true,
+      items: [
+        { label: 'Campaigns & SMS', icon: Gift, href: `${MARKETFLOW_URL}/${orgSlug}/campaigns`, moduleKey: 'crm', permission: [P.CLIENTS_VIEW, P.CLIENTS_MANAGE, P.REPORTS_VIEW], waiterHidden: true },
+        { label: 'Contacts', icon: UserSquare, href: `${MARKETFLOW_URL}/${orgSlug}/contacts`, moduleKey: 'crm', permission: [P.CLIENTS_VIEW, P.CLIENTS_MANAGE], waiterHidden: true },
+        { label: 'Segments', icon: Users, href: `${MARKETFLOW_URL}/${orgSlug}/crm/segments`, moduleKey: 'crm', permission: [P.CLIENTS_VIEW, P.CLIENTS_MANAGE], waiterHidden: true },
       ],
     },
     {

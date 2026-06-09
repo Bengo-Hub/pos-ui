@@ -45,7 +45,9 @@ export type ModuleKey =
   | 'clients'
   | 'staff_schedule'
   | 'resources'
-  | 'queue';
+  | 'queue'
+  | 'accounting'
+  | 'crm';
 
 // ─── Use-case types ─────────────────────────────────────────────────────────
 export type UseCaseType =
@@ -64,6 +66,10 @@ const COMMON_MODULES: ModuleKey[] = [
   'settings',
   'platform',
   'inventory',
+  // Cross-service link groups (Accounting→treasury-ui, CRM→marketflow-ui) — available to every
+  // use case but gated by a manager permission on each item; the target service enforces its own RBAC.
+  'accounting',
+  'crm',
 ];
 
 const USE_CASE_MODULES: Record<UseCaseType, ModuleKey[]> = {
