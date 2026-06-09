@@ -19,6 +19,8 @@ import {
   Clock,
   Cpu,
   FilePlus,
+  FileText,
+  HandCoins,
   FlaskConical,
   Gift,
   Grid3x3,
@@ -266,6 +268,10 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
         { label: 'POS', icon: ShoppingCart, href: '/retail', moduleKey: 'retail', permission: P.ORDERS_ADD, waiterHidden: true },
         // All sales (the sale/order list) — add/change or reports access; excludes kitchen/bar (KDS-only view).
         { label: 'All Sales', icon: ClipboardList, href: '/orders', moduleKey: 'orders', permission: [P.ORDERS_ADD, P.ORDERS_CHANGE_OWN, P.ORDERS_CHANGE, P.ORDERS_MANAGE, P.ORDERS_VIEW_OWN, P.REPORTS_VIEW], waiterHidden: true },
+        // Drafts = saved-but-unpaid sales (POSOrder status=draft) from terminal Park / Add Sale.
+        { label: 'Drafts', icon: FileText, href: '/sell/drafts', moduleKey: 'orders', permission: [P.ORDERS_ADD, P.ORDERS_CHANGE_OWN, P.ORDERS_CHANGE, P.ORDERS_MANAGE], waiterHidden: true },
+        // Credit Sale = sell on account (on_account tender → treasury AR; credit limit enforced).
+        { label: 'Credit Sale', icon: HandCoins, href: '/sell/add?credit=1', moduleKey: 'new_order', permission: [P.ORDERS_ADD, P.ORDERS_MANAGE], waiterHidden: true, cashierHospHidden: true },
         { label: 'Layaway', icon: Package, href: '/layaway', moduleKey: 'layaway', permission: [P.ORDERS_ADD, P.ORDERS_CHANGE_OWN, P.ORDERS_CHANGE, P.ORDERS_MANAGE], subFeature: 'layaway', subPlan: 'Growth', waiterHidden: true },
         { label: 'Sell Returns', icon: RotateCcw, href: '/returns', moduleKey: 'returns', permission: [P.ORDERS_CHANGE_OWN, P.ORDERS_CHANGE, P.ORDERS_MANAGE], waiterHidden: true },
       ],

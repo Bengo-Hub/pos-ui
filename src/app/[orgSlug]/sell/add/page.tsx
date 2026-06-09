@@ -8,7 +8,7 @@
  */
 
 import { useState, useMemo, useCallback } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import { Loader2, Minus, Plus, Search, ShoppingCart, Trash2, UserPlus, X } from 'lucide-react';
 import { useMenuItems, useCreateOrder, type CatalogItem } from '@/hooks/usePOS';
 import { useClientSearch } from '@/hooks/useClients';
@@ -28,6 +28,7 @@ const fmt = (n: number) => `KES ${n.toLocaleString(undefined, { maximumFractionD
 
 export default function AddSalePage() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const orgSlug = (params?.orgSlug as string) || '';
   const outlet = useAuthStore((s) => s.outlet);
   const outletId = outlet?.id ?? '';
@@ -47,7 +48,9 @@ export default function AddSalePage() {
 
   // ── Order-level ──
   const [discount, setDiscount] = useState(0);
-  const [creditSale, setCreditSale] = useState(false);
+  // Credit Sale entry point (sidebar /sell/add?credit=1) pre-selects on-account; the On-Account
+  // tender in the payment modal posts the total to the customer's AR (treasury enforces the limit).
+  const [creditSale, setCreditSale] = useState(searchParams.get('credit') === '1');
   const [notes, setNotes] = useState('');
 
   const createOrder = useCreateOrder();
@@ -129,8 +132,8 @@ export default function AddSalePage() {
     <div className="p-6 max-w-6xl mx-auto space-y-6">
       <div className="flex items-center gap-3">
         <ShoppingCart className="h-6 w-6 text-primary" />
-        <h1 className="text-2xl font-bold tracking-tight">Add Sale</h1>
-        <span className="text-sm text-muted-foreground">Back-office sale entry</span>
+        <h1 className="text-2xl font-bold tracking-tight">{creditSale ? 'Credit Sale' : 'Add Sale'}</h1>
+        <span className="text-sm text-muted-foreground">{creditSale ? 'Sell on account — posts to customer AR' : 'Back-office sale entry'}</span>
       </div>
 
       {/* Customer */}
@@ -240,7 +243,7 @@ export default function AddSalePage() {
           <div className="space-y-2">
             <Button onClick={() => save('pay')} disabled={lines.length === 0 || createOrder.isPending} className="w-full min-h-12 font-bold rounded-xl gap-2">
               {createOrder.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShoppingCart className="h-4 w-4" />}
-              Save &amp; Pay · {fmt(total)}
+              {creditSale ? 'Save — On Account' : 'Save & Pay'} · {fmt(total)}
             </Button>
             <Button variant="outline" onClick={() => save('draft')} disabled={lines.length === 0 || createOrder.isPending} className="w-full rounded-xl">
               Save as Draft
