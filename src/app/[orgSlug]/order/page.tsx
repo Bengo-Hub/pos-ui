@@ -9,6 +9,7 @@ import { AddExpenseModal } from '@/components/pos/add-expense-modal';
 import { ParkedSalesModal } from '@/components/pos/parked-sales-modal';
 import { ReceiptPreview, type ReceiptData } from '@/components/pos/receipt-preview';
 import { OrderTypeSelector } from '@/components/pos/order-type-selector';
+import { LoyaltyPanel, type LoyaltyState } from '@/components/retail/LoyaltyPanel';
 import { cn } from '@/lib/utils';
 import { terminalConfigFor } from '@/lib/use-case-config';
 import { useMenuItems, useCategories, useCreateOrder, useAddOrderLines, useVoidOrder, useAssignTable, useReleaseTable, type OrderSubtype } from '@/hooks/usePOS';
@@ -87,6 +88,9 @@ export default function OrderPage() {
   useEffect(() => {
     if (cfg.barcodeFirst) scanInputRef.current?.focus();
   }, [cfg.barcodeFirst]);
+  // Retail loyalty panel (customer lookup + points redemption) — absorbed from /retail into the
+  // adaptive terminal; its redeemDiscount applies as an order discount and posts the customer.
+  const [loyaltyState, setLoyaltyState] = useState<LoyaltyState | null>(null);
   const { can } = usePermissions();
   const { data: posSettings } = usePOSSettings();
   const taxRate = (posSettings?.vat_rate ?? 16) / 100;
@@ -373,7 +377,8 @@ export default function OrderPage() {
 
   const subtotal = cart.reduce((sum, item) => sum + (item.price + (item.modifierTotal ?? 0)) * item.quantity, 0);
   const tax = Math.round(subtotal * taxRate);
-  const total = subtotal + tax;
+  const loyaltyDiscount = loyaltyState?.redeemDiscount ?? 0;
+  const total = Math.max(0, subtotal + tax - loyaltyDiscount);
   const cartItemCount = cart.reduce((s, c) => s + c.quantity, 0);
 
   // ─── Place Order ────────────────────────────────────────────────────────
@@ -447,6 +452,9 @@ export default function OrderPage() {
         orderSubtype: orderSubtype ?? undefined,
         tableId: tableId || undefined,
         coversCount: coversParam > 1 ? coversParam : undefined,
+        discountAmount: loyaltyDiscount || undefined,
+        customerPhone: loyaltyState?.customerPhone || undefined,
+        customerName: loyaltyState?.customerName || undefined,
         lines: orderLines,
       },
       {
@@ -911,6 +919,11 @@ export default function OrderPage() {
               {repricing && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
             </div>
           )}
+          {cfg.showPricingProfile && (
+            <div className="mt-2">
+              <LoyaltyPanel onStateChange={setLoyaltyState} />
+            </div>
+          )}
         </div>
 
         {/* Cart items — scrollable */}
@@ -1007,6 +1020,12 @@ export default function OrderPage() {
                 <span className="text-muted-foreground">VAT ({Math.round(taxRate * 100)}%)</span>
                 <span className="font-medium tabular-nums">KES {tax.toLocaleString()}</span>
               </div>
+              {loyaltyDiscount > 0 && (
+                <div className="flex justify-between text-sm text-emerald-600">
+                  <span>Loyalty redemption</span>
+                  <span className="font-medium tabular-nums">- KES {loyaltyDiscount.toLocaleString()}</span>
+                </div>
+              )}
               <div className="flex justify-between pt-2 border-t border-border">
                 <span className="font-bold text-base">Total</span>
                 <span className="font-bold text-base tabular-nums text-primary">KES {total.toLocaleString()}</span>
