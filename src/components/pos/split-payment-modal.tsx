@@ -56,6 +56,7 @@ export function SplitPaymentModal({
   const [lineAssignments, setLineAssignments] = useState<number[]>(() => new Array(orderLines.length).fill(0));
   const [itemSplitPayer, setItemSplitPayer] = useState<number | null>(null); // guest index (1-based)
   const [paidGuests, setPaidGuests] = useState<Set<number>>(new Set());
+  const [cashGiven, setCashGiven] = useState('');
 
   const fmt = (n: number) =>
     new Intl.NumberFormat('en-KE', { style: 'currency', currency: 'KES' }).format(n);
@@ -207,6 +208,24 @@ export function SplitPaymentModal({
           {mode === 'full' && (
             <div className="space-y-3">
               <p className="text-sm text-muted-foreground">Process the full amount in one payment.</p>
+              {/* Cash-given helper: compute change due (display only — does not alter the tender). */}
+              <div className="rounded-xl border border-border p-3 space-y-2">
+                <label className="text-xs font-semibold text-muted-foreground">Cash given (optional)</label>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  value={cashGiven}
+                  onChange={(e) => setCashGiven(e.target.value)}
+                  placeholder={fmt(total)}
+                  className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+                />
+                {parseFloat(cashGiven) > total && (
+                  <div className="flex justify-between text-sm font-semibold text-emerald-600">
+                    <span>Change due</span>
+                    <span className="tabular-nums">{fmt(parseFloat(cashGiven) - total)}</span>
+                  </div>
+                )}
+              </div>
               <button
                 type="button"
                 onClick={() => setCurrentPayer(0)}
