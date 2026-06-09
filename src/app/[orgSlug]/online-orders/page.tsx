@@ -7,12 +7,17 @@ import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
 import { onlineOrdersApi, type PickupOrder, type DeliveryOrder } from '@/lib/api/online-orders';
 import { useDeliveryOrders } from '@/hooks/useOnlineOrders';
 import { AssignRiderDialog } from '@/components/online-orders/assign-rider-dialog';
+import { MenuQRCard } from '@/components/online-orders/menu-qr-card';
+import { useParams } from 'next/navigation';
 import { usePermissions, P } from '@/hooks/usePermissions';
 import { useAuthStore } from '@/store/auth';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
 import { Bike, CheckCircle2, Clock, Loader2, MapPin, Package, Phone, UserCheck } from 'lucide-react';
 import { toast } from 'sonner';
+
+// Public online-store/menu base — the same URL the header's "Online Store" link uses.
+const ORDERING_URL = process.env.NEXT_PUBLIC_ORDERING_UI_URL ?? 'https://ordersapp.codevertexitsolutions.com';
 
 const STATUS_COLOR: Record<string, string> = {
   pending:           'bg-amber-500/10 text-amber-700 dark:text-amber-400',
@@ -174,6 +179,7 @@ function DeliveryOrderCard({ order, onAssign }: { order: DeliveryOrder; onAssign
 
 function OnlineOrdersPage() {
   const tenantID = useAuthStore((s) => s.user?.tenant_id ?? '');
+  const orgSlug = (useParams()?.orgSlug as string) || '';
 
   const { data: pickupOrders = [], isLoading: pickupLoading } = useQuery({
     queryKey: ['pickup-orders', tenantID],
@@ -202,6 +208,8 @@ function OnlineOrdersPage() {
           orders from here. Auto-refreshes every 15s.
         </p>
       </div>
+
+      {orgSlug && <MenuQRCard url={`${ORDERING_URL}/${orgSlug}`} />}
 
       {isLoading ? (
         <div className="flex items-center justify-center h-48 gap-3">
