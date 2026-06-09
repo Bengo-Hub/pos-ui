@@ -10,6 +10,7 @@ import { ParkedSalesModal } from '@/components/pos/parked-sales-modal';
 import { ReceiptPreview, type ReceiptData } from '@/components/pos/receipt-preview';
 import { OrderTypeSelector } from '@/components/pos/order-type-selector';
 import { LoyaltyPanel, type LoyaltyState } from '@/components/retail/LoyaltyPanel';
+import { CalculatorOverlay } from '@/components/pos/calculator-overlay';
 import { cn } from '@/lib/utils';
 import { terminalConfigFor } from '@/lib/use-case-config';
 import { useMenuItems, useCategories, useCreateOrder, useAddOrderLines, useVoidOrder, useAssignTable, useReleaseTable, type OrderSubtype } from '@/hooks/usePOS';
@@ -22,6 +23,7 @@ import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import {
   AlertTriangle,
   Ban,
+  Calculator,
   ChefHat,
   Flame,
   Grid3x3,
@@ -101,6 +103,9 @@ export default function OrderPage() {
   const [pricingProfile, setPricingProfile] = useState<'RETAIL' | 'WHOLESALE'>('RETAIL');
   const [repricing, setRepricing] = useState(false);
   const [expenseOpen, setExpenseOpen] = useState(false);
+  const [calcOpen, setCalcOpen] = useState(false);
+  // Keeps the latest handlePlaceOrder for the keyboard-checkout listener (avoids stale closure).
+  const placeOrderRef = useRef<() => void>(() => {});
   const [displayMode, setDisplayMode] = useState<DisplayMode>(() => cfg.defaultDisplayMode);
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 50;
@@ -297,6 +302,12 @@ export default function OrderPage() {
         setBarcodeBuffer('');
         return;
       }
+      // Retail/pharmacy keyboard-first checkout: Enter (no pending scan) finalizes → payment.
+      if (e.key === 'Enter' && cfg.keyboardCheckout) {
+        e.preventDefault();
+        placeOrderRef.current();
+        return;
+      }
       if (/^[a-zA-Z0-9]$/.test(e.key)) {
         setBarcodeBuffer((prev) => prev + e.key);
         clearTimeout(timer);
@@ -309,7 +320,7 @@ export default function OrderPage() {
       window.removeEventListener('keydown', handleKeyDown);
       clearTimeout(timer);
     };
-  }, [barcodeBuffer, menuItems, handleItemTap]);
+  }, [barcodeBuffer, menuItems, handleItemTap, cfg.keyboardCheckout]);
 
   // Handle Enter in the search box to attempt barcode lookup
   const handleSearchKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -534,6 +545,9 @@ export default function OrderPage() {
     setParkedOpen(false);
     setPaymentOpen(true);
   };
+
+  // Sync the keyboard-checkout ref to the current closure each render.
+  placeOrderRef.current = handlePlaceOrder;
 
   const handlePaymentConfirmed = useCallback(async () => {
     toast.success(`Order ${currentOrderNumber} paid!`);
@@ -1139,6 +1153,19 @@ export default function OrderPage() {
       {/* ─── Modals ────────────────────────────────────────────────────────── */}
 
       <AddExpenseModal open={expenseOpen} onClose={() => setExpenseOpen(false)} />
+      {cfg.showCalculator && (
+        <>
+          <button
+            type="button"
+            onClick={() => setCalcOpen((v) => !v)}
+            className="fixed bottom-6 right-6 z-40 h-12 w-12 rounded-full bg-card border border-border shadow-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+            title="Calculator"
+          >
+            <Calculator className="h-5 w-5" />
+          </button>
+          {calcOpen && <CalculatorOverlay onClose={() => setCalcOpen(false)} />}
+        </>
+      )}
 
       {parkedOpen && <ParkedSalesModal onClose={() => setParkedOpen(false)} onResume={handleResumeParked} />}
 
