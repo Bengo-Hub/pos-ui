@@ -2,6 +2,8 @@
 
 import { apiClient } from '@/lib/api/client';
 import { useKDSStations } from '@/hooks/useKDS';
+import { usePOSSettings } from '@/hooks/usePOSSettings';
+import { useAuthStore } from '@/store/auth';
 import { CheckCircle2, Loader2, Printer } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
@@ -18,6 +20,8 @@ interface OrderPlacedDialogProps {
 export function OrderPlacedDialog({ open, orderNumber, orderId, tenantId, orgSlug, onClose }: OrderPlacedDialogProps) {
   const router = useRouter();
   const { data: stationsData } = useKDSStations();
+  const { data: posSettings } = usePOSSettings();
+  const servedBy = useAuthStore((s) => s.user?.fullName || s.user?.email || '');
   const [printing, setPrinting] = useState(false);
 
   if (!open) return null;
@@ -35,7 +39,8 @@ export function OrderPlacedDialog({ open, orderNumber, orderId, tenantId, orgSlu
   const handlePrint = async () => {
     setPrinting(true);
     try {
-      const html = await apiClient.get<string>(`/api/v1/${tenantId}/pos/orders/${orderId}/receipt/html`);
+      const q = servedBy ? `?served_by=${encodeURIComponent(servedBy)}` : '';
+      const html = await apiClient.get<string>(`/api/v1/${tenantId}/pos/orders/${orderId}/receipt/html${q}`);
       const win = window.open('', '_blank', 'width=400,height=600');
       if (win) {
         win.document.write(html as string);
@@ -50,6 +55,13 @@ export function OrderPlacedDialog({ open, orderNumber, orderId, tenantId, orgSlu
       setPrinting(false);
       handleLogout();
     }
+  };
+
+  // OK = log out. If auto-print is enabled, print the bill first (the waiter didn't click Print Bill —
+  // that path prints + logs out, so OK is only reached when not manually printed). Off ⇒ no auto-print.
+  const handleOk = () => {
+    if (posSettings?.auto_print_order) handlePrint();
+    else handleLogout();
   };
 
   return (
@@ -83,7 +95,7 @@ export function OrderPlacedDialog({ open, orderNumber, orderId, tenantId, orgSlu
             Print Bill
           </button>
           <button
-            onClick={handleLogout}
+            onClick={handleOk}
             className="flex-1 py-3 rounded-2xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors"
           >
             OK

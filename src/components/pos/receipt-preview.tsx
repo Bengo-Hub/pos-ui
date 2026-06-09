@@ -10,7 +10,7 @@ import { ReceiptPrint } from './receipt-print';
 const RECEIPT_PRINT_CSS = `
   @page { size: 80mm auto; margin: 3mm 4mm; }
   html, body { margin: 0; padding: 0; background: #fff; }
-  .receipt-root { font-family: 'Courier New', Courier, monospace; font-size: 11px; line-height: 1.4; color: #000; background: #fff; width: 72mm; padding: 4mm 0; margin: 0 auto; }
+  .receipt-root { font-family: 'Courier New', Courier, monospace; font-size: 12px; font-weight: bold; line-height: 1.4; color: #000; background: #fff; width: 72mm; padding: 4mm 0; margin: 0 auto; }
   .receipt-center { text-align: center; }
   .receipt-bold { font-weight: bold; }
   .receipt-divider { border: none; border-top: 1px dashed #000; margin: 3px 0; }
@@ -18,7 +18,7 @@ const RECEIPT_PRINT_CSS = `
   .receipt-row-name { flex: 1; padding-right: 6px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
   .receipt-row-value { flex-shrink: 0; white-space: nowrap; }
   .receipt-total-row { font-weight: bold; font-size: 13px; border-top: 1px solid #000; margin-top: 2px; padding-top: 2px; }
-  .receipt-small { font-size: 9px; color: #444; }
+  .receipt-small { font-size: 10px; color: #000; }
   .receipt-qr { display: block; margin: 4px auto; width: 20mm; height: 20mm; object-fit: contain; }
 `;
 
