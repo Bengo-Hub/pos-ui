@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { useHotelRoom, useRoomFolio, useCheckIn, useCheckOut, useLateCheckout } from '@/hooks/useHotel';
+import { useHotelRoom, useRoomFolio, useCheckIn, useCheckOut, useLateCheckout, usePostFolioCharge } from '@/hooks/useHotel';
 import { Card, CardContent } from '@/components/ui/base';
 import { cn } from '@/lib/utils';
 import {
@@ -48,6 +48,38 @@ function RoomDetailPageInner() {
   const lateCheckout = useLateCheckout(roomId);
   const [showLate, setShowLate] = useState(false);
   const [lateForm, setLateForm] = useState({ surcharge_amount: 0, notes: '' });
+
+  // Manual folio charge (minibar / room service). When an inventory SKU is given the backend
+  // backflushes its stock (a recipe SKU explodes its BOM); leave it blank for a pure money charge.
+  const postCharge = usePostFolioCharge(roomId);
+  const [showCharge, setShowCharge] = useState(false);
+  const [chargeForm, setChargeForm] = useState({ description: '', amount: '', charge_type: 'food', inventory_sku: '', quantity: '1' });
+
+  function submitCharge() {
+    const amount = parseFloat(chargeForm.amount);
+    if (!chargeForm.description.trim() || !amount || amount <= 0) {
+      toast.error('Enter a description and a positive amount');
+      return;
+    }
+    postCharge.mutate(
+      {
+        description: chargeForm.description.trim(),
+        amount,
+        charge_type: chargeForm.charge_type,
+        ...(chargeForm.inventory_sku.trim()
+          ? { inventory_sku: chargeForm.inventory_sku.trim(), quantity: parseFloat(chargeForm.quantity) || 1 }
+          : {}),
+      },
+      {
+        onSuccess: () => {
+          toast.success('Charge added to folio');
+          setChargeForm({ description: '', amount: '', charge_type: 'food', inventory_sku: '', quantity: '1' });
+          setShowCharge(false);
+        },
+        onError: () => toast.error('Failed to add charge'),
+      },
+    );
+  }
 
   async function handleLateCheckout() {
     try {
@@ -200,6 +232,79 @@ function RoomDetailPageInner() {
               <span>Total</span>
               <span className="text-primary">KES {folio.reduce((s, i) => s + i.amount, 0).toLocaleString()}</span>
             </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Manual folio charge (minibar / room service); an inventory SKU deducts stock */}
+      {isOccupied && (
+        <Card>
+          <CardContent className="p-4">
+            {!showCharge ? (
+              <button
+                onClick={() => setShowCharge(true)}
+                className="w-full py-2 rounded-xl border border-dashed border-border text-sm text-muted-foreground hover:bg-muted transition-colors"
+              >
+                + Add folio charge (minibar / room service)
+              </button>
+            ) : (
+              <div className="space-y-3">
+                <p className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">Add Folio Charge</p>
+                <input
+                  className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                  placeholder="Description (e.g. Minibar - Coke)"
+                  value={chargeForm.description}
+                  onChange={(e) => setChargeForm((f) => ({ ...f, description: e.target.value }))}
+                />
+                <div className="flex gap-2">
+                  <input
+                    type="number" min="0" step="0.01"
+                    className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                    placeholder="Amount"
+                    value={chargeForm.amount}
+                    onChange={(e) => setChargeForm((f) => ({ ...f, amount: e.target.value }))}
+                  />
+                  <select
+                    className="rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                    value={chargeForm.charge_type}
+                    onChange={(e) => setChargeForm((f) => ({ ...f, charge_type: e.target.value }))}
+                  >
+                    <option value="food">Food</option>
+                    <option value="minibar">Minibar</option>
+                    <option value="laundry">Laundry</option>
+                    <option value="service">Service</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm font-mono"
+                    placeholder="Inventory SKU (optional - deducts stock)"
+                    value={chargeForm.inventory_sku}
+                    onChange={(e) => setChargeForm((f) => ({ ...f, inventory_sku: e.target.value }))}
+                  />
+                  {chargeForm.inventory_sku.trim() && (
+                    <input
+                      type="number" min="1" step="1"
+                      className="w-20 rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                      placeholder="Qty"
+                      value={chargeForm.quantity}
+                      onChange={(e) => setChargeForm((f) => ({ ...f, quantity: e.target.value }))}
+                    />
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => setShowCharge(false)} className="flex-1 py-2 rounded-xl border border-border text-sm font-medium hover:bg-muted transition-colors">Cancel</button>
+                  <button
+                    onClick={submitCharge}
+                    disabled={postCharge.isPending}
+                    className="flex-1 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 disabled:opacity-50 transition-colors"
+                  >
+                    {postCharge.isPending ? 'Adding...' : 'Add Charge'}
+                  </button>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
