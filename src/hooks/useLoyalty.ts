@@ -143,3 +143,36 @@ export function useRedeemPoints(accountId: string) {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['loyalty-account', tenantID, accountId] }),
   });
 }
+
+export interface Referral {
+  id: string;
+  referrer_account_id: string;
+  referred_phone: string;
+  code: string;
+  status: 'pending' | 'earned' | 'expired' | 'cancelled';
+  bonus_points: number;
+  created_at: string;
+  earned_at?: string;
+}
+
+export function useReferrals(accountId: string) {
+  const tenantID = useTenantID();
+  return useQuery({
+    queryKey: ['loyalty-referrals', tenantID, accountId],
+    queryFn: () =>
+      apiClient
+        .get<Referral[] | PaginatedResponse<Referral>>(`${base(tenantID)}/accounts/${accountId}/referrals`)
+        .then((res) => (Array.isArray(res) ? res : res.data ?? [])),
+    enabled: !!tenantID && !!accountId,
+  });
+}
+
+export function useCreateReferral(accountId: string) {
+  const tenantID = useTenantID();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { referred_phone: string; bonus_points?: number }) =>
+      apiClient.post<Referral>(`${base(tenantID)}/accounts/${accountId}/referrals`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['loyalty-referrals', tenantID, accountId] }),
+  });
+}

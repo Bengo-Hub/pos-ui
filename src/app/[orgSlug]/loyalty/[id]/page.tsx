@@ -3,9 +3,9 @@
 import { ModuleGate } from '@/components/auth/module-gate';
 import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
 
-import { useLoyaltyAccount, useEarnPoints, useRedeemPoints, type LoyaltyTransaction } from '@/hooks/useLoyalty';
+import { useLoyaltyAccount, useEarnPoints, useRedeemPoints, useReferrals, useCreateReferral, type LoyaltyTransaction } from '@/hooks/useLoyalty';
 import { cn } from '@/lib/utils';
-import { ArrowLeft, Gift, Loader2, Minus, Plus } from 'lucide-react';
+import { ArrowLeft, Gift, Loader2, Minus, Plus, Users } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useState } from 'react';
@@ -32,6 +32,23 @@ function LoyaltyAccountDetailPage() {
 
   const [earnPoints, setEarnPoints] = useState('');
   const [redeemPoints, setRedeemPoints] = useState('');
+
+  const { data: referrals = [] } = useReferrals(id);
+  const createReferral = useCreateReferral(id);
+  const [referredPhone, setReferredPhone] = useState('');
+
+  async function handleRefer(e: React.FormEvent) {
+    e.preventDefault();
+    const phone = referredPhone.trim();
+    if (!phone) { toast.error("Enter the friend's phone"); return; }
+    try {
+      await createReferral.mutateAsync({ referred_phone: phone });
+      toast.success('Referral created');
+      setReferredPhone('');
+    } catch (err: any) {
+      toast.error(err?.message ?? 'Failed to create referral');
+    }
+  }
 
   async function handleEarn(e: React.FormEvent) {
     e.preventDefault();
@@ -186,6 +203,63 @@ function LoyaltyAccountDetailPage() {
                     {tx.balance_after.toLocaleString()}
                   </td>
                   <td className="px-4 py-2.5 text-muted-foreground">{formatDate(tx.created_at)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {/* Referrals (refer-a-friend) */}
+      <div className="rounded-2xl border border-border bg-card overflow-hidden">
+        <div className="px-4 py-3 border-b border-border flex items-center gap-2">
+          <Users className="h-4 w-4 text-primary" />
+          <p className="text-sm font-semibold">Referrals</p>
+        </div>
+        <form onSubmit={handleRefer} className="flex items-center gap-2 p-4 border-b border-border">
+          <input
+            type="tel"
+            placeholder="Friend's phone (e.g. 2547…)"
+            value={referredPhone}
+            onChange={(e) => setReferredPhone(e.target.value)}
+            className="flex-1 px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+          />
+          <button
+            type="submit"
+            disabled={createReferral.isPending}
+            className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-60 transition-colors shrink-0"
+          >
+            {createReferral.isPending ? '…' : 'Refer'}
+          </button>
+        </form>
+        {referrals.length === 0 ? (
+          <div className="flex items-center justify-center h-20 text-sm text-muted-foreground">
+            No referrals yet
+          </div>
+        ) : (
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-border bg-accent/20">
+                <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground">Friend</th>
+                <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground">Code</th>
+                <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground">Status</th>
+                <th className="text-right px-4 py-2.5 text-xs font-semibold text-muted-foreground">Bonus</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {referrals.map((r) => (
+                <tr key={r.id} className="hover:bg-accent/20 transition-colors">
+                  <td className="px-4 py-2.5">{r.referred_phone}</td>
+                  <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground">{r.code}</td>
+                  <td className="px-4 py-2.5">
+                    <span className={cn('px-2 py-0.5 rounded-full text-xs font-medium capitalize',
+                      r.status === 'earned' ? 'bg-green-500/15 text-green-500'
+                        : r.status === 'pending' ? 'bg-amber-500/15 text-amber-500'
+                        : 'bg-muted text-muted-foreground')}>
+                      {r.status}
+                    </span>
+                  </td>
+                  <td className="px-4 py-2.5 text-right font-semibold text-primary">{r.bonus_points}</td>
                 </tr>
               ))}
             </tbody>
