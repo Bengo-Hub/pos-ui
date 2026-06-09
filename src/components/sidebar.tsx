@@ -18,8 +18,7 @@ import {
   ClipboardList,
   Clock,
   Cpu,
-  Presentation,
-  Wine,
+  FilePlus,
   FlaskConical,
   Gift,
   Grid3x3,
@@ -30,6 +29,7 @@ import {
   Package,
   Pill,
   Plus,
+  Presentation,
   RotateCcw,
   Settings,
   ShoppingBag,
@@ -40,6 +40,7 @@ import {
   UserSquare,
   Users,
   Wallet,
+  Wine,
   X
 } from 'lucide-react';
 import Link from 'next/link';
@@ -260,7 +261,9 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
       label: 'Sell',
       items: [
         { label: 'POS Terminal', icon: Plus, href: '/order', moduleKey: 'new_order', permission: P.ORDERS_ADD, waiterHidden: true, cashierHospHidden: true },
-        { label: 'Retail POS', icon: ShoppingCart, href: '/retail', moduleKey: 'retail', permission: P.ORDERS_ADD, waiterHidden: true },
+        // Back-office full sale form (wholesaler/credit/delivery) — distinct from the fast terminal.
+        { label: 'Add Sale', icon: FilePlus, href: '/sell/add', moduleKey: 'new_order', permission: [P.ORDERS_ADD, P.ORDERS_MANAGE], waiterHidden: true, cashierHospHidden: true },
+        { label: 'POS', icon: ShoppingCart, href: '/retail', moduleKey: 'retail', permission: P.ORDERS_ADD, waiterHidden: true },
         // All sales (the sale/order list) — add/change or reports access; excludes kitchen/bar (KDS-only view).
         { label: 'All Sales', icon: ClipboardList, href: '/orders', moduleKey: 'orders', permission: [P.ORDERS_ADD, P.ORDERS_CHANGE_OWN, P.ORDERS_CHANGE, P.ORDERS_MANAGE, P.ORDERS_VIEW_OWN, P.REPORTS_VIEW], waiterHidden: true },
         { label: 'Layaway', icon: Package, href: '/layaway', moduleKey: 'layaway', permission: [P.ORDERS_ADD, P.ORDERS_CHANGE_OWN, P.ORDERS_CHANGE, P.ORDERS_MANAGE], subFeature: 'layaway', subPlan: 'Growth', waiterHidden: true },
