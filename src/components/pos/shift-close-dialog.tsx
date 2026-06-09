@@ -26,9 +26,12 @@ interface Props {
   expectedCash: number;
   onConfirm: (payload: { closing_float: number; notes?: string }) => void;
   isLoading?: boolean;
+  /** Blind cash-up (default): hide the expected total + variance from the cashier. The count is still
+   *  submitted and the server records the variance for manager review. */
+  blindClose?: boolean;
 }
 
-export function ShiftCloseDialog({ open, onOpenChange, expectedCash, onConfirm, isLoading }: Props) {
+export function ShiftCloseDialog({ open, onOpenChange, expectedCash, onConfirm, isLoading, blindClose = true }: Props) {
   const [step, setStep] = useState<1 | 2>(1);
   const [counts, setCounts] = useState<Record<number, number>>({});
   const [notes, setNotes] = useState('');
@@ -119,34 +122,43 @@ export function ShiftCloseDialog({ open, onOpenChange, expectedCash, onConfirm, 
 
         {step === 2 && (
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-3 text-sm">
+            <div className={blindClose ? '' : 'grid grid-cols-2 gap-3 text-sm'}>
               <div className="rounded-xl bg-muted px-4 py-3">
                 <p className="text-muted-foreground text-xs mb-1">Cash Counted</p>
                 <p className="font-bold">KES {closingFloat.toLocaleString()}</p>
               </div>
-              <div className="rounded-xl bg-muted px-4 py-3">
-                <p className="text-muted-foreground text-xs mb-1">Expected Cash</p>
-                <p className="font-bold">KES {expectedCash.toLocaleString()}</p>
-              </div>
-            </div>
-
-            <div className={`rounded-xl border px-4 py-3 ${varianceBg}`}>
-              <div className="flex items-center gap-2">
-                {absVariance <= 50
-                  ? <CheckCircle className="h-4 w-4 text-green-600" />
-                  : <AlertTriangle className={`h-4 w-4 ${varianceColor}`} />
-                }
-                <p className="text-xs font-medium text-muted-foreground">Variance</p>
-              </div>
-              <p className={`text-lg font-bold mt-1 ${varianceColor}`}>
-                {variance >= 0 ? '+' : ''}KES {variance.toLocaleString()}
-              </p>
-              {absVariance > 200 && (
-                <p className="text-xs text-red-600 mt-1">
-                  High variance — please recount or add a note explaining the discrepancy.
-                </p>
+              {!blindClose && (
+                <div className="rounded-xl bg-muted px-4 py-3">
+                  <p className="text-muted-foreground text-xs mb-1">Expected Cash</p>
+                  <p className="font-bold">KES {expectedCash.toLocaleString()}</p>
+                </div>
               )}
             </div>
+
+            {blindClose ? (
+              <p className="text-xs text-muted-foreground rounded-xl bg-muted/50 px-4 py-3">
+                Blind cash-up — your drawer count is submitted for manager review. You won&apos;t see the expected
+                total or variance.
+              </p>
+            ) : (
+              <div className={`rounded-xl border px-4 py-3 ${varianceBg}`}>
+                <div className="flex items-center gap-2">
+                  {absVariance <= 50
+                    ? <CheckCircle className="h-4 w-4 text-green-600" />
+                    : <AlertTriangle className={`h-4 w-4 ${varianceColor}`} />
+                  }
+                  <p className="text-xs font-medium text-muted-foreground">Variance</p>
+                </div>
+                <p className={`text-lg font-bold mt-1 ${varianceColor}`}>
+                  {variance >= 0 ? '+' : ''}KES {variance.toLocaleString()}
+                </p>
+                {absVariance > 200 && (
+                  <p className="text-xs text-red-600 mt-1">
+                    High variance — please recount or add a note explaining the discrepancy.
+                  </p>
+                )}
+              </div>
+            )}
 
             <div>
               <label className="text-sm font-medium text-foreground block mb-1">
