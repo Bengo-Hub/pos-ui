@@ -46,6 +46,7 @@ class ApiClient {
 
     private on401Callback: (() => void) | null = null;
     private onSubscription403Callback: ((data: any) => void) | null = null;
+    private onLimitReachedCallback: ((data: any) => void) | null = null;
     private onServerErrorCallback: ((status: number, message: string) => void) | null = null;
 
     /** Register a callback to run when any API response is 401 (e.g. clear session / redirect to auth). */
@@ -56,6 +57,11 @@ class ApiClient {
     /** Register a callback for subscription-related 403 errors (feature gates, plan limits, inactive subscription). */
     public setOnSubscription403(callback: ((data: any) => void) | null) {
         this.onSubscription403Callback = callback;
+    }
+
+    /** Register a callback for 402 metered-limit-reached errors (opens the extra-usage modal). */
+    public setOnLimitReached(callback: ((data: any) => void) | null) {
+        this.onLimitReachedCallback = callback;
     }
 
     /** Register a callback for 5xx server errors to show a global error toast. */
@@ -87,6 +93,14 @@ class ApiClient {
             const data = error.response?.data;
             if (isSubscriptionError(data) && this.onSubscription403Callback) {
                 this.onSubscription403Callback(data);
+            }
+        }
+        // 402 Payment Required = a metered limit was hit. Open the extra-usage modal
+        // (the body carries the overage price + eligibility from subscription-service).
+        if (error.response?.status === 402) {
+            const data = error.response?.data;
+            if (this.onLimitReachedCallback) {
+                this.onLimitReachedCallback(data);
             }
         }
         if (error.response?.status >= 500 && this.onServerErrorCallback) {

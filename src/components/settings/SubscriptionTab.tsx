@@ -1,8 +1,16 @@
 'use client';
 
-import { Clock, Key, Loader2 } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Clock, Gauge, Key, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 import { useSubscription } from '@/hooks/use-subscription';
+import { useAuthStore } from '@/store/auth';
+import { fetchOverageStatus, setOverageEnabled, type OverageStatus } from '@/lib/auth/subscription';
 import { Badge, Card, CardContent, CardHeader } from '@/components/ui/base';
+import { Button } from '@/components/ui/button';
+
+const fmtKes = (n: number) =>
+  new Intl.NumberFormat('en-KE', { style: 'currency', currency: 'KES', maximumFractionDigits: 0 }).format(n);
 
 /**
  * SubscriptionTab is a READ-ONLY view of the outlet's POS subscription licence.
@@ -100,6 +108,101 @@ export function SubscriptionTab() {
           )}
         </CardContent>
       </Card>
+
+      <ExtraUsageCard />
     </div>
+  );
+}
+
+/**
+ * ExtraUsageCard lets a tenant admin view/manage the pay-as-you-go extra-usage opt-in
+ * (allow_overage) and see overage accrued this period. Hidden for exempt users (platform
+ * owners / demo) who never accrue overage.
+ */
+function ExtraUsageCard() {
+  const { isPlatformOwner, isDemo, isServiceCharge } = useSubscription();
+  const user = useAuthStore((s) => s.user);
+  const tenantId = user?.tenant_id as string | undefined;
+  const [data, setData] = useState<OverageStatus | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!tenantId || isPlatformOwner || isDemo) {
+      setLoading(false);
+      return;
+    }
+    let active = true;
+    fetchOverageStatus(tenantId).then((d) => {
+      if (active) {
+        setData(d);
+        setLoading(false);
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, [tenantId, isPlatformOwner, isDemo]);
+
+  if (isPlatformOwner || isDemo || isServiceCharge) return null;
+
+  const toggle = async (enabled: boolean) => {
+    if (!tenantId) return;
+    setSaving(true);
+    const ok = await setOverageEnabled(tenantId, enabled);
+    setSaving(false);
+    if (ok) {
+      setData((d) => (d ? { ...d, allowOverage: enabled } : { allowOverage: enabled, pendingTotalKes: 0, breakdown: [] }));
+      toast.success(enabled ? 'Extra usage enabled' : 'Extra usage disabled');
+    } else {
+      toast.error('Could not update extra usage');
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center gap-2 py-4">
+        <Gauge className="h-4 w-4 text-primary" />
+        <h3 className="font-bold text-sm uppercase tracking-tight">Extra Usage</h3>
+        {data?.allowOverage && <Badge variant="success" className="ml-auto">On</Badge>}
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {loading ? (
+          <div className="flex justify-center py-6">
+            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+          </div>
+        ) : (
+          <>
+            <p className="text-sm text-muted-foreground">
+              When enabled, metered limits (orders, transactions, etc.) can be exceeded and the extra
+              usage is billed on your next renewal. Structural limits (devices, outlets, tables) still
+              require a plan upgrade.
+            </p>
+            <div className="flex items-center justify-between p-3 rounded-lg border border-border bg-card">
+              <div>
+                <p className="text-sm font-medium">Pay-as-you-go extra usage</p>
+                <p className="text-xs text-muted-foreground">
+                  {data?.allowOverage ? 'Enabled — overage allowed' : 'Disabled — limits hard-block'}
+                </p>
+              </div>
+              <Button
+                variant={data?.allowOverage ? 'outline' : 'default'}
+                size="sm"
+                disabled={saving}
+                onClick={() => toggle(!data?.allowOverage)}
+              >
+                {saving ? '…' : data?.allowOverage ? 'Turn off' : 'Turn on'}
+              </Button>
+            </div>
+            {data && data.pendingTotalKes > 0 && (
+              <div className="flex items-center justify-between p-3 rounded-lg border border-amber-200 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/10 text-sm">
+                <span className="text-amber-800 dark:text-amber-300">Overage accrued this period</span>
+                <span className="font-bold text-amber-800 dark:text-amber-300">{fmtKes(data.pendingTotalKes)}</span>
+              </div>
+            )}
+          </>
+        )}
+      </CardContent>
+    </Card>
   );
 }

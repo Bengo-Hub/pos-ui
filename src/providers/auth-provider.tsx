@@ -1,7 +1,9 @@
 'use client';
 
 import { apiClient } from '@/lib/api/client';
-import { subscriptionErrorMessage } from '@/lib/api/error-handler';
+import { parseLimitInfo, subscriptionErrorMessage } from '@/lib/api/error-handler';
+import { LimitReachedModal } from '@/components/subscription/limit-reached-modal';
+import { useLimitModal } from '@/store/limit-modal';
 import { useMe } from '@/hooks/useMe';
 import { useAuthStore } from '@/store/auth';
 import { useQueryClient } from '@tanstack/react-query';
@@ -76,6 +78,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => apiClient.setOnSubscription403(null);
   }, [orgSlug, router]);
 
+  // Wire 402 metered-limit-reached → extra-usage modal
+  useEffect(() => {
+    apiClient.setOnLimitReached((data) => {
+      const info = parseLimitInfo(data);
+      if (info) useLimitModal.getState().show(info);
+    });
+    return () => apiClient.setOnLimitReached(null);
+  }, []);
+
   // Wire 5xx server errors → sonner toast
   useEffect(() => {
     apiClient.setOnServerError((_status, message) => {
@@ -121,5 +132,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     );
   }
 
-  return <>{children}</>;
+  return (
+    <>
+      {children}
+      <LimitReachedModal />
+    </>
+  );
 }
