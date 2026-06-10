@@ -16,9 +16,16 @@ export function useSubscription() {
   const subStore = useSubscriptionStore();
 
   const tenantSlug = user?.tenant_slug as string | undefined;
-  const isPlatformOwner = !!(user as any)?.isPlatformOwner || tenantSlug === 'codevertex';
+  const roles = (((user as any)?.roles ?? []) as string[]).map((r) => String(r).toLowerCase());
+  const isSuperuser = roles.includes('superuser') || roles.includes('super_admin');
+  const isPlatformOwner =
+    !!(user as any)?.is_platform_owner ||
+    !!(user as any)?.isPlatformOwner ||
+    isSuperuser ||
+    tenantSlug === 'codevertex';
   const isServiceCharge = (user as any)?.billing_mode === 'service_charge';
   const isDemo = !!(user as any)?.is_demo || tenantSlug === 'codevertex-demo';
+  const isExempt = isPlatformOwner || isDemo || isServiceCharge;
 
   // Hydrate from IndexedDB on auth so gating works offline
   useEffect(() => {
@@ -111,16 +118,16 @@ export function useSubscription() {
     info,
     status: subStatus,
     plan: info?.planCode ?? null,
-    isActive: subStatus === 'active' || subStatus === 'trial' || isServiceCharge || isDemo,
+    isActive: subStatus === 'active' || subStatus === 'trial' || isExempt,
     isPastDue: subStatus === 'past_due' || subStatus === 'suspended',
     isExpired: subStatus === 'expired' || subStatus === 'cancelled',
-    needsSubscription: subStatus === 'none' && !isServiceCharge && !isDemo,
+    needsSubscription: subStatus === 'none' && !isExempt,
     isLoading: subscriptionInfo === null || subscriptionInfo === undefined,
     isPlatformOwner,
     isServiceCharge,
     isDemo,
-    hasFeature: (code: string) => isDemo || isServiceCharge || isPlatformOwner || (info?.features?.includes(code) ?? false),
-    getLimit: (key: string) => (info?.limits?.[key] ?? Infinity) as number,
+    hasFeature: (code: string) => isExempt || (info?.features?.includes(code) ?? false),
+    getLimit: (key: string) => (isExempt ? Infinity : ((info?.limits?.[key] ?? Infinity) as number)),
     daysUntilExpiry: subStore.daysUntilExpiry,
     isInGracePeriod: subStore.isInGracePeriod,
     gracePeriodEndsAt: subStore.gracePeriodEndsAt,
