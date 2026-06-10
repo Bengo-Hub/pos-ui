@@ -21,6 +21,7 @@ import { LoyaltySettingsTab } from '@/components/settings/LoyaltySettingsTab';
 import { PaymentDisplayTab } from '@/components/settings/PaymentDisplayTab';
 import { SubscriptionTab } from '@/components/settings/SubscriptionTab';
 import { DevicesTab } from '@/components/settings/DevicesTab';
+import { CardTerminalTab } from '@/components/settings/CardTerminalTab';
 import { ChannelsTab } from '@/components/settings/ChannelsTab';
 import { BookingPolicyTab } from '@/components/settings/BookingPolicyTab';
 
@@ -28,6 +29,7 @@ type Tab =
   | 'general'
   | 'receipt'
   | 'payment_display'
+  | 'card_terminal'
   | 'modules'
   | 'shifts'
   | 'kds_stations'
@@ -46,6 +48,7 @@ const ALL_TABS: { id: Tab; label: string; icon: React.ElementType; requireModule
   { id: 'general',          label: 'Outlet Config',      icon: Settings,    description: 'Currency, tax, and returns policy' },
   { id: 'receipt',          label: 'Receipt & Printing', icon: Receipt,     description: 'Receipt format and printer profiles' },
   { id: 'payment_display',  label: 'Payment Display',    icon: CreditCard,  description: 'Paybill, till, and bank details on receipts' },
+  { id: 'card_terminal',    label: 'Card Terminal',      icon: CreditCard,  description: 'PDQ / card-terminal mode, approval ref, and integrated terminal' },
   { id: 'modules',          label: 'Modules',            icon: Layers,      description: 'Use case and feature toggles' },
   { id: 'shifts',           label: 'Shifts',             icon: Clock,       description: 'Float rules and shift visibility' },
   { id: 'kds_stations',     label: 'KDS Stations',       icon: ChefHat,     description: 'Kitchen and bar display screens', requireModule: 'kds' },
@@ -123,6 +126,7 @@ export default function SettingsPage() {
         {activeTab === 'general'          && <GeneralTab />}
         {activeTab === 'receipt'          && <ReceiptTab />}
         {activeTab === 'payment_display'  && <PaymentDisplayTab />}
+        {activeTab === 'card_terminal'    && <CardTerminalTab />}
         {activeTab === 'modules'          && <ModulesTab />}
         {activeTab === 'shifts'           && <ShiftsSettingsTab />}
         {activeTab === 'kds_stations'     && <KDSStationsTab />}

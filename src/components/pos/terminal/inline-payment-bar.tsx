@@ -22,6 +22,8 @@ import { useCallback, useMemo, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { useCreatePaymentIntent, useListC2BPayments, useClaimC2BPayment } from '@/hooks/usePOS';
 import { useOnline } from '@/hooks/use-online';
+import { useCashDrawer } from '@/hooks/useCashDrawer';
+import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { usePOSGateways } from '@/hooks/use-pos-gateways';
 import { useHotelRooms } from '@/hooks/useHotel';
 import { hotelApi } from '@/lib/api/hotel';
@@ -99,7 +101,12 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
   const roundedTotal = Math.max(0, Math.ceil(total));
   const isOnline = useOnline();
   const { data: gateways } = usePOSGateways();
+  const { data: posSettings } = usePOSSettings();
+  const { autoOpenOnSettle } = useCashDrawer();
   const createIntent = useCreatePaymentIntent();
+  // Manual-PDQ policy: when the outlet requires an approval ref, the cashier must enter it before
+  // settling a Card/PDQ payment (some acquirers/audits mandate the approval code on file).
+  const requireCardRef = posSettings?.card_terminal_require_ref ?? false;
 
   // Active capture surface (inline popovers / handoffs).
   const [capture, setCapture] = useState<TenderKey | null>(null);
@@ -144,17 +151,18 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
     setBusyKey(key);
     const ord = await ensureOrder();
     if (!ord) { setBusyKey(null); return; }
+    const method = tenderMethodFor(key);
     createIntent.mutate(
-      { orderId: ord.orderId, tenderMethod: tenderMethodFor(key), amount: roundedTotal, tenderId, externalRef },
+      { orderId: ord.orderId, tenderMethod: method, amount: roundedTotal, tenderId, externalRef },
       {
-        onSuccess: () => finish(ord),
+        onSuccess: () => { autoOpenOnSettle(method); finish(ord); },
         onError: (e: any) => {
           setBusyKey(null);
           toast.error(e?.message ?? 'Payment failed. Please try again.');
         },
       },
     );
-  }, [ensureOrder, createIntent, roundedTotal, tenderId, finish]);
+  }, [ensureOrder, createIntent, roundedTotal, tenderId, finish, autoOpenOnSettle]);
 
   // ── Online gateway tenders (M-Pesa STK / Paystack card / Wallet) ─────────────
   const startGateway = useCallback(async (key: TenderKey) => {
@@ -258,6 +266,7 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
           total={roundedTotal}
           value={cardRef}
           onChange={setCardRef}
+          requireRef={requireCardRef}
           busy={anyBusy}
           onCancel={reset}
           onConfirm={() => settleImmediate('card_pdq', cardRef.trim() || undefined)}
@@ -429,23 +438,34 @@ function CashCapture({ total, value, onChange, busy, onConfirm, onCancel }: {
 }
 
 // ── Inline card / PDQ approval-ref capture ──────────────────────────────────────
-function CardRefCapture({ total, value, onChange, busy, onConfirm, onCancel }: {
-  total: number; value: string; onChange: (v: string) => void; busy: boolean; onConfirm: () => void; onCancel: () => void;
+// Manual flow: the cashier runs the card on the standalone PDQ machine, waits for the terminal to
+// APPROVE, then records the approval/reference code here. When the outlet requires a ref, Confirm is
+// disabled until a code is entered (some acquirers/audits mandate it on file).
+function CardRefCapture({ total, value, requireRef, onChange, busy, onConfirm, onCancel }: {
+  total: number; value: string; requireRef: boolean; onChange: (v: string) => void; busy: boolean; onConfirm: () => void; onCancel: () => void;
 }) {
+  const refMissing = requireRef && value.trim() === '';
   return (
     <div className="p-3 border-b border-border bg-blue-500/5 space-y-2">
       <div className="flex items-center justify-between">
         <span className="text-sm font-bold">Card / PDQ · {`KES ${total.toLocaleString()}`}</span>
         <button onClick={onCancel} className="h-7 w-7 rounded-lg flex items-center justify-center hover:bg-accent"><X className="h-4 w-4" /></button>
       </div>
-      <p className="text-xs text-muted-foreground">Run the card on your PDQ machine, then record the approval / reference code (optional).</p>
+      <ol className="text-xs text-muted-foreground list-decimal pl-4 space-y-0.5">
+        <li>Run the card on the PDQ terminal for <span className="font-semibold text-foreground">KES {total.toLocaleString()}</span>.</li>
+        <li>Wait for the terminal to show <span className="font-semibold text-emerald-600">APPROVED</span>.</li>
+        <li>Enter the approval / reference code below{requireRef ? '' : ' (optional)'}, then Confirm.</li>
+      </ol>
       <input
-        type="text" autoFocus value={value} placeholder="Approval / Ref code (optional)"
+        type="text" autoFocus value={value}
+        placeholder={requireRef ? 'Approval / Ref code (required)' : 'Approval / Ref code (optional)'}
         onChange={(e) => onChange(e.target.value.toUpperCase())}
+        onKeyDown={(e) => { if (e.key === 'Enter' && !refMissing && !busy) onConfirm(); }}
         className="w-full bg-background border border-border rounded-xl py-2.5 px-3 text-base font-semibold tracking-wide uppercase focus:ring-2 focus:ring-blue-500/40 focus:outline-none"
       />
+      {refMissing && <p className="text-[11px] text-amber-600">This outlet requires the PDQ approval code before confirming.</p>}
       <button
-        type="button" disabled={busy} onClick={onConfirm}
+        type="button" disabled={busy || refMissing} onClick={onConfirm}
         className="w-full min-h-11 rounded-xl bg-blue-600 text-white font-bold flex items-center justify-center gap-2 disabled:opacity-40 hover:bg-blue-700 transition-colors"
       >
         {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <CheckCircle2 className="h-5 w-5" />}

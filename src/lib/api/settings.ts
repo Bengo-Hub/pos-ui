@@ -33,6 +33,16 @@ export interface POSSettings {
   pin_login_message?: string | null;
   screensaver_url?: string | null;
   printer_profiles: PrinterProfile[];
+  // cash drawer (ESC/POS drawer kick via the assigned printer)
+  cash_drawer_enabled: boolean;
+  cash_drawer_printer?: string | null;
+  cash_drawer_auto_open: boolean;
+  cash_drawer_kick_code: string;
+  // card terminal / PDQ
+  card_terminal_mode: string; // 'manual' | 'integrated'
+  card_terminal_provider?: string | null;
+  card_terminal_tid?: string | null;
+  card_terminal_require_ref: boolean;
   enable_kds: boolean;
   enable_appointments: boolean;
   hotel_module_enabled: boolean;
@@ -74,6 +84,16 @@ export interface UpdatePOSSettingsInput {
   screensaver_url?: string | null;
   printer_profiles?: PrinterProfile[];
   return_window_days?: number;
+  // cash drawer
+  cash_drawer_enabled?: boolean;
+  cash_drawer_printer?: string | null;
+  cash_drawer_auto_open?: boolean;
+  cash_drawer_kick_code?: string;
+  // card terminal / PDQ
+  card_terminal_mode?: string;
+  card_terminal_provider?: string | null;
+  card_terminal_tid?: string | null;
+  card_terminal_require_ref?: boolean;
   // payment display
   mpesa_paybill?: string | null;
   mpesa_account_reference?: string | null;

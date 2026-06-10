@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Loader2, Lock, Printer, Receipt, Save } from 'lucide-react';
+import { Inbox, Loader2, Lock, Printer, Receipt, Save } from 'lucide-react';
 import { Button, Card, CardContent, CardHeader } from '@/components/ui/base';
 import { usePOSSettings, useUpdatePOSSettings } from '@/hooks/usePOSSettings';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -10,7 +10,7 @@ import { useAuthStore } from '@/store/auth';
 import { useOutletFilterStore } from '@/store/outlet-filter';
 import { P } from '@/lib/rbac/permissions';
 import type { PrinterProfile } from '@/lib/api/settings';
-import { discoverPrinters } from '@/lib/pos/printer-discovery';
+import { discoverPrinters, openCashDrawer, type DrawerKickCode } from '@/lib/pos/printer-discovery';
 import { Toggle, inputClass, labelClass } from './shared';
 import { toast } from 'sonner';
 
@@ -45,12 +45,40 @@ export function ReceiptTab() {
     receiptFooter: '',
     autoPrintOrder: false,
     autoPrintKitchen: false,
+    cashDrawerEnabled: false,
+    cashDrawerPrinter: '',
+    cashDrawerAutoOpen: true,
+    cashDrawerKickCode: 'default',
   });
   const [profiles, setProfiles] = useState<PrinterProfile[]>([]);
   // Discovered printers (from the QZ Tray bridge, when available) for the printer-name dropdowns.
   const [discovered, setDiscovered] = useState<string[]>([]);
   const [discoverNote, setDiscoverNote] = useState('');
   const [discovering, setDiscovering] = useState(false);
+  const [testingDrawer, setTestingDrawer] = useState(false);
+
+  // The drawer is wired to a printer; default to the Bill/customer station printer when unset.
+  const drawerPrinterName = (): string => {
+    if (form.cashDrawerPrinter) return form.cashDrawerPrinter;
+    const bill = profiles.find((p) => p.id === 'customer');
+    return bill?.printer_name && bill.printer_name !== 'browser' ? bill.printer_name : '';
+  };
+
+  const handleTestDrawer = async () => {
+    const printer = drawerPrinterName();
+    if (!printer) {
+      toast.info('Assign a drawer printer (or a Bill station printer) and run Detect Printers first.');
+      return;
+    }
+    setTestingDrawer(true);
+    try {
+      const ok = await openCashDrawer(printer, form.cashDrawerKickCode as DrawerKickCode);
+      if (ok) toast.success('Drawer kick sent.');
+      else toast.error('Could not reach the drawer. Is QZ Tray running with the printer connected?');
+    } finally {
+      setTestingDrawer(false);
+    }
+  };
 
   const handleDetectPrinters = async () => {
     setDiscovering(true);
@@ -75,6 +103,10 @@ export function ReceiptTab() {
         receiptFooter: settings.receipt_footer ?? DEFAULT_RECEIPT_FOOTER,
         autoPrintOrder: settings.auto_print_order ?? false,
         autoPrintKitchen: settings.auto_print_kitchen ?? false,
+        cashDrawerEnabled: settings.cash_drawer_enabled ?? false,
+        cashDrawerPrinter: settings.cash_drawer_printer ?? '',
+        cashDrawerAutoOpen: settings.cash_drawer_auto_open ?? true,
+        cashDrawerKickCode: settings.cash_drawer_kick_code ?? 'default',
       });
       setProfiles(settings.printer_profiles ?? []);
     }
@@ -101,6 +133,10 @@ export function ReceiptTab() {
       receipt_footer: form.receiptFooter || null,
       auto_print_order: form.autoPrintOrder,
       auto_print_kitchen: form.autoPrintKitchen,
+      cash_drawer_enabled: form.cashDrawerEnabled,
+      cash_drawer_printer: form.cashDrawerPrinter || null,
+      cash_drawer_auto_open: form.cashDrawerAutoOpen,
+      cash_drawer_kick_code: form.cashDrawerKickCode,
       // Keep any station the operator configured: a non-disabled type, an assigned printer name, or auto-print on.
       printer_profiles: profiles.filter(
         (p) => p.printer_type !== 'none' || (p.printer_name && p.printer_name !== 'browser') || p.auto_print,
@@ -270,6 +306,84 @@ export function ReceiptTab() {
             );
           })}
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Inbox className="h-4 w-4 text-primary" />
+            <span className="font-bold text-sm">Cash Drawer</span>
+          </div>
+          <p className="text-xs text-muted-foreground mt-1">
+            The drawer connects to a receipt printer&apos;s RJ11/12 port and is opened by an ESC/POS
+            kick pulse sent to that printer via QZ Tray. Assign the printer the drawer is wired to.
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between p-4 rounded-xl bg-accent/10 border border-border gap-4">
+            <div className="min-w-0">
+              <h4 className="text-sm font-bold">Enable Cash Drawer</h4>
+              <p className="text-xs text-muted-foreground mt-0.5">Allow the POS to pop the drawer via the assigned printer.</p>
+            </div>
+            <Toggle checked={form.cashDrawerEnabled} onChange={(v) => set('cashDrawerEnabled', v)} disabled={!canEdit} />
+          </div>
+
+          {form.cashDrawerEnabled && (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className={labelClass}>Drawer Printer</label>
+                  <select
+                    value={form.cashDrawerPrinter || ''}
+                    onChange={(e) => set('cashDrawerPrinter', e.target.value)}
+                    disabled={!canEdit}
+                    className={inputClass}
+                  >
+                    <option value="">Bill / customer station printer (default)</option>
+                    {Array.from(new Set([
+                      ...discovered,
+                      ...(form.cashDrawerPrinter ? [form.cashDrawerPrinter] : []),
+                    ])).map((n) => <option key={n} value={n}>{n}</option>)}
+                  </select>
+                  <p className="text-[11px] text-muted-foreground">Run Detect Printers above to populate this list.</p>
+                </div>
+                <div className="space-y-1">
+                  <label className={labelClass}>Kick Pulse</label>
+                  <select
+                    value={form.cashDrawerKickCode}
+                    onChange={(e) => set('cashDrawerKickCode', e.target.value)}
+                    disabled={!canEdit}
+                    className={inputClass}
+                  >
+                    <option value="default">Default (pin 2)</option>
+                    <option value="pin5">Pin 5</option>
+                    <option value="legacy">Legacy (long pulse)</option>
+                  </select>
+                  <p className="text-[11px] text-muted-foreground">Switch to Pin 5 if the drawer doesn&apos;t open.</p>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between p-4 rounded-xl bg-accent/10 border border-border gap-4">
+                <div className="min-w-0">
+                  <h4 className="text-sm font-bold">Auto-Open on Sale</h4>
+                  <p className="text-xs text-muted-foreground mt-0.5">Automatically pop the drawer when a cash or card sale is settled.</p>
+                </div>
+                <Toggle checked={form.cashDrawerAutoOpen} onChange={(v) => set('cashDrawerAutoOpen', v)} disabled={!canEdit} />
+              </div>
+
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleTestDrawer}
+                disabled={testingDrawer}
+                className="gap-2 h-9 text-xs"
+              >
+                {testingDrawer ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Inbox className="h-3.5 w-3.5" />}
+                {testingDrawer ? 'Opening…' : 'Test — Open Drawer'}
+              </Button>
+            </>
+          )}
         </CardContent>
       </Card>
 

@@ -103,6 +103,57 @@ export async function discoverPrinters(): Promise<DiscoverResult> {
   }
 }
 
+// ── Cash drawer (ESC/POS drawer kick) ───────────────────────────────────────────
+//
+// A cash drawer has no network/USB interface of its own: it plugs into the receipt printer's RJ11/12
+// port and is opened by an ESC/POS "drawer kick" pulse — ESC p m t1 t2 (0x1B 0x70 m t1 t2) — sent to
+// that printer. With QZ Tray already bridging the printer, the kick is just those raw bytes printed to
+// the assigned printer. No second device bridge is needed.
+
+/** ESC/POS drawer-kick byte sequences, keyed by the pin variant configured per outlet.
+ *  - default/pin2: ESC p 0  25 250  → pin 2, the common Epson/generic default.
+ *  - pin5:         ESC p 1  25 250  → pin 5, for drawers wired to the second pin.
+ *  - legacy:       ESC p 0  50 250  → longer pulse for older/stiff drawers.
+ *  Bytes are sent to QZ as a hex "rawhex" command. */
+export type DrawerKickCode = 'default' | 'pin2' | 'pin5' | 'legacy';
+
+function kickHex(code: DrawerKickCode): string {
+  switch (code) {
+    case 'pin5':
+      return '1B700119FA'; // ESC p 1 25 250
+    case 'legacy':
+      return '1B700032FA'; // ESC p 0 50 250
+    case 'pin2':
+    case 'default':
+    default:
+      return '1B700019FA'; // ESC p 0 25 250
+  }
+}
+
+/**
+ * Pop the cash drawer wired to `printerName` by sending an ESC/POS drawer-kick pulse via QZ Tray.
+ * Returns true on success. Returns false (no throw) when there is no QZ bridge or no real printer
+ * name — callers treat that as "drawer not available" rather than a hard error, since the sale itself
+ * must never be blocked by drawer hardware.
+ */
+export async function openCashDrawer(
+  printerName: string | undefined,
+  code: DrawerKickCode = 'default',
+): Promise<boolean> {
+  const named = printerName && printerName.toLowerCase() !== 'browser' ? printerName : '';
+  if (!named) return false;
+  const qz = await loadQz();
+  if (!qz) return false;
+  try {
+    const cfg = qz.configs.create(named);
+    // QZ Tray raw command, hex flavor: the ESC/POS drawer-kick bytes are sent verbatim to the printer.
+    await qz.print(cfg, [{ type: 'raw', format: 'command', flavor: 'hex', data: kickHex(code) }]);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** Best-effort sync check: is a QZ connection already active? (Used for UI hints only.) */
 export function canSilentPrint(): boolean {
   if (typeof window === 'undefined') return false;
