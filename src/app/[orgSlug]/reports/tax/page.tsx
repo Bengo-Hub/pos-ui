@@ -21,7 +21,7 @@ function TaxReportContent() {
   const tenantID = useAuthStore((s) => s.user?.tenant_id ?? '');
   const [period, setPeriod] = useState<'today' | 'week' | 'month'>('month');
   const { from, to } = periodRange(period);
-  const { data: rows = [], isLoading } = useTaxReport(from, to);
+  const { data: rows = [], isLoading, isError, refetch } = useTaxReport(from, to);
 
   const totalTax = rows.reduce((sum, r) => sum + r.tax_collected, 0);
   const totalTaxable = rows.reduce((sum, r) => sum + r.taxable_amount, 0);
