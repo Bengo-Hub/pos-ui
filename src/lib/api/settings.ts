@@ -5,6 +5,8 @@ export interface PrinterProfile {
   label: string;
   printer_type: 'network' | 'thermal' | 'bluetooth' | 'browser' | 'none';
   printer_ip?: string;
+  /** OS/QZ-Tray printer name selected from discovery; '' or 'browser' => browser print dialog. */
+  printer_name?: string;
   paper_width?: '58mm' | '80mm';
   auto_print?: boolean;
   categories?: string[];

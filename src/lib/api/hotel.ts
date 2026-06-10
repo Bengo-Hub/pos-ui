@@ -180,6 +180,50 @@ export interface FolioItem {
   created_at: string;
 }
 
+export interface FolioPayment {
+  id: string;
+  amount: number;
+  currency: string;
+  method: string;
+  reference?: string;
+  status: 'completed' | 'pending' | 'failed';
+  created_at: string;
+}
+
+export interface FolioSummary {
+  room_id: string;
+  room_number: string;
+  rate_per_night: number;
+  guest_id: string;
+  guest_name: string;
+  phone?: string;
+  nights: number;
+  check_in_date: string;
+  check_out_date: string;
+  room_charge: number;
+  charges_total: number;
+  paid_total: number;
+  balance: number;
+  currency: string;
+  items: FolioItem[];
+  payments: FolioPayment[];
+}
+
+export interface SettleFolioInput {
+  amount: number;
+  method: string; // cash | card_manual | pdq | mpesa | mpesa_stk | card | wallet
+  reference?: string;
+  checkout?: boolean;
+}
+
+export interface SettleFolioResult {
+  status: 'completed' | 'pending';
+  checked_out: boolean;
+  intent_id?: string;
+  initiate_url?: string;
+  summary: FolioSummary;
+}
+
 export interface Facility {
   id: string;
   name: string;
@@ -318,6 +362,14 @@ export const hotelApi = {
 
   getRoomFolio: (tenantSlug: string, roomId: string) =>
     apiClient.get<FolioItem[]>(`${hotelBase(tenantSlug)}/rooms/${roomId}/folio`),
+
+  // Full checkout bill: room charge + folio + surcharges, payments taken, and outstanding balance.
+  getFolioSummary: (tenantSlug: string, roomId: string) =>
+    apiClient.get<FolioSummary>(`${hotelBase(tenantSlug)}/rooms/${roomId}/folio/summary`),
+
+  // Record a folio payment (full or partial) and optionally check out when the balance clears.
+  settleFolio: (tenantSlug: string, roomId: string, body: SettleFolioInput) =>
+    apiClient.post<SettleFolioResult>(`${hotelBase(tenantSlug)}/rooms/${roomId}/settle`, body),
 
   postFolioCharge: (
     tenantSlug: string,

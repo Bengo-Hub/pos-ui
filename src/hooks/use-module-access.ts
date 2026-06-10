@@ -15,6 +15,7 @@
 import { useAuthStore } from '@/store/auth';
 import { useOutletFilterStore } from '@/store/outlet-filter';
 import { usePOSSettings } from './usePOSSettings';
+import { normalizeUseCase } from '@/lib/use-case-config';
 
 // ─── Module keys ────────────────────────────────────────────────────────────
 export type ModuleKey =
@@ -106,11 +107,11 @@ export function useModuleAccess() {
   // isResolved is false until we have a concrete use case. Sidebar renders a skeleton until true.
   const isResolved = rawUseCase !== null;
 
-  const useCase: UseCaseType | null = (
-    rawUseCase && Object.keys(USE_CASE_MODULES).includes(rawUseCase)
-      ? rawUseCase as UseCaseType
-      : null
-  );
+  // Normalize raw outlet use_case (which may be an alias like "hotel", "bar", "cafe", "restaurant",
+  // "salon", "spa", "clinic") onto one of the five canonical profiles. Without this, an outlet whose
+  // use_case is e.g. "hotel" matched no USE_CASE_MODULES key → useCase=null → the ENTIRE sidebar was
+  // hidden for non-superusers. normalizeUseCase guarantees a valid profile for any non-null use_case.
+  const useCase: UseCaseType | null = rawUseCase ? (normalizeUseCase(rawUseCase) as UseCaseType) : null;
 
   const isSuperUser =
     user?.isSuperUser === true ||

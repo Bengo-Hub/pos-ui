@@ -15,6 +15,7 @@ import {
   type LateCheckoutInput,
   type CreateHousekeepingInput,
   type UpdateHousekeepingInput,
+  type SettleFolioInput,
 } from '@/lib/api/hotel';
 
 function useTenantSlug() {
@@ -91,6 +92,31 @@ export function useRoomFolio(roomId: string, enabled: boolean) {
     queryFn: () => hotelApi.getRoomFolio(slug, roomId),
     enabled: !!slug && !!roomId && enabled,
     staleTime: 15_000,
+  });
+}
+
+export function useFolioSummary(roomId: string, enabled: boolean) {
+  const slug = useTenantSlug();
+  return useQuery({
+    queryKey: ['folio-summary', slug, roomId],
+    queryFn: () => hotelApi.getFolioSummary(slug, roomId),
+    enabled: !!slug && !!roomId && enabled,
+    staleTime: 5_000,
+  });
+}
+
+export function useSettleFolio(roomId: string) {
+  const slug = useTenantSlug();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: SettleFolioInput) => hotelApi.settleFolio(slug, roomId, body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['folio-summary', slug, roomId] });
+      qc.invalidateQueries({ queryKey: ['room-folio', slug, roomId] });
+      qc.invalidateQueries({ queryKey: ['hotel-rooms', slug] });
+      qc.invalidateQueries({ queryKey: ['hotel-room', slug, roomId] });
+      qc.invalidateQueries({ queryKey: ['room-guest', slug, roomId] });
+    },
   });
 }
 

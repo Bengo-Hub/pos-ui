@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/base';
 import { Printer, Download, X } from 'lucide-react';
 import { ReceiptPrint } from './receipt-print';
+import { printHtmlToPrinter, canSilentPrint } from '@/lib/pos/printer-discovery';
 
 // Thermal-receipt styles inlined into the dedicated print window (mirrors src/styles/receipt.css).
 const RECEIPT_PRINT_CSS = `
@@ -74,9 +75,11 @@ interface ReceiptPreviewProps {
   onClose: () => void;
   outletName?: string;
   tenantName?: string;
+  /** Assigned bill/customer printer name (QZ Tray). When set + bridge present, prints silently to it. */
+  printerName?: string;
 }
 
-export function ReceiptPreview({ receipt, open, onClose, outletName, tenantName }: ReceiptPreviewProps) {
+export function ReceiptPreview({ receipt, open, onClose, outletName, tenantName, printerName }: ReceiptPreviewProps) {
   const [printing, setPrinting] = useState(false);
 
   if (!receipt || !open) return null;
@@ -88,6 +91,12 @@ export function ReceiptPreview({ receipt, open, onClose, outletName, tenantName 
     const node = typeof document !== 'undefined' ? document.getElementById('receipt-print-root') : null;
     if (!node) {
       window.print();
+      return;
+    }
+    // When a bill printer is assigned and the QZ Tray bridge is present, print silently to it;
+    // otherwise fall through to the browser print window (the default).
+    if (printerName && printerName.toLowerCase() !== 'browser' && canSilentPrint()) {
+      void printHtmlToPrinter(printerName, `Receipt ${receipt.order_number}`, node.innerHTML, receipt.paper_width ?? '80mm');
       return;
     }
     const win = window.open('', '_blank', 'width=380,height=640');

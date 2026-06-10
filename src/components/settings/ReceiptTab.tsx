@@ -10,14 +10,19 @@ import { useAuthStore } from '@/store/auth';
 import { useOutletFilterStore } from '@/store/outlet-filter';
 import { P } from '@/lib/rbac/permissions';
 import type { PrinterProfile } from '@/lib/api/settings';
+import { discoverPrinters } from '@/lib/pos/printer-discovery';
 import { Toggle, inputClass, labelClass } from './shared';
+import { toast } from 'sonner';
 
 const RECEIPT_PRINTER_ROLES = [
-  { id: 'customer', label: 'Customer Receipt', desc: 'Full receipt printed at point of sale' },
-  { id: 'kitchen', label: 'Kitchen Printer', desc: 'Kitchen ticket (no prices) sent on order open' },
-  { id: 'bar', label: 'Bar Printer', desc: 'Bar ticket for drinks and cocktails' },
+  { id: 'customer', label: 'Bill / Customer Receipt', desc: 'Full receipt (prices) printed at point of sale' },
+  { id: 'kitchen', label: 'KOT Kitchen Printer', desc: 'Kitchen ticket (food, no prices) on order open' },
+  { id: 'bar', label: 'KOT Bar Printer', desc: 'Bar ticket for alcohol & cold drinks' },
+  { id: 'coffee', label: 'KOT Coffee Shop', desc: 'Dedicated coffee/tea ticket (else folds into Kitchen)' },
   { id: 'waiter', label: 'Waiter Copy', desc: 'Order summary for the serving staff' },
 ];
+
+const PAPER_OPTIONS = ['80mm', '58mm'];
 
 // Sensible default footer when the tenant hasn't set one yet.
 const DEFAULT_RECEIPT_FOOTER = 'Thank you for your business!';
@@ -42,6 +47,23 @@ export function ReceiptTab() {
     autoPrintKitchen: false,
   });
   const [profiles, setProfiles] = useState<PrinterProfile[]>([]);
+  // Discovered printers (from the QZ Tray bridge, when available) for the printer-name dropdowns.
+  const [discovered, setDiscovered] = useState<string[]>([]);
+  const [discoverNote, setDiscoverNote] = useState('');
+  const [discovering, setDiscovering] = useState(false);
+
+  const handleDetectPrinters = async () => {
+    setDiscovering(true);
+    try {
+      const res = await discoverPrinters();
+      setDiscovered(res.printers);
+      setDiscoverNote(res.note ?? (res.source === 'qz' ? `Found ${res.printers.length} printer(s) via QZ Tray.` : ''));
+      if (res.source === 'qz' && res.printers.length) toast.success(`Detected ${res.printers.length} printer(s).`);
+      else if (res.source !== 'qz') toast.info('No print bridge detected — using browser print.');
+    } finally {
+      setDiscovering(false);
+    }
+  };
 
   useEffect(() => {
     if (settings) {
@@ -79,7 +101,10 @@ export function ReceiptTab() {
       receipt_footer: form.receiptFooter || null,
       auto_print_order: form.autoPrintOrder,
       auto_print_kitchen: form.autoPrintKitchen,
-      printer_profiles: profiles.filter((p) => p.printer_type !== 'none'),
+      // Keep any station the operator configured: a non-disabled type, an assigned printer name, or auto-print on.
+      printer_profiles: profiles.filter(
+        (p) => p.printer_type !== 'none' || (p.printer_name && p.printer_name !== 'browser') || p.auto_print,
+      ),
     });
   };
 
@@ -155,61 +180,90 @@ export function ReceiptTab() {
 
       <Card>
         <CardHeader>
-          <div className="flex items-center gap-2">
-            <Printer className="h-4 w-4 text-primary" />
-            <span className="font-bold text-sm">Printer Profiles</span>
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <Printer className="h-4 w-4 text-primary" />
+              <span className="font-bold text-sm">Order Printing — Stations</span>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleDetectPrinters}
+              disabled={discovering}
+              className="gap-2 h-8 text-xs"
+            >
+              {discovering ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Printer className="h-3.5 w-3.5" />}
+              {discovering ? 'Detecting…' : 'Detect Printers'}
+            </Button>
           </div>
           <p className="text-xs text-muted-foreground mt-1">
-            Configure separate printers for customer receipts, kitchen tickets, and bar orders.
+            Assign a printer to each station (Bill, Kitchen, Bar, Coffee). Detect Printers scans network,
+            USB &amp; Bluetooth printers via QZ Tray; with none detected, printing uses the browser dialog.
           </p>
+          {discoverNote && (
+            <p className="text-[11px] mt-1.5 rounded-lg bg-accent/30 px-3 py-2 text-muted-foreground">{discoverNote}</p>
+          )}
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
           {RECEIPT_PRINTER_ROLES.map((role) => {
             const p = getProfile(role.id);
+            const currentName = p.printer_name ?? '';
+            // Build the dropdown options: browser default + discovered + any previously-saved name.
+            const names = Array.from(new Set([...discovered, ...(currentName && currentName !== 'browser' ? [currentName] : [])]));
             return (
               <div key={role.id} className="rounded-xl border border-border p-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div>
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
                     <p className="text-sm font-bold">{role.label}</p>
                     <p className="text-xs text-muted-foreground">{role.desc}</p>
                   </div>
-                  <select
-                    value={p.printer_type}
-                    onChange={(e) => setProfile(role.id, 'printer_type', e.target.value as any)}
-                    disabled={!canEdit}
-                    className={`${inputClass} w-40`}
-                  >
-                    <option value="none">Disabled</option>
-                    <option value="network">Network (ESC/POS)</option>
-                    <option value="browser">Browser Print</option>
-                    <option value="bluetooth">Bluetooth</option>
-                  </select>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-[10px] font-semibold uppercase text-muted-foreground">Auto-print</span>
+                    <Toggle checked={p.auto_print ?? false} onChange={(v) => setProfile(role.id, 'auto_print', v)} disabled={!canEdit} />
+                  </div>
                 </div>
-                {p.printer_type === 'network' && (
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1">
-                      <label className={labelClass}>Printer IP</label>
-                      <input
-                        value={p.printer_ip ?? ''}
-                        onChange={(e) => setProfile(role.id, 'printer_ip', e.target.value)}
-                        disabled={!canEdit}
-                        placeholder="192.168.1.100"
-                        className={`${inputClass} font-mono`}
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className={labelClass}>Paper Width</label>
-                      <select
-                        value={p.paper_width ?? '80mm'}
-                        onChange={(e) => setProfile(role.id, 'paper_width', e.target.value)}
-                        disabled={!canEdit}
-                        className={inputClass}
-                      >
-                        <option value="58mm">58mm</option>
-                        <option value="80mm">80mm</option>
-                      </select>
-                    </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className={labelClass}>Paper Size</label>
+                    <select
+                      value={p.paper_width ?? '80mm'}
+                      onChange={(e) => setProfile(role.id, 'paper_width', e.target.value)}
+                      disabled={!canEdit}
+                      className={inputClass}
+                    >
+                      {PAPER_OPTIONS.map((w) => <option key={w} value={w}>{w === '80mm' ? '80 (72) x 297mm' : '58mm'}</option>)}
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <label className={labelClass}>Printer Name</label>
+                    <select
+                      value={currentName || 'browser'}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setProfile(role.id, 'printer_name', v === 'browser' ? '' : v);
+                        // Reflect choice in printer_type so legacy consumers + the save filter behave.
+                        setProfile(role.id, 'printer_type', v === 'browser' ? 'browser' : 'network');
+                      }}
+                      disabled={!canEdit}
+                      className={inputClass}
+                    >
+                      <option value="browser">Browser print (default)</option>
+                      {names.map((n) => <option key={n} value={n}>{n}</option>)}
+                    </select>
+                  </div>
+                </div>
+                {/* Optional explicit network IP for ESC/POS printers not exposed via the bridge. */}
+                {p.printer_type === 'network' && !currentName && (
+                  <div className="space-y-1">
+                    <label className={labelClass}>Network Printer IP (optional)</label>
+                    <input
+                      value={p.printer_ip ?? ''}
+                      onChange={(e) => setProfile(role.id, 'printer_ip', e.target.value)}
+                      disabled={!canEdit}
+                      placeholder="192.168.1.100"
+                      className={`${inputClass} font-mono`}
+                    />
                   </div>
                 )}
               </div>
