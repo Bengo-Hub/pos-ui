@@ -1126,14 +1126,17 @@ export default function OrderPage() {
               </button>
             )}
           </div>
-          {/* Order type selector — hospitality only */}
-          <OrderTypeSelector
-            value={orderSubtype}
-            onChange={setOrderSubtype}
-            tableName={tableName || undefined}
-            onSelectTable={() => router.push(`/${orgSlug}/tables`)}
-            useCase={outlet?.use_case}
-          />
+          {/* Order type (Dine-In/Takeaway/Delivery/Bar Tab) is a hospitality/quick_service concept only —
+              retail, pharmacy and services have no order types, so it's gated by cfg.showOrderType. */}
+          {cfg.showOrderType && (
+            <OrderTypeSelector
+              value={orderSubtype}
+              onChange={setOrderSubtype}
+              tableName={tableName || undefined}
+              onSelectTable={() => router.push(`/${orgSlug}/tables`)}
+              useCase={outlet?.use_case}
+            />
+          )}
           {cfg.showPricingProfile && (
             <div className="flex items-center gap-1.5 mt-2">
               <span className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Price</span>
