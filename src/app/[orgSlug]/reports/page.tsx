@@ -51,7 +51,7 @@ function ReportsPage() {
   const [period, setPeriod] = useState<Period>('today');
   const { from, to } = periodToRange(period);
 
-  const { data: sales, isLoading: salesLoading } = useSalesSummary(from, to);
+  const { data: sales, isLoading: salesLoading, isError: salesError, refetch: refetchSales } = useSalesSummary(from, to);
   const { data: refunds } = useRefundSummary(from, to);
   const { data: daily = [] } = useDailyBreakdown(from, to, period !== 'today');
   const { data: topItems = [] } = useTopItems(from, to);
@@ -110,6 +110,17 @@ function ReportsPage() {
       {salesLoading ? (
         <div className="flex items-center justify-center h-48">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      ) : salesError ? (
+        <div className="flex flex-col items-center justify-center h-48 text-muted-foreground gap-3">
+          <BarChart3 className="h-12 w-12 opacity-30" />
+          <p>Couldn&apos;t load report data.</p>
+          <button
+            onClick={() => refetchSales()}
+            className="px-4 py-2 rounded-xl text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+          >
+            Retry
+          </button>
         </div>
       ) : (
         <>
