@@ -19,6 +19,7 @@ import Link from 'next/link';
 import { toast } from 'sonner';
 import { ModuleGate } from '@/components/auth/module-gate';
 import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
+import { CheckoutPanel } from '@/components/pos/hotel/checkout-panel';
 
 function RoomDetailPageInner() {
   const params = useParams();
@@ -33,6 +34,7 @@ function RoomDetailPageInner() {
     expected_arrival_at: '', expected_departure_at: '', nights: '1',
   });
   const [showCheckIn, setShowCheckIn] = useState(false);
+  const [showCheckout, setShowCheckout] = useState(false);
 
   function setField(key: keyof typeof checkInForm, value: string) {
     setCheckInForm((f) => ({ ...f, [key]: value }));
@@ -125,6 +127,8 @@ function RoomDetailPageInner() {
       });
       toast.success('Guest checked in');
       setShowCheckIn(false);
+      // Redirect straight to checkout so the desk can see/settle the bill (room charge already posted).
+      setShowCheckout(true);
     } catch {
       toast.error('Check-in failed');
     }
@@ -370,24 +374,40 @@ function RoomDetailPageInner() {
         )}
 
         {isOccupied && (
-          <div className="flex flex-col sm:flex-row gap-3">
+          <div className="space-y-3">
             <button
-              onClick={() => setShowLate(true)}
-              className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl border border-border font-semibold hover:bg-muted transition-colors"
+              onClick={() => setShowCheckout(true)}
+              className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-primary text-primary-foreground font-bold hover:bg-primary/90 transition-colors"
             >
-              <Clock className="h-5 w-5" />
-              Late Checkout
+              <Receipt className="h-5 w-5" />
+              Checkout &amp; Settle Bill
             </button>
-            <button
-              onClick={handleCheckOut}
-              disabled={checkOut.isPending}
-              className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-destructive text-destructive-foreground font-semibold hover:bg-destructive/90 disabled:opacity-50 transition-colors"
-            >
-              {checkOut.isPending ? <Loader2 className="h-5 w-5 animate-spin" /> : <LogOut className="h-5 w-5" />}
-              Check Out
-            </button>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <button
+                onClick={() => setShowLate(true)}
+                className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl border border-border font-semibold hover:bg-muted transition-colors"
+              >
+                <Clock className="h-5 w-5" />
+                Late Checkout
+              </button>
+              <button
+                onClick={handleCheckOut}
+                disabled={checkOut.isPending}
+                className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl border border-destructive/40 text-destructive font-semibold hover:bg-destructive/5 disabled:opacity-50 transition-colors"
+              >
+                {checkOut.isPending ? <Loader2 className="h-5 w-5 animate-spin" /> : <LogOut className="h-5 w-5" />}
+                Check Out (no payment)
+              </button>
+            </div>
           </div>
         )}
+
+        <CheckoutPanel
+          roomId={roomId}
+          open={showCheckout}
+          onClose={() => setShowCheckout(false)}
+          onCheckedOut={() => router.push(`/${orgSlug}/hotel/rooms`)}
+        />
 
         {showLate && (
           <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center bg-black/50 backdrop-blur-sm" onClick={() => setShowLate(false)}>

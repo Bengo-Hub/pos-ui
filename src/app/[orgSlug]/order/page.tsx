@@ -15,6 +15,10 @@ import { ScaleDisplay } from '@/components/retail/ScaleDisplay';
 import { ManagerPINOverrideModal } from '@/components/retail/ManagerPINOverrideModal';
 import { CalculatorOverlay } from '@/components/pos/calculator-overlay';
 import { CategoryNav } from '@/components/pos/category-nav';
+import { InlinePaymentBar, type CreatedOrder } from '@/components/pos/terminal/inline-payment-bar';
+import { PosToolbar } from '@/components/pos/terminal/pos-toolbar';
+import { printKitchenBarTickets } from '@/lib/pos/kitchen-bar-print';
+import { configFor } from '@/lib/pos/printer-stations';
 import { cn } from '@/lib/utils';
 import { terminalConfigFor } from '@/lib/use-case-config';
 import { useMenuItems, useCategories, useCreateOrder, useAddOrderLines, useVoidOrder, useAssignTable, useReleaseTable, type OrderSubtype } from '@/hooks/usePOS';
@@ -114,15 +118,15 @@ export default function OrderPage() {
   const { data: posSettings } = usePOSSettings();
   const taxRate = (posSettings?.vat_rate ?? 16) / 100;
 
-  // Phase 1b: in hospitality/quick_service, cashiers settle from the orders list — waiters create
+  // Phase 1b: in hospitality/quick_service/hotel, cashiers settle from the orders list — waiters create
   // orders from tables. A non-superuser cashier landing on /order directly is redirected to /orders.
+  // Use the normalized profile so aliases like "hotel"/"bar"/"cafe"/"restaurant" are covered too.
   useEffect(() => {
     const roles = user?.roles ?? [];
-    const uc = (outlet?.use_case ?? '').toLowerCase();
-    if (!isSuperuser && roles.includes('cashier') && ['hospitality', 'quick_service'].includes(uc)) {
+    if (!isSuperuser && roles.includes('cashier') && (cfg.profile === 'hospitality' || cfg.profile === 'quick_service')) {
       router.replace(`/${orgSlug}/orders`);
     }
-  }, [user, outlet, isSuperuser, orgSlug, router]);
+  }, [user, cfg.profile, isSuperuser, orgSlug, router]);
   const [activeCategory, setActiveCategory] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -643,6 +647,92 @@ export default function OrderPage() {
     }
   }, [currentOrderNumber, currentOrderId, user, orgSlug, router]);
 
+  // ─── Inline GoDigital payment bar orchestration ─────────────────────────
+  // createOrderAsync creates (and returns) the order so the inline bar can settle against it,
+  // mirroring handlePlaceOrder's validation. The bar owns the tender; the page owns order creation.
+  const createOrderAsync = useCallback(async (): Promise<CreatedOrder | null> => {
+    if (cart.length === 0) return null;
+    if (isHospitality && !orderSubtype) {
+      toast.error('Please select Dine-In or Takeaway before placing the order.');
+      return null;
+    }
+    if (isHospitality && orderSubtype === 'dine_in' && !tableId) {
+      toast.error('Please select a table first.');
+      router.push(`/${orgSlug}/tables`);
+      return null;
+    }
+    const courses = [...new Set(cart.map((i) => (i.courseNumber ?? 0) as CourseValue).filter((c) => c > 0))].sort() as CourseValue[];
+    try {
+      const data: any = await createOrder.mutateAsync({
+        outletId: outlet?.id ?? '',
+        orderSubtype: orderSubtype ?? undefined,
+        tableId: tableId || undefined,
+        coversCount: coversParam > 1 ? coversParam : undefined,
+        discountAmount: loyaltyDiscount || undefined,
+        customerPhone: loyaltyState?.customerPhone || undefined,
+        customerName: loyaltyState?.customerName || undefined,
+        lines: orderLines,
+      });
+      const orderId = data.id || data.order_id || '';
+      const orderNumber = data.order_number || '';
+      setCurrentOrderId(orderId);
+      setCurrentOrderNumber(orderNumber);
+      setFiredCourses(0);
+      setCurrentOrderCourses(courses);
+      setCurrentOrderLines(cart.map((item) => ({
+        id: item.id,
+        name: item.name,
+        quantity: item.quantity,
+        unitPrice: item.price + (item.modifierTotal ?? 0),
+        totalPrice: (item.price + (item.modifierTotal ?? 0)) * item.quantity,
+      })));
+      if (tableId && orderId) assignTable.mutate({ tableId, orderId });
+      return { orderId, orderNumber };
+    } catch {
+      toast.error('Failed to create order. Please try again.');
+      return null;
+    }
+  }, [cart, isHospitality, orderSubtype, tableId, coversParam, loyaltyDiscount, loyaltyState, orderLines, outlet, createOrder, assignTable, router, orgSlug]);
+
+  // unpaid=true → dine-in send-to-kitchen or COD: show the order-placed dialog (no receipt yet).
+  // unpaid=false → tender settled: reuse handlePaymentConfirmed (receipt + table release + reset).
+  const handleInlineSettled = useCallback((ord: CreatedOrder, opts?: { unpaid?: boolean }) => {
+    if (opts?.unpaid) {
+      // Send-to-Kitchen (dine-in) / COD: print kitchen + bar tickets per the outlet's printer setup
+      // (single printer → 3-in-1 bill+kitchen+bar; multiple → split jobs) before clearing the cart.
+      if (isHospitality && cart.length > 0) {
+        printKitchenBarTickets({
+          orderNumber: ord.orderNumber || ord.orderId.slice(0, 8),
+          tableRef: tableName ? `Table ${tableName}` : '',
+          lines: cart.map((c) => ({
+            name: c.name,
+            quantity: c.quantity,
+            category: c.category,
+            notes: c.notes,
+            unitPrice: c.price + (c.modifierTotal ?? 0),
+            totalPrice: (c.price + (c.modifierTotal ?? 0)) * c.quantity,
+          })),
+          stations: (posSettings as any)?.printer_profiles ?? [],
+          includeCustomerBill: true,
+          currency: (posSettings as any)?.currency ?? 'KES',
+        });
+      }
+      clearCart();
+      setCartOpen(false);
+      setOrderPlacedId(ord.orderId);
+      setOrderPlacedNumber(ord.orderNumber);
+      setOrderPlacedOpen(true);
+      return;
+    }
+    handlePaymentConfirmed();
+  }, [handlePaymentConfirmed, isHospitality, cart, tableName, posSettings]);
+
+  // Multiple Pay → the order already exists (created by the bar); open the split modal against it.
+  const handleInlineSplit = useCallback((_ord: CreatedOrder) => {
+    setResumeTotal(null);
+    setPaymentOpen(true);
+  }, []);
+
   // ─── Render ─────────────────────────────────────────────────────────────
 
   return (
@@ -650,8 +740,19 @@ export default function OrderPage() {
       {/* ── Left Panel: Menu (60%) ── */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden min-h-0">
 
+        {/* GoDigital-style quick-action toolbar (use-case + role aware) */}
+        <PosToolbar
+          orgSlug={orgSlug}
+          profile={cfg.profile}
+          canRegister={can('pos.sessions.view') || can('pos.sessions.add') || can('pos.payments.add')}
+          showCalculator={cfg.showCalculator}
+          onCalculator={() => setCalcOpen(true)}
+          onParkedSales={() => setParkedOpen(true)}
+          onAddExpense={() => setExpenseOpen(true)}
+        />
+
         {/* Search bar — full width at very top */}
-        <div className="px-4 pt-4 pb-2 shrink-0">
+        <div className="px-4 pt-1 pb-2 shrink-0">
           <div className="relative group">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4.5 w-4.5 text-muted-foreground group-focus-within:text-primary transition-colors" />
             <input
@@ -1170,34 +1271,41 @@ export default function OrderPage() {
               </div>
             </div>
           )}
+          {/* Add-to-bill keeps its single append button; everything else uses the GoDigital-style
+              inline payment bar (methods rendered directly on the page, no method-picker modal). */}
+          {isAddToBill ? (
+            <div className="p-5 pt-3">
+              <Button
+                onClick={handlePlaceOrder}
+                disabled={cart.length === 0 || addOrderLines.isPending}
+                className={cn(
+                  'w-full min-h-14 text-base font-bold rounded-2xl gap-2.5 transition-all',
+                  cart.length > 0 ? 'shadow-lg shadow-primary/20 hover:shadow-primary/30' : 'opacity-50 cursor-not-allowed'
+                )}
+              >
+                {addOrderLines.isPending ? <Loader2 className="h-5 w-5 animate-spin" /> : <ChefHat className="h-5 w-5" />}
+                {cart.length === 0 ? 'Add items to bill' : 'Add to Bill →'}
+              </Button>
+            </div>
+          ) : (
+            <InlinePaymentBar
+              total={total}
+              tenantSlug={user?.tenant_slug ?? ''}
+              profile={cfg.profile}
+              isHospitality={isHospitality}
+              allowCOD={cfg.profile === 'retail' || cfg.profile === 'quick_service'}
+              customerEmail={(loyaltyState as any)?.customerEmail}
+              disabled={cart.length === 0}
+              mode={isHospitality && orderSubtype === 'dine_in' ? 'send_to_kitchen' : 'pay'}
+              createOrderAsync={createOrderAsync}
+              onSettled={handleInlineSettled}
+              onDraft={handlePark}
+              onQuotation={handlePark}
+              onCancel={clearCart}
+              onSplit={handleInlineSplit}
+            />
+          )}
           <div className="p-5 pt-3 space-y-2">
-            <Button
-              onClick={handlePlaceOrder}
-              disabled={cart.length === 0 || createOrder.isPending || addOrderLines.isPending}
-              className={cn(
-                'w-full min-h-14 text-base font-bold rounded-2xl gap-2.5 transition-all',
-                cart.length > 0
-                  ? 'shadow-lg shadow-primary/20 hover:shadow-primary/30'
-                  : 'opacity-50 cursor-not-allowed'
-              )}
-            >
-              {(createOrder.isPending || addOrderLines.isPending) ? (
-                <Loader2 className="h-5 w-5 animate-spin" />
-              ) : isAddToBill ? (
-                <ChefHat className="h-5 w-5" />
-              ) : orderSubtype === 'dine_in' ? (
-                <ChefHat className="h-5 w-5" />
-              ) : (
-                <ShoppingCart className="h-5 w-5" />
-              )}
-              {cart.length === 0
-                ? 'Add items to pay'
-                : isAddToBill
-                  ? 'Add to Bill →'
-                  : orderSubtype === 'dine_in'
-                    ? 'Send to Kitchen'
-                    : `Pay · KES ${total.toLocaleString()}`}
-            </Button>
             {currentOrderId && can('pos.orders.void') && (
               <button
                 type="button"
@@ -1340,6 +1448,7 @@ export default function OrderPage() {
           setReceiptOpen(false);
           setReceiptData(null);
         }}
+        printerName={configFor((posSettings as any)?.printer_profiles, 'bill').printer_name}
       />
 
       <OrderPlacedDialog

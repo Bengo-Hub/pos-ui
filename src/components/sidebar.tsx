@@ -1,6 +1,7 @@
 'use client';
 
 import { useModuleAccess } from '@/hooks/use-module-access';
+import { normalizeUseCase } from '@/lib/use-case-config';
 import { useSubscription } from '@/hooks/use-subscription';
 import { usePermissions } from '@/hooks/usePermissions';
 import { isPlatformOwner as checkPlatformOwner } from '@/lib/auth/permissions';
@@ -241,15 +242,18 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
   const isHQUser = isPlatformOwner || userRoles.some((r) => ['admin', 'pos_admin', 'manager', 'store_manager', 'superuser', 'super_admin'].includes(r));
 
   const outlet = useAuthStore((s) => s.outlet);
-  const outletUseCase = (outlet?.use_case ?? (user as any)?.outlet_use_case ?? '').toLowerCase();
-  const isServices = outletUseCase === 'services';
-  const isPharmacy = outletUseCase === 'pharmacy';
-  const isHospOrQSR = ['hospitality', 'quick_service'].includes(outletUseCase);
+  // Normalize the raw use_case (which may be "hotel"/"bar"/"cafe"/"restaurant"/"salon"/"spa"…) onto a
+  // canonical profile so role/use-case gating is consistent with useModuleAccess and never leaks the
+  // wrong menus (e.g. a "hotel" outlet must behave like hospitality, not fall through to retail).
+  const outletProfile = normalizeUseCase(outlet?.use_case ?? (user as any)?.outlet_use_case ?? '');
+  const isServices = outletProfile === 'services';
+  const isPharmacy = outletProfile === 'pharmacy';
+  const isHospOrQSR = outletProfile === 'hospitality' || outletProfile === 'quick_service';
 
   // ── Nav groups ────────────────────────────────────────────────────────────
 
   const isWaiter = !isHQUser && userRoles.includes('waiter');
-  const isCashierHospOrQSR = !isHQUser && userRoles.includes('cashier') && ['hospitality', 'quick_service'].includes(outletUseCase);
+  const isCashierHospOrQSR = !isHQUser && userRoles.includes('cashier') && isHospOrQSR;
 
   const navGroups: NavGroup[] = [
     {
