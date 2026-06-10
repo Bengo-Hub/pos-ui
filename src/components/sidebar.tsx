@@ -81,6 +81,8 @@ interface NavItem {
   waiterHidden?: boolean;
   /** Hidden for cashier in hospitality/quick_service — they work from the Orders page only */
   cashierHospHidden?: boolean;
+  /** Hidden for these normalized outlet profiles (e.g. retail back-office items hidden on hospitality). */
+  hideForProfiles?: string[];
 }
 
 interface NavGroup {
@@ -274,12 +276,14 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
       items: [
         { label: 'POS Terminal', icon: Plus, href: '/order', moduleKey: 'new_order', permission: P.ORDERS_ADD, waiterHidden: true, cashierHospHidden: true },
         // Back-office full sale form (wholesaler/credit/delivery) — distinct from the fast terminal.
-        { label: 'Add Sale', icon: FilePlus, href: '/sell/add', moduleKey: 'new_order', permission: [P.ORDERS_ADD, P.ORDERS_MANAGE], waiterHidden: true, cashierHospHidden: true },
+        // Retail/services/pharmacy back-office only — hospitality/QSR work from the POS terminal + tables.
+        { label: 'Add Sale', icon: FilePlus, href: '/sell/add', moduleKey: 'new_order', permission: [P.ORDERS_ADD, P.ORDERS_MANAGE], waiterHidden: true, cashierHospHidden: true, hideForProfiles: ['hospitality', 'quick_service'] },
         // (Legacy standalone /retail POS retired — retail outlets now use the adaptive /order terminal above.)
         // All sales (the sale/order list) — add/change or reports access; excludes kitchen/bar (KDS-only view).
         { label: 'All Sales', icon: ClipboardList, href: '/orders', moduleKey: 'orders', permission: [P.ORDERS_ADD, P.ORDERS_CHANGE_OWN, P.ORDERS_CHANGE, P.ORDERS_MANAGE, P.ORDERS_VIEW_OWN, P.REPORTS_VIEW], waiterHidden: true },
         // Drafts = saved-but-unpaid sales (POSOrder status=draft) from terminal Park / Add Sale.
-        { label: 'Drafts', icon: FileText, href: '/sell/drafts', moduleKey: 'orders', permission: [P.ORDERS_ADD, P.ORDERS_CHANGE_OWN, P.ORDERS_CHANGE, P.ORDERS_MANAGE], waiterHidden: true },
+        // Hospitality parks bills on tables, not a back-office drafts list.
+        { label: 'Drafts', icon: FileText, href: '/sell/drafts', moduleKey: 'orders', permission: [P.ORDERS_ADD, P.ORDERS_CHANGE_OWN, P.ORDERS_CHANGE, P.ORDERS_MANAGE], waiterHidden: true, hideForProfiles: ['hospitality', 'quick_service'] },
         // Credit Sale = sell on account (on_account tender → treasury AR; credit limit enforced).
         { label: 'Credit Sale', icon: HandCoins, href: '/sell/add?credit=1', moduleKey: 'new_order', permission: [P.ORDERS_ADD, P.ORDERS_MANAGE], waiterHidden: true, cashierHospHidden: true },
         // Quotations are owned by treasury — link to its UI rather than duplicating the page.
@@ -409,6 +413,8 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
       items: group.items
         .filter((item) => {
           if (!hasModule(item.moduleKey)) return false;
+          // Hide items not relevant to this outlet's use case (e.g. retail back-office on hospitality).
+          if (item.hideForProfiles?.includes(outletProfile)) return false;
           // Waiter role: only Tables + Shifts
           if (isWaiter && item.waiterHidden) return false;
           // Cashier in hospitality/quick_service: focused on clearing bills only
