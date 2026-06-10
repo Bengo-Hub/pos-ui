@@ -5,6 +5,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { useSubscription } from "@/hooks/use-subscription";
+import { featureLabel, isKnownFeature, requiredPlanLabel } from "@/lib/subscription/feature-catalog";
 
 const SUBSCRIBE_URL =
   process.env.NEXT_PUBLIC_SUBSCRIPTIONS_UI_URL || "https://pricing.codevertexitsolutions.com";
@@ -29,17 +30,26 @@ export function SubscriptionGate({
 }: SubscriptionGateProps) {
   const { isActive, hasFeature, isLoading } = useSubscription();
 
+  // Only gate codes we recognise; an unknown/un-seeded code fails open (renders children)
+  // so a typo can never permanently hide a real capability.
+  const gateable = isKnownFeature(feature);
+
   if (isLoading || isActive) {
-    if (feature && !isLoading && !hasFeature(feature)) {
-      return <>{fallback ?? <DefaultUpgradePrompt feature={feature} />}</>;
+    if (gateable && !isLoading && !hasFeature(feature!)) {
+      return <>{fallback ?? <DefaultUpgradePrompt feature={feature!} />}</>;
     }
     return <>{children}</>;
   }
 
-  return <>{fallback ?? <DefaultUpgradePrompt feature={feature ?? null} />}</>;
+  // Subscription inactive/expired — gate known features; otherwise still render.
+  if (gateable) {
+    return <>{fallback ?? <DefaultUpgradePrompt feature={feature!} />}</>;
+  }
+  return <>{children}</>;
 }
 
 function DefaultUpgradePrompt({ feature }: { feature: string | null }) {
+  const planLabel = requiredPlanLabel(feature ?? undefined);
   return (
     <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border bg-muted/30 px-6 py-8 text-center">
       <div className="flex size-12 items-center justify-center rounded-full bg-primary/10">
@@ -47,7 +57,7 @@ function DefaultUpgradePrompt({ feature }: { feature: string | null }) {
       </div>
       <div className="space-y-1">
         <p className="text-sm font-semibold text-foreground">
-          {feature ? "Feature requires upgrade" : "Premium feature"}
+          {feature ? `${featureLabel(feature)} requires the ${planLabel ?? "a higher"} plan` : "Premium feature"}
         </p>
         <p className="text-xs text-muted-foreground">
           Upgrade your plan to access this feature and more.

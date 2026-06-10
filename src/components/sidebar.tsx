@@ -4,6 +4,7 @@ import { useModuleAccess } from '@/hooks/use-module-access';
 import { useSubscription } from '@/hooks/use-subscription';
 import { usePermissions } from '@/hooks/usePermissions';
 import { isPlatformOwner as checkPlatformOwner } from '@/lib/auth/permissions';
+import { isKnownFeature, requiredPlanLabel } from '@/lib/subscription/feature-catalog';
 import type { Permission } from '@/lib/rbac/permissions';
 import { P } from '@/lib/rbac/permissions';
 import { cn } from '@/lib/utils';
@@ -199,6 +200,8 @@ function NavGroupSection({
         <div className="space-y-0.5">
           {group.items.map((item) => {
             const locked = !!item.subFeature && lockedFeatures.has(item.subFeature);
+            // Prefer the catalog's required tier (accurate) over the hand-typed subPlan.
+            const planLabel = requiredPlanLabel(item.subFeature) ?? item.subPlan;
             return (
               <NavLink
                 key={item.href + item.label}
@@ -206,7 +209,7 @@ function NavGroupSection({
                 orgSlug={orgSlug}
                 onClose={onClose}
                 locked={locked}
-                subPlan={item.subPlan}
+                subPlan={planLabel}
               />
             );
           })}
@@ -227,7 +230,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
   const user = useAuthStore((s) => s.user);
   const { hasModule, isSuperUser, isResolved } = useModuleAccess();
   const { canAny, isSuperuser } = usePermissions();
-  const { hasFeature, isActive } = useSubscription();
+  const { hasFeature, isLoading: subLoading, info: subInfo } = useSubscription();
   // Platform-owner-only (device fleet, platform config, licensing). A tenant `admin` is
   // NOT a platform owner — only the is_platform_owner claim, the superuser role, or the
   // codevertex tenant (verified via the server-returned tenant slug, not the URL) qualifies.
@@ -321,7 +324,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
       defaultCollapsed: true,
       items: [
         // Waiters handle pickup hand-off + delivery rider assignment (P.ORDERS_CHANGE).
-        { label: 'Pickup Queue', icon: ShoppingBag, href: '/online-orders', moduleKey: 'online_orders', permission: [P.ORDERS_MANAGE, P.ORDERS_CHANGE, P.QUEUE_MANAGE], subFeature: 'online_orders', subPlan: 'Pro' },
+        { label: 'Pickup Queue', icon: ShoppingBag, href: '/online-orders', moduleKey: 'online_orders', permission: [P.ORDERS_MANAGE, P.ORDERS_CHANGE, P.QUEUE_MANAGE], subFeature: 'online_ordering', subPlan: 'Pro' },
       ],
     },
     {
@@ -369,7 +372,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
       items: [
         { label: 'Reports', icon: BarChart3, href: '/reports', moduleKey: 'reports', permission: [P.REPORTS_VIEW, P.REPORTS_MANAGE], subFeature: 'shift_reports', subPlan: 'Pro', waiterHidden: true },
         { label: 'Most Profitable', icon: TrendingUp, href: '/reports/most-profitable', moduleKey: 'reports', permission: [P.REPORTS_VIEW, P.REPORTS_MANAGE], subFeature: 'shift_reports', subPlan: 'Pro', waiterHidden: true },
-        { label: 'Loyalty', icon: Gift, href: '/loyalty', moduleKey: 'loyalty', permission: [P.LOYALTY_VIEW, P.LOYALTY_ADD, P.LOYALTY_MANAGE], subFeature: 'loyalty', subPlan: 'Growth', waiterHidden: true, cashierHospHidden: true },
+        { label: 'Loyalty', icon: Gift, href: '/loyalty', moduleKey: 'loyalty', permission: [P.LOYALTY_VIEW, P.LOYALTY_ADD, P.LOYALTY_MANAGE], subFeature: 'loyalty_program', subPlan: 'Growth', waiterHidden: true, cashierHospHidden: true },
         { label: 'Commissions', icon: TrendingUp, href: '/commissions', moduleKey: 'commissions', permission: [P.COMMISSIONS_VIEW, P.COMMISSIONS_VIEW_OWN, P.COMMISSIONS_MANAGE], subFeature: 'commissions', subPlan: 'Pro', waiterHidden: true },
         { label: 'Settings', icon: Settings, href: '/settings', moduleKey: 'settings', permission: [P.CONFIG_VIEW, P.CONFIG_CHANGE, P.CONFIG_MANAGE], waiterHidden: true },
       ],
@@ -378,13 +381,18 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
 
   // ── Filter by module + permission; subscription features shown but locked ───
 
-  // Collect which subFeature codes are locked (not in the current plan).
-  // Platform owners and superusers bypass all subscription gates.
+  // Collect which subFeature codes are locked (recognised feature, not in the current plan).
+  // Rules:
+  //  - Platform owners / superusers bypass all gates (hasFeature already returns true for them).
+  //  - Gate only once entitlements have loaded (subInfo resolved & not loading), so nothing is
+  //    locked during the initial fetch.
+  //  - Only gate codes present in FEATURE_CATALOG; unknown codes fail-open (visible) so a typo or
+  //    an un-seeded feature can never permanently hide a real capability.
   const lockedFeatures = new Set<string>();
-  if (!isPlatformOwner && isActive !== undefined) {
+  if (!isPlatformOwner && !subLoading && subInfo !== undefined && subInfo !== null) {
     navGroups.forEach((g) =>
       g.items.forEach((item) => {
-        if (item.subFeature && !hasFeature(item.subFeature)) {
+        if (isKnownFeature(item.subFeature) && !hasFeature(item.subFeature)) {
           lockedFeatures.add(item.subFeature);
         }
       })

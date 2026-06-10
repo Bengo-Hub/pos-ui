@@ -19,6 +19,24 @@ export interface ApiError {
   detail?: string;
   /** Present on subscription errors — recommended plan to upgrade to */
   upgrade_plan?: string;
+  /** Present on usage_limit_exceeded — overage metadata for the limit-reached modal */
+  limit?: LimitReachedInfo;
+}
+
+/** Structured overage metadata returned by subscription-service on a metered limit (402). */
+export interface LimitReachedInfo {
+  metric: string;
+  limit: number;
+  used: number;
+  /** True when the metric supports pay-as-you-go extra usage. */
+  overageEligible: boolean;
+  /** KES price per overage unit (per overageUnit quantum). */
+  overageUnitPrice: number;
+  /** Human unit label, e.g. "per 100 orders". */
+  overageUnit: string;
+  /** Sum of overage already accrued this period (KES). */
+  accruedOverageKes: number;
+  upgradeUrl?: string;
 }
 
 export interface SubscriptionError extends ApiError {
@@ -52,6 +70,22 @@ export function parseApiError(error: any): ApiError {
     message: data.message ?? data.error ?? error?.message ?? 'An unexpected error occurred.',
     detail: data.detail ?? data.description,
     upgrade_plan: data.upgrade_plan,
+    limit: parseLimitInfo(data),
+  };
+}
+
+/** Extracts the overage/limit metadata from a structured usage_limit_exceeded body. */
+export function parseLimitInfo(data: any): LimitReachedInfo | undefined {
+  if (!data || data.metric === undefined || data.limit === undefined) return undefined;
+  return {
+    metric: String(data.metric),
+    limit: Number(data.limit) || 0,
+    used: Number(data.used) || 0,
+    overageEligible: !!data.overage_eligible,
+    overageUnitPrice: Number(data.overage_unit_price) || 0,
+    overageUnit: String(data.overage_unit ?? ''),
+    accruedOverageKes: Number(data.accrued_overage_kes) || 0,
+    upgradeUrl: data.upgrade_url,
   };
 }
 

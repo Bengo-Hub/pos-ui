@@ -55,3 +55,49 @@ export async function fetchSubscriptionInfo(
     return null;
   }
 }
+
+export interface OverageStatus {
+  allowOverage: boolean;
+  pendingTotalKes: number;
+  breakdown: Array<{
+    metric_type: string;
+    period_date: string;
+    units_over: number;
+    plan_limit: number;
+    unit_price_kes: number;
+    total_charge_kes: number;
+  }>;
+}
+
+/** Reads the tenant's extra-usage opt-in flag + pending overage via the local proxy. */
+export async function fetchOverageStatus(tenantId: string): Promise<OverageStatus | null> {
+  try {
+    const resp = await fetch(`/api/subscription/overage?tenantId=${encodeURIComponent(tenantId)}`, {
+      cache: "no-store",
+    });
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    if (!data) return null;
+    return {
+      allowOverage: !!data.allow_overage,
+      pendingTotalKes: Number(data.pending_total_kes) || 0,
+      breakdown: data.breakdown ?? [],
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** Enables/disables pay-as-you-go extra usage for the tenant. Returns true on success. */
+export async function setOverageEnabled(tenantId: string, enabled: boolean): Promise<boolean> {
+  try {
+    const resp = await fetch(`/api/subscription/overage?tenantId=${encodeURIComponent(tenantId)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ enabled }),
+    });
+    return resp.ok;
+  } catch {
+    return false;
+  }
+}
