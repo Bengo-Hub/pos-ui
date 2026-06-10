@@ -118,6 +118,8 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
     () => paymentActionsFor(profile, gateways, { isHospitality, isOnline, allowCOD }),
     [profile, gateways, isHospitality, isOnline, allowCOD],
   );
+  // Back-office profiles (retail/pharmacy/services) get Draft + Quotation; hospitality/QSR do not.
+  const isBackOffice = profile === 'retail' || profile === 'pharmacy' || profile === 'services';
 
   const reset = useCallback(() => {
     setCapture(null); setBusyKey(null); setCashTendered(''); setCardRef('');
@@ -322,8 +324,10 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
               <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Total Payable</span>
               <span className="text-2xl font-extrabold tabular-nums text-emerald-600">{fmt(roundedTotal)}</span>
             </div>
-            {/* Payment methods — rendered directly on the page (GoDigital style) */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+            {/* Payment methods — rendered directly on the page (GoDigital style). The cart panel is
+                narrow, so a fixed 2-column grid with centered icon + full (wrapping) label keeps every
+                tile legible — no truncated "C…"/"M…" labels or clipped icons. */}
+            <div className="grid grid-cols-2 gap-2">
               {actions.map((a) => {
                 const Icon = tenderIcon(a.key);
                 const tone = TONES[a.tone];
@@ -334,26 +338,25 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
                     type="button"
                     disabled={disabled || anyBusy}
                     onClick={() => onPick(a.key)}
+                    title={a.sublabel}
                     className={cn(
-                      'flex items-center gap-2 px-3 py-2.5 rounded-xl border-2 border-border text-left transition-all active:scale-95 disabled:opacity-40',
+                      'flex flex-col items-center justify-center gap-1.5 px-2 py-3 rounded-xl border-2 border-border transition-all active:scale-95 disabled:opacity-40 min-h-20',
                       tone.ring,
                     )}
                   >
-                    <span className={cn('h-9 w-9 rounded-lg flex items-center justify-center shrink-0', tone.bg, tone.text)}>
-                      {isBusy ? <Loader2 className="h-4.5 w-4.5 animate-spin" /> : <Icon className="h-4.5 w-4.5" />}
+                    <span className={cn('h-10 w-10 rounded-lg flex items-center justify-center shrink-0', tone.bg, tone.text)}>
+                      {isBusy ? <Loader2 className="h-5 w-5 animate-spin" /> : <Icon className="h-5 w-5" />}
                     </span>
-                    <span className="min-w-0">
-                      <span className="block text-sm font-bold truncate">{a.label}</span>
-                      <span className="block text-[10px] text-muted-foreground truncate">{a.sublabel}</span>
-                    </span>
+                    <span className="text-xs font-bold text-center leading-tight">{a.label}</span>
                   </button>
                 );
               })}
             </div>
-            {/* Secondary workflow actions */}
-            <div className="grid grid-cols-3 gap-2 pt-1">
-              <SecondaryBtn icon={FileText} label="Draft" onClick={onDraft} disabled={disabled || anyBusy} />
-              <SecondaryBtn icon={FileText} label="Quotation" onClick={onQuotation} disabled={anyBusy} />
+            {/* Secondary workflow actions. Draft/Quotation are retail/back-office concepts — hospitality
+                & QSR hold orders on tables / send to kitchen, so only Cancel shows there. */}
+            <div className={cn('grid gap-2 pt-1', isBackOffice ? 'grid-cols-3' : 'grid-cols-1')}>
+              {isBackOffice && <SecondaryBtn icon={FileText} label="Draft" onClick={onDraft} disabled={disabled || anyBusy} />}
+              {isBackOffice && <SecondaryBtn icon={FileText} label="Quotation" onClick={onQuotation} disabled={anyBusy} />}
               <SecondaryBtn icon={X} label="Cancel" tone="danger" onClick={onCancel} disabled={anyBusy} />
             </div>
           </>

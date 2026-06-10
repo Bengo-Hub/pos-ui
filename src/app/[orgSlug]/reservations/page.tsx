@@ -394,17 +394,28 @@ export default function ReservationsPage() {
   const [selectedDate, setSelectedDate] = useState(() => format(new Date(), 'yyyy-MM-dd'));
   const [statusFilter, setStatusFilter] = useState('all');
   const [newOpen, setNewOpen] = useState(false);
+  // Default to "Upcoming" so newly-submitted reservations (often future-dated, incl. from the public
+  // booking widget) are visible without having to navigate to their exact day. Toggle to per-day view.
+  const [viewMode, setViewMode] = useState<'upcoming' | 'day'>('upcoming');
 
   const confirm = useConfirmReservation();
   const checkIn = useCheckInReservation();
   const cancel = useCancelReservation();
 
   const { data, isLoading } = useReservations({
-    date: selectedDate,
+    date: viewMode === 'day' ? selectedDate : undefined,
     status: statusFilter === 'all' ? undefined : statusFilter,
     outletId: outlet?.id,
   });
-  const reservations = data?.data ?? [];
+  // In Upcoming mode, show today onward (hide long-past bookings) sorted by time.
+  const reservations = useMemo(() => {
+    const all = data?.data ?? [];
+    if (viewMode === 'day') return all;
+    const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0);
+    return all
+      .filter((r) => new Date(r.scheduled_at).getTime() >= startOfToday.getTime() || r.status === 'pending')
+      .sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime());
+  }, [data, viewMode]);
 
   const dateLabel = useMemo(() => {
     const d = new Date(selectedDate + 'T12:00:00');
@@ -448,24 +459,42 @@ export default function ReservationsPage() {
         </button>
       </div>
 
-      {/* Date navigator */}
-      <div className="flex items-center gap-3">
-        <button onClick={() => shiftDate(-1)} className="h-9 w-9 rounded-xl border border-border flex items-center justify-center hover:bg-muted transition-colors">
-          <ChevronLeft className="h-4 w-4" />
-        </button>
-        <div className="flex-1 text-center">
-          <p className="font-bold text-sm">{dateLabel}</p>
-          <p className="text-xs text-muted-foreground">{format(new Date(selectedDate + 'T12:00:00'), 'EEEE, MMMM d yyyy')}</p>
+      {/* View mode + date navigator */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex rounded-xl border border-border overflow-hidden">
+          {(['upcoming', 'day'] as const).map((m) => (
+            <button
+              key={m}
+              onClick={() => setViewMode(m)}
+              className={cn('px-3 py-2 text-xs font-bold transition-colors',
+                viewMode === m ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted')}
+            >
+              {m === 'upcoming' ? 'Upcoming' : 'By Day'}
+            </button>
+          ))}
         </div>
-        <button onClick={() => shiftDate(1)} className="h-9 w-9 rounded-xl border border-border flex items-center justify-center hover:bg-muted transition-colors">
-          <ChevronRight className="h-4 w-4" />
-        </button>
-        <input
-          type="date"
-          value={selectedDate}
-          onChange={(e) => setSelectedDate(e.target.value)}
-          className="border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary/40 bg-background"
-        />
+        {viewMode === 'day' ? (
+          <>
+            <button onClick={() => shiftDate(-1)} className="h-9 w-9 rounded-xl border border-border flex items-center justify-center hover:bg-muted transition-colors">
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <div className="flex-1 text-center min-w-32">
+              <p className="font-bold text-sm">{dateLabel}</p>
+              <p className="text-xs text-muted-foreground">{format(new Date(selectedDate + 'T12:00:00'), 'EEEE, MMMM d yyyy')}</p>
+            </div>
+            <button onClick={() => shiftDate(1)} className="h-9 w-9 rounded-xl border border-border flex items-center justify-center hover:bg-muted transition-colors">
+              <ChevronRight className="h-4 w-4" />
+            </button>
+            <input
+              type="date"
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value)}
+              className="border border-border rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary/40 bg-background"
+            />
+          </>
+        ) : (
+          <p className="flex-1 text-sm font-semibold text-muted-foreground">All upcoming bookings</p>
+        )}
       </div>
 
       {/* Summary pills */}

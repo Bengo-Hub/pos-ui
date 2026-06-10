@@ -43,12 +43,14 @@ export function PosToolbar({
   const go = (path: string) => router.push(`/${orgSlug}${path}`);
   const isRetailish = profile === 'retail' || profile === 'pharmacy' || profile === 'services';
 
+  // Hospitality/QSR run bills off tables + KDS, not the retail back-office surfaces — Sell Return,
+  // Suspended Sales, Calculator and Repair are retail/services concepts and are hidden there.
   const buttons: ToolbarBtn[] = [
     { key: 'recent',   label: 'Recent Transactions', icon: ClipboardList, onClick: () => go('/orders'), show: true },
-    { key: 'return',   label: 'Sell Return',         icon: RotateCcw,     onClick: () => go('/returns'), show: true },
+    { key: 'return',   label: 'Sell Return',         icon: RotateCcw,     onClick: () => go('/returns'), show: isRetailish },
     { key: 'register', label: 'Register Details',    icon: Wallet,        onClick: () => go('/shifts'), show: canRegister },
     { key: 'calc',     label: 'Calculator',          icon: Calculator,    onClick: onCalculator, show: showCalculator },
-    { key: 'suspended',label: 'Suspended Sales',     icon: PauseCircle,   onClick: onParkedSales, show: true },
+    { key: 'suspended',label: 'Suspended Sales',     icon: PauseCircle,   onClick: onParkedSales, show: isRetailish },
     { key: 'expense',  label: 'Add Expense',         icon: Receipt,       onClick: onAddExpense, show: true },
     { key: 'repair',   label: 'Repair',              icon: Wrench,        onClick: () => go('/repair'), show: isRetailish },
   ];

@@ -37,9 +37,7 @@ import {
   Grid3x3,
   Image as ImageIcon,
   LayoutList,
-  ListChecks,
   Loader2,
-  PauseCircle,
   Minus,
   Plus,
   Receipt,
@@ -1306,6 +1304,8 @@ export default function OrderPage() {
             />
           )}
           <div className="p-5 pt-3 space-y-2">
+            {/* Add Expense, Park (Draft) and Parked/Suspended Sales now live in the top toolbar +
+                inline payment bar — no duplicate retail-style buttons cluttering the cart card. */}
             {currentOrderId && can('pos.orders.void') && (
               <button
                 type="button"
@@ -1316,33 +1316,6 @@ export default function OrderPage() {
                 Void Order #{currentOrderNumber}
               </button>
             )}
-            <button
-              type="button"
-              onClick={() => setExpenseOpen(true)}
-              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-border text-sm font-semibold hover:bg-accent transition-colors"
-            >
-              <Receipt className="h-4 w-4" />
-              Add Expense
-            </button>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={handlePark}
-                disabled={cart.length === 0 || createOrder.isPending}
-                className="flex items-center justify-center gap-2 py-2.5 rounded-xl border border-border text-sm font-semibold hover:bg-accent transition-colors disabled:opacity-40"
-              >
-                <PauseCircle className="h-4 w-4" />
-                Park Sale
-              </button>
-              <button
-                type="button"
-                onClick={() => setParkedOpen(true)}
-                className="flex items-center justify-center gap-2 py-2.5 rounded-xl border border-border text-sm font-semibold hover:bg-accent transition-colors"
-              >
-                <ListChecks className="h-4 w-4" />
-                Parked Sales
-              </button>
-            </div>
             {cfg.showCourses && currentOrderId && currentOrderCourses.length > 0 && (
               <div className="rounded-xl border border-border bg-muted/30 p-3 space-y-2">
                 <div className="flex items-center gap-1.5 text-xs font-bold text-muted-foreground uppercase tracking-wide">
