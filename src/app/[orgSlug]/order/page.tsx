@@ -21,7 +21,7 @@ import { printKitchenBarTickets } from '@/lib/pos/kitchen-bar-print';
 import { configFor } from '@/lib/pos/printer-stations';
 import { cn } from '@/lib/utils';
 import { terminalConfigFor } from '@/lib/use-case-config';
-import { useMenuItems, useCategories, useCreateOrder, useAddOrderLines, useVoidOrder, useAssignTable, useReleaseTable, type OrderSubtype } from '@/hooks/usePOS';
+import { useMenuItems, useCategories, useCreateOrder, useAddOrderLines, useVoidOrder, useAssignTable, useReleaseTable, usePricingTiers, type OrderSubtype } from '@/hooks/usePOS';
 import { OrderPlacedDialog } from '@/components/pos/order-placed-dialog';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -129,7 +129,7 @@ export default function OrderPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [cart, setCart] = useState<CartItem[]>([]);
   // Pricing profile (Retail/Wholesale) — switching it re-prices the cart via inventory tier prices.
-  const [pricingProfile, setPricingProfile] = useState<'RETAIL' | 'WHOLESALE'>('RETAIL');
+  const [pricingProfile, setPricingProfile] = useState<string>('');
   const [repricing, setRepricing] = useState(false);
   const [expenseOpen, setExpenseOpen] = useState(false);
   const [calcOpen, setCalcOpen] = useState(false);
@@ -238,6 +238,15 @@ export default function OrderPage() {
 
   const totalItems = catalogData?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(totalItems / PAGE_SIZE));
+
+  // Pricing tiers (Retail/Wholesale/custom) from inventory via pos-api — drives the price selector.
+  const { data: tiersResp } = usePricingTiers();
+  const pricingTiers = useMemo(() => tiersResp?.data ?? [], [tiersResp]);
+  useEffect(() => {
+    if (!pricingProfile && pricingTiers.length > 0) {
+      setPricingProfile((pricingTiers.find((t) => t.is_default) ?? pricingTiers[0]).code);
+    }
+  }, [pricingTiers, pricingProfile]);
 
   const { data: serverCategories } = useCategories();
   // Typed category list (with icons) consumed by CategoryNav. CategoryNav owns
@@ -417,7 +426,7 @@ export default function OrderPage() {
   // repriceCart switches the pricing profile and re-resolves each cart line's base price against the
   // matching inventory pricing tier (RETAIL/WHOLESALE). On any failure a line keeps its current price.
   const repriceCart = useCallback(
-    async (profile: 'RETAIL' | 'WHOLESALE') => {
+    async (profile: string) => {
       setPricingProfile(profile);
       const tenantId = user?.tenant_id ?? '';
       if (cart.length === 0 || !tenantId) return;
@@ -1140,22 +1149,18 @@ export default function OrderPage() {
           {cfg.showPricingProfile && (
             <div className="flex items-center gap-1.5 mt-2">
               <span className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Price</span>
-              {(['RETAIL', 'WHOLESALE'] as const).map((p) => (
-                <button
-                  key={p}
-                  type="button"
-                  onClick={() => repriceCart(p)}
-                  disabled={repricing}
-                  className={cn(
-                    'px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors disabled:opacity-50',
-                    pricingProfile === p
-                      ? 'bg-primary text-primary-foreground'
-                      : 'bg-card border border-border text-muted-foreground hover:text-foreground'
-                  )}
-                >
-                  {p === 'RETAIL' ? 'Retail' : 'Wholesale'}
-                </button>
-              ))}
+              {/* Real pricing tiers from inventory (Retail, Wholesale, custom e.g. Loyal Clients). */}
+              <select
+                value={pricingProfile}
+                onChange={(e) => repriceCart(e.target.value)}
+                disabled={repricing || pricingTiers.length === 0}
+                className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-card border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:opacity-50"
+              >
+                {pricingTiers.length === 0 && <option value="">Default Price</option>}
+                {pricingTiers.map((t) => (
+                  <option key={t.code} value={t.code}>{t.name}</option>
+                ))}
+              </select>
               {repricing && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
             </div>
           )}

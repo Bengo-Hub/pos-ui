@@ -81,7 +81,7 @@ export function terminalConfigFor(useCase?: string | null): TerminalConfig {
       };
     case 'services':
       return {
-        profile, defaultDisplayMode: 'card', barcodeFirst: false, showPricingProfile: false,
+        profile, defaultDisplayMode: 'card', barcodeFirst: false, showPricingProfile: true,
         showOrderType: false, showCourses: false, showStaffAttribution: true, showCalculator: false,
         keyboardCheckout: false, showBrandGrid: false,
         showStockBadge: false, showScale: false, managerOverride: false, terminalTitle: 'New Sale',
