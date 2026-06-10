@@ -1,16 +1,20 @@
 /**
- * Printer discovery + dispatch for the POS.
+ * Printer discovery + dispatch for the POS, backed by QZ Tray.
  *
- * A browser cannot, by itself, enumerate OS / network / USB / Bluetooth printers or print silently to
- * a specific one — `window.print()` only opens the OS dialog where the user picks a printer. The
- * industry-standard bridge for web POS is **QZ Tray**: a small local app that exposes the machine's
- * printers (network, USB, Bluetooth — whatever the OS sees) over a secure WebSocket. When QZ Tray is
- * running and its client (`window.qz`) is loaded, we can list printers and print silently to a named
- * one. When it is NOT present we degrade gracefully to the browser print window (the default).
+ * A browser cannot enumerate OS / network / USB / Bluetooth printers or print silently to a named one
+ * on its own. QZ Tray — a small local app the operator installs — exposes the machine's printers over
+ * a secure WebSocket and prints silently. This module lazily loads the `qz-tray` client, wires its
+ * certificate + signature promises to the pos-api signing endpoints (the private key never touches the
+ * browser), connects, and prints. When QZ Tray isn't running we degrade to the browser print dialog.
  *
- * This module never hard-depends on the qz-tray package (so the build stays clean); it detects the
- * runtime global `window.qz`. Loading qz-tray.js is an operator/deployment concern.
+ * Production silent printing requires a signed connection: pos-api serves the platform digital
+ * certificate and signs each request with the platform private key (env-configured). If signing is
+ * not configured, QZ still connects unsigned (the operator sees a one-time allow prompt) and printing
+ * works; only the silent/no-prompt guarantee is lost.
  */
+
+import { apiClient } from '@/lib/api/client';
+import { useAuthStore } from '@/store/auth';
 
 export type PrinterSource = 'qz' | 'none';
 
@@ -18,67 +22,97 @@ export interface DiscoverResult {
   source: PrinterSource;
   printers: string[];
   defaultPrinter?: string;
-  /** Human-readable note for the settings UI when no bridge is available. */
   note?: string;
 }
 
-function qz(): any | null {
+let qzPromise: Promise<any | null> | null = null;
+let configured = false;
+
+function tenantSlug(): string {
+  try { return useAuthStore.getState().user?.tenant_id ?? ''; } catch { return ''; }
+}
+
+/** Lazily import qz-tray, wire cert/signature promises to pos-api, and connect. Returns null when the
+ *  QZ Tray app isn't reachable (caller then uses the browser print dialog). Cached after first call. */
+async function loadQz(): Promise<any | null> {
   if (typeof window === 'undefined') return null;
-  const q = (window as any).qz;
-  return q && q.printers && q.websocket ? q : null;
+  const existing = (window as any).qz;
+  if (existing?.websocket?.isActive?.()) return existing;
+  if (qzPromise) return qzPromise;
+
+  qzPromise = (async () => {
+    try {
+      const mod: any = await import('qz-tray');
+      const qz = mod.default ?? mod;
+
+      if (!configured) {
+        const slug = tenantSlug();
+        const base = slug ? `/api/v1/${slug}/pos/printing/qz` : '';
+        // Certificate: served by pos-api (public). Empty string → QZ treats the connection as
+        // unsigned (operator allow-prompt) rather than failing.
+        qz.security.setCertificatePromise((resolve: (v: string) => void) => {
+          if (!base) { resolve(''); return; }
+          apiClient
+            .get<{ certificate?: string }>(`${base}/cert`)
+            .then((r) => resolve(r?.certificate ?? ''))
+            .catch(() => resolve(''));
+        });
+        try { qz.security.setSignatureAlgorithm('SHA512'); } catch { /* older qz */ }
+        // Signature: pos-api signs the request with the platform private key (never exposed here).
+        qz.security.setSignaturePromise((toSign: string) => (resolve: (v: string) => void) => {
+          if (!base) { resolve(''); return; }
+          apiClient
+            .post<{ signature?: string }>(`${base}/sign`, { request: toSign })
+            .then((r) => resolve(r?.signature ?? ''))
+            .catch(() => resolve(''));
+        });
+        configured = true;
+      }
+
+      if (!(qz.websocket.isActive && qz.websocket.isActive())) {
+        await qz.websocket.connect();
+      }
+      (window as any).qz = qz;
+      return qz;
+    } catch {
+      qzPromise = null; // allow a later retry (e.g. after the operator starts QZ Tray)
+      return null;
+    }
+  })();
+  return qzPromise;
 }
 
-async function ensureQzConnected(q: any): Promise<boolean> {
-  try {
-    if (q.websocket.isActive && q.websocket.isActive()) return true;
-    await q.websocket.connect();
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Discover available printers. Tries QZ Tray; returns an empty list with source 'none' when no bridge
- * is detected (the caller then offers only the browser-print default).
- */
+/** Discover printers via QZ Tray; empty list + source 'none' when no bridge is reachable. */
 export async function discoverPrinters(): Promise<DiscoverResult> {
-  const q = qz();
-  if (!q) {
+  const qz = await loadQz();
+  if (!qz) {
     return {
       source: 'none',
       printers: [],
-      note: 'No print bridge detected. Install/run QZ Tray to auto-detect network, USB & Bluetooth printers and enable silent auto-print. Without it, printing uses the browser print dialog.',
-    };
-  }
-  const connected = await ensureQzConnected(q);
-  if (!connected) {
-    return {
-      source: 'none',
-      printers: [],
-      note: 'QZ Tray is installed but not reachable. Start the QZ Tray app, then click Detect Printers again.',
+      note: 'No print bridge detected. Install & run QZ Tray on this terminal to auto-detect network, USB & Bluetooth printers and enable silent auto-print. Without it, printing uses the browser print dialog.',
     };
   }
   try {
-    const list: string[] = await q.printers.find();
+    const list: string[] = await qz.printers.find();
     let def: string | undefined;
-    try { def = await q.printers.getDefault(); } catch { /* optional */ }
-    return { source: 'qz', printers: Array.isArray(list) ? list : [list].filter(Boolean), defaultPrinter: def };
+    try { def = await qz.printers.getDefault(); } catch { /* optional */ }
+    const printers = Array.isArray(list) ? list : [list].filter(Boolean);
+    return { source: 'qz', printers, defaultPrinter: def, note: `Found ${printers.length} printer(s) via QZ Tray.` };
   } catch {
     return { source: 'none', printers: [], note: 'Could not read printers from QZ Tray.' };
   }
 }
 
-/** True when silent printing to a named printer is possible right now. */
+/** Best-effort sync check: is a QZ connection already active? (Used for UI hints only.) */
 export function canSilentPrint(): boolean {
-  return qz() !== null;
+  if (typeof window === 'undefined') return false;
+  const qz = (window as any).qz;
+  return Boolean(qz?.websocket?.isActive?.());
 }
-
-const PAGE_WIDTH: Record<string, string> = { '58mm': '58mm', '80mm': '80mm' };
 
 function browserPrint(title: string, html: string, paperWidth = '80mm') {
   if (typeof window === 'undefined') return;
-  const w = PAGE_WIDTH[paperWidth] ?? '80mm';
+  const w = paperWidth === '58mm' ? '58mm' : '80mm';
   const win = window.open('', '_blank', 'width=380,height=640');
   if (!win) { window.print(); return; }
   win.document.write(
@@ -94,9 +128,9 @@ function browserPrint(title: string, html: string, paperWidth = '80mm') {
 }
 
 /**
- * Print HTML to a station's assigned printer. When QZ Tray + a real printer name are available the
- * job is sent silently to that printer; otherwise it falls back to the browser print window so a
- * receipt is always produced. `printerName` of '', 'browser', or undefined forces the browser path.
+ * Print HTML to a station's assigned printer. With QZ Tray + a real printer name it prints silently to
+ * that printer; otherwise (no bridge, or printerName empty/'browser') it falls back to the browser
+ * print window so a receipt is never lost.
  */
 export async function printHtmlToPrinter(
   printerName: string | undefined,
@@ -104,19 +138,14 @@ export async function printHtmlToPrinter(
   html: string,
   paperWidth = '80mm',
 ): Promise<void> {
-  const q = qz();
   const named = printerName && printerName.toLowerCase() !== 'browser' ? printerName : '';
-  if (!q || !named) {
-    browserPrint(title, html, paperWidth);
-    return;
-  }
+  if (!named) { browserPrint(title, html, paperWidth); return; }
+  const qz = await loadQz();
+  if (!qz) { browserPrint(title, html, paperWidth); return; }
   try {
-    if (!(await ensureQzConnected(q))) { browserPrint(title, html, paperWidth); return; }
-    const cfg = q.configs.create(named, { size: { width: paperWidth === '58mm' ? 58 : 80, height: null }, units: 'mm' });
-    // Print as HTML so our thermal markup renders without ESC/POS hand-coding.
-    await q.print(cfg, [{ type: 'html', format: 'plain', data: `<div style="font-family:'Courier New',monospace">${html}</div>` }]);
+    const cfg = qz.configs.create(named, { size: { width: paperWidth === '58mm' ? 58 : 80, height: null }, units: 'mm' });
+    await qz.print(cfg, [{ type: 'html', format: 'plain', data: `<div style="font-family:'Courier New',monospace">${html}</div>` }]);
   } catch {
-    // Any QZ failure → never lose the receipt; fall back to the browser dialog.
-    browserPrint(title, html, paperWidth);
+    browserPrint(title, html, paperWidth); // never lose the receipt
   }
 }
