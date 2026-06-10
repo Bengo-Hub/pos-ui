@@ -11,9 +11,11 @@
 import { cn } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
 import {
-  Calculator, ClipboardList, PauseCircle, Receipt, RotateCcw, Wallet, Wrench,
+  Calculator, ClipboardList, Inbox, PauseCircle, Receipt, RotateCcw, Wallet, Wrench,
 } from 'lucide-react';
+import { toast } from 'sonner';
 import type { TerminalProfile } from '@/lib/use-case-config';
+import { useCashDrawer } from '@/hooks/useCashDrawer';
 
 export interface PosToolbarProps {
   orgSlug: string;
@@ -43,12 +45,21 @@ export function PosToolbar({
   const go = (path: string) => router.push(`/${orgSlug}${path}`);
   const isRetailish = profile === 'retail' || profile === 'pharmacy' || profile === 'services';
 
+  // Cash drawer manual open — only roles that handle the drawer (same gate as Register Details).
+  const { canOpen: canOpenDrawer, openDrawer } = useCashDrawer();
+  const handleOpenDrawer = async () => {
+    const ok = await openDrawer();
+    if (ok) toast.success('Drawer opened.');
+    else toast.error('Could not open the drawer. Check the drawer setting and that QZ Tray is running.');
+  };
+
   // Hospitality/QSR run bills off tables + KDS, not the retail back-office surfaces — Sell Return,
   // Suspended Sales, Calculator and Repair are retail/services concepts and are hidden there.
   const buttons: ToolbarBtn[] = [
     { key: 'recent',   label: 'Recent Transactions', icon: ClipboardList, onClick: () => go('/orders'), show: true },
     { key: 'return',   label: 'Sell Return',         icon: RotateCcw,     onClick: () => go('/returns'), show: isRetailish },
     { key: 'register', label: 'Register Details',    icon: Wallet,        onClick: () => go('/shifts'), show: canRegister },
+    { key: 'drawer',   label: 'Open Drawer',         icon: Inbox,         onClick: handleOpenDrawer, show: canRegister && canOpenDrawer },
     { key: 'calc',     label: 'Calculator',          icon: Calculator,    onClick: onCalculator, show: showCalculator },
     { key: 'suspended',label: 'Suspended Sales',     icon: PauseCircle,   onClick: onParkedSales, show: isRetailish },
     { key: 'expense',  label: 'Add Expense',         icon: Receipt,       onClick: onAddExpense, show: true },
