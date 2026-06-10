@@ -13,6 +13,25 @@ function basePath(tenantID: string) {
   return `/api/v1/${tenantID}/pos`;
 }
 
+export interface PricingTier {
+  code: string;
+  name: string;
+  is_default: boolean;
+  sort_order: number;
+}
+
+/** The tenant's active pricing tiers (Retail, Wholesale, custom e.g. Loyal Clients) from inventory,
+ *  proxied by pos-api — drives the POS price-profile selector. */
+export function usePricingTiers() {
+  const tenantID = useTenantID();
+  return useQuery({
+    queryKey: ['pos-pricing-tiers', tenantID],
+    queryFn: () => apiClient.get<{ data: PricingTier[] }>(`${basePath(tenantID)}/catalog/pricing/tiers`),
+    enabled: !!tenantID,
+    staleTime: 300_000,
+  });
+}
+
 // ─── Expenses ─────────────────────────────────────────────────────────────────
 
 // useAddExpense records a petty-cash expense entered at the register straight to treasury
