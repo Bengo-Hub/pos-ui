@@ -49,6 +49,7 @@ type ModalStep =
   | 'select'
   | 'cash'
   | 'manual'
+  | 'card_pdq'
   | 'c2b'
   | 'treasury'
   | 'room_select'
@@ -79,6 +80,7 @@ export function POSPaymentModal({
   const [splitCount, setSplitCount] = useState(2);
   const [cashTendered, setCashTendered] = useState('');
   const [manualRef, setManualRef] = useState('');
+  const [cardRef, setCardRef] = useState('');
   const [intentId, setIntentId] = useState('');
   const [initiateUrl, setInitiateUrl] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
@@ -138,6 +140,7 @@ export function POSPaymentModal({
       setSplitCount(2);
       setCashTendered('');
       setManualRef('');
+      setCardRef('');
       setIntentId('');
       setInitiateUrl('');
       setErrorMsg('');
@@ -219,6 +222,21 @@ export function POSPaymentModal({
       }
     );
   }, [manualRef, roundedTotal, orderId, tenderId, tenantSlug, isOnline, createIntent, onPaymentConfirmed]);
+
+  // Card / PDQ: the standalone card terminal already approved the swipe, so it settles immediately
+  // like cash (treasury records it as card_manual). Optional approval/reference code is captured.
+  const handleCardManualConfirm = useCallback(() => {
+    createIntent.mutate(
+      { orderId, tenderMethod: 'card_manual', amount: roundedTotal, externalRef: cardRef.trim() || undefined, tenderId },
+      {
+        onSuccess: () => { setStep('confirmed'); onPaymentConfirmed(); },
+        onError: (err: any) => {
+          setErrorMsg(err?.message ?? 'Card payment failed. Please try again.');
+          setStep('failed');
+        },
+      }
+    );
+  }, [orderId, roundedTotal, cardRef, tenderId, createIntent, onPaymentConfirmed]);
 
   const handleDigital = useCallback((method: string) => {
     createIntent.mutate(
@@ -315,6 +333,7 @@ export function POSPaymentModal({
               {step === 'select' ? 'Settle Bill' :
                step === 'cash' ? 'Cash Payment' :
                step === 'manual' ? 'M-Pesa Reference' :
+               step === 'card_pdq' ? 'Card / PDQ' :
                step === 'room_select' || step === 'room_confirm' ? 'Room Charge' :
                step === 'confirmed' ? 'Payment Successful' :
                step === 'offline_queued' ? 'Payment Queued' :
@@ -403,6 +422,16 @@ export function POSPaymentModal({
                       disabled={false}
                       loading={false}
                       onClick={() => setStep('manual')}
+                    />
+                    <PayTile
+                      icon={<CreditCard className="h-7 w-7" />}
+                      color="text-blue-600"
+                      bg="bg-blue-500/10"
+                      label="Card (PDQ)"
+                      sub="Swipe on terminal"
+                      disabled={false}
+                      loading={false}
+                      onClick={() => setStep('card_pdq')}
                     />
                     <PayTile
                       icon={<NotebookPen className="h-7 w-7" />}
@@ -593,6 +622,38 @@ export function POSPaymentModal({
                     ? <Loader2 className="h-5 w-5 animate-spin" />
                     : <CheckCircle2 className="h-5 w-5" />}
                   {isOnline ? 'Confirm M-Pesa' : 'Record & Verify Later'}
+                </button>
+                <button onClick={() => setStep('select')} className="w-full py-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
+                  ← Back
+                </button>
+              </div>
+            )}
+
+            {/* ── Card / PDQ (external terminal — settles immediately) ──────── */}
+            {step === 'card_pdq' && (
+              <div className="p-5 space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  Run the card on your PDQ / card machine, then record the approval / reference code (optional).
+                </p>
+                <label className="block">
+                  <span className="text-sm font-medium text-foreground">Approval / Ref code</span>
+                  <input
+                    type="text"
+                    placeholder="Optional"
+                    value={cardRef}
+                    onChange={(e) => setCardRef(e.target.value.toUpperCase())}
+                    className="mt-1 w-full bg-background border border-border rounded-xl py-3 px-4 text-lg font-bold tracking-wide uppercase focus:ring-2 focus:ring-blue-500/40 focus:outline-none"
+                    autoFocus
+                    maxLength={32}
+                  />
+                </label>
+                <button
+                  onClick={handleCardManualConfirm}
+                  disabled={createIntent.isPending}
+                  className="w-full min-h-12 rounded-xl bg-blue-600 text-white font-bold flex items-center justify-center gap-2 disabled:opacity-40 hover:bg-blue-700 transition-colors"
+                >
+                  {createIntent.isPending ? <Loader2 className="h-5 w-5 animate-spin" /> : <CheckCircle2 className="h-5 w-5" />}
+                  Confirm Card Payment
                 </button>
                 <button onClick={() => setStep('select')} className="w-full py-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
                   ← Back
