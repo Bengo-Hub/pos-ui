@@ -237,10 +237,21 @@ export function TerminalCart() {
                 <span className="text-muted-foreground">Subtotal</span>
                 <span className="font-medium tabular-nums">KES {t.subtotal.toLocaleString()}</span>
               </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">VAT ({Math.round(t.taxRate * 100)}%)</span>
-                <span className="font-medium tabular-nums">KES {t.tax.toLocaleString()}</span>
-              </div>
+              {/* Tax is per-item (from treasury via inventory): `tax` is the tax ADDED to the order
+                  (tax-exclusive lines); `inclusiveTax` is already baked into the prices/total and is
+                  shown only as an informational note so the cashier sees the embedded VAT. */}
+              {t.tax > 0 && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">VAT</span>
+                  <span className="font-medium tabular-nums">KES {t.tax.toLocaleString()}</span>
+                </div>
+              )}
+              {t.inclusiveTax > 0 && (
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span>incl. VAT</span>
+                  <span className="tabular-nums">KES {t.inclusiveTax.toLocaleString()}</span>
+                </div>
+              )}
               {t.loyaltyDiscount > 0 && (
                 <div className="flex justify-between text-sm text-emerald-600">
                   <span>Loyalty redemption</span>

@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import {
-  ChefHat, Clock, CreditCard, Gift, Key, Layers, Monitor, Receipt, Truck,
+  ChefHat, Clock, CreditCard, Gift, Key, Layers, Monitor, Percent, Receipt, Truck,
   Settings, ShieldCheck, Table2, Users,
 } from 'lucide-react';
 import { useAuthStore } from '@/store/auth';
@@ -10,6 +10,7 @@ import { useModuleAccess } from '@/hooks/use-module-access';
 import { cn } from '@/lib/utils';
 
 import { GeneralTab } from '@/components/settings/GeneralTab';
+import { TaxTab } from '@/components/settings/TaxTab';
 import { ReceiptTab } from '@/components/settings/ReceiptTab';
 import { ModulesTab } from '@/components/settings/ModulesTab';
 import { ShiftsSettingsTab } from '@/components/settings/ShiftsSettingsTab';
@@ -27,6 +28,7 @@ import { BookingPolicyTab } from '@/components/settings/BookingPolicyTab';
 
 type Tab =
   | 'general'
+  | 'tax'
   | 'receipt'
   | 'payment_display'
   | 'card_terminal'
@@ -45,7 +47,8 @@ type Tab =
 // requireModule → only shown when the module is enabled (or to superusers).
 // requireAdmin  → read-only account views shown to tenant admins/managers (and platform owners).
 const ALL_TABS: { id: Tab; label: string; icon: React.ElementType; requireModule?: string; requireAdmin?: boolean; description: string }[] = [
-  { id: 'general',          label: 'Outlet Config',      icon: Settings,    description: 'Currency, tax, and returns policy' },
+  { id: 'general',          label: 'Outlet Config',      icon: Settings,    description: 'Currency and returns policy' },
+  { id: 'tax',              label: 'Tax',                icon: Percent,     description: 'Treasury tax codes (source of truth) and legacy fallback' },
   { id: 'receipt',          label: 'Receipt & Printing', icon: Receipt,     description: 'Receipt format and printer profiles' },
   { id: 'payment_display',  label: 'Payment Display',    icon: CreditCard,  description: 'Paybill, till, and bank details on receipts' },
   { id: 'card_terminal',    label: 'Card Terminal',      icon: CreditCard,  description: 'PDQ / card-terminal mode, approval ref, and integrated terminal' },
@@ -124,6 +127,7 @@ export default function SettingsPage() {
         </div>
 
         {activeTab === 'general'          && <GeneralTab />}
+        {activeTab === 'tax'              && <TaxTab />}
         {activeTab === 'receipt'          && <ReceiptTab />}
         {activeTab === 'payment_display'  && <PaymentDisplayTab />}
         {activeTab === 'card_terminal'    && <CardTerminalTab />}
