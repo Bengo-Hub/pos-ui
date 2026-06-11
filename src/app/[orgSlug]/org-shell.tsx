@@ -4,8 +4,11 @@ import { Header } from '@/components/header';
 import { Sidebar } from '@/components/sidebar';
 import { AuthProvider } from '@/providers/auth-provider';
 import { TenantBrandingProvider } from '@/providers/tenant-branding-provider';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import { ReactNode, useState } from 'react';
+import { useOnline } from '@/hooks/use-online';
+import { getCachedCatalog } from '@/lib/db/pos-db';
+import { loadFullCatalog, offlineToCatalogItem, FULL_CATALOG_QUERY_KEY } from '@/hooks/usePOS';
 import { Footer } from '@/components/footer';
 import { SubscriptionBanner } from '@/components/subscription/subscription-banner';
 import { OfflineBanner } from '@/components/pos/offline-banner';
@@ -50,6 +53,45 @@ function OfflineSyncWorker() {
   return null;
 }
 
+/**
+ * Warms the full-catalog cache at the app shell, before the cashier opens the
+ * terminal, so the product grid paints instantly (cache-first):
+ *  1. Seed the TanStack query from the IndexedDB cache (resolves before network).
+ *  2. Revalidate the complete catalog from the API in the background, writing every
+ *     item through to IndexedDB so the local cache keeps improving over time.
+ */
+function CatalogPrewarm() {
+  const queryClient = useQueryClient();
+  const tenantID = useAuthStore((s) => (s.user as any)?.tenant_id ?? '');
+  const isOnline = useOnline();
+  useEffect(() => {
+    if (!tenantID) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const cached = await getCachedCatalog(tenantID);
+        if (!cancelled && cached.length) {
+          queryClient.setQueryData(
+            [FULL_CATALOG_QUERY_KEY, tenantID],
+            cached.map(offlineToCatalogItem),
+          );
+        }
+      } catch { /* cache seed is best-effort */ }
+      if (!cancelled && isOnline) {
+        queryClient
+          .fetchQuery({
+            queryKey: [FULL_CATALOG_QUERY_KEY, tenantID],
+            queryFn: () => loadFullCatalog(tenantID, true),
+            staleTime: 0,
+          })
+          .catch(() => { /* offline / transient — terminal falls back to cache */ });
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [tenantID, isOnline, queryClient]);
+  return null;
+}
+
 function NotificationListener() {
   const user = useAuthStore((s) => s.user);
   const tenantID = (user as any)?.tenant_id ?? '';
@@ -91,6 +133,7 @@ export function OrgShell({ children }: { children: ReactNode }) {
           <PWAUpdateBanner />
           <OfflineBanner />
           <OfflineSyncWorker />
+          <CatalogPrewarm />
           <NotificationListener />
           <PWARegistration />
 

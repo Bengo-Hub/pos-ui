@@ -3,6 +3,8 @@
 import { apiClient } from '@/lib/api/client';
 import { useAuthStore } from '@/store/auth';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { cacheCatalogItems, getCachedCatalog, type OfflineCatalogItem } from '@/lib/db/pos-db';
+import { useOnline } from '@/hooks/use-online';
 
 // Get tenant ID from auth store
 function useTenantID() {
@@ -226,6 +228,29 @@ export interface PaginatedResponse<T> {
   page: number;
 }
 
+/** Write fetched catalog rows through to the IndexedDB offline cache (best-effort,
+ *  non-blocking) so the terminal keeps working — and reopens instantly — offline.
+ *  Maps the rich catalog DTO to the lean OfflineCatalogItem shape used by pos-db. */
+export function cacheCatalogPage(tenantID: string, items: CatalogItem[] | undefined): void {
+  if (!tenantID || !items?.length) return;
+  const now = new Date().toISOString();
+  const rows: OfflineCatalogItem[] = items.map((i) => ({
+    id: i.id,
+    tenant_id: tenantID,
+    sku: i.sku,
+    name: i.name,
+    category: i.category ?? '',
+    unit_price: i.price ?? i.net_price ?? 0,
+    tax_status: i.tax_status ?? 'taxable',
+    status: i.status ?? 'active',
+    image_url: i.image_url,
+    barcode: i.barcode,
+    metadata: i.metadata,
+    cached_at: now,
+  }));
+  void cacheCatalogItems(rows).catch(() => { /* offline cache is best-effort */ });
+}
+
 export function useMenuItems(filters?: {
   category?: string;
   search?: string;
@@ -238,16 +263,102 @@ export function useMenuItems(filters?: {
   const limit = filters?.limit ?? 50;
   return useQuery({
     queryKey: ['pos-catalog-items', tenantID, filters?.category, filters?.search, filters?.itemType, page, limit],
-    queryFn: () =>
-      apiClient.get<PaginatedResponse<CatalogItem>>(`${basePath(tenantID)}/catalog/items`, {
+    queryFn: async () => {
+      const res = await apiClient.get<PaginatedResponse<CatalogItem>>(`${basePath(tenantID)}/catalog/items`, {
         category: filters?.category,
         search: filters?.search,
         item_type: filters?.itemType,
         page,
         limit,
-      }),
+      });
+      // Keep the offline catalog cache fresh as the cashier browses (prices/availability).
+      cacheCatalogPage(tenantID, res?.data);
+      return res;
+    },
     enabled: !!tenantID,
     staleTime: 5 * 60_000,
+    placeholderData: (prev) => prev,
+  });
+}
+
+/** Map a lean offline-cache row back to the rich catalog DTO the terminal renders. */
+export function offlineToCatalogItem(c: OfflineCatalogItem): CatalogItem {
+  return {
+    id: c.id,
+    sku: c.sku,
+    name: c.name,
+    category: c.category,
+    price: c.unit_price,
+    tax_status: c.tax_status,
+    status: c.status,
+    image_url: c.image_url,
+    barcode: c.barcode,
+    metadata: c.metadata,
+  };
+}
+
+/** Pull the ENTIRE catalog (loop every page) so client-side filter/search/pagination
+ *  operate on the complete set — never a single page. Capped to avoid a runaway loop. */
+async function fetchAllCatalogItems(tenantID: string): Promise<CatalogItem[]> {
+  const limit = 200;
+  const all: CatalogItem[] = [];
+  for (let page = 1; page <= 100; page++) {
+    const res = await apiClient.get<PaginatedResponse<CatalogItem>>(
+      `${basePath(tenantID)}/catalog/items`,
+      { page, limit },
+    );
+    const batch = res?.data ?? [];
+    all.push(...batch);
+    const total = res?.total ?? all.length;
+    if (batch.length < limit || all.length >= total) break;
+  }
+  return all;
+}
+
+/**
+ * Load the full catalog with the local cache as the first source of truth:
+ *  - Online  → fetch every page from the API, write ALL items through to IndexedDB
+ *              (upsert — the local cache keeps improving), and return the fresh set.
+ *              If the network fails mid-session, fall back to whatever is cached.
+ *  - Offline → serve the complete IndexedDB cache.
+ * Shared by `useFullCatalog` (terminal) and the shell-level prewarm so there is one
+ * code path and one query-cache key.
+ */
+export async function loadFullCatalog(tenantID: string, isOnline: boolean): Promise<CatalogItem[]> {
+  if (!tenantID) return [];
+  if (!isOnline) {
+    const cached = await getCachedCatalog(tenantID);
+    return cached.map(offlineToCatalogItem);
+  }
+  try {
+    const all = await fetchAllCatalogItems(tenantID);
+    cacheCatalogPage(tenantID, all); // write-through (best-effort, non-blocking)
+    return all;
+  } catch (err) {
+    const cached = await getCachedCatalog(tenantID);
+    if (cached.length) return cached.map(offlineToCatalogItem);
+    throw err;
+  }
+}
+
+export const FULL_CATALOG_QUERY_KEY = 'pos-catalog-full';
+
+/**
+ * The terminal's catalog source. Returns the COMPLETE catalog so the terminal can
+ * resolve category/search/brand/pagination locally over the full set. It is
+ * cache-first: the shell prewarm seeds this query from IndexedDB before the terminal
+ * mounts (instant paint), and every fetch revalidates from the API and refreshes the
+ * IndexedDB cache. Falls back to the local cache when offline or on network error.
+ */
+export function useFullCatalog() {
+  const tenantID = useTenantID();
+  const isOnline = useOnline();
+  return useQuery({
+    queryKey: [FULL_CATALOG_QUERY_KEY, tenantID],
+    queryFn: () => loadFullCatalog(tenantID, isOnline),
+    enabled: !!tenantID,
+    staleTime: 5 * 60_000,
+    networkMode: 'always',
     placeholderData: (prev) => prev,
   });
 }
