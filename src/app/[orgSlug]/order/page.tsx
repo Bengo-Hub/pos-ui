@@ -17,6 +17,7 @@ import { CalculatorOverlay } from '@/components/pos/calculator-overlay';
 import { CategoryNav } from '@/components/pos/category-nav';
 import { InlinePaymentBar, type CreatedOrder } from '@/components/pos/terminal/inline-payment-bar';
 import { PosToolbar } from '@/components/pos/terminal/pos-toolbar';
+import { RegisterDetailsModal, RecentTransactionsModal, SellReturnModal } from '@/components/pos/terminal/toolbar-modals';
 import { printKitchenBarTickets } from '@/lib/pos/kitchen-bar-print';
 import { configFor } from '@/lib/pos/printer-stations';
 import { cn } from '@/lib/utils';
@@ -132,6 +133,10 @@ export default function OrderPage() {
   const [pricingProfile, setPricingProfile] = useState<string>('');
   const [repricing, setRepricing] = useState(false);
   const [expenseOpen, setExpenseOpen] = useState(false);
+  // GoDigital toolbar modals (open in-place instead of navigating away from the terminal).
+  const [recentOpen, setRecentOpen] = useState(false);
+  const [registerOpen, setRegisterOpen] = useState(false);
+  const [sellReturnOpen, setSellReturnOpen] = useState(false);
   const [calcOpen, setCalcOpen] = useState(false);
   // Mobile-only: the cart renders as a slide-up bottom sheet (toggled by the
   // sticky bar). On lg+ it is always a static side panel and this flag is unused.
@@ -756,6 +761,9 @@ export default function OrderPage() {
           onCalculator={() => setCalcOpen(true)}
           onParkedSales={() => setParkedOpen(true)}
           onAddExpense={() => setExpenseOpen(true)}
+          onRecentTransactions={() => setRecentOpen(true)}
+          onRegisterDetails={() => setRegisterOpen(true)}
+          onSellReturn={() => setSellReturnOpen(true)}
         />
 
         {/* Search bar — full width at very top */}
@@ -1366,6 +1374,9 @@ export default function OrderPage() {
       {/* ─── Modals ────────────────────────────────────────────────────────── */}
 
       <AddExpenseModal open={expenseOpen} onClose={() => setExpenseOpen(false)} />
+      <RegisterDetailsModal open={registerOpen} onClose={() => setRegisterOpen(false)} />
+      <RecentTransactionsModal open={recentOpen} onClose={() => setRecentOpen(false)} orgSlug={orgSlug} />
+      <SellReturnModal open={sellReturnOpen} onClose={() => setSellReturnOpen(false)} orgSlug={orgSlug} />
       {cfg.showCalculator && (
         <>
           <button
