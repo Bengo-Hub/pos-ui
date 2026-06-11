@@ -27,6 +27,12 @@ export interface PosToolbarProps {
   onCalculator: () => void;
   onParkedSales: () => void;
   onAddExpense: () => void;
+  /** Open the Recent Transactions modal (instead of navigating to All Sales). */
+  onRecentTransactions: () => void;
+  /** Open the Register Details (Z-report) modal. */
+  onRegisterDetails: () => void;
+  /** Open the Sell Return modal (invoice lookup). */
+  onSellReturn: () => void;
 }
 
 interface ToolbarBtn {
@@ -39,7 +45,7 @@ interface ToolbarBtn {
 
 export function PosToolbar({
   orgSlug, profile, canRegister = true, showCalculator = false,
-  onCalculator, onParkedSales, onAddExpense,
+  onCalculator, onParkedSales, onAddExpense, onRecentTransactions, onRegisterDetails, onSellReturn,
 }: PosToolbarProps) {
   const router = useRouter();
   const go = (path: string) => router.push(`/${orgSlug}${path}`);
@@ -56,9 +62,9 @@ export function PosToolbar({
   // Hospitality/QSR run bills off tables + KDS, not the retail back-office surfaces — Sell Return,
   // Suspended Sales, Calculator and Repair are retail/services concepts and are hidden there.
   const buttons: ToolbarBtn[] = [
-    { key: 'recent',   label: 'Recent Transactions', icon: ClipboardList, onClick: () => go('/orders'), show: true },
-    { key: 'return',   label: 'Sell Return',         icon: RotateCcw,     onClick: () => go('/returns'), show: isRetailish },
-    { key: 'register', label: 'Register Details',    icon: Wallet,        onClick: () => go('/shifts'), show: canRegister },
+    { key: 'recent',   label: 'Recent Transactions', icon: ClipboardList, onClick: onRecentTransactions, show: true },
+    { key: 'return',   label: 'Sell Return',         icon: RotateCcw,     onClick: onSellReturn, show: isRetailish },
+    { key: 'register', label: 'Register Details',    icon: Wallet,        onClick: onRegisterDetails, show: canRegister },
     { key: 'drawer',   label: 'Open Drawer',         icon: Inbox,         onClick: handleOpenDrawer, show: canRegister && canOpenDrawer },
     { key: 'calc',     label: 'Calculator',          icon: Calculator,    onClick: onCalculator, show: showCalculator },
     { key: 'suspended',label: 'Suspended Sales',     icon: PauseCircle,   onClick: onParkedSales, show: isRetailish },
