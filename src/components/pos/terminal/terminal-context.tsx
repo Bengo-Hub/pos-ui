@@ -42,6 +42,8 @@ export interface MenuItem {
   description?: string;
   price: number;
   category: string;
+  brandName?: string;       // ItemBrand name (retail/pharmacy) — for the Brands tab
+  brandCode?: string;
   image?: string;
   item_type?: string;       // GOODS | SERVICE | RECIPE | VOUCHER
   duration_minutes?: number;
@@ -88,6 +90,12 @@ export interface TerminalContextValue {
   searchQuery: string;
   displayMode: DisplayMode;
   setDisplayMode: (m: DisplayMode) => void;
+  // Browse by Category or Brand (Brands apply to retail/pharmacy only — gated by cfg.showBrandGrid).
+  pickerMode: 'category' | 'brand';
+  setPickerMode: (m: 'category' | 'brand') => void;
+  activeBrand: string;
+  brands: CategoryEntry[];
+  handleBrandChange: (b: string) => void;
   page: number;
   setPage: React.Dispatch<React.SetStateAction<number>>;
   PAGE_SIZE: number;
@@ -262,6 +270,8 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
     }
   }, [user, cfg.profile, isSuperuser, orgSlug, router]);
   const [activeCategory, setActiveCategory] = useState('All');
+  const [pickerMode, setPickerModeState] = useState<'category' | 'brand'>('category');
+  const [activeBrand, setActiveBrand] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [cart, setCart] = useState<CartItem[]>([]);
   // Pricing profile (Retail/Wholesale) — switching it re-prices the cart via inventory tier prices.
@@ -343,12 +353,18 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
   // Barcode scanner buffer (global keydown listener — fires when no input focused)
   const [barcodeBuffer, setBarcodeBuffer] = useState('');
 
-  // Reset to page 1 when search/category changes
+  // Reset to page 1 when search/category/brand changes
   const handleCategoryChange = (cat: string) => { setActiveCategory(cat); setPage(1); };
   const handleSearchChange = (q: string) => { setSearchQuery(q); setPage(1); };
+  const handleBrandChange = (b: string) => { setActiveBrand(b); setPage(1); };
+  // Switching Category↔Brand resets the other axis so the two never compound.
+  const setPickerMode = (m: 'category' | 'brand') => {
+    setPickerModeState(m); setActiveCategory('All'); setActiveBrand('All'); setPage(1);
+  };
 
   const { data: catalogData, isLoading: menuLoading } = useMenuItems({
-    category: activeCategory !== 'All' ? activeCategory : undefined,
+    // In Brand mode we fetch all categories and filter by brand client-side.
+    category: pickerMode === 'category' && activeCategory !== 'All' ? activeCategory : undefined,
     search: searchQuery || undefined,
     page,
     limit: PAGE_SIZE,
@@ -365,6 +381,8 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
       description: item.description,
       price: item.price ?? 0,
       category: item.category || 'Uncategorized',
+      brandName: item.brand_name ?? item.brand ?? undefined,
+      brandCode: item.brand_code ?? undefined,
       image: item.image_url,
       item_type: item.item_type,
       duration_minutes: item.duration_minutes,
@@ -400,8 +418,20 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
     return names.map((name) => ({ name }));
   }, [serverCategories, menuItems]);
 
-  // Server-side filtering — items returned by the API are already filtered
-  const filteredItems = menuItems;
+  // Brand list (retail/pharmacy) derived from the items actually present, so only brands with
+  // sellable items show. The "All" tab is owned by the nav, like categories.
+  const brands = useMemo(() => {
+    const names = Array.from(new Set(menuItems.map((i) => i.brandName).filter(Boolean) as string[])).sort();
+    return names.map((name) => ({ name }));
+  }, [menuItems]);
+
+  // Category filtering is server-side; brand filtering is client-side over the (all-category) page.
+  const filteredItems = useMemo(() => {
+    if (pickerMode === 'brand' && activeBrand !== 'All') {
+      return menuItems.filter((i) => i.brandName === activeBrand);
+    }
+    return menuItems;
+  }, [menuItems, pickerMode, activeBrand]);
 
   // ─── Item Add Flow ──────────────────────────────────────────────────────
 
@@ -884,6 +914,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
     orgSlug, cfg, isHospitality, isAddToBill, user, outlet, can, taxRate,
     scanInputRef,
     activeCategory, searchQuery, displayMode, setDisplayMode, page, setPage, PAGE_SIZE,
+    pickerMode, setPickerMode, activeBrand, brands, handleBrandChange,
     totalItems, totalPages, menuLoading, menuItems, filteredItems, categories,
     handleCategoryChange, handleSearchChange, handleSearchKeyDown,
     cart, cartItemCount, subtotal, tax, loyaltyDiscount, total,

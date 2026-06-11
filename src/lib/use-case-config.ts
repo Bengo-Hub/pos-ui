@@ -76,7 +76,7 @@ export function terminalConfigFor(useCase?: string | null): TerminalConfig {
       return {
         profile, defaultDisplayMode: 'list', barcodeFirst: true, showPricingProfile: true,
         showOrderType: false, showCourses: false, showStaffAttribution: false, showCalculator: true,
-        keyboardCheckout: true, showBrandGrid: false,
+        keyboardCheckout: true, showBrandGrid: true,
         showStockBadge: true, showScale: true, managerOverride: true, terminalTitle: 'Walk-In Sale',
       };
     case 'services':

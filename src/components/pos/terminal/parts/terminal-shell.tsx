@@ -239,10 +239,27 @@ export function TerminalShell() {
         {/* ===== RIGHT: PRODUCT PICKER (Category/Brands tabs + grid) ===== */}
         <div className="flex flex-col min-h-0 flex-1 bg-card/30">
           <div className="shrink-0 px-3 py-2.5 flex items-center gap-2 border-b border-border">
+            {/* Category | Brands switch — Brands apply to retail/pharmacy only (cfg.showBrandGrid). */}
+            {cfg.showBrandGrid && (
+              <div className="flex gap-0.5 shrink-0 border border-border rounded-lg p-0.5 bg-card">
+                {(['category', 'brand'] as const).map((m) => (
+                  <button
+                    key={m}
+                    onClick={() => t.setPickerMode(m)}
+                    className={cn(
+                      'px-3 py-1.5 rounded-md text-xs font-bold transition-colors capitalize',
+                      t.pickerMode === m ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground',
+                    )}
+                  >
+                    {m === 'category' ? 'Category' : 'Brands'}
+                  </button>
+                ))}
+              </div>
+            )}
             <CategoryNav
-              categories={t.categories}
-              active={t.activeCategory}
-              onSelect={t.handleCategoryChange}
+              categories={t.pickerMode === 'brand' ? t.brands : t.categories}
+              active={t.pickerMode === 'brand' ? t.activeBrand : t.activeCategory}
+              onSelect={t.pickerMode === 'brand' ? t.handleBrandChange : t.handleCategoryChange}
               className="flex-1"
             />
             <div className="flex gap-0.5 shrink-0 border border-border rounded-lg p-0.5 bg-card">
