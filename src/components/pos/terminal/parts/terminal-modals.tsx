@@ -11,6 +11,7 @@
 
 import { Button } from '@/components/ui/base';
 import { ModifierModal } from '@/components/pos/modifier-modal';
+import { VariantPickerModal } from '@/components/pos/terminal/parts/variant-picker-modal';
 import { SplitPaymentModal } from '@/components/pos/split-payment-modal';
 import { VoidOrderModal } from '@/components/pos/void-order-modal';
 import { AddExpenseModal } from '@/components/pos/add-expense-modal';
@@ -50,6 +51,15 @@ export function TerminalModals() {
       )}
 
       {t.parkedOpen && <ParkedSalesModal onClose={() => t.setParkedOpen(false)} onResume={t.handleResumeParked} />}
+
+      {t.variantItem && (
+        <VariantPickerModal
+          open
+          onClose={() => t.setVariantItem(null)}
+          item={t.variantItem}
+          onConfirm={(variant, qty) => t.handleVariantChosen(t.variantItem!, variant, qty)}
+        />
+      )}
 
       {t.modifierItem && (
         <ModifierModal

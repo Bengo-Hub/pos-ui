@@ -60,6 +60,11 @@ export function TerminalProductGrid() {
                     <span className={cn('h-2 w-2 rounded-full shrink-0', inCart ? 'bg-primary' : 'bg-emerald-500')} />
                     <div className="min-w-0">
                       <p className="text-sm font-bold truncate leading-tight">{item.name}</p>
+                      {cfg.showBrandGrid && (item.manufacturer || item.model) && (
+                        <p className="text-[10px] text-muted-foreground truncate">
+                          {[item.manufacturer, item.model].filter(Boolean).join(' · ')}
+                        </p>
+                      )}
                       {item.description ? (
                         <p className="text-xs text-muted-foreground truncate mt-0.5">{item.description}</p>
                       ) : (
@@ -76,7 +81,9 @@ export function TerminalProductGrid() {
                       {item.item_type === 'RECIPE' && (
                         <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">Menu</span>
                       )}
-                      {item.modifierGroups?.length ? (
+                      {(item.hasVariants || item.variants?.length) ? (
+                        <span className="text-[10px] text-primary">Choose variant</span>
+                      ) : item.modifierGroups?.length ? (
                         <span className="text-[10px] text-primary">Has options</span>
                       ) : null}
                       {cfg.showStockBadge && item.stockQuantity !== undefined && (
@@ -132,12 +139,19 @@ export function TerminalProductGrid() {
                   )}
                   <div className="p-3 bg-card">
                     <p className="text-sm font-bold truncate leading-tight">{item.name}</p>
+                    {cfg.showBrandGrid && (item.manufacturer || item.model) && (
+                      <p className="text-[10px] text-muted-foreground truncate leading-tight">
+                        {[item.manufacturer, item.model].filter(Boolean).join(' · ')}
+                      </p>
+                    )}
                     {item.description && (
                       <p className="text-xs text-muted-foreground truncate mt-0.5 leading-tight">{item.description}</p>
                     )}
                     <div className="flex items-center justify-between mt-1">
                       <p className="text-xs font-bold font-mono text-primary">KES {item.price.toLocaleString()}</p>
-                      {item.modifierGroups?.length ? (
+                      {(item.hasVariants || item.variants?.length) ? (
+                        <span className="text-[10px] text-primary">Variants</span>
+                      ) : item.modifierGroups?.length ? (
                         <span className="text-[10px] text-primary">Has options</span>
                       ) : null}
                     </div>
@@ -174,6 +188,11 @@ export function TerminalProductGrid() {
                   </div>
                   {/* Name */}
                   <span className="text-sm font-bold text-left leading-tight line-clamp-2 flex-1">{item.name}</span>
+                  {cfg.showBrandGrid && (item.manufacturer || item.model) && (
+                    <span className="text-[10px] text-muted-foreground text-left truncate w-full">
+                      {[item.manufacturer, item.model].filter(Boolean).join(' · ')}
+                    </span>
+                  )}
                   {/* Price row */}
                   <div className="flex items-center justify-between w-full mt-2">
                     <span className="text-xs font-bold font-mono text-primary">
@@ -183,6 +202,8 @@ export function TerminalProductGrid() {
                       <span className="text-[10px] text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-900/30 px-1.5 py-0.5 rounded font-semibold">
                         {item.duration_minutes ? `${item.duration_minutes}min` : 'Service'}
                       </span>
+                    ) : (item.hasVariants || item.variants?.length) ? (
+                      <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">Variants</span>
                     ) : item.modifierGroups?.length ? (
                       <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">Options</span>
                     ) : null}
