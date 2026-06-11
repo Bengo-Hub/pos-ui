@@ -270,6 +270,7 @@ export function TerminalShell() {
           </div>
         ) : (
           <InlinePaymentBar
+            layout="bar"
             total={t.total}
             tenantSlug={t.user?.tenant_slug ?? ''}
             profile={cfg.profile}
