@@ -20,7 +20,7 @@ import { OrderTypeSelector } from '@/components/pos/order-type-selector';
 import { LoyaltyPanel } from '@/components/retail/LoyaltyPanel';
 import { ScaleDisplay } from '@/components/retail/ScaleDisplay';
 import { CategoryNav } from '@/components/pos/category-nav';
-import { CourseBadge, COURSES } from '@/components/pos/course-selector';
+import { CourseSelector, COURSES } from '@/components/pos/course-selector';
 import { TerminalProductGrid } from '@/components/pos/terminal/parts/terminal-product-grid';
 import { TerminalModals } from '@/components/pos/terminal/parts/terminal-modals';
 import { InlinePaymentBar } from '@/components/pos/terminal/inline-payment-bar';
@@ -190,10 +190,16 @@ export function TerminalShell() {
                       <div className="flex items-center gap-1.5 mt-0.5">
                         <span className="text-[11px] text-muted-foreground font-mono">{item.sku}</span>
                         {item.serialNumber && <span className="text-[10px] text-muted-foreground">SN: {item.serialNumber}</span>}
-                        {cfg.showCourses && item.courseNumber ? <CourseBadge course={item.courseNumber} /> : null}
                       </div>
                       {item.selectedModifiers && Object.values(item.selectedModifiers).flat().length > 0 && (
                         <p className="text-[10px] text-primary truncate">{Object.values(item.selectedModifiers).flat().join(', ')}</p>
+                      )}
+                      {/* Per-line course selector (hospitality) — restored: lets the waiter assign each
+                          line to a course (Starter/Main/Dessert/Bar) for kitchen firing. */}
+                      {cfg.showCourses && (
+                        <div className="mt-1">
+                          <CourseSelector value={item.courseNumber ?? 0} onChange={(c) => t.updateCourse(idx, c)} compact />
+                        </div>
                       )}
                     </div>
                     {/* Qty stepper */}

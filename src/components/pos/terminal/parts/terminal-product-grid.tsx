@@ -111,7 +111,7 @@ export function TerminalProductGrid() {
           </div>
         ) : displayMode === 'image_grid' ? (
           /* ─── IMAGE GRID MODE ─── */
-          <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
             {filteredItems.map((item) => {
               const inCart = cart.find((c) => c.id === item.id && !c.selectedModifiers);
               return (
@@ -162,7 +162,7 @@ export function TerminalProductGrid() {
           </div>
         ) : (
           /* ─── CARD MODE (default) — 2-col portrait → 5-col wide desktop ─── */
-          <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
             {filteredItems.map((item) => {
               const inCart = cart.find((c) => c.id === item.id && !c.selectedModifiers);
               return (
