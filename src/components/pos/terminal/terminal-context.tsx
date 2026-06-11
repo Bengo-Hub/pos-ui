@@ -35,15 +35,31 @@ import { apiClient } from '@/lib/api/client';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
+/** A purchasable variant of a catalog item (e.g. "Red / M"). Carried on MenuItem when
+ *  the backend catalog list reports has_variants — selecting one shapes the cart line. */
+export interface ItemVariant {
+  id: string;
+  sku: string;
+  name: string;
+  price: number;
+  attributes?: Record<string, string>;
+  barcode?: string;
+}
+
 export interface MenuItem {
   id: string;
   name: string;
   sku: string;
+  barcode?: string;         // set for variant cart lines (the chosen variant's scan code)
   description?: string;
   price: number;
   category: string;
   brandName?: string;       // ItemBrand name (retail/pharmacy) — for the Brands tab
   brandCode?: string;
+  manufacturer?: string;    // shown as subtext on retail/pharmacy item cards
+  model?: string;
+  hasVariants?: boolean;    // when true, tapping opens the variant picker before adding
+  variants?: ItemVariant[];
   image?: string;
   item_type?: string;       // GOODS | SERVICE | RECIPE | VOUCHER
   duration_minutes?: number;
@@ -189,6 +205,10 @@ export interface TerminalContextValue {
   modifierItem: MenuItem | null;
   setModifierItem: (i: MenuItem | null) => void;
 
+  variantItem: MenuItem | null;
+  setVariantItem: (i: MenuItem | null) => void;
+  handleVariantChosen: (item: MenuItem, variant: ItemVariant, qty?: number) => void;
+
   voidOpen: boolean;
   setVoidOpen: (v: boolean) => void;
   voidOrderMutateAsync: ReturnType<typeof useVoidOrder>['mutateAsync'];
@@ -311,6 +331,9 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
   // Modifier modal
   const [modifierItem, setModifierItem] = useState<MenuItem | null>(null);
 
+  // Variant picker modal (opens before modifiers/add when an item has variants)
+  const [variantItem, setVariantItem] = useState<MenuItem | null>(null);
+
   // Payment modal
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [currentOrderId, setCurrentOrderId] = useState('');
@@ -383,6 +406,21 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
       category: item.category || 'Uncategorized',
       brandName: item.brand_name ?? item.brand ?? undefined,
       brandCode: item.brand_code ?? undefined,
+      manufacturer: item.manufacturer ?? undefined,
+      model: item.model ?? undefined,
+      hasVariants: item.has_variants ?? undefined,
+      variants: Array.isArray(item.variants)
+        ? item.variants
+            .filter((v: any) => v?.is_active !== false)
+            .map((v: any) => ({
+              id: v.id,
+              sku: v.sku,
+              name: v.name,
+              price: v.price ?? 0,
+              attributes: v.attributes ?? undefined,
+              barcode: v.barcode ?? undefined,
+            }))
+        : undefined,
       image: item.image_url,
       item_type: item.item_type,
       duration_minutes: item.duration_minutes,
@@ -465,6 +503,12 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
 
   const proceedWithItem = useCallback(
     (item: MenuItem) => {
+      // Variants take precedence: pick the variant first, then fall through to modifiers/add
+      // (handled by the variant picker modal which re-enters this flow with the chosen variant).
+      if (item.hasVariants || item.variants?.length) {
+        setVariantItem(item);
+        return;
+      }
       if (item.trackSerialNumber) {
         setSerialPrompt({
           item,
@@ -484,6 +528,31 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
         return;
       }
       addItemToCart(item);
+    },
+    [addItemToCart]
+  );
+
+  // Variant chosen from the picker: build a variant-flavored line (variant price/sku/barcode +
+  // "<item> — <variant>" name) and either open modifiers for it or add it straight to the cart.
+  const handleVariantChosen = useCallback(
+    (item: MenuItem, variant: ItemVariant, qty = 1) => {
+      const variantItem: MenuItem = {
+        ...item,
+        // Use a composite id so distinct variants of the same item are separate cart lines.
+        id: `${item.id}::${variant.id}`,
+        name: `${item.name} — ${variant.name}`,
+        sku: variant.sku || item.sku,
+        barcode: variant.barcode,
+        price: variant.price,
+        hasVariants: false,
+        variants: undefined,
+      };
+      setVariantItem(null);
+      if (variantItem.modifierGroups?.length) {
+        setModifierItem(variantItem);
+        return;
+      }
+      addItemToCart(variantItem, undefined, qty);
     },
     [addItemToCart]
   );
@@ -934,6 +1003,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
     sellReturnOpen, setSellReturnOpen, calcOpen, setCalcOpen, cartOpen, setCartOpen,
     parkedOpen, setParkedOpen,
     modifierItem, setModifierItem,
+    variantItem, setVariantItem, handleVariantChosen,
     voidOpen, setVoidOpen, voidOrderMutateAsync: voidOrder.mutateAsync, setCurrentOrderId, setCurrentOrderNumber,
     receiptData, receiptOpen, setReceiptOpen, setReceiptData,
     orderPlacedOpen, setOrderPlacedOpen, orderPlacedId, orderPlacedNumber,
