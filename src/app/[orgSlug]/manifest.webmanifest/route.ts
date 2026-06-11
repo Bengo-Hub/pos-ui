@@ -42,6 +42,9 @@ export async function GET(
   const tenant = await fetchTenant(orgSlug);
 
   const name = tenant?.name ?? 'Codevertex';
+  // Home-screen label = tenant's first word + service, e.g. "Urban POS", so a
+  // tenant with several installed Bengo apps can tell them apart at a glance.
+  const shortName = `${name.trim().split(/\s+/)[0] || 'Bengo'} POS`;
   const primaryColor =
     tenant?.brand_colors?.primary ??
     (tenant?.metadata?.primary_color as string | undefined) ??
@@ -66,7 +69,7 @@ export async function GET(
 
   const manifest = {
     name: `${name} POS`,
-    short_name: name,
+    short_name: shortName,
     description: 'Fast, offline-ready Point of Sale for your business.',
     start_url: `/${orgSlug}/`,
     scope: `/${orgSlug}/`,
