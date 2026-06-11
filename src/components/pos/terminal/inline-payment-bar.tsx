@@ -52,6 +52,9 @@ export interface InlinePaymentBarProps {
   disabled?: boolean;
   /** dine-in shows Send-to-Kitchen; everything else shows tender buttons. */
   mode?: 'pay' | 'send_to_kitchen';
+  /** 'panel' = stacked tiles (narrow cart column); 'bar' = compact horizontal button row (GoDigital
+   *  full-width bottom action bar). Defaults to 'panel'. */
+  layout?: 'panel' | 'bar';
   /** Creates (or returns) the order to settle. Returns null if validation fails (toast already shown). */
   createOrderAsync: () => Promise<CreatedOrder | null>;
   /** Called after a tender settles (or after Send-to-Kitchen) so the page can show the receipt + reset. */
@@ -94,7 +97,7 @@ function tenderIcon(key: TenderKey) {
 export function InlinePaymentBar(props: InlinePaymentBarProps) {
   const {
     total, tenantSlug, profile, isHospitality, allowCOD = false, customerEmail,
-    tenderId = NIL_TENDER, disabled = false, mode = 'pay',
+    tenderId = NIL_TENDER, disabled = false, mode = 'pay', layout = 'panel',
     createOrderAsync, onSettled, onDraft, onQuotation, onCancel, onSplit,
   } = props;
 
@@ -315,8 +318,8 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
       )}
 
       {/* ── Bottom action bar ──────────────────────────────────────────────── */}
-      <div className="flex flex-col gap-2 p-3">
-        {mode === 'send_to_kitchen' ? (
+      {mode === 'send_to_kitchen' ? (
+        <div className="p-3">
           <button
             type="button"
             disabled={disabled || anyBusy}
@@ -326,8 +329,41 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
             {anyBusy ? <Loader2 className="h-5 w-5 animate-spin" /> : <ChefHat className="h-5 w-5" />}
             Send to Kitchen
           </button>
-        ) : (
-          <>
+        </div>
+      ) : layout === 'bar' ? (
+        /* GoDigital compact horizontal action bar: secondary actions + tender buttons + Total Payable */
+        <div className="flex flex-wrap items-center gap-2 px-3 py-2.5">
+          {isBackOffice && <SecondaryBtn icon={FileText} label="Draft" onClick={onDraft} disabled={disabled || anyBusy} />}
+          {isBackOffice && <SecondaryBtn icon={FileText} label="Quotation" onClick={onQuotation} disabled={anyBusy} />}
+          {actions.map((a) => {
+            const Icon = tenderIcon(a.key);
+            const tone = TONES[a.tone];
+            const isBusy = busyKey === a.key;
+            return (
+              <button
+                key={a.key}
+                type="button"
+                disabled={disabled || anyBusy}
+                onClick={() => onPick(a.key)}
+                title={a.sublabel}
+                className={cn(
+                  'flex items-center gap-2 px-3.5 py-2.5 rounded-xl border-2 border-border text-sm font-bold transition-all active:scale-95 disabled:opacity-40',
+                  tone.ring, tone.text,
+                )}
+              >
+                {isBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Icon className="h-4 w-4" />}
+                <span className="whitespace-nowrap">{a.label}</span>
+              </button>
+            );
+          })}
+          <SecondaryBtn icon={X} label="Cancel" tone="danger" onClick={onCancel} disabled={anyBusy} />
+          <div className="ml-auto flex items-center gap-2 pl-2">
+            <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Total Payable</span>
+            <span className="text-xl font-extrabold tabular-nums text-emerald-600">{fmt(roundedTotal)}</span>
+          </div>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-2 p-3">
             {/* Total */}
             <div className="flex items-center justify-between px-1">
               <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Total Payable</span>
@@ -368,10 +404,9 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
               {isBackOffice && <SecondaryBtn icon={FileText} label="Quotation" onClick={onQuotation} disabled={anyBusy} />}
               <SecondaryBtn icon={X} label="Cancel" tone="danger" onClick={onCancel} disabled={anyBusy} />
             </div>
-          </>
+          </div>
         )}
       </div>
-    </div>
   );
 }
 
