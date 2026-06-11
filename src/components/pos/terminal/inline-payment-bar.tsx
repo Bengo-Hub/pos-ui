@@ -331,10 +331,12 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
           </button>
         </div>
       ) : layout === 'bar' ? (
-        /* GoDigital compact horizontal action bar: secondary actions + tender buttons + Total Payable */
+        /* GoDigital compact horizontal action bar — tenders render as modern pill BADGES (soft toned
+           bg + tone text, icon + label inline), Draft/Quotation as neutral badges, Cancel red, and
+           the Total Payable pinned right. */
         <div className="flex flex-wrap items-center gap-2 px-3 py-2.5">
-          {isBackOffice && <SecondaryBtn icon={FileText} label="Draft" onClick={onDraft} disabled={disabled || anyBusy} />}
-          {isBackOffice && <SecondaryBtn icon={FileText} label="Quotation" onClick={onQuotation} disabled={anyBusy} />}
+          {isBackOffice && <BadgeBtn icon={FileText} label="Draft" onClick={onDraft} disabled={disabled || anyBusy} />}
+          {isBackOffice && <BadgeBtn icon={FileText} label="Quotation" onClick={onQuotation} disabled={anyBusy} />}
           {actions.map((a) => {
             const Icon = tenderIcon(a.key);
             const tone = TONES[a.tone];
@@ -347,16 +349,17 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
                 onClick={() => onPick(a.key)}
                 title={a.sublabel}
                 className={cn(
-                  'flex items-center gap-2 px-3.5 py-2.5 rounded-xl border-2 border-border text-sm font-bold transition-all active:scale-95 disabled:opacity-40',
-                  tone.ring, tone.text,
+                  'inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-bold transition-all',
+                  'hover:brightness-95 active:scale-95 disabled:opacity-40 disabled:pointer-events-none',
+                  tone.bg, tone.text,
                 )}
               >
-                {isBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Icon className="h-4 w-4" />}
+                {isBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Icon className="h-4 w-4 shrink-0" />}
                 <span className="whitespace-nowrap">{a.label}</span>
               </button>
             );
           })}
-          <SecondaryBtn icon={X} label="Cancel" tone="danger" onClick={onCancel} disabled={anyBusy} />
+          <BadgeBtn icon={X} label="Cancel" tone="danger" onClick={onCancel} disabled={anyBusy} />
           <div className="ml-auto flex items-center gap-2 pl-2">
             <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Total Payable</span>
             <span className="text-xl font-extrabold tabular-nums text-emerald-600">{fmt(roundedTotal)}</span>
@@ -407,6 +410,30 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
           </div>
         )}
       </div>
+  );
+}
+
+// Pill/badge-style action used by the compact `layout="bar"` action bar. Neutral by default
+// (muted bg) so Draft/Quotation match the tender badges; `tone="danger"` renders Cancel in red.
+function BadgeBtn({ icon: Icon, label, onClick, disabled, tone }: {
+  icon: React.ElementType; label: string; onClick: () => void; disabled?: boolean; tone?: 'danger';
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={cn(
+        'inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-bold transition-all',
+        'hover:brightness-95 active:scale-95 disabled:opacity-40 disabled:pointer-events-none',
+        tone === 'danger'
+          ? 'bg-destructive/10 text-destructive'
+          : 'bg-muted text-muted-foreground hover:text-foreground',
+      )}
+    >
+      <Icon className="h-4 w-4 shrink-0" />
+      <span className="whitespace-nowrap">{label}</span>
+    </button>
   );
 }
 

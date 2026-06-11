@@ -25,6 +25,7 @@ import { TerminalProductGrid } from '@/components/pos/terminal/parts/terminal-pr
 import { TerminalModals } from '@/components/pos/terminal/parts/terminal-modals';
 import { InlinePaymentBar } from '@/components/pos/terminal/inline-payment-bar';
 import { useTerminal } from '@/components/pos/terminal/terminal-context';
+import { searchPlaceholderFor } from '@/lib/use-case-config';
 import { cn } from '@/lib/utils';
 import {
   Ban, ChefHat, Flame, Grid3x3, Image as ImageIcon, LayoutList, Loader2,
@@ -56,28 +57,38 @@ export function TerminalShell() {
         />
       </div>
 
-      {/* ─────────── 2. BODY: order builder (left) + product picker (right) ─────────── */}
-      <div className="flex-1 flex flex-col lg:flex-row min-h-0 overflow-hidden">
+      {/* ─────────── 2. BODY: order builder (left) + product picker (right) ───────────
+          On lg+ a fixed two-column grid (52% / 48%) keeps the split robust — neither column
+          can grow past its track, so the order-builder no longer gets squeezed by the product
+          grid. Each column scrolls independently (min-h-0). Below lg the columns stack. */}
+      <div className="flex-1 flex flex-col lg:grid lg:grid-cols-[52%_48%] min-h-0 overflow-hidden">
 
         {/* ===== LEFT: ORDER BUILDER ===== */}
-        <div className="flex flex-col min-h-0 lg:w-[56%] xl:w-[58%] lg:border-r border-border">
-          {/* Customer + product search */}
+        <div className="flex flex-col min-h-0 overflow-hidden lg:border-r border-border">
+          {/* Customer + product search.
+              The customer/search row stacks on narrow widths (flex-col) and sits side-by-side
+              from sm+ so it never cramps or overflows. The "Walk-In Customer" fallback chip is a
+              back-office concept: it shows only for profiles WITHOUT the order-type selector
+              (hospitality/quick_service use Dine-In/Takeaway/Delivery as the equivalent, so showing
+              both would duplicate). */}
           <div className="shrink-0 p-3 space-y-2 border-b border-border bg-card/40">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div className="flex flex-col sm:flex-row gap-2">
               {/* Customer — LoyaltyPanel is the customer/loyalty link where pricing/loyalty applies */}
               {cfg.showPricingProfile ? (
-                <LoyaltyPanel onStateChange={t.setLoyaltyState} />
-              ) : (
-                <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl border border-border bg-card text-sm font-medium text-muted-foreground">
-                  <User className="h-4 w-4" /> Walk-In Customer
+                <div className="sm:flex-1 min-w-0">
+                  <LoyaltyPanel onStateChange={t.setLoyaltyState} />
                 </div>
-              )}
+              ) : !cfg.showOrderType ? (
+                <div className="sm:flex-1 min-w-0 flex items-center gap-2 px-3 py-2.5 rounded-xl border border-border bg-card text-sm font-medium text-muted-foreground">
+                  <User className="h-4 w-4 shrink-0" /> Walk-In Customer
+                </div>
+              ) : null}
               {/* Product search / scan */}
-              <div className="relative group">
+              <div className="relative group sm:flex-1 min-w-0">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary" />
                 <input
                   ref={t.scanInputRef}
-                  placeholder="Product name / SKU / Scan bar code"
+                  placeholder={searchPlaceholderFor(cfg.profile)}
                   className="w-full bg-card border border-border rounded-xl py-2.5 pl-9 pr-9 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 font-medium"
                   value={t.searchQuery}
                   onChange={(e) => t.handleSearchChange(e.target.value)}
@@ -237,7 +248,7 @@ export function TerminalShell() {
         </div>
 
         {/* ===== RIGHT: PRODUCT PICKER (Category/Brands tabs + grid) ===== */}
-        <div className="flex flex-col min-h-0 flex-1 bg-card/30">
+        <div className="flex flex-col min-h-0 overflow-hidden bg-card/30">
           <div className="shrink-0 px-3 py-2.5 flex items-center gap-2 border-b border-border">
             {/* Category | Brands switch — Brands apply to retail/pharmacy only (cfg.showBrandGrid). */}
             {cfg.showBrandGrid && (

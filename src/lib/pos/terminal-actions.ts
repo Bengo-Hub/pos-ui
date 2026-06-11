@@ -73,7 +73,13 @@ export function paymentActionsFor(
   const { isHospitality = false, isOnline = true, allowCOD = false } = opts;
   const g = gateways ?? {};
 
-  const ordered: TenderAction[] = [CASH, CARD_PDQ, MPESA_STK, MPESA_C2B, CARD_ONLINE, WALLET, ON_ACCOUNT, SPLIT];
+  // Credit Sale (charge to AR) is a back-office retail/pharmacy concept — it does NOT apply to
+  // hospitality, quick_service or services, which settle at the point of sale.
+  const allowCredit = profile === 'retail' || profile === 'pharmacy';
+
+  const ordered: TenderAction[] = [CASH, CARD_PDQ, MPESA_STK, MPESA_C2B, CARD_ONLINE, WALLET];
+  if (allowCredit) ordered.push(ON_ACCOUNT);
+  ordered.push(SPLIT);
 
   // Hospitality outlets can post the bill to an occupied room's folio.
   if (isHospitality) ordered.splice(2, 0, ROOM);
