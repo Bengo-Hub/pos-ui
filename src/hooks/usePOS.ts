@@ -34,12 +34,78 @@ export function usePricingTiers() {
 
 // ─── Expenses ─────────────────────────────────────────────────────────────────
 
-// useAddExpense records a petty-cash expense entered at the register straight to treasury
+export interface ExpenseCategory {
+  id: string;
+  code?: string;
+  name: string;
+  is_active?: boolean;
+}
+
+export interface ExpenseAccount {
+  id: string;
+  code: string;
+  name: string;
+  type?: string;
+  category?: string;
+}
+
+/** Expense categories (from treasury, proxied by pos-api) for the Add-Expense form dropdown.
+ *  Degrades to an empty list when none are configured. */
+export function useExpenseCategories() {
+  const tenantID = useTenantID();
+  return useQuery({
+    queryKey: ['pos-expense-categories', tenantID],
+    queryFn: () =>
+      apiClient.get<{ categories?: ExpenseCategory[]; total?: number }>(
+        `${basePath(tenantID)}/expenses/categories`,
+      ),
+    enabled: !!tenantID,
+    staleTime: 5 * 60_000,
+    select: (res) => res.categories ?? [],
+  });
+}
+
+/** Chart-of-accounts (from treasury, proxied by pos-api) for the Add-Expense "Payment Account"
+ *  dropdown. Degrades to an empty list when none are configured. */
+export function useExpenseAccounts() {
+  const tenantID = useTenantID();
+  return useQuery({
+    queryKey: ['pos-expense-accounts', tenantID],
+    queryFn: () =>
+      apiClient.get<{ accounts?: ExpenseAccount[]; total?: number }>(
+        `${basePath(tenantID)}/expenses/accounts`,
+      ),
+    enabled: !!tenantID,
+    staleTime: 5 * 60_000,
+    select: (res) => res.accounts ?? [],
+  });
+}
+
+export interface AddExpenseInput {
+  description: string; // "Expense note"
+  amount: number; // "Total amount"
+  category_id?: string;
+  reference_no?: string;
+  expense_date?: string; // YYYY-MM-DD
+  account_id?: string; // Payment Account
+  vendor_id?: string;
+  cost_center_id?: string;
+  tax_amount?: number;
+  tax_rate?: number;
+  currency?: string;
+  payment_method?: string;
+  paid_on?: string;
+  payment_note?: string;
+  payment_amount?: number;
+  expense_for?: string; // free-text label when no vendor selected
+}
+
+// useAddExpense records an expense entered at the register straight to treasury
 // (via pos-api POST /pos/expenses → treasury S2S). No money moves through the till.
 export function useAddExpense() {
   const tenantID = useTenantID();
   return useMutation({
-    mutationFn: (data: { description: string; amount: number; category_id?: string; currency?: string }) =>
+    mutationFn: (data: AddExpenseInput) =>
       apiClient.post(`${basePath(tenantID)}/expenses`, data),
   });
 }
