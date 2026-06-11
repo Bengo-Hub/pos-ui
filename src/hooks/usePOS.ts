@@ -32,6 +32,32 @@ export function usePricingTiers() {
   });
 }
 
+/** A treasury tax code (the platform source of truth for tax rates), proxied by pos-api. The POS
+ *  applies each item's enriched rate at checkout; this list is shown read-only in Settings → Tax. */
+export interface TaxCode {
+  id: string;
+  code: string;
+  name: string;
+  rate: number;
+  tax_type?: string;
+  kra_code?: string;
+  is_default?: boolean;
+}
+
+/** The tenant's tax codes/rates from treasury (the source of truth), proxied by pos-api.
+ *  Degrades to an empty list when treasury is unreachable or none are configured. */
+export function useTaxCodes() {
+  const tenantID = useTenantID();
+  return useQuery({
+    queryKey: ['pos-tax-codes', tenantID],
+    queryFn: () =>
+      apiClient.get<{ tax_codes?: TaxCode[]; total?: number }>(`${basePath(tenantID)}/tax-codes`),
+    enabled: !!tenantID,
+    staleTime: 5 * 60_000,
+    select: (res) => res.tax_codes ?? [],
+  });
+}
+
 // ─── Expenses ─────────────────────────────────────────────────────────────────
 
 export interface ExpenseCategory {
@@ -176,6 +202,13 @@ export interface CatalogItem {
   image_url?: string;
   barcode?: string;
   price?: number;
+  // Tax — enriched by inventory-api from treasury-api (the source of truth). The POS terminal
+  // applies THESE per-item values at checkout instead of a flat outlet rate.
+  tax_code_id?: string;
+  tax_inclusive?: boolean;
+  tax_rate?: number;   // VAT % applied to this item (resolved from treasury)
+  net_price?: number;  // selling price excluding tax
+  tax_amount?: number; // tax portion of the selling price
   requires_age_verification?: boolean;
   track_serial_numbers?: boolean;
   requires_prescription?: boolean;

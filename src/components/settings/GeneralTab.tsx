@@ -7,7 +7,7 @@ import { useTenantBranding } from '@/providers/tenant-branding-provider';
 import { usePOSSettings, useUpdatePOSSettings } from '@/hooks/usePOSSettings';
 import { usePermissions } from '@/hooks/usePermissions';
 import { P } from '@/lib/rbac/permissions';
-import { Toggle, inputClass, labelClass } from './shared';
+import { inputClass, labelClass } from './shared';
 
 export function GeneralTab() {
   const { tenant, isLoading: brandingLoading } = useTenantBranding();
@@ -17,24 +17,20 @@ export function GeneralTab() {
   const canEdit = can(P.CONFIG_CHANGE) || can(P.CONFIG_MANAGE);
 
   const [currency, setCurrency] = useState('KES');
-  const [vatRate, setVatRate] = useState('16');
-  const [vatEnabled, setVatEnabled] = useState(true);
   const [returnWindowDays, setReturnWindowDays] = useState('30');
 
   useEffect(() => {
     if (settings) {
       setCurrency(settings.currency || 'KES');
-      setVatRate(String(settings.vat_rate ?? 16));
-      setVatEnabled(settings.vat_enabled ?? true);
       setReturnWindowDays(String(settings.return_window_days ?? 30));
     }
   }, [settings]);
 
   const handleSave = () => {
+    // VAT/tax now lives in the Tax tab (sourced from treasury per item) — only currency + returns
+    // are edited here. We omit vat_* so saving currency never clobbers the tax settings.
     updateSettings.mutate({
       currency,
-      vat_rate: parseFloat(vatRate) || 16,
-      vat_enabled: vatEnabled,
       return_window_days: parseInt(returnWindowDays, 10) || 30,
     });
   };
@@ -88,7 +84,7 @@ export function GeneralTab() {
               <CardHeader>
                 <div className="flex items-center gap-2">
                   <Globe className="h-4 w-4 text-primary" />
-                  <span className="font-bold text-sm">Currency & Tax</span>
+                  <span className="font-bold text-sm">Currency</span>
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -109,26 +105,10 @@ export function GeneralTab() {
                     <option value="GHS">GHS — Ghanaian Cedi</option>
                   </select>
                 </div>
-                <div className="space-y-2">
-                  <label className={labelClass}>VAT / Tax Rate (%)</label>
-                  <input
-                    type="number"
-                    min={0}
-                    max={100}
-                    step={0.1}
-                    value={vatRate}
-                    onChange={(e) => setVatRate(e.target.value)}
-                    disabled={!canEdit}
-                    className={`${inputClass} font-mono`}
-                  />
-                </div>
-                <div className="flex items-center justify-between pt-1">
-                  <div>
-                    <p className="text-sm font-medium">Show VAT on Receipts</p>
-                    <p className="text-xs text-muted-foreground">Display VAT as a line item</p>
-                  </div>
-                  <Toggle checked={vatEnabled} onChange={setVatEnabled} disabled={!canEdit} />
-                </div>
+                <p className="text-xs text-muted-foreground pt-1">
+                  Tax rates are managed in the <span className="font-medium text-foreground">Tax</span> tab
+                  (sourced from Treasury, applied per item).
+                </p>
               </CardContent>
             </Card>
 

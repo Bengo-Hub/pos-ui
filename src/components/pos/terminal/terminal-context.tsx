@@ -23,6 +23,7 @@ import type { ReceiptData } from '@/components/pos/receipt-preview';
 import type { LoyaltyState } from '@/components/retail/LoyaltyPanel';
 import type { CreatedOrder } from '@/components/pos/terminal/inline-payment-bar';
 import { printKitchenBarTickets } from '@/lib/pos/kitchen-bar-print';
+import { computeCartTax } from '@/lib/pos/cart-tax';
 import { terminalConfigFor, type TerminalConfig } from '@/lib/use-case-config';
 import {
   useMenuItems, useCategories, useCreateOrder, useAddOrderLines, useVoidOrder,
@@ -69,6 +70,13 @@ export interface MenuItem {
   /** On-hand stock for the StockBadge / out-of-stock override (retail/pharmacy). Only present
    *  when the backend catalog list projects stock_quantity — see integrator note. */
   stockQuantity?: number;
+  // ── Per-item tax (enriched by inventory-api from treasury, the source of truth) ──
+  // The terminal applies THESE at checkout instead of a flat outlet rate. See computeCartTax.
+  taxCodeId?: string;
+  taxInclusive?: boolean;   // when true, `price` ALREADY includes the tax — never add on top
+  taxRate?: number;         // VAT % for this item (e.g. 16). undefined → no treasury info (legacy fallback)
+  netPrice?: number;        // unit price excluding tax (informational)
+  taxAmount?: number;       // tax portion of the unit price (informational)
 }
 
 export interface CartItem extends MenuItem {
@@ -130,6 +138,8 @@ export interface TerminalContextValue {
   cartItemCount: number;
   subtotal: number;
   tax: number;
+  /** Tax embedded inside tax-inclusive lines (already part of subtotal/total) — for display only. */
+  inclusiveTax: number;
   loyaltyDiscount: number;
   total: number;
   addItemToCart: (item: MenuItem, mods?: Record<string, string[]>, qty?: number, serialNumber?: string) => void;
@@ -429,6 +439,12 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
       modifierGroups: item.modifier_groups,
       // stock_quantity is only populated if the backend projects it on the catalog list (see note).
       stockQuantity: item.stock_quantity,
+      // Per-item tax from treasury (via inventory-api enrichment → pos-api catalog passthrough).
+      taxCodeId: item.tax_code_id ?? undefined,
+      taxInclusive: item.tax_inclusive ?? undefined,
+      taxRate: typeof item.tax_rate === 'number' ? item.tax_rate : undefined,
+      netPrice: typeof item.net_price === 'number' ? item.net_price : undefined,
+      taxAmount: typeof item.tax_amount === 'number' ? item.tax_amount : undefined,
     }));
   }, [catalogData]);
 
@@ -698,8 +714,20 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
     setCart((prev) => prev.map((c, i) => i === index ? { ...c, courseNumber: course } : c));
   };
 
-  const subtotal = cart.reduce((sum, item) => sum + (item.price + (item.modifierTotal ?? 0)) * item.quantity, 0);
-  const tax = Math.round(subtotal * taxRate);
+  // Per-item tax: each line carries its own treasury-sourced rate/inclusive flag (enriched by
+  // inventory-api, passed through pos-api). We aggregate per line instead of applying one flat
+  // outlet rate over the whole cart — this eliminates the double-tax on tax-inclusive items and
+  // honours each item's real rate. `taxRate` (posSettings.vat_rate) is now only the LEGACY fallback
+  // for items with no treasury tax info. See src/lib/pos/cart-tax.ts.
+  const { subtotal, tax, inclusiveTax } = useMemo(() => {
+    const lines = cart.map((item) => ({
+      gross: (item.price + (item.modifierTotal ?? 0)) * item.quantity,
+      taxRate: item.taxRate,
+      taxInclusive: item.taxInclusive,
+    }));
+    const r = computeCartTax(lines, taxRate * 100);
+    return { subtotal: r.subtotal, tax: r.tax, inclusiveTax: r.inclusiveTax };
+  }, [cart, taxRate]);
   const loyaltyDiscount = loyaltyState?.redeemDiscount ?? 0;
   const total = Math.max(0, subtotal + tax - loyaltyDiscount);
   const cartItemCount = cart.reduce((s, c) => s + c.quantity, 0);
@@ -986,7 +1014,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
     pickerMode, setPickerMode, activeBrand, brands, handleBrandChange,
     totalItems, totalPages, menuLoading, menuItems, filteredItems, categories,
     handleCategoryChange, handleSearchChange, handleSearchKeyDown,
-    cart, cartItemCount, subtotal, tax, loyaltyDiscount, total,
+    cart, cartItemCount, subtotal, tax, inclusiveTax, loyaltyDiscount, total,
     addItemToCart, handleItemTap, proceedWithItem, handleScaleAddToCart,
     updateQuantity, removeFromCart, clearCart, updateCourse,
     pricingProfile, pricingTiers, repricing, repriceCart,
