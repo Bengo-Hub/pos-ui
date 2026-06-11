@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { useParams } from 'next/navigation';
 import { Button } from '@/components/ui/base';
 import { Download, Share, X } from 'lucide-react';
 import { toast } from 'sonner';
@@ -52,28 +51,14 @@ async function requestPermissions() {
 
 export function PWARegistration() {
   const { tenant } = useTenantBranding();
-  const params = useParams();
-  const orgSlug = params?.orgSlug as string | undefined;
   const [visible, setVisible] = useState(false);
   const [ios, setIos] = useState(false);
   const promptRef = useRef<BeforeInstallPromptEvent | null>(null);
 
-  // Inject the tenant-specific manifest link into <head> so the browser uses
-  // the dynamic manifest (with tenant logo, start_url=/{orgSlug}/) when
-  // evaluating PWA install criteria and capturing the app icon on install.
-  useEffect(() => {
-    if (!orgSlug) return;
-    const href = `/${orgSlug}/manifest.webmanifest`;
-    let link = document.querySelector<HTMLLinkElement>('link[rel="manifest"]');
-    if (!link) {
-      link = document.createElement('link');
-      link.rel = 'manifest';
-      document.head.appendChild(link);
-    }
-    if (link.href !== new URL(href, window.location.href).href) {
-      link.href = href;
-    }
-  }, [orgSlug]);
+  // The tenant-specific manifest link is emitted server-side via
+  // generateMetadata in [orgSlug]/layout.tsx (and kept in sync on SPA nav by
+  // ManifestInjector in org-shell), so the browser already has the correct
+  // tenant manifest when evaluating install criteria and capturing the icon.
 
   const appName = tenant?.orgName ? `${tenant.orgName} POS` : 'BengoBox POS';
   const logoUrl = tenant?.logoUrl;
