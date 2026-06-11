@@ -44,6 +44,24 @@ export interface TerminalConfig {
 const HOSPITALITY = ['hospitality', 'hotel', 'bar', 'cafe', 'restaurant'];
 const QUICK = ['quick_service', 'quick service'];
 
+/**
+ * Product-search placeholder per profile — centralised so the terminal never hardcodes it.
+ * Retail/pharmacy are barcode-first checkout; hospitality/QSR browse a menu; services sell services.
+ */
+export function searchPlaceholderFor(profile: TerminalProfile): string {
+  switch (profile) {
+    case 'hospitality':
+    case 'quick_service':
+      return 'Search menu items…';
+    case 'services':
+      return 'Search services…';
+    case 'retail':
+    case 'pharmacy':
+    default:
+      return 'Product name / SKU / Scan barcode';
+  }
+}
+
 /** Collapse any raw outlet use_case string into a terminal profile. Defaults to retail. */
 export function normalizeUseCase(useCase?: string | null): TerminalProfile {
   const uc = (useCase ?? '').toLowerCase();

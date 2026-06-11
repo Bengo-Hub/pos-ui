@@ -63,7 +63,13 @@ export function CategoryNav({ categories, active, onSelect, className }: Categor
     <div
       role="tablist"
       aria-label="Categories"
-      className={cn('flex gap-2 overflow-x-auto pb-0.5 scrollbar-none', className)}
+      className={cn(
+        // Single horizontally-scrolling row so every category stays reachable even when there are
+        // many (e.g. hospitality menus). flex-nowrap stops tabs wrapping/clipping; the scrollbar is
+        // hidden for a clean look (scrollbar-hide + the native props) while still scrolling.
+        'flex flex-nowrap gap-2 overflow-x-auto pb-0.5 scrollbar-hide [scrollbar-width:none] [-ms-overflow-style:none] min-w-0',
+        className,
+      )}
     >
       {/* All tab */}
       <button
