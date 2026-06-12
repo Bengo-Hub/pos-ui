@@ -20,7 +20,7 @@ import {
 import { useState, useMemo } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { TrackingIframeModal } from '@bengo-hub/shared-ui-lib';
-import { POSPaymentModal } from '@/components/pos/payment-modal';
+import { SplitPaymentModal } from '@/components/pos/split-payment-modal';
 import { PrintReceiptButton } from '@/components/pos/print-receipt-button';
 import { useAuthStore } from '@/store/auth';
 
@@ -376,13 +376,21 @@ export default function OrdersPage() {
       )}
 
       {selectedOrder && (
-        <POSPaymentModal
+        <SplitPaymentModal
           open={paymentOpen}
           onClose={() => setPaymentOpen(false)}
           orderId={selectedOrder.id}
           orderNumber={selectedOrder.order_number}
           total={selectedOrder.total_amount ?? 0}
           tenantSlug={orgSlug}
+          tenantId={user?.tenant_id ?? ''}
+          orderLines={(selectedOrder.edges?.lines ?? []).map((line: any, i: number) => ({
+            id: line.id ?? String(i),
+            name: line.name ?? line.item_name ?? 'Item',
+            quantity: line.quantity ?? 1,
+            unitPrice: line.unit_price ?? 0,
+            totalPrice: line.total_price ?? ((line.unit_price ?? 0) * (line.quantity ?? 1)),
+          }))}
           isHospitality={isHospitality}
           onPaymentConfirmed={() => {
             const tableId = selectedOrder?.table_id ?? selectedOrder?.metadata?.table_id;

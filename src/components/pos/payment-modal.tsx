@@ -297,32 +297,38 @@ export function POSPaymentModal({
 
   if (!open) return null;
 
+  // Online gateway handoff (M-Pesa STK / Paystack / Wallet): render the treasury pay flow as the
+  // SOLE modal — never stacked on top of the settle sheet — so selecting an online method doesn't
+  // pop a second blocking modal over this one. On confirm/fail/cancel the step changes and the
+  // settle sheet below takes over again (success / failed / back to method select).
+  if (step === 'treasury' && intentId) {
+    return (
+      <TreasuryPaymentModal
+        open={true}
+        onOpenChange={(isOpen) => { if (!isOpen) setStep('select'); }}
+        paymentIntentId={intentId}
+        tenantSlug={tenantSlug}
+        initiateUrl={initiateUrl}
+        amount={roundedTotal}
+        currency="KES"
+        description={`Order ${orderNumber}`}
+        customerEmail={customerEmail}
+        allowedMethods={allowedMethods}
+        referenceId={orderId}
+        referenceType="pos_order"
+        onPaymentConfirmed={() => { setStep('confirmed'); onPaymentConfirmed(methodRef.current); }}
+        onPaymentFailed={(err) => {
+          setErrorMsg(typeof err === 'string' ? err : 'Payment was declined or failed.');
+          setStep('failed');
+        }}
+      />
+    );
+  }
+
   return (
     <>
-      {step === 'treasury' && intentId && (
-        <TreasuryPaymentModal
-          open={true}
-          onOpenChange={(isOpen) => { if (!isOpen) setStep('select'); }}
-          paymentIntentId={intentId}
-          tenantSlug={tenantSlug}
-          initiateUrl={initiateUrl}
-          amount={roundedTotal}
-          currency="KES"
-          description={`Order ${orderNumber}`}
-          customerEmail={customerEmail}
-          allowedMethods={allowedMethods}
-          referenceId={orderId}
-          referenceType="pos_order"
-          onPaymentConfirmed={() => { setStep('confirmed'); onPaymentConfirmed(methodRef.current); }}
-          onPaymentFailed={(err) => {
-            setErrorMsg(typeof err === 'string' ? err : 'Payment was declined or failed.');
-            setStep('failed');
-          }}
-        />
-      )}
-
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-        <div className="bg-card rounded-2xl w-full max-w-md max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+        <div className="bg-card rounded-2xl w-full max-w-2xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden">
 
           {/* ── Purple amount banner ─────────────────────────────────── */}
           <div className="relative bg-gradient-to-br from-violet-600 to-purple-700 px-6 pt-6 pb-5">
@@ -352,16 +358,16 @@ export function POSPaymentModal({
 
             {/* ── Method selection ─────────────────────────────────────── */}
             {step === 'select' && (
-              <div className="p-5 space-y-4">
+              <div className="p-6 space-y-5">
 
-                {/* ── Always-available methods ─────────────────────────── */}
+                {/* ── Always-available methods (badge pills) ───────────── */}
                 <div>
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2.5">
                     Always available
                   </p>
-                  <div className="grid grid-cols-2 gap-3">
-                    <PayTile
-                      icon={<Banknote className="h-7 w-7" />}
+                  <div className="flex flex-wrap gap-2.5">
+                    <PayBadge
+                      icon={<Banknote className="h-4 w-4" />}
                       color="text-emerald-600"
                       bg="bg-emerald-500/10"
                       label="Cash"
@@ -370,8 +376,8 @@ export function POSPaymentModal({
                       loading={false}
                       onClick={() => { setCashTendered(String(roundedTotal)); setStep('cash'); }}
                     />
-                    <PayTile
-                      icon={<Hash className="h-7 w-7" />}
+                    <PayBadge
+                      icon={<Hash className="h-4 w-4" />}
                       color="text-yellow-600"
                       bg="bg-yellow-500/10"
                       label="M-Pesa Code"
@@ -380,8 +386,8 @@ export function POSPaymentModal({
                       loading={false}
                       onClick={() => setStep('manual')}
                     />
-                    <PayTile
-                      icon={<CreditCard className="h-7 w-7" />}
+                    <PayBadge
+                      icon={<CreditCard className="h-4 w-4" />}
                       color="text-blue-600"
                       bg="bg-blue-500/10"
                       label="Card (PDQ)"
@@ -390,8 +396,8 @@ export function POSPaymentModal({
                       loading={false}
                       onClick={() => setStep('card_pdq')}
                     />
-                    <PayTile
-                      icon={<NotebookPen className="h-7 w-7" />}
+                    <PayBadge
+                      icon={<NotebookPen className="h-4 w-4" />}
                       color="text-orange-600"
                       bg="bg-orange-500/10"
                       label="On Account"
@@ -402,8 +408,8 @@ export function POSPaymentModal({
                       onClick={handleOnAccount}
                     />
                     {isHospitality && (
-                      <PayTile
-                        icon={<Building2 className="h-7 w-7" />}
+                      <PayBadge
+                        icon={<Building2 className="h-4 w-4" />}
                         color="text-indigo-600"
                         bg="bg-indigo-500/10"
                         label="Room"
@@ -420,14 +426,14 @@ export function POSPaymentModal({
                 {/* ── Online gateways (treasury-synced) ────────────────── */}
                 {isOnline && (gateways?.mpesa || gateways?.paystack || gateways?.wallet) && (
                   <div>
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2 flex items-center gap-1.5">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2.5 flex items-center gap-1.5">
                       <Zap className="h-3 w-3 text-primary" />
                       Online payments
                     </p>
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="flex flex-wrap gap-2.5">
                       {gateways?.mpesa && (
-                        <PayTile
-                          icon={<Smartphone className="h-7 w-7" />}
+                        <PayBadge
+                          icon={<Smartphone className="h-4 w-4" />}
                           color="text-green-600"
                           bg="bg-green-500/10"
                           label="M-Pesa STK"
@@ -438,8 +444,8 @@ export function POSPaymentModal({
                         />
                       )}
                       {gateways?.mpesa && (
-                        <PayTile
-                          icon={<Landmark className="h-7 w-7" />}
+                        <PayBadge
+                          icon={<Landmark className="h-4 w-4" />}
                           color="text-green-700"
                           bg="bg-green-500/10"
                           label="M-Pesa Paybill"
@@ -450,8 +456,8 @@ export function POSPaymentModal({
                         />
                       )}
                       {gateways?.paystack && (
-                        <PayTile
-                          icon={<CreditCard className="h-7 w-7" />}
+                        <PayBadge
+                          icon={<CreditCard className="h-4 w-4" />}
                           color="text-blue-600"
                           bg="bg-blue-500/10"
                           label="Card / M-Pesa"
@@ -462,8 +468,8 @@ export function POSPaymentModal({
                         />
                       )}
                       {gateways?.wallet && (
-                        <PayTile
-                          icon={<Wallet className="h-7 w-7" />}
+                        <PayBadge
+                          icon={<Wallet className="h-4 w-4" />}
                           color="text-purple-600"
                           bg="bg-purple-500/10"
                           label="Wallet"
@@ -832,7 +838,10 @@ export function POSPaymentModal({
   );
 }
 
-function PayTile({
+// Compact badge-style payment option: a rounded pill with a small toned icon chip + label/sub
+// inline. Replaces the old large card tiles so the method list reads as one organised row of
+// badges rather than a grid of bulky cards.
+function PayBadge({
   icon, color, bg, label, sub, disabled, loading, offlineBadge, onClick,
 }: {
   icon: React.ReactNode;
@@ -849,22 +858,23 @@ function PayTile({
     <button
       onClick={onClick}
       disabled={disabled || loading}
+      title={offlineBadge ? 'Requires internet' : sub}
       className={cn(
-        'flex flex-col items-center justify-center gap-2 py-5 rounded-2xl border-2 transition-all active:scale-95',
+        'group inline-flex items-center gap-2.5 rounded-full border pl-2 pr-4 py-1.5 transition-all active:scale-95',
         disabled || loading
           ? 'border-border opacity-40 cursor-not-allowed'
-          : 'border-border hover:border-primary/40 hover:bg-accent/30'
+          : 'border-border hover:border-primary/50 hover:bg-accent/40'
       )}
     >
-      <div className={cn('h-12 w-12 rounded-xl flex items-center justify-center', bg, color)}>
-        {loading ? <Loader2 className="h-6 w-6 animate-spin" /> : icon}
-      </div>
-      <div className="text-center">
-        <p className="font-bold text-sm">{label}</p>
-        <p className="text-[10px] text-muted-foreground">
+      <span className={cn('h-8 w-8 rounded-full flex items-center justify-center shrink-0', bg, color)}>
+        {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : icon}
+      </span>
+      <span className="text-left leading-tight">
+        <span className="block text-sm font-bold">{label}</span>
+        <span className="block text-[10px] text-muted-foreground">
           {offlineBadge ? 'Requires internet' : sub}
-        </p>
-      </div>
+        </span>
+      </span>
     </button>
   );
 }
