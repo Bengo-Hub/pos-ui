@@ -250,7 +250,7 @@ export function SplitPaymentModal({
   return (
     <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4" onClick={onClose}>
       <div
-        className="bg-card rounded-2xl border border-border shadow-2xl w-full max-w-md"
+        className="bg-card rounded-2xl border border-border shadow-2xl w-full max-w-lg"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}

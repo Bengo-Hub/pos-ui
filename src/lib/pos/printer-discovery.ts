@@ -16,7 +16,7 @@
 import { apiClient } from '@/lib/api/client';
 import { useAuthStore } from '@/store/auth';
 
-export type PrinterSource = 'qz' | 'webusb' | 'bluetooth' | 'none';
+export type PrinterSource = 'network' | 'qz' | 'webusb' | 'bluetooth' | 'none';
 
 export interface DiscoveredDevice {
   name: string;
@@ -186,6 +186,32 @@ export async function requestBluetoothPrinter(): Promise<DiscoveredDevice | null
   }
 }
 
+/** ── Backend LAN scan (on-prem pos-api) ──────────────────────────────────────────
+ *  Tried FIRST by discoverPrinters(). pos-api scans ITS OWN network (mDNS / TCP 9100·631·515 / SNMP)
+ *  and returns named printers. This only finds anything when pos-api shares the LAN with the printer
+ *  (on-prem); a cloud deployment returns { enabled: false } and we silently fall back to QZ/USB/BT. */
+async function detectBackend(): Promise<{ devices: DiscoveredDevice[]; note?: string }> {
+  if (typeof window === 'undefined') return { devices: [] };
+  const slug = tenantSlug();
+  if (!slug) return { devices: [] };
+  try {
+    const res = await apiClient.get<{
+      enabled?: boolean;
+      printers?: Array<{ name?: string; ip?: string; port?: number; source?: string; model?: string }>;
+      note?: string;
+    }>(`/api/v1/${slug}/pos/printing/discover`);
+    if (!res?.enabled) return { devices: [] }; // disabled on cloud → use the local bridges
+    const devices: DiscoveredDevice[] = (res.printers ?? []).map((p) => ({
+      name: p.name || (p.ip ? `${p.ip}:${p.port ?? 9100}` : 'Network printer'),
+      source: 'network' as const,
+      detail: p.ip ? `${p.ip}${p.port ? ':' + p.port : ''}${p.model ? ' · ' + p.model : ''}` : p.model,
+    }));
+    return { devices, note: res.note || `Server network scan: ${devices.length} printer(s).` };
+  } catch {
+    return { devices: [] };
+  }
+}
+
 /**
  * Discover printers across every available source on this terminal:
  *  - QZ Tray (OS / network / USB / Bluetooth printers already installed in the OS) — silent printing,
@@ -201,6 +227,15 @@ export async function discoverPrinters(): Promise<DiscoverResult> {
   let primary: PrinterSource = 'none';
   let defaultPrinter: string | undefined;
 
+  // 0) Backend LAN scan FIRST (on-prem pos-api on the same network). On a cloud deployment this is
+  //    disabled server-side and returns nothing, so we fall through to the local bridges below.
+  const backend = await detectBackend();
+  if (backend.devices.length) {
+    backend.devices.forEach((d) => devices.push(d));
+    primary = 'network';
+  }
+  if (backend.note) notes.push(backend.note);
+
   // 1) QZ Tray
   const qz = await loadQz();
   if (qz) {
@@ -209,7 +244,7 @@ export async function discoverPrinters(): Promise<DiscoverResult> {
       try { defaultPrinter = await qz.printers.getDefault(); } catch { /* optional */ }
       const names = Array.isArray(list) ? list : [list].filter(Boolean);
       names.forEach((n) => devices.push({ name: n, source: 'qz', detail: 'OS / network' }));
-      if (names.length) primary = 'qz';
+      if (names.length && primary === 'none') primary = 'qz';
       notes.push(`QZ Tray: found ${names.length} OS printer(s).${names.length ? '' : ' Tip: a network printer must be ADDED to this computer (Windows “Add a printer”) before QZ can list it.'}`);
     } catch {
       notes.push('QZ Tray: connected but could not read the printer list.');
