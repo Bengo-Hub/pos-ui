@@ -10,6 +10,9 @@ interface ReceiptPrintProps {
   tenantAddress?: string;
   tenantPhone?: string;
   tenantPin?: string; // KRA PIN for eTIMS
+  /** Tenant logo shown at the top of the receipt. Brand COLOURS are deliberately not used (faint on
+   *  thermal printers); the logo is grayscaled via .receipt-logo so it prints crisp. */
+  logoUrl?: string;
   paymentMethods?: ReceiptData['payment_methods'];
 }
 
@@ -31,6 +34,7 @@ export function ReceiptPrint({
   tenantAddress,
   tenantPhone,
   tenantPin,
+  logoUrl,
   paymentMethods,
 }: ReceiptPrintProps) {
   const currency = receipt.currency || 'KES';
@@ -50,7 +54,11 @@ export function ReceiptPrint({
 
   return (
     <div className="receipt-root">
-      {/* Header / branding */}
+      {/* Header / branding — logo only, no brand colours (thermal-safe) */}
+      {logoUrl && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={logoUrl} alt="logo" className="receipt-logo" />
+      )}
       {tenantName && (
         <p className="receipt-center receipt-bold" style={{ fontSize: 13, marginBottom: 2 }}>
           {tenantName}

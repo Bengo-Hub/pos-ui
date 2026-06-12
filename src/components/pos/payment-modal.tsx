@@ -11,9 +11,7 @@ import {
   Hash,
   Landmark,
   Loader2,
-  Minus,
   NotebookPen,
-  Plus,
   Smartphone,
   Wallet,
   WifiOff,
@@ -21,7 +19,7 @@ import {
   XCircle,
   Zap,
 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { useCreatePaymentIntent, useListC2BPayments, useClaimC2BPayment } from '@/hooks/usePOS';
 import { useOnline } from '@/hooks/use-online';
@@ -42,7 +40,9 @@ export interface POSPaymentModalProps {
   customerEmail?: string;
   isHospitality?: boolean;
   allowedMethods?: string;
-  onPaymentConfirmed: () => void;
+  /** Called on a successful payment. `method` is the tender used (cash | manual | mpesa | card |
+   *  card_manual | wallet | on_account | room_charge) so a split portion can record how it was paid. */
+  onPaymentConfirmed: (method?: string) => void;
 }
 
 type ModalStep =
@@ -57,8 +57,6 @@ type ModalStep =
   | 'confirmed'
   | 'offline_queued'
   | 'failed';
-
-type PayMode = 'full' | 'split';
 
 export function POSPaymentModal({
   open,
@@ -76,8 +74,6 @@ export function POSPaymentModal({
   const roundedTotal = Math.ceil(total);
 
   const [step, setStep] = useState<ModalStep>('select');
-  const [payMode, setPayMode] = useState<PayMode>('full');
-  const [splitCount, setSplitCount] = useState(2);
   const [cashTendered, setCashTendered] = useState('');
   const [manualRef, setManualRef] = useState('');
   const [cardRef, setCardRef] = useState('');
@@ -97,7 +93,7 @@ export function POSPaymentModal({
   useEffect(() => {
     if (streamStatus === 'paid' && step === 'treasury') {
       setStep('confirmed');
-      onPaymentConfirmed();
+      onPaymentConfirmed(methodRef.current);
     }
   }, [streamStatus, step, onPaymentConfirmed]);
   const { data: occupiedRooms = [], isLoading: roomsLoading } = useHotelRooms(
@@ -113,31 +109,32 @@ export function POSPaymentModal({
       }),
   });
 
-  const splitAmount = useMemo(() => Math.ceil(roundedTotal / splitCount), [roundedTotal, splitCount]);
-  const activeAmount = payMode === 'split' ? splitAmount : roundedTotal;
+  // The tender method of the most recent payment, reported back to the splitter via
+  // onPaymentConfirmed(method) so each split portion records how it was paid. A ref (not state)
+  // so the async treasury/SSE confirmation path reads the latest value without re-renders.
+  const methodRef = useRef<string>('');
 
   // M-Pesa C2B (paybill/till): poll unreconciled inbox payments matching the active amount, then
   // claim + settle the one the cashier picks.
-  const c2bQuery = useListC2BPayments(activeAmount, open && step === 'c2b' && isOnline);
+  const c2bQuery = useListC2BPayments(roundedTotal, open && step === 'c2b' && isOnline);
   const claimC2B = useClaimC2BPayment();
   const handleClaimC2B = useCallback(
     (transID: string) => {
+      methodRef.current = 'mpesa';
       claimC2B.mutate(
-        { transID, posOrderId: orderId, amount: activeAmount, tenderId },
+        { transID, posOrderId: orderId, amount: roundedTotal, tenderId },
         {
-          onSuccess: () => { setStep('confirmed'); onPaymentConfirmed(); },
+          onSuccess: () => { setStep('confirmed'); onPaymentConfirmed(methodRef.current); },
           onError: (err: any) => { setErrorMsg(err?.message ?? 'Could not claim that payment.'); setStep('failed'); },
         }
       );
     },
-    [claimC2B, orderId, activeAmount, tenderId, onPaymentConfirmed]
+    [claimC2B, orderId, roundedTotal, tenderId, onPaymentConfirmed]
   );
 
   useEffect(() => {
     if (open) {
       setStep('select');
-      setPayMode('full');
-      setSplitCount(2);
       setCashTendered('');
       setManualRef('');
       setCardRef('');
@@ -150,8 +147,9 @@ export function POSPaymentModal({
   }, [open]);
 
   const handleCashConfirm = useCallback(async () => {
-    const tendered = parseFloat(cashTendered) || activeAmount;
-    if (tendered < activeAmount) return;
+    methodRef.current = 'cash';
+    const tendered = parseFloat(cashTendered) || roundedTotal;
+    if (tendered < roundedTotal) return;
 
     if (!isOnline) {
       try {
@@ -166,7 +164,7 @@ export function POSPaymentModal({
           synced: false,
         });
         setStep('offline_queued');
-        onPaymentConfirmed();
+        onPaymentConfirmed(methodRef.current);
       } catch {
         setErrorMsg('Failed to save offline payment. Please try again.');
         setStep('failed');
@@ -177,16 +175,17 @@ export function POSPaymentModal({
     createIntent.mutate(
       { orderId, tenderMethod: 'cash', amount: roundedTotal, tenderId },
       {
-        onSuccess: () => { setStep('confirmed'); onPaymentConfirmed(); },
+        onSuccess: () => { setStep('confirmed'); onPaymentConfirmed(methodRef.current); },
         onError: (err: any) => {
           setErrorMsg(err?.message ?? 'Cash payment failed. Please try again.');
           setStep('failed');
         },
       }
     );
-  }, [cashTendered, activeAmount, roundedTotal, orderId, tenderId, tenantSlug, isOnline, createIntent, onPaymentConfirmed]);
+  }, [cashTendered, roundedTotal, orderId, tenderId, tenantSlug, isOnline, createIntent, onPaymentConfirmed]);
 
   const handleManualConfirm = useCallback(async () => {
+    methodRef.current = 'manual';
     if (!manualRef.trim()) return;
 
     if (!isOnline) {
@@ -203,7 +202,7 @@ export function POSPaymentModal({
           synced: false,
         });
         setStep('offline_queued');
-        onPaymentConfirmed();
+        onPaymentConfirmed(methodRef.current);
       } catch {
         setErrorMsg('Failed to save offline payment. Please try again.');
         setStep('failed');
@@ -214,7 +213,7 @@ export function POSPaymentModal({
     createIntent.mutate(
       { orderId, tenderMethod: 'manual', amount: roundedTotal, externalRef: manualRef.trim(), tenderId },
       {
-        onSuccess: () => { setStep('confirmed'); onPaymentConfirmed(); },
+        onSuccess: () => { setStep('confirmed'); onPaymentConfirmed(methodRef.current); },
         onError: (err: any) => {
           setErrorMsg(err?.message ?? 'Could not verify M-Pesa code. Please check and try again.');
           setStep('failed');
@@ -226,10 +225,11 @@ export function POSPaymentModal({
   // Card / PDQ: the standalone card terminal already approved the swipe, so it settles immediately
   // like cash (treasury records it as card_manual). Optional approval/reference code is captured.
   const handleCardManualConfirm = useCallback(() => {
+    methodRef.current = 'card_manual';
     createIntent.mutate(
       { orderId, tenderMethod: 'card_manual', amount: roundedTotal, externalRef: cardRef.trim() || undefined, tenderId },
       {
-        onSuccess: () => { setStep('confirmed'); onPaymentConfirmed(); },
+        onSuccess: () => { setStep('confirmed'); onPaymentConfirmed(methodRef.current); },
         onError: (err: any) => {
           setErrorMsg(err?.message ?? 'Card payment failed. Please try again.');
           setStep('failed');
@@ -239,6 +239,7 @@ export function POSPaymentModal({
   }, [orderId, roundedTotal, cardRef, tenderId, createIntent, onPaymentConfirmed]);
 
   const handleDigital = useCallback((method: string) => {
+    methodRef.current = method;
     createIntent.mutate(
       { orderId, tenderMethod: method, amount: roundedTotal, tenderId },
       {
@@ -258,10 +259,11 @@ export function POSPaymentModal({
   // On Account (credit sale): the backend posts to the customer's treasury AR balance (credit limit
   // enforced) and settles the order immediately — so it behaves like cash here, not a digital intent.
   const handleOnAccount = useCallback(() => {
+    methodRef.current = 'on_account';
     createIntent.mutate(
       { orderId, tenderMethod: 'on_account', amount: roundedTotal, tenderId },
       {
-        onSuccess: () => { setStep('confirmed'); onPaymentConfirmed(); },
+        onSuccess: () => { setStep('confirmed'); onPaymentConfirmed(methodRef.current); },
         onError: (err: any) => {
           setErrorMsg(err?.message ?? 'Could not charge to account — check the customer and their credit limit.');
           setStep('failed');
@@ -271,11 +273,12 @@ export function POSPaymentModal({
   }, [orderId, roundedTotal, tenderId, createIntent, onPaymentConfirmed]);
 
   const handleRoomCharge = useCallback(() => {
+    methodRef.current = 'room_charge';
     if (!selectedRoom) return;
     postRoomCharge.mutate(
       { roomId: selectedRoom.id },
       {
-        onSuccess: () => { setStep('confirmed'); onPaymentConfirmed(); },
+        onSuccess: () => { setStep('confirmed'); onPaymentConfirmed(methodRef.current); },
         onError: (err: any) => {
           setErrorMsg(err?.message ?? 'Failed to post charge to room. Please try again.');
           setStep('failed');
@@ -284,7 +287,7 @@ export function POSPaymentModal({
     );
   }, [selectedRoom, postRoomCharge, onPaymentConfirmed]);
 
-  const change = (parseFloat(cashTendered) || 0) - activeAmount;
+  const change = (parseFloat(cashTendered) || 0) - roundedTotal;
 
   const filteredRooms = occupiedRooms.filter((r) =>
     !roomSearch ||
@@ -310,7 +313,7 @@ export function POSPaymentModal({
           allowedMethods={allowedMethods}
           referenceId={orderId}
           referenceType="pos_order"
-          onPaymentConfirmed={() => { setStep('confirmed'); onPaymentConfirmed(); }}
+          onPaymentConfirmed={() => { setStep('confirmed'); onPaymentConfirmed(methodRef.current); }}
           onPaymentFailed={(err) => {
             setErrorMsg(typeof err === 'string' ? err : 'Payment was declined or failed.');
             setStep('failed');
@@ -340,11 +343,8 @@ export function POSPaymentModal({
                step === 'failed' ? 'Payment Failed' : 'Payment'}
             </p>
             <p className="text-white text-4xl font-extrabold tabular-nums leading-none">
-              KES {(step === 'select' && payMode === 'split' ? splitAmount : roundedTotal).toLocaleString()}
+              KES {roundedTotal.toLocaleString()}
             </p>
-            {step === 'select' && payMode === 'split' && (
-              <p className="text-white/70 text-xs mt-0.5">per person · KES {roundedTotal.toLocaleString()} total</p>
-            )}
             <p className="text-white/60 text-xs mt-1">{orderNumber}</p>
           </div>
 
@@ -353,49 +353,6 @@ export function POSPaymentModal({
             {/* ── Method selection ─────────────────────────────────────── */}
             {step === 'select' && (
               <div className="p-5 space-y-4">
-
-                {/* Pay mode tabs */}
-                <div className="flex gap-1 bg-accent/30 rounded-xl p-1">
-                  {(['full', 'split'] as PayMode[]).map((mode) => (
-                    <button
-                      key={mode}
-                      onClick={() => setPayMode(mode)}
-                      className={cn(
-                        'flex-1 py-2 rounded-lg text-xs font-bold transition-all',
-                        payMode === mode
-                          ? 'bg-background shadow-sm text-foreground'
-                          : 'text-muted-foreground'
-                      )}
-                    >
-                      {mode === 'full' ? 'Full' : 'Split Equal'}
-                    </button>
-                  ))}
-                </div>
-
-                {/* Split guest counter */}
-                {payMode === 'split' && (
-                  <div className="flex items-center justify-between bg-accent/20 rounded-xl px-5 py-3">
-                    <div>
-                      <p className="text-xs text-muted-foreground font-medium">Number of guests</p>
-                      <p className="text-sm font-bold">KES {splitAmount.toLocaleString()} each</p>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <button
-                        onClick={() => setSplitCount(Math.max(2, splitCount - 1))}
-                        className="h-8 w-8 rounded-lg border border-border flex items-center justify-center hover:bg-accent transition-colors"
-                      >
-                        <Minus className="h-3.5 w-3.5" />
-                      </button>
-                      <span className="w-6 text-center font-bold text-lg tabular-nums">{splitCount}</span>
-                      <button
-                        onClick={() => setSplitCount(Math.min(20, splitCount + 1))}
-                        className="h-8 w-8 rounded-lg border border-border flex items-center justify-center hover:bg-accent transition-colors"
-                      >
-                        <Plus className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                )}
 
                 {/* ── Always-available methods ─────────────────────────── */}
                 <div>
@@ -411,7 +368,7 @@ export function POSPaymentModal({
                       sub="Accept cash"
                       disabled={false}
                       loading={false}
-                      onClick={() => { setCashTendered(String(activeAmount)); setStep('cash'); }}
+                      onClick={() => { setCashTendered(String(roundedTotal)); setStep('cash'); }}
                     />
                     <PayTile
                       icon={<Hash className="h-7 w-7" />}
@@ -497,8 +454,8 @@ export function POSPaymentModal({
                           icon={<CreditCard className="h-7 w-7" />}
                           color="text-blue-600"
                           bg="bg-blue-500/10"
-                          label="Card"
-                          sub="Debit / credit"
+                          label="Card / M-Pesa"
+                          sub="Paystack — prompts customer"
                           disabled={false}
                           loading={createIntent.isPending}
                           onClick={() => handleDigital('card')}
@@ -543,7 +500,7 @@ export function POSPaymentModal({
                   />
                 </label>
                 <div className="grid grid-cols-3 gap-2">
-                  {[activeAmount, Math.ceil(activeAmount / 100) * 100, Math.ceil(activeAmount / 500) * 500]
+                  {[roundedTotal, Math.ceil(roundedTotal / 100) * 100, Math.ceil(roundedTotal / 500) * 500]
                     .filter((v, i, a) => a.indexOf(v) === i)
                     .map((amt) => (
                       <button
@@ -575,7 +532,7 @@ export function POSPaymentModal({
                 )}
                 <button
                   onClick={handleCashConfirm}
-                  disabled={parseFloat(cashTendered) < activeAmount || createIntent.isPending}
+                  disabled={parseFloat(cashTendered) < roundedTotal || createIntent.isPending}
                   className="w-full min-h-12 rounded-xl bg-primary text-primary-foreground font-bold flex items-center justify-center gap-2 disabled:opacity-40 hover:bg-primary/90 transition-colors"
                 >
                   {createIntent.isPending
@@ -666,7 +623,7 @@ export function POSPaymentModal({
               <div className="p-5 space-y-4">
                 <p className="text-sm text-muted-foreground">
                   Match the customer&apos;s M-Pesa paybill/till payment to this sale. Showing unreconciled
-                  payments of KES {activeAmount.toLocaleString()}.
+                  payments of KES {roundedTotal.toLocaleString()}.
                 </p>
                 {c2bQuery.isLoading ? (
                   <div className="flex justify-center py-8">

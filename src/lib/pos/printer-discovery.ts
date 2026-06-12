@@ -16,13 +16,27 @@
 import { apiClient } from '@/lib/api/client';
 import { useAuthStore } from '@/store/auth';
 
-export type PrinterSource = 'qz' | 'none';
+export type PrinterSource = 'qz' | 'webusb' | 'bluetooth' | 'none';
+
+export interface DiscoveredDevice {
+  name: string;
+  source: PrinterSource;
+  detail?: string;
+}
 
 export interface DiscoverResult {
+  /** Primary source — 'qz' when the QZ bridge answered, else the first source that found a device,
+   *  else 'none'. Kept for back-compat with existing callers. */
   source: PrinterSource;
+  /** Flat, de-duplicated list of printer names usable in the station dropdowns. */
   printers: string[];
   defaultPrinter?: string;
+  /** First/primary human note (back-compat). See `notes` for the full per-source list. */
   note?: string;
+  /** Labelled devices from every source that answered (QZ / WebUSB / Bluetooth). */
+  devices?: DiscoveredDevice[];
+  /** One actionable diagnostic line per source attempted. */
+  notes?: string[];
 }
 
 let qzPromise: Promise<any | null> | null = null;
@@ -82,25 +96,150 @@ async function loadQz(): Promise<any | null> {
   return qzPromise;
 }
 
-/** Discover printers via QZ Tray; empty list + source 'none' when no bridge is reachable. */
-export async function discoverPrinters(): Promise<DiscoverResult> {
-  const qz = await loadQz();
-  if (!qz) {
-    return {
-      source: 'none',
-      printers: [],
-      note: 'No print bridge detected. Install & run QZ Tray on this terminal to auto-detect network, USB & Bluetooth printers and enable silent auto-print. Without it, printing uses the browser print dialog.',
-    };
+/** ── WebUSB ────────────────────────────────────────────────────────────────────
+ *  Browsers (Chromium: Chrome/Edge on desktop & Android) expose USB printers via the WebUSB API.
+ *  `getDevices()` returns only devices the user has ALREADY granted — discovery is silent but limited
+ *  to previously-paired printers; pairing a new one needs a user gesture (see requestUSBPrinter). */
+const USB_PRINTER_CLASS = 0x07; // USB base class "Printer"
+
+function usbDeviceName(d: any): string {
+  const parts = [d?.manufacturerName, d?.productName].filter(Boolean);
+  if (parts.length) return parts.join(' ').trim();
+  const vid = typeof d?.vendorId === 'number' ? d.vendorId.toString(16).padStart(4, '0') : '????';
+  const pid = typeof d?.productId === 'number' ? d.productId.toString(16).padStart(4, '0') : '????';
+  return `USB printer ${vid}:${pid}`;
+}
+
+function isUsbPrinter(d: any): boolean {
+  // Class can sit on the device or on an interface alternate; accept either.
+  if (d?.deviceClass === USB_PRINTER_CLASS) return true;
+  const cfgs = d?.configurations ?? [];
+  for (const cfg of cfgs) {
+    for (const intf of cfg?.interfaces ?? []) {
+      for (const alt of intf?.alternates ?? []) {
+        if (alt?.interfaceClass === USB_PRINTER_CLASS) return true;
+      }
+    }
   }
+  return false;
+}
+
+async function detectWebUSB(): Promise<DiscoveredDevice[]> {
+  if (typeof navigator === 'undefined' || !(navigator as any).usb) return [];
   try {
-    const list: string[] = await qz.printers.find();
-    let def: string | undefined;
-    try { def = await qz.printers.getDefault(); } catch { /* optional */ }
-    const printers = Array.isArray(list) ? list : [list].filter(Boolean);
-    return { source: 'qz', printers, defaultPrinter: def, note: `Found ${printers.length} printer(s) via QZ Tray.` };
+    const devices: any[] = await (navigator as any).usb.getDevices();
+    return devices.filter(isUsbPrinter).map((d) => ({ name: usbDeviceName(d), source: 'webusb' as const, detail: 'USB' }));
   } catch {
-    return { source: 'none', printers: [], note: 'Could not read printers from QZ Tray.' };
+    return [];
   }
+}
+
+/** Prompt the operator to pick & grant a USB printer. MUST be called from a user gesture (click). */
+export async function requestUSBPrinter(): Promise<DiscoveredDevice | null> {
+  if (typeof navigator === 'undefined' || !(navigator as any).usb) return null;
+  try {
+    const d = await (navigator as any).usb.requestDevice({ filters: [{ classCode: USB_PRINTER_CLASS }] });
+    return d ? { name: usbDeviceName(d), source: 'webusb', detail: 'USB' } : null;
+  } catch {
+    return null; // user cancelled or unsupported
+  }
+}
+
+/** ── Web Bluetooth ─────────────────────────────────────────────────────────────
+ *  Chromium-only. There is no silent enumeration except `getDevices()` (permitted devices, behind a
+ *  flag on some platforms); pairing a new BT printer needs a user gesture (see requestBluetoothPrinter). */
+async function detectBluetooth(): Promise<DiscoveredDevice[]> {
+  const bt = typeof navigator !== 'undefined' ? (navigator as any).bluetooth : undefined;
+  if (!bt || typeof bt.getDevices !== 'function') return [];
+  try {
+    const devices: any[] = await bt.getDevices();
+    return devices.map((d) => ({ name: d?.name || 'Bluetooth printer', source: 'bluetooth' as const, detail: 'Bluetooth' }));
+  } catch {
+    return [];
+  }
+}
+
+/** Prompt the operator to pick & pair a Bluetooth printer. MUST be called from a user gesture. */
+export async function requestBluetoothPrinter(): Promise<DiscoveredDevice | null> {
+  const bt = typeof navigator !== 'undefined' ? (navigator as any).bluetooth : undefined;
+  if (!bt) return null;
+  try {
+    // Thermal printers commonly expose the 0x18F0 serial-print service; accept all so generic
+    // printers are also pickable, requesting that service as optional for later writes.
+    const d = await bt.requestDevice({
+      acceptAllDevices: true,
+      optionalServices: ['000018f0-0000-1000-8000-00805f9b34fb'],
+    });
+    return d ? { name: d?.name || 'Bluetooth printer', source: 'bluetooth', detail: 'Bluetooth' } : null;
+  } catch {
+    return null; // user cancelled or unsupported
+  }
+}
+
+/**
+ * Discover printers across every available source on this terminal:
+ *  - QZ Tray (OS / network / USB / Bluetooth printers already installed in the OS) — silent printing,
+ *  - WebUSB (already-granted USB printers) — Chromium,
+ *  - Web Bluetooth (already-permitted BT printers) — Chromium.
+ * Each source is probed independently and never throws; the result carries a flat name list (for the
+ * dropdowns), labelled devices, and one diagnostic note per source so the UI can tell the operator
+ * exactly why nothing was found.
+ */
+export async function discoverPrinters(): Promise<DiscoverResult> {
+  const notes: string[] = [];
+  const devices: DiscoveredDevice[] = [];
+  let primary: PrinterSource = 'none';
+  let defaultPrinter: string | undefined;
+
+  // 1) QZ Tray
+  const qz = await loadQz();
+  if (qz) {
+    try {
+      const list: string[] = await qz.printers.find();
+      try { defaultPrinter = await qz.printers.getDefault(); } catch { /* optional */ }
+      const names = Array.isArray(list) ? list : [list].filter(Boolean);
+      names.forEach((n) => devices.push({ name: n, source: 'qz', detail: 'OS / network' }));
+      if (names.length) primary = 'qz';
+      notes.push(`QZ Tray: found ${names.length} OS printer(s).${names.length ? '' : ' Tip: a network printer must be ADDED to this computer (Windows “Add a printer”) before QZ can list it.'}`);
+    } catch {
+      notes.push('QZ Tray: connected but could not read the printer list.');
+    }
+  } else {
+    notes.push('QZ Tray: not running on this terminal. Install & start QZ Tray for silent printing and to list OS/network printers; without it, printing uses the browser dialog.');
+  }
+
+  // 2) WebUSB
+  if (typeof navigator !== 'undefined' && (navigator as any).usb) {
+    const usb = await detectWebUSB();
+    usb.forEach((d) => devices.push(d));
+    if (usb.length && primary === 'none') primary = 'webusb';
+    notes.push(`WebUSB: ${usb.length} granted USB printer(s).${usb.length ? '' : ' Use “Add USB printer” to pick one.'}`);
+  } else {
+    notes.push('WebUSB: not supported by this browser (USB detection needs Chrome/Edge on desktop or Android).');
+  }
+
+  // 3) Web Bluetooth
+  const bt = typeof navigator !== 'undefined' ? (navigator as any).bluetooth : undefined;
+  if (bt) {
+    const ble = await detectBluetooth();
+    ble.forEach((d) => devices.push(d));
+    if (ble.length && primary === 'none') primary = 'bluetooth';
+    notes.push(`Bluetooth: ${ble.length} permitted device(s).${ble.length ? '' : ' Use “Add Bluetooth printer” to pair one.'}`);
+  } else {
+    notes.push('Bluetooth: not supported by this browser.');
+  }
+
+  // De-duplicate names for the dropdowns (preserve first occurrence / source order: QZ → USB → BT).
+  const printers = Array.from(new Set(devices.map((d) => d.name).filter(Boolean)));
+
+  return {
+    source: primary,
+    printers,
+    defaultPrinter,
+    devices,
+    notes,
+    note: notes[0],
+  };
 }
 
 // ── Cash drawer (ESC/POS drawer kick) ───────────────────────────────────────────

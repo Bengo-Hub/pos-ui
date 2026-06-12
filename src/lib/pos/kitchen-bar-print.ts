@@ -76,9 +76,11 @@ export function splitByStation(lines: TicketLine[], coffeeActive = false): { kit
 const TICKET_CSS = `
   @page { size: 80mm auto; margin: 3mm 4mm; }
   html, body { margin: 0; padding: 0; background: #fff; }
-  .t-root { font-family: 'Courier New', Courier, monospace; color: #000; width: 72mm; padding: 4mm 0; margin: 0 auto; }
+  /* Force pure-black bold ink on white so thermal/non-colour printers stay crisp (no faint gray). */
+  .t-root, .t-root * { color: #000 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .t-root { font-family: 'Courier New', Courier, 'DejaVu Sans Mono', monospace; font-weight: bold; color: #000; width: 72mm; padding: 4mm 0; margin: 0 auto; }
   .t-title { text-align: center; font-size: 16px; font-weight: 800; margin: 2px 0; text-transform: uppercase; }
-  .t-sub { text-align: center; font-size: 11px; margin: 1px 0; }
+  .t-sub { text-align: center; font-size: 11px; font-weight: 700; margin: 1px 0; }
   .t-div { border: none; border-top: 1px dashed #000; margin: 4px 0; }
   .t-line { display: flex; justify-content: space-between; font-size: 14px; font-weight: 700; padding: 2px 0; }
   .t-qty { min-width: 28px; }

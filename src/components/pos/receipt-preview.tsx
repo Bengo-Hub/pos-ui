@@ -6,12 +6,17 @@ import { Button } from '@/components/ui/base';
 import { Printer, Download, X } from 'lucide-react';
 import { ReceiptPrint } from './receipt-print';
 import { printHtmlToPrinter } from '@/lib/pos/printer-discovery';
+import { useTenantBranding } from '@/providers/tenant-branding-provider';
 
 // Thermal-receipt styles inlined into the dedicated print window (mirrors src/styles/receipt.css).
 const RECEIPT_PRINT_CSS = `
   @page { size: 80mm auto; margin: 3mm 4mm; }
   html, body { margin: 0; padding: 0; background: #fff; }
-  .receipt-root { font-family: 'Courier New', Courier, monospace; font-size: 12px; font-weight: bold; line-height: 1.4; color: #000; background: #fff; width: 72mm; padding: 4mm 0; margin: 0 auto; }
+  /* Thermal/non-colour printers render gray & brand colours faint — force pure-black bold ink on
+     white for every node, keep colours exact, and only the logo image keeps its pixels (dithered). */
+  .receipt-root, .receipt-root * { color: #000 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .receipt-root { font-family: 'Courier New', Courier, 'DejaVu Sans Mono', monospace; font-size: 12px; font-weight: bold; line-height: 1.45; color: #000; background: #fff; width: 72mm; padding: 4mm 0; margin: 0 auto; }
+  .receipt-logo { display: block; margin: 0 auto 4px; max-width: 48mm; max-height: 20mm; object-fit: contain; filter: grayscale(1) contrast(1.2); }
   .receipt-center { text-align: center; }
   .receipt-bold { font-weight: bold; }
   .receipt-divider { border: none; border-top: 1px dashed #000; margin: 3px 0; }
@@ -81,6 +86,9 @@ interface ReceiptPreviewProps {
 
 export function ReceiptPreview({ receipt, open, onClose, outletName, tenantName, printerName }: ReceiptPreviewProps) {
   const [printing, setPrinting] = useState(false);
+  // Logo only — brand colours are intentionally omitted (they print faint on thermal printers).
+  const { tenant } = useTenantBranding();
+  const logoUrl = tenant?.logoUrl || '';
 
   if (!receipt || !open) return null;
 
@@ -163,6 +171,7 @@ export function ReceiptPreview({ receipt, open, onClose, outletName, tenantName,
           receipt={receipt}
           outletName={outletName}
           tenantName={tenantName}
+          logoUrl={logoUrl}
           paymentMethods={receipt.payment_methods}
         />
       </div>
@@ -184,6 +193,10 @@ export function ReceiptPreview({ receipt, open, onClose, outletName, tenantName,
 
           {/* Receipt content */}
           <div className="px-4 py-3 font-mono text-xs overflow-y-auto max-h-[60vh]">
+            {logoUrl && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={logoUrl} alt="logo" className="mx-auto mb-2 max-h-16 object-contain grayscale" />
+            )}
             {tenantName && (
               <p className="text-center font-semibold text-sm mb-1">{tenantName}</p>
             )}

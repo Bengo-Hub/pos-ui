@@ -82,6 +82,7 @@ export function TerminalModals() {
         orderNumber={t.currentOrderNumber}
         total={t.resumeTotal ?? t.total}
         tenantSlug={t.user?.tenant_slug ?? ''}
+        tenantId={t.user?.tenant_id ?? ''}
         orderLines={t.currentOrderLines}
         isHospitality={t.isHospitality}
         onPaymentConfirmed={t.handlePaymentConfirmed}

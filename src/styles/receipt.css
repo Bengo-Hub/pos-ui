@@ -10,6 +10,12 @@
     visibility: visible !important;
   }
 
+  /* Force a white sheet and pure-black ink for every node in the receipt — thermal heads render
+     gray/theme colors as faint or blank, so override them and disable color downscaling. */
+  html,
+  body {
+    background: #fff !important;
+  }
   #receipt-print-root {
     position: fixed !important;
     inset: 0 !important;
@@ -17,6 +23,13 @@
     margin: 0 !important;
     padding: 0 !important;
     background: #fff !important;
+  }
+  #receipt-print-root,
+  #receipt-print-root * {
+    color: #000 !important;
+    background: transparent !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
 
   /* 58mm thermal rolls — narrower print width (set via paper_width POS setting) */
@@ -35,14 +48,25 @@
 
 /* Receipt typography */
 .receipt-root {
-  font-family: 'Courier New', Courier, monospace;
-  font-size: 11px;
-  line-height: 1.4;
+  font-family: 'Courier New', Courier, 'DejaVu Sans Mono', monospace;
+  font-size: 12px;
+  font-weight: bold;
+  line-height: 1.45;
   color: #000;
   background: #fff;
   width: 72mm;
   padding: 4mm 0;
   margin: 0 auto;
+}
+
+/* Tenant logo on the receipt — grayscaled so colour logos print crisp on thermal heads. */
+.receipt-logo {
+  display: block;
+  margin: 0 auto 4px;
+  max-width: 48mm;
+  max-height: 20mm;
+  object-fit: contain;
+  filter: grayscale(1) contrast(1.2);
 }
 
 .receipt-center {
@@ -88,8 +112,8 @@
 }
 
 .receipt-small {
-  font-size: 9px;
-  color: #444;
+  font-size: 10px;
+  color: #000;
 }
 
 .receipt-qr {

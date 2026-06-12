@@ -1,10 +1,13 @@
 'use client';
 
-import { useState } from 'react';
-import { Users, SplitSquareHorizontal, CreditCard, Minus, Plus, X, ListOrdered } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Users, SplitSquareHorizontal, CreditCard, Layers, Minus, Plus, X, ListOrdered } from 'lucide-react';
 import { POSPaymentModal } from './payment-modal';
+import { createSplits, settleSplit, type CreateSplitInput } from '@/lib/api/bill-splits';
 
-type SplitMode = 'full' | 'equal' | 'custom' | 'by_item';
+// 'split_tender' = one bill paid across several tenders (e.g. part Cash + part M-Pesa).
+// 'equal' / 'custom' / 'by_item' = split among several people, each paying their own portion.
+type SplitMode = 'full' | 'split_tender' | 'equal' | 'custom' | 'by_item';
 
 interface CustomSplit {
   amount: string;
@@ -26,6 +29,8 @@ interface SplitPaymentModalProps {
   orderNumber: string;
   total: number;
   tenantSlug: string;
+  /** Tenant UUID — required to persist splits via the bill-splits API (routes parse a UUID). */
+  tenantId?: string;
   tenderId?: string;
   orderLines?: OrderLineItem[];
   isHospitality?: boolean;
@@ -40,6 +45,7 @@ export function SplitPaymentModal({
   orderNumber,
   total,
   tenantSlug,
+  tenantId,
   tenderId,
   orderLines = [],
   isHospitality = false,
@@ -51,12 +57,46 @@ export function SplitPaymentModal({
   const [currentPayer, setCurrentPayer] = useState<number | null>(null);
   const [paidCount, setPaidCount] = useState(0);
   const [customSplits, setCustomSplits] = useState<CustomSplit[]>([{ amount: '', paid: false }]);
+  // Split Tender: one bill, several tenders each with its own amount + payment method.
+  const [tenderLines, setTenderLines] = useState<CustomSplit[]>([{ amount: '', paid: false }, { amount: '', paid: false }]);
+  const [tenderPayer, setTenderPayer] = useState<number | null>(null);
   // By Item: guestCount guests, lineAssignments[lineIndex] = guestIndex (1-based, 0 = unassigned)
   const [guestCount, setGuestCount] = useState(2);
   const [lineAssignments, setLineAssignments] = useState<number[]>(() => new Array(orderLines.length).fill(0));
   const [itemSplitPayer, setItemSplitPayer] = useState<number | null>(null); // guest index (1-based)
   const [paidGuests, setPaidGuests] = useState<Set<number>>(new Set());
   const [cashGiven, setCashGiven] = useState('');
+
+  // Best-effort server-side persistence of splits (reporting only — never blocks payment).
+  // splitIdsRef[i] holds the BillSplit id for portion i of the active layout; createdRef guards
+  // a single create per layout. Reset whenever the layout (mode) or the modal's open state changes.
+  const splitIdsRef = useRef<string[]>([]);
+  const createdRef = useRef(false);
+  useEffect(() => {
+    createdRef.current = false;
+    splitIdsRef.current = [];
+  }, [mode, open]);
+
+  async function ensureSplits(lines: CreateSplitInput[]) {
+    if (createdRef.current || !tenantId) return;
+    createdRef.current = true;
+    try {
+      const res = await createSplits(tenantId, orderId, lines);
+      splitIdsRef.current = (res?.data ?? []).map((s) => s.id);
+    } catch {
+      // reporting layer only — order settlement is driven by POSPayment rows, so ignore failures
+    }
+  }
+
+  async function recordSettle(idx: number, method?: string) {
+    const id = splitIdsRef.current[idx];
+    if (!id || !tenantId || !method) return;
+    try {
+      await settleSplit(tenantId, orderId, id, method);
+    } catch {
+      // best-effort
+    }
+  }
 
   const fmt = (n: number) =>
     new Intl.NumberFormat('en-KE', { style: 'currency', currency: 'KES' }).format(n);
@@ -92,6 +132,23 @@ export function SplitPaymentModal({
     }
   }
 
+  // Split Tender helpers (one bill across several tenders/methods).
+  function tenderEnteredTotal() {
+    return tenderLines.reduce((sum, s) => sum + (parseFloat(s.amount) || 0), 0);
+  }
+  function tenderBalanced() {
+    return Math.abs(tenderEnteredTotal() - total) < 0.01;
+  }
+  function handleTenderLinePaid(idx: number) {
+    const updated = [...tenderLines];
+    updated[idx] = { ...updated[idx], paid: true };
+    setTenderLines(updated);
+    setTenderPayer(null);
+    if (updated.every((s) => s.paid)) {
+      onPaymentConfirmed();
+    }
+  }
+
   // By Item helpers
   function guestTotal(guest: number) {
     return orderLines.reduce((sum, line, i) => {
@@ -121,7 +178,7 @@ export function SplitPaymentModal({
 
   if (!open) return null;
 
-  // Sub-modal for a specific payer
+  // Sub-modal for a specific payer (full / equal / custom)
   if (currentPayer !== null) {
     const payAmount = mode === 'full' ? total : mode === 'equal' ? equalShare : parseFloat(customSplits[currentPayer].amount) || 0;
     const label = mode === 'equal' ? `Person ${currentPayer + paidCount + 1} of ${peopleCount}` : `Split ${currentPayer + 1}`;
@@ -137,7 +194,36 @@ export function SplitPaymentModal({
         tenderId={tenderId}
         isHospitality={isHospitality}
         customerEmail={customerEmail}
-        onPaymentConfirmed={mode === 'equal' ? handleEqualPayerDone : () => handleCustomPayerDone(currentPayer)}
+        onPaymentConfirmed={(method) => {
+          if (mode === 'equal') {
+            handleEqualPayerDone();
+          } else {
+            recordSettle(currentPayer, method);
+            handleCustomPayerDone(currentPayer);
+          }
+        }}
+      />
+    );
+  }
+
+  // Sub-modal for a split-tender line (one bill, this part paid with the chosen method)
+  if (tenderPayer !== null) {
+    const amt = parseFloat(tenderLines[tenderPayer].amount) || 0;
+    return (
+      <POSPaymentModal
+        open
+        onClose={() => setTenderPayer(null)}
+        orderId={orderId}
+        orderNumber={`${orderNumber} — Tender ${tenderPayer + 1}`}
+        total={amt}
+        tenantSlug={tenantSlug}
+        tenderId={tenderId}
+        isHospitality={isHospitality}
+        customerEmail={customerEmail}
+        onPaymentConfirmed={(method) => {
+          recordSettle(tenderPayer, method);
+          handleTenderLinePaid(tenderPayer);
+        }}
       />
     );
   }
@@ -180,9 +266,10 @@ export function SplitPaymentModal({
         </div>
 
         {/* Mode tabs */}
-        <div className="flex gap-1 px-5 pt-4">
+        <div className="flex flex-wrap gap-1 px-5 pt-4">
           {([
             { key: 'full', label: 'Full', icon: CreditCard },
+            { key: 'split_tender', label: 'Split Bill', icon: Layers },
             { key: 'equal', label: 'Equal', icon: Users },
             { key: 'custom', label: 'Custom', icon: SplitSquareHorizontal },
             ...(orderLines.length > 0 ? [{ key: 'by_item' as const, label: 'By Item', icon: ListOrdered }] : []),
@@ -191,7 +278,7 @@ export function SplitPaymentModal({
               key={key}
               type="button"
               onClick={() => setMode(key)}
-              className={`flex-1 flex flex-col items-center gap-1 py-2.5 px-2 rounded-xl text-xs font-semibold border transition-colors ${
+              className={`flex-1 min-w-16 flex flex-col items-center gap-1 py-2.5 px-2 rounded-xl text-xs font-semibold border transition-colors ${
                 mode === key
                   ? 'border-primary bg-primary/5 text-primary'
                   : 'border-border text-muted-foreground hover:bg-accent'
@@ -233,6 +320,76 @@ export function SplitPaymentModal({
               >
                 Pay {fmt(total)}
               </button>
+            </div>
+          )}
+
+          {/* Split Tender — one bill, several payment methods (e.g. part Cash + part M-Pesa) */}
+          {mode === 'split_tender' && (
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                Split this one bill across payment methods — enter each amount, then pay it with Cash,
+                M-Pesa or card. The bill closes once every part is paid.
+              </p>
+              {tenderLines.map((line, i) => (
+                <div key={i} className={`flex items-center gap-2 p-2 rounded-xl border ${line.paid ? 'border-green-200 bg-green-50 dark:bg-green-900/10 opacity-60' : 'border-border'}`}>
+                  <span className="text-xs text-muted-foreground w-5 shrink-0">{i + 1}</span>
+                  <input
+                    type="number"
+                    placeholder="Amount"
+                    value={line.amount}
+                    onChange={(e) => {
+                      const updated = [...tenderLines];
+                      updated[i] = { ...updated[i], amount: e.target.value };
+                      setTenderLines(updated);
+                    }}
+                    disabled={line.paid}
+                    className="flex-1 h-8 rounded-lg border border-border bg-background px-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary/30 disabled:opacity-50"
+                  />
+                  {line.paid ? (
+                    <span className="text-xs text-green-600 font-bold whitespace-nowrap">Paid</span>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={!line.amount || parseFloat(line.amount) <= 0 || !tenderBalanced()}
+                      title={!tenderBalanced() ? 'Tender amounts must add up to the order total before charging' : undefined}
+                      onClick={() => {
+                        ensureSplits(tenderLines.map((l, j) => ({ label: `Tender ${j + 1}`, amount: parseFloat(l.amount) || 0 })));
+                        setTenderPayer(i);
+                      }}
+                      className="px-2 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-semibold disabled:opacity-40 hover:bg-primary/90 transition-colors whitespace-nowrap"
+                    >
+                      Pay
+                    </button>
+                  )}
+                  {tenderLines.length > 1 && !line.paid && (
+                    <button
+                      type="button"
+                      onClick={() => setTenderLines(tenderLines.filter((_, j) => j !== i))}
+                      className="h-7 w-7 flex items-center justify-center rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+              ))}
+              <button
+                type="button"
+                onClick={() => setTenderLines([...tenderLines, { amount: '', paid: false }])}
+                className="w-full py-2 rounded-xl border border-dashed border-border text-xs text-muted-foreground hover:bg-accent transition-colors"
+              >
+                + Add tender
+              </button>
+              <div className="flex justify-between text-xs text-muted-foreground px-1">
+                <span>Entered: {fmt(tenderEnteredTotal())}</span>
+                <span>Total: {fmt(total)}</span>
+              </div>
+              {!tenderBalanced() && (
+                <p className="text-xs text-destructive px-1">
+                  {tenderEnteredTotal() < total
+                    ? `Short by ${fmt(total - tenderEnteredTotal())} — add or increase a tender before charging.`
+                    : `Over by ${fmt(tenderEnteredTotal() - total)} — reduce a tender.`}
+                </p>
+              )}
             </div>
           )}
 
@@ -412,7 +569,10 @@ export function SplitPaymentModal({
                       type="button"
                       disabled={!split.amount || parseFloat(split.amount) <= 0 || !splitsBalanced()}
                       title={!splitsBalanced() ? 'Split amounts must add up to the order total before charging' : undefined}
-                      onClick={() => setCurrentPayer(i)}
+                      onClick={() => {
+                        ensureSplits(customSplits.map((s, j) => ({ label: `Split ${j + 1}`, amount: parseFloat(s.amount) || 0 })));
+                        setCurrentPayer(i);
+                      }}
                       className="px-2 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-semibold disabled:opacity-40 hover:bg-primary/90 transition-colors whitespace-nowrap"
                     >
                       Pay

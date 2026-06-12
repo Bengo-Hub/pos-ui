@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Inbox, Loader2, Lock, Printer, Receipt, Save } from 'lucide-react';
+import { HelpCircle, Inbox, Loader2, Lock, Printer, Receipt, Save } from 'lucide-react';
 import { Button, Card, CardContent, CardHeader } from '@/components/ui/base';
 import { usePOSSettings, useUpdatePOSSettings } from '@/hooks/usePOSSettings';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -10,7 +10,7 @@ import { useAuthStore } from '@/store/auth';
 import { useOutletFilterStore } from '@/store/outlet-filter';
 import { P } from '@/lib/rbac/permissions';
 import type { PrinterProfile } from '@/lib/api/settings';
-import { discoverPrinters, openCashDrawer, type DrawerKickCode } from '@/lib/pos/printer-discovery';
+import { discoverPrinters, openCashDrawer, requestUSBPrinter, requestBluetoothPrinter, type DrawerKickCode } from '@/lib/pos/printer-discovery';
 import { Toggle, inputClass, labelClass } from './shared';
 import { toast } from 'sonner';
 
@@ -54,7 +54,9 @@ export function ReceiptTab() {
   // Discovered printers (from the QZ Tray bridge, when available) for the printer-name dropdowns.
   const [discovered, setDiscovered] = useState<string[]>([]);
   const [discoverNote, setDiscoverNote] = useState('');
+  const [discoverNotes, setDiscoverNotes] = useState<string[]>([]);
   const [discovering, setDiscovering] = useState(false);
+  const [showPrinterHelp, setShowPrinterHelp] = useState(false);
   const [testingDrawer, setTestingDrawer] = useState(false);
 
   // The drawer is wired to a printer; default to the Bill/customer station printer when unset.
@@ -84,12 +86,37 @@ export function ReceiptTab() {
     setDiscovering(true);
     try {
       const res = await discoverPrinters();
-      setDiscovered(res.printers);
-      setDiscoverNote(res.note ?? (res.source === 'qz' ? `Found ${res.printers.length} printer(s) via QZ Tray.` : ''));
-      if (res.source === 'qz' && res.printers.length) toast.success(`Detected ${res.printers.length} printer(s).`);
-      else if (res.source !== 'qz') toast.info('No print bridge detected — using browser print.');
+      // Merge with any names already added via the USB/Bluetooth pair buttons so they aren't lost.
+      setDiscovered((prev) => Array.from(new Set([...res.printers, ...prev])));
+      setDiscoverNotes(res.notes ?? (res.note ? [res.note] : []));
+      setDiscoverNote(res.note ?? '');
+      if (res.printers.length) toast.success(`Detected ${res.printers.length} printer(s).`);
+      else {
+        toast.info('No printers detected — see the setup steps below.');
+        setShowPrinterHelp(true); // surface manual-intervention guidance
+      }
     } finally {
       setDiscovering(false);
+    }
+  };
+
+  const handleAddUSB = async () => {
+    const d = await requestUSBPrinter();
+    if (d) {
+      setDiscovered((prev) => Array.from(new Set([d.name, ...prev])));
+      toast.success(`Added USB printer: ${d.name}`);
+    } else {
+      toast.info('No USB printer selected (or WebUSB unsupported on this browser).');
+    }
+  };
+
+  const handleAddBluetooth = async () => {
+    const d = await requestBluetoothPrinter();
+    if (d) {
+      setDiscovered((prev) => Array.from(new Set([d.name, ...prev])));
+      toast.success(`Paired Bluetooth printer: ${d.name}`);
+    } else {
+      toast.info('No Bluetooth printer paired (or Web Bluetooth unsupported on this browser).');
     }
   };
 
@@ -221,23 +248,92 @@ export function ReceiptTab() {
               <Printer className="h-4 w-4 text-primary" />
               <span className="font-bold text-sm">Order Printing — Stations</span>
             </div>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={handleDetectPrinters}
-              disabled={discovering}
-              className="gap-2 h-8 text-xs"
-            >
-              {discovering ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Printer className="h-3.5 w-3.5" />}
-              {discovering ? 'Detecting…' : 'Detect Printers'}
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleAddUSB}
+                className="gap-2 h-8 text-xs"
+              >
+                <Printer className="h-3.5 w-3.5" /> Add USB
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleAddBluetooth}
+                className="gap-2 h-8 text-xs"
+              >
+                <Printer className="h-3.5 w-3.5" /> Add Bluetooth
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleDetectPrinters}
+                disabled={discovering}
+                className="gap-2 h-8 text-xs"
+              >
+                {discovering ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Printer className="h-3.5 w-3.5" />}
+                {discovering ? 'Detecting…' : 'Detect Printers'}
+              </Button>
+            </div>
           </div>
           <p className="text-xs text-muted-foreground mt-1">
-            Assign a printer to each station (Bill, Kitchen, Bar, Coffee). Detect Printers scans network,
-            USB &amp; Bluetooth printers via QZ Tray; with none detected, printing uses the browser dialog.
+            Assign a printer to each station (Bill, Kitchen, Bar, Coffee). Detect Printers scans OS &amp;
+            network printers via QZ Tray and already-granted USB/Bluetooth devices; use Add USB / Add
+            Bluetooth to pair a new device. With none detected, printing uses the browser dialog.
           </p>
-          {discoverNote && (
+          {discoverNotes.length > 0 ? (
+            <ul className="text-[11px] mt-1.5 rounded-lg bg-accent/30 px-3 py-2 text-muted-foreground space-y-1 list-disc list-inside">
+              {discoverNotes.map((n, i) => <li key={i}>{n}</li>)}
+            </ul>
+          ) : discoverNote ? (
             <p className="text-[11px] mt-1.5 rounded-lg bg-accent/30 px-3 py-2 text-muted-foreground">{discoverNote}</p>
+          ) : null}
+
+          {/* Manual-intervention guidance: detection can only see printers already installed in the OS,
+              so direct the operator through driver install / Windows protected-print-mode / QZ Tray. */}
+          <button
+            type="button"
+            onClick={() => setShowPrinterHelp((v) => !v)}
+            className="mt-2 inline-flex items-center gap-1.5 text-[11px] font-semibold text-primary hover:underline"
+          >
+            <HelpCircle className="h-3.5 w-3.5" />
+            {showPrinterHelp ? 'Hide setup help' : "Printer not showing? Setup help"}
+          </button>
+          {showPrinterHelp && (
+            <div className="mt-1.5 rounded-lg border border-border bg-background px-3 py-3 text-[11px] text-muted-foreground space-y-2">
+              <p className="font-semibold text-foreground">
+                Detection lists printers that are installed on this computer. If yours isn&apos;t showing, work through these:
+              </p>
+              <ol className="list-decimal list-inside space-y-1.5">
+                <li>
+                  <span className="font-medium text-foreground">Install the driver &amp; add the printer in Windows.</span>{' '}
+                  Settings → Bluetooth &amp; devices → Printers &amp; scanners → <em>Add device</em>. For a network
+                  printer, add a <em>Standard TCP/IP</em> port using its <em>static</em> IP, choose “Local Port”, and
+                  uncheck “Query the printer”.
+                </li>
+                <li>
+                  <span className="font-medium text-foreground">Windows 11: turn off “Windows protected print mode”.</span>{' '}
+                  It removes printers that use manufacturer drivers (most thermal/POS printers). Same Printers &amp;
+                  scanners page → <em>Printer preferences</em>, switch it off, then re-add the printer.{' '}
+                  <a className="text-primary hover:underline" href="https://learn.microsoft.com/en-us/windows/modern-print/windows-protected-print-mode/windows-protected-mode-faq" target="_blank" rel="noreferrer">Learn more</a>.
+                </li>
+                <li>
+                  <span className="font-medium text-foreground">Install &amp; start QZ Tray</span> on this terminal for
+                  silent printing and OS-printer detection, then click <em>Detect Printers</em> again.{' '}
+                  <a className="text-primary hover:underline" href="https://qz.io/download/" target="_blank" rel="noreferrer">Download QZ Tray</a>.
+                </li>
+                <li>
+                  <span className="font-medium text-foreground">Network printer not reachable?</span> Make sure this
+                  device and the printer are on the same Wi-Fi/LAN and the router does <em>not</em> have
+                  “client/AP isolation” (guest mode) enabled.
+                </li>
+                <li>
+                  <span className="font-medium text-foreground">USB or Bluetooth printer:</span> use{' '}
+                  <em>Add USB</em> / <em>Add Bluetooth</em> above (Chrome or Edge) and pick your device.
+                </li>
+              </ol>
+            </div>
           )}
         </CardHeader>
         <CardContent>
