@@ -104,7 +104,7 @@ export function ReceiptPrint({
             <span className="receipt-row-name">
               {line.name}{line.modifiers ? ` (${line.modifiers})` : ''}
             </span>
-            <span className="receipt-row-value">{fmt(line.total_price)}</span>
+            <span className="receipt-row-value">{line.total_price === 0 ? 'FREE' : fmt(line.total_price)}</span>
           </div>
           {line.quantity !== 1 && (
             <div className="receipt-small" style={{ paddingLeft: 8 }}>

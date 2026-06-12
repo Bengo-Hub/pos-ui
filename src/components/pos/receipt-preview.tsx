@@ -220,7 +220,7 @@ export function ReceiptPreview({ receipt, open, onClose, outletName, tenantName,
                 <span className="flex-1 truncate pr-2">
                   {line.name} ×{line.quantity}
                 </span>
-                <span className="shrink-0">{formatCurrency(line.total_price)}</span>
+                <span className="shrink-0">{line.total_price === 0 ? 'Free' : formatCurrency(line.total_price)}</span>
               </div>
             ))}
 
