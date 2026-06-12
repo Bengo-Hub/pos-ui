@@ -55,9 +55,10 @@ async function loadQz(): Promise<any | null> {
   if (qzPromise) return qzPromise;
 
   qzPromise = (async () => {
+    let qz: any = null;
     try {
       const mod: any = await import('qz-tray');
-      const qz = mod.default ?? mod;
+      qz = mod.default ?? mod;
 
       if (!configured) {
         const slug = tenantSlug();
@@ -84,11 +85,20 @@ async function loadQz(): Promise<any | null> {
       }
 
       if (!(qz.websocket.isActive && qz.websocket.isActive())) {
-        await qz.websocket.connect();
+        // QZ's default connect walks several ports (8181/8282/8443/8283) with retries and can hang
+        // ~10s+ when QZ Tray is NOT running — the operator just sees an endless "Detecting…". Cap the
+        // retries and race the connect against a timeout so detection resolves promptly with an
+        // accurate result (and the caller falls back to the browser print dialog).
+        await Promise.race([
+          qz.websocket.connect({ retries: 1, delay: 1 }),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('qz-connect-timeout')), 6000)),
+        ]);
       }
+      if (!(qz.websocket.isActive && qz.websocket.isActive())) throw new Error('qz-not-active');
       (window as any).qz = qz;
       return qz;
     } catch {
+      try { qz?.websocket?.disconnect?.(); } catch { /* socket may be mid-handshake; ignore */ }
       qzPromise = null; // allow a later retry (e.g. after the operator starts QZ Tray)
       return null;
     }
@@ -205,7 +215,7 @@ export async function discoverPrinters(): Promise<DiscoverResult> {
       notes.push('QZ Tray: connected but could not read the printer list.');
     }
   } else {
-    notes.push('QZ Tray: not running on this terminal. Install & start QZ Tray for silent printing and to list OS/network printers; without it, printing uses the browser dialog.');
+    notes.push('QZ Tray: not running on this terminal. A web page cannot list OS printers on its own — your installed printer still prints via the browser Print dialog (pick it there or set it as the Windows default). Install & start QZ Tray only to enable SILENT auto-printing and to list/auto-select printers here.');
   }
 
   // 2) WebUSB
