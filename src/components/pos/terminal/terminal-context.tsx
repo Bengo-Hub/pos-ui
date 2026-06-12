@@ -26,7 +26,7 @@ import { printKitchenBarTickets } from '@/lib/pos/kitchen-bar-print';
 import { computeCartTax } from '@/lib/pos/cart-tax';
 import { terminalConfigFor, type TerminalConfig } from '@/lib/use-case-config';
 import {
-  useMenuItems, useCategories, useCreateOrder, useAddOrderLines, useVoidOrder,
+  useFullCatalog, useCategories, useCreateOrder, useAddOrderLines, useVoidOrder,
   useAssignTable, useReleaseTable, usePricingTiers, type OrderSubtype,
 } from '@/hooks/usePOS';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
@@ -395,18 +395,15 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
     setPickerModeState(m); setActiveCategory('All'); setActiveBrand('All'); setPage(1);
   };
 
-  const { data: catalogData, isLoading: menuLoading } = useMenuItems({
-    // In Brand mode we fetch all categories and filter by brand client-side.
-    category: pickerMode === 'category' && activeCategory !== 'All' ? activeCategory : undefined,
-    search: searchQuery || undefined,
-    page,
-    limit: PAGE_SIZE,
-  });
+  // Cache-first FULL catalog (IndexedDB-seeded, revalidated + written through on every
+  // fetch). Category / search / brand / pagination are all resolved CLIENT-SIDE over the
+  // complete set below — so filters never operate on a single paginated page.
+  const { data: catalogItems, isLoading: menuLoading } = useFullCatalog();
   const createOrder = useCreateOrder();
   const addOrderLines = useAddOrderLines();
 
   const menuItems: MenuItem[] = useMemo(() => {
-    const items = catalogData?.data ?? [];
+    const items = catalogItems ?? [];
     return items.map((item: any) => ({
       id: item.id,
       name: item.name,
@@ -446,10 +443,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
       netPrice: typeof item.net_price === 'number' ? item.net_price : undefined,
       taxAmount: typeof item.tax_amount === 'number' ? item.tax_amount : undefined,
     }));
-  }, [catalogData]);
-
-  const totalItems = catalogData?.total ?? 0;
-  const totalPages = Math.max(1, Math.ceil(totalItems / PAGE_SIZE));
+  }, [catalogItems]);
 
   // Pricing tiers (Retail/Wholesale/custom) from inventory via pos-api — drives the price selector.
   const { data: tiersResp } = usePricingTiers();
@@ -479,13 +473,42 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
     return names.map((name) => ({ name }));
   }, [menuItems]);
 
-  // Category filtering is server-side; brand filtering is client-side over the (all-category) page.
-  const filteredItems = useMemo(() => {
-    if (pickerMode === 'brand' && activeBrand !== 'All') {
-      return menuItems.filter((i) => i.brandName === activeBrand);
+  // All filtering is CLIENT-SIDE over the complete catalog (cache-first source):
+  // category (category mode) or brand (brand mode), then free-text search by
+  // name / sku / barcode. Switching Category↔Brand resets the other axis to 'All'.
+  const matchedItems = useMemo(() => {
+    let items = menuItems;
+    if (pickerMode === 'category' && activeCategory !== 'All') {
+      items = items.filter((i) => i.category === activeCategory);
     }
-    return menuItems;
-  }, [menuItems, pickerMode, activeBrand]);
+    if (pickerMode === 'brand' && activeBrand !== 'All') {
+      items = items.filter((i) => i.brandName === activeBrand);
+    }
+    const q = searchQuery.trim().toLowerCase();
+    if (q) {
+      items = items.filter((i) =>
+        i.name.toLowerCase().includes(q) ||
+        i.sku.toLowerCase().includes(q) ||
+        (i.barcode?.toLowerCase().includes(q) ?? false),
+      );
+    }
+    return items;
+  }, [menuItems, pickerMode, activeCategory, activeBrand, searchQuery]);
+
+  const totalItems = matchedItems.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / PAGE_SIZE));
+
+  // The grid renders one page at a time, sliced from the fully-filtered set.
+  const filteredItems = useMemo(
+    () => matchedItems.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
+    [matchedItems, page, PAGE_SIZE],
+  );
+
+  // Keep the current page in range if the filtered set shrinks (search/category change,
+  // or the catalog updates after a background revalidation).
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
 
   // ─── Item Add Flow ──────────────────────────────────────────────────────
 
