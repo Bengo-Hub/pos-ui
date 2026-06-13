@@ -48,6 +48,8 @@ export type ModuleKey =
   | 'resources'
   | 'queue'
   | 'repairs'
+  | 'reservations'
+  | 'packages'
   | 'accounting'
   | 'crm';
 
@@ -75,9 +77,9 @@ const COMMON_MODULES: ModuleKey[] = [
 ];
 
 const USE_CASE_MODULES: Record<UseCaseType, ModuleKey[]> = {
-  hospitality:   [...COMMON_MODULES, 'bar', 'tables', 'kds', 'appointments', 'hotel', 'shifts', 'reports', 'loyalty', 'commissions', 'online_orders'],
+  hospitality:   [...COMMON_MODULES, 'bar', 'tables', 'reservations', 'kds', 'appointments', 'packages', 'hotel', 'shifts', 'reports', 'loyalty', 'commissions', 'online_orders'],
   retail:        [...COMMON_MODULES, 'retail', 'shifts', 'reports', 'layaway', 'loyalty', 'commissions', 'online_orders', 'purchase_orders', 'returns', 'clients', 'repairs'],
-  services:      [...COMMON_MODULES, 'appointments', 'shifts', 'reports', 'loyalty', 'commissions', 'clients', 'staff_schedule', 'resources', 'queue', 'repairs'],
+  services:      [...COMMON_MODULES, 'appointments', 'packages', 'shifts', 'reports', 'loyalty', 'commissions', 'clients', 'staff_schedule', 'resources', 'queue', 'repairs'],
   quick_service: [...COMMON_MODULES, 'kds', 'shifts', 'reports', 'online_orders'],
   pharmacy:      [...COMMON_MODULES, 'shifts', 'reports', 'pharmacy', 'patients', 'drug_inventory'],
 };

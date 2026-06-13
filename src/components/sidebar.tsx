@@ -419,8 +419,9 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
           if (isWaiter && item.waiterHidden) return false;
           // Cashier in hospitality/quick_service: focused on clearing bills only
           if (isCashierHospOrQSR && item.cashierHospHidden) return false;
-          // Services outlets: hide order-entry items (they use Appointments/Queue instead)
-          if (isServices && ['new_order', 'orders'].includes(item.moduleKey)) return false;
+          // Services outlets sell through the adaptive /order terminal ("New Sale") — they also have
+          // Appointments/Queue/Packages, but those surfaces have no checkout, so order entry must stay
+          // available (previously hiding new_order/orders left services with no way to take payment).
           // Retail outlets now use the adaptive /order terminal (legacy /retail page retired).
           if (!item.permission) return true;
           if (isSuperuser || isSuperUser) return true;
@@ -433,6 +434,10 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
           // moduleKey 'new_order', so matching on that produced three identical "Walk-In Sale" rows.
           if (isPharmacy && item.href === '/order') {
             return { ...item, label: 'Walk-In Sale' };
+          }
+          // Services outlets: the terminal is the "New Sale" surface (matches the terminal title).
+          if (isServices && item.href === '/order') {
+            return { ...item, label: 'New Sale' };
           }
           return item;
         }),
