@@ -9,11 +9,11 @@
 
 import { useState, useMemo, useCallback } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
-import { Loader2, Minus, Plus, Search, ShoppingCart, Trash2, UserPlus, X } from 'lucide-react';
+import { Loader2, Minus, Plus, Search, ShoppingCart, Trash2 } from 'lucide-react';
 import { useMenuItems, useCreateOrder, useCreatePaymentIntent, type CatalogItem } from '@/hooks/usePOS';
-import { useClientSearch } from '@/hooks/useClients';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { SplitPaymentModal } from '@/components/pos/split-payment-modal';
+import { CustomerSearch, WALK_IN_CUSTOMER, type SelectedCustomer } from '@/components/pos/customer-search';
 import { useAuthStore } from '@/store/auth';
 import { apiClient } from '@/lib/api/client';
 import { Button } from '@/components/ui/base';
@@ -37,10 +37,11 @@ export default function AddSalePage() {
   const { data: posSettings } = usePOSSettings();
   const taxRate = (posSettings?.vat_rate ?? 16) / 100;
 
-  // ── Customer ──
-  const [custPhone, setCustPhone] = useState('');
-  const [custName, setCustName] = useState('');
-  const { data: matches } = useClientSearch(custPhone.length >= 4 ? custPhone : undefined, undefined);
+  // ── Customer ── (rich phone search; defaults to the seeded Walk-in Customer)
+  const [customer, setCustomer] = useState<SelectedCustomer | null>(WALK_IN_CUSTOMER);
+  const realCustomer = !!(customer && !customer.isWalkIn && customer.phone);
+  const custPhone = customer && !customer.isWalkIn ? customer.phone : '';
+  const custName = customer?.name ?? '';
 
   // ── Line items ──
   const [search, setSearch] = useState('');
@@ -98,7 +99,7 @@ export default function AddSalePage() {
 
   function save(mode: 'pay' | 'draft') {
     if (lines.length === 0) return;
-    if (creditSale && !custPhone) {
+    if (creditSale && !realCustomer) {
       toast.error('A customer is required for a credit sale.');
       return;
     }
@@ -128,7 +129,7 @@ export default function AddSalePage() {
     });
   }
   function reset() {
-    setLines([]); setDiscount(0); setNotes(''); setCustPhone(''); setCustName(''); setCreditSale(false);
+    setLines([]); setDiscount(0); setNotes(''); setCustomer(WALK_IN_CUSTOMER); setCreditSale(false);
   }
 
   // Save as Quotation: forward the cart to treasury via the pos-api proxy (treasury owns quotations;
@@ -174,32 +175,10 @@ export default function AddSalePage() {
         <span className="text-sm text-muted-foreground">{creditSale ? 'Sell on account — posts to customer AR' : 'Back-office sale entry'}</span>
       </div>
 
-      {/* Customer */}
-      <div className="bg-card border border-border rounded-2xl p-5 grid sm:grid-cols-2 gap-4">
-        <div>
-          <label className="text-xs font-semibold text-muted-foreground">Customer phone</label>
-          <div className="relative mt-1">
-            <input value={custPhone} onChange={(e) => setCustPhone(e.target.value)} placeholder="Walk-in (optional)"
-              className="w-full bg-background border border-border rounded-xl py-2.5 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" />
-            {(matches?.accounts?.length ?? 0) > 0 && (
-              <div className="absolute z-10 mt-1 w-full bg-card border border-border rounded-xl shadow-lg max-h-44 overflow-y-auto">
-                {matches!.accounts!.map((c: any) => (
-                  <button key={c.id} type="button" onClick={() => { setCustPhone(c.customer_phone); setCustName(c.customer_name); }}
-                    className="w-full text-left px-3 py-2 hover:bg-accent text-sm flex items-center gap-2">
-                    <UserPlus className="h-3.5 w-3.5 text-muted-foreground" />
-                    <span className="font-medium">{c.customer_name}</span>
-                    <span className="text-muted-foreground text-xs">{c.customer_phone}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-        <div>
-          <label className="text-xs font-semibold text-muted-foreground">Customer name</label>
-          <input value={custName} onChange={(e) => setCustName(e.target.value)} placeholder="Walk-in Customer"
-            className="w-full mt-1 bg-background border border-border rounded-xl py-2.5 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" />
-        </div>
+      {/* Customer — rich phone search; defaults to Walk-in (credit sales require a real customer). */}
+      <div className="bg-card border border-border rounded-2xl p-5 space-y-2">
+        <label className="text-xs font-semibold text-muted-foreground">Customer</label>
+        <CustomerSearch value={customer} onChange={setCustomer} requireRealCustomer={creditSale} />
       </div>
 
       <div className="grid lg:grid-cols-3 gap-6">
