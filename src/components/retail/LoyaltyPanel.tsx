@@ -29,6 +29,18 @@ function isValidPhone(phone: string) {
   return phone.replace(/\D/g, '').length >= 9;
 }
 
+// normalizeKePhone strips spaces/symbols and unifies Kenyan formats to a canonical local 0-number,
+// so "+254 792 548766", "254792548766", "792548766" and "0792 548 766" all become "0792548766".
+// Used for the loyalty search query and for storing new accounts (the backend matches by the last 9
+// digits regardless, but this keeps stored data clean and consistent).
+function normalizeKePhone(raw: string): string {
+  const d = raw.replace(/\D/g, '');
+  if (!d) return '';
+  if (d.startsWith('254')) return '0' + d.slice(3);
+  if (d.length === 9 && (d.startsWith('7') || d.startsWith('1'))) return '0' + d;
+  return d;
+}
+
 export function LoyaltyPanel({ onStateChange, orderId }: LoyaltyPanelProps) {
   const { can } = usePermissions();
   if (!can(P.LOYALTY_VIEW)) return null;
@@ -53,7 +65,7 @@ function LoyaltyPanelInner({ onStateChange, orderId }: LoyaltyPanelProps) {
   }, [phone]);
 
   const { data: accounts, isLoading: lookupLoading } = useLoyaltyAccounts(
-    isValidPhone(debouncedPhone) ? debouncedPhone : undefined,
+    isValidPhone(debouncedPhone) ? normalizeKePhone(debouncedPhone) : undefined,
   );
   const { data: programs } = useLoyaltyPrograms();
   const program = programs?.[0];
@@ -77,7 +89,7 @@ function LoyaltyPanelInner({ onStateChange, orderId }: LoyaltyPanelProps) {
   const handleRegister = () => {
     if (!registerName.trim() || !phone.trim()) return;
     createAccount.mutate(
-      { customer_phone: phone.trim(), customer_name: registerName.trim() },
+      { customer_phone: normalizeKePhone(phone), customer_name: registerName.trim() },
       {
         onSuccess: (newAcc) => {
           setLinkedAccount(newAcc as unknown as LoyaltyAccount);

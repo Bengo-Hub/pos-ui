@@ -415,10 +415,9 @@ export function PharmacyDashboard({ orgSlug }: { orgSlug: string }) {
           </div>
         </div>
       )}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <QuickAction icon={Plus} label="New Prescription" desc="Receive & queue Rx" href={`/${orgSlug}/pharmacy`} accent />
         <QuickAction icon={Pill} label="All Prescriptions" desc="Fill & dispense" href={`/${orgSlug}/pharmacy`} />
-        <QuickAction icon={Package} label="Drug Inventory" desc="Stock & expiry" href={`/${orgSlug}/drug-inventory`} />
       </div>
     </div>
   );

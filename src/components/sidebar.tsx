@@ -23,7 +23,6 @@ import {
   FilePlus,
   FileText,
   HandCoins,
-  FlaskConical,
   Gift,
   Grid3x3,
   LayoutDashboard,
@@ -341,7 +340,8 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
       items: [
         { label: 'Prescriptions', icon: Pill, href: '/pharmacy', moduleKey: 'pharmacy', permission: [P.PHARMACY_VIEW, P.PHARMACY_ADD, P.PHARMACY_CHANGE, P.PHARMACY_MANAGE], waiterHidden: true },
         { label: 'Patient Profiles', icon: UserSquare, href: '/patients', moduleKey: 'patients', permission: [P.PHARMACY_VIEW, P.PHARMACY_MANAGE], waiterHidden: true },
-        { label: 'Drug Inventory', icon: FlaskConical, href: '/drug-inventory', moduleKey: 'drug_inventory', permission: [P.PHARMACY_VIEW, P.PHARMACY_MANAGE, P.CATALOG_MANAGE], waiterHidden: true },
+        // Drug stock / expiry / batch lives in the linked inventory app (Inventory → Manage
+        // Inventory). No separate in-POS "Drug Inventory" entry — it duplicated the inventory surface.
       ],
     },
     {
@@ -428,8 +428,10 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
           return canAny(perms);
         })
         .map((item) => {
-          // Pharmacy outlets: rename "New Order" to "Walk-In Sale"
-          if (isPharmacy && item.moduleKey === 'new_order') {
+          // Pharmacy outlets: the fast terminal IS the "Walk-In Sale" surface. Rename ONLY the POS
+          // Terminal entry — not every new_order item: Add Sale and Credit Sale also use
+          // moduleKey 'new_order', so matching on that produced three identical "Walk-In Sale" rows.
+          if (isPharmacy && item.href === '/order') {
             return { ...item, label: 'Walk-In Sale' };
           }
           return item;
