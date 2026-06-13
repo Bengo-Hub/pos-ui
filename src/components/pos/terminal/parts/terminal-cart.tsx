@@ -140,11 +140,6 @@ export function TerminalCart() {
               {t.repricing && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
             </div>
           )}
-          {cfg.showPricingProfile && (
-            <div className="mt-2">
-              <LoyaltyPanel onStateChange={t.setLoyaltyState} />
-            </div>
-          )}
         </div>
 
         {/* Cart items — scrollable */}
@@ -262,6 +257,15 @@ export function TerminalCart() {
                 <span className="font-bold text-base">Total</span>
                 <span className="font-bold text-base tabular-nums text-primary">KES {t.total.toLocaleString()}</span>
               </div>
+            </div>
+          )}
+          {/* Loyalty capture as a checkout step — shown right above the tender buttons so the cashier
+              can ask "do you have a loyalty number?" before taking payment, the way a supermarket till
+              does. Available for every use case (the panel self-gates on the loyalty permission); a
+              sale with no number entered is an anonymous walk-in and earns nothing. */}
+          {cart.length > 0 && !t.isAddToBill && (
+            <div className="px-5 pt-2">
+              <LoyaltyPanel onStateChange={t.setLoyaltyState} />
             </div>
           )}
           {/* Add-to-bill keeps its single append button; everything else uses the GoDigital-style

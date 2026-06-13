@@ -30,6 +30,7 @@ import {
   useAssignTable, useReleaseTable, usePricingTiers, type OrderSubtype,
 } from '@/hooks/usePOS';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
+import { useLoyaltyPrograms } from '@/hooks/useLoyalty';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useAuthStore } from '@/store/auth';
 import { apiClient } from '@/lib/api/client';
@@ -289,6 +290,8 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
   const { can, isSuperuser } = usePermissions();
   const { data: posSettings } = usePOSSettings();
   const taxRate = (posSettings?.vat_rate ?? 16) / 100;
+  // Active loyalty program — used to tell the cashier how many points the customer just earned.
+  const { data: loyaltyPrograms } = useLoyaltyPrograms();
 
   // Phase 1b: in hospitality/quick_service/hotel, cashiers settle from the orders list — waiters create
   // orders from tables. A non-superuser cashier landing on /order directly is redirected to /orders.
@@ -939,6 +942,16 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
 
   const handlePaymentConfirmed = useCallback(async () => {
     toast.success(`Order ${currentOrderNumber} paid!`);
+    // Loyalty feedback: when the sale carried a registered customer, tell the cashier the points the
+    // customer earned (credited server-side on pos.sale.finalized). Anonymous walk-ins earn nothing,
+    // so this only shows when a loyalty phone was attached.
+    const earnRate = loyaltyPrograms?.[0]?.earn_rate ?? 0;
+    if (loyaltyState?.customerPhone && earnRate > 0) {
+      const pts = Math.floor(total * earnRate);
+      if (pts > 0) {
+        toast.success(`+${pts} loyalty pt${pts === 1 ? '' : 's'} for ${loyaltyState.customerName || loyaltyState.customerPhone}`);
+      }
+    }
     clearCart();
     setPaymentOpen(false);
     setCurrentOrderId('');
@@ -964,7 +977,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
         // Receipt fetch failed — not critical, payment already confirmed
       }
     }
-  }, [currentOrderNumber, currentOrderId, user, tableId, releaseTable]);
+  }, [currentOrderNumber, currentOrderId, user, tableId, releaseTable, total, loyaltyState, loyaltyPrograms]);
 
   // ─── Inline GoDigital payment bar orchestration ─────────────────────────
   // createOrderAsync creates (and returns) the order so the inline bar can settle against it,
