@@ -536,8 +536,30 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
         }
         return [...prev, { ...item, quantity: qty }];
       });
+
+      // The catalog grid shows the DEFAULT tier price. When a non-default pricing profile (e.g.
+      // Wholesale) is selected, resolve this item's profile price from inventory-api and patch the
+      // line so newly-added items honour the chosen profile (not just items present at switch time).
+      const defaultCode = (pricingTiers.find((tt) => tt.is_default) ?? pricingTiers[0])?.code;
+      const tenantId = user?.tenant_id ?? '';
+      if (!mods && !serialNumber && tenantId && pricingProfile && pricingProfile !== defaultCode) {
+        apiClient
+          .get<{ unit_price?: number }>(
+            `/api/v1/${tenantId}/pos/catalog/pricing/resolve?item_id=${encodeURIComponent(item.id)}&quantity=${qty}&profile=${pricingProfile}`,
+          )
+          .then((res) => {
+            if (res && typeof res.unit_price === 'number' && res.unit_price > 0) {
+              setCart((prev) =>
+                prev.map((c) => (c.id === item.id && !c.selectedModifiers ? { ...c, price: res.unit_price as number } : c)),
+              );
+            }
+          })
+          .catch(() => {
+            /* keep the default-tier price on failure */
+          });
+      }
     },
-    []
+    [pricingProfile, pricingTiers, user],
   );
 
   const proceedWithItem = useCallback(

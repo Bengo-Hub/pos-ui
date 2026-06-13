@@ -126,7 +126,7 @@ function LoyaltyPanelInner({ onStateChange, orderId }: LoyaltyPanelProps) {
   const canRedeem = !redeemed && account !== null && (account.points_balance ?? 0) >= minRedeem;
 
   return (
-    <div className="bg-card border border-border rounded-2xl p-4 space-y-3">
+    <div className="bg-card border border-border rounded-2xl p-3 space-y-2">
       <div className="flex items-center gap-2">
         <Gift className="h-4 w-4 text-primary shrink-0" />
         <span className="text-sm font-bold">Loyalty</span>
@@ -135,71 +135,54 @@ function LoyaltyPanelInner({ onStateChange, orderId }: LoyaltyPanelProps) {
             type="button"
             onClick={handleClear}
             className="ml-auto p-1 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+            aria-label="Clear loyalty customer"
           >
             <X className="h-3.5 w-3.5" />
           </button>
         )}
       </div>
 
-      {!account && (
-        <div className="relative flex items-center gap-2">
-          <input
-            type="tel"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            placeholder="Customer phone (e.g. 0712 345 678)"
-            className="flex-1 bg-accent/10 border border-border rounded-xl py-2 px-3 text-sm focus:ring-1 focus:ring-primary outline-none"
-          />
-          {lookupLoading && isValidPhone(debouncedPhone) && (
-            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground shrink-0" />
-          )}
-        </div>
-      )}
+      {/* Phone is the only persistent control — no customer cards (keeps the panel compact as the
+          loyalty base grows). A matched customer attaches to the order and shows as one compact line. */}
+      <div className="relative flex items-center gap-2">
+        <input
+          type="tel"
+          value={phone}
+          onChange={(e) => setPhone(e.target.value)}
+          placeholder="Loyalty phone (e.g. 0712 345 678)"
+          className="flex-1 bg-accent/10 border border-border rounded-xl py-2 px-3 text-sm focus:ring-1 focus:ring-primary outline-none"
+        />
+        {lookupLoading && isValidPhone(debouncedPhone) && (
+          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground shrink-0" />
+        )}
+      </div>
 
-      {/* Found account */}
+      {/* Matched customer — compact one-liner (name · points) with inline redeem when eligible. */}
       {account && (
-        <div className="bg-primary/5 border border-primary/20 rounded-xl p-3 space-y-2">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-bold">{account.customer_name}</p>
-              <p className="text-xs text-muted-foreground">{account.customer_phone}</p>
-            </div>
-            <div className="text-right">
-              <p className="text-sm font-bold text-primary">
-                {(account.points_balance ?? 0).toLocaleString()} pts
-              </p>
-              {program && (
-                <p className="text-xs text-muted-foreground">
-                  ≈ KSh {Math.floor((account.points_balance ?? 0) * (program.redeem_rate ?? 0)).toLocaleString()}
-                </p>
-              )}
-            </div>
-          </div>
-
+        <div className="flex items-center justify-between gap-2 px-1 text-xs">
+          <span className="min-w-0 truncate">
+            <span className="font-semibold text-foreground">{account.customer_name}</span>
+            <span className="text-muted-foreground"> · {(account.points_balance ?? 0).toLocaleString()} pts</span>
+          </span>
           {redeemed ? (
-            <div className="text-xs text-green-600 font-semibold text-center py-1">
-              ✓ Points redeemed
-            </div>
+            <span className="shrink-0 font-semibold text-green-600">✓ redeemed</span>
           ) : canRedeem && can(P.LOYALTY_ADD) ? (
             <button
               type="button"
               disabled={redeemPoints.isPending}
               onClick={handleRedeem}
-              className="w-full py-2 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              className="shrink-0 inline-flex items-center gap-1 rounded-lg bg-primary px-2 py-1 font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
             >
-              {redeemPoints.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-              Redeem {account.points_balance ?? 0} pts (
-              KSh {Math.floor((account.points_balance ?? 0) * (program?.redeem_rate ?? 0.01)).toLocaleString()} off)
+              {redeemPoints.isPending && <Loader2 className="h-3 w-3 animate-spin" />}
+              Redeem KSh {Math.floor((account.points_balance ?? 0) * (program?.redeem_rate ?? 0.01)).toLocaleString()}
             </button>
-          ) : !canRedeem && (account.points_balance ?? 0) > 0 ? (
-            <p className="text-xs text-muted-foreground text-center">
-              Need {minRedeem} pts to redeem (has {account.points_balance ?? 0})
-            </p>
+          ) : (account.points_balance ?? 0) > 0 ? (
+            <span className="shrink-0 text-muted-foreground">need {minRedeem} pts</span>
           ) : null}
         </div>
       )}
 
-      {/* Not found — show register option */}
+      {/* Unknown number — quick register (part of the loyalty + ordering workflow). */}
       {!account && !lookupLoading && isValidPhone(debouncedPhone) && accounts !== undefined && accounts.length === 0 && canAdd && (
         <>
           {!showRegister ? (
