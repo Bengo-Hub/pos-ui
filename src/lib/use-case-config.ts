@@ -23,8 +23,6 @@ export interface TerminalConfig {
   showOrderType: boolean;
   /** Per-item course assignment + Fire Courses (sit-down hospitality). */
   showCourses: boolean;
-  /** Mandatory sales-person / staff attribution on the cart (services). */
-  showStaffAttribution: boolean;
   /** Show the on-screen calculator overlay (retail/pharmacy). */
   showCalculator: boolean;
   /** Keyboard-first checkout: Enter pays when the cart has items and no field is focused. */
@@ -79,28 +77,28 @@ export function terminalConfigFor(useCase?: string | null): TerminalConfig {
     case 'hospitality':
       return {
         profile, defaultDisplayMode: 'image_grid', barcodeFirst: false, showPricingProfile: false,
-        showOrderType: true, showCourses: true, showStaffAttribution: false, showCalculator: false,
+        showOrderType: true, showCourses: true, showCalculator: false,
         keyboardCheckout: false, showBrandGrid: false,
         showStockBadge: false, showScale: false, managerOverride: false, terminalTitle: 'New Order',
       };
     case 'quick_service':
       return {
         profile, defaultDisplayMode: 'card', barcodeFirst: false, showPricingProfile: false,
-        showOrderType: true, showCourses: false, showStaffAttribution: false, showCalculator: false,
+        showOrderType: true, showCourses: false, showCalculator: false,
         keyboardCheckout: false, showBrandGrid: false,
         showStockBadge: false, showScale: false, managerOverride: false, terminalTitle: 'New Order',
       };
     case 'pharmacy':
       return {
         profile, defaultDisplayMode: 'list', barcodeFirst: true, showPricingProfile: true,
-        showOrderType: false, showCourses: false, showStaffAttribution: false, showCalculator: true,
+        showOrderType: false, showCourses: false, showCalculator: true,
         keyboardCheckout: true, showBrandGrid: true,
         showStockBadge: true, showScale: true, managerOverride: true, terminalTitle: 'Walk-In Sale',
       };
     case 'services':
       return {
         profile, defaultDisplayMode: 'card', barcodeFirst: false, showPricingProfile: true,
-        showOrderType: false, showCourses: false, showStaffAttribution: true, showCalculator: false,
+        showOrderType: false, showCourses: false, showCalculator: false,
         keyboardCheckout: false, showBrandGrid: false,
         showStockBadge: false, showScale: false, managerOverride: false, terminalTitle: 'New Sale',
       };
@@ -108,7 +106,7 @@ export function terminalConfigFor(useCase?: string | null): TerminalConfig {
     default:
       return {
         profile: 'retail', defaultDisplayMode: 'list', barcodeFirst: true, showPricingProfile: true,
-        showOrderType: false, showCourses: false, showStaffAttribution: false, showCalculator: true,
+        showOrderType: false, showCourses: false, showCalculator: true,
         keyboardCheckout: true, showBrandGrid: true,
         showStockBadge: true, showScale: true, managerOverride: true, terminalTitle: 'New Sale',
       };
