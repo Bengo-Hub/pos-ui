@@ -10,7 +10,7 @@
 import { useState, useMemo, useCallback } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import { Loader2, Minus, Plus, Search, ShoppingCart, Trash2, UserPlus, X } from 'lucide-react';
-import { useMenuItems, useCreateOrder, type CatalogItem } from '@/hooks/usePOS';
+import { useMenuItems, useCreateOrder, useCreatePaymentIntent, type CatalogItem } from '@/hooks/usePOS';
 import { useClientSearch } from '@/hooks/useClients';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { SplitPaymentModal } from '@/components/pos/split-payment-modal';
@@ -50,13 +50,15 @@ export default function AddSalePage() {
 
   // ── Order-level ──
   const [discount, setDiscount] = useState(0);
-  // Credit Sale entry point (sidebar /sell/add?credit=1) pre-selects on-account; the On-Account
-  // tender in the payment modal posts the total to the customer's AR (treasury enforces the limit).
+  // Credit Sale entry point (sidebar /sell/add?credit=1) pre-selects on-account. When checked, Save
+  // posts the total straight to the customer's AR (on_account tender) and completes the order with no
+  // payment collected now — treasury enforces the credit limit. No payment modal.
   const [creditSale, setCreditSale] = useState(searchParams.get('credit') === '1');
   const [notes, setNotes] = useState('');
   const [quotationSaving, setQuotationSaving] = useState(false);
 
   const createOrder = useCreateOrder();
+  const createIntent = useCreatePaymentIntent();
   const [payOrder, setPayOrder] = useState<{ id: string; number: string; total: number } | null>(null);
 
   const addLine = useCallback((item: CatalogItem) => {
@@ -106,6 +108,18 @@ export default function AddSalePage() {
         if (mode === 'draft') {
           toast.success('Saved as draft');
           reset();
+        } else if (creditSale) {
+          // A credit sale is settled "on account": post the full total to the customer's AR and
+          // complete the order WITHOUT collecting payment now (treasury enforces the credit limit).
+          // No payment modal — that's the whole point of a credit sale.
+          const arAmount = Number(o.total_amount) || total;
+          createIntent.mutate(
+            { orderId: id, tenderMethod: 'on_account', amount: arAmount },
+            {
+              onSuccess: () => { toast.success(`Sale posted on account · ${fmt(arAmount)}`); reset(); },
+              onError: (e: any) => toast.error(e?.message ?? 'Failed to post credit sale to AR.'),
+            },
+          );
         } else {
           setPayOrder({ id, number: o.order_number || id, total });
         }

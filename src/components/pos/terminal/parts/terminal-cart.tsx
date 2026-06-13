@@ -15,6 +15,7 @@ import { OrderTypeSelector } from '@/components/pos/order-type-selector';
 import { LoyaltyPanel } from '@/components/retail/LoyaltyPanel';
 import { InlinePaymentBar } from '@/components/pos/terminal/inline-payment-bar';
 import { useTerminal } from '@/components/pos/terminal/terminal-context';
+import { useTenantBranding } from '@/providers/tenant-branding-provider';
 import { cn } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
 import {
@@ -24,6 +25,7 @@ import {
 export function TerminalCart() {
   const t = useTerminal();
   const router = useRouter();
+  const { tenant } = useTenantBranding();
   const { cfg, cart } = t;
 
   return (
@@ -291,7 +293,7 @@ export function TerminalCart() {
               profile={cfg.profile}
               isHospitality={t.isHospitality}
               allowCOD={cfg.profile === 'retail' || cfg.profile === 'quick_service'}
-              customerEmail={(t.loyaltyState as any)?.customerEmail}
+              customerEmail={(t.loyaltyState as any)?.customerEmail || tenant?.contactEmail || undefined}
               disabled={cart.length === 0}
               mode={t.isHospitality && t.orderSubtype === 'dine_in' ? 'send_to_kitchen' : 'pay'}
               createOrderAsync={t.createOrderAsync}

@@ -50,6 +50,8 @@ export interface TenantBrand {
   useCase: string;
   /** Image or video URL for the POS terminal screensaver. Null = use default. */
   posScreensaverUrl: string | null;
+  /** Tenant contact email — used as the default Paystack payer email so cashiers needn't type one. */
+  contactEmail: string | null;
 }
 
 export function parseBrandFromTenant(t: TenantResponse): TenantBrand {
@@ -72,6 +74,7 @@ export function parseBrandFromTenant(t: TenantResponse): TenantBrand {
     orgName: typeof orgName === 'string' ? orgName : (t.name ?? ''),
     useCase: t.use_case ?? 'other',
     posScreensaverUrl: typeof posScreensaverUrl === 'string' ? posScreensaverUrl : null,
+    contactEmail: typeof t.contact_email === 'string' && t.contact_email ? t.contact_email : null,
   };
 }
 
