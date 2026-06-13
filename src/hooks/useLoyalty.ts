@@ -47,6 +47,28 @@ export interface LoyaltyTransaction {
   created_at: string;
 }
 
+// The pos-api returns ent entities directly, and ent tags every field `json:",omitempty"`.
+// That means ZERO-valued numbers (a brand-new account's points_balance, a 0 redeem_rate, etc.)
+// are OMITTED from the JSON entirely — so the field arrives as `undefined` on the client and any
+// `n.toLocaleString()` / arithmetic blows up. Coerce the numeric fields back to real numbers at the
+// data boundary so the declared types hold and components never see `undefined` where a number is typed.
+function normalizeAccount(a: LoyaltyAccount): LoyaltyAccount {
+  return {
+    ...a,
+    points_balance: Number(a.points_balance ?? 0),
+    lifetime_points: Number(a.lifetime_points ?? 0),
+  };
+}
+
+function normalizeProgram(p: LoyaltyProgram): LoyaltyProgram {
+  return {
+    ...p,
+    earn_rate: Number(p.earn_rate ?? 0),
+    redeem_rate: Number(p.redeem_rate ?? 0),
+    min_redeem_points: Number(p.min_redeem_points ?? 0),
+  };
+}
+
 export function useLoyaltyPrograms() {
   const tenantID = useTenantID();
   return useQuery({
@@ -54,7 +76,8 @@ export function useLoyaltyPrograms() {
     queryFn: () =>
       apiClient
         .get<PaginatedResponse<LoyaltyProgram>>(`${base(tenantID)}/programs`)
-        .then((res) => (Array.isArray(res) ? res : res.data ?? [])),
+        .then((res) => (Array.isArray(res) ? res : res.data ?? []))
+        .then((list) => list.map(normalizeProgram)),
     enabled: !!tenantID,
   });
 }
@@ -96,7 +119,8 @@ export function useLoyaltyAccounts(phone?: string) {
           `${base(tenantID)}/accounts`,
           phone ? { phone } : undefined,
         )
-        .then((res) => (Array.isArray(res) ? res : res.data ?? [])),
+        .then((res) => (Array.isArray(res) ? res : res.data ?? []))
+        .then((list) => list.map(normalizeAccount)),
     enabled: !!tenantID,
     staleTime: 15_000,
   });
@@ -107,9 +131,11 @@ export function useLoyaltyAccount(id: string) {
   return useQuery({
     queryKey: ['loyalty-account', tenantID, id],
     queryFn: () =>
-      apiClient.get<{ account: LoyaltyAccount; transactions: LoyaltyTransaction[] }>(
-        `${base(tenantID)}/accounts/${id}`,
-      ),
+      apiClient
+        .get<{ account: LoyaltyAccount; transactions: LoyaltyTransaction[] }>(
+          `${base(tenantID)}/accounts/${id}`,
+        )
+        .then((res) => ({ ...res, account: normalizeAccount(res.account) })),
     enabled: !!tenantID && !!id,
   });
 }
@@ -119,7 +145,9 @@ export function useCreateLoyaltyAccount() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (data: { customer_phone: string; customer_name: string; program_id?: string }) =>
-      apiClient.post<LoyaltyAccount>(`${base(tenantID)}/accounts`, data),
+      apiClient
+        .post<LoyaltyAccount>(`${base(tenantID)}/accounts`, data)
+        .then(normalizeAccount),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['loyalty-accounts', tenantID] }),
   });
 }

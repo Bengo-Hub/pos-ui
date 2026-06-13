@@ -91,8 +91,8 @@ function LoyaltyPanelInner({ onStateChange, orderId }: LoyaltyPanelProps) {
 
   const handleRedeem = () => {
     if (!account || !program) return;
-    const pointsToRedeem = account.points_balance;
-    const discountKSh = Math.floor(pointsToRedeem * program.redeem_rate);
+    const pointsToRedeem = account.points_balance ?? 0;
+    const discountKSh = Math.floor(pointsToRedeem * (program.redeem_rate ?? 0));
 
     redeemPoints.mutate(
       { points: pointsToRedeem, order_id: orderId, notes: 'Redeemed at POS checkout' },
@@ -123,7 +123,7 @@ function LoyaltyPanelInner({ onStateChange, orderId }: LoyaltyPanelProps) {
   };
 
   const minRedeem = program?.min_redeem_points ?? 100;
-  const canRedeem = !redeemed && account !== null && account.points_balance >= minRedeem;
+  const canRedeem = !redeemed && account !== null && (account.points_balance ?? 0) >= minRedeem;
 
   return (
     <div className="bg-card border border-border rounded-2xl p-4 space-y-3">
@@ -166,11 +166,11 @@ function LoyaltyPanelInner({ onStateChange, orderId }: LoyaltyPanelProps) {
             </div>
             <div className="text-right">
               <p className="text-sm font-bold text-primary">
-                {account.points_balance.toLocaleString()} pts
+                {(account.points_balance ?? 0).toLocaleString()} pts
               </p>
               {program && (
                 <p className="text-xs text-muted-foreground">
-                  ≈ KSh {Math.floor(account.points_balance * program.redeem_rate).toLocaleString()}
+                  ≈ KSh {Math.floor((account.points_balance ?? 0) * (program.redeem_rate ?? 0)).toLocaleString()}
                 </p>
               )}
             </div>
@@ -188,12 +188,12 @@ function LoyaltyPanelInner({ onStateChange, orderId }: LoyaltyPanelProps) {
               className="w-full py-2 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
             >
               {redeemPoints.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-              Redeem {account.points_balance} pts (
-              KSh {Math.floor(account.points_balance * (program?.redeem_rate ?? 0.01)).toLocaleString()} off)
+              Redeem {account.points_balance ?? 0} pts (
+              KSh {Math.floor((account.points_balance ?? 0) * (program?.redeem_rate ?? 0.01)).toLocaleString()} off)
             </button>
-          ) : !canRedeem && account.points_balance > 0 ? (
+          ) : !canRedeem && (account.points_balance ?? 0) > 0 ? (
             <p className="text-xs text-muted-foreground text-center">
-              Need {minRedeem} pts to redeem (has {account.points_balance})
+              Need {minRedeem} pts to redeem (has {account.points_balance ?? 0})
             </p>
           ) : null}
         </div>
