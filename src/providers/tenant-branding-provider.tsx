@@ -76,6 +76,7 @@ const DEFAULT_BRAND: TenantBrand = {
   orgName: 'Codevertex Africa Limited',
   useCase: 'other',
   posScreensaverUrl: null,
+  contactEmail: null,
 };
 
 export function TenantBrandingProvider({ children }: { children: ReactNode }) {
