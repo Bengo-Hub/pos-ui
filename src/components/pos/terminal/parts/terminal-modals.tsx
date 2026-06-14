@@ -18,7 +18,6 @@ import { AddExpenseModal } from '@/components/pos/add-expense-modal';
 import { ParkedSalesModal } from '@/components/pos/parked-sales-modal';
 import { ReceiptPreview } from '@/components/pos/receipt-preview';
 import { CalculatorOverlay } from '@/components/pos/calculator-overlay';
-import { ManagerPINOverrideModal } from '@/components/retail/ManagerPINOverrideModal';
 import { ManagerPinDialog } from '@/components/pos/manager-pin-dialog';
 import { OrderPlacedDialog } from '@/components/pos/order-placed-dialog';
 import { RegisterDetailsModal, RecentTransactionsModal, SellReturnModal } from '@/components/pos/terminal/toolbar-modals';
@@ -152,12 +151,15 @@ export function TerminalModals() {
         onClose={() => t.setOrderPlacedOpen(false)}
       />
 
-      {/* Manager override — out-of-stock add interception (retail/pharmacy) */}
+      {/* Manager override — out-of-stock add interception (retail/pharmacy).
+          Uses the audited step-up so each override is recorded (who approved, when). */}
       {t.pendingOverride && (
-        <ManagerPINOverrideModal
-          tenantId={t.user?.tenant_slug ?? t.orgSlug}
-          itemName={t.pendingOverride.name}
-          onApprove={() => {
+        <ManagerPinDialog
+          open
+          action="catalog.oos_override"
+          label={`override out-of-stock for ${t.pendingOverride.name}`}
+          onClose={() => t.setPendingOverride(null)}
+          onApproved={() => {
             const item = t.pendingOverride!;
             t.setPendingOverride(null);
             // Override approved — continue the normal add flow (serial/modifier/age still apply).
@@ -167,7 +169,6 @@ export function TerminalModals() {
               t.addItemToCart(item);
             }
           }}
-          onCancel={() => t.setPendingOverride(null)}
         />
       )}
 
