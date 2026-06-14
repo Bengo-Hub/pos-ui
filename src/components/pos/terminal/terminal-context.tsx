@@ -143,6 +143,15 @@ export interface TerminalContextValue {
   inclusiveTax: number;
   loyaltyDiscount: number;
   total: number;
+  // Manual order-level discount
+  manualDiscount: number;
+  discountReason: string;
+  discountOpen: boolean;
+  setDiscountOpen: (v: boolean) => void;
+  applyDiscount: (amount: number, reason: string) => void;
+  pendingDiscountApproval: boolean;
+  setPendingDiscountApproval: (v: boolean) => void;
+  confirmDiscountApproval: (approvalToken: string) => void;
   addItemToCart: (item: MenuItem, mods?: Record<string, string[]>, qty?: number, serialNumber?: string) => void;
   handleItemTap: (item: MenuItem) => void;
   proceedWithItem: (item: MenuItem) => void;
@@ -406,6 +415,14 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
   // Set true when the cashier confirms the age prompt for an age-restricted item;
   // sent with the order so the backend age gate passes. Reset when the cart clears.
   const ageVerifiedRef = useRef(false);
+  // Manual order-level discount (KES amount) + reason; an over-limit discount
+  // triggers a manager step-up (handled in handlePlaceOrder on a 422).
+  const [manualDiscount, setManualDiscountState] = useState(0);
+  const [discountReason, setDiscountReason] = useState('');
+  const [discountOpen, setDiscountOpen] = useState(false);
+  const [pendingDiscountApproval, setPendingDiscountApproval] = useState(false);
+  // Holds the latest retryable place(token) so the discount approval dialog can resubmit.
+  const placeWithDiscountApprovalRef = useRef<((token: string) => void) | null>(null);
   const addOrderLines = useAddOrderLines();
 
   const menuItems: MenuItem[] = useMemo(() => {
@@ -730,7 +747,14 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
     setCart((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const clearCart = () => { setCart([]); ageVerifiedRef.current = false; };
+  const clearCart = () => { setCart([]); ageVerifiedRef.current = false; setManualDiscountState(0); setDiscountReason(''); };
+
+  // Apply or clear a manual order-level discount (KES amount).
+  const applyDiscount = (amount: number, reason: string) => {
+    setManualDiscountState(Math.max(0, amount));
+    setDiscountReason(reason);
+    setDiscountOpen(false);
+  };
 
   // repriceCart switches the pricing profile and re-resolves each cart line's base price against the
   // matching inventory pricing tier (RETAIL/WHOLESALE). On any failure a line keeps its current price.
@@ -783,7 +807,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
     return { subtotal: r.subtotal, tax: r.tax, inclusiveTax: r.inclusiveTax };
   }, [cart, taxRate]);
   const loyaltyDiscount = loyaltyState?.redeemDiscount ?? 0;
-  const total = Math.max(0, subtotal + tax - loyaltyDiscount);
+  const total = Math.max(0, subtotal + tax - loyaltyDiscount - manualDiscount);
   const cartItemCount = cart.reduce((s, c) => s + c.quantity, 0);
 
   // ─── Place Order ────────────────────────────────────────────────────────
@@ -852,13 +876,17 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
     }
 
     const courses = [...new Set(cart.map((i) => (i.courseNumber ?? 0) as CourseValue).filter((c) => c > 0))].sort() as CourseValue[];
-    createOrder.mutate(
+    // place() is retryable with a manager approval_token when the discount exceeds
+    // the outlet's limit (backend returns 422).
+    const place = (approvalToken?: string) => createOrder.mutate(
       {
         outletId: outlet?.id ?? '',
         orderSubtype: orderSubtype ?? undefined,
         tableId: tableId || undefined,
         coversCount: coversParam > 1 ? coversParam : undefined,
-        discountAmount: loyaltyDiscount || undefined,
+        discountAmount: (loyaltyDiscount + manualDiscount) || undefined,
+        discountReason: discountReason || undefined,
+        approvalToken,
         customerPhone: loyaltyState?.customerPhone || undefined,
         customerName: loyaltyState?.customerName || undefined,
         ageVerified: ageVerifiedRef.current || undefined,
@@ -897,11 +925,26 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
           setCartOpen(false);
           setPaymentOpen(true);
         },
-        onError: () => {
+        onError: (err: any) => {
+          const status = err?.response?.status;
+          const msg: string = err?.response?.data?.error ?? '';
+          // Over-limit discount → require a manager step-up, then retry.
+          if (status === 422 && msg.toLowerCase().includes('discount')) {
+            setPendingDiscountApproval(true);
+            return;
+          }
           toast.error('Failed to create order. Please try again.');
         },
       }
     );
+    placeWithDiscountApprovalRef.current = place;
+    place();
+  };
+
+  // Confirm a manager approval for an over-limit discount and retry the order.
+  const confirmDiscountApproval = (approvalToken: string) => {
+    setPendingDiscountApproval(false);
+    placeWithDiscountApprovalRef.current?.(approvalToken);
   };
 
   // Park the current cart as a draft order (retail orders persist as "draft") and clear the register.
@@ -1082,6 +1125,8 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
     totalItems, totalPages, menuLoading, menuItems, filteredItems, categories,
     handleCategoryChange, handleSearchChange, handleSearchKeyDown,
     cart, cartItemCount, subtotal, tax, inclusiveTax, loyaltyDiscount, total,
+    manualDiscount, discountReason, discountOpen, setDiscountOpen, applyDiscount,
+    pendingDiscountApproval, setPendingDiscountApproval, confirmDiscountApproval,
     addItemToCart, handleItemTap, proceedWithItem, handleScaleAddToCart,
     updateQuantity, removeFromCart, clearCart, updateCourse,
     pricingProfile, pricingTiers, repricing, repriceCart,

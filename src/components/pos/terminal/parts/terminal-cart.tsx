@@ -19,7 +19,7 @@ import { useTenantBranding } from '@/providers/tenant-branding-provider';
 import { cn } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
 import {
-  Ban, ChefHat, Flame, Loader2, Minus, Plus, ShoppingCart, Trash2, X,
+  Ban, ChefHat, Flame, Loader2, Minus, Plus, ShoppingCart, Tag, Trash2, X,
 } from 'lucide-react';
 
 export function TerminalCart() {
@@ -254,6 +254,19 @@ export function TerminalCart() {
                   <span>Loyalty redemption</span>
                   <span className="font-medium tabular-nums">- KES {t.loyaltyDiscount.toLocaleString()}</span>
                 </div>
+              )}
+              {t.manualDiscount > 0 ? (
+                <div className="flex justify-between items-center text-sm text-amber-600">
+                  <button onClick={() => t.setDiscountOpen(true)} className="underline underline-offset-2">
+                    Discount{t.discountReason ? ` (${t.discountReason})` : ''}
+                  </button>
+                  <span className="font-medium tabular-nums">- KES {t.manualDiscount.toLocaleString()}</span>
+                </div>
+              ) : (
+                <button onClick={() => t.setDiscountOpen(true)}
+                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-primary">
+                  <Tag className="h-3.5 w-3.5" /> Add discount
+                </button>
               )}
               <div className="flex justify-between pt-2 border-t border-border">
                 <span className="font-bold text-base">Total</span>

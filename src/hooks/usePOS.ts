@@ -758,6 +758,8 @@ interface CreateOrderInput {
   customerPhone?: string;
   customerName?: string;
   ageVerified?: boolean;
+  discountReason?: string;
+  approvalToken?: string;
   lines: Array<{
     catalog_item_id: string;
     sku: string;
@@ -785,6 +787,9 @@ export function useCreateOrder() {
         customer_phone: data.customerPhone,
         customer_name: data.customerName,
         age_verified: data.ageVerified,
+        discount_amount: data.discountAmount,
+        discount_reason: data.discountReason,
+        approval_token: data.approvalToken,
         lines: data.lines,
       }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['pos-orders'] }),

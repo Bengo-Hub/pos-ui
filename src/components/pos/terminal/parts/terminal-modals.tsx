@@ -19,6 +19,7 @@ import { ParkedSalesModal } from '@/components/pos/parked-sales-modal';
 import { ReceiptPreview } from '@/components/pos/receipt-preview';
 import { CalculatorOverlay } from '@/components/pos/calculator-overlay';
 import { ManagerPinDialog } from '@/components/pos/manager-pin-dialog';
+import { DiscountModal } from '@/components/pos/discount-modal';
 import { OrderPlacedDialog } from '@/components/pos/order-placed-dialog';
 import { RegisterDetailsModal, RecentTransactionsModal, SellReturnModal } from '@/components/pos/terminal/toolbar-modals';
 import { configFor } from '@/lib/pos/printer-stations';
@@ -118,6 +119,23 @@ export function TerminalModals() {
             setPendingVoidReason(reason);
           }
         }}
+      />
+
+      <DiscountModal
+        open={t.discountOpen}
+        subtotal={t.subtotal}
+        currentAmount={t.manualDiscount}
+        currentReason={t.discountReason}
+        onApply={t.applyDiscount}
+        onClose={() => t.setDiscountOpen(false)}
+      />
+
+      <ManagerPinDialog
+        open={t.pendingDiscountApproval}
+        action="order.discount_override"
+        label="approve this discount"
+        onClose={() => t.setPendingDiscountApproval(false)}
+        onApproved={t.confirmDiscountApproval}
       />
 
       <ManagerPinDialog

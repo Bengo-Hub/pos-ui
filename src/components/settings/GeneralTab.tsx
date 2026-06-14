@@ -18,11 +18,13 @@ export function GeneralTab() {
 
   const [currency, setCurrency] = useState('KES');
   const [returnWindowDays, setReturnWindowDays] = useState('30');
+  const [maxDiscountPercent, setMaxDiscountPercent] = useState('100');
 
   useEffect(() => {
     if (settings) {
       setCurrency(settings.currency || 'KES');
       setReturnWindowDays(String(settings.return_window_days ?? 30));
+      setMaxDiscountPercent(String((settings as any).max_discount_percent ?? 100));
     }
   }, [settings]);
 
@@ -32,7 +34,8 @@ export function GeneralTab() {
     updateSettings.mutate({
       currency,
       return_window_days: parseInt(returnWindowDays, 10) || 30,
-    });
+      max_discount_percent: parseFloat(maxDiscountPercent) || 100,
+    } as any);
   };
 
   return (
@@ -135,6 +138,23 @@ export function GeneralTab() {
                   />
                   <p className="text-xs text-muted-foreground">
                     Maximum days after purchase to accept a return. Set 0 for no limit.
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <label className={labelClass}>Max discount without approval (%)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    step={1}
+                    value={maxDiscountPercent}
+                    onChange={(e) => setMaxDiscountPercent(e.target.value)}
+                    disabled={!canEdit}
+                    placeholder="100"
+                    className={`${inputClass} font-mono`}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    A cashier discount above this % of the order requires a manager approval (PIN or QR card). Set 100 for no limit.
                   </p>
                 </div>
               </CardContent>
