@@ -17,6 +17,7 @@ import { ShiftsSettingsTab } from '@/components/settings/ShiftsSettingsTab';
 import { KDSStationsTab } from '@/components/settings/KDSStationsTab';
 import { TablesSettingsTab } from '@/components/settings/TablesSettingsTab';
 import { TeamTab } from '@/components/settings/TeamTab';
+import { AuditTab } from '@/components/settings/AuditTab';
 import { PlatformTab } from '@/components/settings/PlatformTab';
 import { LoyaltySettingsTab } from '@/components/settings/LoyaltySettingsTab';
 import { PaymentDisplayTab } from '@/components/settings/PaymentDisplayTab';
@@ -42,7 +43,8 @@ type Tab =
   | 'devices'
   | 'booking_policy'
   | 'platform'
-  | 'team';
+  | 'team'
+  | 'audit';
 
 // requireModule → only shown when the module is enabled (or to superusers).
 // requireAdmin  → read-only account views shown to tenant admins/managers (and platform owners).
@@ -62,6 +64,7 @@ const ALL_TABS: { id: Tab; label: string; icon: React.ElementType; requireModule
   { id: 'devices',          label: 'Devices',            icon: Monitor,     description: 'POS terminals linked to this outlet (view only)', requireAdmin: true },
   { id: 'booking_policy',   label: 'Booking Policy',     icon: Clock,       description: 'Amendment & cancellation windows and fees for hotel bookings', requireModule: 'hotel' },
   { id: 'team',             label: 'Team',               icon: Users,       description: 'Staff members and roles' },
+  { id: 'audit',            label: 'Loss Prevention',    icon: ShieldCheck, description: 'Audit trail + per-cashier exception report', requireAdmin: true },
   { id: 'platform',         label: 'Platform',           icon: ShieldCheck, description: 'Admin and tenant management' },
 ];
 
@@ -141,6 +144,7 @@ export default function SettingsPage() {
         {activeTab === 'devices'          && isAdminOrManager && <DevicesTab />}
         {activeTab === 'booking_policy'   && <BookingPolicyTab />}
         {activeTab === 'team'             && <TeamTab />}
+        {activeTab === 'audit'            && <AuditTab />}
         {activeTab === 'platform'         && isPlatformOwner && <PlatformTab />}
       </div>
     </div>
