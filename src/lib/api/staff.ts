@@ -84,4 +84,9 @@ export const staffApi = {
 
   verifyPin: (tenantId: string, userId: string, pin: string) =>
     apiClient.post<{ token: string }>(`${staffBase(tenantId)}/auth/pin`, { user_id: userId, pin }),
+
+  // Mint the signed manager-card token embedded in a staff member's printable QR card.
+  cardToken: (tenantId: string, userId: string) =>
+    apiClient.post<{ card_token: string; staff_name: string; staff_role: string; can_approve: boolean }>(
+      `${staffBase(tenantId)}/staff/${userId}/card-token`, {}),
 };

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { CalendarDays, Check, Loader2, Pencil, Plus, Trash2, Users, X } from 'lucide-react';
+import { CalendarDays, Check, Loader2, Pencil, Plus, QrCode, Trash2, Users, X } from 'lucide-react';
 import { Button, Card, CardContent, CardHeader } from '@/components/ui/base';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import {
@@ -11,6 +11,8 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { useAuthStore } from '@/store/auth';
 import type { StaffMember, UpdateStaffInput, CreateStaffInput } from '@/lib/api/staff';
 import { StaffShiftDrawer } from '@/components/pos/staff-shift-drawer';
+import { RolesPanel } from './RolesPanel';
+import { StaffCardModal } from './StaffCardModal';
 import { toast } from 'sonner';
 import { inputClass } from './shared';
 
@@ -43,6 +45,7 @@ export function TeamTab() {
   const outlet = useAuthStore((s) => s.outlet);
   const outletId = selectedOutletId || outlet?.id || '';
 
+  const [view, setView] = useState<'members' | 'roles'>('members');
   const [showAdd, setShowAdd] = useState(false);
   const [addForm, setAddForm] = useState({
     name: '', role: 'cashier', employment_type: 'full_time', pin: '', mpesa_phone: '',
@@ -54,6 +57,7 @@ export function TeamTab() {
   const [newPin, setNewPin] = useState('');
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [scheduleStaff, setScheduleStaff] = useState<StaffMember | null>(null);
+  const [cardStaff, setCardStaff] = useState<StaffMember | null>(null);
 
   function startEdit(m: StaffMember) {
     setEditingId(m.id);
@@ -118,6 +122,25 @@ export function TeamTab() {
 
   return (
     <div className="space-y-4">
+      {/* Members | Roles & Permissions sub-view toggle */}
+      <div className="flex gap-1 bg-accent/10 p-1 rounded-lg w-fit">
+        <button
+          onClick={() => setView('members')}
+          className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors ${view === 'members' ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+        >
+          Members
+        </button>
+        <button
+          onClick={() => setView('roles')}
+          className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors ${view === 'roles' ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+        >
+          Roles & Permissions
+        </button>
+      </div>
+
+      {view === 'roles' && <RolesPanel />}
+
+      {view === 'members' && (
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
@@ -264,6 +287,15 @@ export function TeamTab() {
                                 >
                                   <CalendarDays className="h-3.5 w-3.5" />
                                 </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-7 w-7 p-0 text-muted-foreground hover:text-primary"
+                                  onClick={() => setCardStaff(m)}
+                                  title="Print approval QR card"
+                                >
+                                  <QrCode className="h-3.5 w-3.5" />
+                                </Button>
                                 {!isProtected && (
                                   <Button
                                     size="sm"
@@ -297,6 +329,7 @@ export function TeamTab() {
           )}
         </CardContent>
       </Card>
+      )}
 
       {showAdd && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -402,6 +435,12 @@ export function TeamTab() {
         staff={scheduleStaff}
         open={!!scheduleStaff}
         onClose={() => setScheduleStaff(null)}
+      />
+
+      <StaffCardModal
+        staff={cardStaff}
+        open={!!cardStaff}
+        onClose={() => setCardStaff(null)}
       />
     </div>
   );

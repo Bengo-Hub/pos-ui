@@ -19,16 +19,32 @@ import { ParkedSalesModal } from '@/components/pos/parked-sales-modal';
 import { ReceiptPreview } from '@/components/pos/receipt-preview';
 import { CalculatorOverlay } from '@/components/pos/calculator-overlay';
 import { ManagerPINOverrideModal } from '@/components/retail/ManagerPINOverrideModal';
+import { ManagerPinDialog } from '@/components/pos/manager-pin-dialog';
 import { OrderPlacedDialog } from '@/components/pos/order-placed-dialog';
 import { RegisterDetailsModal, RecentTransactionsModal, SellReturnModal } from '@/components/pos/terminal/toolbar-modals';
 import { configFor } from '@/lib/pos/printer-stations';
 import { useTerminal } from '@/components/pos/terminal/terminal-context';
 import { AlertTriangle, Calculator } from 'lucide-react';
+import { useState } from 'react';
 import { toast } from 'sonner';
+
+// Roles allowed to void without a separate manager approval.
+const VOID_SELF_ROLES = ['admin', 'manager', 'pos_admin', 'store_manager', 'owner', 'super_admin', 'superuser'];
 
 export function TerminalModals() {
   const t = useTerminal();
   const { cfg } = t;
+
+  // Manager-PIN step-up state for voiding an order when the cashier is not a manager.
+  const [pendingVoidReason, setPendingVoidReason] = useState<string | null>(null);
+
+  async function finalizeVoid(reason: string, approvalToken?: string) {
+    await t.voidOrderMutateAsync({ orderId: t.currentOrderId, reason, approvalToken });
+    toast.success(`Order #${t.currentOrderNumber} voided`);
+    t.setCurrentOrderId('');
+    t.setCurrentOrderNumber('');
+    t.clearCart();
+  }
 
   return (
     <>
@@ -94,11 +110,26 @@ export function TerminalModals() {
         orderNumber={t.currentOrderNumber}
         onClose={() => t.setVoidOpen(false)}
         onConfirm={async (reason) => {
-          await t.voidOrderMutateAsync({ orderId: t.currentOrderId, reason });
-          toast.success(`Order #${t.currentOrderNumber} voided`);
-          t.setCurrentOrderId('');
-          t.setCurrentOrderNumber('');
-          t.clearCart();
+          const role = (t.user?.roles?.[0] ?? '') as string;
+          if (VOID_SELF_ROLES.includes(role)) {
+            await finalizeVoid(reason);
+          } else {
+            // Cashier: require a manager PIN step-up before voiding.
+            t.setVoidOpen(false);
+            setPendingVoidReason(reason);
+          }
+        }}
+      />
+
+      <ManagerPinDialog
+        open={pendingVoidReason !== null}
+        action="order.void"
+        label={`void order #${t.currentOrderNumber}`}
+        onClose={() => setPendingVoidReason(null)}
+        onApproved={async (token) => {
+          const reason = pendingVoidReason ?? '';
+          setPendingVoidReason(null);
+          await finalizeVoid(reason, token);
         }}
       />
 

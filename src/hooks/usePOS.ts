@@ -803,8 +803,8 @@ export function useVoidOrder() {
   const tenantID = useTenantID();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ orderId, reason }: { orderId: string; reason: string }) =>
-      apiClient.patch(`${basePath(tenantID)}/orders/${orderId}/void`, { reason }),
+    mutationFn: ({ orderId, reason, approvalToken }: { orderId: string; reason: string; approvalToken?: string }) =>
+      apiClient.patch(`${basePath(tenantID)}/orders/${orderId}/void`, { reason, approval_token: approvalToken }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['pos-orders'] }),
   });
 }
