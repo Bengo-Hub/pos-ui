@@ -20,6 +20,7 @@ import { ReceiptPreview } from '@/components/pos/receipt-preview';
 import { CalculatorOverlay } from '@/components/pos/calculator-overlay';
 import { ManagerPinDialog } from '@/components/pos/manager-pin-dialog';
 import { DiscountModal } from '@/components/pos/discount-modal';
+import { LinePriceModal } from '@/components/pos/line-price-modal';
 import { OrderPlacedDialog } from '@/components/pos/order-placed-dialog';
 import { RegisterDetailsModal, RecentTransactionsModal, SellReturnModal } from '@/components/pos/terminal/toolbar-modals';
 import { configFor } from '@/lib/pos/printer-stations';
@@ -131,11 +132,18 @@ export function TerminalModals() {
       />
 
       <ManagerPinDialog
-        open={t.pendingDiscountApproval}
-        action="order.discount_override"
-        label="approve this discount"
-        onClose={() => t.setPendingDiscountApproval(false)}
-        onApproved={t.confirmDiscountApproval}
+        open={!!t.pendingApprovalAction}
+        action={t.pendingApprovalAction ?? ''}
+        label={t.pendingApprovalAction === 'price.override' ? 'approve this price override' : 'approve this discount'}
+        onClose={() => t.setPendingApprovalAction(null)}
+        onApproved={t.confirmApproval}
+      />
+
+      <LinePriceModal
+        open={t.priceEditIndex !== null}
+        item={t.priceEditIndex !== null ? t.cart[t.priceEditIndex] : null}
+        onApply={(price, reason) => t.priceEditIndex !== null && t.setLinePrice(t.priceEditIndex, price, reason)}
+        onClose={() => t.setPriceEditIndex(null)}
       />
 
       <ManagerPinDialog

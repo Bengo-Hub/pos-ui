@@ -182,9 +182,19 @@ export function TerminalCart() {
                         <p className="text-xs text-muted-foreground font-mono mt-0.5">S/N: {item.serialNumber}</p>
                       )}
                       <div className="flex items-center gap-2 mt-1 flex-wrap">
-                        <p className="text-xs font-bold font-mono text-primary">
+                        <button
+                          type="button"
+                          onClick={() => t.setPriceEditIndex(idx)}
+                          title="Override unit price"
+                          className="text-xs font-bold font-mono text-primary hover:underline underline-offset-2"
+                        >
                           KES {((item.price + (item.modifierTotal ?? 0)) * item.quantity).toLocaleString()}
-                        </p>
+                        </button>
+                        {item.originalPrice != null && item.price < item.originalPrice && (
+                          <span className="text-[10px] text-muted-foreground line-through font-mono">
+                            KES {(item.originalPrice * item.quantity).toLocaleString()}
+                          </span>
+                        )}
                         {cfg.showCourses && (
                           <CourseSelector
                             value={item.courseNumber ?? 0}

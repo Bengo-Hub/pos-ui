@@ -87,6 +87,9 @@ export interface CartItem extends MenuItem {
   serialNumber?: string;
   notes?: string;
   courseNumber?: CourseValue;
+  /** Catalog price before a manual price override (markdown). */
+  originalPrice?: number;
+  overrideReason?: string;
 }
 
 export type DisplayMode = 'card' | 'list' | 'image_grid';
@@ -149,9 +152,13 @@ export interface TerminalContextValue {
   discountOpen: boolean;
   setDiscountOpen: (v: boolean) => void;
   applyDiscount: (amount: number, reason: string) => void;
-  pendingDiscountApproval: boolean;
-  setPendingDiscountApproval: (v: boolean) => void;
-  confirmDiscountApproval: (approvalToken: string) => void;
+  pendingApprovalAction: string | null;
+  setPendingApprovalAction: (v: string | null) => void;
+  confirmApproval: (approvalToken: string) => void;
+  // Per-line price override
+  priceEditIndex: number | null;
+  setPriceEditIndex: (i: number | null) => void;
+  setLinePrice: (index: number, newPrice: number, reason: string) => void;
   addItemToCart: (item: MenuItem, mods?: Record<string, string[]>, qty?: number, serialNumber?: string) => void;
   handleItemTap: (item: MenuItem) => void;
   proceedWithItem: (item: MenuItem) => void;
@@ -420,8 +427,11 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
   const [manualDiscount, setManualDiscountState] = useState(0);
   const [discountReason, setDiscountReason] = useState('');
   const [discountOpen, setDiscountOpen] = useState(false);
-  const [pendingDiscountApproval, setPendingDiscountApproval] = useState(false);
-  // Holds the latest retryable place(token) so the discount approval dialog can resubmit.
+  // Action a manager must approve (order.discount_override | price.override), set
+  // from the backend's 422; null = no pending approval.
+  const [pendingApprovalAction, setPendingApprovalAction] = useState<string | null>(null);
+  const [priceEditIndex, setPriceEditIndex] = useState<number | null>(null);
+  // Holds the latest retryable place(token) so the approval dialog can resubmit.
   const placeWithDiscountApprovalRef = useRef<((token: string) => void) | null>(null);
   const addOrderLines = useAddOrderLines();
 
@@ -840,6 +850,10 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
       ...(item.selectedModifiers ? { modifiers: item.selectedModifiers } : {}),
       ...(item.notes ? { notes: item.notes } : {}),
       ...(item.serialNumber ? { serial_number: item.serialNumber } : {}),
+      // Price-override markers so the backend can gate large markdowns.
+      ...(item.originalPrice != null && item.price < item.originalPrice
+        ? { price_override: true, original_price: item.originalPrice, override_reason: item.overrideReason ?? '' }
+        : {}),
     },
   }));
 
@@ -927,10 +941,10 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
         },
         onError: (err: any) => {
           const status = err?.response?.status;
-          const msg: string = err?.response?.data?.error ?? '';
-          // Over-limit discount → require a manager step-up, then retry.
-          if (status === 422 && msg.toLowerCase().includes('discount')) {
-            setPendingDiscountApproval(true);
+          const data = err?.response?.data ?? {};
+          // Over-limit discount or price override → require a manager step-up, then retry.
+          if (status === 422 && data.approval_required) {
+            setPendingApprovalAction(data.action || 'order.discount_override');
             return;
           }
           toast.error('Failed to create order. Please try again.');
@@ -941,10 +955,22 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
     place();
   };
 
-  // Confirm a manager approval for an over-limit discount and retry the order.
-  const confirmDiscountApproval = (approvalToken: string) => {
-    setPendingDiscountApproval(false);
+  // Confirm a manager approval (discount or price override) and retry the order.
+  const confirmApproval = (approvalToken: string) => {
+    setPendingApprovalAction(null);
     placeWithDiscountApprovalRef.current?.(approvalToken);
+  };
+
+  // Override a cart line's unit price (markdown only). Records the catalog price
+  // as original so the backend can gate large markdowns.
+  const setLinePrice = (index: number, newPrice: number, reason: string) => {
+    setCart((prev) => prev.map((it, i) => {
+      if (i !== index) return it;
+      const original = it.originalPrice ?? it.price;
+      const capped = Math.max(0, Math.min(newPrice, original));
+      return { ...it, price: capped, originalPrice: original, overrideReason: reason };
+    }));
+    setPriceEditIndex(null);
   };
 
   // Park the current cart as a draft order (retail orders persist as "draft") and clear the register.
@@ -1126,7 +1152,8 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
     handleCategoryChange, handleSearchChange, handleSearchKeyDown,
     cart, cartItemCount, subtotal, tax, inclusiveTax, loyaltyDiscount, total,
     manualDiscount, discountReason, discountOpen, setDiscountOpen, applyDiscount,
-    pendingDiscountApproval, setPendingDiscountApproval, confirmDiscountApproval,
+    pendingApprovalAction, setPendingApprovalAction, confirmApproval,
+    priceEditIndex, setPriceEditIndex, setLinePrice,
     addItemToCart, handleItemTap, proceedWithItem, handleScaleAddToCart,
     updateQuantity, removeFromCart, clearCart, updateCourse,
     pricingProfile, pricingTiers, repricing, repriceCart,
