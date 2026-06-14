@@ -757,6 +757,7 @@ interface CreateOrderInput {
   coversCount?: number;
   customerPhone?: string;
   customerName?: string;
+  ageVerified?: boolean;
   lines: Array<{
     catalog_item_id: string;
     sku: string;
@@ -783,6 +784,7 @@ export function useCreateOrder() {
         covers_count: data.coversCount,
         customer_phone: data.customerPhone,
         customer_name: data.customerName,
+        age_verified: data.ageVerified,
         lines: data.lines,
       }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['pos-orders'] }),

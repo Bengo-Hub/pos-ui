@@ -403,6 +403,9 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
   // complete set below — so filters never operate on a single paginated page.
   const { data: catalogItems, isLoading: menuLoading } = useFullCatalog();
   const createOrder = useCreateOrder();
+  // Set true when the cashier confirms the age prompt for an age-restricted item;
+  // sent with the order so the backend age gate passes. Reset when the cart clears.
+  const ageVerifiedRef = useRef(false);
   const addOrderLines = useAddOrderLines();
 
   const menuItems: MenuItem[] = useMemo(() => {
@@ -637,6 +640,9 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
         item,
         callback: () => {
           setAgePrompt(null);
+          // Record that the cashier confirmed the customer's age for this sale —
+          // sent as age_verified so the backend age gate passes (defence in depth).
+          ageVerifiedRef.current = true;
           proceedWithItem(item);
         },
       });
@@ -724,7 +730,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
     setCart((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const clearCart = () => setCart([]);
+  const clearCart = () => { setCart([]); ageVerifiedRef.current = false; };
 
   // repriceCart switches the pricing profile and re-resolves each cart line's base price against the
   // matching inventory pricing tier (RETAIL/WHOLESALE). On any failure a line keeps its current price.
@@ -855,6 +861,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
         discountAmount: loyaltyDiscount || undefined,
         customerPhone: loyaltyState?.customerPhone || undefined,
         customerName: loyaltyState?.customerName || undefined,
+        ageVerified: ageVerifiedRef.current || undefined,
         lines: orderLines,
       },
       {
@@ -906,6 +913,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
         orderSubtype: orderSubtype ?? undefined,
         tableId: tableId || undefined,
         coversCount: coversParam > 1 ? coversParam : undefined,
+        ageVerified: ageVerifiedRef.current || undefined,
         lines: orderLines,
       },
       {
@@ -1003,6 +1011,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
         discountAmount: loyaltyDiscount || undefined,
         customerPhone: loyaltyState?.customerPhone || undefined,
         customerName: loyaltyState?.customerName || undefined,
+        ageVerified: ageVerifiedRef.current || undefined,
         lines: orderLines,
       });
       const orderId = data.id || data.order_id || '';
