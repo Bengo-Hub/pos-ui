@@ -14,7 +14,9 @@
  * (terminalConfigFor) exactly as before, so behaviour is unchanged — only the layout is GoDigital.
  */
 
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { CategoryBrandDrawer } from '@/components/pos/terminal/parts/category-brand-drawer';
 import { PosToolbar } from '@/components/pos/terminal/pos-toolbar';
 import { OrderTypeSelector } from '@/components/pos/order-type-selector';
 import { LoyaltyPanel } from '@/components/retail/LoyaltyPanel';
@@ -28,7 +30,7 @@ import { useTerminal } from '@/components/pos/terminal/terminal-context';
 import { searchPlaceholderFor } from '@/lib/use-case-config';
 import { cn } from '@/lib/utils';
 import {
-  Ban, ChefHat, Flame, Grid3x3, Image as ImageIcon, LayoutList, Loader2,
+  Ban, ChefHat, Flame, Grid3x3, Image as ImageIcon, LayoutGrid, LayoutList, Loader2,
   Minus, Plus, Search, ShoppingCart, Trash2, User, X,
 } from 'lucide-react';
 
@@ -36,6 +38,8 @@ export function TerminalShell() {
   const t = useTerminal();
   const { cfg, cart } = t;
   const router = useRouter();
+  // Full-screen category/brand picker drawer (godigital-style "browse").
+  const [browseOpen, setBrowseOpen] = useState(false);
 
   return (
     <div className="flex flex-col bg-background" style={{ height: 'calc(100vh - 80px)' }}>
@@ -279,6 +283,16 @@ export function TerminalShell() {
               onSelect={t.pickerMode === 'brand' ? t.handleBrandChange : t.handleCategoryChange}
               className="flex-1"
             />
+            {/* Browse — opens the full category/brand picker drawer (godigital reference). */}
+            <button
+              type="button"
+              onClick={() => setBrowseOpen(true)}
+              title={t.pickerMode === 'brand' ? 'Browse brands' : 'Browse categories'}
+              className="shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-border bg-card text-xs font-bold text-muted-foreground hover:text-foreground hover:border-primary/40 transition-colors"
+            >
+              <LayoutGrid className="h-4 w-4" />
+              <span className="hidden sm:inline">Browse</span>
+            </button>
             <div className="flex gap-0.5 shrink-0 border border-border rounded-lg p-0.5 bg-card">
               {([['card', Grid3x3], ['list', LayoutList], ['image_grid', ImageIcon]] as const).map(([mode, Icon]) => (
                 <button key={mode} onClick={() => t.setDisplayMode(mode)}
@@ -324,6 +338,15 @@ export function TerminalShell() {
       </div>
 
       <TerminalModals />
+
+      <CategoryBrandDrawer
+        open={browseOpen}
+        mode={t.pickerMode === 'brand' ? 'brand' : 'category'}
+        entries={t.pickerMode === 'brand' ? t.brands : t.categories}
+        active={t.pickerMode === 'brand' ? t.activeBrand : t.activeCategory}
+        onSelect={t.pickerMode === 'brand' ? t.handleBrandChange : t.handleCategoryChange}
+        onClose={() => setBrowseOpen(false)}
+      />
     </div>
   );
 }

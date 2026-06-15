@@ -6,6 +6,7 @@ import { Button, Card, CardContent, CardHeader } from '@/components/ui/base';
 import { useTenantBranding } from '@/providers/tenant-branding-provider';
 import { usePOSSettings, useUpdatePOSSettings } from '@/hooks/usePOSSettings';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useModuleAccess } from '@/hooks/use-module-access';
 import { P } from '@/lib/rbac/permissions';
 import { inputClass, labelClass } from './shared';
 
@@ -14,7 +15,11 @@ export function GeneralTab() {
   const { data: settings, isLoading } = usePOSSettings();
   const updateSettings = useUpdatePOSSettings();
   const { can } = usePermissions();
+  const { isRetail, isPharmacy } = useModuleAccess();
   const canEdit = can(P.CONFIG_CHANGE) || can(P.CONFIG_MANAGE);
+  // Goods returns only apply to retail/pharmacy — a hospitality or quick-service outlet doesn't
+  // accept returns of consumed food/drinks, so the return-window field is irrelevant there.
+  const showReturnWindow = isRetail || isPharmacy;
 
   const [currency, setCurrency] = useState('KES');
   const [returnWindowDays, setReturnWindowDays] = useState('30');
@@ -119,27 +124,29 @@ export function GeneralTab() {
               <CardHeader>
                 <div className="flex items-center gap-2">
                   <RotateCcw className="h-4 w-4 text-primary" />
-                  <span className="font-bold text-sm">Returns Policy</span>
+                  <span className="font-bold text-sm">{showReturnWindow ? 'Returns & Discounts' : 'Discounts'}</span>
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <label className={labelClass}>Return Window (days)</label>
-                  <input
-                    type="number"
-                    min={0}
-                    max={365}
-                    step={1}
-                    value={returnWindowDays}
-                    onChange={(e) => setReturnWindowDays(e.target.value)}
-                    disabled={!canEdit}
-                    placeholder="30"
-                    className={`${inputClass} font-mono`}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Maximum days after purchase to accept a return. Set 0 for no limit.
-                  </p>
-                </div>
+                {showReturnWindow && (
+                  <div className="space-y-2">
+                    <label className={labelClass}>Return Window (days)</label>
+                    <input
+                      type="number"
+                      min={0}
+                      max={365}
+                      step={1}
+                      value={returnWindowDays}
+                      onChange={(e) => setReturnWindowDays(e.target.value)}
+                      disabled={!canEdit}
+                      placeholder="30"
+                      className={`${inputClass} font-mono`}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Maximum days after purchase to accept a return. Set 0 for no limit.
+                    </p>
+                  </div>
+                )}
                 <div className="space-y-2">
                   <label className={labelClass}>Max discount without approval (%)</label>
                   <input

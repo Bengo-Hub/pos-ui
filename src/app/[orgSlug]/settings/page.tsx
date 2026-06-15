@@ -63,7 +63,7 @@ const ALL_TABS: { id: Tab; label: string; icon: React.ElementType; requireModule
   { id: 'subscription',     label: 'Subscription',       icon: Key,         description: 'Your POS plan, limits, and features (view only)', requireAdmin: true },
   { id: 'devices',          label: 'Devices',            icon: Monitor,     description: 'POS terminals linked to this outlet (view only)', requireAdmin: true },
   { id: 'booking_policy',   label: 'Booking Policy',     icon: Clock,       description: 'Amendment & cancellation windows and fees for hotel bookings', requireModule: 'hotel' },
-  { id: 'team',             label: 'Team',               icon: Users,       description: 'Staff members and roles' },
+  { id: 'team',             label: 'Team',               icon: Users,       description: 'Staff members, roles, and permissions', requireAdmin: true },
   { id: 'audit',            label: 'Loss Prevention',    icon: ShieldCheck, description: 'Audit trail + per-cashier exception report', requireAdmin: true },
   { id: 'platform',         label: 'Platform',           icon: ShieldCheck, description: 'Admin and tenant management' },
 ];
@@ -143,7 +143,7 @@ export default function SettingsPage() {
         {activeTab === 'subscription'     && isAdminOrManager && <SubscriptionTab />}
         {activeTab === 'devices'          && isAdminOrManager && <DevicesTab />}
         {activeTab === 'booking_policy'   && <BookingPolicyTab />}
-        {activeTab === 'team'             && <TeamTab />}
+        {activeTab === 'team'             && isAdminOrManager && <TeamTab />}
         {activeTab === 'audit'            && <AuditTab />}
         {activeTab === 'platform'         && isPlatformOwner && <PlatformTab />}
       </div>

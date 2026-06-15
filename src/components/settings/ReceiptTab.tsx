@@ -5,6 +5,7 @@ import { HelpCircle, Inbox, Loader2, Lock, Printer, Receipt, Save } from 'lucide
 import { Button, Card, CardContent, CardHeader } from '@/components/ui/base';
 import { usePOSSettings, useUpdatePOSSettings } from '@/hooks/usePOSSettings';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useModuleAccess } from '@/hooks/use-module-access';
 import { useTenantBranding } from '@/providers/tenant-branding-provider';
 import { useAuthStore } from '@/store/auth';
 import { useOutletFilterStore } from '@/store/outlet-filter';
@@ -14,12 +15,15 @@ import { discoverPrinters, openCashDrawer, requestUSBPrinter, requestBluetoothPr
 import { Toggle, inputClass, labelClass } from './shared';
 import { toast } from 'sonner';
 
+// Each station declares whether it is a Kitchen-Order-Ticket station (kitchen/bar/coffee) or a
+// waiter copy, so we can hide KOT/waiter stations on use cases that don't have a kitchen or table
+// service (e.g. retail/pharmacy) — they only ever print the customer bill.
 const RECEIPT_PRINTER_ROLES = [
-  { id: 'customer', label: 'Bill / Customer Receipt', desc: 'Full receipt (prices) printed at point of sale' },
-  { id: 'kitchen', label: 'KOT Kitchen Printer', desc: 'Kitchen ticket (food, no prices) on order open' },
-  { id: 'bar', label: 'KOT Bar Printer', desc: 'Bar ticket for alcohol & cold drinks' },
-  { id: 'coffee', label: 'KOT Coffee Shop', desc: 'Dedicated coffee/tea ticket (else folds into Kitchen)' },
-  { id: 'waiter', label: 'Waiter Copy', desc: 'Order summary for the serving staff' },
+  { id: 'customer', label: 'Bill / Customer Receipt', desc: 'Full receipt (prices) printed at point of sale', kot: false, waiter: false },
+  { id: 'kitchen', label: 'KOT Kitchen Printer', desc: 'Kitchen ticket (food, no prices) on order open', kot: true, waiter: false },
+  { id: 'bar', label: 'KOT Bar Printer', desc: 'Bar ticket for alcohol & cold drinks', kot: true, waiter: false },
+  { id: 'coffee', label: 'KOT Coffee Shop', desc: 'Dedicated coffee/tea ticket (else folds into Kitchen)', kot: true, waiter: false },
+  { id: 'waiter', label: 'Waiter Copy', desc: 'Order summary for the serving staff', kot: false, waiter: true },
 ];
 
 const PAPER_OPTIONS = ['80mm', '58mm'];
@@ -31,6 +35,14 @@ export function ReceiptTab() {
   const { data: settings, isLoading } = usePOSSettings();
   const updateSettings = useUpdatePOSSettings();
   const { can } = usePermissions();
+  const { hasModule } = useModuleAccess();
+  // KOT stations (kitchen/bar/coffee) only make sense where there's a kitchen display; the waiter
+  // copy only where there's table service. Retail/pharmacy print just the customer bill.
+  const showKitchenStations = hasModule('kds');
+  const showWaiterStation = hasModule('tables');
+  const printerRoles = RECEIPT_PRINTER_ROLES.filter(
+    (r) => (!r.kot || showKitchenStations) && (!r.waiter || showWaiterStation),
+  );
   const { tenant } = useTenantBranding();
   const authOutlet = useAuthStore((s) => s.outlet);
   const selectedOutlet = useOutletFilterStore((s) => s.selectedOutlet);
@@ -227,7 +239,10 @@ export function ReceiptTab() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {[
               { key: 'autoPrintOrder' as const, label: 'Auto-Print Receipt on Completion', desc: 'Automatically print customer receipt when a sale is completed.' },
-              { key: 'autoPrintKitchen' as const, label: 'Auto-Print Kitchen Ticket', desc: 'Send a kitchen order ticket when an order is created.' },
+              // Kitchen auto-print only applies where a kitchen display/ticket exists.
+              ...(showKitchenStations
+                ? [{ key: 'autoPrintKitchen' as const, label: 'Auto-Print Kitchen Ticket', desc: 'Send a kitchen order ticket when an order is created.' }]
+                : []),
             ].map((item) => (
               <div key={item.key} className="flex items-center justify-between p-4 rounded-xl bg-accent/10 border border-border gap-4">
                 <div className="min-w-0">
@@ -338,7 +353,7 @@ export function ReceiptTab() {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-          {RECEIPT_PRINTER_ROLES.map((role) => {
+          {printerRoles.map((role) => {
             const p = getProfile(role.id);
             const currentName = p.printer_name ?? '';
             // Build the dropdown options: browser default + discovered + any previously-saved name.
