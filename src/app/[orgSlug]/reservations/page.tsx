@@ -23,8 +23,8 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 
-import { usePermissions } from '@/hooks/usePermissions';
-import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
+import { PageGuard } from '@/components/auth/page-guard';
+import { P } from '@/lib/rbac/permissions';
 import {
   useReservations,
   useAvailableSlots,
@@ -384,8 +384,7 @@ function ReservationCard({
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-export default function ReservationsPage() {
-  const { can } = usePermissions();
+function ReservationsPage() {
   const outlet = useAuthStore((s) => s.outlet);
   const params = useParams();
   const router = useRouter();
@@ -434,10 +433,6 @@ export default function ReservationsPage() {
     reservations.forEach((r) => { if (r.status in c) (c as any)[r.status]++; });
     return c;
   }, [reservations]);
-
-  if (!can('pos.tables.change') && !can('pos.tables.manage')) {
-    return <ModuleUnavailablePage moduleKey="reservations" />;
-  }
 
   return (
     <div className="p-6 max-w-3xl mx-auto space-y-6">
@@ -574,5 +569,13 @@ export default function ReservationsPage() {
         />
       )}
     </div>
+  );
+}
+
+export default function ReservationsPageGated() {
+  return (
+    <PageGuard moduleKey="reservations" permission={[P.TABLES_VIEW, P.TABLES_MANAGE]} label="Reservations">
+      <ReservationsPage />
+    </PageGuard>
   );
 }

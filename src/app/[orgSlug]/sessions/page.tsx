@@ -122,7 +122,7 @@ function SessionsContent() {
 
 export default function SessionsPage() {
   return (
-    <ModuleGate moduleKey="pos.reports" fallback={<ModuleUnavailablePage />}>
+    <ModuleGate moduleKey="reports" fallback={<ModuleUnavailablePage />}>
       <SessionsContent />
     </ModuleGate>
   );

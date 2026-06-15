@@ -52,11 +52,13 @@ export interface AvailabilityResponse {
   booked_slots: BookedSlot[];
 }
 
-export function listAppointments(
+export async function listAppointments(
   tenantSlug: string,
   params?: { status?: string; staff_member_id?: string; start_from?: string; start_to?: string },
-) {
-  return apiClient.get<Appointment[]>(`${base(tenantSlug)}/appointments`, params);
+): Promise<Appointment[]> {
+  // Backend returns the `{ data, total, page, limit }` pagination envelope.
+  const res = await apiClient.get<{ data: Appointment[] }>(`${base(tenantSlug)}/appointments`, params);
+  return res.data ?? [];
 }
 
 export function createAppointment(tenantSlug: string, data: CreateAppointmentInput) {

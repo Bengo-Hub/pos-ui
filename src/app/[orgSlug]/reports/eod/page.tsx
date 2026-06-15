@@ -97,7 +97,7 @@ function EODContent() {
 
 export default function EODListPage() {
   return (
-    <ModuleGate moduleKey="pos.reports" fallback={<ModuleUnavailablePage />}>
+    <ModuleGate moduleKey="reports" fallback={<ModuleUnavailablePage />}>
       <EODContent />
     </ModuleGate>
   );

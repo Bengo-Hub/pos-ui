@@ -98,7 +98,7 @@ function ShiftsReportContent() {
 
 export default function ShiftsReportPage() {
   return (
-    <ModuleGate moduleKey="pos.reports" fallback={<ModuleUnavailablePage />}>
+    <ModuleGate moduleKey="reports" fallback={<ModuleUnavailablePage />}>
       <ShiftsReportContent />
     </ModuleGate>
   );

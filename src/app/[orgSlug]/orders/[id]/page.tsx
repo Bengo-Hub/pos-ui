@@ -104,7 +104,12 @@ export default function OrderDetailPage() {
                     KES {(line.unit_price ?? 0).toLocaleString()}
                   </td>
                   <td className="px-4 py-3 text-right font-mono font-semibold">
-                    KES {(line.line_total ?? line.total ?? 0).toLocaleString()}
+                    KES {(
+                      line.total_price ??
+                      line.line_total ??
+                      line.total ??
+                      (line.unit_price ?? 0) * (line.quantity ?? 0)
+                    ).toLocaleString()}
                   </td>
                 </tr>
               ))}

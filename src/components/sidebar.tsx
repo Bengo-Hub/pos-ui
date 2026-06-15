@@ -249,12 +249,14 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
   const outletProfile = normalizeUseCase(outlet?.use_case ?? (user as any)?.outlet_use_case ?? '');
   const isServices = outletProfile === 'services';
   const isPharmacy = outletProfile === 'pharmacy';
-  const isHospOrQSR = outletProfile === 'hospitality' || outletProfile === 'quick_service';
 
   // ── Nav groups ────────────────────────────────────────────────────────────
 
   const isWaiter = !isHQUser && userRoles.includes('waiter');
-  const isCashierHospOrQSR = !isHQUser && userRoles.includes('cashier') && isHospOrQSR;
+  // Hospitality cashiers settle bills from the Tables/Orders surface, so the fast terminal is hidden
+  // for them. Quick-service has NO table service — the POS terminal IS the cashier's order-entry
+  // surface, so quick-service cashiers must keep it. Hence: hospitality only, not QSR.
+  const isCashierHosp = !isHQUser && userRoles.includes('cashier') && outletProfile === 'hospitality';
 
   const navGroups: NavGroup[] = [
     {
@@ -417,8 +419,9 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
           if (item.hideForProfiles?.includes(outletProfile)) return false;
           // Waiter role: only Tables + Shifts
           if (isWaiter && item.waiterHidden) return false;
-          // Cashier in hospitality/quick_service: focused on clearing bills only
-          if (isCashierHospOrQSR && item.cashierHospHidden) return false;
+          // Hospitality cashier: focused on clearing bills from Tables/Orders (terminal hidden).
+          // Quick-service cashier keeps the terminal — see isCashierHosp note above.
+          if (isCashierHosp && item.cashierHospHidden) return false;
           // Services outlets sell through the adaptive /order terminal ("New Sale") — they also have
           // Appointments/Queue/Packages, but those surfaces have no checkout, so order entry must stay
           // available (previously hiding new_order/orders left services with no way to take payment).

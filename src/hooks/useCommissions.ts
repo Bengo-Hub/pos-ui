@@ -17,9 +17,15 @@ export interface CommissionRecord {
   tenant_id: string;
   staff_member_id: string;
   order_id?: string;
-  amount: number;
-  rate: number;
-  base_amount: number;
+  order_line_id?: string;
+  service_sku: string;
+  /** Sale amount the commission was calculated on. */
+  sale_amount: number;
+  /** Percentage at time of sale (e.g. 10 means 10%). */
+  commission_rate: number;
+  /** Commission earned. */
+  commission_amount: number;
+  status: 'pending' | 'paid' | 'voided';
   notes?: string;
   created_at: string;
 }
@@ -94,12 +100,13 @@ export function useCommissions(filters?: { staff_member_id?: string; order_id?: 
   return useQuery({
     queryKey: ['commissions', tenantID, filters],
     queryFn: () =>
-      apiClient.get<CommissionRecord[]>(basePath(tenantID), {
+      apiClient.get<{ data: CommissionRecord[] }>(basePath(tenantID), {
         staff_member_id: filters?.staff_member_id,
         order_id: filters?.order_id,
       }),
     enabled: !!tenantID,
     staleTime: 30_000,
+    select: (res) => res.data ?? [],
   });
 }
 

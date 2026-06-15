@@ -110,7 +110,7 @@ function StockReportContent() {
 
 export default function StockReportPage() {
   return (
-    <ModuleGate moduleKey="pos.reports" fallback={<ModuleUnavailablePage />}>
+    <ModuleGate moduleKey="reports" fallback={<ModuleUnavailablePage />}>
       <StockReportContent />
     </ModuleGate>
   );

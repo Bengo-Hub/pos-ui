@@ -106,7 +106,7 @@ function ReturnsReportContent() {
 
 export default function ReturnsReportPage() {
   return (
-    <ModuleGate moduleKey="pos.reports" fallback={<ModuleUnavailablePage />}>
+    <ModuleGate moduleKey="reports" fallback={<ModuleUnavailablePage />}>
       <ReturnsReportContent />
     </ModuleGate>
   );

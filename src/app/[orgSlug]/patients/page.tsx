@@ -7,19 +7,18 @@ import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api/client';
 import { useParams } from 'next/navigation';
 import { useState } from 'react';
-import { AlertTriangle, Loader2, Plus, UserSquare } from 'lucide-react';
+import { Loader2, Plus, UserSquare } from 'lucide-react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 
+// Patients are a derived view over prescriptions — there is no standalone Patient
+// entity. The backend returns distinct patients keyed by id-number (fallback: name).
 interface Patient {
-  id: string;
-  name: string;
-  dob?: string;
-  phone?: string;
-  allergies?: string[];
-  active_medication_count?: number;
-  prescription_count?: number;
-  created_at: string;
+  patient_name: string;
+  patient_dob?: string;
+  patient_id_number?: string;
+  visit_count: number;
+  last_visit?: string;
 }
 
 function usePatients(search: string) {
@@ -27,48 +26,48 @@ function usePatients(search: string) {
   const tenantID = user?.tenant_id ?? '';
   return useQuery({
     queryKey: ['pharmacy-patients', tenantID, search],
-    queryFn: () => apiClient.get<{ data: Patient[] }>(`/api/v1/${tenantID}/pos/pharmacy/patients${search ? `?search=${encodeURIComponent(search)}` : ''}`),
+    // Backend search param is `q`; response is the `{ data }` pagination envelope.
+    queryFn: () => apiClient.get<{ data: Patient[] }>(`/api/v1/${tenantID}/pos/pharmacy/patients${search ? `?q=${encodeURIComponent(search)}` : ''}`),
     enabled: !!tenantID,
     staleTime: 2 * 60_000,
+    select: (res) => res.data ?? [],
   });
 }
 
 function PatientCard({ patient, orgSlug }: { patient: Patient; orgSlug: string }) {
-  const age = patient.dob
-    ? Math.floor((Date.now() - new Date(patient.dob).getTime()) / (365.25 * 24 * 3600 * 1000))
+  const age = patient.patient_dob
+    ? Math.floor((Date.now() - new Date(patient.patient_dob).getTime()) / (365.25 * 24 * 3600 * 1000))
     : null;
-  const hasAllergies = (patient.allergies ?? []).length > 0;
+  // Route by name (always present); id-number is unreliable / often blank.
+  const key = encodeURIComponent(patient.patient_name);
 
   return (
     <Link
-      href={`/${orgSlug}/patients/${patient.id}`}
+      href={`/${orgSlug}/patients/${key}`}
       className="flex items-center gap-4 px-5 py-4 bg-card border border-border rounded-2xl hover:border-primary/30 hover:shadow-md hover:shadow-primary/8 transition-all duration-200"
     >
       <div className="h-11 w-11 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
         <span className="text-sm font-bold text-primary">
-          {patient.name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase()}
+          {patient.patient_name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase()}
         </span>
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
-          <p className="font-semibold text-sm text-foreground">{patient.name}</p>
-          {hasAllergies && (
-            <span className="flex items-center gap-1 text-[10px] font-bold bg-red-500/10 text-red-500 border border-red-500/20 px-1.5 py-0.5 rounded-full">
-              <AlertTriangle className="h-2.5 w-2.5" /> Allergy
+          <p className="font-semibold text-sm text-foreground">{patient.patient_name}</p>
+          {patient.patient_id_number && (
+            <span className="text-[10px] font-medium bg-accent text-muted-foreground px-1.5 py-0.5 rounded-full">
+              ID {patient.patient_id_number}
             </span>
           )}
         </div>
         <p className="text-xs text-muted-foreground mt-0.5">
           {age !== null ? `${age} yrs` : ''}
-          {age !== null && patient.phone ? ' · ' : ''}
-          {patient.phone ?? ''}
+          {age !== null && patient.last_visit ? ' · ' : ''}
+          {patient.last_visit ? `last visit ${new Date(patient.last_visit).toLocaleDateString()}` : ''}
         </p>
       </div>
       <div className="text-right shrink-0">
-        <p className="text-xs font-semibold text-foreground">{patient.prescription_count ?? 0} Rx</p>
-        {(patient.active_medication_count ?? 0) > 0 && (
-          <p className="text-[10px] text-muted-foreground mt-0.5">{patient.active_medication_count} active meds</p>
-        )}
+        <p className="text-xs font-semibold text-foreground">{patient.visit_count ?? 0} Rx</p>
       </div>
     </Link>
   );
@@ -78,8 +77,7 @@ function PatientsPage() {
   const params = useParams();
   const orgSlug = params?.orgSlug as string;
   const [search, setSearch] = useState('');
-  const { data, isLoading } = usePatients(search);
-  const patients = data?.data ?? [];
+  const { data: patients = [], isLoading } = usePatients(search);
 
   return (
     <div className="p-6">
@@ -94,8 +92,9 @@ function PatientsPage() {
             <p className="text-sm text-muted-foreground mt-0.5">Manage patient records and medication history</p>
           </div>
         </div>
+        {/* Patients are created implicitly when a prescription is filled. */}
         <Link
-          href={`/${orgSlug}/patients/new`}
+          href={`/${orgSlug}/pharmacy?new=1`}
           className="inline-flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-primary/90 transition-colors"
         >
           <Plus className="h-4 w-4" />
@@ -124,8 +123,8 @@ function PatientsPage() {
         <div className="flex flex-col items-center justify-center h-48 text-muted-foreground gap-2">
           <UserSquare className="h-10 w-10 opacity-30" />
           <p className="font-medium">{search ? 'No patients found for that search' : 'No patient profiles yet'}</p>
-          <Link href={`/${orgSlug}/patients/new`} className="text-sm text-primary underline">
-            Add first patient
+          <Link href={`/${orgSlug}/pharmacy?new=1`} className="text-sm text-primary underline">
+            Fill first prescription
           </Link>
         </div>
       ) : (

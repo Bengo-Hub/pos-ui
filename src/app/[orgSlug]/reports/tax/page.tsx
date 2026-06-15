@@ -119,7 +119,7 @@ function TaxReportContent() {
 
 export default function TaxReportPage() {
   return (
-    <ModuleGate moduleKey="pos.reports" fallback={<ModuleUnavailablePage />}>
+    <ModuleGate moduleKey="reports" fallback={<ModuleUnavailablePage />}>
       <TaxReportContent />
     </ModuleGate>
   );

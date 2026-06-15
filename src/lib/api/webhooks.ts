@@ -60,6 +60,9 @@ export const webhooksApi = {
   delete: (tenantID: string, webhookID: string) =>
     apiClient.delete(`${webhookBase(tenantID)}/${webhookID}`),
 
+  // Backend returns the `{ data, total, page, limit }` pagination envelope.
   listDeliveries: (tenantID: string, webhookID: string) =>
-    apiClient.get<WebhookDelivery[]>(`${webhookBase(tenantID)}/${webhookID}/deliveries`),
+    apiClient
+      .get<{ data: WebhookDelivery[] }>(`${webhookBase(tenantID)}/${webhookID}/deliveries`)
+      .then((r) => r.data ?? []),
 };

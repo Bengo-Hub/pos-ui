@@ -106,7 +106,7 @@ function ShiftDetailContent() {
 
 export default function ShiftDetailPage() {
   return (
-    <ModuleGate moduleKey="pos.reports" fallback={<ModuleUnavailablePage />}>
+    <ModuleGate moduleKey="reports" fallback={<ModuleUnavailablePage />}>
       <ShiftDetailContent />
     </ModuleGate>
   );

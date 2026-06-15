@@ -53,19 +53,48 @@ export interface PrescriptionFilters {
 }
 
 // ─── API functions ────────────────────────────────────────────────────────────
+//
+// Backend shapes:
+//   - List  → pagination envelope `{ data: Prescription[], total, page, limit }`
+//             (list rows do NOT include `lines`).
+//   - Get / Create / Dispense → `{ prescription: Prescription, lines: PrescriptionLine[] }`.
+// We normalise both to a flat `Prescription` (with `lines`) for the UI.
 
-export function listPrescriptions(tenantSlug: string, params?: PrescriptionFilters) {
-  return apiClient.get<Prescription[]>(`${base(tenantSlug)}/prescriptions`, params);
+/** Flatten the `{ prescription, lines }` detail envelope into a flat Prescription. */
+function flattenPrescription(res: { prescription: Prescription; lines?: PrescriptionLine[] }): Prescription {
+  return { ...res.prescription, lines: res.lines ?? res.prescription?.lines ?? [] };
 }
 
-export function getPrescription(tenantSlug: string, id: string) {
-  return apiClient.get<Prescription>(`${base(tenantSlug)}/prescriptions/${id}`);
+export async function listPrescriptions(
+  tenantSlug: string,
+  params?: PrescriptionFilters,
+): Promise<Prescription[]> {
+  const res = await apiClient.get<{ data: Prescription[] }>(
+    `${base(tenantSlug)}/prescriptions`,
+    params,
+  );
+  return (res.data ?? []).map((p) => ({ ...p, lines: p.lines ?? [] }));
 }
 
-export function createPrescription(tenantSlug: string, data: CreatePrescriptionData) {
-  return apiClient.post<Prescription>(`${base(tenantSlug)}/prescriptions`, data);
+export async function getPrescription(tenantSlug: string, id: string): Promise<Prescription> {
+  const res = await apiClient.get<{ prescription: Prescription; lines?: PrescriptionLine[] }>(
+    `${base(tenantSlug)}/prescriptions/${id}`,
+  );
+  return flattenPrescription(res);
 }
 
-export function dispensePrescription(tenantSlug: string, id: string) {
-  return apiClient.post<Prescription>(`${base(tenantSlug)}/prescriptions/${id}/dispense`, {});
+export async function createPrescription(tenantSlug: string, data: CreatePrescriptionData): Promise<Prescription> {
+  const res = await apiClient.post<{ prescription: Prescription; lines?: PrescriptionLine[] }>(
+    `${base(tenantSlug)}/prescriptions`,
+    data,
+  );
+  return flattenPrescription(res);
+}
+
+export async function dispensePrescription(tenantSlug: string, id: string): Promise<Prescription> {
+  const res = await apiClient.post<{ prescription: Prescription; lines?: PrescriptionLine[] }>(
+    `${base(tenantSlug)}/prescriptions/${id}/dispense`,
+    {},
+  );
+  return flattenPrescription(res);
 }

@@ -122,7 +122,7 @@ function EODDetailContent() {
 
 export default function EODDetailPage() {
   return (
-    <ModuleGate moduleKey="pos.reports" fallback={<ModuleUnavailablePage />}>
+    <ModuleGate moduleKey="reports" fallback={<ModuleUnavailablePage />}>
       <EODDetailContent />
     </ModuleGate>
   );

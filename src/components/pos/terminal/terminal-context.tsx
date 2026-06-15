@@ -54,7 +54,10 @@ export interface MenuItem {
   sku: string;
   barcode?: string;         // set for variant cart lines (the chosen variant's scan code)
   description?: string;
+  /** Price for the currently-selected pricing profile (already resolved by the terminal). */
   price: number;
+  /** All pricing-profile prices keyed by tier code (RETAIL/WHOLESALE/…) from inventory. */
+  prices?: Record<string, number>;
   category: string;
   brandName?: string;       // ItemBrand name (retail/pharmacy) — for the Brands tab
   brandCode?: string;
@@ -437,12 +440,23 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
 
   const menuItems: MenuItem[] = useMemo(() => {
     const items = catalogItems ?? [];
-    return items.map((item: any) => ({
+    return items.map((item: any) => {
+      const tierPrices: Record<string, number> | undefined =
+        item.prices && typeof item.prices === 'object' ? item.prices : undefined;
+      // Display/charge price = the selected profile's tier price when available, else the
+      // override-merged default price. New taps after a profile switch get the right price because
+      // this memo recomputes when pricingProfile changes.
+      const profilePrice =
+        tierPrices && pricingProfile && (tierPrices[pricingProfile] ?? 0) > 0
+          ? tierPrices[pricingProfile]
+          : (item.price ?? 0);
+      return {
       id: item.id,
       name: item.name,
       sku: item.sku,
       description: item.description,
-      price: item.price ?? 0,
+      price: profilePrice,
+      prices: tierPrices,
       category: item.category || 'Uncategorized',
       brandName: item.brand_name ?? item.brand ?? undefined,
       brandCode: item.brand_code ?? undefined,
@@ -475,8 +489,9 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
       taxRate: typeof item.tax_rate === 'number' ? item.tax_rate : undefined,
       netPrice: typeof item.net_price === 'number' ? item.net_price : undefined,
       taxAmount: typeof item.tax_amount === 'number' ? item.tax_amount : undefined,
-    }));
-  }, [catalogItems]);
+      };
+    });
+  }, [catalogItems, pricingProfile]);
 
   // Pricing tiers (Retail/Wholesale/custom) from inventory via pos-api — drives the price selector.
   const { data: tiersResp } = usePricingTiers();
@@ -570,12 +585,14 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
         return [...prev, { ...item, quantity: qty }];
       });
 
-      // The catalog grid shows the DEFAULT tier price. When a non-default pricing profile (e.g.
-      // Wholesale) is selected, resolve this item's profile price from inventory-api and patch the
-      // line so newly-added items honour the chosen profile (not just items present at switch time).
+      // The grid price already reflects the selected profile (menuItems carries every tier's price).
+      // Only when the profile price isn't in the local map do we resolve it from inventory-api —
+      // e.g. a tier with quantity-break pricing not included in the bulk payload.
       const defaultCode = (pricingTiers.find((tt) => tt.is_default) ?? pricingTiers[0])?.code;
       const tenantId = user?.tenant_id ?? '';
-      if (!mods && !serialNumber && tenantId && pricingProfile && pricingProfile !== defaultCode) {
+      const hasLocalProfilePrice =
+        !!item.prices && typeof item.prices[pricingProfile] === 'number' && item.prices[pricingProfile] > 0;
+      if (!mods && !serialNumber && tenantId && pricingProfile && pricingProfile !== defaultCode && !hasLocalProfilePrice) {
         apiClient
           .get<{ unit_price?: number }>(
             `/api/v1/${tenantId}/pos/catalog/pricing/resolve?item_id=${encodeURIComponent(item.id)}&quantity=${qty}&profile=${pricingProfile}`,
@@ -777,6 +794,12 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
       try {
         const updated = await Promise.all(
           cart.map(async (c) => {
+            // Fast path: the line already carries every tier's price from the catalog payload.
+            const local = c.prices?.[profile];
+            if (typeof local === 'number' && local > 0) {
+              return { ...c, price: local };
+            }
+            // Fallback: quantity-aware resolve against inventory (handles tiers not in the map).
             try {
               const res = await apiClient.get<{ unit_price?: number }>(
                 `/api/v1/${tenantId}/pos/catalog/pricing/resolve?item_id=${encodeURIComponent(c.id)}&quantity=${c.quantity}&profile=${profile}`

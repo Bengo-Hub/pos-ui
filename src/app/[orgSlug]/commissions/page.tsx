@@ -38,7 +38,7 @@ function CommissionsPage() {
     toast.error('Failed to load commissions');
   }
 
-  const totalAmount = records.reduce((sum, r) => sum + (r.amount ?? 0), 0);
+  const totalAmount = records.reduce((sum, r) => sum + (r.commission_amount ?? 0), 0);
 
   return (
     <div className="p-6">
@@ -73,9 +73,11 @@ function CommissionsPage() {
               <tr className="border-b border-border bg-accent/30">
                 <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Staff ID</th>
                 <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Order ID</th>
-                <th className="text-right px-4 py-3 font-semibold text-muted-foreground">Base Amount</th>
+                <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Service</th>
+                <th className="text-right px-4 py-3 font-semibold text-muted-foreground">Sale Amount</th>
                 <th className="text-right px-4 py-3 font-semibold text-muted-foreground">Rate</th>
                 <th className="text-right px-4 py-3 font-semibold text-muted-foreground">Commission</th>
+                <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Status</th>
                 <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Date</th>
               </tr>
             </thead>
@@ -88,12 +90,21 @@ function CommissionsPage() {
                   <td className="px-4 py-3 font-mono text-xs text-muted-foreground">
                     {rec.order_id ? rec.order_id.slice(0, 8) + '…' : '—'}
                   </td>
-                  <td className="px-4 py-3 text-right">{formatCurrency(rec.base_amount)}</td>
+                  <td className="px-4 py-3 text-muted-foreground">{rec.service_sku || '—'}</td>
+                  <td className="px-4 py-3 text-right">{formatCurrency(rec.sale_amount)}</td>
                   <td className="px-4 py-3 text-right text-muted-foreground">
-                    {(rec.rate * 100).toFixed(1)}%
+                    {(rec.commission_rate ?? 0).toFixed(1)}%
                   </td>
                   <td className="px-4 py-3 text-right font-semibold text-primary">
-                    {formatCurrency(rec.amount)}
+                    {formatCurrency(rec.commission_amount)}
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className={cn(
+                      'inline-flex rounded-full px-2 py-0.5 text-xs font-medium capitalize',
+                      rec.status === 'paid' && 'bg-green-100 text-green-700',
+                      rec.status === 'pending' && 'bg-amber-100 text-amber-700',
+                      rec.status === 'voided' && 'bg-red-100 text-red-700',
+                    )}>{rec.status}</span>
                   </td>
                   <td className="px-4 py-3 text-muted-foreground">{formatDate(rec.created_at)}</td>
                 </tr>
@@ -101,9 +112,9 @@ function CommissionsPage() {
             </tbody>
             <tfoot>
               <tr className="border-t border-border bg-accent/30">
-                <td colSpan={4} className="px-4 py-3 font-semibold text-muted-foreground">Total</td>
+                <td colSpan={5} className="px-4 py-3 font-semibold text-muted-foreground">Total</td>
                 <td className="px-4 py-3 text-right font-bold text-primary">{formatCurrency(totalAmount)}</td>
-                <td />
+                <td colSpan={2} />
               </tr>
             </tfoot>
           </table>
