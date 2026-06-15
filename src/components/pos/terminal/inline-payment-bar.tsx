@@ -22,6 +22,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { useCreatePaymentIntent, useListC2BPayments, useClaimC2BPayment } from '@/hooks/usePOS';
 import { useOnline } from '@/hooks/use-online';
+import { savePendingPayment, getOfflineOrderByLocalId } from '@/lib/db/pos-db';
 import { useCashDrawer } from '@/hooks/useCashDrawer';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { usePOSGateways } from '@/hooks/use-pos-gateways';
@@ -155,6 +156,36 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
     const ord = await ensureOrder();
     if (!ord) { setBusyKey(null); return; }
     const method = tenderMethodFor(key);
+
+    // Offline: the order is already queued in IndexedDB (createOrderAsync). Queue the payment
+    // too — routed by local_order_id when the order itself is offline — so the sync worker
+    // records it after the order syncs. Without this, offline cash would create an order but
+    // never capture payment.
+    if (!isOnline) {
+      try {
+        const localOrder = await getOfflineOrderByLocalId(ord.orderId);
+        await savePendingPayment({
+          server_order_id: localOrder ? undefined : ord.orderId,
+          local_order_id: localOrder ? ord.orderId : undefined,
+          tender_id: tenderId,
+          tender_method: method,
+          amount: roundedTotal,
+          currency: 'KES',
+          external_ref: externalRef,
+          tenant_slug: tenantSlug,
+          created_at: new Date().toISOString(),
+          synced: false,
+        });
+        autoOpenOnSettle(method);
+        toast.success('Saved offline — will sync when back online.');
+        finish(ord);
+      } catch {
+        setBusyKey(null);
+        toast.error('Failed to save offline payment. Please try again.');
+      }
+      return;
+    }
+
     createIntent.mutate(
       { orderId: ord.orderId, tenderMethod: method, amount: roundedTotal, tenderId, externalRef },
       {
@@ -165,7 +196,7 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
         },
       },
     );
-  }, [ensureOrder, createIntent, roundedTotal, tenderId, finish, autoOpenOnSettle]);
+  }, [ensureOrder, createIntent, roundedTotal, tenderId, finish, autoOpenOnSettle, isOnline, tenantSlug]);
 
   // ── Online gateway tenders (M-Pesa STK / Paystack card / Wallet) ─────────────
   const startGateway = useCallback(async (key: TenderKey) => {
@@ -344,6 +375,7 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
             return (
               <button
                 key={a.key}
+                data-testid={`pos-tender-${a.key}`}
                 type="button"
                 disabled={disabled || anyBusy}
                 onClick={() => onPick(a.key)}
@@ -383,6 +415,7 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
                 return (
                   <button
                     key={a.key}
+                    data-testid={`pos-tender-${a.key}`}
                     type="button"
                     disabled={disabled || anyBusy}
                     onClick={() => onPick(a.key)}
@@ -489,6 +522,7 @@ function CashCapture({ total, value, onChange, busy, onConfirm, onCancel }: {
         </div>
       )}
       <button
+        data-testid="pos-confirm-cash"
         type="button" disabled={(parseFloat(value) || 0) < total || busy} onClick={onConfirm}
         className="w-full min-h-11 rounded-xl bg-emerald-600 text-white font-bold flex items-center justify-center gap-2 disabled:opacity-40 hover:bg-emerald-700 transition-colors"
       >

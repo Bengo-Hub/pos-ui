@@ -849,6 +849,7 @@ export default function PINLoginPage() {
                 return (
                   <button
                     key={i}
+                    data-testid={`pin-key-${key}`}
                     onClick={() => handleDigit(key)}
                     disabled={loginMutation.isPending || pinDigits.length >= PIN_LENGTH}
                     className={cn(

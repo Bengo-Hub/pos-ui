@@ -47,6 +47,7 @@ export function TerminalProductGrid() {
               return (
                 <button
                   key={item.id}
+                  data-testid="pos-product-card"
                   onClick={() => handleItemTap(item)}
                   className={cn(
                     'w-full grid grid-cols-[1fr_auto_auto] gap-3 items-center px-4 py-3 transition-all touch-manipulation active:scale-[0.99]',
@@ -117,6 +118,7 @@ export function TerminalProductGrid() {
               return (
                 <button
                   key={item.id}
+                  data-testid="pos-product-card"
                   onClick={() => handleItemTap(item)}
                   className={cn(
                     'relative rounded-2xl border-2 overflow-hidden transition-all active:scale-95 touch-manipulation',
@@ -168,6 +170,7 @@ export function TerminalProductGrid() {
               return (
                 <button
                   key={item.id}
+                  data-testid="pos-product-card"
                   onClick={() => handleItemTap(item)}
                   className={cn(
                     'relative flex flex-col items-start justify-between p-4 rounded-2xl border-2 transition-all min-h-30 touch-manipulation',
