@@ -50,24 +50,46 @@ async function getAuth(page: Page): Promise<{ token: string; tenantId: string; o
   });
 }
 
-// ── PIN login, preferring a retail/quick-service outlet (simple pay flow) ──────────
+// ── PIN login, selecting the Retail outlet (inline-pay flow) before entering the PIN ──
 async function pinLogin(page: Page) {
+  page.on('response', async (res) => {
+    if (res.url().includes('/auth/pin')) {
+      const body = await res.text().catch(() => '');
+      console.log(`[PIN ${res.request().method()} ${res.status()}] ${res.url()} :: ${body.slice(0, 200)}`);
+    }
+  });
   await page.goto(`/${ORG}/pin-login`, { waitUntil: 'domcontentloaded' });
 
-  // Outlet selection step (when >1 outlet and none stored). Prefer retail/quick_service.
-  const outletBtns = page.locator('button:has-text("Retail"), button:has-text("Quick Service")');
-  if (await outletBtns.first().isVisible().catch(() => false)) {
-    await outletBtns.first().click();
+  // Quick Service outlet: pay-mode inline checkout (not hospitality send-to-kitchen) and the
+  // richest demo catalog, so the product grid actually populates.
+  const outlet = page.getByRole('button', { name: /Quick Service/i }).first();
+  const keypad = page.getByTestId('pin-key-1');
+
+  // The keypad renders first (default step), then an effect switches multi-outlet tenants to
+  // the outlet step once outlets load. So wait for the outlet step to APPEAR (don't trust an
+  // early keypad), pick the outlet, and only THEN enter the PIN — otherwise digits are lost
+  // when the keypad is swapped out mid-entry.
+  const onOutletStep = await outlet.waitFor({ state: 'visible', timeout: 15_000 }).then(() => true).catch(() => false);
+  if (onOutletStep) {
+    await outlet.click();
   }
 
-  // Enter the PIN on the keypad.
-  await expect(page.getByTestId('pin-key-1')).toBeVisible({ timeout: 20_000 });
+  await expect(keypad).toBeVisible({ timeout: 20_000 });
+  await page.waitForTimeout(600);
   for (const d of PIN.split('')) {
     await page.getByTestId(`pin-key-${d}`).click();
-    await page.waitForTimeout(120);
+    await page.waitForTimeout(150);
   }
 
-  await page.waitForURL(new RegExp(`/${ORG}/(dashboard|order|orders|sell)`), { timeout: 30_000 });
+  // Surface a wrong-PIN error fast instead of waiting the full timeout.
+  const navigated = await page
+    .waitForURL(new RegExp(`/${ORG}/(dashboard|order|orders|sell)`), { timeout: 30_000 })
+    .then(() => true)
+    .catch(() => false);
+  if (!navigated) {
+    const err = await page.getByText(/Incorrect PIN|Too many/i).first().textContent().catch(() => null);
+    throw new Error(`PIN login did not navigate (still on ${page.url()}). Error shown: ${err ?? 'none'}`);
+  }
 }
 
 test.describe('POS offline sync (live)', () => {

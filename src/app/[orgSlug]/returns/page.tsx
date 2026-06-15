@@ -109,6 +109,7 @@ function useInitiateReturn() {
         { headers: { 'Idempotency-Key': localId } },
       );
     },
+    networkMode: 'always',
     onSuccess: () => qc.invalidateQueries({ queryKey: ['returns', tenantID] }),
   });
 }

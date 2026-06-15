@@ -856,6 +856,10 @@ export function useCreateOrder() {
       );
       return { ...res, offline: false };
     },
+    // Must run even when navigator.onLine is false — we handle offline internally
+    // (write to IndexedDB). Without this, React Query pauses the mutation offline and the
+    // sale is never queued.
+    networkMode: 'always',
     onSuccess: () => qc.invalidateQueries({ queryKey: ['pos-orders'] }),
   });
 }
@@ -902,6 +906,7 @@ export function useVoidOrder() {
         idemHeaders(localId),
       );
     },
+    networkMode: 'always',
     onSuccess: () => qc.invalidateQueries({ queryKey: ['pos-orders'] }),
   });
 }
@@ -1157,6 +1162,7 @@ export function useOpenDrawer() {
       }
       return apiClient.post(`${basePath(tenantID)}/drawers/open`, data, idemHeaders(localId));
     },
+    networkMode: 'always',
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['pos-drawer-current'] });
       qc.invalidateQueries({ queryKey: ['pos-session-current'] });
@@ -1192,6 +1198,7 @@ export function useCloseDrawer() {
         idemHeaders(`close-${drawerId}`),
       );
     },
+    networkMode: 'always',
     onSuccess: () => qc.invalidateQueries({ queryKey: ['pos-drawer-current'] }),
   });
 }
