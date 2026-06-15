@@ -40,7 +40,7 @@ export default function OrderDetailPage() {
   const payments = order.edges?.payments ?? [];
 
   return (
-    <div className="p-6 max-w-2xl mx-auto space-y-6">
+    <div className="p-6 max-w-5xl mx-auto space-y-6">
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold font-mono">{order.order_number}</h1>
@@ -64,89 +64,92 @@ export default function OrderDetailPage() {
         </div>
       </div>
 
-      <div className="bg-card rounded-2xl border border-border p-5 space-y-4">
-        <div className="grid grid-cols-3 gap-4 text-center">
-          <div>
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Subtotal</p>
-            <p className="text-lg font-bold font-mono">KES {order.subtotal.toLocaleString()}</p>
-          </div>
-          <div>
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Tax</p>
-            <p className="text-lg font-bold font-mono">{order.tax_total.toLocaleString()}</p>
-          </div>
-          <div>
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Total</p>
-            <p className="text-lg font-bold font-mono text-primary">KES {order.total_amount.toLocaleString()}</p>
+      {/* Two-column on desktop: line items fill the main column, summary + payments ride the side. */}
+      <div className="grid gap-6 lg:grid-cols-3">
+        <div className="lg:col-span-2 space-y-6">
+          <div className="bg-card rounded-2xl border border-border overflow-hidden">
+            <div className="px-5 py-4 border-b border-border">
+              <h2 className="font-bold text-base">Line Items</h2>
+            </div>
+            {lines.length > 0 ? (
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border bg-accent/20">
+                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Item</th>
+                    <th className="text-center px-4 py-3 font-semibold text-muted-foreground">Qty</th>
+                    <th className="text-right px-4 py-3 font-semibold text-muted-foreground">Unit</th>
+                    <th className="text-right px-4 py-3 font-semibold text-muted-foreground">Total</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {lines.map((line: any, i: number) => (
+                    <tr key={line.id ?? i}>
+                      <td className="px-4 py-3">{line.name ?? line.item_name ?? 'Item'}</td>
+                      <td className="px-4 py-3 text-center">{line.quantity}</td>
+                      <td className="px-4 py-3 text-right font-mono">
+                        KES {(line.unit_price ?? 0).toLocaleString()}
+                      </td>
+                      <td className="px-4 py-3 text-right font-mono font-semibold">
+                        KES {(
+                          line.total_price ??
+                          line.line_total ??
+                          line.total ??
+                          (line.unit_price ?? 0) * (line.quantity ?? 0)
+                        ).toLocaleString()}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <p className="px-5 py-10 text-center text-sm text-muted-foreground">No line items on this order.</p>
+            )}
           </div>
         </div>
+
+        <aside className="space-y-6 self-start lg:sticky lg:top-6">
+          <div className="bg-card rounded-2xl border border-border p-5">
+            <h2 className="font-bold text-base mb-4">Summary</h2>
+            <div className="space-y-2.5 text-sm">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Subtotal</span>
+                <span className="font-mono font-semibold">KES {order.subtotal.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Tax</span>
+                <span className="font-mono font-semibold">KES {order.tax_total.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between border-t border-border pt-2.5 mt-1">
+                <span className="font-bold">Total</span>
+                <span className="font-mono font-bold text-primary text-base">KES {order.total_amount.toLocaleString()}</span>
+              </div>
+            </div>
+          </div>
+
+          {payments.length > 0 && (
+            <div className="bg-card rounded-2xl border border-border overflow-hidden">
+              <div className="px-5 py-4 border-b border-border">
+                <h2 className="font-bold text-base">Payments</h2>
+              </div>
+              <div className="divide-y divide-border">
+                {payments.map((p: any, i: number) => (
+                  <div key={p.id ?? i} className="flex items-center justify-between gap-3 px-5 py-3 text-sm">
+                    <div className="min-w-0">
+                      <p className="capitalize font-medium truncate">{(p.payment_method ?? '').replace(/_/g, ' ') || '—'}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {p.created_at ? new Date(p.created_at).toLocaleString() : '—'}
+                      </p>
+                    </div>
+                    <span className="font-mono font-semibold text-green-600 shrink-0">
+                      KES {(p.amount ?? 0).toLocaleString()}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </aside>
       </div>
-
-      {lines.length > 0 && (
-        <div className="bg-card rounded-2xl border border-border overflow-hidden">
-          <div className="px-5 py-4 border-b border-border">
-            <h2 className="font-bold text-base">Line Items</h2>
-          </div>
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border bg-accent/20">
-                <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Item</th>
-                <th className="text-center px-4 py-3 font-semibold text-muted-foreground">Qty</th>
-                <th className="text-right px-4 py-3 font-semibold text-muted-foreground">Unit</th>
-                <th className="text-right px-4 py-3 font-semibold text-muted-foreground">Total</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {lines.map((line: any, i: number) => (
-                <tr key={line.id ?? i}>
-                  <td className="px-4 py-3">{line.name ?? line.item_name ?? 'Item'}</td>
-                  <td className="px-4 py-3 text-center">{line.quantity}</td>
-                  <td className="px-4 py-3 text-right font-mono">
-                    KES {(line.unit_price ?? 0).toLocaleString()}
-                  </td>
-                  <td className="px-4 py-3 text-right font-mono font-semibold">
-                    KES {(
-                      line.total_price ??
-                      line.line_total ??
-                      line.total ??
-                      (line.unit_price ?? 0) * (line.quantity ?? 0)
-                    ).toLocaleString()}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {payments.length > 0 && (
-        <div className="bg-card rounded-2xl border border-border overflow-hidden">
-          <div className="px-5 py-4 border-b border-border">
-            <h2 className="font-bold text-base">Payments</h2>
-          </div>
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border bg-accent/20">
-                <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Method</th>
-                <th className="text-right px-4 py-3 font-semibold text-muted-foreground">Amount</th>
-                <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Date</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {payments.map((p: any, i: number) => (
-                <tr key={p.id ?? i}>
-                  <td className="px-4 py-3 capitalize">{(p.payment_method ?? '').replace(/_/g, ' ')}</td>
-                  <td className="px-4 py-3 text-right font-mono font-semibold text-green-600">
-                    KES {(p.amount ?? 0).toLocaleString()}
-                  </td>
-                  <td className="px-4 py-3 text-muted-foreground">
-                    {p.created_at ? new Date(p.created_at).toLocaleString() : '—'}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
     </div>
   );
 }
