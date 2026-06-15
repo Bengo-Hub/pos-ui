@@ -8,13 +8,22 @@ import { usePermissions, P } from '@/hooks/usePermissions';
 import { Loader2, ShieldAlert } from 'lucide-react';
 import { toast } from 'sonner';
 
+type PaymentTiming = 'settle_at_checkout' | 'pay_upfront' | 'per_day_split';
+
 interface BookingPolicy {
   free_amendment_window_hours: number;
   cancellation_window_hours: number;
   amendment_fee: number;
   cancellation_fee: number;
   currency: string;
+  payment_timing: PaymentTiming;
 }
+
+const PAYMENT_TIMING_OPTIONS: { value: PaymentTiming; label: string; hint: string }[] = [
+  { value: 'settle_at_checkout', label: 'Settle at checkout', hint: 'Room + extras paid together when the guest checks out.' },
+  { value: 'pay_upfront', label: 'Pay room upfront', hint: 'Full room charge taken at check-in; extras settled at checkout.' },
+  { value: 'per_day_split', label: 'Per-night split', hint: 'Room charge split into per-night payments across the stay.' },
+];
 
 const base = (tenant: string) => `/api/v1/${tenant}/pos/settings/booking-policy`;
 
@@ -42,6 +51,7 @@ export function BookingPolicyTab() {
     amendment_fee: 0,
     cancellation_fee: 0,
     currency: 'KES',
+    payment_timing: 'settle_at_checkout',
   });
 
   useEffect(() => {
@@ -72,6 +82,33 @@ export function BookingPolicyTab() {
       <div className="rounded-xl border border-border bg-muted/30 p-4 text-sm text-muted-foreground">
         Amendments and cancellations made <strong>more than</strong> the window (hours) before arrival are free.
         Made <strong>within</strong> the window, the corresponding fee applies. Set a fee to 0 for no penalty.
+      </div>
+
+      {/* Room payment timing */}
+      <div className="space-y-2">
+        <span className="text-sm font-semibold">Room payment timing</span>
+        <p className="text-xs text-muted-foreground">
+          When the room charge is collected. Folio extras (minibar / room service) are always settled at
+          checkout, and checkout is blocked until the guest&apos;s balance is fully cleared.
+        </p>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+          {PAYMENT_TIMING_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              disabled={!canManage}
+              onClick={() => set('payment_timing', opt.value)}
+              className={`rounded-xl border p-3 text-left transition-colors ${
+                form.payment_timing === opt.value
+                  ? 'border-primary bg-primary/5'
+                  : 'border-border bg-card hover:border-primary/40'
+              } ${canManage ? '' : 'opacity-60'}`}
+            >
+              <span className="block text-sm font-semibold">{opt.label}</span>
+              <span className="block text-xs text-muted-foreground mt-0.5">{opt.hint}</span>
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">

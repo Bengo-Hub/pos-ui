@@ -130,7 +130,11 @@ function PatientsPage() {
       ) : (
         <div className="space-y-3">
           {patients.map((patient) => (
-            <PatientCard key={patient.id} patient={patient} orgSlug={orgSlug} />
+            <PatientCard
+              key={patient.patient_id_number || patient.patient_name}
+              patient={patient}
+              orgSlug={orgSlug}
+            />
           ))}
         </div>
       )}
