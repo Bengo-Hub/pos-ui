@@ -150,16 +150,16 @@ class ApiClient {
     return this.instance.get<T>(url, { params }).then((res: AxiosResponse<T>) => res.data);
   }
 
-  public post<T>(url: string, data?: any): Promise<T> {
-    return this.instance.post<T>(url, data).then((res: AxiosResponse<T>) => res.data);
+  public post<T>(url: string, data?: any, config?: { headers?: Record<string, string> }): Promise<T> {
+    return this.instance.post<T>(url, data, config).then((res: AxiosResponse<T>) => res.data);
   }
 
-  public put<T>(url: string, data?: any): Promise<T> {
-    return this.instance.put<T>(url, data).then((res: AxiosResponse<T>) => res.data);
+  public put<T>(url: string, data?: any, config?: { headers?: Record<string, string> }): Promise<T> {
+    return this.instance.put<T>(url, data, config).then((res: AxiosResponse<T>) => res.data);
   }
 
-  public patch<T>(url: string, data?: any): Promise<T> {
-    return this.instance.patch<T>(url, data).then((res: AxiosResponse<T>) => res.data);
+  public patch<T>(url: string, data?: any, config?: { headers?: Record<string, string> }): Promise<T> {
+    return this.instance.patch<T>(url, data, config).then((res: AxiosResponse<T>) => res.data);
   }
 
   public delete<T>(url: string): Promise<T> {

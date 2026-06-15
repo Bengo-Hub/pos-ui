@@ -17,6 +17,51 @@ export interface OfflineCatalogItem {
   cached_at: string;
 }
 
+// ── Sync state (shared by every outbound queue) ──────────────────────────────────
+//
+// Each queued mutation moves through: pending → (in-flight) → synced | retryable | dead.
+// We don't persist an explicit "in-flight" flag (the drain is single-threaded per tab);
+// instead retryable rows carry next_attempt_at (exponential backoff) and terminal rows
+// are marked dead_letter so they stop auto-retrying and surface for manual review.
+export interface SyncState {
+  synced: boolean;
+  sync_error?: string;
+  attempts?: number;
+  next_attempt_at?: string; // ISO; do not retry before this time
+  dead_letter?: boolean; // terminal failure — stop auto-retrying, needs manual review
+}
+
+/** Max auto-retries before a row is dead-lettered. */
+export const MAX_SYNC_ATTEMPTS = 8;
+
+/**
+ * Compute the next sync-state after a failed attempt. Terminal (4xx validation) failures
+ * dead-letter immediately — replaying won't change the outcome. Retryable (network/5xx)
+ * failures back off exponentially with jitter, dead-lettering after MAX_SYNC_ATTEMPTS.
+ */
+export function nextRetryState(
+  current: { attempts?: number },
+  error: string,
+  opts: { terminal?: boolean; now?: number } = {},
+): Pick<SyncState, 'attempts' | 'next_attempt_at' | 'dead_letter' | 'sync_error'> {
+  const attempts = (current.attempts ?? 0) + 1;
+  const now = opts.now ?? Date.now();
+  if (opts.terminal || attempts >= MAX_SYNC_ATTEMPTS) {
+    return { attempts, sync_error: error, dead_letter: true, next_attempt_at: undefined };
+  }
+  // 2^n seconds capped at 5 min, +/- 20% jitter so reconnecting terminals don't sync in lockstep.
+  const baseMs = Math.min(2 ** attempts * 1000, 5 * 60_000);
+  const jitter = baseMs * (0.8 + ((attempts * 37) % 40) / 100); // deterministic pseudo-jitter
+  return { attempts, sync_error: error, next_attempt_at: new Date(now + jitter).toISOString() };
+}
+
+/** True when a queued row is eligible to (re)try right now. */
+export function isRetryReady(row: SyncState, now = Date.now()): boolean {
+  if (row.synced || row.dead_letter) return false;
+  if (!row.next_attempt_at) return true;
+  return new Date(row.next_attempt_at).getTime() <= now;
+}
+
 // ── Orders ─────────────────────────────────────────────────────────────────────
 
 export interface OfflineOrderLine {
@@ -28,9 +73,9 @@ export interface OfflineOrderLine {
   total_price: number;
 }
 
-export interface OfflineOrder {
+export interface OfflineOrder extends SyncState {
   id?: number; // Dexie auto-increment PK
-  local_id: string; // uuid generated client-side
+  local_id: string; // uuid generated client-side — also the server client_reference + Idempotency-Key
   tenant_id: string;
   tenant_slug: string;
   outlet_id: string;
@@ -39,9 +84,7 @@ export interface OfflineOrder {
   tax_total: number;
   total_amount: number;
   lines: OfflineOrderLine[];
-  created_at: string;
-  synced: boolean;
-  sync_error?: string;
+  created_at: string; // device-clock time the sale was rung up (becomes offline_created_at server-side)
   server_order_id?: string; // filled after successful sync
   // Cash payment info — stored together so sync worker can record payment after creating order
   pending_payment?: {
@@ -54,11 +97,12 @@ export interface OfflineOrder {
 
 // ── Payments ───────────────────────────────────────────────────────────────────
 
-export interface OfflinePayment {
+export interface OfflinePayment extends SyncState {
   id?: number;
   // server_order_id: order already exists on server (payment failed while offline)
   server_order_id?: string;
-  // local_order_id: order itself was created offline (payment bundled with order sync)
+  // local_order_id: order itself was created offline; payment is remapped to the server
+  // order id once the order syncs.
   local_order_id?: string;
   tender_id: string;
   tender_method: string;
@@ -68,13 +112,55 @@ export interface OfflinePayment {
   tenant_slug: string;
   tenant_id?: string;
   created_at: string;
-  synced: boolean;
-  sync_error?: string;
+}
+
+// ── Voids ────────────────────────────────────────────────────────────────────────
+
+export interface OfflineVoid extends SyncState {
+  id?: number;
+  local_id: string; // idempotency key for the void
+  server_order_id?: string; // order already on server
+  local_order_id?: string; // order created offline, not yet synced
+  line_id?: string; // when set, this is a single line void; otherwise a whole-order void
+  reason: string;
+  approval_token?: string;
+  tenant_id: string;
+  tenant_slug: string;
+  created_at: string;
+}
+
+// ── Returns ──────────────────────────────────────────────────────────────────────
+
+// Mirrors the pos-api returnLineInput so a queued return posts verbatim on sync.
+export interface OfflineReturnLine {
+  order_line_id?: string;
+  sku: string;
+  name: string;
+  quantity: number;
+  unit_price: number;
+  total_price: number;
+  reason?: string;
+}
+
+export interface OfflineReturn extends SyncState {
+  id?: number;
+  local_id: string; // idempotency key for the return
+  server_order_id?: string;
+  local_order_id?: string;
+  outlet_id: string;
+  return_type: string; // refund | exchange | store_credit
+  reason: string;
+  reason_code?: string;
+  lines: OfflineReturnLine[];
+  refund_amount: number; // for local display / dead-letter summary
+  tenant_id: string;
+  tenant_slug: string;
+  created_at: string;
 }
 
 // ── Cash Drawer ────────────────────────────────────────────────────────────────
 
-export interface OfflineDrawerSession {
+export interface OfflineDrawerSession extends SyncState {
   id?: number;
   local_id: string;
   tenant_id: string;
@@ -82,12 +168,10 @@ export interface OfflineDrawerSession {
   outlet_id: string;
   starting_cash: number;
   opened_at: string;
-  synced: boolean;
-  sync_error?: string;
   server_drawer_id?: string;
 }
 
-export interface OfflineDrawerClose {
+export interface OfflineDrawerClose extends SyncState {
   id?: number;
   server_drawer_id?: string; // for drawers already on server
   local_drawer_id?: string; // for drawers opened offline
@@ -95,8 +179,6 @@ export interface OfflineDrawerClose {
   closed_at: string;
   tenant_id: string;
   tenant_slug: string;
-  synced: boolean;
-  sync_error?: string;
 }
 
 // ── eTIMS offline queue ────────────────────────────────────────────────────────
@@ -127,16 +209,30 @@ export interface CachedStaffProfile {
   cached_at: string;
 }
 
+// ── Cached session/shift/drawer snapshots (cold-start offline) ────────────────────
+//
+// Last-known-good snapshots of network-owned state so the app shell can render and the
+// shift/drawer gate can resolve when the device cold-starts during an outage.
+export interface CachedSnapshot {
+  key: string; // PK, e.g. `me:${tenantId}`, `shift:${tenantId}`, `drawer:${tenantId}`
+  tenant_id: string;
+  data: any;
+  cached_at: string;
+}
+
 // ── Database ───────────────────────────────────────────────────────────────────
 
 class POSDatabase extends Dexie {
   catalogItems!: Table<OfflineCatalogItem, string>;
   offlineOrders!: Table<OfflineOrder, number>;
   offlinePayments!: Table<OfflinePayment, number>;
+  offlineVoids!: Table<OfflineVoid, number>;
+  offlineReturns!: Table<OfflineReturn, number>;
   drawerSessions!: Table<OfflineDrawerSession, number>;
   drawerCloses!: Table<OfflineDrawerClose, number>;
   staffProfiles!: Table<CachedStaffProfile, string>;
   etimsQueue!: Table<OfflineETIMSSubmission, number>;
+  snapshots!: Table<CachedSnapshot, string>;
 
   constructor() {
     super('pos_offline_db');
@@ -159,10 +255,32 @@ class POSDatabase extends Dexie {
       staffProfiles:  'user_id, tenant_id',
       etimsQueue:     '++id, order_id, tenant_id, synced, status, created_at',
     });
+
+    // v4: void/return queues + cold-start snapshots. We deliberately DROP `synced` from the
+    // indexes — IndexedDB cannot index boolean values, so `where('synced').equals(0)` matched
+    // nothing and the queues never drained. Pending rows are now found via `.filter()`.
+    this.version(4).stores({
+      catalogItems:   'id, tenant_id, sku, category, status, cached_at',
+      offlineOrders:  '++id, local_id, tenant_id, created_at',
+      offlinePayments:'++id, local_order_id, server_order_id, tenant_id',
+      offlineVoids:   '++id, local_id, server_order_id, local_order_id, tenant_id, created_at',
+      offlineReturns: '++id, local_id, server_order_id, local_order_id, tenant_id, created_at',
+      drawerSessions: '++id, local_id, tenant_id',
+      drawerCloses:   '++id, server_drawer_id, local_drawer_id, tenant_id',
+      staffProfiles:  'user_id, tenant_id',
+      etimsQueue:     '++id, order_id, tenant_id, status, created_at',
+      snapshots:      'key, tenant_id',
+    });
   }
 }
 
 export const posDB = new POSDatabase();
+
+/** Filter a queue to rows that are ready to (re)try now (unsynced, not dead, past backoff). */
+function pendingReady<T extends SyncState>(rows: T[]): T[] {
+  const now = Date.now();
+  return rows.filter((r) => isRetryReady(r, now));
+}
 
 // ── Catalog helpers ────────────────────────────────────────────────────────────
 
@@ -181,17 +299,30 @@ export async function saveDraftOrder(order: Omit<OfflineOrder, 'id'>): Promise<n
 }
 
 export async function getPendingSyncOrders(): Promise<OfflineOrder[]> {
-  return posDB.offlineOrders.where('synced').equals(0).toArray();
+  return pendingReady(await posDB.offlineOrders.toArray());
+}
+
+/** Lookup an offline order by its client-side local_id (used to detect local-order payments). */
+export async function getOfflineOrderByLocalId(localId: string): Promise<OfflineOrder | undefined> {
+  return posDB.offlineOrders.where('local_id').equals(localId).first();
+}
+
+/** Resolve a synced offline order's server id, if it has one. */
+export async function resolveServerOrderId(localId: string): Promise<string | undefined> {
+  const o = await getOfflineOrderByLocalId(localId);
+  return o?.server_order_id;
 }
 
 export async function markOrderSynced(localId: string, serverOrderId: string): Promise<void> {
   await posDB.offlineOrders
     .where('local_id').equals(localId)
-    .modify({ synced: true, server_order_id: serverOrderId, sync_error: undefined });
+    .modify({ synced: true, server_order_id: serverOrderId, sync_error: undefined, dead_letter: false });
 }
 
-export async function markOrderSyncFailed(localId: string, error: string): Promise<void> {
-  await posDB.offlineOrders.where('local_id').equals(localId).modify({ sync_error: error });
+export async function markOrderSyncFailed(localId: string, error: string, terminal = false): Promise<void> {
+  await posDB.offlineOrders.where('local_id').equals(localId).modify((o) => {
+    Object.assign(o, nextRetryState(o, error, { terminal }));
+  });
 }
 
 // ── Payment helpers ────────────────────────────────────────────────────────────
@@ -201,15 +332,54 @@ export async function savePendingPayment(payment: Omit<OfflinePayment, 'id'>): P
 }
 
 export async function getPendingSyncPayments(): Promise<OfflinePayment[]> {
-  return posDB.offlinePayments.where('synced').equals(0).toArray();
+  return pendingReady(await posDB.offlinePayments.toArray());
 }
 
 export async function markPaymentSynced(id: number): Promise<void> {
-  await posDB.offlinePayments.update(id, { synced: true, sync_error: undefined });
+  await posDB.offlinePayments.update(id, { synced: true, sync_error: undefined, dead_letter: false });
 }
 
-export async function markPaymentSyncFailed(id: number, error: string): Promise<void> {
-  await posDB.offlinePayments.update(id, { sync_error: error });
+export async function markPaymentSyncFailed(id: number, error: string, terminal = false): Promise<void> {
+  const row = await posDB.offlinePayments.get(id);
+  if (row) await posDB.offlinePayments.update(id, nextRetryState(row, error, { terminal }));
+}
+
+// ── Void helpers ─────────────────────────────────────────────────────────────────
+
+export async function saveDraftVoid(v: Omit<OfflineVoid, 'id'>): Promise<number> {
+  return posDB.offlineVoids.add(v);
+}
+
+export async function getPendingSyncVoids(): Promise<OfflineVoid[]> {
+  return pendingReady(await posDB.offlineVoids.toArray());
+}
+
+export async function markVoidSynced(id: number): Promise<void> {
+  await posDB.offlineVoids.update(id, { synced: true, sync_error: undefined, dead_letter: false });
+}
+
+export async function markVoidSyncFailed(id: number, error: string, terminal = false): Promise<void> {
+  const row = await posDB.offlineVoids.get(id);
+  if (row) await posDB.offlineVoids.update(id, nextRetryState(row, error, { terminal }));
+}
+
+// ── Return helpers ───────────────────────────────────────────────────────────────
+
+export async function saveDraftReturn(r: Omit<OfflineReturn, 'id'>): Promise<number> {
+  return posDB.offlineReturns.add(r);
+}
+
+export async function getPendingSyncReturns(): Promise<OfflineReturn[]> {
+  return pendingReady(await posDB.offlineReturns.toArray());
+}
+
+export async function markReturnSynced(id: number): Promise<void> {
+  await posDB.offlineReturns.update(id, { synced: true, sync_error: undefined, dead_letter: false });
+}
+
+export async function markReturnSyncFailed(id: number, error: string, terminal = false): Promise<void> {
+  const row = await posDB.offlineReturns.get(id);
+  if (row) await posDB.offlineReturns.update(id, nextRetryState(row, error, { terminal }));
 }
 
 // ── Drawer session helpers ─────────────────────────────────────────────────────
@@ -219,13 +389,25 @@ export async function saveDraftDrawerSession(session: Omit<OfflineDrawerSession,
 }
 
 export async function getPendingSyncDrawerSessions(): Promise<OfflineDrawerSession[]> {
-  return posDB.drawerSessions.where('synced').equals(0).toArray();
+  return pendingReady(await posDB.drawerSessions.toArray());
 }
 
 export async function markDrawerSessionSynced(localId: string, serverDrawerId: string): Promise<void> {
   await posDB.drawerSessions
     .where('local_id').equals(localId)
-    .modify({ synced: true, server_drawer_id: serverDrawerId, sync_error: undefined });
+    .modify({ synced: true, server_drawer_id: serverDrawerId, sync_error: undefined, dead_letter: false });
+}
+
+export async function markDrawerSessionSyncFailed(localId: string, error: string, terminal = false): Promise<void> {
+  await posDB.drawerSessions.where('local_id').equals(localId).modify((s) => {
+    Object.assign(s, nextRetryState(s, error, { terminal }));
+  });
+}
+
+/** Resolve an offline-opened drawer's server id (reads synced sessions too). */
+export async function resolveServerDrawerId(localId: string): Promise<string | undefined> {
+  const s = await posDB.drawerSessions.where('local_id').equals(localId).first();
+  return s?.server_drawer_id;
 }
 
 export async function saveDraftDrawerClose(close: Omit<OfflineDrawerClose, 'id'>): Promise<number> {
@@ -233,11 +415,87 @@ export async function saveDraftDrawerClose(close: Omit<OfflineDrawerClose, 'id'>
 }
 
 export async function getPendingSyncDrawerCloses(): Promise<OfflineDrawerClose[]> {
-  return posDB.drawerCloses.where('synced').equals(0).toArray();
+  return pendingReady(await posDB.drawerCloses.toArray());
 }
 
 export async function markDrawerCloseSynced(id: number): Promise<void> {
-  await posDB.drawerCloses.update(id, { synced: true, sync_error: undefined });
+  await posDB.drawerCloses.update(id, { synced: true, sync_error: undefined, dead_letter: false });
+}
+
+export async function markDrawerCloseSyncFailed(id: number, error: string, terminal = false): Promise<void> {
+  const row = await posDB.drawerCloses.get(id);
+  if (row) await posDB.drawerCloses.update(id, nextRetryState(row, error, { terminal }));
+}
+
+// ── Aggregate sync status (UI badge + dead-letter review) ────────────────────────
+
+export interface SyncStatusCounts {
+  pending: number; // unsynced, not dead-lettered
+  deadLetter: number; // terminal failures needing manual review
+}
+
+export async function getSyncStatusCounts(): Promise<SyncStatusCounts> {
+  const [orders, payments, voids, returns, sessions, closes] = await Promise.all([
+    posDB.offlineOrders.toArray(),
+    posDB.offlinePayments.toArray(),
+    posDB.offlineVoids.toArray(),
+    posDB.offlineReturns.toArray(),
+    posDB.drawerSessions.toArray(),
+    posDB.drawerCloses.toArray(),
+  ]);
+  const all: SyncState[] = [...orders, ...payments, ...voids, ...returns, ...sessions, ...closes];
+  return {
+    pending: all.filter((r) => !r.synced && !r.dead_letter).length,
+    deadLetter: all.filter((r) => r.dead_letter).length,
+  };
+}
+
+export interface DeadLetterItem {
+  kind: 'order' | 'payment' | 'void' | 'return' | 'drawer_open' | 'drawer_close';
+  id: number | string;
+  summary: string;
+  error?: string;
+  attempts?: number;
+  created_at?: string;
+}
+
+/** Collect all dead-lettered items across queues for the manual-review surface. */
+export async function getDeadLetterItems(): Promise<DeadLetterItem[]> {
+  const [orders, payments, voids, returns, sessions, closes] = await Promise.all([
+    posDB.offlineOrders.toArray(),
+    posDB.offlinePayments.toArray(),
+    posDB.offlineVoids.toArray(),
+    posDB.offlineReturns.toArray(),
+    posDB.drawerSessions.toArray(),
+    posDB.drawerCloses.toArray(),
+  ]);
+  const out: DeadLetterItem[] = [];
+  orders.filter((o) => o.dead_letter).forEach((o) =>
+    out.push({ kind: 'order', id: o.id!, summary: `Sale ${o.currency} ${o.total_amount.toFixed(2)}`, error: o.sync_error, attempts: o.attempts, created_at: o.created_at }));
+  payments.filter((p) => p.dead_letter).forEach((p) =>
+    out.push({ kind: 'payment', id: p.id!, summary: `${p.tender_method} ${p.amount.toFixed(2)}`, error: p.sync_error, attempts: p.attempts, created_at: p.created_at }));
+  voids.filter((v) => v.dead_letter).forEach((v) =>
+    out.push({ kind: 'void', id: v.id!, summary: v.line_id ? 'Line void' : 'Order void', error: v.sync_error, attempts: v.attempts, created_at: v.created_at }));
+  returns.filter((r) => r.dead_letter).forEach((r) =>
+    out.push({ kind: 'return', id: r.id!, summary: `Return ${r.refund_amount.toFixed(2)}`, error: r.sync_error, attempts: r.attempts, created_at: r.created_at }));
+  sessions.filter((s) => s.dead_letter).forEach((s) =>
+    out.push({ kind: 'drawer_open', id: s.id!, summary: `Drawer open ${s.starting_cash.toFixed(2)}`, error: s.sync_error, attempts: s.attempts, created_at: s.opened_at }));
+  closes.filter((c) => c.dead_letter).forEach((c) =>
+    out.push({ kind: 'drawer_close', id: c.id!, summary: `Drawer close ${c.ending_cash.toFixed(2)}`, error: c.sync_error, attempts: c.attempts, created_at: c.closed_at }));
+  return out;
+}
+
+/** Reset a dead-lettered item so the next drain retries it (manual "retry" action). */
+export async function retryDeadLetter(kind: DeadLetterItem['kind'], id: number): Promise<void> {
+  const reset = { dead_letter: false, attempts: 0, next_attempt_at: undefined, sync_error: undefined };
+  switch (kind) {
+    case 'order': await posDB.offlineOrders.update(id, reset); break;
+    case 'payment': await posDB.offlinePayments.update(id, reset); break;
+    case 'void': await posDB.offlineVoids.update(id, reset); break;
+    case 'return': await posDB.offlineReturns.update(id, reset); break;
+    case 'drawer_open': await posDB.drawerSessions.update(id, reset); break;
+    case 'drawer_close': await posDB.drawerCloses.update(id, reset); break;
+  }
 }
 
 // ── Staff profile helpers ──────────────────────────────────────────────────────
@@ -254,6 +512,17 @@ export async function getCachedStaffProfile(userId: string): Promise<CachedStaff
   return posDB.staffProfiles.get(userId);
 }
 
+// ── Snapshot helpers (cold-start) ────────────────────────────────────────────────
+
+export async function cacheSnapshot(key: string, tenantId: string, data: any): Promise<void> {
+  await posDB.snapshots.put({ key, tenant_id: tenantId, data, cached_at: new Date().toISOString() });
+}
+
+export async function getSnapshot<T = any>(key: string): Promise<T | undefined> {
+  const row = await posDB.snapshots.get(key);
+  return row?.data as T | undefined;
+}
+
 // ── eTIMS queue helpers ────────────────────────────────────────────────────────
 
 export async function queueETIMSSubmission(
@@ -263,7 +532,7 @@ export async function queueETIMSSubmission(
 }
 
 export async function getPendingETIMSSubmissions(): Promise<OfflineETIMSSubmission[]> {
-  return posDB.etimsQueue.where('synced').equals(0).toArray();
+  return (await posDB.etimsQueue.toArray()).filter((s) => !s.synced);
 }
 
 export async function markETIMSSubmissionSynced(id: number): Promise<void> {

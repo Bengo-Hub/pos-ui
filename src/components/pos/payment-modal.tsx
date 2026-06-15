@@ -24,7 +24,7 @@ import { useMutation } from '@tanstack/react-query';
 import { useCreatePaymentIntent, useListC2BPayments, useClaimC2BPayment } from '@/hooks/usePOS';
 import { useOnline } from '@/hooks/use-online';
 import { usePaymentStream } from '@/hooks/usePaymentStream';
-import { savePendingPayment } from '@/lib/db/pos-db';
+import { savePendingPayment, getOfflineOrderByLocalId } from '@/lib/db/pos-db';
 import { usePOSGateways } from '@/hooks/use-pos-gateways';
 import { useHotelRooms } from '@/hooks/useHotel';
 import { hotelApi, type Room } from '@/lib/api/hotel';
@@ -146,6 +146,28 @@ export function POSPaymentModal({
     }
   }, [open]);
 
+  // Queue an offline payment, routing it to the right key: if `orderId` is an offline
+  // (not-yet-synced) order, attach via local_order_id so the sync worker remaps it to the
+  // server order id once the order syncs; otherwise it is a server order paid offline.
+  const queueOfflinePayment = useCallback(
+    async (method: string, externalRef?: string) => {
+      const localOrder = await getOfflineOrderByLocalId(orderId);
+      await savePendingPayment({
+        server_order_id: localOrder ? undefined : orderId,
+        local_order_id: localOrder ? orderId : undefined,
+        tender_id: tenderId,
+        tender_method: method,
+        amount: roundedTotal,
+        currency: 'KES',
+        external_ref: externalRef,
+        tenant_slug: tenantSlug,
+        created_at: new Date().toISOString(),
+        synced: false,
+      });
+    },
+    [orderId, tenderId, roundedTotal, tenantSlug],
+  );
+
   const handleCashConfirm = useCallback(async () => {
     methodRef.current = 'cash';
     const tendered = parseFloat(cashTendered) || roundedTotal;
@@ -153,16 +175,7 @@ export function POSPaymentModal({
 
     if (!isOnline) {
       try {
-        await savePendingPayment({
-          server_order_id: orderId,
-          tender_id: tenderId,
-          tender_method: 'cash',
-          amount: roundedTotal,
-          currency: 'KES',
-          tenant_slug: tenantSlug,
-          created_at: new Date().toISOString(),
-          synced: false,
-        });
+        await queueOfflinePayment('cash');
         setStep('offline_queued');
         onPaymentConfirmed(methodRef.current);
       } catch {
@@ -190,17 +203,7 @@ export function POSPaymentModal({
 
     if (!isOnline) {
       try {
-        await savePendingPayment({
-          server_order_id: orderId,
-          tender_id: tenderId,
-          tender_method: 'manual',
-          amount: roundedTotal,
-          currency: 'KES',
-          external_ref: manualRef.trim(),
-          tenant_slug: tenantSlug,
-          created_at: new Date().toISOString(),
-          synced: false,
-        });
+        await queueOfflinePayment('manual', manualRef.trim());
         setStep('offline_queued');
         onPaymentConfirmed(methodRef.current);
       } catch {

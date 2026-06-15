@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '@/store/auth';
 import { shiftsApi, type SessionSummary } from '@/lib/api/shifts';
+import { getSnapshot, cacheSnapshot } from '@/lib/db/pos-db';
 
 function useTenantId() {
   return useAuthStore((s) => s.user?.tenant_id ?? '');
@@ -12,9 +13,20 @@ export function useCurrentShift() {
   const tenantId = useTenantId();
   return useQuery({
     queryKey: ['shift-current', tenantId],
-    queryFn: () => shiftsApi.getCurrent(tenantId),
+    // Offline (incl. cold-start): serve the last-known shift snapshot so the gate resolves
+    // to the cashier's open shift instead of blocking; cache it through on every online read.
+    queryFn: async () => {
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        const snap = await getSnapshot(`shift:${tenantId}`);
+        if (snap !== undefined) return snap;
+      }
+      const res = await shiftsApi.getCurrent(tenantId);
+      await cacheSnapshot(`shift:${tenantId}`, tenantId, res).catch(() => {});
+      return res;
+    },
     enabled: !!tenantId,
     staleTime: 30_000,
+    networkMode: 'always',
     retry: (count, err: any) => err?.response?.status !== 404 && count < 2,
   });
 }

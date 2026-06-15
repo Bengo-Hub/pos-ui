@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { useOnline } from '@/hooks/use-online';
 import { useAuthStore } from '@/store/auth';
 import { useQueryClient } from '@tanstack/react-query';
@@ -12,25 +12,43 @@ import {
   getPendingSyncPayments,
   markPaymentSynced,
   markPaymentSyncFailed,
+  getPendingSyncVoids,
+  markVoidSynced,
+  markVoidSyncFailed,
+  getPendingSyncReturns,
+  markReturnSynced,
+  markReturnSyncFailed,
   getPendingSyncDrawerSessions,
   markDrawerSessionSynced,
+  markDrawerSessionSyncFailed,
   getPendingSyncDrawerCloses,
   markDrawerCloseSynced,
+  markDrawerCloseSyncFailed,
   getPendingETIMSSubmissions,
   markETIMSSubmissionSynced,
   markETIMSSubmissionFailed,
+  resolveServerOrderId,
+  resolveServerDrawerId,
 } from '@/lib/db/pos-db';
 
 /**
  * Background sync worker — drains all IndexedDB queues when connectivity is restored.
  *
- * Sync order:
- *  1. Offline drawer sessions (open) → create on server
- *  2. Offline orders → create on server; then record bundled cash payment if present
- *  3. Offline payments against server-existing orders → record on server
- *  4. Offline drawer closes → close on server
+ * Drain order (dependency-respecting): a payment/void/return of a locally-created order
+ * needs that order's server id first, so orders sync before anything that references them.
+ *  1. drawer sessions (open)  → create on server
+ *  2. orders                  → create on server (idempotent via Idempotency-Key/client_reference)
+ *  3. payments                → record (local_order_id remapped to the now-synced server id)
+ *  4. voids                   → apply
+ *  5. returns                 → apply
+ *  6. drawer closes           → close on server
+ *  7. eTIMS queue             → forward to treasury
  *
- * Mount once via <OfflineSyncWorker /> in [orgSlug]/layout.tsx.
+ * Every replay carries an Idempotency-Key so a retried request can never double-apply.
+ * Failures back off (retryable) or dead-letter (terminal 4xx) via the queue helpers.
+ *
+ * Mount once via <OfflineSyncWorker /> in the org shell. Exposes syncNow() so the service
+ * worker Background Sync handler and a manual "retry" button can trigger a drain too.
  */
 export function useSyncOfflineOrders() {
   const isOnline = useOnline();
@@ -38,48 +56,88 @@ export function useSyncOfflineOrders() {
   const syncingRef = useRef(false);
   const qc = useQueryClient();
 
-  useEffect(() => {
-    if (!isOnline || !tenantID || syncingRef.current) return;
+  const runSync = useCallback(async () => {
+    if (!tenantID || syncingRef.current || typeof navigator !== 'undefined' && !navigator.onLine) return;
+    syncingRef.current = true;
+    try {
+      await syncDrawerSessions(tenantID);
+      await syncOrders(tenantID);
+      await syncPayments(tenantID);
+      await syncVoids(tenantID);
+      await syncReturns(tenantID);
+      await syncDrawerCloses(tenantID);
+      await syncETIMSQueue(tenantID);
 
-    async function sync() {
-      syncingRef.current = true;
-      try {
-        await syncDrawerSessions(tenantID);
-        await syncOrders(tenantID);
-        await syncPayments(tenantID);
-        await syncDrawerCloses(tenantID);
-        await syncETIMSQueue(tenantID);
-
-        // Refresh UI after sync
-        qc.invalidateQueries({ queryKey: ['pos-orders'] });
-        qc.invalidateQueries({ queryKey: ['pos-drawer-current'] });
-      } finally {
-        syncingRef.current = false;
-      }
+      qc.invalidateQueries({ queryKey: ['pos-orders'] });
+      qc.invalidateQueries({ queryKey: ['pos-drawer-current'] });
+      qc.invalidateQueries({ queryKey: ['pos-sync-status'] });
+    } finally {
+      syncingRef.current = false;
     }
+  }, [tenantID, qc]);
 
-    // 1.5 s delay to let network settle
-    const timer = setTimeout(sync, 1500);
+  useEffect(() => {
+    if (!isOnline || !tenantID) return;
+    // 1.5 s delay to let the network settle after a reconnect transient.
+    const timer = setTimeout(runSync, 1500);
     return () => clearTimeout(timer);
-  }, [isOnline, tenantID, qc]);
+  }, [isOnline, tenantID, runSync]);
+
+  // Let the service worker (Background Sync) ask the page to drain when it regains focus.
+  useEffect(() => {
+    if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;
+    const onMsg = (e: MessageEvent) => {
+      if (e.data?.type === 'POS_SYNC') void runSync();
+    };
+    navigator.serviceWorker.addEventListener('message', onMsg);
+    return () => navigator.serviceWorker.removeEventListener('message', onMsg);
+  }, [runSync]);
+
+  // Manual trigger (e.g. the "Retry" button on the dead-letter panel) → drain now.
+  useEffect(() => {
+    const onTrigger = () => void runSync();
+    window.addEventListener('pos:sync-now', onTrigger);
+    return () => window.removeEventListener('pos:sync-now', onTrigger);
+  }, [runSync]);
+
+  return { syncNow: runSync };
+}
+
+/** Ask the mounted sync worker to drain the queues now. */
+export function triggerSyncNow() {
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event('pos:sync-now'));
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────────────────
+
+/** Idempotency-Key header so a replayed request is deduped server-side. */
+function idem(key: string) {
+  return { headers: { 'Idempotency-Key': key } };
+}
+
+/** A 4xx (except 408/429) is a terminal validation error — replaying won't help; dead-letter it. */
+function isTerminal(err: any): boolean {
+  const s = err?.response?.status;
+  return typeof s === 'number' && s >= 400 && s < 500 && s !== 408 && s !== 429;
+}
+
+function errMsg(err: any): string {
+  return err?.response?.data?.error ?? err?.message ?? 'sync failed';
 }
 
 // ── Drawer session sync ────────────────────────────────────────────────────────
 
 async function syncDrawerSessions(tenantID: string) {
-  const sessions = await getPendingSyncDrawerSessions();
-  for (const session of sessions) {
+  for (const session of await getPendingSyncDrawerSessions()) {
     try {
       const res: any = await apiClient.post(
         `/api/v1/${tenantID}/pos/drawers/open`,
-        {
-          outletId: session.outlet_id,
-          startingCash: session.starting_cash,
-        }
+        { outletId: session.outlet_id, startingCash: session.starting_cash },
+        idem(session.local_id),
       );
       await markDrawerSessionSynced(session.local_id, res?.id ?? '');
-    } catch {
-      // Leave for next sync attempt
+    } catch (err: any) {
+      await markDrawerSessionSyncFailed(session.local_id, errMsg(err), isTerminal(err));
     }
   }
 }
@@ -87,8 +145,7 @@ async function syncDrawerSessions(tenantID: string) {
 // ── Order sync ─────────────────────────────────────────────────────────────────
 
 async function syncOrders(tenantID: string) {
-  const orders = await getPendingSyncOrders();
-  for (const order of orders) {
+  for (const order of await getPendingSyncOrders()) {
     try {
       const res: any = await apiClient.post(
         `/api/v1/${tenantID}/pos/orders`,
@@ -96,12 +153,15 @@ async function syncOrders(tenantID: string) {
           outlet_id: order.outlet_id,
           currency: order.currency,
           lines: order.lines,
-        }
+          client_reference: order.local_id,
+          offline_created_at: order.created_at,
+        },
+        idem(order.local_id),
       );
       const serverOrderId: string = res?.id ?? res?.order_id ?? '';
       await markOrderSynced(order.local_id, serverOrderId);
 
-      // If a cash payment was bundled with the offline order, record it now
+      // Record a payment bundled with the order at creation time (if any).
       if (serverOrderId && order.pending_payment) {
         try {
           await apiClient.post(
@@ -112,15 +172,15 @@ async function syncOrders(tenantID: string) {
               amount: order.pending_payment.amount,
               currency: order.currency,
               externalRef: order.pending_payment.external_ref,
-            }
+            },
+            idem(`pay-${order.local_id}`),
           );
         } catch {
-          // Payment sync failed — it will be picked up by syncPayments via local_order_id
+          // Non-fatal — a separately-queued payment (via syncPayments) will cover it.
         }
       }
     } catch (err: any) {
-      const msg = err?.response?.data?.error ?? err?.message ?? 'sync failed';
-      await markOrderSyncFailed(order.local_id, msg);
+      await markOrderSyncFailed(order.local_id, errMsg(err), isTerminal(err));
     }
   }
 }
@@ -128,10 +188,15 @@ async function syncOrders(tenantID: string) {
 // ── Payment sync ───────────────────────────────────────────────────────────────
 
 async function syncPayments(tenantID: string) {
-  const payments = await getPendingSyncPayments();
-  for (const payment of payments) {
-    const orderId = payment.server_order_id;
-    if (!orderId) continue; // bundled payments handled in syncOrders
+  for (const payment of await getPendingSyncPayments()) {
+    // Resolve the server order id: either it already exists, or the order was created
+    // offline and we look up the id it got when it synced. If still unresolved, skip —
+    // the order hasn't synced yet (or failed); we retry on the next pass.
+    let orderId = payment.server_order_id;
+    if (!orderId && payment.local_order_id) {
+      orderId = await resolveServerOrderId(payment.local_order_id);
+    }
+    if (!orderId) continue;
 
     try {
       await apiClient.post(
@@ -142,12 +207,66 @@ async function syncPayments(tenantID: string) {
           amount: payment.amount,
           currency: payment.currency,
           externalRef: payment.external_ref,
-        }
+        },
+        idem(`pay-${payment.local_order_id ?? orderId}-${payment.tender_method}-${payment.external_ref ?? payment.amount}`),
       );
       await markPaymentSynced(payment.id!);
     } catch (err: any) {
-      const msg = err?.response?.data?.error ?? err?.message ?? 'sync failed';
-      await markPaymentSyncFailed(payment.id!, msg);
+      await markPaymentSyncFailed(payment.id!, errMsg(err), isTerminal(err));
+    }
+  }
+}
+
+// ── Void sync ──────────────────────────────────────────────────────────────────
+
+async function syncVoids(tenantID: string) {
+  for (const v of await getPendingSyncVoids()) {
+    let orderId = v.server_order_id;
+    if (!orderId && v.local_order_id) orderId = await resolveServerOrderId(v.local_order_id);
+    if (!orderId) continue;
+    try {
+      if (v.line_id) {
+        await apiClient.post(
+          `/api/v1/${tenantID}/pos/orders/${orderId}/lines/${v.line_id}/void`,
+          { reason: v.reason, approval_token: v.approval_token },
+          idem(v.local_id),
+        );
+      } else {
+        await apiClient.patch(
+          `/api/v1/${tenantID}/pos/orders/${orderId}/void`,
+          { reason: v.reason, approval_token: v.approval_token },
+          idem(v.local_id),
+        );
+      }
+      await markVoidSynced(v.id!);
+    } catch (err: any) {
+      await markVoidSyncFailed(v.id!, errMsg(err), isTerminal(err));
+    }
+  }
+}
+
+// ── Return sync ────────────────────────────────────────────────────────────────
+
+async function syncReturns(tenantID: string) {
+  for (const r of await getPendingSyncReturns()) {
+    let orderId = r.server_order_id;
+    if (!orderId && r.local_order_id) orderId = await resolveServerOrderId(r.local_order_id);
+    if (!orderId) continue;
+    try {
+      await apiClient.post(
+        `/api/v1/${tenantID}/pos/orders/${orderId}/returns`,
+        {
+          outlet_id: r.outlet_id,
+          return_type: r.return_type,
+          reason: r.reason,
+          reason_code: r.reason_code,
+          lines: r.lines,
+        },
+        idem(r.local_id),
+      );
+      await markReturnSynced(r.id!);
+    } catch (err: any) {
+      await markReturnSyncFailed(r.id!, errMsg(err), isTerminal(err));
     }
   }
 }
@@ -155,18 +274,15 @@ async function syncPayments(tenantID: string) {
 // ── eTIMS queue sync ───────────────────────────────────────────────────────────
 
 async function syncETIMSQueue(tenantID: string) {
-  const submissions = await getPendingETIMSSubmissions();
-  for (const sub of submissions) {
+  for (const sub of await getPendingETIMSSubmissions()) {
     try {
-      // Queue with treasury-api which owns eTIMS submission to KRA
       await apiClient.post(
         `/api/v1/${tenantID}/treasury/etims/queue`,
-        { order_id: sub.order_id, invoice_data: sub.invoice_data }
+        { order_id: sub.order_id, invoice_data: sub.invoice_data },
       );
       await markETIMSSubmissionSynced(sub.id!);
     } catch (err: any) {
-      const msg = err?.response?.data?.error ?? err?.message ?? 'sync failed';
-      await markETIMSSubmissionFailed(sub.id!, msg);
+      await markETIMSSubmissionFailed(sub.id!, errMsg(err));
     }
   }
 }
@@ -174,19 +290,45 @@ async function syncETIMSQueue(tenantID: string) {
 // ── Drawer close sync ──────────────────────────────────────────────────────────
 
 async function syncDrawerCloses(tenantID: string) {
-  const closes = await getPendingSyncDrawerCloses();
-  for (const close of closes) {
-    const drawerId = close.server_drawer_id;
-    if (!drawerId) continue; // locally-opened drawers handled when session is synced
+  for (const close of await getPendingSyncDrawerCloses()) {
+    // A close against a drawer opened offline waits until the session syncs and the local
+    // drawer id resolves to a server id.
+    let drawerId = close.server_drawer_id;
+    if (!drawerId && close.local_drawer_id) {
+      // The drawer was opened offline; use the server id it got when its session synced.
+      drawerId = await resolveServerDrawerId(close.local_drawer_id);
+    }
+    if (!drawerId) continue; // session not synced yet — retry next pass
 
     try {
       await apiClient.post(
         `/api/v1/${tenantID}/pos/drawers/${drawerId}/close`,
-        { endingCash: close.ending_cash }
+        { endingCash: close.ending_cash },
+        idem(`close-${drawerId}`),
       );
       await markDrawerCloseSynced(close.id!);
-    } catch {
-      // Leave for next sync
+    } catch (err: any) {
+      await markDrawerCloseSyncFailed(close.id!, errMsg(err), isTerminal(err));
     }
   }
+}
+
+/**
+ * Lightweight reactive snapshot of how many items are still queued — drives the header
+ * pending-sync badge. Polls IndexedDB on an interval and on query invalidation.
+ */
+export function usePendingSyncCount() {
+  const [counts, setCounts] = useState({ pending: 0, deadLetter: 0 });
+  useEffect(() => {
+    let active = true;
+    const tick = async () => {
+      const { getSyncStatusCounts } = await import('@/lib/db/pos-db');
+      const c = await getSyncStatusCounts();
+      if (active) setCounts(c);
+    };
+    void tick();
+    const interval = setInterval(tick, 5000);
+    return () => { active = false; clearInterval(interval); };
+  }, []);
+  return counts;
 }

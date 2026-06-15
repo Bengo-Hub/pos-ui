@@ -12,6 +12,7 @@ import { loadFullCatalog, offlineToCatalogItem, FULL_CATALOG_QUERY_KEY } from '@
 import { Footer } from '@/components/footer';
 import { SubscriptionBanner } from '@/components/subscription/subscription-banner';
 import { OfflineBanner } from '@/components/pos/offline-banner';
+import { SyncStatusIndicator } from '@/components/pos/sync-status-indicator';
 import { PWARegistration } from '@/components/pwa-registration';
 import { PWAUpdateBanner } from '@/components/pwa-update-banner';
 import { StartShiftGate } from '@/components/pos/start-shift-gate';
@@ -132,6 +133,7 @@ export function OrgShell({ children }: { children: ReactNode }) {
           <ManifestInjector />
           <PWAUpdateBanner />
           <OfflineBanner />
+          <SyncStatusIndicator />
           <OfflineSyncWorker />
           <CatalogPrewarm />
           <NotificationListener />

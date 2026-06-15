@@ -42,6 +42,11 @@ function basePath(tenantID: string) {
   return `/api/v1/${tenantID}/pos`;
 }
 
+/** Idempotency-Key header so the backend dedups a replayed/lost-response request. */
+function idemHeaders(key: string) {
+  return { headers: { 'Idempotency-Key': key } };
+}
+
 // ── Catalog ────────────────────────────────────────────────────────────────────
 
 interface CatalogItem {
@@ -170,8 +175,11 @@ export function useCreateOrderOffline() {
 
   return useMutation({
     mutationFn: async (data: CreateOrderInput) => {
+      // Generate the client reference up front and use it on BOTH paths: offline it is
+      // the IndexedDB local_id; online it is sent as client_reference + Idempotency-Key so
+      // even a "request succeeded but response lost" retry can't create a duplicate order.
+      const localId = uuidv4();
       if (!isOnline) {
-        const localId = uuidv4();
         const lines: OfflineOrderLine[] = data.lines.map((l) => ({
           catalog_item_id: l.catalog_item_id,
           sku: l.sku,
@@ -202,15 +210,18 @@ export function useCreateOrderOffline() {
         return { local_id: localId, offline: true, order_id: null };
       }
 
-      return apiClient.post<{ id: string; order_number: string }>(
+      const res = await apiClient.post<{ id: string; order_number: string }>(
         `${basePath(tenantID)}/orders`,
         {
           outlet_id: data.outletId,
           device_id: data.deviceId,
           currency: data.currency ?? 'KES',
           lines: data.lines,
-        }
+          client_reference: localId,
+        },
+        idemHeaders(localId)
       );
+      return { ...res, local_id: localId, offline: false, order_id: res.id };
     },
     onSuccess: () => {
       if (isOnline) qc.invalidateQueries({ queryKey: ['pos-orders'] });
@@ -235,8 +246,8 @@ export function useOpenDrawerOffline() {
 
   return useMutation({
     mutationFn: async (data: { outletId?: string; startingCash: number }) => {
+      const localId = uuidv4();
       if (!isOnline) {
-        const localId = uuidv4();
         await saveDraftDrawerSession({
           local_id: localId,
           tenant_id: tenantID,
@@ -248,7 +259,7 @@ export function useOpenDrawerOffline() {
         });
         return { local_id: localId, offline: true };
       }
-      return apiClient.post(`${basePath(tenantID)}/drawers/open`, data);
+      return apiClient.post(`${basePath(tenantID)}/drawers/open`, data, idemHeaders(localId));
     },
     onSuccess: () => {
       if (isOnline) qc.invalidateQueries({ queryKey: ['pos-drawer-current'] });
@@ -290,7 +301,11 @@ export function useCloseDrawerOffline() {
         });
         return { offline: true };
       }
-      return apiClient.post(`${basePath(tenantID)}/drawers/${drawerId}/close`, { endingCash });
+      return apiClient.post(
+        `${basePath(tenantID)}/drawers/${drawerId}/close`,
+        { endingCash },
+        idemHeaders(`close-${drawerId}`)
+      );
     },
     onSuccess: () => {
       if (isOnline) qc.invalidateQueries({ queryKey: ['pos-drawer-current'] });
@@ -344,13 +359,11 @@ export function useRecordPaymentOffline() {
         });
         return { offline: true };
       }
-      return apiClient.post(`${basePath(tenantID)}/orders/${orderId}/payments/intent`, {
-        tenderMethod,
-        tenderId,
-        amount,
-        currency,
-        externalRef,
-      });
+      return apiClient.post(
+        `${basePath(tenantID)}/orders/${orderId}/payments/intent`,
+        { tenderMethod, tenderId, amount, currency, externalRef },
+        idemHeaders(`pay-${orderId}-${externalRef ?? amount}`)
+      );
     },
     onSuccess: () => {
       if (isOnline) qc.invalidateQueries({ queryKey: ['pos-orders'] });

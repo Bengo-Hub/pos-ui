@@ -5,6 +5,8 @@ import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
 import { useAuthStore } from '@/store/auth';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api/client';
+import { useOnline } from '@/hooks/use-online';
+import { v4 as uuidv4 } from 'uuid';
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Loader2, Plus, RotateCcw, Search, X } from 'lucide-react';
@@ -66,10 +68,47 @@ interface InitiateReturnPayload {
 function useInitiateReturn() {
   const user = useAuthStore((s) => s.user);
   const tenantID = user?.tenant_id ?? '';
+  const tenantSlug = user?.tenant_slug ?? tenantID;
+  const outletID = (user as (typeof user & { outlet_id?: string }) | null)?.outlet_id ?? '';
+  const isOnline = useOnline();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ orderId, payload }: { orderId: string; payload: InitiateReturnPayload }) =>
-      apiClient.post(`/api/v1/${tenantID}/pos/orders/${orderId}/returns`, payload),
+    mutationFn: async ({ orderId, payload }: { orderId: string; payload: InitiateReturnPayload }) => {
+      const localId = uuidv4();
+      if (!isOnline) {
+        // Queue the return; the order shown in the picker came from a server search so its id
+        // is a server id. Synced on reconnect (idempotent via the Idempotency-Key = local_id).
+        const { saveDraftReturn } = await import('@/lib/db/pos-db');
+        const refundAmount = payload.lines.reduce((s, l) => s + (l.total_price ?? 0), 0);
+        await saveDraftReturn({
+          local_id: localId,
+          server_order_id: orderId,
+          outlet_id: outletID,
+          return_type: payload.return_type,
+          reason: payload.reason,
+          reason_code: payload.reason_code,
+          lines: payload.lines.map((l) => ({
+            order_line_id: l.order_line_id,
+            sku: l.sku,
+            name: l.name,
+            quantity: l.quantity,
+            unit_price: l.unit_price,
+            total_price: l.total_price,
+          })),
+          refund_amount: refundAmount,
+          tenant_id: tenantID,
+          tenant_slug: tenantSlug,
+          created_at: new Date().toISOString(),
+          synced: false,
+        });
+        return { offline: true };
+      }
+      return apiClient.post(
+        `/api/v1/${tenantID}/pos/orders/${orderId}/returns`,
+        payload,
+        { headers: { 'Idempotency-Key': localId } },
+      );
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['returns', tenantID] }),
   });
 }

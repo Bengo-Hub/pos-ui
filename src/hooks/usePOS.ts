@@ -3,12 +3,34 @@
 import { apiClient } from '@/lib/api/client';
 import { useAuthStore } from '@/store/auth';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { cacheCatalogItems, getCachedCatalog, type OfflineCatalogItem } from '@/lib/db/pos-db';
+import {
+  cacheCatalogItems,
+  getCachedCatalog,
+  saveDraftOrder,
+  saveDraftDrawerSession,
+  saveDraftDrawerClose,
+  type OfflineCatalogItem,
+  type OfflineOrderLine,
+} from '@/lib/db/pos-db';
 import { useOnline } from '@/hooks/use-online';
+import { v4 as uuidv4 } from 'uuid';
 
 // Get tenant ID from auth store
 function useTenantID() {
   return useAuthStore((s) => s.user?.tenant_id ?? '');
+}
+
+function useTenantSlug() {
+  return useAuthStore((s) => s.user?.tenant_slug ?? s.user?.tenant_id ?? '');
+}
+
+function useOutletID() {
+  return useAuthStore((s) => (s.user as (typeof s.user & { outlet_id?: string }) | null)?.outlet_id ?? '');
+}
+
+/** Idempotency-Key header so the backend dedups a replayed/lost-response request. */
+function idemHeaders(key: string) {
+  return { headers: { 'Idempotency-Key': key } };
 }
 
 function basePath(tenantID: string) {
@@ -774,24 +796,66 @@ interface CreateOrderInput {
 
 export function useCreateOrder() {
   const tenantID = useTenantID();
+  const tenantSlug = useTenantSlug();
+  const outletID = useOutletID();
+  const isOnline = useOnline();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: CreateOrderInput) =>
-      apiClient.post(`${basePath(tenantID)}/orders`, {
-        outlet_id: data.outletId,
-        device_id: data.deviceId,
-        currency: data.currency ?? 'KES',
-        order_subtype: data.orderSubtype ?? 'dine_in',
-        table_id: data.tableId,
-        covers_count: data.coversCount,
-        customer_phone: data.customerPhone,
-        customer_name: data.customerName,
-        age_verified: data.ageVerified,
-        discount_amount: data.discountAmount,
-        discount_reason: data.discountReason,
-        approval_token: data.approvalToken,
-        lines: data.lines,
-      }),
+    // Generate the client reference up front and use it on BOTH paths: offline it is the
+    // IndexedDB local_id; online it is sent as client_reference + Idempotency-Key so the
+    // backend dedups a replayed (or lost-response) submission into a single order.
+    mutationFn: async (data: CreateOrderInput) => {
+      const localId = uuidv4();
+      if (!isOnline) {
+        const lines: OfflineOrderLine[] = data.lines.map((l) => ({
+          catalog_item_id: l.catalog_item_id,
+          sku: l.sku,
+          name: l.name,
+          quantity: l.quantity,
+          unit_price: l.unit_price,
+          total_price: l.total_price,
+        }));
+        const subtotal = lines.reduce((s, l) => s + l.total_price, 0);
+        const totalAmount = Math.max(0, subtotal - (data.discountAmount ?? 0));
+        await saveDraftOrder({
+          local_id: localId,
+          tenant_id: tenantID,
+          tenant_slug: tenantSlug,
+          outlet_id: data.outletId || outletID,
+          currency: data.currency ?? 'KES',
+          subtotal,
+          tax_total: 0,
+          total_amount: totalAmount,
+          lines,
+          created_at: new Date().toISOString(),
+          synced: false,
+        });
+        // Shape mirrors the server order enough for the place-order → payment handoff;
+        // id === local_id so downstream offline payment can attach via isLocalOrder.
+        return { id: localId, order_id: localId, local_id: localId, offline: true, status: 'open' };
+      }
+      const res = await apiClient.post<{ id: string; order_number: string }>(
+        `${basePath(tenantID)}/orders`,
+        {
+          outlet_id: data.outletId,
+          device_id: data.deviceId,
+          currency: data.currency ?? 'KES',
+          order_subtype: data.orderSubtype ?? 'dine_in',
+          table_id: data.tableId,
+          covers_count: data.coversCount,
+          customer_phone: data.customerPhone,
+          customer_name: data.customerName,
+          age_verified: data.ageVerified,
+          discount_amount: data.discountAmount,
+          discount_reason: data.discountReason,
+          approval_token: data.approvalToken,
+          lines: data.lines,
+          client_reference: localId,
+        },
+        idemHeaders(localId),
+      );
+      return { ...res, offline: false };
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['pos-orders'] }),
   });
 }
@@ -808,10 +872,36 @@ export function useUpdateOrderStatus() {
 
 export function useVoidOrder() {
   const tenantID = useTenantID();
+  const tenantSlug = useTenantSlug();
+  const isOnline = useOnline();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ orderId, reason, approvalToken }: { orderId: string; reason: string; approvalToken?: string }) =>
-      apiClient.patch(`${basePath(tenantID)}/orders/${orderId}/void`, { reason, approval_token: approvalToken }),
+    mutationFn: async ({ orderId, reason, approvalToken }: { orderId: string; reason: string; approvalToken?: string }) => {
+      const localId = uuidv4();
+      if (!isOnline) {
+        // If voiding an offline (not-yet-synced) order, key by local_order_id so the void
+        // syncs after the order resolves a server id.
+        const { getOfflineOrderByLocalId, saveDraftVoid } = await import('@/lib/db/pos-db');
+        const localOrder = await getOfflineOrderByLocalId(orderId);
+        await saveDraftVoid({
+          local_id: localId,
+          server_order_id: localOrder ? undefined : orderId,
+          local_order_id: localOrder ? orderId : undefined,
+          reason,
+          approval_token: approvalToken,
+          tenant_id: tenantID,
+          tenant_slug: tenantSlug,
+          created_at: new Date().toISOString(),
+          synced: false,
+        });
+        return { offline: true };
+      }
+      return apiClient.patch(
+        `${basePath(tenantID)}/orders/${orderId}/void`,
+        { reason, approval_token: approvalToken },
+        idemHeaders(localId),
+      );
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['pos-orders'] }),
   });
 }
@@ -944,13 +1034,25 @@ interface CashDrawer {
 
 export function useCurrentDrawer() {
   const tenantID = useTenantID();
+  const isOnline = useOnline();
   return useQuery({
     queryKey: ['pos-drawer-current', tenantID],
-    queryFn: () =>
-      apiClient.get<{ drawer: CashDrawer | null; isOpen: boolean }>(`${basePath(tenantID)}/drawers/current`),
+    // Offline (incl. cold-start): serve the last-known drawer snapshot so the cashier sees
+    // their open drawer instead of a blank/zero state; cache it through on every online read.
+    queryFn: async () => {
+      const { getSnapshot, cacheSnapshot } = await import('@/lib/db/pos-db');
+      if (!navigator.onLine) {
+        const snap = await getSnapshot<{ drawer: CashDrawer | null; isOpen: boolean }>(`drawer:${tenantID}`);
+        if (snap !== undefined) return snap;
+      }
+      const res = await apiClient.get<{ drawer: CashDrawer | null; isOpen: boolean }>(`${basePath(tenantID)}/drawers/current`);
+      await cacheSnapshot(`drawer:${tenantID}`, tenantID, res).catch(() => {});
+      return res;
+    },
     enabled: !!tenantID,
     staleTime: 5_000,
-    refetchInterval: 30_000,
+    refetchInterval: isOnline ? 30_000 : false,
+    networkMode: 'always',
   });
 }
 
@@ -1034,10 +1136,27 @@ export function useCloseShift() {
 
 export function useOpenDrawer() {
   const tenantID = useTenantID();
+  const tenantSlug = useTenantSlug();
+  const outletID = useOutletID();
+  const isOnline = useOnline();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: { outletId: string; startingCash: number; deviceId?: string }) =>
-      apiClient.post(`${basePath(tenantID)}/drawers/open`, data),
+    mutationFn: async (data: { outletId: string; startingCash: number; deviceId?: string }) => {
+      const localId = uuidv4();
+      if (!isOnline) {
+        await saveDraftDrawerSession({
+          local_id: localId,
+          tenant_id: tenantID,
+          tenant_slug: tenantSlug,
+          outlet_id: data.outletId || outletID,
+          starting_cash: data.startingCash,
+          opened_at: new Date().toISOString(),
+          synced: false,
+        });
+        return { id: localId, local_id: localId, offline: true };
+      }
+      return apiClient.post(`${basePath(tenantID)}/drawers/open`, data, idemHeaders(localId));
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['pos-drawer-current'] });
       qc.invalidateQueries({ queryKey: ['pos-session-current'] });
@@ -1047,10 +1166,32 @@ export function useOpenDrawer() {
 
 export function useCloseDrawer() {
   const tenantID = useTenantID();
+  const tenantSlug = useTenantSlug();
+  const isOnline = useOnline();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ drawerId, endingCash }: { drawerId: string; endingCash: number }) =>
-      apiClient.post(`${basePath(tenantID)}/drawers/${drawerId}/close`, { endingCash }),
+    // isLocalDrawer = the drawer was opened offline and hasn't synced yet (drawerId is a
+    // local uuid). The close is queued against local_drawer_id and applied after the
+    // session syncs and resolves a server id.
+    mutationFn: async ({ drawerId, endingCash, isLocalDrawer = false }: { drawerId: string; endingCash: number; isLocalDrawer?: boolean }) => {
+      if (!isOnline) {
+        await saveDraftDrawerClose({
+          server_drawer_id: isLocalDrawer ? undefined : drawerId,
+          local_drawer_id: isLocalDrawer ? drawerId : undefined,
+          ending_cash: endingCash,
+          closed_at: new Date().toISOString(),
+          tenant_id: tenantID,
+          tenant_slug: tenantSlug,
+          synced: false,
+        });
+        return { offline: true };
+      }
+      return apiClient.post(
+        `${basePath(tenantID)}/drawers/${drawerId}/close`,
+        { endingCash },
+        idemHeaders(`close-${drawerId}`),
+      );
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['pos-drawer-current'] }),
   });
 }
