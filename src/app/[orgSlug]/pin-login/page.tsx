@@ -14,7 +14,7 @@ import { useIdleTimer, getScreensaverTimeoutMs, setScreensaverTimeoutMs } from '
 import { useBiometric } from '@/hooks/use-biometric';
 import { apiClient } from '@/lib/api/client';
 import { useAuthStore } from '@/store/auth';
-import { getCachedStaffProfiles, cacheStaffProfile, type CachedStaffProfile } from '@/lib/db/pos-db';
+import { getCachedStaffProfiles, getCachedStaffProfile, cacheStaffProfile, type CachedStaffProfile } from '@/lib/db/pos-db';
 import { Screensaver } from '@/components/pos/screensaver';
 import { LiveClock } from '@/components/pos/live-clock';
 import { useTenantBranding } from '@/providers/tenant-branding-provider';
@@ -44,6 +44,7 @@ interface PINLoginResponse {
     outlet_id: string;
     outlet_use_case?: string;
     is_hq_user?: boolean;
+    pin_hash?: string; // returned only to this device, cached for offline PIN re-login
   };
 }
 
@@ -270,13 +271,17 @@ export default function PINLoginPage() {
       );
       const list: StaffProfile[] = body.data ?? [];
       for (const p of list) {
+        // Preserve a pin_hash already cached at login — the public list never carries it,
+        // and we must not wipe a staff member's offline re-login capability.
+        const existing = await getCachedStaffProfile(p.user_id);
         await cacheStaffProfile({
           user_id:     p.user_id,
           tenant_id:   p.tenant_id,
           name:        p.name,
-          email:       '',
-          roles:       p.role ? [p.role] : [],
-          permissions: [],
+          email:       existing?.email ?? '',
+          roles:       p.role ? [p.role] : existing?.roles ?? [],
+          permissions: existing?.permissions ?? [],
+          pin_hash:    existing?.pin_hash,
           cached_at:   new Date().toISOString(),
         });
       }
@@ -296,6 +301,20 @@ export default function PINLoginPage() {
   // ── PIN login mutation (online) ──────────────────────────────────────────────
 
   function handleLoginSuccess(data: PINLoginResponse) {
+    // Cache this user's profile WITH their pin_hash so they can re-login offline (e.g. after
+    // a mid-outage reload/logout). Only users who have signed in on this device are cacheable.
+    if (data.user.pin_hash) {
+      void cacheStaffProfile({
+        user_id:     data.user.user_id,
+        tenant_id:   data.user.tenant_id,
+        name:        data.user.name,
+        email:       '',
+        roles:       data.user.role ? [data.user.role] : [],
+        permissions: data.user.permissions ?? [],
+        pin_hash:    data.user.pin_hash,
+        cached_at:   new Date().toISOString(),
+      });
+    }
     setTerminalSession(data.access_token, {
       id:              data.user.user_id,
       email:           '',
@@ -379,6 +398,9 @@ export default function PINLoginPage() {
         triggerPinError('Incorrect PIN. Please try again.');
         return;
       }
+      // Restore outlet context from the last selection so offline orders carry the right
+      // outlet_id (and the API client sends X-Outlet-ID once back online).
+      const offlineOutletId = outletInfo?.id ?? storedOutletId;
       setTerminalSession('offline-terminal-session', {
         id:              matched.user_id,
         email:           matched.email,
@@ -389,7 +411,19 @@ export default function PINLoginPage() {
         tenant_slug:     orgSlug,
         isPlatformOwner: false,
         isSuperUser:     false,
-      });
+        ...(offlineOutletId ? { outlet_id: offlineOutletId } : {}),
+      } as Parameters<typeof setTerminalSession>[1]);
+      if (offlineOutletId) {
+        setOutlet({
+          id:       offlineOutletId,
+          code:     '',
+          name:     outletInfo?.name ?? offlineOutletId,
+          use_case: outletInfo?.use_case ?? '',
+          is_hq:    outletInfo?.is_hq ?? false,
+          status:   'active',
+        });
+        apiClient.setOutletID(offlineOutletId);
+      }
       router.push(`/${orgSlug}/dashboard`);
     }
   }
