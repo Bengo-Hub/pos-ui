@@ -54,8 +54,8 @@ async function getAuth(page: Page): Promise<{ token: string; tenantId: string; o
 async function pinLogin(page: Page) {
   page.on('response', async (res) => {
     if (res.url().includes('/auth/pin')) {
-      const body = await res.text().catch(() => '');
-      console.log(`[PIN ${res.request().method()} ${res.status()}] ${res.url()} :: ${body.slice(0, 200)}`);
+      // Status only — never log the response body (it carries the access token).
+      console.log(`[PIN ${res.request().method()} ${res.status()}] ${res.url().split('?')[0]}`);
     }
   });
   await page.goto(`/${ORG}/pin-login`, { waitUntil: 'domcontentloaded' });
@@ -210,7 +210,9 @@ test.describe('POS offline sync (live)', () => {
             req.onerror = () => resolve(null);
           }),
         null,
-        { timeout: 60_000, polling: 2000 },
+        // Generous: the IP rate-limit window (100/60s) can throttle the first sync attempts
+        // after a busy login+catalog burst; the 10s periodic re-drain succeeds once it rolls.
+        { timeout: 120_000, polling: 2000 },
       )
       .then((h) => h.jsonValue())
       .catch(() => null);
@@ -235,28 +237,44 @@ test.describe('POS offline sync (live)', () => {
       .toBe(0);
 
     // 6) Backend verification + idempotency via API (using the captured terminal token).
+    // Include X-Outlet-ID (the order is outlet-scoped) and retry through the IP rate limiter.
     const api = await pwRequest.newContext({
       baseURL: API,
-      extraHTTPHeaders: { Authorization: `Bearer ${auth.token}`, 'X-Tenant-ID': auth.tenantId },
+      extraHTTPHeaders: {
+        Authorization: `Bearer ${auth.token}`,
+        'X-Tenant-ID': auth.tenantId,
+        'X-Tenant-Slug': ORG,
+        'X-Outlet-ID': newOrder.outlet_id,
+      },
     });
+    const withRetry = async (fn: () => Promise<any>) => {
+      for (let i = 0; i < 6; i++) {
+        const res = await fn();
+        if (res.status() !== 429) return res;
+        await new Promise((r) => setTimeout(r, 12_000)); // rate-limit window cooldown
+      }
+      return fn();
+    };
 
-    const getOrder = await api.get(`/api/v1/${auth.tenantId}/pos/orders/${serverOrderId}`);
-    expect(getOrder.ok(), `GET order ${serverOrderId} should be 200`).toBeTruthy();
+    const getOrder = await withRetry(() => api.get(`/api/v1/${auth.tenantId}/pos/orders/${serverOrderId}`));
+    expect(getOrder.ok(), `GET order ${serverOrderId} should be 200 (got ${getOrder.status()})`).toBeTruthy();
     const orderBody = await getOrder.json();
     expect(orderBody.client_reference ?? orderBody.data?.client_reference).toBe(newOrder.local_id);
 
     // Idempotency: replay the create with the SAME Idempotency-Key + client_reference.
     // get-or-create must return the SAME order, not a duplicate.
-    const replay = await api.post(`/api/v1/${auth.tenantId}/pos/orders`, {
-      headers: { 'Idempotency-Key': newOrder.local_id },
-      data: {
-        outlet_id: newOrder.outlet_id,
-        currency: newOrder.currency,
-        lines: newOrder.lines,
-        client_reference: newOrder.local_id,
-      },
-    });
-    expect(replay.ok(), 'idempotent replay should succeed').toBeTruthy();
+    const replay = await withRetry(() =>
+      api.post(`/api/v1/${auth.tenantId}/pos/orders`, {
+        headers: { 'Idempotency-Key': newOrder.local_id },
+        data: {
+          outlet_id: newOrder.outlet_id,
+          currency: newOrder.currency,
+          lines: newOrder.lines,
+          client_reference: newOrder.local_id,
+        },
+      }),
+    );
+    expect(replay.ok(), `idempotent replay should succeed (got ${replay.status()})`).toBeTruthy();
     const replayBody = await replay.json();
     const replayId = replayBody.id ?? replayBody.data?.id;
     expect(replayId, 'replay must return the SAME order id (no duplicate)').toBe(serverOrderId);
