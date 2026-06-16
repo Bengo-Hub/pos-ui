@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import {
-  ChefHat, Clock, CreditCard, Gift, Key, Layers, Monitor, Percent, Receipt, Truck,
+  ChefHat, Clock, CreditCard, DatabaseBackup, Gift, Key, Layers, Monitor, Percent, Receipt, Truck,
   Settings, ShieldCheck, Table2, Users,
 } from 'lucide-react';
 import { useAuthStore } from '@/store/auth';
@@ -26,6 +26,7 @@ import { DevicesTab } from '@/components/settings/DevicesTab';
 import { CardTerminalTab } from '@/components/settings/CardTerminalTab';
 import { ChannelsTab } from '@/components/settings/ChannelsTab';
 import { BookingPolicyTab } from '@/components/settings/BookingPolicyTab';
+import { BackupsTab } from '@/components/settings/BackupsTab';
 
 type Tab =
   | 'general'
@@ -44,7 +45,8 @@ type Tab =
   | 'booking_policy'
   | 'platform'
   | 'team'
-  | 'audit';
+  | 'audit'
+  | 'backups';
 
 // requireModule → only shown when the module is enabled (or to superusers).
 // requireAdmin  → read-only account views shown to tenant admins/managers (and platform owners).
@@ -65,6 +67,7 @@ const ALL_TABS: { id: Tab; label: string; icon: React.ElementType; requireModule
   { id: 'booking_policy',   label: 'Booking Policy',     icon: Clock,       description: 'Amendment & cancellation windows and fees for hotel bookings', requireModule: 'hotel' },
   { id: 'team',             label: 'Team',               icon: Users,       description: 'Staff members, roles, and permissions', requireAdmin: true },
   { id: 'audit',            label: 'Loss Prevention',    icon: ShieldCheck, description: 'Audit trail + per-cashier exception report', requireAdmin: true },
+  { id: 'backups',          label: 'Backups',            icon: DatabaseBackup, description: 'Opt in to daily automatic backups and set retention', requireAdmin: true },
   { id: 'platform',         label: 'Platform',           icon: ShieldCheck, description: 'Admin and tenant management' },
 ];
 
@@ -145,6 +148,7 @@ export default function SettingsPage() {
         {activeTab === 'booking_policy'   && <BookingPolicyTab />}
         {activeTab === 'team'             && isAdminOrManager && <TeamTab />}
         {activeTab === 'audit'            && <AuditTab />}
+        {activeTab === 'backups'          && isAdminOrManager && <BackupsTab />}
         {activeTab === 'platform'         && isPlatformOwner && <PlatformTab />}
       </div>
     </div>
