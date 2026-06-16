@@ -79,8 +79,15 @@ export function useSyncOfflineOrders() {
   useEffect(() => {
     if (!isOnline || !tenantID) return;
     // 1.5 s delay to let the network settle after a reconnect transient.
-    const timer = setTimeout(runSync, 1500);
-    return () => clearTimeout(timer);
+    const initial = setTimeout(runSync, 1500);
+    // Periodic re-drain so items that hit a transient failure (e.g. the network still settling
+    // right after reconnect) and backed off are retried — without this a single transient error
+    // on reconnect strands the queue until the next online event or manual trigger.
+    const interval = setInterval(runSync, 10_000);
+    return () => {
+      clearTimeout(initial);
+      clearInterval(interval);
+    };
   }, [isOnline, tenantID, runSync]);
 
   // Let the service worker (Background Sync) ask the page to drain when it regains focus.

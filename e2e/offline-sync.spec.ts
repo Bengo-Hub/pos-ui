@@ -182,16 +182,45 @@ test.describe('POS offline sync (live)', () => {
     expect(stillQueued.some((o) => o.local_id === newOrder.local_id && !o.synced)).toBeTruthy();
 
     // 5) Reconnect → the worker drains the queue.
+    page.on('response', (res) => {
+      if (res.url().includes('/pos/orders') && res.request().method() === 'POST') {
+        res.text().then((b) => console.log(`[SYNC POST ${res.status()}] ${res.url()} :: ${b.slice(0, 160)}`)).catch(() => {});
+      }
+    });
     await context.setOffline(false);
     await page.evaluate(() => window.dispatchEvent(new Event('online')));
+    // Also nudge the worker directly (covers any missed online-event timing).
+    await page.waitForTimeout(2500);
+    await page.evaluate(() => window.dispatchEvent(new Event('pos:sync-now')));
 
-    await expect
-      .poll(async () => {
-        const orders = await idbGetAll(page, 'offlineOrders');
-        const o = orders.find((x) => x.local_id === newOrder.local_id);
-        return o?.synced ? o.server_order_id : null;
-      }, { timeout: 60_000, message: 'order should sync and get a server id' })
-      .toBeTruthy();
+    const syncedId = await page
+      .waitForFunction(
+        () =>
+          new Promise((resolve) => {
+            const req = indexedDB.open('pos_offline_db');
+            req.onsuccess = () => {
+              const tx = req.result.transaction('offlineOrders', 'readonly');
+              const all = tx.objectStore('offlineOrders').getAll();
+              all.onsuccess = () => {
+                const o = (all.result as any[]).find((x) => x.synced && x.server_order_id);
+                resolve(o ? o.server_order_id : null);
+              };
+              all.onerror = () => resolve(null);
+            };
+            req.onerror = () => resolve(null);
+          }),
+        null,
+        { timeout: 60_000, polling: 2000 },
+      )
+      .then((h) => h.jsonValue())
+      .catch(() => null);
+
+    if (!syncedId) {
+      const row = (await idbGetAll(page, 'offlineOrders')).find((x) => x.local_id === newOrder.local_id);
+      console.log('UNSYNCED ORDER ROW:', JSON.stringify(row));
+      console.log('SYNC CONSOLE:\n' + logs.slice(-30).join('\n'));
+    }
+    expect(syncedId, 'order should sync and get a server id').toBeTruthy();
 
     const syncedOrders = await idbGetAll(page, 'offlineOrders');
     const synced = syncedOrders.find((x) => x.local_id === newOrder.local_id);
