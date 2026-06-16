@@ -57,3 +57,10 @@ next-env.d.ts
 *-key.pem
 KubeSecrets/
 kubeSecrets/
+
+# next-pwa generated service worker (do not commit — regenerated each build)
+public/sw.js
+public/sw.js.map
+public/workbox-*.js
+public/swe-worker-*.js
+public/fallback-*.js

@@ -10,7 +10,7 @@ import { cn } from '@/lib/utils';
 /**
  * Floating sync-status pill (bottom-right). Shows how many offline sales/payments/voids/
  * returns are still queued, and surfaces dead-lettered items (terminal failures) for manual
- * review + retry. Hidden when everything is synced. Complements the top OfflineBanner.
+ * review + retry. Hidden when everything is synced. Complements the top OfflineBar ribbon.
  */
 export function SyncStatusIndicator() {
   const online = useOnline();
@@ -26,7 +26,9 @@ export function SyncStatusIndicator() {
     if (open) void loadItems();
   }, [open, deadLetter, loadItems]);
 
-  if (pending === 0 && deadLetter === 0) return null;
+  // The top OfflineBar ribbon now owns the offline + "Syncing offline data…" (pending) display.
+  // This floating pill is reserved for dead-lettered items that need manual review/retry.
+  if (deadLetter === 0) return null;
 
   const handleRetry = async (it: DeadLetterItem) => {
     await retryDeadLetter(it.kind, it.id as number);

@@ -7,16 +7,15 @@ import { TenantBrandingProvider } from '@/providers/tenant-branding-provider';
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import { ReactNode, useState } from 'react';
 import { useOnline } from '@/hooks/use-online';
-import { getCachedCatalog } from '@/lib/db/pos-db';
+import { getCachedCatalog, getSyncStatusCounts } from '@/lib/db/pos-db';
+import { OfflineBar } from '@bengo-hub/shared-ui-lib/offline';
 import { loadFullCatalog, offlineToCatalogItem, FULL_CATALOG_QUERY_KEY } from '@/hooks/usePOS';
 import { Footer } from '@/components/footer';
 import { SubscriptionBanner } from '@/components/subscription/subscription-banner';
-import { OfflineBanner } from '@/components/pos/offline-banner';
 import { SyncStatusIndicator } from '@/components/pos/sync-status-indicator';
 import { PWARegistration } from '@/components/pwa-registration';
-import { PWAUpdateBanner } from '@/components/pwa-update-banner';
 import { StartShiftGate } from '@/components/pos/start-shift-gate';
-import { useSyncOfflineOrders } from '@/hooks/use-sync-offline-orders';
+import { useSyncOfflineOrders, triggerSyncNow } from '@/hooks/use-sync-offline-orders';
 import { useEffect } from 'react';
 import { registerBackgroundSync } from '@/lib/sw/register-sync';
 import { usePathname, useParams } from 'next/navigation';
@@ -131,8 +130,16 @@ export function OrgShell({ children }: { children: ReactNode }) {
       <AuthProvider>
         <TenantBrandingProvider>
           <ManifestInjector />
-          <PWAUpdateBanner />
-          <OfflineBanner />
+          {/* Shared top ribbon: offline-mode (cash/manual only) + animated "Syncing offline
+              data… (N)" driven by the real IndexedDB queue. SW is registered by registerBackgroundSync. */}
+          <OfflineBar
+            registerSW={false}
+            getPendingCount={async () => (await getSyncStatusCounts()).pending}
+            onSyncNow={triggerSyncNow}
+            availableOffline={['Sell', 'Cash & manual payments', 'Open/close drawer']}
+            disabledOffline={['Card / M-Pesa STK', 'Live reports']}
+          />
+          {/* Floating pill kept for dead-letter review (failed items + manual retry). */}
           <SyncStatusIndicator />
           <OfflineSyncWorker />
           <CatalogPrewarm />
