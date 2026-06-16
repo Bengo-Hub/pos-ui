@@ -113,12 +113,22 @@ test.describe('POS offline sync (live)', () => {
     const swActive = await page.evaluate(async () => {
       if (!('serviceWorker' in navigator)) return false;
       const ready = navigator.serviceWorker.ready.then(() => true);
-      const timeout = new Promise<boolean>((r) => setTimeout(() => r(false), 15000));
+      // next-pwa precaches the whole app on first install (~50s on a cold cache), so allow ample
+      // time before the offline cold-start checks.
+      const timeout = new Promise<boolean>((r) => setTimeout(() => r(false), 90000));
       return Promise.race([ready, timeout]);
     });
     console.log('SERVICE_WORKER_ACTIVE:', swActive);
     expect(swActive, 'a service worker must be active for offline cold-start').toBe(true);
-    await page.reload({ waitUntil: 'domcontentloaded' });
+    // Wait until the SW actually controls this page (clientsClaim) before reloading, so the
+    // reload isn't aborted mid-claim. Then reload so the now-active SW caches this navigation.
+    await page.waitForFunction(() => !!navigator.serviceWorker.controller, null, { timeout: 30_000 }).catch(() => {});
+    await page.waitForTimeout(2000);
+    for (let i = 0; i < 3; i++) {
+      const ok = await page.reload({ waitUntil: 'domcontentloaded' }).then(() => true).catch(() => false);
+      if (ok) break;
+      await page.waitForTimeout(2500);
+    }
     await expect(page.getByTestId('pos-product-card').first()).toBeVisible({ timeout: 30_000 });
     await page.waitForTimeout(1000);
 
@@ -170,9 +180,9 @@ test.describe('POS offline sync (live)', () => {
     expect(newOrder.local_id, 'queued order should carry a client local_id').toBeTruthy();
     expect(payments.some((p) => !p.synced), 'an offline payment should be queued').toBeTruthy();
 
-    // Sync pill should reflect pending work.
-    const pill = page.getByTestId('pos-sync-pill');
-    await expect(pill).toBeVisible({ timeout: 5_000 });
+    // The shared OfflineBar ribbon should reflect offline/pending work (the bottom pill is now
+    // reserved for dead-lettered items only).
+    await expect(page.getByText(/Offline mode|Syncing offline data/i).first()).toBeVisible({ timeout: 5_000 });
 
     // 4) Cold-start: reload while still offline — the terminal must still work.
     await page.reload({ waitUntil: 'domcontentloaded' });

@@ -10,7 +10,9 @@ const withPWA = withPWAInit({
   dest: "public",
   disable: process.env.NODE_ENV === "development",
   register: true,
-  reloadOnOnline: true,
+  // Don't auto-reload the page when connectivity returns — it yanks the cashier mid-task; the
+  // shared OfflineBar shows the "Syncing offline data…" ribbon while the queue drains instead.
+  reloadOnOnline: false,
   cacheOnFrontEndNav: true,
   workboxOptions: {
     skipWaiting: false, // PwaUpdater activates the waiting worker on the user's click
