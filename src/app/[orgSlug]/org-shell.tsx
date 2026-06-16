@@ -133,7 +133,7 @@ export function OrgShell({ children }: { children: ReactNode }) {
           {/* Shared top ribbon: offline-mode (cash/manual only) + animated "Syncing offline
               data… (N)" driven by the real IndexedDB queue. SW is registered by registerBackgroundSync. */}
           <OfflineBar
-            registerSW={false}
+            registerSW
             getPendingCount={async () => (await getSyncStatusCounts()).pending}
             onSyncNow={triggerSyncNow}
             availableOffline={['Sell', 'Cash & manual payments', 'Open/close drawer']}

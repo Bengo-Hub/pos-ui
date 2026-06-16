@@ -221,8 +221,9 @@ test.describe('POS offline sync (live)', () => {
           }),
         null,
         // Generous: the IP rate-limit window (100/60s) can throttle the first sync attempts
-        // after a busy login+catalog burst; the 10s periodic re-drain succeeds once it rolls.
-        { timeout: 120_000, polling: 2000 },
+        // after a busy login+catalog+precache burst; the 10s periodic re-drain succeeds once it
+        // rolls. Widened so re-drains outlast repeated 429s.
+        { timeout: 180_000, polling: 3000 },
       )
       .then((h) => h.jsonValue())
       .catch(() => null);

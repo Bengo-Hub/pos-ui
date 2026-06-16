@@ -8,10 +8,12 @@ import type { NextConfig } from "next";
 // the terminal still boots and reads the IndexedDB queue during an outage.
 const withPWA = withPWAInit({
   dest: "public",
-  disable: process.env.NODE_ENV === "development",
+  // next-pwa DISABLED: under output:standalone its generated SW activated slowly (~50s precache)
+  // and regressed reconnect-sync vs the committed hand-written runtime-caching SW at public/sw.js
+  // (proven green end-to-end). We own that static SW (registered by the shared OfflineBar);
+  // disabling guarantees the build never overwrites it. Uniform + bundler-agnostic across the fleet.
+  disable: true,
   register: true,
-  // Don't auto-reload the page when connectivity returns — it yanks the cashier mid-task; the
-  // shared OfflineBar shows the "Syncing offline data…" ribbon while the queue drains instead.
   reloadOnOnline: false,
   cacheOnFrontEndNav: true,
   workboxOptions: {
