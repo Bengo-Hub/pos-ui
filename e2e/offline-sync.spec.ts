@@ -105,6 +105,23 @@ test.describe('POS offline sync (live)', () => {
     await expect(page.getByTestId('pos-product-card').first()).toBeVisible({ timeout: 30_000 });
     // Give the catalog prewarm a moment to write through to IndexedDB.
     await page.waitForTimeout(1500);
+
+    // The offline shell needs an ACTIVE service worker that has cached this route's document.
+    // Wait for it to register+activate, then do one online reload so the SW (now controlling
+    // the page) intercepts and caches the navigation — mirroring a terminal that's warm before
+    // an outage. Without this, an offline reload has no cached document → blank page.
+    const swActive = await page.evaluate(async () => {
+      if (!('serviceWorker' in navigator)) return false;
+      const ready = navigator.serviceWorker.ready.then(() => true);
+      const timeout = new Promise<boolean>((r) => setTimeout(() => r(false), 15000));
+      return Promise.race([ready, timeout]);
+    });
+    console.log('SERVICE_WORKER_ACTIVE:', swActive);
+    expect(swActive, 'a service worker must be active for offline cold-start').toBe(true);
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await expect(page.getByTestId('pos-product-card').first()).toBeVisible({ timeout: 30_000 });
+    await page.waitForTimeout(1000);
+
     const auth = await getAuth(page);
     expect(auth.token, 'should have a terminal access token').not.toEqual('');
     expect(auth.tenantId).not.toEqual('');
@@ -116,17 +133,35 @@ test.describe('POS offline sync (live)', () => {
     await expect(page.getByText(/Offline/i).first()).toBeVisible({ timeout: 10_000 });
 
     await page.getByTestId('pos-product-card').first().click();
+
+    // Quick-service/hospitality outlets require an order type before placing. Pick Takeaway
+    // (→ pay flow, not dine-in send-to-kitchen). Retail/pharmacy don't show this selector.
+    const takeaway = page.getByRole('button', { name: /^Takeaway$/i });
+    if (await takeaway.isVisible().catch(() => false)) {
+      await takeaway.click();
+    }
+
     // Open the cart/tender area if the cash tender isn't already visible (narrow layouts).
     const cashTender = page.getByTestId('pos-tender-cash');
     if (!(await cashTender.isVisible().catch(() => false))) {
       await page.locator('button:has-text("Cart"), button:has-text("View order"), [aria-label*="cart" i]').first().click().catch(() => {});
     }
     await expect(cashTender).toBeVisible({ timeout: 10_000 });
+    console.log('navigator.onLine at placement:', await page.evaluate(() => navigator.onLine));
     await cashTender.click();
     await page.getByTestId('pos-confirm-cash').click();
 
+    // Surface any failure toast (e.g. "Failed to create order") for diagnosis.
+    const toastText = await page.locator('[data-sonner-toast], .toast, [role="status"]').first().textContent({ timeout: 4000 }).catch(() => null);
+    if (toastText) console.log('TOAST after confirm:', toastText);
+
     // 3) Assert it was queued offline (order + payment) — this is the core wiring that was broken.
-    await page.waitForTimeout(1000);
+    // Poll briefly in case the mutation resolves a beat after the click.
+    await expect
+      .poll(async () => (await idbGetAll(page, 'offlineOrders')).length, { timeout: 8000, message: 'offline order should appear' })
+      .toBeGreaterThan(ordersBefore.length)
+      .catch(() => {});
+    if (logs.length) console.log('PAGE CONSOLE:\n' + logs.slice(-25).join('\n'));
     const ordersAfter = await idbGetAll(page, 'offlineOrders');
     const payments = await idbGetAll(page, 'offlinePayments');
     expect(ordersAfter.length, 'an offline order should be queued').toBeGreaterThan(ordersBefore.length);
