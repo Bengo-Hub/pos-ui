@@ -1148,6 +1148,10 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
           stations: (posSettings as any)?.printer_profiles ?? [],
           includeCustomerBill: true,
           currency: (posSettings as any)?.currency ?? 'KES',
+          // Only auto-print when the outlet enabled it — otherwise the kitchen gets the order via
+          // the KDS and the cashier prints manually (no surprise browser print dialog).
+          autoPrintKitchen: (posSettings as any)?.auto_print_kitchen ?? false,
+          autoPrintBill: (posSettings as any)?.auto_print_order ?? false,
         });
       }
       clearCart();

@@ -149,6 +149,10 @@ export interface PrintTicketsOptions {
   /** Include the customer bill section/job (true for dine-in send-to-kitchen). */
   includeCustomerBill?: boolean;
   currency?: string;
+  /** Outlet setting auto_print_kitchen — only auto-print kitchen/bar/coffee tickets when true. */
+  autoPrintKitchen?: boolean;
+  /** Outlet setting auto_print_order — only auto-print the customer bill when true. */
+  autoPrintBill?: boolean;
 }
 
 function hasAssignedPrinter(profiles?: PrinterProfile[] | null): boolean {
@@ -164,8 +168,18 @@ function hasAssignedPrinter(profiles?: PrinterProfile[] | null): boolean {
  * Returns a promise but is safe to fire-and-forget.
  */
 export async function printKitchenBarTickets(opts: PrintTicketsOptions): Promise<void> {
-  const { orderNumber, tableRef = '', lines, stations = [], includeCustomerBill = true, currency = 'KES' } = opts;
+  const {
+    orderNumber, tableRef = '', lines, stations = [], includeCustomerBill = true, currency = 'KES',
+    autoPrintKitchen = false, autoPrintBill = false,
+  } = opts;
   if (lines.length === 0) return;
+
+  // Respect the outlet's auto-print settings. With both off (and routing handled by the KDS),
+  // do NOT pop a browser print dialog or fire a silent job — the cashier uses the explicit
+  // "Print Bill" action instead. This is the gate that stops the print dialog from auto-opening.
+  const printBill = includeCustomerBill && autoPrintBill;
+  const printStations = autoPrintKitchen;
+  if (!printBill && !printStations) return;
 
   const cfg = stationConfigMap(stations);
   const coffeeActive = coffeeStationActive(stations);
@@ -185,16 +199,19 @@ export async function printKitchenBarTickets(opts: PrintTicketsOptions): Promise
       if (!force && c.auto_print === false) return; // station auto-print disabled
       jobs.push(printHtmlToPrinter(c.printer_name, title, `<div class="t-root">${html}</div>`, c.paper_width ?? '80mm'));
     };
-    if (includeCustomerBill) send('bill', `Bill ${orderNumber}`, billHtml, true);
-    send('kitchen', `Kitchen ${orderNumber}`, kitchenHtml);
-    send('bar', `Bar ${orderNumber}`, barHtml);
-    send('coffee', `Coffee ${orderNumber}`, coffeeHtml);
+    if (printBill) send('bill', `Bill ${orderNumber}`, billHtml, true);
+    if (printStations) {
+      send('kitchen', `Kitchen ${orderNumber}`, kitchenHtml);
+      send('bar', `Bar ${orderNumber}`, barHtml);
+      send('coffee', `Coffee ${orderNumber}`, coffeeHtml);
+    }
     await Promise.all(jobs);
     return;
   }
 
-  // No assigned printers → single combined 3-in-1 browser job.
+  // No assigned printers → single combined 3-in-1 browser job (only the enabled sections).
   const combined =
-    (includeCustomerBill ? billHtml : '') + kitchenHtml + barHtml + coffeeHtml;
+    (printBill ? billHtml : '') + (printStations ? kitchenHtml + barHtml + coffeeHtml : '');
+  if (!combined) return;
   openPrintWindow(`Order ${orderNumber}`, combined);
 }
