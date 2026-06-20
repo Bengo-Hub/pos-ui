@@ -1,5 +1,5 @@
 import { apiClient } from '@/lib/api/client';
-import { buildAuthorizeUrl, buildLogoutUrl, exchangeCodeForTokens, fetchProfile, fetchPosServiceProfile } from '@/lib/auth/api';
+import { buildAuthorizeUrl, buildLogoutUrl, exchangeCodeForTokens, fetchProfile, fetchPosServiceProfile, revokeServerSession } from '@/lib/auth/api';
 import {
     consumeVerifier,
     generateCodeChallenge,
@@ -281,8 +281,11 @@ export const useAuthStore = create<AuthState>()(
       },
 
       logout: async () => {
-        const { user } = get();
+        const { user, session } = get();
         const orgSlug = user?.tenant_slug ?? '';
+        // Revoke the backend SSO session (Redis session_token keys + DB sessions)
+        // before clearing local state, so refresh tokens can't be reused.
+        await revokeServerSession(session?.accessToken);
         set({ status: 'idle', user: null, session: null, subscriptionInfo: undefined, lastAuthenticatedAt: null, isTerminalSession: false, outlet: null, selectedOutletId: null });
         apiClient.setAccessToken(null);
         apiClient.setTenantInfo(null, null);

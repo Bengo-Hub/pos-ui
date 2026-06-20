@@ -43,6 +43,25 @@ export function buildLogoutUrl(postLogoutRedirectUri?: string): string {
   return url.toString();
 }
 
+/**
+ * Best-effort POST to revoke the user's backend SSO session: deletes their Redis
+ * session_token keys + DB sessions and clears the cookie. POS still redirects to
+ * PIN login afterwards (staff re-authenticate locally), but the underlying SSO
+ * session is invalidated so a stolen refresh token can't be reused. Never throws.
+ */
+export async function revokeServerSession(accessToken?: string | null): Promise<void> {
+  try {
+    await fetch(new URL('/api/v1/auth/logout', SSO_BASE_URL).toString(), {
+      method: 'POST',
+      headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+      credentials: 'include',
+      keepalive: true,
+    });
+  } catch {
+    /* best-effort: still clear local state + redirect */
+  }
+}
+
 export async function exchangeCodeForTokens(params: TokenExchangeParams) {
   const body = new URLSearchParams({
     grant_type: 'authorization_code',
