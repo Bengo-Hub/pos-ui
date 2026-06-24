@@ -96,6 +96,9 @@ export function TerminalProductGrid() {
                   </div>
                   <span className="text-sm font-bold font-mono text-right w-24">
                     KES {item.price.toLocaleString()}
+                    {item.priceIsFallback && (
+                      <span className="block text-[9px] font-normal text-amber-500" title="No price set for the selected pricing profile — showing default price">default price</span>
+                    )}
                   </span>
                   {inCart ? (
                     <span className="h-6 w-6 rounded-full bg-primary text-primary-foreground text-xs font-bold flex items-center justify-center shrink-0">
@@ -150,7 +153,12 @@ export function TerminalProductGrid() {
                       <p className="text-xs text-muted-foreground truncate mt-0.5 leading-tight">{item.description}</p>
                     )}
                     <div className="flex items-center justify-between mt-1">
-                      <p className="text-xs font-bold font-mono text-primary">KES {item.price.toLocaleString()}</p>
+                      <p className="text-xs font-bold font-mono text-primary">
+                        KES {item.price.toLocaleString()}
+                        {item.priceIsFallback && (
+                          <span className="ml-1 text-[9px] font-normal text-amber-500" title="No price set for the selected pricing profile — showing default price">(default)</span>
+                        )}
+                      </p>
                       {(item.hasVariants || item.variants?.length) ? (
                         <span className="text-[10px] text-primary">Variants</span>
                       ) : item.modifierGroups?.length ? (
@@ -200,6 +208,9 @@ export function TerminalProductGrid() {
                   <div className="flex items-center justify-between w-full mt-2">
                     <span className="text-xs font-bold font-mono text-primary">
                       KES {item.price.toLocaleString()}
+                      {item.priceIsFallback && (
+                        <span className="ml-1 text-[9px] font-normal text-amber-500" title="No price set for the selected pricing profile — showing default price">(default)</span>
+                      )}
                     </span>
                     {item.item_type === 'SERVICE' ? (
                       <span className="text-[10px] text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-900/30 px-1.5 py-0.5 rounded font-semibold">

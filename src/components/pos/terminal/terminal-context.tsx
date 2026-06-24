@@ -58,6 +58,11 @@ export interface MenuItem {
   price: number;
   /** All pricing-profile prices keyed by tier code (RETAIL/WHOLESALE/…) from inventory. */
   prices?: Record<string, number>;
+  /** True when `price` came from the default tier because the selected profile has no own price. */
+  priceIsFallback?: boolean;
+  /** Hard selling-price guardrails from inventory; enforced server-side at sale. */
+  minSellingPrice?: number;
+  maxSellingPrice?: number;
   category: string;
   brandName?: string;       // ItemBrand name (retail/pharmacy) — for the Brands tab
   brandCode?: string;
@@ -446,10 +451,12 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
       // Display/charge price = the selected profile's tier price when available, else the
       // override-merged default price. New taps after a profile switch get the right price because
       // this memo recomputes when pricingProfile changes.
-      const profilePrice =
-        tierPrices && pricingProfile && (tierPrices[pricingProfile] ?? 0) > 0
-          ? tierPrices[pricingProfile]
-          : (item.price ?? 0);
+      const hasProfilePrice =
+        !!tierPrices && !!pricingProfile && (tierPrices[pricingProfile] ?? 0) > 0;
+      const profilePrice = hasProfilePrice ? tierPrices![pricingProfile] : (item.price ?? 0);
+      // Fallback = a non-default profile is selected but this item has no price for it, so we
+      // show the default-tier price. Surfaced as a badge so "nothing changed on switch" is explainable.
+      const priceIsFallback = !!pricingProfile && !hasProfilePrice;
       return {
       id: item.id,
       name: item.name,
@@ -457,6 +464,9 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
       description: item.description,
       price: profilePrice,
       prices: tierPrices,
+      priceIsFallback,
+      minSellingPrice: typeof item.min_selling_price === 'number' ? item.min_selling_price : undefined,
+      maxSellingPrice: typeof item.max_selling_price === 'number' ? item.max_selling_price : undefined,
       category: item.category || 'Uncategorized',
       brandName: item.brand_name ?? item.brand ?? undefined,
       brandCode: item.brand_code ?? undefined,
@@ -873,6 +883,9 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
       ...(item.selectedModifiers ? { modifiers: item.selectedModifiers } : {}),
       ...(item.notes ? { notes: item.notes } : {}),
       ...(item.serialNumber ? { serial_number: item.serialNumber } : {}),
+      // Selling-price guardrails so the backend hard-blocks out-of-band prices (manager override).
+      ...(item.minSellingPrice != null ? { min_price: item.minSellingPrice } : {}),
+      ...(item.maxSellingPrice != null ? { max_price: item.maxSellingPrice } : {}),
       // Price-override markers so the backend can gate large markdowns.
       ...(item.originalPrice != null && item.price < item.originalPrice
         ? { price_override: true, original_price: item.originalPrice, override_reason: item.overrideReason ?? '' }
