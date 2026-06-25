@@ -5,6 +5,7 @@ import { Printer, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/base';
 import { apiClient } from '@/lib/api/client';
+import { apiErrorMessage } from '@/lib/api/error-message';
 import { useAuthStore } from '@/store/auth';
 import { useTenantBranding } from '@/providers/tenant-branding-provider';
 import { ReceiptPreview, type ReceiptData } from './receipt-preview';
@@ -57,8 +58,8 @@ export function PrintReceiptButton({
       // server name from the API; fall back to the currently logged-in user.
       setReceipt({ ...data, cashier_name: data.cashier_name || user?.fullName || user?.email });
       setOpen(true);
-    } catch {
-      toast.error('Failed to load receipt');
+    } catch (e) {
+      toast.error(await apiErrorMessage(e, 'Failed to load receipt'));
     } finally {
       setLoading(false);
     }

@@ -33,6 +33,7 @@ import {
   paymentActionsFor, tenderMethodFor, isImmediateTender, type TenderKey, type TenderTone,
 } from '@/lib/pos/terminal-actions';
 import { toast } from 'sonner';
+import { apiErrorMessage } from '@/lib/api/error-message';
 
 const NIL_TENDER = '00000000-0000-0000-0000-000000000000';
 
@@ -179,9 +180,9 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
         autoOpenOnSettle(method);
         toast.success('Saved offline — will sync when back online.');
         finish(ord);
-      } catch {
+      } catch (e) {
         setBusyKey(null);
-        toast.error('Failed to save offline payment. Please try again.');
+        toast.error(await apiErrorMessage(e, 'Failed to save offline payment. Please try again.'));
       }
       return;
     }
@@ -190,9 +191,9 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
       { orderId: ord.orderId, tenderMethod: method, amount: roundedTotal, tenderId, externalRef },
       {
         onSuccess: () => { autoOpenOnSettle(method); finish(ord); },
-        onError: (e: any) => {
+        onError: async (e: any) => {
           setBusyKey(null);
-          toast.error(e?.message ?? 'Payment failed. Please try again.');
+          toast.error(await apiErrorMessage(e, 'Payment failed. Please try again.'));
         },
       },
     );
@@ -214,9 +215,9 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
           setGatewayMethod(method as 'mpesa' | 'card' | 'wallet');
           setCapture(key);
         },
-        onError: (e: any) => {
+        onError: async (e: any) => {
           setBusyKey(null);
-          toast.error(e?.message ?? 'Could not start payment. Please try again.');
+          toast.error(await apiErrorMessage(e, 'Could not start payment. Please try again.'));
         },
       },
     );
@@ -598,7 +599,7 @@ function C2BCapture({ amount, orderId, tenderId, isOnline, onCancel, onClaimed }
               key={c.trans_id} type="button" disabled={claimC2B.isPending}
               onClick={() => claimC2B.mutate(
                 { transID: c.trans_id, posOrderId: orderId, amount, tenderId },
-                { onSuccess: onClaimed, onError: (e: any) => toast.error(e?.message ?? 'Could not match that payment.') },
+                { onSuccess: onClaimed, onError: async (e: any) => toast.error(await apiErrorMessage(e, 'Could not match that payment.')) },
               )}
               className="w-full flex items-center justify-between gap-3 rounded-lg border border-border hover:border-green-500/50 px-3 py-2 text-left disabled:opacity-50"
             >
@@ -624,7 +625,7 @@ function RoomCapture({ amount, orderNumber, tenantSlug, search, onSearch, onCanc
     mutationFn: (roomId: string) =>
       hotelApi.postFolioCharge(tenantSlug, roomId, { description: `Bill ${orderNumber}`, amount, charge_type: 'restaurant' }),
     onSuccess: onCharged,
-    onError: (e: any) => toast.error(e?.message ?? 'Failed to post charge to room.'),
+    onError: async (e: any) => toast.error(await apiErrorMessage(e, 'Failed to post charge to room.')),
   });
   const filtered = rooms.filter((r: any) =>
     !search || r.room_number?.toLowerCase().includes(search.toLowerCase()) ||

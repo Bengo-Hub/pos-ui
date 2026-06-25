@@ -37,6 +37,7 @@ import {
 } from '@/hooks/usePOS';
 import { useAuthStore } from '@/store/auth';
 import { cn } from '@/lib/utils';
+import { apiErrorMessage } from '@/lib/api/error-message';
 
 // ─── Status config ────────────────────────────────────────────────────────────
 
@@ -117,7 +118,7 @@ function NewReservationModal({
         toast.success('Reservation created');
         onClose();
       },
-      onError: () => toast.error('Failed to create reservation'),
+      onError: async (e) => toast.error(await apiErrorMessage(e, 'Failed to create reservation')),
     });
   };
 
@@ -543,18 +544,18 @@ function ReservationsPage() {
               res={res}
               onConfirm={(id) => confirm.mutate({ id }, {
                 onSuccess: () => toast.success('Reservation confirmed — table marked Reserved'),
-                onError: () => toast.error('Failed to confirm'),
+                onError: async (e) => toast.error(await apiErrorMessage(e, 'Failed to confirm')),
               })}
               onCheckIn={(id) => checkIn.mutate(id, {
                 onSuccess: () => {
                   toast.success('Guest checked in — table marked Occupied');
                   router.push(`/${orgSlug}/tables`);
                 },
-                onError: () => toast.error('Failed to check in'),
+                onError: async (e) => toast.error(await apiErrorMessage(e, 'Failed to check in')),
               })}
               onCancel={(id) => cancel.mutate({ id }, {
                 onSuccess: () => toast.success('Reservation cancelled'),
-                onError: () => toast.error('Failed to cancel'),
+                onError: async (e) => toast.error(await apiErrorMessage(e, 'Failed to cancel')),
               })}
             />
           ))}

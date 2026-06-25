@@ -17,6 +17,7 @@ import type { StaffMember } from '@/lib/api/staff';
 import type { OverrideType } from '@/lib/api/shift-overrides';
 import type { LeaveType } from '@/lib/api/leave-requests';
 import { toast } from 'sonner';
+import { apiErrorMessage } from '@/lib/api/error-message';
 
 const DAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -110,8 +111,8 @@ export function StaffShiftDrawer({ staff, open, onClose }: StaffShiftDrawerProps
     try {
       await upsert.mutateAsync(entries);
       toast.success('Schedule saved');
-    } catch {
-      toast.error('Failed to save schedule');
+    } catch (e) {
+      toast.error(await apiErrorMessage(e, 'Failed to save schedule'));
     }
   }
 
@@ -135,8 +136,8 @@ export function StaffShiftDrawer({ staff, open, onClose }: StaffShiftDrawerProps
       });
       toast.success('Override saved');
       setOvForm({ date: todayStr(), override_type: 'off_duty', start_time: '08:00', end_time: '12:00', reason: '' });
-    } catch {
-      toast.error('Failed to save override');
+    } catch (e) {
+      toast.error(await apiErrorMessage(e, 'Failed to save override'));
     }
   }
 
@@ -156,8 +157,8 @@ export function StaffShiftDrawer({ staff, open, onClose }: StaffShiftDrawerProps
       });
       toast.success('Leave request submitted');
       setLvForm({ start_date: todayStr(), end_date: todayStr(), leave_type: 'annual', reason: '' });
-    } catch {
-      toast.error('Failed to submit leave request');
+    } catch (e) {
+      toast.error(await apiErrorMessage(e, 'Failed to submit leave request'));
     }
   }
 
@@ -372,7 +373,7 @@ export function StaffShiftDrawer({ staff, open, onClose }: StaffShiftDrawerProps
                         {ov.reason && <p className="text-[10px] text-muted-foreground italic truncate">{ov.reason}</p>}
                       </div>
                       <button
-                        onClick={() => deleteOverride.mutate(ov.id, { onError: () => toast.error('Failed to delete') })}
+                        onClick={() => deleteOverride.mutate(ov.id, { onError: async (e) => toast.error(await apiErrorMessage(e, 'Failed to delete')) })}
                         disabled={deleteOverride.isPending}
                         className="p-1 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
                       >

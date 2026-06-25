@@ -15,6 +15,7 @@ import { AlertTriangle, Loader2, X } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { apiErrorMessage } from '@/lib/api/error-message';
 
 function statusVariant(status: LayawayPlan['status']): 'default' | 'success' | 'outline' {
   if (status === 'completed') return 'success';
@@ -62,7 +63,7 @@ function LayawayDetailPage() {
           setPaymentOpen(false);
           setPaymentForm({ amount: 0, payment_method: 'cash', reference: '', notes: '' });
         },
-        onError: () => toast.error('Failed to record payment'),
+        onError: async (e) => toast.error(await apiErrorMessage(e, 'Failed to record payment')),
       }
     );
   };
@@ -73,7 +74,7 @@ function LayawayDetailPage() {
         toast.success('Layaway plan cancelled');
         setCancelOpen(false);
       },
-      onError: () => toast.error('Failed to cancel plan'),
+      onError: async (e) => toast.error(await apiErrorMessage(e, 'Failed to cancel plan')),
     });
   };
 

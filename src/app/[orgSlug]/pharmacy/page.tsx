@@ -15,6 +15,7 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useFieldArray, useForm } from 'react-hook-form';
 import { toast } from 'sonner';
+import { apiErrorMessage } from '@/lib/api/error-message';
 import { z } from 'zod';
 import type { Prescription } from '@/lib/api/pharmacy';
 
@@ -221,8 +222,8 @@ function NewPrescriptionModal({ onClose }: { onClose: () => void }) {
       toast.success('Prescription created');
       onClose();
       router.push(`/${orgSlug}/pharmacy/${rx.id}`);
-    } catch {
-      toast.error('Failed to create prescription');
+    } catch (e) {
+      toast.error(await apiErrorMessage(e, 'Failed to create prescription'));
     }
   };
 
@@ -437,8 +438,8 @@ function PharmacyPage() {
     try {
       await dispense.mutateAsync(id);
       toast.success(`Prescription ${rx} dispensed`);
-    } catch {
-      toast.error('Failed to dispense prescription');
+    } catch (e) {
+      toast.error(await apiErrorMessage(e, 'Failed to dispense prescription'));
     }
   };
 

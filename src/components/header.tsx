@@ -3,6 +3,7 @@
 import { usePermissions } from '@/hooks/usePermissions';
 import { useCloseShift, useCurrentShift } from '@/hooks/useShifts';
 import { apiClient } from '@/lib/api/client';
+import { apiErrorMessage } from '@/lib/api/error-message';
 import { P } from '@/lib/rbac/permissions';
 import { cn } from '@/lib/utils';
 import { useTenantBranding } from '@/providers/tenant-branding-provider';
@@ -207,8 +208,8 @@ export function Header({ onMenuClick }: HeaderProps) {
       } else {
         toast.success('Shift ended');
       }
-    } catch {
-      toast.error('Failed to end shift');
+    } catch (e) {
+      toast.error(await apiErrorMessage(e, 'Failed to end shift'));
     }
   }
 

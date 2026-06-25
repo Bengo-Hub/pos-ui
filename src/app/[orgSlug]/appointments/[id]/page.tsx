@@ -27,6 +27,7 @@ import {
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { toast } from 'sonner';
+import { apiErrorMessage } from '@/lib/api/error-message';
 
 const STATUS_COLORS: Record<AppointmentStatus, string> = {
   scheduled:   'bg-muted text-muted-foreground',
@@ -95,8 +96,8 @@ function AppointmentDetailPage() {
     try {
       await mutation.mutateAsync(id);
       toast.success(label);
-    } catch {
-      toast.error(`Failed: ${label}`);
+    } catch (e) {
+      toast.error(await apiErrorMessage(e, `Failed: ${label}`));
     }
   }
 

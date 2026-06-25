@@ -16,6 +16,7 @@ import { useEffect, useState } from 'react';
 import { Loader2, UserPlus, UserRound, X, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { useClientSearch, useCreateLoyaltyAccount } from '@/hooks/useClients';
+import { apiErrorMessage } from '@/lib/api/error-message';
 import { normalizeKePhone, nationalSubscriberDigits, isUsablePhone } from '@/lib/phone';
 
 export interface SelectedCustomer {
@@ -75,7 +76,7 @@ export function CustomerSearch({ value, onChange, requireRealCustomer = false }:
           toast.success(`${newName.trim()} added`);
           select({ phone: p, name: newName.trim(), isWalkIn: false });
         },
-        onError: () => toast.error('Failed to add customer'),
+        onError: async (e) => toast.error(await apiErrorMessage(e, 'Failed to add customer')),
       },
     );
   };

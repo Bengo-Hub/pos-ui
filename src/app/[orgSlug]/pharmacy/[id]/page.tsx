@@ -9,6 +9,7 @@ import { ArrowLeft, Loader2, Pill } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { toast } from 'sonner';
+import { apiErrorMessage } from '@/lib/api/error-message';
 import type { Prescription } from '@/lib/api/pharmacy';
 
 // ─── Status badge ─────────────────────────────────────────────────────────────
@@ -51,8 +52,8 @@ function PrescriptionDetailPage() {
     try {
       await dispense.mutateAsync(rx.id);
       toast.success('Prescription dispensed');
-    } catch {
-      toast.error('Failed to dispense prescription');
+    } catch (e) {
+      toast.error(await apiErrorMessage(e, 'Failed to dispense prescription'));
     }
   };
 

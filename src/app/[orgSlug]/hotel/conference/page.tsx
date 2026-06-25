@@ -19,6 +19,7 @@ import { Combobox } from '@/components/ui/combobox';
 import { FacilityFormModal } from '@/components/hotel/facility-form-modal';
 import { Loader2, Plus, Presentation, Ticket } from 'lucide-react';
 import { toast } from 'sonner';
+import { apiErrorMessage } from '@/lib/api/error-message';
 import { ModuleGate } from '@/components/auth/module-gate';
 import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
 
@@ -70,8 +71,8 @@ function ConferencePageInner() {
       });
       toast.success('Event booked');
       setShowForm(false);
-    } catch {
-      toast.error('Failed to book event');
+    } catch (e) {
+      toast.error(await apiErrorMessage(e, 'Failed to book event'));
     }
   }
 
@@ -258,8 +259,8 @@ function EventPanel({ event }: { event: EventBooking }) {
     try {
       const res = await genMut.mutateAsync({ meal_periods: periods });
       toast.success(`${res.cards_issued} meal cards generated`);
-    } catch {
-      toast.error('Failed to generate meal cards (already generated?)');
+    } catch (e) {
+      toast.error(await apiErrorMessage(e, 'Failed to generate meal cards (already generated?)'));
     }
   }
 
@@ -269,8 +270,8 @@ function EventPanel({ event }: { event: EventBooking }) {
       await redeemMut.mutateAsync({ code: redeemCode.trim(), body: {} });
       toast.success('Meal card redeemed');
       setRedeemCode('');
-    } catch {
-      toast.error('Redemption failed (invalid, expired, or already used)');
+    } catch (e) {
+      toast.error(await apiErrorMessage(e, 'Redemption failed (invalid, expired, or already used)'));
     }
   }
 

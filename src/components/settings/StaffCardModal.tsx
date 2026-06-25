@@ -8,6 +8,7 @@ import { staffApi } from '@/lib/api/staff';
 import type { StaffMember } from '@/lib/api/staff';
 import { useAuthStore } from '@/store/auth';
 import { toast } from 'sonner';
+import { apiErrorMessage } from '@/lib/api/error-message';
 
 /**
  * StaffCardModal renders a printable staff approval card whose QR encodes a
@@ -36,7 +37,7 @@ export function StaffCardModal({ staff, open, onClose }: { staff: StaffMember | 
           setCanApprove(res.can_approve);
         }
       })
-      .catch(() => { if (!cancelled) toast.error('Failed to generate card'); })
+      .catch(async (e) => { if (!cancelled) toast.error(await apiErrorMessage(e, 'Failed to generate card')); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [open, staff, tenantId]);

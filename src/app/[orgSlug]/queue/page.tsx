@@ -9,6 +9,7 @@ import { useQueue, useCreateQueueEntry, useUpdateQueueStatus } from '@/hooks/use
 import { useAuthStore } from '@/store/auth';
 import type { QueueStatus } from '@/lib/api/queue';
 import { toast } from 'sonner';
+import { apiErrorMessage } from '@/lib/api/error-message';
 
 function AddToQueueModal({ outletID, onClose }: { outletID: string; onClose: () => void }) {
   const [name, setName] = useState('');
@@ -30,8 +31,8 @@ function AddToQueueModal({ outletID, onClose }: { outletID: string; onClose: () 
       });
       toast.success(`${name} added to queue`);
       onClose();
-    } catch {
-      toast.error('Failed to add to queue');
+    } catch (e) {
+      toast.error(await apiErrorMessage(e, 'Failed to add to queue'));
     }
   }
 
@@ -99,8 +100,8 @@ export default function QueuePage() {
   async function handleStatusChange(entryID: string, status: QueueStatus) {
     try {
       await updateStatus.mutateAsync({ entryID, status });
-    } catch {
-      toast.error('Failed to update status');
+    } catch (e) {
+      toast.error(await apiErrorMessage(e, 'Failed to update status'));
     }
   }
 

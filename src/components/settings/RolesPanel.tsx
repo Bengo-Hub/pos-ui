@@ -8,6 +8,7 @@ import { useCreateRole, useRbacPermissions, useRbacRoles, useRolePermissions, us
 import type { POSPermission } from '@/lib/api/rbac';
 import { usePermissions } from '@/hooks/usePermissions';
 import { toast } from 'sonner';
+import { apiErrorMessage } from '@/lib/api/error-message';
 import { inputClass } from './shared';
 
 /**
@@ -60,7 +61,7 @@ export function RolesPanel() {
               <Button size="sm" className="w-full" disabled={!form.role_code || !form.name || createRole.isPending}
                 onClick={() => createRole.mutate(form, {
                   onSuccess: () => { toast.success('Role created'); setForm({ role_code: '', name: '' }); setShowNew(false); },
-                  onError: () => toast.error('Failed to create role'),
+                  onError: async (e) => toast.error(await apiErrorMessage(e, 'Failed to create role')),
                 })}>
                 {createRole.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Create role'}
               </Button>
@@ -117,7 +118,7 @@ function RolePermissionMatrix({ tenantId, roleId, canManage }: { tenantId: strin
             <Button size="sm" disabled={setRolePerms.isPending}
               onClick={() => setRolePerms.mutate({ roleId, permissionIds: Array.from(selected) }, {
                 onSuccess: () => toast.success('Permissions updated'),
-                onError: () => toast.error('Failed to update permissions'),
+                onError: async (e) => toast.error(await apiErrorMessage(e, 'Failed to update permissions')),
               })}>
               {setRolePerms.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Save className="h-3.5 w-3.5 mr-1" /> Save</>}
             </Button>

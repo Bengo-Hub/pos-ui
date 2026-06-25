@@ -6,6 +6,7 @@ import { posSettingsApi, type UpdatePOSModulesInput, type UpdatePOSSettingsInput
 export type { POSSettings } from '@/lib/api/settings';
 import { useAuthStore } from '@/store/auth';
 import { toast } from 'sonner';
+import { apiErrorMessage } from '@/lib/api/error-message';
 
 function useTenantID() {
   return useAuthStore((s) => s.user?.tenant_id ?? '');
@@ -32,7 +33,7 @@ export function useUpdatePOSSettings() {
       qc.setQueryData(['pos-settings', tenantID], data);
       toast.success('Settings saved');
     },
-    onError: () => toast.error('Failed to save settings'),
+    onError: async (e) => toast.error(await apiErrorMessage(e, 'Failed to save settings')),
   });
 }
 
@@ -47,7 +48,7 @@ export function useUpdateShiftSettings() {
       qc.setQueryData(['pos-settings', tenantID], data);
       toast.success('Shift settings saved');
     },
-    onError: () => toast.error('Failed to save shift settings'),
+    onError: async (e) => toast.error(await apiErrorMessage(e, 'Failed to save shift settings')),
   });
 }
 
@@ -62,7 +63,7 @@ export function useUpdateTableSettings() {
       qc.setQueryData(['pos-settings', tenantID], data);
       toast.success('Table settings saved');
     },
-    onError: () => toast.error('Failed to save table settings'),
+    onError: async (e) => toast.error(await apiErrorMessage(e, 'Failed to save table settings')),
   });
 }
 
@@ -76,7 +77,7 @@ export function useUpdatePOSModules() {
       qc.setQueryData(['pos-settings', tenantID], data);
       toast.success('Module settings saved');
     },
-    onError: () => toast.error('Failed to save module settings'),
+    onError: async (e) => toast.error(await apiErrorMessage(e, 'Failed to save module settings')),
   });
 }
 
@@ -90,6 +91,6 @@ export function useUpdateOutletConfig() {
       qc.setQueryData(['pos-settings', tenantID], data);
       toast.success('Outlet configuration saved');
     },
-    onError: () => toast.error('Failed to save outlet configuration'),
+    onError: async (e) => toast.error(await apiErrorMessage(e, 'Failed to save outlet configuration')),
   });
 }

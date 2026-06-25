@@ -10,6 +10,7 @@ import { useStaffAdmin } from '@/hooks/useStaff';
 import { useAuthStore } from '@/store/auth';
 import { Card, CardContent } from '@/components/ui/base';
 import { toast } from 'sonner';
+import { apiErrorMessage } from '@/lib/api/error-message';
 import type { ShiftRotation, ShiftRotationSlot } from '@/lib/api/shift-rotations';
 
 function todayStr() {
@@ -63,8 +64,8 @@ function SlotManager({ rotation, staffNames, staffIds }: SlotManagerProps) {
     try {
       await upsert.mutateAsync(remaining);
       toast.success('Slot removed');
-    } catch {
-      toast.error('Failed to remove slot');
+    } catch (e) {
+      toast.error(await apiErrorMessage(e, 'Failed to remove slot'));
     }
   }
 
@@ -103,8 +104,8 @@ function SlotManager({ rotation, staffNames, staffIds }: SlotManagerProps) {
       toast.success(`Assigned ${newSlots.length} slot${newSlots.length !== 1 ? 's' : ''}`);
       setShowForm(false);
       setForm((f) => ({ ...f, staff_member_id: '', day_from: '1', day_to: String(rotation.cycle_days) }));
-    } catch {
-      toast.error('Failed to save slots');
+    } catch (e) {
+      toast.error(await apiErrorMessage(e, 'Failed to save slots'));
     }
   }
 
@@ -258,8 +259,8 @@ function RotationCard({
     try {
       await update.mutateAsync({ is_active: !rotation.is_active });
       toast.success(rotation.is_active ? 'Rotation deactivated' : 'Rotation activated');
-    } catch {
-      toast.error('Failed to update rotation');
+    } catch (e) {
+      toast.error(await apiErrorMessage(e, 'Failed to update rotation'));
     }
   }
 
@@ -340,8 +341,8 @@ export function ShiftRotationPanel() {
       toast.success('Rotation created');
       setForm({ name: '', cycle_days: '14', start_date: todayStr() });
       setShowCreate(false);
-    } catch {
-      toast.error('Failed to create rotation');
+    } catch (e) {
+      toast.error(await apiErrorMessage(e, 'Failed to create rotation'));
     }
   }
 

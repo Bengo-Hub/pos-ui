@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Search, Plus } from 'lucide-react';
 import { useMenuItems, type CatalogItem } from '@/hooks/usePOS';
 import { useAddRepairPart } from '@/hooks/useRepairs';
+import { apiErrorMessage } from '@/lib/api/error-message';
 
 interface RepairPartsPickerProps {
   jobID: string;
@@ -39,8 +40,9 @@ export function RepairPartsPicker({ jobID, disabled }: RepairPartsPickerProps) {
           import('sonner').then(({ toast }) => toast.success(`Added ${item.name}`));
           setSearch('');
         },
-        onError: () => {
-          import('sonner').then(({ toast }) => toast.error('Failed to add part'));
+        onError: async (e) => {
+          const { toast } = await import('sonner');
+          toast.error(await apiErrorMessage(e, 'Failed to add part'));
         },
       },
     );

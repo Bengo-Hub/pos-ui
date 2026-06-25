@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
+import { apiErrorMessage } from '@/lib/api/error-message';
 import { ModuleGate } from '@/components/auth/module-gate';
 import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
 import { CheckoutPanel } from '@/components/pos/hotel/checkout-panel';
@@ -78,7 +79,7 @@ function RoomDetailPageInner() {
           setChargeForm({ description: '', amount: '', charge_type: 'food', inventory_sku: '', quantity: '1' });
           setShowCharge(false);
         },
-        onError: () => toast.error('Failed to add charge'),
+        onError: async (e) => toast.error(await apiErrorMessage(e, 'Failed to add charge')),
       },
     );
   }
@@ -89,8 +90,8 @@ function RoomDetailPageInner() {
       toast.success('Late checkout approved');
       setShowLate(false);
       setLateForm({ surcharge_amount: 0, notes: '' });
-    } catch {
-      toast.error('Failed to approve late checkout');
+    } catch (e) {
+      toast.error(await apiErrorMessage(e, 'Failed to approve late checkout'));
     }
   }
 
@@ -129,8 +130,8 @@ function RoomDetailPageInner() {
       setShowCheckIn(false);
       // Redirect straight to checkout so the desk can see/settle the bill (room charge already posted).
       setShowCheckout(true);
-    } catch {
-      toast.error('Check-in failed');
+    } catch (e) {
+      toast.error(await apiErrorMessage(e, 'Check-in failed'));
     }
   }
 
@@ -139,8 +140,8 @@ function RoomDetailPageInner() {
       await checkOut.mutateAsync();
       toast.success('Guest checked out');
       router.push(`/${orgSlug}/hotel/rooms`);
-    } catch {
-      toast.error('Check-out failed');
+    } catch (e) {
+      toast.error(await apiErrorMessage(e, 'Check-out failed'));
     }
   }
 

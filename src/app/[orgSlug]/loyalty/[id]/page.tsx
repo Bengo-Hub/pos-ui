@@ -10,6 +10,7 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { apiErrorMessage } from '@/lib/api/error-message';
 
 function txColor(type: string) {
   if (type === 'earn') return 'text-green-400';
@@ -45,8 +46,8 @@ function LoyaltyAccountDetailPage() {
       await createReferral.mutateAsync({ referred_phone: phone });
       toast.success('Referral created');
       setReferredPhone('');
-    } catch (err: any) {
-      toast.error(err?.message ?? 'Failed to create referral');
+    } catch (err) {
+      toast.error(await apiErrorMessage(err, 'Failed to create referral'));
     }
   }
 
@@ -58,8 +59,8 @@ function LoyaltyAccountDetailPage() {
       await earn.mutateAsync({ points: pts });
       toast.success(`${pts} points earned`);
       setEarnPoints('');
-    } catch {
-      toast.error('Failed to earn points');
+    } catch (e) {
+      toast.error(await apiErrorMessage(e, 'Failed to earn points'));
     }
   }
 
@@ -71,8 +72,8 @@ function LoyaltyAccountDetailPage() {
       await redeem.mutateAsync({ points: pts });
       toast.success(`${pts} points redeemed`);
       setRedeemPoints('');
-    } catch (err: any) {
-      toast.error(err?.message ?? 'Failed to redeem points');
+    } catch (err) {
+      toast.error(await apiErrorMessage(err, 'Failed to redeem points'));
     }
   }
 

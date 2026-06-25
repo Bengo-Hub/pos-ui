@@ -7,6 +7,7 @@ import { Loader2, Play } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { toast } from 'sonner';
+import { apiErrorMessage } from '@/lib/api/error-message';
 
 // Roles that always require an explicit shift start (with or without float)
 // Admin and manager are exempt — they can access the app without opening a shift.
@@ -65,8 +66,8 @@ export function StartShiftGate({ children }: StartShiftGateProps) {
       if (isCashierHospOrQSR && orgSlug) {
         router.push(`/${orgSlug}/orders`);
       }
-    } catch {
-      toast.error('Failed to open shift');
+    } catch (e) {
+      toast.error(await apiErrorMessage(e, 'Failed to open shift'));
     }
   }
 

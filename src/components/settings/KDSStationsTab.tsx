@@ -11,6 +11,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { P } from '@/lib/rbac/permissions';
 import { useAuthStore } from '@/store/auth';
 import { toast } from 'sonner';
+import { apiErrorMessage } from '@/lib/api/error-message';
 import { Toggle, inputClass, labelClass } from './shared';
 
 const KDS_CATEGORIES = [
@@ -50,8 +51,8 @@ export function KDSStationsTab() {
       setForm({ name: '', category_filter: [], sort_order: 0 });
       setShowForm(false);
       toast.success('Station created');
-    } catch {
-      toast.error('Failed to create station');
+    } catch (e) {
+      toast.error(await apiErrorMessage(e, 'Failed to create station'));
     }
   };
 
@@ -62,7 +63,7 @@ export function KDSStationsTab() {
       { stationID: confirmToggle.id, input: { is_active: !confirmToggle.is_active } },
       {
         onSuccess: () => { toast.success(`Station ${action}d`); setConfirmToggle(null); },
-        onError: () => { toast.error(`Failed to ${action} station`); setConfirmToggle(null); },
+        onError: async (e) => { toast.error(await apiErrorMessage(e, `Failed to ${action} station`)); setConfirmToggle(null); },
       },
     );
   };
@@ -81,8 +82,8 @@ export function KDSStationsTab() {
       });
       setEditingId(null);
       toast.success('Station updated');
-    } catch {
-      toast.error('Failed to update station');
+    } catch (e) {
+      toast.error(await apiErrorMessage(e, 'Failed to update station'));
     }
   };
 
@@ -90,7 +91,7 @@ export function KDSStationsTab() {
     if (!confirmDelete) return;
     deleteStation.mutate(confirmDelete.id, {
       onSuccess: () => { toast.success(`Station "${confirmDelete.name}" deleted`); setConfirmDelete(null); },
-      onError: () => { toast.error('Failed to delete station'); setConfirmDelete(null); },
+      onError: async (e) => { toast.error(await apiErrorMessage(e, 'Failed to delete station')); setConfirmDelete(null); },
     });
   };
 

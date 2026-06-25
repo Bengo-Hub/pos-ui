@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { backupsApi, type BackupSettings } from '@/lib/api/backups';
+import { apiErrorMessage } from '@/lib/api/error-message';
 import { useAuthStore } from '@/store/auth';
 import { toast } from 'sonner';
 
@@ -32,6 +33,6 @@ export function useUpdateBackupSettings() {
       qc.setQueryData(['backup-settings', tenantID], data);
       toast.success('Backup settings saved');
     },
-    onError: () => toast.error('Failed to save backup settings'),
+    onError: async (e) => toast.error(await apiErrorMessage(e, 'Failed to save backup settings')),
   });
 }

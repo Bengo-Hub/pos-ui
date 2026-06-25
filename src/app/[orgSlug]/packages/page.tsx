@@ -7,6 +7,7 @@ import { usePackages, useCreatePackage, useDeactivatePackage, type CreatePackage
 import { Loader2, Package, Plus, X } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { apiErrorMessage } from '@/lib/api/error-message';
 
 const EMPTY_FORM: CreatePackageInput = {
   name: '',
@@ -47,7 +48,7 @@ function PackagesPage() {
         setCreateOpen(false);
         setForm(EMPTY_FORM);
       },
-      onError: () => toast.error('Failed to create package'),
+      onError: async (e) => toast.error(await apiErrorMessage(e, 'Failed to create package')),
     });
   };
 
@@ -55,7 +56,7 @@ function PackagesPage() {
     if (!window.confirm(`Deactivate package "${name}"?\n\nExisting subscribers will keep their access until expiry, but no new subscriptions can be started.`)) return;
     deactivate.mutate(id, {
       onSuccess: () => toast.success(`Package "${name}" deactivated`),
-      onError: () => toast.error('Failed to deactivate package'),
+      onError: async (e) => toast.error(await apiErrorMessage(e, 'Failed to deactivate package')),
     });
   };
 

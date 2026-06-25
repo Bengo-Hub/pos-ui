@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { apiErrorMessage } from '@/lib/api/error-message';
 
 const EVENT_TYPES = [
   'order.created', 'order.completed', 'order.cancelled',
@@ -149,7 +150,7 @@ export function WebhooksTab() {
       setForm({ event_type: EVENT_TYPES[0], target_url: '', secret: '' });
       qc.invalidateQueries({ queryKey: ['webhooks', tenantID] });
     },
-    onError: () => toast.error('Failed to create webhook'),
+    onError: async (e) => toast.error(await apiErrorMessage(e, 'Failed to create webhook')),
   });
 
   if (!can(P.CONFIG_MANAGE)) {

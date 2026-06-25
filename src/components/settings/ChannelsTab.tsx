@@ -7,6 +7,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { P } from '@/lib/rbac/permissions';
 import { useChannels, useCreateChannel, useTriggerChannelSync } from '@/hooks/useChannels';
 import { toast } from 'sonner';
+import { apiErrorMessage } from '@/lib/api/error-message';
 
 const CHANNEL_TYPES = [
   { value: 'uber_eats', label: 'Uber Eats' },
@@ -50,7 +51,7 @@ export function ChannelsTab() {
       toast.success('Channel added');
       setName('');
     } catch (err: any) {
-      toast.error(err?.message ?? 'Failed to add channel');
+      toast.error(await apiErrorMessage(err, 'Failed to add channel'));
     }
   }
 
@@ -59,7 +60,7 @@ export function ChannelsTab() {
       await triggerSync.mutateAsync(id);
       toast.success('Catalog sync queued');
     } catch (err: any) {
-      toast.error(err?.message ?? 'Sync failed');
+      toast.error(await apiErrorMessage(err, 'Sync failed'));
     }
   }
 

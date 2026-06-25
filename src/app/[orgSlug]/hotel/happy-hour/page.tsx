@@ -7,6 +7,7 @@ import { usePermissions, P } from '@/hooks/usePermissions';
 import type { CreateHappyHourInput } from '@/lib/api/hotel';
 import { Loader2, Plus, Wine } from 'lucide-react';
 import { toast } from 'sonner';
+import { apiErrorMessage } from '@/lib/api/error-message';
 import { ModuleGate } from '@/components/auth/module-gate';
 import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
 
@@ -54,8 +55,8 @@ function HappyHourPageInner() {
       toast.success('Happy hour created');
       setShowForm(false);
       setName('');
-    } catch {
-      toast.error('Failed to create happy hour');
+    } catch (e) {
+      toast.error(await apiErrorMessage(e, 'Failed to create happy hour'));
     }
   }
 

@@ -4,6 +4,7 @@ import { useState, useCallback } from 'react';
 import { Loader2, Minus, Plus, Search, ShoppingCart, Trash2, X } from 'lucide-react';
 import { useMenuItems, useCreateOrder } from '@/hooks/usePOS';
 import { SplitPaymentModal } from './split-payment-modal';
+import { apiErrorMessage } from '@/lib/api/error-message';
 import { useAuthStore } from '@/store/auth';
 import { toast } from 'sonner';
 import type { CatalogItem } from '@/hooks/usePOS';
@@ -83,7 +84,7 @@ export function WalkInSaleModal({ open, onClose, tenantSlug }: WalkInSaleModalPr
             total: subtotal,
           });
         },
-        onError: () => toast.error('Failed to create order'),
+        onError: async (e) => toast.error(await apiErrorMessage(e, 'Failed to create order')),
       },
     );
   };

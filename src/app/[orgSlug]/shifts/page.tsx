@@ -20,6 +20,7 @@ import { ShiftPlannerPanel } from '@/components/pos/shift-planner-panel';
 import { LeaveApprovalPanel } from '@/components/pos/leave-approval-panel';
 import { ShiftRotationPanel } from '@/components/pos/shift-rotation-panel';
 import { toast } from 'sonner';
+import { apiErrorMessage } from '@/lib/api/error-message';
 import type { ShiftHistoryRow } from '@/lib/api/shifts';
 
 type Tab = 'current' | 'history' | 'planner' | 'leave' | 'rotations';
@@ -167,8 +168,8 @@ function ShiftsPage() {
       await openShift.mutateAsync(floatAmt);
       toast.success('Shift opened');
       setOpeningFloat('');
-    } catch {
-      toast.error('Failed to open shift');
+    } catch (e) {
+      toast.error(await apiErrorMessage(e, 'Failed to open shift'));
     }
   }
 
@@ -177,8 +178,8 @@ function ShiftsPage() {
       await closeShift.mutateAsync(payload);
       toast.success('Shift closed successfully');
       setCloseDialogOpen(false);
-    } catch {
-      toast.error('Failed to close shift');
+    } catch (e) {
+      toast.error(await apiErrorMessage(e, 'Failed to close shift'));
     }
   }
 

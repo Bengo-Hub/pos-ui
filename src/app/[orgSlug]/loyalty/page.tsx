@@ -10,6 +10,7 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { apiErrorMessage } from '@/lib/api/error-message';
 
 function LoyaltyPage() {
   const params = useParams();
@@ -32,8 +33,8 @@ function LoyaltyPage() {
       toast.success('Account created');
       setShowCreate(false);
       setForm({ customer_name: '', customer_phone: '' });
-    } catch {
-      toast.error('Failed to create account');
+    } catch (e) {
+      toast.error(await apiErrorMessage(e, 'Failed to create account'));
     }
   }
 

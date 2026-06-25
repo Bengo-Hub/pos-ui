@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { apiErrorMessage } from '@/lib/api/error-message';
 
 export default function DrawerPage() {
   const [openingAmount, setOpeningAmount] = useState('');
@@ -39,7 +40,7 @@ export default function DrawerPage() {
       { outletId, startingCash: openingAmount.trim() === '' ? 0 : parseFloat(openingAmount) },
       {
         onSuccess: () => toast.success('Drawer opened!'),
-        onError: () => toast.error('Failed to open drawer'),
+        onError: async (e) => toast.error(await apiErrorMessage(e, 'Failed to open drawer')),
       }
     );
   };
@@ -53,7 +54,7 @@ export default function DrawerPage() {
           toast.success('Drawer closed!');
           setClosingAmount('');
         },
-        onError: () => toast.error('Failed to close drawer'),
+        onError: async (e) => toast.error(await apiErrorMessage(e, 'Failed to close drawer')),
       }
     );
   };

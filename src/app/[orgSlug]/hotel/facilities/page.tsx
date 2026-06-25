@@ -15,6 +15,7 @@ import { cn } from '@/lib/utils';
 import { Building2, CalendarPlus, Edit2, Loader2, Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { apiErrorMessage } from '@/lib/api/error-message';
 
 const statusColors: Record<string, string> = {
   available:   'bg-green-500/10 text-green-700 dark:text-green-400',
@@ -40,8 +41,8 @@ function BookingForm({ facilityId, onDone }: { facilityId: string; onDone: () =>
       await book.mutateAsync({ ...form, guests_count: parseInt(form.guests_count) || 1 });
       toast.success('Facility booked');
       onDone();
-    } catch {
-      toast.error('Booking failed');
+    } catch (e) {
+      toast.error(await apiErrorMessage(e, 'Booking failed'));
     }
   }
 
@@ -98,8 +99,8 @@ function FacilitiesPage() {
       await deleteFacility.mutateAsync(deleteTarget.id);
       toast.success(`${deleteTarget.name} deleted`);
       setDeleteTarget(null);
-    } catch {
-      toast.error('Failed to delete facility');
+    } catch (e) {
+      toast.error(await apiErrorMessage(e, 'Failed to delete facility'));
     }
   }
 

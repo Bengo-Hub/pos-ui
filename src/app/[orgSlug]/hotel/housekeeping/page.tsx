@@ -14,6 +14,7 @@ import { cn } from '@/lib/utils';
 import { Loader2, Plus, Sparkles, X, CheckCircle2, PlayCircle, Ban } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
+import { apiErrorMessage } from '@/lib/api/error-message';
 
 const TASK_TYPES = [
   { value: 'routine_clean', label: 'Routine Clean' },
@@ -48,8 +49,8 @@ function HousekeepingModal({ roomOptions, onClose }: { roomOptions: { id: string
       await create.mutateAsync(form);
       toast.success('Housekeeping task created');
       onClose();
-    } catch {
-      toast.error('Failed to create task');
+    } catch (e) {
+      toast.error(await apiErrorMessage(e, 'Failed to create task'));
     }
   }
 
@@ -139,8 +140,8 @@ function HousekeepingPage() {
     try {
       await update.mutateAsync({ taskID: task.id, body: { status } });
       toast.success(`Task marked ${status.replace('_', ' ')}`);
-    } catch {
-      toast.error('Failed to update task');
+    } catch (e) {
+      toast.error(await apiErrorMessage(e, 'Failed to update task'));
     }
   }
 

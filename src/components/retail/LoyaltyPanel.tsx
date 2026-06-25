@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Gift, Loader2, UserPlus, X } from 'lucide-react';
 import { toast } from 'sonner';
+import { apiErrorMessage } from '@/lib/api/error-message';
 import {
   useLoyaltyAccounts,
   useLoyaltyPrograms,
@@ -96,7 +97,7 @@ function LoyaltyPanelInner({ onStateChange, orderId }: LoyaltyPanelProps) {
           setShowRegister(false);
           toast.success(`${registerName} registered for loyalty`);
         },
-        onError: () => toast.error('Failed to register loyalty account'),
+        onError: async (e) => toast.error(await apiErrorMessage(e, 'Failed to register loyalty account')),
       },
     );
   };
@@ -119,7 +120,7 @@ function LoyaltyPanelInner({ onStateChange, orderId }: LoyaltyPanelProps) {
           });
           toast.success(`Redeemed ${pointsToRedeem} pts — KSh ${discountKSh} off`);
         },
-        onError: () => toast.error('Failed to redeem points'),
+        onError: async (e) => toast.error(await apiErrorMessage(e, 'Failed to redeem points')),
       },
     );
   };

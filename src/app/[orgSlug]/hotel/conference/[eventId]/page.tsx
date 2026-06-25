@@ -15,6 +15,7 @@ import { usePermissions, P } from '@/hooks/usePermissions';
 import type { EventBooking } from '@/lib/api/hotel';
 import { ArrowLeft, Loader2, Pencil, Presentation, Ticket, X } from 'lucide-react';
 import { toast } from 'sonner';
+import { apiErrorMessage } from '@/lib/api/error-message';
 import { ModuleGate } from '@/components/auth/module-gate';
 import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
 
@@ -63,7 +64,7 @@ function EventEditModal({ event, onClose }: { event: EventBooking; onClose: () =
       });
       toast.success('Event updated. Re-run “Generate / Top up” to issue cards for any added delegates or days.');
       onClose();
-    } catch { toast.error('Failed to update event'); }
+    } catch (e) { toast.error(await apiErrorMessage(e, 'Failed to update event')); }
   }
 
   return (
@@ -131,14 +132,14 @@ function EventDetailPageInner() {
     try {
       const res = await genMut.mutateAsync({ meal_periods: periods });
       toast.success(res.cards_issued > 0 ? `${res.cards_issued} meal card(s) issued` : 'All meal cards already up to date');
-    } catch { toast.error('Failed to generate meal cards'); }
+    } catch (e) { toast.error(await apiErrorMessage(e, 'Failed to generate meal cards')); }
   }
   async function handleRedeem() {
     if (!redeemCode.trim()) return;
     try {
       await redeemMut.mutateAsync({ code: redeemCode.trim(), body: {} });
       toast.success('Meal card redeemed'); setRedeemCode('');
-    } catch { toast.error('Redemption failed (invalid, expired, or already used)'); }
+    } catch (e) { toast.error(await apiErrorMessage(e, 'Redemption failed (invalid, expired, or already used)')); }
   }
 
   if (isLoading || !event) {

@@ -12,6 +12,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { useAvailableRiders, useAssignRider } from '@/hooks/useOnlineOrders';
 import type { DeliveryOrder, Rider } from '@/lib/api/online-orders';
+import { apiErrorMessage } from '@/lib/api/error-message';
 import { cn } from '@/lib/utils';
 import { Bike, Check, Loader2, Phone, Search, Star } from 'lucide-react';
 import { toast } from 'sonner';
@@ -68,7 +69,7 @@ export function AssignRiderDialog({ open, onOpenChange, order }: AssignRiderDial
           );
           handleOpenChange(false);
         },
-        onError: () => toast.error('Failed to assign rider'),
+        onError: async (e) => toast.error(await apiErrorMessage(e, 'Failed to assign rider')),
       },
     );
   }

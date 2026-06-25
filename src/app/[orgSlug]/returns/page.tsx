@@ -12,6 +12,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { Loader2, Plus, RotateCcw, Search, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { apiErrorMessage } from '@/lib/api/error-message';
 
 interface ReturnItem {
   id: string;
@@ -511,8 +512,8 @@ function ReturnByInvoiceModal({ onClose }: { onClose: () => void }) {
       await initiate.mutateAsync({ orderId: order.id, payload });
       toast.success(`Return initiated for ${order.order_number}`);
       onClose();
-    } catch (e: any) {
-      toast.error(e?.message ?? 'Failed to initiate return');
+    } catch (e) {
+      toast.error(await apiErrorMessage(e, 'Failed to initiate return'));
     }
   }
 

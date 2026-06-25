@@ -25,6 +25,7 @@ import {
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api/client';
+import { apiErrorMessage } from '@/lib/api/error-message';
 import { useAuthStore } from '@/store/auth';
 
 function useStaffList() {
@@ -110,7 +111,7 @@ function BookingForm({
         onSuccess();
         onClose();
       },
-      onError: () => toast.error('Failed to book appointment'),
+      onError: async (e) => toast.error(await apiErrorMessage(e, 'Failed to book appointment')),
     });
   };
 
@@ -251,7 +252,7 @@ function AppointmentsPage() {
       { id, status },
       {
         onSuccess: () => toast.success(`Status updated to ${status.replace('_', ' ')}`),
-        onError: () => toast.error('Failed to update status'),
+        onError: async (e) => toast.error(await apiErrorMessage(e, 'Failed to update status')),
       },
     );
   };
@@ -355,7 +356,7 @@ function AppointmentsPage() {
                       <button
                         type="button"
                         onClick={() => {
-                          noShow.mutate(apt.id, { onError: () => toast.error('Failed to mark no-show') });
+                          noShow.mutate(apt.id, { onError: async (e) => toast.error(await apiErrorMessage(e, 'Failed to mark no-show')) });
                         }}
                         disabled={noShow.isPending}
                         title="Mark as No Show"

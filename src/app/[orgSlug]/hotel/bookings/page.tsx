@@ -12,10 +12,11 @@ import type { CreateRoomBookingInput, RoomBooking } from '@/lib/api/hotel';
 import { ArrowLeft, ChevronDown, ChevronRight, Loader2, Pencil, Plus, Users, X, XCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { apiErrorMessage } from '@/lib/api/error-message';
 import { ModuleGate } from '@/components/auth/module-gate';
 import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
 
-const inputCls = 'mt-1 w-full px-4 py-2.5 rounded-xl border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring';
+const inputCls ='mt-1 w-full px-4 py-2.5 rounded-xl border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring';
 
 type BookingType = 'group' | 'individual';
 
@@ -65,7 +66,7 @@ function BookingEditModal({ b, onClose }: { b: RoomBooking; onClose: () => void 
       });
       toast.success(res.applied_fee > 0 ? `Booking amended — ${res.fee_currency} ${res.applied_fee.toLocaleString()} amendment fee applies` : 'Booking updated');
       onClose();
-    } catch { toast.error('Failed to update booking'); }
+    } catch (e) { toast.error(await apiErrorMessage(e, 'Failed to update booking')); }
   }
 
   return (
@@ -124,7 +125,7 @@ function BookingRow({ b, canManage }: { b: RoomBooking; canManage: boolean }) {
       const res = await cancelMut.mutateAsync({ status: 'cancelled' });
       toast.success(res.applied_fee > 0 ? `Booking cancelled — ${res.fee_currency} ${res.applied_fee.toLocaleString()} cancellation fee applies` : 'Booking cancelled');
       setConfirmCancel(false);
-    } catch { toast.error('Failed to cancel booking'); }
+    } catch (e) { toast.error(await apiErrorMessage(e, 'Failed to cancel booking')); }
   }
 
   return (
@@ -235,7 +236,7 @@ function BookingsPageInner() {
       toast.success('Booking created');
       setShowForm(false);
       setForm(emptyForm());
-    } catch { toast.error('Failed to create booking'); }
+    } catch (e) { toast.error(await apiErrorMessage(e, 'Failed to create booking')); }
   }
 
   return (

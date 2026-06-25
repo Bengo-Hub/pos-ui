@@ -12,6 +12,7 @@ import Link from 'next/link';
 import { BedDouble, Edit2, Loader2, LogOut, Plus, Trash2, X } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { apiErrorMessage } from '@/lib/api/error-message';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -74,8 +75,8 @@ function RoomFormModal({ room, onClose }: RoomFormProps) {
         toast.success('Room created');
       }
       onClose();
-    } catch {
-      toast.error(isEdit ? 'Failed to update room' : 'Failed to create room');
+    } catch (e) {
+      toast.error(await apiErrorMessage(e, isEdit ? 'Failed to update room' : 'Failed to create room'));
     }
   }
 
@@ -225,8 +226,8 @@ function BatchCheckoutModal({ occupiedRooms, onClose }: { occupiedRooms: Room[];
         toast.success(`${selected.size} room(s) checked out`);
       }
       onClose();
-    } catch {
-      toast.error('Batch check-out failed');
+    } catch (e) {
+      toast.error(await apiErrorMessage(e, 'Batch check-out failed'));
     }
   }
 
@@ -296,8 +297,8 @@ function RoomsPage() {
       await deleteRoom.mutateAsync(deleteTarget.id);
       toast.success(`Room ${deleteTarget.room_number} deleted`);
       setDeleteTarget(null);
-    } catch {
-      toast.error('Failed to delete room');
+    } catch (e) {
+      toast.error(await apiErrorMessage(e, 'Failed to delete room'));
     }
   }
 

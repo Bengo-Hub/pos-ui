@@ -15,6 +15,7 @@ import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
+import { apiErrorMessage } from '@/lib/api/error-message';
 
 function statusVariant(status: LayawayPlan['status']): 'default' | 'success' | 'outline' {
   if (status === 'completed') return 'success';
@@ -78,7 +79,7 @@ function LayawayListPage() {
         setForm(EMPTY_FORM);
         router.push(`/${orgSlug}/layaway/${plan.id}`);
       },
-      onError: () => toast.error('Failed to create layaway plan'),
+      onError: async (e) => toast.error(await apiErrorMessage(e, 'Failed to create layaway plan')),
     });
   };
 

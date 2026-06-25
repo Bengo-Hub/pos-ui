@@ -12,6 +12,7 @@ import { Loader2, Save } from 'lucide-react';
 import { useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
+import { apiErrorMessage } from '@/lib/api/error-message';
 
 interface DayRow {
   day: number;
@@ -69,8 +70,8 @@ export default function StaffSchedulePage() {
     try {
       await upsert.mutateAsync(entries);
       toast.success('Schedule saved');
-    } catch {
-      toast.error('Failed to save schedule');
+    } catch (e) {
+      toast.error(await apiErrorMessage(e, 'Failed to save schedule'));
     }
   }
 

@@ -12,6 +12,7 @@ import { useState, useEffect } from 'react';
 import { Loader2, X, Banknote, CreditCard, Smartphone, CheckCircle2, BedDouble } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useFolioSummary, useSettleFolio } from '@/hooks/useHotel';
+import { apiErrorMessage } from '@/lib/api/error-message';
 import { toast } from 'sonner';
 
 interface CheckoutPanelProps {
@@ -64,7 +65,7 @@ export function CheckoutPanel({ roomId, open, onClose, onCheckedOut }: CheckoutP
             toast.info('Payment started — complete it on the customer prompt.');
           }
         },
-        onError: (e: any) => toast.error(e?.message ?? 'Failed to record payment.'),
+        onError: async (e: any) => toast.error(await apiErrorMessage(e, 'Failed to record payment.')),
       },
     );
   };

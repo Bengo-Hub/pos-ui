@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { X } from 'lucide-react';
 import { useCreateRepair } from '@/hooks/useRepairs';
+import { apiErrorMessage } from '@/lib/api/error-message';
 
 interface RepairIntakeFormProps {
   open: boolean;
@@ -44,8 +45,9 @@ export function RepairIntakeForm({ open, onClose, onCreated }: RepairIntakeFormP
           reset();
           onCreated(job.id);
         },
-        onError: () => {
-          import('sonner').then(({ toast }) => toast.error('Failed to create repair job'));
+        onError: async (e) => {
+          const { toast } = await import('sonner');
+          toast.error(await apiErrorMessage(e, 'Failed to create repair job'));
         },
       },
     );

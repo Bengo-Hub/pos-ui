@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Loader2, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { useCreateFacility, useUpdateFacility } from '@/hooks/useHotel';
+import { apiErrorMessage } from '@/lib/api/error-message';
 import type { Facility, CreateFacilityInput } from '@/lib/api/hotel';
 
 export const FACILITY_TYPES = [
@@ -59,8 +60,8 @@ export function FacilityFormModal({
       toast.success(isEdit ? 'Facility updated' : 'Facility created');
       onCreated?.(saved as Facility);
       onClose();
-    } catch {
-      toast.error(isEdit ? 'Failed to update facility' : 'Failed to create facility');
+    } catch (e) {
+      toast.error(await apiErrorMessage(e, isEdit ? 'Failed to update facility' : 'Failed to create facility'));
     }
   }
 

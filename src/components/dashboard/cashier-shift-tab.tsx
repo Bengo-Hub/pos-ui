@@ -1,6 +1,7 @@
 'use client';
 
 import { useCurrentShift, useShiftSummary, useCloseShift, useOpenShift } from '@/hooks/usePOS';
+import { apiErrorMessage } from '@/lib/api/error-message';
 import { useAuthStore } from '@/store/auth';
 import { fmt } from './widgets';
 import { Clock, Loader2, Wallet } from 'lucide-react';
@@ -44,7 +45,7 @@ export function CashierShiftTab({ orgSlug }: { orgSlug: string }) {
           toast.success('Shift closed');
           logout();
         },
-        onError: () => toast.error('Failed to close shift'),
+        onError: async (e) => toast.error(await apiErrorMessage(e, 'Failed to close shift')),
       },
     );
   };
@@ -54,7 +55,7 @@ export function CashierShiftTab({ orgSlug }: { orgSlug: string }) {
       { floatAmount: 0 },
       {
         onSuccess: () => toast.success('Shift opened'),
-        onError: () => toast.error('Failed to open shift'),
+        onError: async (e) => toast.error(await apiErrorMessage(e, 'Failed to open shift')),
       },
     );
   };

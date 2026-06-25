@@ -7,6 +7,7 @@ import { useAuthStore } from '@/store/auth';
 import { usePermissions, P } from '@/hooks/usePermissions';
 import { Loader2, ShieldAlert } from 'lucide-react';
 import { toast } from 'sonner';
+import { apiErrorMessage } from '@/lib/api/error-message';
 
 type PaymentTiming = 'settle_at_checkout' | 'pay_upfront' | 'per_day_split';
 
@@ -64,7 +65,7 @@ export function BookingPolicyTab() {
       toast.success('Booking policy saved');
       qc.invalidateQueries({ queryKey: ['booking-policy', tenantID] });
     },
-    onError: () => toast.error('Failed to save booking policy'),
+    onError: async (e) => toast.error(await apiErrorMessage(e, 'Failed to save booking policy')),
   });
 
   function set<K extends keyof BookingPolicy>(k: K, v: BookingPolicy[K]) {

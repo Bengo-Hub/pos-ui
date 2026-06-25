@@ -7,6 +7,7 @@ import { apiClient } from '@/lib/api/client';
 import { useAuthStore } from '@/store/auth';
 import { useModuleAccess } from '@/hooks/use-module-access';
 import { toast } from 'sonner';
+import { apiErrorMessage } from '@/lib/api/error-message';
 import { inputClass, labelClass } from './shared';
 
 const AUTH_API_URL_DEFAULT = process.env.NEXT_PUBLIC_AUTH_API_URL || 'https://sso.codevertexitsolutions.com';
@@ -41,8 +42,8 @@ export function IntegrationsTab() {
         config_type: 'string',
       });
       toast.success('Saved');
-    } catch {
-      toast.error('Failed to save');
+    } catch (e) {
+      toast.error(await apiErrorMessage(e, 'Failed to save'));
     } finally {
       setSaving(false);
     }

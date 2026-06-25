@@ -6,6 +6,7 @@ import { useLeaveRequests, useUpdateLeaveStatus } from '@/hooks/useLeaveRequests
 import { useStaffAdmin } from '@/hooks/useStaff';
 import { useAuthStore } from '@/store/auth';
 import { Card, CardContent } from '@/components/ui/base';
+import { apiErrorMessage } from '@/lib/api/error-message';
 import { toast } from 'sonner';
 import type { LeaveRequest, LeaveStatus } from '@/lib/api/leave-requests';
 
@@ -125,8 +126,8 @@ export function LeaveApprovalPanel() {
     try {
       await updateStatus.mutateAsync({ leaveId, status: 'approved' });
       toast.success('Leave approved');
-    } catch {
-      toast.error('Failed to approve leave');
+    } catch (e) {
+      toast.error(await apiErrorMessage(e, 'Failed to approve leave'));
     }
   }
 
@@ -134,8 +135,8 @@ export function LeaveApprovalPanel() {
     try {
       await updateStatus.mutateAsync({ leaveId, status: 'rejected', rejectionReason });
       toast.success('Leave rejected');
-    } catch {
-      toast.error('Failed to reject leave');
+    } catch (e) {
+      toast.error(await apiErrorMessage(e, 'Failed to reject leave'));
     }
   }
 

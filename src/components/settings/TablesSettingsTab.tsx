@@ -21,6 +21,7 @@ import { Card, CardContent } from '@/components/ui/base';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { LayoutGrid, Loader2, Map, Pencil, Plus, Trash2, X, Check, Clock } from 'lucide-react';
 import { toast } from 'sonner';
+import { apiErrorMessage } from '@/lib/api/error-message';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -233,8 +234,8 @@ export function TablesSettingsTab() {
       await createSection.mutateAsync({ outletId: outlet?.id ?? '', name: sectionName.trim() });
       setSectionName('');
       setShowSectionForm(false);
-    } catch {
-      toast.error('Failed to create section');
+    } catch (e) {
+      toast.error(await apiErrorMessage(e, 'Failed to create section'));
     }
   }
 
@@ -244,8 +245,8 @@ export function TablesSettingsTab() {
       await updateSection.mutateAsync({ sectionId, input: { name: renameValue.trim() } });
       setRenamingSectionId(null);
       toast.success('Section renamed');
-    } catch {
-      toast.error('Failed to rename section');
+    } catch (e) {
+      toast.error(await apiErrorMessage(e, 'Failed to rename section'));
     }
   }
 
@@ -265,8 +266,7 @@ export function TablesSettingsTab() {
       if (selectedSection === confirmSection.id) setSelectedSection(null);
       toast.success(`Section "${confirmSection.name}" deleted`);
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
-      toast.error(msg || 'Failed to delete section');
+      toast.error(await apiErrorMessage(err, 'Failed to delete section'));
     } finally {
       setConfirmSection(null);
     }
@@ -285,8 +285,8 @@ export function TablesSettingsTab() {
       setTableForm({ name: '', capacity: 4, sectionId: '' });
       setShowTableForm(false);
       toast.success('Table added');
-    } catch {
-      toast.error('Failed to create table');
+    } catch (e) {
+      toast.error(await apiErrorMessage(e, 'Failed to create table'));
     }
   }
 
@@ -308,8 +308,8 @@ export function TablesSettingsTab() {
       });
       setEditingTableId(null);
       toast.success('Table updated');
-    } catch {
-      toast.error('Failed to update table');
+    } catch (e) {
+      toast.error(await apiErrorMessage(e, 'Failed to update table'));
     }
   }
 
@@ -327,8 +327,7 @@ export function TablesSettingsTab() {
       await deleteTable.mutateAsync(confirmTable.id);
       toast.success(`Table "${confirmTable.name}" deleted`);
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
-      toast.error(msg || 'Failed to delete table');
+      toast.error(await apiErrorMessage(err, 'Failed to delete table'));
     } finally {
       setConfirmTable(null);
     }
@@ -351,8 +350,8 @@ export function TablesSettingsTab() {
       });
       toast.success(`Layout saved for ${dirty.length} table${dirty.length > 1 ? 's' : ''}`);
       refetchTables();
-    } catch {
-      toast.error('Failed to save layout');
+    } catch (e) {
+      toast.error(await apiErrorMessage(e, 'Failed to save layout'));
     } finally {
       setSavingLayout(false);
     }

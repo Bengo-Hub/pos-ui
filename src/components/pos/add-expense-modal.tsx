@@ -5,6 +5,7 @@ import { Receipt, Store, CreditCard, X } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { cn } from '@/lib/utils';
+import { apiErrorMessage } from '@/lib/api/error-message';
 import { useAuthStore } from '@/store/auth';
 import {
   useAddExpense,
@@ -105,8 +106,8 @@ export function AddExpenseModal({ open, onClose }: AddExpenseModalProps) {
       toast.success('Expense recorded');
       reset();
       onClose();
-    } catch {
-      toast.error('Failed to record expense');
+    } catch (e) {
+      toast.error(await apiErrorMessage(e, 'Failed to record expense'));
     }
   }
 

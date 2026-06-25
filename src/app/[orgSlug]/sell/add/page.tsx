@@ -18,6 +18,7 @@ import { useAuthStore } from '@/store/auth';
 import { apiClient } from '@/lib/api/client';
 import { Button } from '@/components/ui/base';
 import { toast } from 'sonner';
+import { apiErrorMessage } from '@/lib/api/error-message';
 
 interface SaleLine {
   item: CatalogItem;
@@ -118,14 +119,14 @@ export default function AddSalePage() {
             { orderId: id, tenderMethod: 'on_account', amount: arAmount },
             {
               onSuccess: () => { toast.success(`Sale posted on account · ${fmt(arAmount)}`); reset(); },
-              onError: (e: any) => toast.error(e?.message ?? 'Failed to post credit sale to AR.'),
+              onError: async (e) => toast.error(await apiErrorMessage(e, 'Failed to post credit sale to AR.')),
             },
           );
         } else {
           setPayOrder({ id, number: o.order_number || id, total });
         }
       },
-      onError: () => toast.error('Failed to create sale. Please try again.'),
+      onError: async (e) => toast.error(await apiErrorMessage(e, 'Failed to create sale. Please try again.')),
     });
   }
   function reset() {
@@ -146,8 +147,8 @@ export default function AddSalePage() {
       });
       toast.success('Quotation saved to Treasury');
       reset();
-    } catch (e: any) {
-      toast.error(e?.message ?? 'Failed to save quotation');
+    } catch (e) {
+      toast.error(await apiErrorMessage(e, 'Failed to save quotation'));
     } finally {
       setQuotationSaving(false);
     }

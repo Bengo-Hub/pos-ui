@@ -18,6 +18,7 @@ import {
 } from '@/hooks/useRepairs';
 import { RepairPartsPicker } from './RepairPartsPicker';
 import { RepairStatusBadge } from './RepairStatusBadge';
+import { apiErrorMessage } from '@/lib/api/error-message';
 
 const fmt = (n: number) =>
   new Intl.NumberFormat('en-KE', { style: 'currency', currency: 'KES' }).format(n);
@@ -57,7 +58,7 @@ export function RepairDetailPanel({ jobID }: RepairDetailPanelProps) {
       { jobID, input: { status } },
       {
         onSuccess: () => import('sonner').then(({ toast }) => toast.success('Status updated')),
-        onError: () => import('sonner').then(({ toast }) => toast.error('Failed to update status')),
+        onError: async (e) => { const { toast } = await import('sonner'); toast.error(await apiErrorMessage(e, 'Failed to update status')); },
       },
     );
   }
@@ -70,7 +71,7 @@ export function RepairDetailPanel({ jobID }: RepairDetailPanelProps) {
           import('sonner').then(({ toast }) => toast.success('Diagnosis saved'));
           setDiagnosis(null);
         },
-        onError: () => import('sonner').then(({ toast }) => toast.error('Failed to save diagnosis')),
+        onError: async (e) => { const { toast } = await import('sonner'); toast.error(await apiErrorMessage(e, 'Failed to save diagnosis')); },
       },
     );
   }
@@ -81,7 +82,7 @@ export function RepairDetailPanel({ jobID }: RepairDetailPanelProps) {
       { jobID, partID: removeTarget },
       {
         onSuccess: () => import('sonner').then(({ toast }) => toast.success('Part removed')),
-        onError: () => import('sonner').then(({ toast }) => toast.error('Failed to remove part')),
+        onError: async (e) => { const { toast } = await import('sonner'); toast.error(await apiErrorMessage(e, 'Failed to remove part')); },
         onSettled: () => setRemoveTarget(null),
       },
     );
@@ -120,7 +121,7 @@ export function RepairDetailPanel({ jobID }: RepairDetailPanelProps) {
                 : order.total_amount ?? partsTotal,
           });
         },
-        onError: () => import('sonner').then(({ toast }) => toast.error('Failed to create order')),
+        onError: async (e) => { const { toast } = await import('sonner'); toast.error(await apiErrorMessage(e, 'Failed to create order')); },
       },
     );
   }
@@ -131,7 +132,7 @@ export function RepairDetailPanel({ jobID }: RepairDetailPanelProps) {
       { jobID, posOrderID: settleOrder.id },
       {
         onSuccess: () => import('sonner').then(({ toast }) => toast.success('Repair settled')),
-        onError: () => import('sonner').then(({ toast }) => toast.error('Failed to settle repair')),
+        onError: async (e) => { const { toast } = await import('sonner'); toast.error(await apiErrorMessage(e, 'Failed to settle repair')); },
         onSettled: () => setSettleOrder(null),
       },
     );

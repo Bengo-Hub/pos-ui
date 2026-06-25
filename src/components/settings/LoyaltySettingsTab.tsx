@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Gift, Loader2, Plus, Save, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { apiErrorMessage } from '@/lib/api/error-message';
 import { Button, Card, CardContent, CardHeader } from '@/components/ui/base';
 import { usePermissions } from '@/hooks/usePermissions';
 import { P } from '@/lib/rbac/permissions';
@@ -78,7 +79,7 @@ export function LoyaltySettingsTab() {
 
     action
       .then(() => toast.success('Loyalty program saved'))
-      .catch(() => toast.error('Failed to save loyalty program'));
+      .catch(async (e) => toast.error(await apiErrorMessage(e, 'Failed to save loyalty program')));
   };
 
   const addTier = () =>

@@ -15,6 +15,7 @@ import { RolesPanel } from './RolesPanel';
 import { StaffCardModal } from './StaffCardModal';
 import { toast } from 'sonner';
 import { inputClass } from './shared';
+import { apiErrorMessage } from '@/lib/api/error-message';
 
 const ROLE_LABELS: Record<string, string> = {
   admin: 'Admin', manager: 'Manager', cashier: 'Cashier', waiter: 'Waiter',
@@ -69,8 +70,8 @@ export function TeamTab() {
       await update.mutateAsync({ staffId: m.id, input: editForm });
       toast.success('Staff updated');
       setEditingId(null);
-    } catch {
-      toast.error('Failed to update staff');
+    } catch (e) {
+      toast.error(await apiErrorMessage(e, 'Failed to update staff'));
     }
   }
 
@@ -79,8 +80,8 @@ export function TeamTab() {
       await deactivate.mutateAsync(staffId);
       toast.success('Staff deactivated');
       setConfirmId(null);
-    } catch {
-      toast.error('Failed to deactivate staff');
+    } catch (e) {
+      toast.error(await apiErrorMessage(e, 'Failed to deactivate staff'));
     }
   }
 
@@ -103,8 +104,7 @@ export function TeamTab() {
       setShowAdd(false);
       setAddForm({ name: '', role: 'cashier', employment_type: 'full_time', pin: '', mpesa_phone: '' });
     } catch (err) {
-      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
-      toast.error(msg || 'Failed to add team member');
+      toast.error(await apiErrorMessage(err, 'Failed to add team member'));
     }
   }
 
@@ -115,8 +115,8 @@ export function TeamTab() {
       toast.success('PIN updated');
       setPinStaffId(null);
       setNewPin('');
-    } catch {
-      toast.error('Failed to set PIN');
+    } catch (e) {
+      toast.error(await apiErrorMessage(e, 'Failed to set PIN'));
     }
   }
 

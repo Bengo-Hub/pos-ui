@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { KeyRound, Loader2, ShieldCheck, User } from 'lucide-react';
 import { toast } from 'sonner';
+import { apiErrorMessage } from '@/lib/api/error-message';
 
 import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -134,7 +135,7 @@ function PinSetForm({
           toast.success('PIN updated successfully');
           onDone();
         },
-        onError: () => toast.error('Failed to update PIN'),
+        onError: async (e) => toast.error(await apiErrorMessage(e, 'Failed to update PIN')),
       }
     );
   }

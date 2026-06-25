@@ -34,6 +34,7 @@ import { useLoyaltyPrograms } from '@/hooks/useLoyalty';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useAuthStore } from '@/store/auth';
 import { apiClient } from '@/lib/api/client';
+import { apiErrorMessage } from '@/lib/api/error-message';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -864,8 +865,8 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
       setFiredCourses(course);
       const courseName = COURSES.find((c) => c.value === course)?.label ?? `Course ${course}`;
       toast.success(`${courseName} fired to kitchen`);
-    } catch {
-      toast.error('Failed to fire course');
+    } catch (e) {
+      toast.error(await apiErrorMessage(e, 'Failed to fire course'));
     } finally {
       setFiringCourse(null);
     }
@@ -908,7 +909,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
             setOrderPlacedNumber('');
             setOrderPlacedOpen(true);
           },
-          onError: () => toast.error('Failed to add items to bill. Please try again.'),
+          onError: async (e) => toast.error(await apiErrorMessage(e, 'Failed to add items to bill. Please try again.')),
         }
       );
       return;
@@ -975,7 +976,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
           setCartOpen(false);
           setPaymentOpen(true);
         },
-        onError: (err: any) => {
+        onError: async (err: any) => {
           const status = err?.response?.status;
           const data = err?.response?.data ?? {};
           // Over-limit discount or price override → require a manager step-up, then retry.
@@ -983,7 +984,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
             setPendingApprovalAction(data.action || 'order.discount_override');
             return;
           }
-          toast.error('Failed to create order. Please try again.');
+          toast.error(await apiErrorMessage(err, 'Failed to create order. Please try again.'));
         },
       }
     );
@@ -1026,7 +1027,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
           clearCart();
           toast.success('Sale parked — resume it from Parked Sales.');
         },
-        onError: () => toast.error('Failed to park sale. Please try again.'),
+        onError: async (e) => toast.error(await apiErrorMessage(e, 'Failed to park sale. Please try again.')),
       }
     );
   };
@@ -1134,8 +1135,8 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
       })));
       if (tableId && orderId) assignTable.mutate({ tableId, orderId });
       return { orderId, orderNumber };
-    } catch {
-      toast.error('Failed to create order. Please try again.');
+    } catch (e) {
+      toast.error(await apiErrorMessage(e, 'Failed to create order. Please try again.'));
       return null;
     }
   }, [cart, isHospitality, orderSubtype, tableId, coversParam, loyaltyDiscount, loyaltyState, orderLines, outlet, createOrder, assignTable, router, orgSlug]);

@@ -5,6 +5,7 @@ import { ModuleGate } from '@/components/auth/module-gate';
 import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
 
 import { onlineOrdersApi, type PickupOrder, type DeliveryOrder } from '@/lib/api/online-orders';
+import { apiErrorMessage } from '@/lib/api/error-message';
 import { useDeliveryOrders } from '@/hooks/useOnlineOrders';
 import { AssignRiderDialog } from '@/components/online-orders/assign-rider-dialog';
 import { MenuQRCard } from '@/components/online-orders/menu-qr-card';
@@ -86,7 +87,7 @@ function OrderCard({ order, tenantID }: { order: PickupOrder; tenantID: string }
       toast.success(`Order ${order.order_number} marked ready`);
       qc.invalidateQueries({ queryKey: ['pickup-orders', tenantID] });
     },
-    onError: () => toast.error('Failed to update status'),
+    onError: async (e) => toast.error(await apiErrorMessage(e, 'Failed to update status')),
   });
 
   const markCollected = useMutation({
@@ -95,7 +96,7 @@ function OrderCard({ order, tenantID }: { order: PickupOrder; tenantID: string }
       toast.success(`Order ${order.order_number} collected`);
       qc.invalidateQueries({ queryKey: ['pickup-orders', tenantID] });
     },
-    onError: () => toast.error('Failed to update status'),
+    onError: async (e) => toast.error(await apiErrorMessage(e, 'Failed to update status')),
   });
 
   const status = order.status;
