@@ -108,6 +108,15 @@ class ApiClient {
             const message = data?.message ?? data?.error ?? 'A server error occurred. Please try again.';
             this.onServerErrorCallback(error.response.status, message);
         }
+        // Normalize the real backend message onto the error so call sites can show it
+        // (instead of a generic "Failed to …"). Handles Blob bodies from responseType:'blob'.
+        try {
+            const { apiErrorMessage } = await import('./error-message');
+            const msg = await apiErrorMessage(error, '');
+            if (msg) (error as { normalizedMessage?: string }).normalizedMessage = msg;
+        } catch {
+            /* never let normalization mask the original error */
+        }
         return Promise.reject(error);
     };
 
