@@ -1,11 +1,13 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { CreditCard, Loader2, Lock, Save } from 'lucide-react';
+import { CheckCircle2, CreditCard, Loader2, Lock, Save } from 'lucide-react';
 import { Button, Card, CardContent, CardHeader } from '@/components/ui/base';
 import { usePOSSettings, useUpdatePOSSettings } from '@/hooks/usePOSSettings';
 import { usePermissions } from '@/hooks/usePermissions';
 import { P } from '@/lib/rbac/permissions';
+import { banksApi, type BankOption } from '@/lib/api/banks';
+import { useAuthStore } from '@/store/auth';
 import { Toggle, inputClass, labelClass } from './shared';
 
 export function PaymentDisplayTab() {
@@ -42,6 +44,39 @@ export function PaymentDisplayTab() {
 
   const set = (k: keyof typeof form, v: string | boolean) =>
     setForm((f) => ({ ...f, [k]: v }));
+
+  // Bank verification (Paystack via pos-api → treasury S2S): pick a bank + verify the account
+  // number to confirm the holder name printed on receipts.
+  const tenantID = useAuthStore((s) => s.user?.tenant_id ?? '');
+  const [banks, setBanks] = useState<BankOption[]>([]);
+  const [bankCode, setBankCode] = useState('');
+  const [verifying, setVerifying] = useState(false);
+  const [verified, setVerified] = useState(false);
+  useEffect(() => {
+    if (!tenantID) return;
+    banksApi
+      .list(tenantID)
+      .then((res) => setBanks((res.banks as BankOption[]) ?? (res.data as BankOption[]) ?? []))
+      .catch(() => setBanks([]));
+  }, [tenantID]);
+
+  const verifyBank = async () => {
+    if (!bankCode || !form.bankAccountNumber) return;
+    setVerifying(true);
+    setVerified(false);
+    try {
+      const res = await banksApi.resolve(tenantID, form.bankAccountNumber, bankCode);
+      const payload = (res.data as Record<string, unknown>) ?? res;
+      if (payload?.account_name) {
+        set('bankAccountName', payload.account_name as string);
+        setVerified(true);
+      }
+    } catch {
+      /* leave manual entry */
+    } finally {
+      setVerifying(false);
+    }
+  };
 
   const handleSave = () => {
     updateSettings.mutate({
@@ -138,35 +173,56 @@ export function PaymentDisplayTab() {
         <CardContent className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
-              <label className={labelClass}>Bank Name</label>
-              <input
-                className={inputClass}
-                value={form.bankName}
-                onChange={(e) => set('bankName', e.target.value)}
-                placeholder="e.g. KCB"
-                disabled={!canEdit}
-              />
+              <label className={labelClass}>Bank</label>
+              {banks.length > 0 ? (
+                <select
+                  className={inputClass}
+                  value={bankCode}
+                  onChange={(e) => {
+                    const b = banks.find((x) => x.code === e.target.value);
+                    setBankCode(e.target.value);
+                    setVerified(false);
+                    set('bankName', b?.name ?? '');
+                  }}
+                  disabled={!canEdit}
+                >
+                  <option value="">Select bank…</option>
+                  {banks.map((b) => (
+                    <option key={b.code} value={b.code}>{b.name}</option>
+                  ))}
+                </select>
+              ) : (
+                <input className={inputClass} value={form.bankName} onChange={(e) => set('bankName', e.target.value)} placeholder="e.g. KCB" disabled={!canEdit} />
+              )}
             </div>
             <div>
               <label className={labelClass}>Account Number</label>
-              <input
-                className={inputClass}
-                value={form.bankAccountNumber}
-                onChange={(e) => set('bankAccountNumber', e.target.value)}
-                placeholder="Bank account number"
-                disabled={!canEdit}
-              />
+              <div className="flex gap-2">
+                <input
+                  className={inputClass}
+                  value={form.bankAccountNumber}
+                  onChange={(e) => { set('bankAccountNumber', e.target.value); setVerified(false); }}
+                  placeholder="Bank account number"
+                  disabled={!canEdit}
+                />
+                <Button type="button" variant="outline" onClick={verifyBank} disabled={!canEdit || !bankCode || !form.bankAccountNumber || verifying}>
+                  {verifying ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Verify'}
+                </Button>
+              </div>
             </div>
           </div>
           <div>
             <label className={labelClass}>Account Name</label>
-            <input
-              className={inputClass}
-              value={form.bankAccountName}
-              onChange={(e) => set('bankAccountName', e.target.value)}
-              placeholder="e.g. THE URBAN LOFT CAFE LIMITED"
-              disabled={!canEdit}
-            />
+            <div className="relative">
+              <input
+                className={inputClass}
+                value={form.bankAccountName}
+                onChange={(e) => set('bankAccountName', e.target.value)}
+                placeholder="e.g. THE URBAN LOFT CAFE LIMITED"
+                disabled={!canEdit}
+              />
+              {verified && <CheckCircle2 className="absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-green-600" />}
+            </div>
           </div>
         </CardContent>
       </Card>
