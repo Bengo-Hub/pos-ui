@@ -11,7 +11,7 @@
 
 import React from 'react';
 import {
-  BedDouble, Building2, ChevronRight, Coffee, Delete, Pill, Scissors, Settings,
+  BedDouble, Building2, ChevronRight, Coffee, Lock, Pill, Scissors, Settings,
   ShoppingBag, Truck, UtensilsCrossed, Warehouse, Wine, WifiOff, Zap,
 } from 'lucide-react';
 import { LiveClock } from '@/components/pos/live-clock';
@@ -159,16 +159,31 @@ export interface LoginHeroProps {
     activeMs: number;
     onPick: (ms: number) => void;
   };
+  /**
+   * Masked passcode field + "Login" button rendered ON the hero curve.
+   * Omitted on the outlet-selection step (no passcode entry there).
+   */
+  passcode?: {
+    /** Number of characters currently entered (rendered as masked dots). */
+    length: number;
+    /** Error styling (red) for the masked field. */
+    error?: boolean;
+    /** One-shot shake animation on a failed attempt. */
+    shake?: boolean;
+    /** Shared submitPasscode() — same path as numeric auto-submit & QWERTY Enter. */
+    onSubmit: () => void;
+    isSubmitting?: boolean;
+  };
 }
 
 export function LoginHero({
   eyebrow, heading, outletName, backdropUrl, logoUrl, fallbackInitials,
   useCaseLabel, useCaseAccent, isHQ, pinLoginMessage,
-  showSwitchOutlet, onSwitchOutlet, isOnline, settings,
+  showSwitchOutlet, onSwitchOutlet, isOnline, settings, passcode,
 }: LoginHeroProps) {
   return (
     <div
-      className="relative shrink-0 overflow-hidden"
+      className={cn('relative shrink-0 overflow-hidden', passcode && 'pb-12 sm:pb-14')}
       style={{
         background:
           'linear-gradient(135deg, rgb(var(--brand-dark)) 0%, hsl(var(--primary)) 130%)',
@@ -195,6 +210,15 @@ export function LoginHero({
       <div
         className="pointer-events-none absolute -top-24 -right-16 h-72 w-72 rounded-full blur-3xl"
         style={{ background: 'hsl(var(--primary) / 0.35)' }}
+      />
+      {/* Brand-tinted decorative circles at the page edges */}
+      <div
+        className="pointer-events-none absolute -left-20 top-1/3 h-40 w-40 rounded-full ring-1 ring-inset ring-white/10"
+        style={{ background: 'hsl(var(--primary) / 0.12)' }}
+      />
+      <div
+        className="pointer-events-none absolute right-10 -bottom-4 h-24 w-24 rounded-full ring-1 ring-inset ring-white/10"
+        style={{ background: 'rgb(var(--brand-dark) / 0.4)' }}
       />
 
       <div className="relative z-10 px-5 sm:px-8 pt-5 pb-6">
@@ -305,94 +329,96 @@ export function LoginHero({
         <div className="sm:hidden mt-4 flex justify-center">
           <LiveClock />
         </div>
+
+        {/* Masked passcode field + Login button — sits ON the hero curve */}
+        {passcode && (
+          <div className="mt-5 sm:mt-6 flex items-center justify-center gap-2.5 sm:gap-3">
+            <div
+              className={cn(
+                'flex h-12 min-w-48 sm:min-w-64 items-center gap-3 rounded-full bg-white px-5 shadow-lg ring-1 ring-black/5 transition-all',
+                passcode.error && 'ring-2 ring-destructive',
+                passcode.shake && 'animate-shake'
+              )}
+            >
+              <Lock className={cn('h-4 w-4 shrink-0', passcode.error ? 'text-destructive' : 'text-slate-400')} />
+              {passcode.length === 0 ? (
+                <span className="text-sm font-medium text-slate-400">Enter passcode</span>
+              ) : (
+                <div className="flex items-center gap-1.5">
+                  {Array.from({ length: passcode.length }).map((_, i) => (
+                    <span
+                      key={i}
+                      className={cn('h-2.5 w-2.5 rounded-full', passcode.error ? 'bg-destructive' : 'bg-slate-700')}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={passcode.onSubmit}
+              disabled={passcode.isSubmitting || passcode.length === 0}
+              className={cn(
+                'h-12 rounded-full px-7 text-sm font-bold text-white shadow-lg',
+                'ring-1 ring-inset ring-white/20 active:scale-95 transition-all',
+                'disabled:opacity-50 disabled:cursor-not-allowed'
+              )}
+              style={{ background: 'linear-gradient(160deg, hsl(var(--primary)) 0%, hsl(var(--primary-dark)) 100%)' }}
+            >
+              {passcode.isSubmitting ? 'Signing in…' : 'Login'}
+            </button>
+          </div>
+        )}
       </div>
+
+      {/* Concave curved (wave) bottom edge — light panel pokes up into the hero */}
+      <svg
+        className="absolute inset-x-0 bottom-0 z-20 h-8 w-full text-slate-50 sm:h-10"
+        viewBox="0 0 1440 80"
+        preserveAspectRatio="none"
+        aria-hidden
+      >
+        <path
+          fill="currentColor"
+          d="M0,80 L0,40 C240,80 480,80 720,52 C960,24 1200,24 1440,52 L1440,80 Z"
+        />
+      </svg>
     </div>
   );
 }
 
-// ── Numeric keypad ───────────────────────────────────────────────────────────
-// Brand-coloured tactile number keys (7-8-9 / 4-5-6 / 1-2-3 / 0), a backspace
-// key and a destructive CLEAR key. PIN-only — no QWERTY, no password field.
+// PinKeypad (numeric keypad) lives in ./pin-login-keyboards alongside the QWERTY
+// keyboard; re-exported here so existing imports of `PinKeypad` keep working.
+export { PinKeypad } from '@/components/pos/pin-login-keyboards';
+export type { PinKeypadProps } from '@/components/pos/pin-login-keyboards';
 
-const KEYPAD_KEYS = ['7', '8', '9', '4', '5', '6', '1', '2', '3', 'clear', '0', 'del'] as const;
+// ── Demo PIN hints (codevertex-demo only) ────────────────────────────────────
+// Floating bottom-right panel listing seeded demo PINs for the selected use-case.
 
-export interface PinKeypadProps {
-  onDigit: (digit: string) => void;
-  onBackspace: () => void;
-  onClear: () => void;
-  disabled: boolean;
-  /** True while the 4th digit is submitting — render a pulse on number keys. */
-  isSubmitting: boolean;
-  digitsLength: number;
-  pinLength: number;
-}
-
-export function PinKeypad({
-  onDigit, onBackspace, onClear, disabled, isSubmitting, digitsLength, pinLength,
-}: PinKeypadProps) {
+export function DemoHints({
+  useCase, hints,
+}: {
+  useCase?: string | null;
+  hints: { pin: string; role: string; accent: string }[];
+}) {
   return (
-    <div className="grid grid-cols-3 gap-3 sm:gap-4 w-full">
-      {KEYPAD_KEYS.map((key, i) => {
-        if (key === 'del') {
-          return (
-            <button
-              key={i}
-              onClick={onBackspace}
-              disabled={disabled || digitsLength === 0}
-              aria-label="Delete"
-              className={cn(
-                'h-16 sm:h-20 rounded-2xl flex items-center justify-center transition-all duration-100 touch-manipulation',
-                'bg-slate-100 border border-slate-200 text-slate-500',
-                'hover:bg-slate-200 hover:text-slate-700 active:scale-95',
-                'shadow-sm disabled:opacity-40 disabled:cursor-not-allowed'
-              )}
-            >
-              <Delete className="h-6 w-6" />
-            </button>
-          );
-        }
-        if (key === 'clear') {
-          return (
-            <button
-              key={i}
-              onClick={onClear}
-              disabled={disabled || digitsLength === 0}
-              aria-label="Clear"
-              data-testid="pin-key-clear"
-              className={cn(
-                'h-16 sm:h-20 rounded-2xl flex items-center justify-center transition-all duration-100 touch-manipulation',
-                'bg-rose-50 border border-rose-200 text-rose-600 text-sm font-black uppercase tracking-wider',
-                'hover:bg-rose-100 hover:border-rose-300 active:scale-95',
-                'shadow-sm disabled:opacity-40 disabled:cursor-not-allowed'
-              )}
-            >
-              Clear
-            </button>
-          );
-        }
-        return (
-          <button
-            key={i}
-            data-testid={`pin-key-${key}`}
-            onClick={() => onDigit(key)}
-            disabled={disabled || digitsLength >= pinLength}
-            className={cn(
-              'h-16 sm:h-20 rounded-2xl flex items-center justify-center transition-all duration-100 touch-manipulation',
-              'text-white text-2xl sm:text-3xl font-black',
-              'active:scale-95',
-              'shadow-[inset_0_1px_0_rgba(255,255,255,0.25),0_4px_14px_hsl(var(--primary)/0.35)]',
-              'disabled:opacity-40 disabled:cursor-not-allowed'
-            )}
-            style={{
-              background: 'linear-gradient(160deg, hsl(var(--primary)) 0%, hsl(var(--primary-dark)) 100%)',
-            }}
-          >
-            {isSubmitting && digitsLength === pinLength ? (
-              <span className="h-2.5 w-2.5 rounded-full bg-white/80 animate-pulse" />
-            ) : key}
-          </button>
-        );
-      })}
+    <div className="absolute bottom-4 right-4 z-30 hidden sm:block">
+      <div className="rounded-2xl border border-slate-200 bg-white/90 backdrop-blur-xl shadow-lg p-3 max-w-[220px]">
+        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Demo PINs</p>
+        {useCase && (
+          <p className="text-[8px] text-slate-400 uppercase tracking-wider mb-2">
+            {USE_CASE_LABELS[useCase] ?? useCase}
+          </p>
+        )}
+        <div className="grid grid-cols-2 gap-1">
+          {hints.map(({ pin, role, accent }) => (
+            <div key={pin} className="flex items-center gap-1.5 px-2 py-1 rounded-lg" style={{ background: `${accent}14` }}>
+              <span className="font-mono text-[11px] font-black" style={{ color: accent }}>{pin}</span>
+              <span className="text-[10px] text-slate-500 truncate">{role}</span>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

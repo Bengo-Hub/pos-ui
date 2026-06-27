@@ -6,7 +6,7 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { compare as bcryptCompare } from 'bcryptjs';
 import Link from 'next/link';
 import {
-  Building2, Clock3, ExternalLink, Fingerprint, KeyRound,
+  Building2, CalendarClock, Clock3, ExternalLink, Fingerprint, KeyRound, UserRound,
 } from 'lucide-react';
 import { useOnline } from '@/hooks/use-online';
 import { useIdleTimer, getScreensaverTimeoutMs, setScreensaverTimeoutMs, resolveScreensaverTimeoutMs } from '@/hooks/use-idle-timer';
@@ -16,8 +16,9 @@ import { useAuthStore } from '@/store/auth';
 import { getCachedStaffProfiles, getCachedStaffProfile, cacheStaffProfile, type CachedStaffProfile } from '@/lib/db/pos-db';
 import { Screensaver } from '@/components/pos/screensaver';
 import {
-  LoginHero, PinKeypad, OutletCard, USE_CASE_COLORS, USE_CASE_LABELS,
+  LoginHero, PinKeypad, OutletCard, DemoHints, USE_CASE_COLORS, USE_CASE_LABELS,
 } from '@/components/pos/pin-login-ui';
+import { QwertyKeyboard } from '@/components/pos/pin-login-keyboards';
 import { useTenantBranding } from '@/providers/tenant-branding-provider';
 import { cn } from '@/lib/utils';
 
@@ -120,6 +121,7 @@ export default function PINLoginPage() {
   const [timeoutMs, setTimeoutMsState]  = useState<number>(30_000);
   const [step, setStep]             = useState<'outlet' | 'pin'>('pin');
   const [storedEmail, setStoredEmail] = useState<string | null>(null);
+  const [shift, setShift]           = useState(false); // on-screen QWERTY shift state
 
   // Device-local override (set via the gear menu) wins; otherwise fall back to the default.
   // Once the outlet settings load, a centrally-configured timeout is applied when the user
@@ -358,58 +360,77 @@ export default function PINLoginPage() {
 
   // ── PIN input handling ───────────────────────────────────────────────────────
 
-  async function handleDigit(digit: string) {
+  // Single submit path shared by: numeric auto-submit at 4 digits, the on-screen
+  // QWERTY ENTER key, and the hero "Login" button. Online → loginMutation; offline
+  // → bcrypt-match against cached profiles. No duplicate mutation/submit fns.
+  async function submitPasscode(passcode?: string) {
+    if (loginMutation.isPending) return;
+    const pin = passcode ?? pinDigits.join('');
+    if (!pin) return; // guard empty (hero Login / Enter on an empty field)
+
+    if (isOnline) {
+      loginMutation.mutate(pin);
+      return;
+    }
+    // Offline: scan all cached profiles for a bcrypt match
+    let matched: CachedStaffProfile | null = null;
+    for (const cached of offlineProfiles) {
+      if (cached.pin_hash && await bcryptCompare(pin, cached.pin_hash)) {
+        matched = cached;
+        break;
+      }
+    }
+    if (!matched) {
+      triggerPinError('Incorrect PIN. Please try again.');
+      return;
+    }
+    // Restore outlet context from the last selection so offline orders carry the right
+    // outlet_id (and the API client sends X-Outlet-ID once back online).
+    const offlineOutletId = outletInfo?.id ?? storedOutletId;
+    setTerminalSession('offline-terminal-session', {
+      id:              matched.user_id,
+      email:           matched.email,
+      fullName:        matched.name,
+      roles:           matched.roles,
+      permissions:     matched.permissions,
+      tenant_id:       matched.tenant_id,
+      tenant_slug:     orgSlug,
+      isPlatformOwner: false,
+      isSuperUser:     false,
+      ...(offlineOutletId ? { outlet_id: offlineOutletId } : {}),
+    } as Parameters<typeof setTerminalSession>[1]);
+    if (offlineOutletId) {
+      setOutlet({
+        id:       offlineOutletId,
+        code:     '',
+        name:     outletInfo?.name ?? offlineOutletId,
+        use_case: outletInfo?.use_case ?? '',
+        is_hq:    outletInfo?.is_hq ?? false,
+        status:   'active',
+      });
+      apiClient.setOutletID(offlineOutletId);
+    }
+    router.push(`/${orgSlug}/dashboard`);
+  }
+
+  function handleDigit(digit: string) {
     if (loginMutation.isPending) return;
     const next = [...pinDigits, digit];
     setPinDigits(next);
     setPinError(null);
-
+    // Numeric keypad keeps its auto-submit at 4 — via the shared submitPasscode helper.
     if (next.length === 4) {
-      const pin = next.join('');
-      if (isOnline) {
-        loginMutation.mutate(pin);
-        return;
-      }
-      // Offline: scan all cached profiles for a bcrypt match
-      let matched: CachedStaffProfile | null = null;
-      for (const cached of offlineProfiles) {
-        if (cached.pin_hash && await bcryptCompare(pin, cached.pin_hash)) {
-          matched = cached;
-          break;
-        }
-      }
-      if (!matched) {
-        triggerPinError('Incorrect PIN. Please try again.');
-        return;
-      }
-      // Restore outlet context from the last selection so offline orders carry the right
-      // outlet_id (and the API client sends X-Outlet-ID once back online).
-      const offlineOutletId = outletInfo?.id ?? storedOutletId;
-      setTerminalSession('offline-terminal-session', {
-        id:              matched.user_id,
-        email:           matched.email,
-        fullName:        matched.name,
-        roles:           matched.roles,
-        permissions:     matched.permissions,
-        tenant_id:       matched.tenant_id,
-        tenant_slug:     orgSlug,
-        isPlatformOwner: false,
-        isSuperUser:     false,
-        ...(offlineOutletId ? { outlet_id: offlineOutletId } : {}),
-      } as Parameters<typeof setTerminalSession>[1]);
-      if (offlineOutletId) {
-        setOutlet({
-          id:       offlineOutletId,
-          code:     '',
-          name:     outletInfo?.name ?? offlineOutletId,
-          use_case: outletInfo?.use_case ?? '',
-          is_hq:    outletInfo?.is_hq ?? false,
-          status:   'active',
-        });
-        apiClient.setOutletID(offlineOutletId);
-      }
-      router.push(`/${orgSlug}/dashboard`);
+      void submitPasscode(next.join(''));
     }
+  }
+
+  // On-screen QWERTY key handler (genuinely-new logic): append to the SAME pinDigits
+  // state. Letters/space/punctuation append (case already applied by the keyboard).
+  // QWERTY input does NOT auto-submit — only ENTER / hero-Login submit.
+  function handleKey(char: string) {
+    if (loginMutation.isPending) return;
+    setPinDigits((d) => [...d, char]);
+    setPinError(null);
   }
 
   function handleBackspace() {
@@ -598,6 +619,13 @@ export default function PINLoginPage() {
             activeMs: timeoutMs,
             onPick: handleTimeoutChange,
           }}
+          passcode={{
+            length: pinDigits.length,
+            error: !!pinError,
+            shake: isShaking,
+            onSubmit: () => submitPasscode(),
+            isSubmitting: loginMutation.isPending,
+          }}
         />
 
         {/* Ambient blob under the body */}
@@ -608,162 +636,102 @@ export default function PINLoginPage() {
                style={{ background: 'hsl(var(--primary) / 0.06)' }} />
         </div>
 
-        {/* ── Body: action column (left) + keypad card (right) ── */}
-        <div className="relative z-10 flex-1 flex items-center justify-center overflow-y-auto px-4 sm:px-6 py-6">
-          <div className="w-full max-w-3xl grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_minmax(0,420px)] gap-5 sm:gap-6 items-stretch">
-
-            {/* Left action column */}
-            <div className="flex flex-col gap-3 rounded-3xl bg-white border border-slate-200 shadow-xl shadow-slate-900/5 p-5 sm:p-6">
-              <p className="text-slate-500 text-[11px] font-bold tracking-[0.2em] uppercase">
-                Actions
-              </p>
-              <button
-                onClick={() => redirectToSSO(orgSlug, `/${orgSlug}/dashboard`)}
-                className={cn(
-                  'w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl text-left',
-                  'text-white font-semibold shadow-sm',
-                  'active:scale-[0.98] transition-all duration-150 group'
-                )}
-                style={{ background: 'linear-gradient(160deg, hsl(var(--primary)) 0%, hsl(var(--primary-dark)) 100%)' }}
-              >
-                <span className="h-9 w-9 rounded-xl bg-white/20 ring-1 ring-inset ring-white/25 flex items-center justify-center shrink-0">
-                  <ExternalLink className="h-4 w-4" />
-                </span>
-                <span className="min-w-0">
-                  <span className="block text-sm leading-tight">Login</span>
-                  <span className="block text-[11px] font-medium text-white/75 leading-tight">Sign in with your account</span>
-                </span>
-              </button>
-              <Link
-                href={`/${orgSlug}/shifts`}
-                className={cn(
-                  'w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl text-left',
-                  'border border-slate-200 bg-white text-slate-700 font-semibold shadow-sm',
-                  'hover:bg-slate-50 hover:border-slate-300 active:scale-[0.98]',
-                  'transition-all duration-150 group'
-                )}
-              >
-                <span className="h-9 w-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0 group-hover:bg-primary/15">
-                  <Clock3 className="h-4 w-4" />
-                </span>
-                <span className="min-w-0">
-                  <span className="block text-sm leading-tight">Attendance</span>
-                  <span className="block text-[11px] font-medium text-slate-400 leading-tight">Clock in & manage shifts</span>
-                </span>
-              </Link>
-              {biometricSupported && hasRegisteredCredential && storedEmail && (
-                <button
-                  onClick={() => biometricAuth(storedEmail, orgSlug)}
-                  disabled={biometricLoading}
-                  className={cn(
-                    'w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl text-left',
-                    'border border-primary/25 bg-primary/8 text-primary font-semibold',
-                    'hover:bg-primary/15 hover:border-primary/45 active:scale-[0.98]',
-                    'disabled:opacity-50 transition-all duration-150'
-                  )}
-                >
-                  <span className="h-9 w-9 rounded-xl bg-primary/15 flex items-center justify-center shrink-0">
-                    <Fingerprint className="h-4 w-4" />
-                  </span>
-                  <span className="min-w-0">
-                    <span className="block text-sm leading-tight">{biometricLoading ? 'Verifying…' : 'Fingerprint'}</span>
-                    <span className="block text-[11px] font-medium text-primary/70 leading-tight">Biometric sign-in</span>
-                  </span>
-                </button>
+        {/* ── Body: white card on the light panel, 3 zones (stack on mobile) ── */}
+        <div className="relative z-10 flex-1 flex items-start justify-center overflow-y-auto px-3 sm:px-6 pt-2 pb-6">
+          <div className="w-full max-w-6xl rounded-3xl bg-white border border-slate-200 shadow-xl shadow-slate-900/5 p-4 sm:p-6">
+            {/* Error message — shared across all input zones */}
+            <div className="h-4 mb-2 flex items-center justify-center">
+              {pinError && (
+                <p className="text-destructive text-xs font-medium animate-fade-in text-center">
+                  {pinError}
+                </p>
               )}
-              {biometricError && <p className="text-xs text-red-500">{biometricError}</p>}
-              <div className="mt-auto pt-3 flex items-center gap-2 text-slate-400">
-                <KeyRound className="h-3.5 w-3.5" />
-                <span className="text-[11px] font-medium">Enter your 4-digit PIN to start a shift on this terminal.</span>
-              </div>
             </div>
 
-            {/* Right: PIN dots + error + keypad */}
-            <div className="flex flex-col items-center gap-5 rounded-3xl bg-white border border-slate-200 shadow-xl shadow-slate-900/5 px-5 sm:px-7 py-6">
-              <p className="text-slate-500 text-xs font-semibold tracking-[0.2em] uppercase">
-                Enter your PIN
-              </p>
+            <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,200px)_minmax(0,1fr)_minmax(0,300px)] gap-4 sm:gap-5 items-stretch">
 
-              {/* PIN dots */}
-              <div className={cn('flex items-center gap-4', isShaking && 'animate-shake')}>
-                {Array.from({ length: PIN_LENGTH }).map((_, i) => {
-                  const filled = i < pinDigits.length;
-                  return (
-                    <div
-                      key={i}
-                      className={cn(
-                        'h-5 w-5 rounded-full border-2 transition-all duration-150',
-                        filled
-                          ? pinError
-                            ? 'bg-red-500 border-red-500 scale-110'
-                            : 'border-white/0 scale-110'
-                          : 'bg-transparent border-slate-300'
-                      )}
-                      style={filled && !pinError ? {
-                        background: 'hsl(var(--primary))',
-                        borderColor: 'hsl(var(--primary))',
-                        boxShadow: '0 0 8px hsl(var(--primary) / 0.5)',
-                      } : {}}
-                    />
-                  );
-                })}
+              {/* LEFT zone: two tall stacked action buttons */}
+              <div className="flex flex-row lg:flex-col gap-3">
+                <button
+                  onClick={() => redirectToSSO(orgSlug, `/${orgSlug}/dashboard`)}
+                  className={cn(
+                    'flex-1 flex flex-col items-center justify-center gap-2.5 rounded-2xl py-6 lg:py-0',
+                    'text-white font-bold shadow-md ring-1 ring-inset ring-white/15',
+                    'active:scale-[0.98] transition-all duration-150'
+                  )}
+                  style={{ background: 'linear-gradient(160deg, hsl(var(--primary)) 0%, hsl(var(--primary-dark)) 100%)' }}
+                >
+                  <span className="h-12 w-12 rounded-2xl bg-white/20 ring-1 ring-inset ring-white/25 flex items-center justify-center">
+                    <UserRound className="h-6 w-6" />
+                  </span>
+                  <span className="text-sm">Login</span>
+                </button>
+                <Link
+                  href={`/${orgSlug}/shifts`}
+                  className={cn(
+                    'flex-1 flex flex-col items-center justify-center gap-2.5 rounded-2xl py-6 lg:py-0',
+                    'text-secondary-foreground font-bold shadow-md ring-1 ring-inset ring-black/5',
+                    'hover:brightness-95 active:scale-[0.98] transition-all duration-150'
+                  )}
+                  style={{ background: 'hsl(var(--secondary))' }}
+                >
+                  <span className="h-12 w-12 rounded-2xl bg-black/5 flex items-center justify-center">
+                    <CalendarClock className="h-6 w-6" />
+                  </span>
+                  <span className="text-sm">Attendance</span>
+                </Link>
               </div>
 
-              {/* Error message */}
-              <div className="h-4 flex items-center justify-center">
-                {pinError && (
-                  <p className="text-red-500 text-xs font-medium animate-fade-in text-center">
-                    {pinError}
-                  </p>
+              {/* CENTER zone: full on-screen QWERTY */}
+              <div className="flex flex-col justify-center gap-3 rounded-2xl bg-slate-50/60 border border-slate-100 p-3 sm:p-4">
+                <QwertyKeyboard
+                  onKey={handleKey}
+                  onBackspace={handleBackspace}
+                  onEnter={() => submitPasscode()}
+                  shift={shift}
+                  onToggleShift={() => setShift((s) => !s)}
+                  disabled={loginMutation.isPending}
+                />
+                {/* Biometric affordance kept available below the keyboard */}
+                {biometricSupported && hasRegisteredCredential && storedEmail && (
+                  <button
+                    onClick={() => biometricAuth(storedEmail, orgSlug)}
+                    disabled={biometricLoading}
+                    className={cn(
+                      'mx-auto inline-flex items-center gap-2 px-4 py-2 rounded-full',
+                      'border border-primary/25 bg-primary/10 text-primary text-xs font-semibold',
+                      'hover:bg-primary/15 hover:border-primary/45 disabled:opacity-50 transition-all'
+                    )}
+                  >
+                    <Fingerprint className="h-3.5 w-3.5" />
+                    {biometricLoading ? 'Verifying…' : 'Sign in with fingerprint'}
+                  </button>
                 )}
+                {biometricError && <p className="text-center text-xs text-destructive">{biometricError}</p>}
               </div>
 
-              {/* Numeric keypad */}
-              <PinKeypad
-                onDigit={handleDigit}
-                onBackspace={handleBackspace}
-                onClear={handleClear}
-                disabled={loginMutation.isPending}
-                isSubmitting={loginMutation.isPending}
-                digitsLength={pinDigits.length}
-                pinLength={PIN_LENGTH}
-              />
+              {/* RIGHT zone: numeric keypad */}
+              <div className="flex flex-col items-center gap-3">
+                <div className="flex items-center gap-2 text-slate-400">
+                  <KeyRound className="h-3.5 w-3.5" />
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.18em]">Enter PIN</span>
+                </div>
+                <PinKeypad
+                  onDigit={handleDigit}
+                  onBackspace={handleBackspace}
+                  onClear={handleClear}
+                  disabled={loginMutation.isPending}
+                  isSubmitting={loginMutation.isPending}
+                  digitsLength={pinDigits.length}
+                  pinLength={PIN_LENGTH}
+                />
+              </div>
             </div>
           </div>
         </div>
 
         {/* ── Demo hints (codevertex-demo only) — floating bottom-right ── */}
-        {isDemoTenant && (
-          <div className="absolute bottom-4 right-4 z-30 hidden sm:block">
-            <div className="rounded-2xl border border-slate-200 bg-white/90 backdrop-blur-xl shadow-lg p-3 max-w-[220px]">
-              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">
-                Demo PINs
-              </p>
-              {useCase && (
-                <p className="text-[8px] text-slate-400 uppercase tracking-wider mb-2">
-                  {USE_CASE_LABELS[useCase] ?? useCase}
-                </p>
-              )}
-              <div className="grid grid-cols-2 gap-1">
-                {getDemoHints(useCase).map(({ pin, role, accent }) => (
-                  <div
-                    key={pin}
-                    className="flex items-center gap-1.5 px-2 py-1 rounded-lg"
-                    style={{ background: `${accent}14` }}
-                  >
-                    <span
-                      className="font-mono text-[11px] font-black"
-                      style={{ color: accent }}
-                    >
-                      {pin}
-                    </span>
-                    <span className="text-[10px] text-slate-500 truncate">{role}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
+        {isDemoTenant && <DemoHints useCase={useCase} hints={getDemoHints(useCase)} />}
       </div>
     </>
   );
