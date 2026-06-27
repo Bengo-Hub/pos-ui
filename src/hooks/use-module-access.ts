@@ -91,6 +91,9 @@ export function useModuleAccess() {
   // Read use_case from the persisted outlet (set by service-level outlet selector).
   // Falls back to JWT claims for backward compat. null means not yet resolved.
   const outlet = useAuthStore((s) => s.outlet);
+  // Auth/hydration signals used to tell "still loading" apart from "genuinely no outlet".
+  const authStatus  = useAuthStore((s) => s.status);
+  const hasHydrated = useAuthStore((s) => s._hasHydrated);
   // When an HQ admin drills into a specific outlet, that outlet's use_case takes priority.
   const drillOutlet = useOutletFilterStore((s) => s.selectedOutlet);
 
@@ -122,7 +125,27 @@ export function useModuleAccess() {
     (user?.roles ?? []).includes('super_admin');
 
   // Outlet-level backend module toggles (staleTime 5min — won't re-fetch on every render)
-  const { data: posSettings } = usePOSSettings();
+  const { data: posSettings, isLoading: posSettingsLoading } = usePOSSettings();
+
+  // ── Resolution state (used by gates to avoid flashing "Module Not Available") ──
+  // Three distinct situations when there is no concrete use_case yet:
+  //   (a) RESOLVED   → useCase != null → module lists apply (handled above).
+  //   (b) RESOLVING  → still hydrating/loading (persist not rehydrated, auth still
+  //       loading/syncing, or the outlet/posSettings query in flight) → show a loader.
+  //   (c) NEEDS OUTLET → authenticated + settled, but genuinely no outlet selected →
+  //       prompt to pick an outlet (NOT "Module Not Available").
+  // Superusers skip this — they always have access regardless of outlet context.
+  const isResolving =
+    !isSuperUser &&
+    rawUseCase === null &&
+    (!hasHydrated || authStatus === 'loading' || authStatus === 'syncing' || posSettingsLoading);
+
+  const needsOutlet =
+    !isSuperUser &&
+    rawUseCase === null &&
+    hasHydrated &&
+    authStatus === 'authenticated' &&
+    !posSettingsLoading;
 
   // Use-case convenience flags
   const isHospitality = useCase === 'hospitality';
@@ -162,6 +185,8 @@ export function useModuleAccess() {
     // Core
     useCase,
     isResolved,
+    isResolving,
+    needsOutlet,
     isSuperUser,
     enabledModules,
 

@@ -4,7 +4,6 @@ import { useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { compare as bcryptCompare } from 'bcryptjs';
-import Link from 'next/link';
 import {
   Building2, CalendarClock, Clock3, ExternalLink, Fingerprint, KeyRound, UserRound,
 } from 'lucide-react';
@@ -122,6 +121,10 @@ export default function PINLoginPage() {
   const [step, setStep]             = useState<'outlet' | 'pin'>('pin');
   const [storedEmail, setStoredEmail] = useState<string | null>(null);
   const [shift, setShift]           = useState(false); // on-screen QWERTY shift state
+  // Where to land AFTER a successful PIN/SSO login. Default (null) → dashboard.
+  // The "Attendance" action sets this to /shifts so the user must authenticate first
+  // and then lands on their shift page (instead of navigating in without a fresh login).
+  const [postLoginRedirect, setPostLoginRedirect] = useState<string | null>(null);
   // Which on-screen keyboard is showing — like a real soft-keyboard, only ONE is
   // visible at a time. Numeric PIN keypad is the default; "ABC"/"?123" toggle between
   // them. This is the ONLY new state; no handler/mutation is duplicated.
@@ -333,7 +336,9 @@ export default function PINLoginPage() {
       });
       apiClient.setOutletID(sessionOutlet.id);
     }
-    router.push(`/${orgSlug}/dashboard`);
+    // Single success-redirect path: Attendance sets postLoginRedirect → /shifts,
+    // everything else falls back to the dashboard.
+    router.push(postLoginRedirect ?? `/${orgSlug}/dashboard`);
   }
 
   const loginMutation = useMutation({
@@ -414,7 +419,8 @@ export default function PINLoginPage() {
       });
       apiClient.setOutletID(offlineOutletId);
     }
-    router.push(`/${orgSlug}/dashboard`);
+    // Same success-redirect destination as the online path (Attendance → /shifts).
+    router.push(postLoginRedirect ?? `/${orgSlug}/dashboard`);
   }
 
   function handleDigit(digit: string) {
@@ -462,6 +468,21 @@ export default function PINLoginPage() {
   const heroBackdrop = tenant?.posScreensaverUrl ?? tenant?.logoUrl ?? null;
   const heroInitials = (tenant?.orgName ?? orgSlug).slice(0, 2).toUpperCase();
 
+  // Attendance intent: if the user is ALREADY in a (terminal) session, jump straight to
+  // /shifts. Otherwise DON'T navigate — record /shifts as the post-login redirect, keep the
+  // user on the PIN screen to authenticate, and surface a brief inline hint. The actual
+  // login still flows through the SINGLE existing success path (handleLoginSuccess /
+  // offline bcrypt path) which now honours postLoginRedirect.
+  const shiftsHref = `/${orgSlug}/shifts`;
+  function handleAttendance() {
+    if (hasSession && isTerminalSession) {
+      router.push(shiftsHref);
+      return;
+    }
+    setPostLoginRedirect(shiftsHref);
+  }
+  const attendanceArmed = postLoginRedirect === shiftsHref;
+
   // Shared Login (redirectToSSO) + Attendance (→ /shifts) action buttons. Factored
   // out so the SAME markup/handlers serve BOTH responsive layouts without copy-paste.
   //  - orientation="row"  → side-by-side (small-screen stacked layout, full width)
@@ -469,7 +490,7 @@ export default function PINLoginPage() {
   const ActionButtons = ({ orientation }: { orientation: 'row' | 'col' }) => (
     <div className={cn('gap-3', orientation === 'row' ? 'grid grid-cols-2' : 'flex flex-col h-full')}>
       <button
-        onClick={() => redirectToSSO(orgSlug, `/${orgSlug}/dashboard`)}
+        onClick={() => redirectToSSO(orgSlug, postLoginRedirect ?? `/${orgSlug}/dashboard`)}
         className={cn(
           'flex flex-col items-center justify-center gap-2 rounded-2xl py-4 sm:py-5',
           'text-white font-bold shadow-md ring-1 ring-inset ring-white/15',
@@ -483,12 +504,15 @@ export default function PINLoginPage() {
         </span>
         <span className="text-sm">Login</span>
       </button>
-      <Link
-        href={`/${orgSlug}/shifts`}
+      <button
+        onClick={handleAttendance}
         className={cn(
           'flex flex-col items-center justify-center gap-2 rounded-2xl py-4 sm:py-5',
-          'text-secondary-foreground font-bold shadow-md ring-1 ring-inset ring-black/5',
+          'text-secondary-foreground font-bold shadow-md ring-1 ring-inset',
           'hover:brightness-95 active:scale-[0.98] transition-all duration-150',
+          // When armed (no session yet), mark Attendance as the active intent so the user
+          // knows their PIN entry will clock them in.
+          attendanceArmed ? 'ring-primary/60 ring-2' : 'ring-black/5',
           orientation === 'col' && 'flex-1'
         )}
         style={{ background: 'hsl(var(--secondary))' }}
@@ -497,7 +521,7 @@ export default function PINLoginPage() {
           <CalendarClock className="h-5 w-5 sm:h-6 sm:w-6" />
         </span>
         <span className="text-sm">Attendance</span>
-      </Link>
+      </button>
     </div>
   );
 
@@ -597,19 +621,26 @@ export default function PINLoginPage() {
               <ExternalLink className="h-4 w-4 group-hover:text-primary transition-colors" />
               Sign in with your account
             </button>
-            <Link
-              href={`/${orgSlug}/shifts`}
+            <button
+              onClick={() => {
+                // From the outlet step the user has no session yet — arm the post-login
+                // redirect and drop them on the PIN screen to authenticate first.
+                if (hasSession && isTerminalSession) { router.push(shiftsHref); return; }
+                setPostLoginRedirect(shiftsHref);
+                setStep('pin');
+              }}
               className={cn(
                 'w-full flex items-center justify-center gap-2.5 px-5 py-3 rounded-2xl',
-                'border border-slate-200 bg-white',
+                'border bg-white',
                 'text-sm text-slate-600 font-medium shadow-sm',
                 'hover:bg-slate-50 hover:text-slate-900 hover:border-slate-300',
-                'transition-all duration-200 group'
+                'transition-all duration-200 group',
+                attendanceArmed ? 'border-primary/50 ring-1 ring-primary/30' : 'border-slate-200'
               )}
             >
               <Clock3 className="h-4 w-4 group-hover:text-primary transition-colors" />
               Attendance
-            </Link>
+            </button>
             {biometricSupported && hasRegisteredCredential && storedEmail && (
               <div className="flex flex-col gap-1">
                 <button
@@ -708,13 +739,17 @@ export default function PINLoginPage() {
 
           {/* ── SMALL SCREENS (< lg): single-keyboard toggle stack ── */}
           <div className="w-full max-w-3xl lg:hidden rounded-3xl bg-white border border-slate-200 shadow-xl shadow-slate-900/5 p-4 sm:p-6">
-            {/* Error message — shared across all input zones */}
-            <div className="h-4 mb-2 flex items-center justify-center">
-              {pinError && (
+            {/* Error / attendance-intent hint — shared across all input zones */}
+            <div className="min-h-4 mb-2 flex items-center justify-center">
+              {pinError ? (
                 <p className="text-destructive text-xs font-medium animate-fade-in text-center">
                   {pinError}
                 </p>
-              )}
+              ) : attendanceArmed ? (
+                <p className="text-primary text-xs font-medium animate-fade-in text-center">
+                  Enter your PIN to clock in / manage your shift
+                </p>
+              ) : null}
             </div>
 
             <div className="flex flex-col gap-4 sm:gap-5">
@@ -765,13 +800,17 @@ export default function PINLoginPage() {
 
           {/* ── LARGE SCREENS (lg+): wide 3-zone layout, both keyboards visible ── */}
           <div className="hidden lg:flex w-full max-w-6xl rounded-3xl bg-white border border-slate-200 shadow-xl shadow-slate-900/5 p-6 flex-col">
-            {/* Error message — shared across all input zones */}
-            <div className="h-4 mb-3 flex items-center justify-center">
-              {pinError && (
+            {/* Error / attendance-intent hint — shared across all input zones */}
+            <div className="min-h-4 mb-3 flex items-center justify-center">
+              {pinError ? (
                 <p className="text-destructive text-xs font-medium animate-fade-in text-center">
                   {pinError}
                 </p>
-              )}
+              ) : attendanceArmed ? (
+                <p className="text-primary text-xs font-medium animate-fade-in text-center">
+                  Enter your PIN to clock in / manage your shift
+                </p>
+              ) : null}
             </div>
 
             <div className="flex items-stretch gap-5">

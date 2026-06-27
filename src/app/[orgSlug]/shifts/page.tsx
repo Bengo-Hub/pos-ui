@@ -1,12 +1,14 @@
 'use client';
 
+import Link from 'next/link';
+import { useParams } from 'next/navigation';
 import { ModuleGate } from '@/components/auth/module-gate';
 import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
 import { useEffect, useMemo, useState } from 'react';
 import { Card, CardContent } from '@/components/ui/base';
 import { Button } from '@/components/ui/button';
 import {
-  AlertTriangle, Banknote, BarChart3, CalendarDays, CalendarOff, Clock,
+  AlertTriangle, Banknote, BarChart3, Building2, CalendarDays, CalendarOff, Clock,
   CreditCard, DollarSign, History, Loader2, LogIn, LogOut,
   RefreshCw, RotateCcw, ShoppingCart, TrendingDown,
 } from 'lucide-react';
@@ -14,6 +16,7 @@ import {
   useCurrentShift, useOpenShift, useCloseShift,
   useSessionSummary, useShiftHistory,
 } from '@/hooks/useShifts';
+import { useModuleAccess } from '@/hooks/use-module-access';
 import { usePermissions, P } from '@/hooks/usePermissions';
 import { ShiftCloseDialog } from '@/components/pos/shift-close-dialog';
 import { ShiftPlannerPanel } from '@/components/pos/shift-planner-panel';
@@ -460,7 +463,52 @@ function ShiftsPage() {
   );
 }
 
+// ── Outlet-context states ──────────────────────────────────────────────────────
+// The shifts module is in EVERY use-case's module list, so a "Module Not Available"
+// here was never really about the module — it was the use_case being unresolved while
+// the outlet/posSettings/profile were still loading. We disambiguate three states so
+// the genuine ModuleUnavailable case is the only one that shows the error.
+
+function ShiftsResolving() {
+  return (
+    <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3">
+      <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <p className="text-sm text-muted-foreground">Loading your outlet…</p>
+    </div>
+  );
+}
+
+function ShiftsNeedsOutlet() {
+  const { orgSlug } = useParams<{ orgSlug: string }>();
+  return (
+    <div className="flex flex-col items-center justify-center min-h-[60vh] p-8 text-center">
+      <div className="h-16 w-16 rounded-2xl bg-muted flex items-center justify-center mb-4">
+        <Building2 className="h-7 w-7 text-muted-foreground" />
+      </div>
+      <h2 className="text-lg font-bold text-foreground font-display mb-1">Select an outlet</h2>
+      <p className="text-sm text-muted-foreground max-w-sm mb-6">
+        Pick the outlet you're working at to clock in and manage your shift.
+      </p>
+      <Link
+        href={`/${orgSlug}/auth/select-outlet`}
+        className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors"
+      >
+        Choose an outlet
+      </Link>
+    </div>
+  );
+}
+
 export default function ShiftsPageGated() {
+  // Resolve the outlet/use-case state first so we never flash "Module Not Available"
+  // while the context is still hydrating (b) or simply unselected (c). The genuine
+  // module-unavailable fallback only fires once the use case is RESOLVED and excludes
+  // shifts (which, in practice, no use case does — shifts is in every list).
+  const { isResolving, needsOutlet } = useModuleAccess();
+
+  if (isResolving) return <ShiftsResolving />;
+  if (needsOutlet) return <ShiftsNeedsOutlet />;
+
   return (
     <ModuleGate moduleKey="shifts" fallback={<ModuleUnavailablePage moduleKey="shifts" />}>
       <ShiftsPage />
