@@ -475,10 +475,10 @@ export default function PINLoginPage() {
       <div
         className="relative min-h-screen w-screen flex flex-col"
         style={{
-          background: 'linear-gradient(160deg, rgb(var(--brand-dark)) 0%, color-mix(in srgb, rgb(var(--brand-dark)) 72%, rgb(var(--brand-emphasis))) 55%, rgb(var(--brand-dark)) 100%)',
+          background: 'linear-gradient(160deg, #f8fafc 0%, color-mix(in srgb, hsl(var(--primary) / 0.06) 60%, #f8fafc) 55%, #f1f5f9 100%)',
         }}
       >
-        <svg className="pointer-events-none absolute inset-0 h-full w-full opacity-[0.032]" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+        <svg className="pointer-events-none absolute inset-0 h-full w-full opacity-[0.015]" xmlns="http://www.w3.org/2000/svg" aria-hidden>
           <filter id="grain-outlet"><feTurbulence type="fractalNoise" baseFrequency="0.82" numOctaves="4" stitchTiles="stitch"/></filter>
           <rect width="100%" height="100%" filter="url(#grain-outlet)"/>
         </svg>
@@ -486,37 +486,37 @@ export default function PINLoginPage() {
           <div className="absolute -top-64 -left-64 h-[700px] w-[700px] rounded-full blur-3xl animate-breathe"
                style={{ background: 'hsl(var(--primary) / 0.1)' }} />
           <div className="absolute top-1/2 -right-48 h-[500px] w-[500px] rounded-full blur-3xl animate-breathe-slow"
-               style={{ background: 'hsl(var(--primary) / 0.06)' }} />
-          <div className="absolute -bottom-48 left-1/3 h-96 w-96 rounded-full blur-3xl"
                style={{ background: 'hsl(var(--primary) / 0.07)' }} />
+          <div className="absolute -bottom-48 left-1/3 h-96 w-96 rounded-full blur-3xl"
+               style={{ background: 'hsl(var(--primary) / 0.08)' }} />
         </div>
 
         <div className="relative z-10 flex flex-col flex-1 items-center px-4 sm:px-6 pt-12 pb-10 overflow-y-auto">
           <div className="flex flex-col items-center gap-5 mb-10 text-center">
             <div className="relative">
               {tenant?.logoUrl ? (
-                <div className="h-20 w-20 rounded-3xl overflow-hidden ring-2 ring-white/15 shadow-2xl shadow-black/50">
+                <div className="h-20 w-20 rounded-3xl overflow-hidden ring-2 ring-slate-200 shadow-lg shadow-slate-900/10">
                   <img src={tenant.logoUrl} alt={tenant.orgName} className="h-full w-full object-cover" />
                 </div>
               ) : (
-                <div className="h-20 w-20 rounded-3xl bg-linear-to-br from-primary/35 to-primary/10 border border-primary/30 flex items-center justify-center shadow-2xl shadow-black/50">
+                <div className="h-20 w-20 rounded-3xl bg-linear-to-br from-primary/20 to-primary/5 border border-primary/25 flex items-center justify-center shadow-lg shadow-slate-900/10">
                   <span className="text-2xl font-black text-primary">{(tenant?.orgName ?? orgSlug).slice(0, 2).toUpperCase()}</span>
                 </div>
               )}
               <div className={cn(
                 'absolute -bottom-1 -right-1 h-4 w-4 rounded-full border-[3px]',
-                'border-[rgb(var(--brand-dark))]',
-                isOnline ? 'bg-emerald-400' : 'bg-amber-400'
+                'border-white',
+                isOnline ? 'bg-emerald-500' : 'bg-amber-500'
               )} />
             </div>
             <div className="space-y-1">
-              <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight leading-none">
+              <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight leading-none">
                 {tenant?.orgName ?? orgSlug}
               </h1>
-              <p className="text-white/40 text-sm font-medium">Select your outlet to continue</p>
+              <p className="text-slate-500 text-sm font-medium">Select your outlet to continue</p>
             </div>
             {!isOnline && (
-              <div className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-semibold">
+              <div className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-amber-50 border border-amber-200 text-amber-700 text-xs font-semibold">
                 <WifiOff className="h-3 w-3" />
                 Offline mode
               </div>
@@ -527,14 +527,14 @@ export default function PINLoginPage() {
             {posOutlets.length === 0 && (outletsLoading || tenantLoading) ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {Array.from({ length: 4 }).map((_, i) => (
-                  <div key={i} className="h-36 rounded-2xl bg-white/5 animate-pulse" style={{ animationDelay: `${i * 80}ms` }} />
+                  <div key={i} className="h-36 rounded-2xl bg-slate-200/60 animate-pulse" style={{ animationDelay: `${i * 80}ms` }} />
                 ))}
               </div>
             ) : posOutlets.length === 0 ? (
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-8 text-center">
-                <Building2 className="mx-auto mb-3 h-10 w-10 text-white/30" />
-                <p className="text-white/80 font-medium">No POS outlets available</p>
-                <p className="mt-1 text-sm text-white/50">No point-of-sale outlets are configured for this business yet. Ask an administrator to create an outlet in the admin console.</p>
+              <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+                <Building2 className="mx-auto mb-3 h-10 w-10 text-slate-300" />
+                <p className="text-slate-900 font-medium">No POS outlets available</p>
+                <p className="mt-1 text-sm text-slate-500">No point-of-sale outlets are configured for this business yet. Ask an administrator to create an outlet in the admin console.</p>
               </div>
             ) : (
               <div className={cn('grid gap-3', colClass)}>
@@ -552,9 +552,9 @@ export default function PINLoginPage() {
                       onClick={() => selectOutlet(outlet)}
                       className={cn(
                         'group relative flex flex-col text-left rounded-2xl border overflow-hidden',
-                        'bg-white/4 border-white/10',
-                        'hover:bg-white/8 hover:border-white/22',
-                        'hover:shadow-2xl', color.glow,
+                        'bg-white border-slate-200',
+                        'hover:border-slate-300',
+                        'shadow-sm hover:shadow-lg',
                         'active:scale-[0.97] transition-all duration-200',
                         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60'
                       )}
@@ -568,18 +568,18 @@ export default function PINLoginPage() {
                         <div className="flex items-start justify-between">
                           <div
                             className="h-12 w-12 rounded-xl flex items-center justify-center border transition-colors duration-200"
-                            style={{ background: `${color.accent}18`, borderColor: `${color.accent}30` }}
+                            style={{ background: `${color.accent}14`, borderColor: `${color.accent}33` }}
                           >
                             <OutletIcon className={cn('h-5 w-5 transition-transform duration-200 group-hover:scale-110', color.text)} />
                           </div>
                           <div className="flex flex-col items-end gap-1.5">
                             {outlet.is_hq && (
-                              <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-white/10 text-white/45 uppercase tracking-widest">HQ</span>
+                              <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-slate-100 text-slate-500 uppercase tracking-widest">HQ</span>
                             )}
                             {label && (
                               <span
-                                className={cn('px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide', color.text)}
-                                style={{ background: `${color.accent}22` }}
+                                className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide"
+                                style={{ background: `${color.accent}1a`, color: color.accent }}
                               >
                                 {label}
                               </span>
@@ -587,10 +587,10 @@ export default function PINLoginPage() {
                           </div>
                         </div>
                         <div className="flex items-end justify-between gap-2">
-                          <p className="font-bold text-white text-sm sm:text-base leading-snug group-hover:text-white/90 transition-colors">
+                          <p className="font-bold text-slate-900 text-sm sm:text-base leading-snug transition-colors">
                             {outlet.name}
                           </p>
-                          <ChevronRight className="h-4 w-4 text-white/20 group-hover:text-white/55 group-hover:translate-x-0.5 transition-all shrink-0 mb-0.5" />
+                          <ChevronRight className="h-4 w-4 text-slate-300 group-hover:text-slate-500 group-hover:translate-x-0.5 transition-all shrink-0 mb-0.5" />
                         </div>
                       </div>
                     </button>
@@ -602,17 +602,17 @@ export default function PINLoginPage() {
 
           <div className="w-full max-w-xs mt-10 flex flex-col gap-3">
             <div className="flex items-center gap-3">
-              <div className="flex-1 h-px bg-white/10" />
-              <span className="text-[10px] text-white/25 font-medium tracking-widest uppercase">or</span>
-              <div className="flex-1 h-px bg-white/10" />
+              <div className="flex-1 h-px bg-slate-200" />
+              <span className="text-[10px] text-slate-400 font-medium tracking-widest uppercase">or</span>
+              <div className="flex-1 h-px bg-slate-200" />
             </div>
             <button
               onClick={() => redirectToSSO(orgSlug, `/${orgSlug}/dashboard`)}
               className={cn(
                 'w-full flex items-center justify-center gap-2.5 px-5 py-3 rounded-2xl',
-                'border border-white/10 bg-white/3',
-                'text-sm text-white/40 font-medium',
-                'hover:bg-white/8 hover:text-white/70 hover:border-white/20',
+                'border border-slate-200 bg-white',
+                'text-sm text-slate-600 font-medium shadow-sm',
+                'hover:bg-slate-50 hover:text-slate-900 hover:border-slate-300',
                 'transition-all duration-200 group'
               )}
             >
@@ -635,7 +635,7 @@ export default function PINLoginPage() {
                   <Fingerprint className="h-4 w-4" />
                   {biometricLoading ? 'Verifying…' : 'Sign in with fingerprint'}
                 </button>
-                {biometricError && <p className="text-center text-xs text-red-400">{biometricError}</p>}
+                {biometricError && <p className="text-center text-xs text-red-500">{biometricError}</p>}
               </div>
             )}
           </div>
@@ -663,22 +663,22 @@ export default function PINLoginPage() {
       <div
         className="relative h-screen w-screen overflow-hidden flex flex-col"
         style={{
-          background: 'linear-gradient(135deg, rgb(var(--brand-dark)) 0%, color-mix(in srgb, rgb(var(--brand-dark)) 80%, rgb(var(--brand-emphasis))) 50%, rgb(var(--brand-dark)) 100%)',
+          background: 'linear-gradient(135deg, #f8fafc 0%, color-mix(in srgb, hsl(var(--primary) / 0.06) 55%, #f8fafc) 50%, #f1f5f9 100%)',
         }}
       >
         {/* Grain texture */}
-        <svg className="pointer-events-none absolute inset-0 h-full w-full opacity-[0.032]" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+        <svg className="pointer-events-none absolute inset-0 h-full w-full opacity-[0.015]" xmlns="http://www.w3.org/2000/svg" aria-hidden>
           <filter id="grain-pin"><feTurbulence type="fractalNoise" baseFrequency="0.82" numOctaves="4" stitchTiles="stitch"/></filter>
           <rect width="100%" height="100%" filter="url(#grain-pin)"/>
         </svg>
         {/* Ambient blobs */}
         <div className="pointer-events-none absolute inset-0 overflow-hidden">
           <div className="absolute -top-48 -left-48 h-[500px] w-[500px] rounded-full blur-3xl animate-breathe"
-               style={{ background: 'hsl(var(--primary) / 0.12)' }} />
+               style={{ background: 'hsl(var(--primary) / 0.1)' }} />
           <div className="absolute top-1/3 -right-32 h-96 w-96 rounded-full blur-3xl animate-breathe-slow"
                style={{ background: 'hsl(var(--primary) / 0.08)' }} />
           <div className="absolute -bottom-32 left-1/3 h-80 w-80 rounded-full blur-3xl"
-               style={{ background: 'hsl(var(--primary) / 0.06)' }} />
+               style={{ background: 'hsl(var(--primary) / 0.07)' }} />
         </div>
 
         {/* ── Top nav (same as before — logo, outlet, clock, settings) ── */}
@@ -688,16 +688,15 @@ export default function PINLoginPage() {
             {/* Left: Logo + Outlet identity */}
             <div className="flex items-center gap-3 min-w-0 flex-1">
               <div className="relative shrink-0">
-                <div className="h-10 w-10 rounded-xl bg-white/15 backdrop-blur-sm border border-white/20 flex items-center justify-center overflow-hidden shadow-lg">
+                <div className="h-10 w-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center overflow-hidden shadow-sm">
                   {tenant?.logoUrl ? (
                     <img
                       src={tenant.logoUrl}
                       alt={tenantDisplayName}
                       className="h-8 w-8 object-contain"
-                      style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.4))' }}
                     />
                   ) : (
-                    <span className="text-xs font-black text-white drop-shadow">
+                    <span className="text-xs font-black text-slate-900">
                       {tenantDisplayName.slice(0, 2).toUpperCase()}
                     </span>
                   )}
@@ -706,19 +705,19 @@ export default function PINLoginPage() {
 
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <h1 className="text-base font-black text-white tracking-tight truncate leading-tight">
+                  <h1 className="text-base font-black text-slate-900 tracking-tight truncate leading-tight">
                     {outletName}
                   </h1>
                   {useCaseLabel && useCaseColor && (
-                    <span className={cn(
-                      'inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wide uppercase shrink-0',
-                      useCaseColor.bg, useCaseColor.text
-                    )}>
+                    <span
+                      className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wide uppercase shrink-0"
+                      style={{ background: `${useCaseColor.accent}1a`, color: useCaseColor.accent }}
+                    >
                       {useCaseLabel}
                     </span>
                   )}
                   {outletInfo?.is_hq && (
-                    <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-white/8 text-white/35 shrink-0">
+                    <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-500 shrink-0">
                       <Building2 className="h-2.5 w-2.5" />HQ
                     </span>
                   )}
@@ -726,18 +725,15 @@ export default function PINLoginPage() {
                 {posOutlets.length > 1 && (
                   <button
                     onClick={() => setStep('outlet')}
-                    className={cn(
-                      'mt-0.5 inline-flex items-center gap-1 text-[11px] font-semibold transition-all group',
-                      useCaseColor ? useCaseColor.text : 'text-primary',
-                      'opacity-70 hover:opacity-100'
-                    )}
+                    className="mt-0.5 inline-flex items-center gap-1 text-[11px] font-semibold transition-all group hover:opacity-80"
+                    style={{ color: useCaseColor ? useCaseColor.accent : 'hsl(var(--primary))' }}
                   >
                     <ChevronRight className="h-3 w-3 rotate-90 group-hover:translate-y-[-1px] transition-transform" />
                     Switch outlet
                   </button>
                 )}
                 {pinLoginMessage && (
-                  <p className="hidden sm:block text-white/35 text-[11px] mt-0.5 truncate max-w-xs leading-tight">
+                  <p className="hidden sm:block text-slate-500 text-[11px] mt-0.5 truncate max-w-xs leading-tight">
                     {pinLoginMessage}
                   </p>
                 )}
@@ -752,7 +748,7 @@ export default function PINLoginPage() {
             {/* Right: Status + Settings */}
             <div className="flex items-center gap-1.5 shrink-0">
               {!isOnline && (
-                <div className="flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-amber-500/12 border border-amber-500/25 text-amber-400 text-[11px] font-semibold">
+                <div className="flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-amber-50 border border-amber-200 text-amber-700 text-[11px] font-semibold">
                   <WifiOff className="h-3 w-3" />
                   <span className="hidden sm:inline">Offline</span>
                 </div>
@@ -761,14 +757,14 @@ export default function PINLoginPage() {
               <div className="relative">
                 <button
                   onClick={() => setShowSettings((v) => !v)}
-                  className="h-9 w-9 rounded-xl flex items-center justify-center bg-white/6 hover:bg-white/12 text-white/40 hover:text-white/70 transition-colors"
+                  className="h-9 w-9 rounded-xl flex items-center justify-center bg-white border border-slate-200 hover:bg-slate-50 text-slate-500 hover:text-slate-900 shadow-sm transition-colors"
                   title="Screensaver timeout"
                 >
                   <Settings className="h-4 w-4" />
                 </button>
                 {showSettings && (
-                  <div className="absolute right-0 top-11 z-50 w-44 rounded-2xl border border-white/10 bg-black/70 backdrop-blur-xl shadow-2xl p-1.5 space-y-0.5">
-                    <p className="px-3 py-1.5 text-[9px] font-bold text-white/30 uppercase tracking-wider">Screensaver</p>
+                  <div className="absolute right-0 top-11 z-50 w-44 rounded-2xl border border-slate-200 bg-white shadow-lg p-1.5 space-y-0.5">
+                    <p className="px-3 py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-wider">Screensaver</p>
                     {TIMEOUT_OPTIONS.map((opt) => (
                       <button
                         key={opt.ms}
@@ -777,7 +773,7 @@ export default function PINLoginPage() {
                           'w-full text-left px-3 py-2 rounded-xl text-sm transition-colors',
                           timeoutMs === opt.ms
                             ? 'bg-primary text-primary-foreground font-semibold'
-                            : 'text-white/65 hover:bg-white/10 hover:text-white'
+                            : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
                         )}
                       >
                         {opt.label}
@@ -791,15 +787,15 @@ export default function PINLoginPage() {
         </div>
 
         {/* Divider */}
-        <div className="relative z-10 mx-4 sm:mx-6 h-px bg-white/8 shrink-0" />
+        <div className="relative z-10 mx-4 sm:mx-6 h-px bg-slate-200 shrink-0" />
 
         {/* ── Main: Centered PIN entry ── */}
         <div className="relative z-10 flex-1 flex items-center justify-center overflow-hidden">
-          <div className="flex flex-col items-center gap-6 w-full max-w-xs px-6">
+          <div className="flex flex-col items-center gap-6 w-full max-w-xs px-7 py-8 rounded-3xl bg-white border border-slate-200 shadow-xl shadow-slate-900/5">
 
             {/* Prompt */}
             <div className="text-center space-y-1">
-              <p className="text-white/50 text-xs font-semibold tracking-[0.2em] uppercase">
+              <p className="text-slate-500 text-xs font-semibold tracking-[0.2em] uppercase">
                 Enter your PIN
               </p>
             </div>
@@ -820,9 +816,9 @@ export default function PINLoginPage() {
                       'h-5 w-5 rounded-full border-2 transition-all duration-150',
                       filled
                         ? pinError
-                          ? 'bg-red-400 border-red-400 scale-110'
+                          ? 'bg-red-500 border-red-500 scale-110'
                           : 'border-white/0 scale-110'
-                        : 'bg-transparent border-white/30'
+                        : 'bg-transparent border-slate-300'
                     )}
                     style={filled && !pinError ? {
                       background: 'hsl(var(--primary))',
@@ -837,7 +833,7 @@ export default function PINLoginPage() {
             {/* Error message */}
             <div className="h-4 flex items-center justify-center">
               {pinError && (
-                <p className="text-red-400 text-xs font-medium animate-fade-in text-center">
+                <p className="text-red-500 text-xs font-medium animate-fade-in text-center">
                   {pinError}
                 </p>
               )}
@@ -857,9 +853,9 @@ export default function PINLoginPage() {
                       disabled={loginMutation.isPending || pinDigits.length === 0}
                       className={cn(
                         'h-[68px] rounded-2xl flex items-center justify-center transition-all duration-100 touch-manipulation',
-                        'bg-white/8 border border-white/10 text-white/55',
-                        'hover:bg-white/14 hover:text-white/80 active:scale-95',
-                        'disabled:opacity-30'
+                        'bg-slate-100 border border-slate-200 text-slate-400',
+                        'hover:bg-slate-200 hover:text-slate-600 active:scale-95',
+                        'disabled:opacity-40'
                       )}
                       aria-label="Delete"
                     >
@@ -875,15 +871,15 @@ export default function PINLoginPage() {
                     disabled={loginMutation.isPending || pinDigits.length >= PIN_LENGTH}
                     className={cn(
                       'h-[68px] rounded-2xl flex items-center justify-center transition-all duration-100 touch-manipulation',
-                      'bg-white/10 border border-white/12 text-white text-2xl font-bold',
-                      'hover:bg-white/18 hover:border-white/22',
-                      'active:scale-95 active:bg-white/22',
-                      'shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_4px_14px_rgba(0,0,0,0.35)]',
+                      'bg-white border border-slate-200 text-slate-900 text-2xl font-bold',
+                      'hover:bg-slate-50 hover:border-slate-300',
+                      'active:scale-95 active:bg-slate-100',
+                      'shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_2px_6px_rgba(15,23,42,0.08)]',
                       'disabled:opacity-40 disabled:cursor-not-allowed'
                     )}
                   >
                     {loginMutation.isPending && pinDigits.length === PIN_LENGTH ? (
-                      <span className="h-2 w-2 rounded-full bg-white/60 animate-pulse" />
+                      <span className="h-2 w-2 rounded-full bg-slate-400 animate-pulse" />
                     ) : key}
                   </button>
                 );
@@ -893,13 +889,13 @@ export default function PINLoginPage() {
             {/* SSO + biometric fallback */}
             <div className="flex flex-col items-center gap-2 w-full mt-2">
               <div className="flex items-center gap-3 w-full">
-                <div className="flex-1 h-px bg-white/10" />
-                <span className="text-[10px] text-white/22 font-medium tracking-wider uppercase">or</span>
-                <div className="flex-1 h-px bg-white/10" />
+                <div className="flex-1 h-px bg-slate-200" />
+                <span className="text-[10px] text-slate-400 font-medium tracking-wider uppercase">or</span>
+                <div className="flex-1 h-px bg-slate-200" />
               </div>
               <button
                 onClick={() => redirectToSSO(orgSlug, `/${orgSlug}/dashboard`)}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-white/10 bg-white/4 text-xs text-white/45 hover:bg-white/9 hover:text-white/75 hover:border-white/20 transition-all font-medium group"
+                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-xs text-slate-600 hover:bg-slate-50 hover:text-slate-900 hover:border-slate-300 transition-all font-medium group"
               >
                 <ExternalLink className="h-3.5 w-3.5 group-hover:text-primary transition-colors" />
                 Sign in with your account
@@ -914,7 +910,7 @@ export default function PINLoginPage() {
                   {biometricLoading ? 'Verifying…' : 'Sign in with fingerprint'}
                 </button>
               )}
-              {biometricError && <p className="text-center text-xs text-red-400">{biometricError}</p>}
+              {biometricError && <p className="text-center text-xs text-red-500">{biometricError}</p>}
             </div>
           </div>
         </div>
@@ -927,12 +923,12 @@ export default function PINLoginPage() {
         {/* ── Demo hints (codevertex-demo only) — floating bottom-right ── */}
         {isDemoTenant && (
           <div className="absolute bottom-4 right-4 z-30 hidden sm:block">
-            <div className="rounded-2xl border border-white/10 bg-black/55 backdrop-blur-xl shadow-2xl p-3 max-w-[220px]">
-              <p className="text-[9px] font-black text-white/30 uppercase tracking-widest mb-1">
+            <div className="rounded-2xl border border-slate-200 bg-white/90 backdrop-blur-xl shadow-lg p-3 max-w-[220px]">
+              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">
                 Demo PINs
               </p>
               {useCase && (
-                <p className="text-[8px] text-white/20 uppercase tracking-wider mb-2">
+                <p className="text-[8px] text-slate-400 uppercase tracking-wider mb-2">
                   {USE_CASE_LABELS[useCase] ?? useCase}
                 </p>
               )}
@@ -949,7 +945,7 @@ export default function PINLoginPage() {
                     >
                       {pin}
                     </span>
-                    <span className="text-[10px] text-white/40 truncate">{role}</span>
+                    <span className="text-[10px] text-slate-500 truncate">{role}</span>
                   </div>
                 ))}
               </div>
