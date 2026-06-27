@@ -1,13 +1,12 @@
 'use client';
 
-import React, { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { compare as bcryptCompare } from 'bcryptjs';
+import Link from 'next/link';
 import {
-  BedDouble, Building2, ChevronRight, Coffee, Delete, ExternalLink,
-  Fingerprint, Pill, Scissors, Settings, ShoppingBag, Truck, UtensilsCrossed,
-  Warehouse, Wine, WifiOff, Zap,
+  Building2, Clock3, ExternalLink, Fingerprint, KeyRound,
 } from 'lucide-react';
 import { useOnline } from '@/hooks/use-online';
 import { useIdleTimer, getScreensaverTimeoutMs, setScreensaverTimeoutMs, resolveScreensaverTimeoutMs } from '@/hooks/use-idle-timer';
@@ -16,7 +15,9 @@ import { apiClient } from '@/lib/api/client';
 import { useAuthStore } from '@/store/auth';
 import { getCachedStaffProfiles, getCachedStaffProfile, cacheStaffProfile, type CachedStaffProfile } from '@/lib/db/pos-db';
 import { Screensaver } from '@/components/pos/screensaver';
-import { LiveClock } from '@/components/pos/live-clock';
+import {
+  LoginHero, PinKeypad, OutletCard, USE_CASE_COLORS, USE_CASE_LABELS,
+} from '@/components/pos/pin-login-ui';
 import { useTenantBranding } from '@/providers/tenant-branding-provider';
 import { cn } from '@/lib/utils';
 
@@ -72,44 +73,6 @@ const TIMEOUT_OPTIONS = [
   { label: '10 min', ms: 600_000 },
   { label: 'Never', ms: 0 },
 ];
-
-const USE_CASE_LABELS: Record<string, string> = {
-  hospitality:   'Hospitality',
-  quick_service: 'Quick Service',
-  retail:        'Retail',
-  pharmacy:      'Pharmacy',
-  services:      'Services',
-  cafe:          'Café',
-  bar:           'Bar',
-  hotel:         'Hotel',
-  warehouse:     'Warehouse',
-};
-
-const USE_CASE_COLORS: Record<string, { bg: string; text: string; accent: string; glow: string }> = {
-  hospitality:   { bg: 'bg-amber-500/20',   text: 'text-amber-300',   accent: '#f59e0b', glow: 'hover:shadow-amber-500/15' },
-  quick_service: { bg: 'bg-blue-500/20',    text: 'text-blue-300',    accent: '#3b82f6', glow: 'hover:shadow-blue-500/15' },
-  retail:        { bg: 'bg-violet-500/20',  text: 'text-violet-300',  accent: '#8b5cf6', glow: 'hover:shadow-violet-500/15' },
-  pharmacy:      { bg: 'bg-emerald-500/20', text: 'text-emerald-300', accent: '#10b981', glow: 'hover:shadow-emerald-500/15' },
-  services:      { bg: 'bg-teal-500/20',    text: 'text-teal-300',    accent: '#14b8a6', glow: 'hover:shadow-teal-500/15' },
-  cafe:          { bg: 'bg-orange-500/20',  text: 'text-orange-300',  accent: '#f97316', glow: 'hover:shadow-orange-500/15' },
-  bar:           { bg: 'bg-purple-500/20',  text: 'text-purple-300',  accent: '#a855f7', glow: 'hover:shadow-purple-500/15' },
-  hotel:         { bg: 'bg-sky-500/20',     text: 'text-sky-300',     accent: '#0ea5e9', glow: 'hover:shadow-sky-500/15' },
-  warehouse:     { bg: 'bg-slate-500/20',   text: 'text-slate-300',   accent: '#94a3b8', glow: 'hover:shadow-slate-500/15' },
-  logistics:     { bg: 'bg-cyan-500/20',    text: 'text-cyan-300',    accent: '#06b6d4', glow: 'hover:shadow-cyan-500/15' },
-};
-
-const USE_CASE_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
-  hospitality:   UtensilsCrossed,
-  quick_service: Zap,
-  retail:        ShoppingBag,
-  pharmacy:      Pill,
-  services:      Scissors,
-  cafe:          Coffee,
-  bar:           Wine,
-  hotel:         BedDouble,
-  warehouse:     Warehouse,
-  logistics:     Truck,
-};
 
 // Demo PINs — shown only on codevertex-demo tenant, filtered to the selected outlet's use_case.
 // Pin assignments mirror the seeded demo staff roles in auth-api/cmd/seed/seed_users.go.
@@ -455,6 +418,13 @@ export default function PINLoginPage() {
     setPinError(null);
   }
 
+  // Clears all entered digits at once (the reference's destructive CLEAR key).
+  function handleClear() {
+    if (loginMutation.isPending) return;
+    setPinDigits([]);
+    setPinError(null);
+  }
+
   const tenantDisplayName = tenant?.orgName ?? tenant?.name ?? orgSlug;
   const outletName = outletInfo?.name ?? tenantDisplayName;
   const useCase = outletInfo?.use_case;
@@ -462,6 +432,10 @@ export default function PINLoginPage() {
   const useCaseColor = useCase ? USE_CASE_COLORS[useCase] : null;
   const useCaseLabel = useCase ? (USE_CASE_LABELS[useCase] ?? useCase) : null;
   const isDemoTenant = orgSlug === 'codevertex-demo';
+
+  // Hero shared bits — brand backdrop image (screensaver/logo) + fallback initials.
+  const heroBackdrop = tenant?.posScreensaverUrl ?? tenant?.logoUrl ?? null;
+  const heroInitials = (tenant?.orgName ?? orgSlug).slice(0, 2).toUpperCase();
 
   // ── Outlet selection step ────────────────────────────────────────────────────
 
@@ -472,57 +446,30 @@ export default function PINLoginPage() {
                                 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3';
 
     return (
-      <div
-        className="relative min-h-screen w-screen flex flex-col"
-        style={{
-          background: 'linear-gradient(160deg, #f8fafc 0%, color-mix(in srgb, hsl(var(--primary) / 0.06) 60%, #f8fafc) 55%, #f1f5f9 100%)',
-        }}
-      >
+      <div className="relative min-h-screen w-screen flex flex-col bg-slate-50">
+        {/* Brand hero band — applied to BOTH steps */}
+        <LoginHero
+          eyebrow="POS System"
+          heading="Welcome Back"
+          outletName={posOutlets.length > 1 ? 'Select your outlet to continue' : tenantDisplayName}
+          backdropUrl={heroBackdrop}
+          logoUrl={tenant?.logoUrl}
+          fallbackInitials={heroInitials}
+          isOnline={isOnline}
+        />
+
         <svg className="pointer-events-none absolute inset-0 h-full w-full opacity-[0.015]" xmlns="http://www.w3.org/2000/svg" aria-hidden>
           <filter id="grain-outlet"><feTurbulence type="fractalNoise" baseFrequency="0.82" numOctaves="4" stitchTiles="stitch"/></filter>
           <rect width="100%" height="100%" filter="url(#grain-outlet)"/>
         </svg>
-        <div className="pointer-events-none absolute inset-0 overflow-hidden">
-          <div className="absolute -top-64 -left-64 h-[700px] w-[700px] rounded-full blur-3xl animate-breathe"
-               style={{ background: 'hsl(var(--primary) / 0.1)' }} />
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 top-40 overflow-hidden">
           <div className="absolute top-1/2 -right-48 h-[500px] w-[500px] rounded-full blur-3xl animate-breathe-slow"
-               style={{ background: 'hsl(var(--primary) / 0.07)' }} />
+               style={{ background: 'hsl(var(--primary) / 0.06)' }} />
           <div className="absolute -bottom-48 left-1/3 h-96 w-96 rounded-full blur-3xl"
-               style={{ background: 'hsl(var(--primary) / 0.08)' }} />
+               style={{ background: 'hsl(var(--primary) / 0.06)' }} />
         </div>
 
-        <div className="relative z-10 flex flex-col flex-1 items-center px-4 sm:px-6 pt-12 pb-10 overflow-y-auto">
-          <div className="flex flex-col items-center gap-5 mb-10 text-center">
-            <div className="relative">
-              {tenant?.logoUrl ? (
-                <div className="h-20 w-20 rounded-3xl overflow-hidden ring-2 ring-slate-200 shadow-lg shadow-slate-900/10">
-                  <img src={tenant.logoUrl} alt={tenant.orgName} className="h-full w-full object-cover" />
-                </div>
-              ) : (
-                <div className="h-20 w-20 rounded-3xl bg-linear-to-br from-primary/20 to-primary/5 border border-primary/25 flex items-center justify-center shadow-lg shadow-slate-900/10">
-                  <span className="text-2xl font-black text-primary">{(tenant?.orgName ?? orgSlug).slice(0, 2).toUpperCase()}</span>
-                </div>
-              )}
-              <div className={cn(
-                'absolute -bottom-1 -right-1 h-4 w-4 rounded-full border-[3px]',
-                'border-white',
-                isOnline ? 'bg-emerald-500' : 'bg-amber-500'
-              )} />
-            </div>
-            <div className="space-y-1">
-              <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight leading-none">
-                {tenant?.orgName ?? orgSlug}
-              </h1>
-              <p className="text-slate-500 text-sm font-medium">Select your outlet to continue</p>
-            </div>
-            {!isOnline && (
-              <div className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-amber-50 border border-amber-200 text-amber-700 text-xs font-semibold">
-                <WifiOff className="h-3 w-3" />
-                Offline mode
-              </div>
-            )}
-          </div>
-
+        <div className="relative z-10 flex flex-col flex-1 items-center px-4 sm:px-6 pt-8 pb-10 overflow-y-auto">
           <div className="w-full max-w-2xl">
             {posOutlets.length === 0 && (outletsLoading || tenantLoading) ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -538,64 +485,14 @@ export default function PINLoginPage() {
               </div>
             ) : (
               <div className={cn('grid gap-3', colClass)}>
-                {posOutlets.map((outlet, idx) => {
-                  const color = (outlet.use_case ? USE_CASE_COLORS[outlet.use_case] : null) ?? {
-                    bg: 'bg-slate-500/20', text: 'text-slate-300', accent: '#94a3b8', glow: 'hover:shadow-slate-500/15',
-                  };
-                  const label = outlet.use_case ? (USE_CASE_LABELS[outlet.use_case] ?? outlet.use_case) : null;
-                  const OutletIcon: React.ComponentType<{ className?: string }> =
-                    (outlet.use_case ? USE_CASE_ICONS[outlet.use_case] : undefined) ?? Building2;
-
-                  return (
-                    <button
-                      key={outlet.id}
-                      onClick={() => selectOutlet(outlet)}
-                      className={cn(
-                        'group relative flex flex-col text-left rounded-2xl border overflow-hidden',
-                        'bg-white border-slate-200',
-                        'hover:border-slate-300',
-                        'shadow-sm hover:shadow-lg',
-                        'active:scale-[0.97] transition-all duration-200',
-                        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60'
-                      )}
-                      style={{ animationDelay: `${idx * 55}ms` }}
-                    >
-                      <div
-                        className="absolute top-0 inset-x-0 h-0.5 opacity-70 group-hover:opacity-100 transition-opacity"
-                        style={{ background: `linear-gradient(90deg, transparent, ${color.accent}, transparent)` }}
-                      />
-                      <div className="p-5 flex flex-col gap-4">
-                        <div className="flex items-start justify-between">
-                          <div
-                            className="h-12 w-12 rounded-xl flex items-center justify-center border transition-colors duration-200"
-                            style={{ background: `${color.accent}14`, borderColor: `${color.accent}33` }}
-                          >
-                            <OutletIcon className={cn('h-5 w-5 transition-transform duration-200 group-hover:scale-110', color.text)} />
-                          </div>
-                          <div className="flex flex-col items-end gap-1.5">
-                            {outlet.is_hq && (
-                              <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-slate-100 text-slate-500 uppercase tracking-widest">HQ</span>
-                            )}
-                            {label && (
-                              <span
-                                className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide"
-                                style={{ background: `${color.accent}1a`, color: color.accent }}
-                              >
-                                {label}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        <div className="flex items-end justify-between gap-2">
-                          <p className="font-bold text-slate-900 text-sm sm:text-base leading-snug transition-colors">
-                            {outlet.name}
-                          </p>
-                          <ChevronRight className="h-4 w-4 text-slate-300 group-hover:text-slate-500 group-hover:translate-x-0.5 transition-all shrink-0 mb-0.5" />
-                        </div>
-                      </div>
-                    </button>
-                  );
-                })}
+                {posOutlets.map((outlet, idx) => (
+                  <OutletCard
+                    key={outlet.id}
+                    outlet={outlet}
+                    index={idx}
+                    onSelect={() => selectOutlet(outlet)}
+                  />
+                ))}
               </div>
             )}
           </div>
@@ -619,6 +516,19 @@ export default function PINLoginPage() {
               <ExternalLink className="h-4 w-4 group-hover:text-primary transition-colors" />
               Sign in with your account
             </button>
+            <Link
+              href={`/${orgSlug}/shifts`}
+              className={cn(
+                'w-full flex items-center justify-center gap-2.5 px-5 py-3 rounded-2xl',
+                'border border-slate-200 bg-white',
+                'text-sm text-slate-600 font-medium shadow-sm',
+                'hover:bg-slate-50 hover:text-slate-900 hover:border-slate-300',
+                'transition-all duration-200 group'
+              )}
+            >
+              <Clock3 className="h-4 w-4 group-hover:text-primary transition-colors" />
+              Attendance
+            </Link>
             {biometricSupported && hasRegisteredCredential && storedEmail && (
               <div className="flex flex-col gap-1">
                 <button
@@ -647,7 +557,6 @@ export default function PINLoginPage() {
   // ── PIN entry step (full-screen, PIN-first) ───────────────────────────────────
 
   const PIN_LENGTH = 4;
-  const keypadKeys = ['1','2','3','4','5','6','7','8','9','','0','del'];
 
   return (
     <>
@@ -660,264 +569,167 @@ export default function PINLoginPage() {
         outletName={outletName !== (tenant?.orgName ?? tenant?.name ?? orgSlug) ? outletName : undefined}
       />
 
-      <div
-        className="relative h-screen w-screen overflow-hidden flex flex-col"
-        style={{
-          background: 'linear-gradient(135deg, #f8fafc 0%, color-mix(in srgb, hsl(var(--primary) / 0.06) 55%, #f8fafc) 50%, #f1f5f9 100%)',
-        }}
-      >
+      <div className="relative h-screen w-screen overflow-hidden flex flex-col bg-slate-50">
         {/* Grain texture */}
         <svg className="pointer-events-none absolute inset-0 h-full w-full opacity-[0.015]" xmlns="http://www.w3.org/2000/svg" aria-hidden>
           <filter id="grain-pin"><feTurbulence type="fractalNoise" baseFrequency="0.82" numOctaves="4" stitchTiles="stitch"/></filter>
           <rect width="100%" height="100%" filter="url(#grain-pin)"/>
         </svg>
-        {/* Ambient blobs */}
-        <div className="pointer-events-none absolute inset-0 overflow-hidden">
-          <div className="absolute -top-48 -left-48 h-[500px] w-[500px] rounded-full blur-3xl animate-breathe"
-               style={{ background: 'hsl(var(--primary) / 0.1)' }} />
+
+        {/* ── Brand hero band (identity, clock, offline, settings) ── */}
+        <LoginHero
+          eyebrow="POS System"
+          heading="Welcome Back"
+          outletName={outletName}
+          backdropUrl={heroBackdrop}
+          logoUrl={tenant?.logoUrl}
+          fallbackInitials={tenantDisplayName.slice(0, 2).toUpperCase()}
+          useCaseLabel={useCaseLabel}
+          useCaseAccent={useCaseColor?.accent ?? null}
+          isHQ={outletInfo?.is_hq}
+          pinLoginMessage={pinLoginMessage}
+          showSwitchOutlet={posOutlets.length > 1}
+          onSwitchOutlet={() => setStep('outlet')}
+          isOnline={isOnline}
+          settings={{
+            show: showSettings,
+            onToggle: () => setShowSettings((v) => !v),
+            options: TIMEOUT_OPTIONS,
+            activeMs: timeoutMs,
+            onPick: handleTimeoutChange,
+          }}
+        />
+
+        {/* Ambient blob under the body */}
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 top-44 overflow-hidden">
           <div className="absolute top-1/3 -right-32 h-96 w-96 rounded-full blur-3xl animate-breathe-slow"
-               style={{ background: 'hsl(var(--primary) / 0.08)' }} />
-          <div className="absolute -bottom-32 left-1/3 h-80 w-80 rounded-full blur-3xl"
-               style={{ background: 'hsl(var(--primary) / 0.07)' }} />
+               style={{ background: 'hsl(var(--primary) / 0.06)' }} />
+          <div className="absolute -bottom-32 left-1/4 h-80 w-80 rounded-full blur-3xl"
+               style={{ background: 'hsl(var(--primary) / 0.06)' }} />
         </div>
 
-        {/* ── Top nav (same as before — logo, outlet, clock, settings) ── */}
-        <div className="relative z-20 shrink-0 px-4 sm:px-6 pt-4 pb-3">
-          <div className="flex items-center justify-between gap-3">
+        {/* ── Body: action column (left) + keypad card (right) ── */}
+        <div className="relative z-10 flex-1 flex items-center justify-center overflow-y-auto px-4 sm:px-6 py-6">
+          <div className="w-full max-w-3xl grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_minmax(0,420px)] gap-5 sm:gap-6 items-stretch">
 
-            {/* Left: Logo + Outlet identity */}
-            <div className="flex items-center gap-3 min-w-0 flex-1">
-              <div className="relative shrink-0">
-                <div className="h-10 w-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center overflow-hidden shadow-sm">
-                  {tenant?.logoUrl ? (
-                    <img
-                      src={tenant.logoUrl}
-                      alt={tenantDisplayName}
-                      className="h-8 w-8 object-contain"
-                    />
-                  ) : (
-                    <span className="text-xs font-black text-slate-900">
-                      {tenantDisplayName.slice(0, 2).toUpperCase()}
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h1 className="text-base font-black text-slate-900 tracking-tight truncate leading-tight">
-                    {outletName}
-                  </h1>
-                  {useCaseLabel && useCaseColor && (
-                    <span
-                      className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wide uppercase shrink-0"
-                      style={{ background: `${useCaseColor.accent}1a`, color: useCaseColor.accent }}
-                    >
-                      {useCaseLabel}
-                    </span>
-                  )}
-                  {outletInfo?.is_hq && (
-                    <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-500 shrink-0">
-                      <Building2 className="h-2.5 w-2.5" />HQ
-                    </span>
-                  )}
-                </div>
-                {posOutlets.length > 1 && (
-                  <button
-                    onClick={() => setStep('outlet')}
-                    className="mt-0.5 inline-flex items-center gap-1 text-[11px] font-semibold transition-all group hover:opacity-80"
-                    style={{ color: useCaseColor ? useCaseColor.accent : 'hsl(var(--primary))' }}
-                  >
-                    <ChevronRight className="h-3 w-3 rotate-90 group-hover:translate-y-[-1px] transition-transform" />
-                    Switch outlet
-                  </button>
-                )}
-                {pinLoginMessage && (
-                  <p className="hidden sm:block text-slate-500 text-[11px] mt-0.5 truncate max-w-xs leading-tight">
-                    {pinLoginMessage}
-                  </p>
-                )}
-              </div>
-            </div>
-
-            {/* Center: Live clock (desktop only) */}
-            <div className="hidden md:block shrink-0">
-              <LiveClock />
-            </div>
-
-            {/* Right: Status + Settings */}
-            <div className="flex items-center gap-1.5 shrink-0">
-              {!isOnline && (
-                <div className="flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-amber-50 border border-amber-200 text-amber-700 text-[11px] font-semibold">
-                  <WifiOff className="h-3 w-3" />
-                  <span className="hidden sm:inline">Offline</span>
-                </div>
-              )}
-
-              <div className="relative">
-                <button
-                  onClick={() => setShowSettings((v) => !v)}
-                  className="h-9 w-9 rounded-xl flex items-center justify-center bg-white border border-slate-200 hover:bg-slate-50 text-slate-500 hover:text-slate-900 shadow-sm transition-colors"
-                  title="Screensaver timeout"
-                >
-                  <Settings className="h-4 w-4" />
-                </button>
-                {showSettings && (
-                  <div className="absolute right-0 top-11 z-50 w-44 rounded-2xl border border-slate-200 bg-white shadow-lg p-1.5 space-y-0.5">
-                    <p className="px-3 py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-wider">Screensaver</p>
-                    {TIMEOUT_OPTIONS.map((opt) => (
-                      <button
-                        key={opt.ms}
-                        onClick={() => handleTimeoutChange(opt.ms)}
-                        className={cn(
-                          'w-full text-left px-3 py-2 rounded-xl text-sm transition-colors',
-                          timeoutMs === opt.ms
-                            ? 'bg-primary text-primary-foreground font-semibold'
-                            : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-                        )}
-                      >
-                        {opt.label}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Divider */}
-        <div className="relative z-10 mx-4 sm:mx-6 h-px bg-slate-200 shrink-0" />
-
-        {/* ── Main: Centered PIN entry ── */}
-        <div className="relative z-10 flex-1 flex items-center justify-center overflow-hidden">
-          <div className="flex flex-col items-center gap-6 w-full max-w-xs px-7 py-8 rounded-3xl bg-white border border-slate-200 shadow-xl shadow-slate-900/5">
-
-            {/* Prompt */}
-            <div className="text-center space-y-1">
-              <p className="text-slate-500 text-xs font-semibold tracking-[0.2em] uppercase">
-                Enter your PIN
+            {/* Left action column */}
+            <div className="flex flex-col gap-3 rounded-3xl bg-white border border-slate-200 shadow-xl shadow-slate-900/5 p-5 sm:p-6">
+              <p className="text-slate-500 text-[11px] font-bold tracking-[0.2em] uppercase">
+                Actions
               </p>
-            </div>
-
-            {/* PIN dots */}
-            <div
-              className={cn(
-                'flex items-center gap-4',
-                isShaking && 'animate-shake'
-              )}
-            >
-              {Array.from({ length: PIN_LENGTH }).map((_, i) => {
-                const filled = i < pinDigits.length;
-                return (
-                  <div
-                    key={i}
-                    className={cn(
-                      'h-5 w-5 rounded-full border-2 transition-all duration-150',
-                      filled
-                        ? pinError
-                          ? 'bg-red-500 border-red-500 scale-110'
-                          : 'border-white/0 scale-110'
-                        : 'bg-transparent border-slate-300'
-                    )}
-                    style={filled && !pinError ? {
-                      background: 'hsl(var(--primary))',
-                      borderColor: 'hsl(var(--primary))',
-                      boxShadow: '0 0 8px hsl(var(--primary) / 0.5)',
-                    } : {}}
-                  />
-                );
-              })}
-            </div>
-
-            {/* Error message */}
-            <div className="h-4 flex items-center justify-center">
-              {pinError && (
-                <p className="text-red-500 text-xs font-medium animate-fade-in text-center">
-                  {pinError}
-                </p>
-              )}
-            </div>
-
-            {/* Numeric keypad */}
-            <div className="grid grid-cols-3 gap-3 w-full">
-              {keypadKeys.map((key, i) => {
-                if (key === '') {
-                  return <div key={i} />;
-                }
-                if (key === 'del') {
-                  return (
-                    <button
-                      key={i}
-                      onClick={handleBackspace}
-                      disabled={loginMutation.isPending || pinDigits.length === 0}
-                      className={cn(
-                        'h-[68px] rounded-2xl flex items-center justify-center transition-all duration-100 touch-manipulation',
-                        'bg-slate-100 border border-slate-200 text-slate-400',
-                        'hover:bg-slate-200 hover:text-slate-600 active:scale-95',
-                        'disabled:opacity-40'
-                      )}
-                      aria-label="Delete"
-                    >
-                      <Delete className="h-5 w-5" />
-                    </button>
-                  );
-                }
-                return (
-                  <button
-                    key={i}
-                    data-testid={`pin-key-${key}`}
-                    onClick={() => handleDigit(key)}
-                    disabled={loginMutation.isPending || pinDigits.length >= PIN_LENGTH}
-                    className={cn(
-                      'h-[68px] rounded-2xl flex items-center justify-center transition-all duration-100 touch-manipulation',
-                      'bg-white border border-slate-200 text-slate-900 text-2xl font-bold',
-                      'hover:bg-slate-50 hover:border-slate-300',
-                      'active:scale-95 active:bg-slate-100',
-                      'shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_2px_6px_rgba(15,23,42,0.08)]',
-                      'disabled:opacity-40 disabled:cursor-not-allowed'
-                    )}
-                  >
-                    {loginMutation.isPending && pinDigits.length === PIN_LENGTH ? (
-                      <span className="h-2 w-2 rounded-full bg-slate-400 animate-pulse" />
-                    ) : key}
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* SSO + biometric fallback */}
-            <div className="flex flex-col items-center gap-2 w-full mt-2">
-              <div className="flex items-center gap-3 w-full">
-                <div className="flex-1 h-px bg-slate-200" />
-                <span className="text-[10px] text-slate-400 font-medium tracking-wider uppercase">or</span>
-                <div className="flex-1 h-px bg-slate-200" />
-              </div>
               <button
                 onClick={() => redirectToSSO(orgSlug, `/${orgSlug}/dashboard`)}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-xs text-slate-600 hover:bg-slate-50 hover:text-slate-900 hover:border-slate-300 transition-all font-medium group"
+                className={cn(
+                  'w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl text-left',
+                  'text-white font-semibold shadow-sm',
+                  'active:scale-[0.98] transition-all duration-150 group'
+                )}
+                style={{ background: 'linear-gradient(160deg, hsl(var(--primary)) 0%, hsl(var(--primary-dark)) 100%)' }}
               >
-                <ExternalLink className="h-3.5 w-3.5 group-hover:text-primary transition-colors" />
-                Sign in with your account
+                <span className="h-9 w-9 rounded-xl bg-white/20 ring-1 ring-inset ring-white/25 flex items-center justify-center shrink-0">
+                  <ExternalLink className="h-4 w-4" />
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-sm leading-tight">Login</span>
+                  <span className="block text-[11px] font-medium text-white/75 leading-tight">Sign in with your account</span>
+                </span>
               </button>
+              <Link
+                href={`/${orgSlug}/shifts`}
+                className={cn(
+                  'w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl text-left',
+                  'border border-slate-200 bg-white text-slate-700 font-semibold shadow-sm',
+                  'hover:bg-slate-50 hover:border-slate-300 active:scale-[0.98]',
+                  'transition-all duration-150 group'
+                )}
+              >
+                <span className="h-9 w-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0 group-hover:bg-primary/15">
+                  <Clock3 className="h-4 w-4" />
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-sm leading-tight">Attendance</span>
+                  <span className="block text-[11px] font-medium text-slate-400 leading-tight">Clock in & manage shifts</span>
+                </span>
+              </Link>
               {biometricSupported && hasRegisteredCredential && storedEmail && (
                 <button
                   onClick={() => biometricAuth(storedEmail, orgSlug)}
                   disabled={biometricLoading}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-primary/25 bg-primary/8 text-xs text-primary hover:bg-primary/18 hover:border-primary/45 transition-all font-medium disabled:opacity-50"
+                  className={cn(
+                    'w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl text-left',
+                    'border border-primary/25 bg-primary/8 text-primary font-semibold',
+                    'hover:bg-primary/15 hover:border-primary/45 active:scale-[0.98]',
+                    'disabled:opacity-50 transition-all duration-150'
+                  )}
                 >
-                  <Fingerprint className="h-3.5 w-3.5" />
-                  {biometricLoading ? 'Verifying…' : 'Sign in with fingerprint'}
+                  <span className="h-9 w-9 rounded-xl bg-primary/15 flex items-center justify-center shrink-0">
+                    <Fingerprint className="h-4 w-4" />
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block text-sm leading-tight">{biometricLoading ? 'Verifying…' : 'Fingerprint'}</span>
+                    <span className="block text-[11px] font-medium text-primary/70 leading-tight">Biometric sign-in</span>
+                  </span>
                 </button>
               )}
-              {biometricError && <p className="text-center text-xs text-red-500">{biometricError}</p>}
+              {biometricError && <p className="text-xs text-red-500">{biometricError}</p>}
+              <div className="mt-auto pt-3 flex items-center gap-2 text-slate-400">
+                <KeyRound className="h-3.5 w-3.5" />
+                <span className="text-[11px] font-medium">Enter your 4-digit PIN to start a shift on this terminal.</span>
+              </div>
+            </div>
+
+            {/* Right: PIN dots + error + keypad */}
+            <div className="flex flex-col items-center gap-5 rounded-3xl bg-white border border-slate-200 shadow-xl shadow-slate-900/5 px-5 sm:px-7 py-6">
+              <p className="text-slate-500 text-xs font-semibold tracking-[0.2em] uppercase">
+                Enter your PIN
+              </p>
+
+              {/* PIN dots */}
+              <div className={cn('flex items-center gap-4', isShaking && 'animate-shake')}>
+                {Array.from({ length: PIN_LENGTH }).map((_, i) => {
+                  const filled = i < pinDigits.length;
+                  return (
+                    <div
+                      key={i}
+                      className={cn(
+                        'h-5 w-5 rounded-full border-2 transition-all duration-150',
+                        filled
+                          ? pinError
+                            ? 'bg-red-500 border-red-500 scale-110'
+                            : 'border-white/0 scale-110'
+                          : 'bg-transparent border-slate-300'
+                      )}
+                      style={filled && !pinError ? {
+                        background: 'hsl(var(--primary))',
+                        borderColor: 'hsl(var(--primary))',
+                        boxShadow: '0 0 8px hsl(var(--primary) / 0.5)',
+                      } : {}}
+                    />
+                  );
+                })}
+              </div>
+
+              {/* Error message */}
+              <div className="h-4 flex items-center justify-center">
+                {pinError && (
+                  <p className="text-red-500 text-xs font-medium animate-fade-in text-center">
+                    {pinError}
+                  </p>
+                )}
+              </div>
+
+              {/* Numeric keypad */}
+              <PinKeypad
+                onDigit={handleDigit}
+                onBackspace={handleBackspace}
+                onClear={handleClear}
+                disabled={loginMutation.isPending}
+                isSubmitting={loginMutation.isPending}
+                digitsLength={pinDigits.length}
+                pinLength={PIN_LENGTH}
+              />
             </div>
           </div>
-        </div>
-
-        {/* ── Bottom bar: clock (mobile) ── */}
-        <div className="relative z-10 flex items-center justify-center px-6 pb-3 pt-1 shrink-0 md:hidden">
-          <LiveClock />
         </div>
 
         {/* ── Demo hints (codevertex-demo only) — floating bottom-right ── */}
