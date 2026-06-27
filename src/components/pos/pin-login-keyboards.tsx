@@ -21,16 +21,28 @@ import { ArrowBigUp, CornerDownLeft, Delete } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 // ── Numeric keypad ───────────────────────────────────────────────────────────
-// Brand-coloured tactile number keys (7-8-9 / 4-5-6 / 1-2-3 / 0) with a
-// destructive CLEAR key + backspace on the bottom row. RIGHT zone of the login
-// card (numeric keys = hsl(var(--primary)); CLEAR = the destructive token).
+// Brand-coloured tactile number keys (7-8-9 / 4-5-6 / 1-2-3) plus a bottom row
+// that mirrors a real on-screen keyboard: an "ABC" toggle (→ QWERTY layout),
+// the 0 key, and backspace. A full-width destructive CLEAR sits below.
+// (numeric keys = hsl(var(--primary)); CLEAR = the destructive token; ABC = the
+//  same neutral chrome a real keyboard uses for its layout switch.)
 
-const KEYPAD_KEYS = ['7', '8', '9', '4', '5', '6', '1', '2', '3', 'clear', '0', 'del'] as const;
+const NUMBER_ROWS = [
+  ['7', '8', '9'],
+  ['4', '5', '6'],
+  ['1', '2', '3'],
+] as const;
+
+// touch-comfortable key surface shared across the numeric keypad.
+const KEY_BASE =
+  'h-12 sm:h-16 min-h-11 rounded-2xl flex items-center justify-center transition-all duration-100 touch-manipulation active:scale-95 shadow-sm disabled:opacity-40 disabled:cursor-not-allowed';
 
 export interface PinKeypadProps {
   onDigit: (digit: string) => void;
   onBackspace: () => void;
   onClear: () => void;
+  /** Switch the active on-screen keyboard to the QWERTY layout ("ABC" key). */
+  onToggleQwerty: () => void;
   disabled: boolean;
   /** True while the 4th digit is submitting — render a pulse on number keys. */
   isSubmitting: boolean;
@@ -39,71 +51,74 @@ export interface PinKeypadProps {
 }
 
 export function PinKeypad({
-  onDigit, onBackspace, onClear, disabled, isSubmitting, digitsLength, pinLength,
+  onDigit, onBackspace, onClear, onToggleQwerty, disabled, isSubmitting, digitsLength, pinLength,
 }: PinKeypadProps) {
+  const NumberKey = (key: string) => (
+    <button
+      key={key}
+      data-testid={`pin-key-${key}`}
+      onClick={() => onDigit(key)}
+      disabled={disabled || digitsLength >= pinLength}
+      className={cn(
+        KEY_BASE,
+        'text-white text-2xl sm:text-3xl font-black',
+        'shadow-[inset_0_1px_0_rgba(255,255,255,0.25),0_4px_14px_hsl(var(--primary)/0.35)]'
+      )}
+      style={{ background: 'linear-gradient(160deg, hsl(var(--primary)) 0%, hsl(var(--primary-dark)) 100%)' }}
+    >
+      {isSubmitting && digitsLength === pinLength ? (
+        <span className="h-2.5 w-2.5 rounded-full bg-white/80 animate-pulse" />
+      ) : key}
+    </button>
+  );
+
   return (
-    <div className="grid grid-cols-3 gap-2.5 sm:gap-3 w-full">
-      {KEYPAD_KEYS.map((key, i) => {
-        if (key === 'del') {
-          return (
-            <button
-              key={i}
-              onClick={onBackspace}
-              disabled={disabled || digitsLength === 0}
-              aria-label="Delete"
-              className={cn(
-                'h-14 sm:h-16 rounded-2xl flex items-center justify-center transition-all duration-100 touch-manipulation',
-                'bg-slate-100 border border-slate-200 text-slate-500',
-                'hover:bg-slate-200 hover:text-slate-700 active:scale-95',
-                'shadow-sm disabled:opacity-40 disabled:cursor-not-allowed'
-              )}
-            >
-              <Delete className="h-6 w-6" />
-            </button>
-          );
-        }
-        if (key === 'clear') {
-          return (
-            <button
-              key={i}
-              onClick={onClear}
-              disabled={disabled || digitsLength === 0}
-              aria-label="Clear"
-              data-testid="pin-key-clear"
-              className={cn(
-                'h-14 sm:h-16 rounded-2xl flex items-center justify-center transition-all duration-100 touch-manipulation',
-                'bg-destructive/10 border border-destructive/25 text-destructive text-sm font-black uppercase tracking-wider',
-                'hover:bg-destructive/15 hover:border-destructive/40 active:scale-95',
-                'shadow-sm disabled:opacity-40 disabled:cursor-not-allowed'
-              )}
-            >
-              Clear
-            </button>
-          );
-        }
-        return (
-          <button
-            key={i}
-            data-testid={`pin-key-${key}`}
-            onClick={() => onDigit(key)}
-            disabled={disabled || digitsLength >= pinLength}
-            className={cn(
-              'h-14 sm:h-16 rounded-2xl flex items-center justify-center transition-all duration-100 touch-manipulation',
-              'text-white text-2xl sm:text-3xl font-black',
-              'active:scale-95',
-              'shadow-[inset_0_1px_0_rgba(255,255,255,0.25),0_4px_14px_hsl(var(--primary)/0.35)]',
-              'disabled:opacity-40 disabled:cursor-not-allowed'
-            )}
-            style={{
-              background: 'linear-gradient(160deg, hsl(var(--primary)) 0%, hsl(var(--primary-dark)) 100%)',
-            }}
-          >
-            {isSubmitting && digitsLength === pinLength ? (
-              <span className="h-2.5 w-2.5 rounded-full bg-white/80 animate-pulse" />
-            ) : key}
-          </button>
-        );
-      })}
+    <div className="flex w-full flex-col gap-2.5 sm:gap-3">
+      <div className="grid grid-cols-3 gap-2.5 sm:gap-3">
+        {NUMBER_ROWS.flat().map(NumberKey)}
+
+        {/* Bottom row mirrors a real keyboard: ABC layout-switch · 0 · backspace */}
+        <button
+          onClick={onToggleQwerty}
+          disabled={disabled}
+          aria-label="Switch to letters keyboard"
+          data-testid="kbd-toggle-qwerty"
+          className={cn(
+            KEY_BASE,
+            'bg-slate-100 border border-slate-200 text-slate-600 text-sm font-black uppercase tracking-wider',
+            'hover:bg-slate-200 hover:text-slate-800'
+          )}
+        >
+          ABC
+        </button>
+        {NumberKey('0')}
+        <button
+          onClick={onBackspace}
+          disabled={disabled || digitsLength === 0}
+          aria-label="Delete"
+          className={cn(
+            KEY_BASE,
+            'bg-slate-100 border border-slate-200 text-slate-500',
+            'hover:bg-slate-200 hover:text-slate-700'
+          )}
+        >
+          <Delete className="h-6 w-6" />
+        </button>
+      </div>
+
+      <button
+        onClick={onClear}
+        disabled={disabled || digitsLength === 0}
+        aria-label="Clear"
+        data-testid="pin-key-clear"
+        className={cn(
+          KEY_BASE,
+          'w-full bg-destructive/10 border border-destructive/25 text-destructive text-sm font-black uppercase tracking-wider',
+          'hover:bg-destructive/15 hover:border-destructive/40'
+        )}
+      >
+        Clear
+      </button>
     </div>
   );
 }
@@ -124,6 +139,8 @@ export interface QwertyKeyboardProps {
   onEnter: () => void;
   shift: boolean;
   onToggleShift: () => void;
+  /** Switch the active on-screen keyboard back to the numeric PIN keypad ("?123" key). */
+  onToggleNumeric: () => void;
   disabled: boolean;
 }
 
@@ -148,7 +165,7 @@ function KbdKey({
       style={style}
       data-testid={`kbd-key-${testChar ?? char}`}
       className={cn(
-        'flex h-11 min-w-0 flex-1 items-center justify-center rounded-xl',
+        'flex h-11 min-h-11 min-w-0 flex-1 items-center justify-center rounded-xl',
         'bg-white text-slate-700 text-sm font-semibold',
         'border border-slate-200 shadow-sm',
         'hover:bg-slate-50 hover:border-slate-300 active:scale-95',
@@ -163,7 +180,7 @@ function KbdKey({
 }
 
 export function QwertyKeyboard({
-  onKey, onBackspace, onEnter, shift, onToggleShift, disabled,
+  onKey, onBackspace, onEnter, shift, onToggleShift, onToggleNumeric, disabled,
 }: QwertyKeyboardProps) {
   const cased = (c: string) => (shift ? c.toUpperCase() : c);
 
@@ -221,8 +238,25 @@ export function QwertyKeyboard({
         />
       </div>
 
-      {/* Row 4: wide SPACE */}
+      {/* Row 4: "?123" layout-switch (bottom-left, like a real keyboard) + wide SPACE */}
       <div className="flex gap-1.5 sm:gap-2">
+        <button
+          type="button"
+          onClick={onToggleNumeric}
+          disabled={disabled}
+          aria-label="Switch to numbers keyboard"
+          data-testid="kbd-toggle-numeric"
+          className={cn(
+            'flex h-11 min-h-11 flex-[1.6] items-center justify-center rounded-xl',
+            'bg-slate-100 text-slate-600 text-sm font-bold',
+            'border border-slate-200 shadow-sm',
+            'hover:bg-slate-200 hover:text-slate-800 active:scale-95',
+            'transition-all duration-100 touch-manipulation select-none',
+            'disabled:opacity-40 disabled:cursor-not-allowed'
+          )}
+        >
+          ?123
+        </button>
         <KbdKey
           char="space"
           label={<span className="text-[11px] font-semibold uppercase tracking-[0.3em] text-slate-400">Space</span>}

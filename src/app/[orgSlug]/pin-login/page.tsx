@@ -122,6 +122,10 @@ export default function PINLoginPage() {
   const [step, setStep]             = useState<'outlet' | 'pin'>('pin');
   const [storedEmail, setStoredEmail] = useState<string | null>(null);
   const [shift, setShift]           = useState(false); // on-screen QWERTY shift state
+  // Which on-screen keyboard is showing — like a real soft-keyboard, only ONE is
+  // visible at a time. Numeric PIN keypad is the default; "ABC"/"?123" toggle between
+  // them. This is the ONLY new state; no handler/mutation is duplicated.
+  const [keyboardMode, setKeyboardMode] = useState<'numeric' | 'qwerty'>('numeric');
 
   // Device-local override (set via the gear menu) wins; otherwise fall back to the default.
   // Once the outlet settings load, a centrally-configured timeout is applied when the user
@@ -636,9 +640,10 @@ export default function PINLoginPage() {
                style={{ background: 'hsl(var(--primary) / 0.06)' }} />
         </div>
 
-        {/* ── Body: white card on the light panel, 3 zones (stack on mobile) ── */}
+        {/* ── Body: white card on the light panel. Single column on phones; actions
+               beside the single active keyboard on md+. Only ONE keyboard renders. ── */}
         <div className="relative z-10 flex-1 flex items-start justify-center overflow-y-auto px-3 sm:px-6 pt-2 pb-6">
-          <div className="w-full max-w-6xl rounded-3xl bg-white border border-slate-200 shadow-xl shadow-slate-900/5 p-4 sm:p-6">
+          <div className="w-full max-w-3xl rounded-3xl bg-white border border-slate-200 shadow-xl shadow-slate-900/5 p-4 sm:p-6">
             {/* Error message — shared across all input zones */}
             <div className="h-4 mb-2 flex items-center justify-center">
               {pinError && (
@@ -648,51 +653,76 @@ export default function PINLoginPage() {
               )}
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,200px)_minmax(0,1fr)_minmax(0,300px)] gap-4 sm:gap-5 items-stretch">
+            <div className="flex flex-col gap-4 sm:gap-5">
 
-              {/* LEFT zone: two tall stacked action buttons */}
-              <div className="flex flex-row lg:flex-col gap-3">
+              {/* Action buttons: full-width row, stacking nicely on the narrowest phones */}
+              <div className="grid grid-cols-2 gap-3">
                 <button
                   onClick={() => redirectToSSO(orgSlug, `/${orgSlug}/dashboard`)}
                   className={cn(
-                    'flex-1 flex flex-col items-center justify-center gap-2.5 rounded-2xl py-6 lg:py-0',
+                    'flex flex-col items-center justify-center gap-2 rounded-2xl py-4 sm:py-5',
                     'text-white font-bold shadow-md ring-1 ring-inset ring-white/15',
                     'active:scale-[0.98] transition-all duration-150'
                   )}
                   style={{ background: 'linear-gradient(160deg, hsl(var(--primary)) 0%, hsl(var(--primary-dark)) 100%)' }}
                 >
-                  <span className="h-12 w-12 rounded-2xl bg-white/20 ring-1 ring-inset ring-white/25 flex items-center justify-center">
-                    <UserRound className="h-6 w-6" />
+                  <span className="h-10 w-10 sm:h-12 sm:w-12 rounded-2xl bg-white/20 ring-1 ring-inset ring-white/25 flex items-center justify-center">
+                    <UserRound className="h-5 w-5 sm:h-6 sm:w-6" />
                   </span>
                   <span className="text-sm">Login</span>
                 </button>
                 <Link
                   href={`/${orgSlug}/shifts`}
                   className={cn(
-                    'flex-1 flex flex-col items-center justify-center gap-2.5 rounded-2xl py-6 lg:py-0',
+                    'flex flex-col items-center justify-center gap-2 rounded-2xl py-4 sm:py-5',
                     'text-secondary-foreground font-bold shadow-md ring-1 ring-inset ring-black/5',
                     'hover:brightness-95 active:scale-[0.98] transition-all duration-150'
                   )}
                   style={{ background: 'hsl(var(--secondary))' }}
                 >
-                  <span className="h-12 w-12 rounded-2xl bg-black/5 flex items-center justify-center">
-                    <CalendarClock className="h-6 w-6" />
+                  <span className="h-10 w-10 sm:h-12 sm:w-12 rounded-2xl bg-black/5 flex items-center justify-center">
+                    <CalendarClock className="h-5 w-5 sm:h-6 sm:w-6" />
                   </span>
                   <span className="text-sm">Attendance</span>
                 </Link>
               </div>
 
-              {/* CENTER zone: full on-screen QWERTY */}
-              <div className="flex flex-col justify-center gap-3 rounded-2xl bg-slate-50/60 border border-slate-100 p-3 sm:p-4">
-                <QwertyKeyboard
-                  onKey={handleKey}
-                  onBackspace={handleBackspace}
-                  onEnter={() => submitPasscode()}
-                  shift={shift}
-                  onToggleShift={() => setShift((s) => !s)}
-                  disabled={loginMutation.isPending}
-                />
-                {/* Biometric affordance kept available below the keyboard */}
+              {/* Active on-screen keyboard — numeric by default, QWERTY when toggled.
+                  Only ONE keyboard is mounted at a time (like a real soft keyboard). */}
+              <div className="flex flex-col gap-3 rounded-2xl bg-slate-50/60 border border-slate-100 p-3 sm:p-4">
+                <div className="flex items-center justify-center gap-2 text-slate-400">
+                  <KeyRound className="h-3.5 w-3.5" />
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.18em]">
+                    {keyboardMode === 'numeric' ? 'Enter PIN' : 'Enter passcode'}
+                  </span>
+                </div>
+
+                {keyboardMode === 'numeric' ? (
+                  <div className="mx-auto w-full max-w-xs">
+                    <PinKeypad
+                      onDigit={handleDigit}
+                      onBackspace={handleBackspace}
+                      onClear={handleClear}
+                      onToggleQwerty={() => setKeyboardMode('qwerty')}
+                      disabled={loginMutation.isPending}
+                      isSubmitting={loginMutation.isPending}
+                      digitsLength={pinDigits.length}
+                      pinLength={PIN_LENGTH}
+                    />
+                  </div>
+                ) : (
+                  <QwertyKeyboard
+                    onKey={handleKey}
+                    onBackspace={handleBackspace}
+                    onEnter={() => submitPasscode()}
+                    shift={shift}
+                    onToggleShift={() => setShift((s) => !s)}
+                    onToggleNumeric={() => setKeyboardMode('numeric')}
+                    disabled={loginMutation.isPending}
+                  />
+                )}
+
+                {/* Biometric affordance kept available below the active keyboard */}
                 {biometricSupported && hasRegisteredCredential && storedEmail && (
                   <button
                     onClick={() => biometricAuth(storedEmail, orgSlug)}
@@ -708,23 +738,6 @@ export default function PINLoginPage() {
                   </button>
                 )}
                 {biometricError && <p className="text-center text-xs text-destructive">{biometricError}</p>}
-              </div>
-
-              {/* RIGHT zone: numeric keypad */}
-              <div className="flex flex-col items-center gap-3">
-                <div className="flex items-center gap-2 text-slate-400">
-                  <KeyRound className="h-3.5 w-3.5" />
-                  <span className="text-[11px] font-semibold uppercase tracking-[0.18em]">Enter PIN</span>
-                </div>
-                <PinKeypad
-                  onDigit={handleDigit}
-                  onBackspace={handleBackspace}
-                  onClear={handleClear}
-                  disabled={loginMutation.isPending}
-                  isSubmitting={loginMutation.isPending}
-                  digitsLength={pinDigits.length}
-                  pinLength={PIN_LENGTH}
-                />
               </div>
             </div>
           </div>
