@@ -7,8 +7,11 @@
  * useTerminal(); cfg(quick_service) drives which controls render.
  */
 
-import { TerminalShell } from '@/components/pos/terminal/parts/terminal-shell';
+import { FaceliftShell } from '@/components/pos/terminal/facelift/facelift-shell';
 
 export function QuickServiceTerminalView() {
-  return <TerminalShell />;
+  // Restaurant-POS facelift, shared with hospitality. Pure restyle over the shared useTerminal()
+  // controller — QSR specifics (fast add, dine-in/takeaway order-type, COD, send-to-kitchen on
+  // dine-in; no tables/courses) are preserved by the same cfg(quick_service) gating.
+  return <FaceliftShell />;
 }

@@ -10,7 +10,7 @@ import {
   Warehouse, Wine, WifiOff, Zap,
 } from 'lucide-react';
 import { useOnline } from '@/hooks/use-online';
-import { useIdleTimer, getScreensaverTimeoutMs, setScreensaverTimeoutMs } from '@/hooks/use-idle-timer';
+import { useIdleTimer, getScreensaverTimeoutMs, setScreensaverTimeoutMs, resolveScreensaverTimeoutMs } from '@/hooks/use-idle-timer';
 import { useBiometric } from '@/hooks/use-biometric';
 import { apiClient } from '@/lib/api/client';
 import { useAuthStore } from '@/store/auth';
@@ -56,6 +56,8 @@ interface OutletInfo {
   settings?: {
     pin_login_message?: string;
     screensaver_url?: string;
+    /** Centrally-configured idle timeout (seconds) before the branded screensaver shows. */
+    screensaver_timeout_seconds?: number;
   };
 }
 
@@ -63,10 +65,11 @@ interface OutletInfo {
 const POS_OUTLET_USE_CASES = ['hospitality', 'quick_service', 'retail', 'pharmacy', 'services'];
 
 const TIMEOUT_OPTIONS = [
-  { label: '15 s',  ms: 15_000 },
   { label: '30 s',  ms: 30_000 },
   { label: '1 min', ms: 60_000 },
   { label: '2 min', ms: 120_000 },
+  { label: '5 min', ms: 300_000 },
+  { label: '10 min', ms: 600_000 },
   { label: 'Never', ms: 0 },
 ];
 
@@ -155,7 +158,16 @@ export default function PINLoginPage() {
   const [step, setStep]             = useState<'outlet' | 'pin'>('pin');
   const [storedEmail, setStoredEmail] = useState<string | null>(null);
 
-  useEffect(() => { setTimeoutMsState(getScreensaverTimeoutMs()); }, []);
+  // Device-local override (set via the gear menu) wins; otherwise fall back to the default.
+  // Once the outlet settings load, a centrally-configured timeout is applied when the user
+  // has NOT picked a device-local value (resolveScreensaverTimeoutMs keeps local precedence).
+  const [hasLocalTimeout, setHasLocalTimeout] = useState(false);
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setHasLocalTimeout(!!localStorage.getItem('pos_screensaver_timeout_ms'));
+    }
+    setTimeoutMsState(getScreensaverTimeoutMs());
+  }, []);
   useEffect(() => {
     if (typeof window !== 'undefined') setStoredEmail(localStorage.getItem('sso_last_email'));
   }, []);
@@ -195,6 +207,7 @@ export default function PINLoginPage() {
   const handleTimeoutChange = (ms: number) => {
     setTimeoutMsState(ms);
     setScreensaverTimeoutMs(ms === 0 ? 9_999_999_999 : ms);
+    setHasLocalTimeout(true);
     setShowSettings(false);
   };
 
@@ -238,6 +251,14 @@ export default function PINLoginPage() {
     staleTime: 5 * 60_000,
     retry: false,
   });
+
+  // Apply a centrally-configured screensaver timeout (service_config / outlet setting) when the
+  // device has no manual override. Default stays 5 min (resolveScreensaverTimeoutMs).
+  useEffect(() => {
+    if (hasLocalTimeout) return;
+    const cfgSeconds = outletInfo?.settings?.screensaver_timeout_seconds;
+    setTimeoutMsState(resolveScreensaverTimeoutMs(cfgSeconds));
+  }, [outletInfo?.settings?.screensaver_timeout_seconds, hasLocalTimeout]);
 
   const posOutlets = allOutlets.filter(
     (o) => !o.use_case || POS_OUTLET_USE_CASES.includes(o.use_case)

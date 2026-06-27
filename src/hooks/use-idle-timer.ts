@@ -3,13 +3,27 @@
 import { useCallback, useEffect, useRef } from 'react';
 
 const TIMEOUT_KEY = 'pos_screensaver_timeout_ms';
-const DEFAULT_MS = 30_000;
+/** Default branded-screensaver idle timeout: 5 minutes (per POS PIN-login uplift spec). */
+const DEFAULT_MS = 5 * 60_000;
 
 export function getScreensaverTimeoutMs(): number {
   if (typeof window === 'undefined') return DEFAULT_MS;
   const v = localStorage.getItem(TIMEOUT_KEY);
   const n = v ? parseInt(v, 10) : NaN;
   return isNaN(n) || n < 5_000 ? DEFAULT_MS : n;
+}
+
+/**
+ * Resolve the effective screensaver timeout (ms): a service_config / outlet-setting value wins
+ * over the device-local setting, which wins over the 5-minute default. `configSeconds` comes from
+ * the outlet settings payload (`screensaver_timeout_seconds`) when present, so a platform/tenant
+ * admin can set it centrally without a new endpoint.
+ */
+export function resolveScreensaverTimeoutMs(configSeconds?: number | null): number {
+  if (typeof configSeconds === 'number' && configSeconds >= 5) {
+    return Math.round(configSeconds * 1000);
+  }
+  return getScreensaverTimeoutMs();
 }
 
 export function setScreensaverTimeoutMs(ms: number): void {

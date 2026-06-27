@@ -15,12 +15,14 @@ import { SubscriptionBanner } from '@/components/subscription/subscription-banne
 import { SyncStatusIndicator } from '@/components/pos/sync-status-indicator';
 import { PWARegistration } from '@/components/pwa-registration';
 import { StartShiftGate } from '@/components/pos/start-shift-gate';
+import { TerminalIdleScreensaver } from '@/components/pos/terminal-idle-screensaver';
 import { useSyncOfflineOrders, triggerSyncNow } from '@/hooks/use-sync-offline-orders';
 import { useEffect } from 'react';
 import { registerBackgroundSync } from '@/lib/sw/register-sync';
 import { usePathname, useParams } from 'next/navigation';
 import { useNotificationStream } from '@/hooks/use-notification-stream';
 import { useAuthStore } from '@/store/auth';
+import { apiClient } from '@/lib/api/client';
 
 /**
  * Client-side belt-and-suspenders for the tenant manifest link. The authoritative
@@ -100,6 +102,28 @@ function NotificationListener() {
   return null;
 }
 
+/**
+ * Platform separation guard (see plan: platform-owner-self-tenant-separation).
+ *
+ * The agreed model is "Dedicated Platform section": the main app is the owner's OWN business
+ * (scoped to codevertex by default) and any cross-tenant drill-in is confined to `/platform/*`.
+ * pos-ui has no `?tenantId=` drill-in today (cross-tenant header suppression lives on the
+ * apiClient via setPlatformOwner), so this is a defensive belt-and-suspenders: whenever the
+ * route is NOT under `/platform`, ensure cross-tenant suppression is OFF so business pages
+ * always carry the owner's own X-Tenant-ID / X-Tenant-Slug and scope to codevertex. If a
+ * platform drill-in is ever added, it must set it only while on `/platform` — this effect
+ * still clears it on the way out.
+ */
+function PlatformDrillInConfinement() {
+  const pathname = usePathname();
+  useEffect(() => {
+    if (!pathname?.includes('/platform')) {
+      apiClient.setPlatformOwner(false);
+    }
+  }, [pathname]);
+  return null;
+}
+
 /** Paths that bypass the full app shell (no header/sidebar/footer). */
 const KIOSK_PATHS = ['/pin-login'];
 
@@ -144,7 +168,12 @@ export function OrgShell({ children }: { children: ReactNode }) {
           <OfflineSyncWorker />
           <CatalogPrewarm />
           <NotificationListener />
+          <PlatformDrillInConfinement />
           <PWARegistration />
+
+          {/* Branded idle lock for active PIN/terminal sessions — wakes to the PIN pad so the
+              next staff member must re-authenticate. No-ops for SSO sessions and the kiosk route. */}
+          <TerminalIdleScreensaver />
 
           {kiosk ? (
             // Fullscreen kiosk layout — no nav chrome
