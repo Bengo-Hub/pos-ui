@@ -42,16 +42,23 @@ export interface PinKeypadProps {
   onBackspace: () => void;
   onClear: () => void;
   /** Switch the active on-screen keyboard to the QWERTY layout ("ABC" key). */
-  onToggleQwerty: () => void;
+  onToggleQwerty?: () => void;
   disabled: boolean;
   /** True while the 4th digit is submitting — render a pulse on number keys. */
   isSubmitting: boolean;
   digitsLength: number;
   pinLength: number;
+  /**
+   * Render the "ABC" layout-switch key. Defaults to true (small-screen single-
+   * keyboard layout). The large-screen 3-zone layout shows BOTH keyboards at once
+   * and passes `false` so no toggle key is rendered (a plain spacer takes its slot).
+   */
+  showToggle?: boolean;
 }
 
 export function PinKeypad({
   onDigit, onBackspace, onClear, onToggleQwerty, disabled, isSubmitting, digitsLength, pinLength,
+  showToggle = true,
 }: PinKeypadProps) {
   const NumberKey = (key: string) => (
     <button
@@ -77,20 +84,26 @@ export function PinKeypad({
       <div className="grid grid-cols-3 gap-2.5 sm:gap-3">
         {NUMBER_ROWS.flat().map(NumberKey)}
 
-        {/* Bottom row mirrors a real keyboard: ABC layout-switch · 0 · backspace */}
-        <button
-          onClick={onToggleQwerty}
-          disabled={disabled}
-          aria-label="Switch to letters keyboard"
-          data-testid="kbd-toggle-qwerty"
-          className={cn(
-            KEY_BASE,
-            'bg-slate-100 border border-slate-200 text-slate-600 text-sm font-black uppercase tracking-wider',
-            'hover:bg-slate-200 hover:text-slate-800'
-          )}
-        >
-          ABC
-        </button>
+        {/* Bottom row mirrors a real keyboard: ABC layout-switch · 0 · backspace.
+            On large screens both keyboards are visible, so the toggle is omitted and
+            an empty spacer keeps the 0 key centred. */}
+        {showToggle ? (
+          <button
+            onClick={onToggleQwerty}
+            disabled={disabled}
+            aria-label="Switch to letters keyboard"
+            data-testid="kbd-toggle-qwerty"
+            className={cn(
+              KEY_BASE,
+              'bg-slate-100 border border-slate-200 text-slate-600 text-sm font-black uppercase tracking-wider',
+              'hover:bg-slate-200 hover:text-slate-800'
+            )}
+          >
+            ABC
+          </button>
+        ) : (
+          <div aria-hidden />
+        )}
         {NumberKey('0')}
         <button
           onClick={onBackspace}
@@ -140,8 +153,14 @@ export interface QwertyKeyboardProps {
   shift: boolean;
   onToggleShift: () => void;
   /** Switch the active on-screen keyboard back to the numeric PIN keypad ("?123" key). */
-  onToggleNumeric: () => void;
+  onToggleNumeric?: () => void;
   disabled: boolean;
+  /**
+   * Render the "?123" layout-switch key. Defaults to true (small-screen single-
+   * keyboard layout). The large-screen 3-zone layout shows BOTH keyboards at once
+   * and passes `false` so no toggle key is rendered.
+   */
+  showToggle?: boolean;
 }
 
 /** A reusable white QWERTY key on the light card panel. */
@@ -180,7 +199,7 @@ function KbdKey({
 }
 
 export function QwertyKeyboard({
-  onKey, onBackspace, onEnter, shift, onToggleShift, onToggleNumeric, disabled,
+  onKey, onBackspace, onEnter, shift, onToggleShift, onToggleNumeric, disabled, showToggle = true,
 }: QwertyKeyboardProps) {
   const cased = (c: string) => (shift ? c.toUpperCase() : c);
 
@@ -238,25 +257,28 @@ export function QwertyKeyboard({
         />
       </div>
 
-      {/* Row 4: "?123" layout-switch (bottom-left, like a real keyboard) + wide SPACE */}
+      {/* Row 4: "?123" layout-switch (bottom-left, like a real keyboard) + wide SPACE.
+          The toggle is omitted on large screens where both keyboards show at once. */}
       <div className="flex gap-1.5 sm:gap-2">
-        <button
-          type="button"
-          onClick={onToggleNumeric}
-          disabled={disabled}
-          aria-label="Switch to numbers keyboard"
-          data-testid="kbd-toggle-numeric"
-          className={cn(
-            'flex h-11 min-h-11 flex-[1.6] items-center justify-center rounded-xl',
-            'bg-slate-100 text-slate-600 text-sm font-bold',
-            'border border-slate-200 shadow-sm',
-            'hover:bg-slate-200 hover:text-slate-800 active:scale-95',
-            'transition-all duration-100 touch-manipulation select-none',
-            'disabled:opacity-40 disabled:cursor-not-allowed'
-          )}
-        >
-          ?123
-        </button>
+        {showToggle && (
+          <button
+            type="button"
+            onClick={onToggleNumeric}
+            disabled={disabled}
+            aria-label="Switch to numbers keyboard"
+            data-testid="kbd-toggle-numeric"
+            className={cn(
+              'flex h-11 min-h-11 flex-[1.6] items-center justify-center rounded-xl',
+              'bg-slate-100 text-slate-600 text-sm font-bold',
+              'border border-slate-200 shadow-sm',
+              'hover:bg-slate-200 hover:text-slate-800 active:scale-95',
+              'transition-all duration-100 touch-manipulation select-none',
+              'disabled:opacity-40 disabled:cursor-not-allowed'
+            )}
+          >
+            ?123
+          </button>
+        )}
         <KbdKey
           char="space"
           label={<span className="text-[11px] font-semibold uppercase tracking-[0.3em] text-slate-400">Space</span>}

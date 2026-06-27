@@ -462,6 +462,62 @@ export default function PINLoginPage() {
   const heroBackdrop = tenant?.posScreensaverUrl ?? tenant?.logoUrl ?? null;
   const heroInitials = (tenant?.orgName ?? orgSlug).slice(0, 2).toUpperCase();
 
+  // Shared Login (redirectToSSO) + Attendance (→ /shifts) action buttons. Factored
+  // out so the SAME markup/handlers serve BOTH responsive layouts without copy-paste.
+  //  - orientation="row"  → side-by-side (small-screen stacked layout, full width)
+  //  - orientation="col"  → stacked tall buttons (large-screen LEFT zone)
+  const ActionButtons = ({ orientation }: { orientation: 'row' | 'col' }) => (
+    <div className={cn('gap-3', orientation === 'row' ? 'grid grid-cols-2' : 'flex flex-col h-full')}>
+      <button
+        onClick={() => redirectToSSO(orgSlug, `/${orgSlug}/dashboard`)}
+        className={cn(
+          'flex flex-col items-center justify-center gap-2 rounded-2xl py-4 sm:py-5',
+          'text-white font-bold shadow-md ring-1 ring-inset ring-white/15',
+          'active:scale-[0.98] transition-all duration-150',
+          orientation === 'col' && 'flex-1'
+        )}
+        style={{ background: 'linear-gradient(160deg, hsl(var(--primary)) 0%, hsl(var(--primary-dark)) 100%)' }}
+      >
+        <span className="h-10 w-10 sm:h-12 sm:w-12 rounded-2xl bg-white/20 ring-1 ring-inset ring-white/25 flex items-center justify-center">
+          <UserRound className="h-5 w-5 sm:h-6 sm:w-6" />
+        </span>
+        <span className="text-sm">Login</span>
+      </button>
+      <Link
+        href={`/${orgSlug}/shifts`}
+        className={cn(
+          'flex flex-col items-center justify-center gap-2 rounded-2xl py-4 sm:py-5',
+          'text-secondary-foreground font-bold shadow-md ring-1 ring-inset ring-black/5',
+          'hover:brightness-95 active:scale-[0.98] transition-all duration-150',
+          orientation === 'col' && 'flex-1'
+        )}
+        style={{ background: 'hsl(var(--secondary))' }}
+      >
+        <span className="h-10 w-10 sm:h-12 sm:w-12 rounded-2xl bg-black/5 flex items-center justify-center">
+          <CalendarClock className="h-5 w-5 sm:h-6 sm:w-6" />
+        </span>
+        <span className="text-sm">Attendance</span>
+      </Link>
+    </div>
+  );
+
+  // Shared biometric affordance — same handler/markup in both layouts.
+  const BiometricButton = () =>
+    biometricSupported && hasRegisteredCredential && storedEmail ? (
+      <button
+        onClick={() => biometricAuth(storedEmail, orgSlug)}
+        disabled={biometricLoading}
+        className={cn(
+          'mx-auto inline-flex items-center gap-2 px-4 py-2 rounded-full',
+          'border border-primary/25 bg-primary/10 text-primary text-xs font-semibold',
+          'hover:bg-primary/15 hover:border-primary/45 disabled:opacity-50 transition-all'
+        )}
+      >
+        <Fingerprint className="h-3.5 w-3.5" />
+        {biometricLoading ? 'Verifying…' : 'Sign in with fingerprint'}
+      </button>
+    ) : null;
+
   // ── Outlet selection step ────────────────────────────────────────────────────
 
   if (step === 'outlet') {
@@ -640,10 +696,18 @@ export default function PINLoginPage() {
                style={{ background: 'hsl(var(--primary) / 0.06)' }} />
         </div>
 
-        {/* ── Body: white card on the light panel. Single column on phones; actions
-               beside the single active keyboard on md+. Only ONE keyboard renders. ── */}
-        <div className="relative z-10 flex-1 flex items-start justify-center overflow-y-auto px-3 sm:px-6 pt-2 pb-6">
-          <div className="w-full max-w-3xl rounded-3xl bg-white border border-slate-200 shadow-xl shadow-slate-900/5 p-4 sm:p-6">
+        {/* ── Body: white card on the light panel. Two RESPONSIVE layouts of the SAME
+               content/handlers (no duplicated logic):
+                 • SMALL (< lg): single-column stack with ONE active keyboard +
+                   the ABC/?123 toggle (driven by keyboardMode).  → `lg:hidden`
+                 • LARGE (lg+): wide 3-zone row — actions LEFT, full QWERTY CENTER,
+                   numeric keypad RIGHT, both shown at once, no toggle. → `hidden lg:flex`
+               Both reuse <ActionButtons>, <PinKeypad>, <QwertyKeyboard>, <BiometricButton>
+               and the shared handlers; only `keyboardMode` differs between them. ── */}
+        <div className="relative z-10 flex-1 flex items-start justify-center overflow-y-auto px-3 sm:px-6 lg:px-8 pt-2 pb-6">
+
+          {/* ── SMALL SCREENS (< lg): single-keyboard toggle stack ── */}
+          <div className="w-full max-w-3xl lg:hidden rounded-3xl bg-white border border-slate-200 shadow-xl shadow-slate-900/5 p-4 sm:p-6">
             {/* Error message — shared across all input zones */}
             <div className="h-4 mb-2 flex items-center justify-center">
               {pinError && (
@@ -654,38 +718,8 @@ export default function PINLoginPage() {
             </div>
 
             <div className="flex flex-col gap-4 sm:gap-5">
-
               {/* Action buttons: full-width row, stacking nicely on the narrowest phones */}
-              <div className="grid grid-cols-2 gap-3">
-                <button
-                  onClick={() => redirectToSSO(orgSlug, `/${orgSlug}/dashboard`)}
-                  className={cn(
-                    'flex flex-col items-center justify-center gap-2 rounded-2xl py-4 sm:py-5',
-                    'text-white font-bold shadow-md ring-1 ring-inset ring-white/15',
-                    'active:scale-[0.98] transition-all duration-150'
-                  )}
-                  style={{ background: 'linear-gradient(160deg, hsl(var(--primary)) 0%, hsl(var(--primary-dark)) 100%)' }}
-                >
-                  <span className="h-10 w-10 sm:h-12 sm:w-12 rounded-2xl bg-white/20 ring-1 ring-inset ring-white/25 flex items-center justify-center">
-                    <UserRound className="h-5 w-5 sm:h-6 sm:w-6" />
-                  </span>
-                  <span className="text-sm">Login</span>
-                </button>
-                <Link
-                  href={`/${orgSlug}/shifts`}
-                  className={cn(
-                    'flex flex-col items-center justify-center gap-2 rounded-2xl py-4 sm:py-5',
-                    'text-secondary-foreground font-bold shadow-md ring-1 ring-inset ring-black/5',
-                    'hover:brightness-95 active:scale-[0.98] transition-all duration-150'
-                  )}
-                  style={{ background: 'hsl(var(--secondary))' }}
-                >
-                  <span className="h-10 w-10 sm:h-12 sm:w-12 rounded-2xl bg-black/5 flex items-center justify-center">
-                    <CalendarClock className="h-5 w-5 sm:h-6 sm:w-6" />
-                  </span>
-                  <span className="text-sm">Attendance</span>
-                </Link>
-              </div>
+              <ActionButtons orientation="row" />
 
               {/* Active on-screen keyboard — numeric by default, QWERTY when toggled.
                   Only ONE keyboard is mounted at a time (like a real soft keyboard). */}
@@ -723,22 +757,69 @@ export default function PINLoginPage() {
                 )}
 
                 {/* Biometric affordance kept available below the active keyboard */}
-                {biometricSupported && hasRegisteredCredential && storedEmail && (
-                  <button
-                    onClick={() => biometricAuth(storedEmail, orgSlug)}
-                    disabled={biometricLoading}
-                    className={cn(
-                      'mx-auto inline-flex items-center gap-2 px-4 py-2 rounded-full',
-                      'border border-primary/25 bg-primary/10 text-primary text-xs font-semibold',
-                      'hover:bg-primary/15 hover:border-primary/45 disabled:opacity-50 transition-all'
-                    )}
-                  >
-                    <Fingerprint className="h-3.5 w-3.5" />
-                    {biometricLoading ? 'Verifying…' : 'Sign in with fingerprint'}
-                  </button>
-                )}
+                <BiometricButton />
                 {biometricError && <p className="text-center text-xs text-destructive">{biometricError}</p>}
               </div>
+            </div>
+          </div>
+
+          {/* ── LARGE SCREENS (lg+): wide 3-zone layout, both keyboards visible ── */}
+          <div className="hidden lg:flex w-full max-w-6xl rounded-3xl bg-white border border-slate-200 shadow-xl shadow-slate-900/5 p-6 flex-col">
+            {/* Error message — shared across all input zones */}
+            <div className="h-4 mb-3 flex items-center justify-center">
+              {pinError && (
+                <p className="text-destructive text-xs font-medium animate-fade-in text-center">
+                  {pinError}
+                </p>
+              )}
+            </div>
+
+            <div className="flex items-stretch gap-5">
+              {/* LEFT zone: tall Login + Attendance buttons */}
+              <div className="w-44 shrink-0">
+                <ActionButtons orientation="col" />
+              </div>
+
+              {/* CENTER zone: full QWERTY keyboard (no ?123 toggle) */}
+              <div className="flex-1 min-w-0 flex flex-col gap-3 rounded-2xl bg-slate-50/60 border border-slate-100 p-4">
+                <div className="flex items-center justify-center gap-2 text-slate-400">
+                  <KeyRound className="h-3.5 w-3.5" />
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.18em]">Enter passcode</span>
+                </div>
+                <QwertyKeyboard
+                  onKey={handleKey}
+                  onBackspace={handleBackspace}
+                  onEnter={() => submitPasscode()}
+                  shift={shift}
+                  onToggleShift={() => setShift((s) => !s)}
+                  disabled={loginMutation.isPending}
+                  showToggle={false}
+                />
+              </div>
+
+              {/* RIGHT zone: numeric PIN keypad (no ABC toggle) */}
+              <div className="w-64 shrink-0 flex flex-col gap-3 rounded-2xl bg-slate-50/60 border border-slate-100 p-4">
+                <div className="flex items-center justify-center gap-2 text-slate-400">
+                  <KeyRound className="h-3.5 w-3.5" />
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.18em]">Enter PIN</span>
+                </div>
+                <PinKeypad
+                  onDigit={handleDigit}
+                  onBackspace={handleBackspace}
+                  onClear={handleClear}
+                  disabled={loginMutation.isPending}
+                  isSubmitting={loginMutation.isPending}
+                  digitsLength={pinDigits.length}
+                  pinLength={PIN_LENGTH}
+                  showToggle={false}
+                />
+              </div>
+            </div>
+
+            {/* Biometric affordance + error — shared, centred below the 3 zones */}
+            <div className="mt-4 flex flex-col items-center gap-1">
+              <BiometricButton />
+              {biometricError && <p className="text-center text-xs text-destructive">{biometricError}</p>}
             </div>
           </div>
         </div>
