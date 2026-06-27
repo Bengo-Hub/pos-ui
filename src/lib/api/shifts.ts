@@ -42,6 +42,7 @@ export interface ShiftHistoryRow {
   closing_float?: number;
   variance?: number;
   notes?: string;
+  auto_closed?: boolean;
   order_count: number;
   total_revenue: number;
 }

@@ -104,6 +104,12 @@ function HistoryTable({ rows }: { rows: ShiftHistoryRow[] }) {
                   <span className="text-xs text-muted-foreground">
                     · {formatDuration(row.opened_at, row.closed_at ?? undefined)}
                   </span>
+                  {row.auto_closed && (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
+                      <Clock className="h-3 w-3" />
+                      Auto-closed
+                    </span>
+                  )}
                 </div>
                 <div className="flex items-center gap-4 mt-2 flex-wrap">
                   <span className="text-xs text-muted-foreground">
