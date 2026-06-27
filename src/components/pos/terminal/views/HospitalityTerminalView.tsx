@@ -9,11 +9,8 @@
  * useTerminal(); cfg(hospitality) drives which controls render.
  */
 
-import { FaceliftShell } from '@/components/pos/terminal/facelift/facelift-shell';
+import { TerminalShell } from '@/components/pos/terminal/parts/terminal-shell';
 
 export function HospitalityTerminalView() {
-  // Restaurant-POS facelift (nav rail + top bar + category chips + product cards + order-bill panel).
-  // Pure restyle over the shared useTerminal() controller — every hospitality workflow (tables,
-  // courses/Fire, send-to-kitchen, room charge, gated checkout/payment_timing) is preserved.
-  return <FaceliftShell />;
+  return <TerminalShell />;
 }
