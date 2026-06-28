@@ -27,6 +27,7 @@ interface ReturnDetail {
   reason?: string;
   reason_code?: string;
   refund_amount: number;
+  refund_channel?: string;
   requested_by: string;
   approved_by?: string;
   treasury_refund_ref?: string;
@@ -34,6 +35,14 @@ interface ReturnDetail {
   updated_at: string;
   edges?: { lines?: ReturnLine[] };
 }
+
+const REFUND_CHANNELS: { value: string; label: string }[] = [
+  { value: 'cash',         label: 'Cash'         },
+  { value: 'mpesa',        label: 'M-Pesa'       },
+  { value: 'bank',         label: 'Bank'         },
+  { value: 'cheque',       label: 'Cheque'       },
+  { value: 'store_credit', label: 'Store Credit' },
+];
 
 const STATUS_CONFIG: Record<ReturnDetail['status'], { label: string; className: string }> = {
   pending:   { label: 'Pending',   className: 'bg-amber-500/10 text-amber-700 border-amber-200' },
@@ -65,7 +74,7 @@ function useApproveReturn(returnId: string) {
   const tenantID = useAuthStore((s) => s.user?.tenant_id ?? '');
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (payload: { action: 'approve' | 'reject'; notes?: string }) =>
+    mutationFn: (payload: { action: 'approve' | 'reject'; notes?: string; refund_channel?: string }) =>
       apiClient.patch(`/api/v1/${tenantID}/pos/returns/${returnId}/approve`, payload),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['return', tenantID, returnId] });
@@ -83,6 +92,8 @@ export default function ReturnDetailPage() {
   const { data: ret, isLoading } = useReturnDetail(returnId);
   const approve = useApproveReturn(returnId);
   const [notes, setNotes] = useState('');
+  // Approval-time refund channel override; seeded from the return once loaded (default cash).
+  const [refundChannel, setRefundChannel] = useState('');
 
   if (isLoading) {
     return (
@@ -102,6 +113,9 @@ export default function ReturnDetailPage() {
   const lines = ret.edges?.lines ?? [];
   const cfg = STATUS_CONFIG[ret.status] ?? { label: ret.status, className: 'bg-muted text-muted-foreground border-border' };
   const isPending = ret.status === 'pending';
+  // Effective channel for the approval selector: local override → existing channel on the return → cash.
+  const effectiveChannel = refundChannel || ret.refund_channel || 'cash';
+  const showChannelPicker = ret.return_type !== 'exchange';
 
   return (
     <div className="p-6 max-w-3xl mx-auto space-y-6">
@@ -145,6 +159,14 @@ export default function ReturnDetailPage() {
             {ret.reason_code ? REASON_CODE_LABELS[ret.reason_code] ?? ret.reason_code : '—'}
           </p>
         </div>
+        {ret.return_type !== 'exchange' && (
+          <div>
+            <p className="text-xs text-muted-foreground">Refund Method</p>
+            <p className="text-sm font-semibold capitalize mt-0.5">
+              {ret.refund_channel ? ret.refund_channel.replace('_', ' ') : '—'}
+            </p>
+          </div>
+        )}
         {ret.reason && (
           <div className="col-span-2 md:col-span-3">
             <p className="text-xs text-muted-foreground">Reason</p>
@@ -198,6 +220,18 @@ export default function ReturnDetailPage() {
       {isPending && (
         <div className="rounded-2xl border border-border bg-card p-5 space-y-4">
           <p className="text-sm font-bold">Action Required</p>
+          {showChannelPicker && (
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground">Refund Method</label>
+              <select
+                value={effectiveChannel}
+                onChange={(e) => setRefundChannel(e.target.value)}
+                className="mt-1 w-full bg-background border border-border rounded-xl py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+              >
+                {REFUND_CHANNELS.map((ch) => <option key={ch.value} value={ch.value}>{ch.label}</option>)}
+              </select>
+            </div>
+          )}
           <div>
             <label className="text-xs font-semibold text-muted-foreground">Notes (optional)</label>
             <textarea
@@ -218,7 +252,7 @@ export default function ReturnDetailPage() {
               Reject
             </button>
             <button
-              onClick={() => approve.mutate({ action: 'approve', notes })}
+              onClick={() => approve.mutate({ action: 'approve', notes, ...(showChannelPicker ? { refund_channel: effectiveChannel } : {}) })}
               disabled={approve.isPending}
               className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50"
             >

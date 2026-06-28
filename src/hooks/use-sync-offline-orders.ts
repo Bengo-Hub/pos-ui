@@ -267,6 +267,7 @@ async function syncReturns(tenantID: string) {
           return_type: r.return_type,
           reason: r.reason,
           reason_code: r.reason_code,
+          refund_channel: r.refund_channel,
           lines: r.lines,
         },
         idem(r.local_id),
