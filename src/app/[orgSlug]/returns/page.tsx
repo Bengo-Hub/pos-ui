@@ -24,6 +24,9 @@ interface ReturnItem {
   status: 'pending' | 'approved' | 'rejected' | 'completed';
   refund_amount?: number;
   currency?: string;
+  // refund_channel is the backend field (cash|mpesa|bank|cheque|store_credit|offset_invoice);
+  // refund_method is kept as a fallback for any legacy serialization.
+  refund_channel?: string;
   refund_method?: string;
   created_at: string;
   line_items?: { name: string; qty: number; unit_price: number }[];
@@ -63,8 +66,19 @@ interface InitiateReturnPayload {
   return_type: string;
   reason: string;
   reason_code?: string;
+  refund_channel?: string;
   lines: ReturnLinePayload[];
 }
+
+// REFUND_CHANNELS are the settlement methods a cashier can pick for a refund/store-credit return.
+// Mirrors the pos-api POSReturn.refund_channel enum + treasury's refund_channel field.
+const REFUND_CHANNELS: { value: string; label: string }[] = [
+  { value: 'cash',         label: 'Cash'         },
+  { value: 'mpesa',        label: 'M-Pesa'       },
+  { value: 'bank',         label: 'Bank'         },
+  { value: 'cheque',       label: 'Cheque'       },
+  { value: 'store_credit', label: 'Store Credit' },
+];
 
 function useInitiateReturn() {
   const user = useAuthStore((s) => s.user);
@@ -88,6 +102,7 @@ function useInitiateReturn() {
           return_type: payload.return_type,
           reason: payload.reason,
           reason_code: payload.reason_code,
+          refund_channel: payload.refund_channel,
           lines: payload.lines.map((l) => ({
             order_line_id: l.order_line_id,
             sku: l.sku,
@@ -159,6 +174,10 @@ function InitiateReturnModal({ onClose }: { onClose: () => void }) {
   const [returnType, setReturnType] = useState('refund');
   const [reason, setReason] = useState(RETURN_REASONS[0]);
   const [reasonCode, setReasonCode] = useState('');
+  const [refundChannel, setRefundChannel] = useState('cash');
+  // Exchange top-up: amount to collect from the customer when the replacement is pricier than the
+  // returned goods. Recorded in the return reason so the cashier/accounting has a trail.
+  const [topUpAmount, setTopUpAmount] = useState('');
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const { mutate, isPending, isError } = useInitiateReturn();
@@ -217,13 +236,18 @@ function InitiateReturnModal({ onClose }: { onClose: () => void }) {
         };
       });
     if (returnLines.length === 0) return;
+    const topUp = returnType === 'exchange' ? parseFloat(topUpAmount) || 0 : 0;
+    const reasonWithTopUp =
+      topUp > 0 ? `${reason} · Exchange top-up collected: KES ${topUp.toLocaleString()}` : reason;
     mutate(
       {
         orderId: selectedOrder.id,
         payload: {
           return_type: returnType,
-          reason,
+          reason: reasonWithTopUp,
           ...(reasonCode ? { reason_code: reasonCode } : {}),
+          // Exchanges settle in-kind (no cash refund channel); refunds/store-credit carry the channel.
+          ...(returnType === 'exchange' ? {} : { refund_channel: refundChannel }),
           lines: returnLines,
         },
       },
@@ -422,6 +446,51 @@ function InitiateReturnModal({ onClose }: { onClose: () => void }) {
             </div>
           </div>
 
+          {/* Refund method / channel — for refund & store-credit returns */}
+          {returnType !== 'exchange' && (
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground">Refund Method</label>
+              <div className="flex flex-wrap gap-2 mt-1">
+                {REFUND_CHANNELS.map((ch) => (
+                  <button
+                    key={ch.value}
+                    type="button"
+                    onClick={() => setRefundChannel(ch.value)}
+                    className={cn(
+                      'px-3 py-2 rounded-xl text-xs font-semibold border transition-colors',
+                      refundChannel === ch.value
+                        ? 'bg-primary text-primary-foreground border-primary'
+                        : 'border-border text-muted-foreground hover:text-foreground'
+                    )}
+                  >
+                    {ch.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Exchange top-up — collect the price difference when the replacement is pricier */}
+          {returnType === 'exchange' && (
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground">
+                Top-up to Collect <span className="font-normal">(optional — if replacement is pricier)</span>
+              </label>
+              <div className="relative mt-1">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">KES</span>
+                <input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={topUpAmount}
+                  onChange={(e) => setTopUpAmount(e.target.value)}
+                  placeholder="0.00"
+                  className="w-full bg-background border border-border rounded-xl py-2.5 pl-12 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+                />
+              </div>
+            </div>
+          )}
+
           {/* Reason */}
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -482,6 +551,7 @@ function ReturnByInvoiceModal({ onClose }: { onClose: () => void }) {
   const [query, setQuery] = useState('');
   const [returnType, setReturnType] = useState('refund');
   const [reason, setReason] = useState(RETURN_REASONS[0]);
+  const [refundChannel, setRefundChannel] = useState('cash');
   const initiate = useInitiateReturn();
 
   const { data: order, isFetching, isError } = useQuery({
@@ -499,6 +569,7 @@ function ReturnByInvoiceModal({ onClose }: { onClose: () => void }) {
     const payload: InitiateReturnPayload = {
       return_type: returnType,
       reason,
+      ...(returnType === 'exchange' ? {} : { refund_channel: refundChannel }),
       lines: lines.map((l) => ({
         order_line_id: l.id,
         sku: l.sku ?? '',
@@ -601,6 +672,19 @@ function ReturnByInvoiceModal({ onClose }: { onClose: () => void }) {
                 </select>
               </label>
             </div>
+
+            {returnType !== 'exchange' && (
+              <label className="block">
+                <span className="text-xs font-medium text-muted-foreground">Refund method</span>
+                <select
+                  value={refundChannel}
+                  onChange={(e) => setRefundChannel(e.target.value)}
+                  className="mt-1 w-full bg-background border border-border rounded-xl py-2 px-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+                >
+                  {REFUND_CHANNELS.map((ch) => <option key={ch.value} value={ch.value}>{ch.label}</option>)}
+                </select>
+              </label>
+            )}
 
             <button
               type="button"
@@ -731,7 +815,7 @@ function ReturnsPage() {
                         : '—'}
                     </td>
                     <td className="px-4 py-3.5 text-muted-foreground text-xs capitalize">
-                      {ret.refund_method?.replace('_', ' ') ?? '—'}
+                      {(ret.refund_channel ?? ret.refund_method)?.replace('_', ' ') ?? '—'}
                     </td>
                     <td className="px-4 py-3.5 text-muted-foreground text-xs">
                       {new Date(ret.created_at).toLocaleDateString()}

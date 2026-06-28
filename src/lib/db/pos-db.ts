@@ -151,6 +151,7 @@ export interface OfflineReturn extends SyncState {
   return_type: string; // refund | exchange | store_credit
   reason: string;
   reason_code?: string;
+  refund_channel?: string; // cash | mpesa | bank | cheque | store_credit | offset_invoice
   lines: OfflineReturnLine[];
   refund_amount: number; // for local display / dead-letter summary
   tenant_id: string;
