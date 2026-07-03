@@ -6,7 +6,7 @@ import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
 
 import { onlineOrdersApi, type PickupOrder, type DeliveryOrder } from '@/lib/api/online-orders';
 import { apiErrorMessage } from '@/lib/api/error-message';
-import { useDeliveryOrders } from '@/hooks/useOnlineOrders';
+import { useDeliveryOrders, useDeliveryDispatch } from '@/hooks/useOnlineOrders';
 import { AssignRiderDialog } from '@/components/online-orders/assign-rider-dialog';
 import { MenuQRCard } from '@/components/online-orders/menu-qr-card';
 import { useParams } from 'next/navigation';
@@ -195,14 +195,16 @@ function OnlineOrdersPage() {
   });
 
   const { data: deliveryOrders = [], isLoading: deliveryLoading } = useDeliveryOrders();
+  // POS-native delivery orders placed at the terminal — dispatched directly to logistics.
+  const { data: dispatchOrders = [], isLoading: dispatchLoading } = useDeliveryDispatch();
 
   const [assignTarget, setAssignTarget] = useState<DeliveryOrder | null>(null);
 
   const pending = pickupOrders.filter((o) => o.status !== 'ready_for_pickup');
   const ready   = pickupOrders.filter((o) => o.status === 'ready_for_pickup');
 
-  const isLoading = pickupLoading || deliveryLoading;
-  const isEmpty = pickupOrders.length === 0 && deliveryOrders.length === 0;
+  const isLoading = pickupLoading || deliveryLoading || dispatchLoading;
+  const isEmpty = pickupOrders.length === 0 && deliveryOrders.length === 0 && dispatchOrders.length === 0;
 
   return (
     <div className="p-6 space-y-6">
@@ -250,11 +252,25 @@ function OnlineOrdersPage() {
         </div>
       ) : (
         <div className="space-y-8">
+          {dispatchOrders.length > 0 && (
+            <section>
+              <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-purple-700 dark:text-purple-400 mb-3">
+                <Bike className="h-4 w-4" />
+                Delivery Dispatch — POS ({dispatchOrders.length})
+              </h2>
+              <div className="space-y-3">
+                {dispatchOrders.map((o) => (
+                  <DeliveryOrderCard key={o.id} order={o} onAssign={setAssignTarget} />
+                ))}
+              </div>
+            </section>
+          )}
+
           {deliveryOrders.length > 0 && (
             <section>
               <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-purple-700 dark:text-purple-400 mb-3">
                 <Bike className="h-4 w-4" />
-                Delivery ({deliveryOrders.length})
+                Delivery — Online ({deliveryOrders.length})
               </h2>
               <div className="space-y-3">
                 {deliveryOrders.map((o) => (

@@ -68,6 +68,16 @@ export const onlineOrdersApi = {
         unwrapList(res).filter((o) => o?.metadata?.source === ONLINE_DELIVERY_SOURCE),
       ),
 
+  /**
+   * listDeliveryDispatch surfaces POS-NATIVE delivery orders (order_subtype=delivery placed at the
+   * terminal) that need a rider. Unlike listDelivery (online orders from ordering-backend), these
+   * are served by a dedicated pos-api endpoint and assigned via logistics-api directly.
+   */
+  listDeliveryDispatch: (tenantID: string) =>
+    apiClient
+      .get<{ data: DeliveryOrder[]; total: number } | DeliveryOrder[]>(`${onlineBase(tenantID)}/dispatch`)
+      .then((res): DeliveryOrder[] => unwrapList(res)),
+
   markReady: (tenantID: string, orderID: string) =>
     apiClient.post(`${onlineBase(tenantID)}/${orderID}/ready`, {}),
 

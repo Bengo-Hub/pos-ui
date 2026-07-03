@@ -124,6 +124,26 @@ export function TerminalCart() {
               useCase={t.outlet?.use_case}
             />
           )}
+          {/* Delivery orders capture a dropoff address + notes so a rider can be dispatched
+              (pos-api → logistics). Shown only for the delivery subtype. */}
+          {cfg.showOrderType && t.orderSubtype === 'delivery' && (
+            <div className="mt-2 space-y-2 rounded-xl border border-border bg-muted/20 p-3">
+              <input
+                type="text"
+                value={t.deliveryInfo.address}
+                onChange={(e) => t.setDeliveryInfo({ ...t.deliveryInfo, address: e.target.value })}
+                placeholder="Delivery address"
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+              />
+              <input
+                type="text"
+                value={t.deliveryInfo.notes}
+                onChange={(e) => t.setDeliveryInfo({ ...t.deliveryInfo, notes: e.target.value })}
+                placeholder="Delivery notes (landmark, gate, etc.) — optional"
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+              />
+            </div>
+          )}
           {cfg.showPricingProfile && (
             <div className="flex items-center gap-1.5 mt-2">
               <span className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Price</span>

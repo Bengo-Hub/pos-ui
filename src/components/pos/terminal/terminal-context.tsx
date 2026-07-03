@@ -191,6 +191,8 @@ export interface TerminalContextValue {
   // ── order type / table ──
   orderSubtype: OrderSubtype | null;
   setOrderSubtype: (s: OrderSubtype | null) => void;
+  deliveryInfo: { address: string; notes: string };
+  setDeliveryInfo: (v: { address: string; notes: string }) => void;
   tableId: string;
   tableName: string;
 
@@ -365,6 +367,9 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
   const [orderSubtype, setOrderSubtype] = useState<OrderSubtype | null>(
     tableId ? 'dine_in' : null
   );
+
+  // Delivery dropoff details — captured for delivery orders so a logistics rider can be dispatched.
+  const [deliveryInfo, setDeliveryInfo] = useState<{ address: string; notes: string }>({ address: '', notes: '' });
 
   // Modifier modal
   const [modifierItem, setModifierItem] = useState<MenuItem | null>(null);
@@ -941,6 +946,14 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
         customerPhone: loyaltyState?.customerPhone || undefined,
         customerName: loyaltyState?.customerName || undefined,
         ageVerified: ageVerifiedRef.current || undefined,
+        // Delivery orders carry the dropoff details so pos-api can build a logistics delivery task
+        // when a rider is dispatched. Address/notes come from the customer capture step.
+        metadata: orderSubtype === 'delivery'
+          ? {
+              ...(deliveryInfo.address ? { delivery_address: deliveryInfo.address } : {}),
+              ...(deliveryInfo.notes ? { delivery_notes: deliveryInfo.notes } : {}),
+            }
+          : undefined,
         lines: orderLines,
       },
       {
@@ -1118,6 +1131,12 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
         customerPhone: loyaltyState?.customerPhone || undefined,
         customerName: loyaltyState?.customerName || undefined,
         ageVerified: ageVerifiedRef.current || undefined,
+        metadata: orderSubtype === 'delivery'
+          ? {
+              ...(deliveryInfo.address ? { delivery_address: deliveryInfo.address } : {}),
+              ...(deliveryInfo.notes ? { delivery_notes: deliveryInfo.notes } : {}),
+            }
+          : undefined,
         lines: orderLines,
       });
       const orderId = data.id || data.order_id || '';
@@ -1199,7 +1218,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
     updateQuantity, removeFromCart, clearCart, updateCourse,
     pricingProfile, pricingTiers, repricing, repriceCart,
     loyaltyState, setLoyaltyState, scaleDeviceId,
-    orderSubtype, setOrderSubtype, tableId, tableName,
+    orderSubtype, setOrderSubtype, deliveryInfo, setDeliveryInfo, tableId, tableName,
     billOrderTotal,
     handlePlaceOrder, handlePark, handleResumeParked, createOrderAsync,
     handleInlineSettled, handleInlineSplit,

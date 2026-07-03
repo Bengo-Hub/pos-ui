@@ -12,8 +12,21 @@ function useTenantID() {
 export const onlineOrderKeys = {
   pickup: (tenantID: string) => ['pickup-orders', tenantID] as const,
   delivery: (tenantID: string) => ['delivery-orders', tenantID] as const,
+  dispatch: (tenantID: string) => ['delivery-dispatch', tenantID] as const,
   riders: (tenantID: string) => ['online-order-riders', tenantID] as const,
 };
+
+/** useDeliveryDispatch — POS-native delivery orders awaiting a rider (pos-api /online-orders/dispatch). */
+export function useDeliveryDispatch() {
+  const tenantID = useTenantID();
+  return useQuery({
+    queryKey: onlineOrderKeys.dispatch(tenantID),
+    queryFn: () => onlineOrdersApi.listDeliveryDispatch(tenantID),
+    enabled: !!tenantID,
+    staleTime: 10_000,
+    refetchInterval: 15_000,
+  });
+}
 
 /**
  * useDeliveryOrders — active online DELIVERY orders (metadata.source "online_delivery").
@@ -58,6 +71,7 @@ export function useAssignRider() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: onlineOrderKeys.delivery(tenantID) });
       qc.invalidateQueries({ queryKey: onlineOrderKeys.pickup(tenantID) });
+      qc.invalidateQueries({ queryKey: onlineOrderKeys.dispatch(tenantID) });
     },
   });
 }

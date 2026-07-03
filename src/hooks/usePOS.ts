@@ -782,6 +782,8 @@ interface CreateOrderInput {
   ageVerified?: boolean;
   discountReason?: string;
   approvalToken?: string;
+  /** Order-level metadata (e.g. delivery_address/delivery_lat/delivery_lng/delivery_notes for delivery orders). */
+  metadata?: Record<string, unknown>;
   lines: Array<{
     catalog_item_id: string;
     sku: string;
@@ -849,6 +851,7 @@ export function useCreateOrder() {
           discount_amount: data.discountAmount,
           discount_reason: data.discountReason,
           approval_token: data.approvalToken,
+          metadata: data.metadata,
           lines: data.lines,
           client_reference: localId,
         },
