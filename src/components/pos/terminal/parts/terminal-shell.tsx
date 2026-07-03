@@ -325,7 +325,8 @@ export function TerminalShell() {
             tenantSlug={t.user?.tenant_slug ?? ''}
             profile={cfg.profile}
             isHospitality={t.isHospitality}
-            allowCOD={cfg.profile === 'retail' || cfg.profile === 'quick_service'}
+            // COD is delivery-only (paid to the rider on delivery) — never for takeaway/counter/dine-in.
+            allowCOD={t.orderSubtype === 'delivery'}
             customerEmail={(t.loyaltyState as any)?.customerEmail}
             disabled={cart.length === 0}
             mode={t.isHospitality && t.orderSubtype === 'dine_in' ? 'send_to_kitchen' : 'pay'}

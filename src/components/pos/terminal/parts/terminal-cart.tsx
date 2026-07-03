@@ -315,7 +315,10 @@ export function TerminalCart() {
               tenantSlug={t.user?.tenant_slug ?? ''}
               profile={cfg.profile}
               isHospitality={t.isHospitality}
-              allowCOD={cfg.profile === 'retail' || cfg.profile === 'quick_service'}
+              // COD (Cash on Delivery) is a DELIVERY-only tender — the customer pays the rider on
+              // delivery. It must NOT appear for takeaway/dine-in/counter sales (that money is just
+              // "Cash" at the till). Gate strictly on the delivery subtype, not the outlet profile.
+              allowCOD={t.orderSubtype === 'delivery'}
               customerEmail={(t.loyaltyState as any)?.customerEmail || tenant?.contactEmail || undefined}
               disabled={cart.length === 0}
               mode={t.isHospitality && t.orderSubtype === 'dine_in' ? 'send_to_kitchen' : 'pay'}
