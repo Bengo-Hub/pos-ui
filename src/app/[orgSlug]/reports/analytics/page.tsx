@@ -43,7 +43,7 @@ export default function AnalyticsReportPage() {
 
       <Section title="Sales by Staff" icon={Users} loading={staff.isLoading} empty={!staff.data?.length}
         head={['Staff', 'Orders', 'Revenue']}
-        rows={(staff.data ?? []).map((r) => [`${r.user_id.slice(0, 8)}…`, String(r.order_count), fmt(r.revenue)])} />
+        rows={(staff.data ?? []).map((r) => [r.staff_name || `${r.user_id.slice(0, 8)}…`, String(r.order_count), fmt(r.revenue)])} />
 
       <Section title="Sales by Hour" icon={Clock} loading={hours.isLoading} empty={!hours.data?.length}
         head={['Hour', 'Orders', 'Revenue']}
@@ -59,7 +59,7 @@ export default function AnalyticsReportPage() {
 
       <Section title="Voids" icon={Ban} loading={voids.isLoading} empty={!voids.data?.length}
         head={['Staff', 'Voids', 'Amount', 'Reasons']}
-        rows={(voids.data ?? []).map((r) => [`${(r.voided_by || '').slice(0, 8)}…`, String(r.void_count), fmt(r.total_voided_amount), Object.keys(r.reasons || {}).join(', ') || '—'])} />
+        rows={(voids.data ?? []).map((r) => [r.staff_name || `${(r.voided_by || '').slice(0, 8)}…`, String(r.void_count), fmt(r.total_voided_amount), Object.keys(r.reasons || {}).join(', ') || '—'])} />
     </div>
   );
 }

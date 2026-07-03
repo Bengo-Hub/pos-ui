@@ -159,6 +159,18 @@ class ApiClient {
     return this.instance.get<T>(url, { params }).then((res: AxiosResponse<T>) => res.data);
   }
 
+  /**
+   * Fetch a file as a Blob through the authenticated axios instance (Authorization header
+   * attached). Use this for CSV/PDF downloads instead of a bare <a href> — a plain anchor
+   * navigation does NOT send the bearer token, so the request 401s and the browser shows
+   * "file wasn't available on site".
+   */
+  public getBlob(url: string, params?: any): Promise<Blob> {
+    return this.instance
+      .get(url, { params, responseType: 'blob' })
+      .then((res: AxiosResponse<Blob>) => res.data);
+  }
+
   public post<T>(url: string, data?: any, config?: { headers?: Record<string, string> }): Promise<T> {
     return this.instance.post<T>(url, data, config).then((res: AxiosResponse<T>) => res.data);
   }

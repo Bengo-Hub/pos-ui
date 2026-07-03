@@ -1,8 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import { Check, ChefHat, Loader2, Pencil, Plus, Trash2, X } from 'lucide-react';
+import { Bell, Check, ChefHat, Loader2, Pencil, Play, Plus, Trash2, X } from 'lucide-react';
 import { Button, Card, CardContent } from '@/components/ui/base';
+import { KDS_TONES, getKDSTone, setKDSTone, playKDSTone, type KDSToneId } from '@/lib/kds-sounds';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import {
   useAllKDSStations, useCreateKDSStation, useUpdateKDSStation, useDeleteKDSStation,
@@ -105,6 +106,8 @@ export function KDSStationsTab() {
 
   return (
     <div className="space-y-4">
+      <WaiterToneSetting />
+
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">
           Configure kitchen and bar display stations. Category filters route specific items to each station.
@@ -330,5 +333,50 @@ export function KDSStationsTab() {
         onConfirm={doDelete}
       />
     </div>
+  );
+}
+
+// WaiterToneSetting lets each station pick (and test-play) the tone that rings when the KDS
+// "Call Waiter" action fires. The choice is stored per-device in localStorage.
+function WaiterToneSetting() {
+  const [tone, setTone] = useState<KDSToneId>(() => getKDSTone());
+
+  const choose = (id: KDSToneId) => {
+    setTone(id);
+    setKDSTone(id);
+    playKDSTone(id); // preview on select
+  };
+
+  return (
+    <Card>
+      <CardContent className="pt-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <Bell className="h-4 w-4 text-primary" />
+          <p className="text-sm font-semibold">Waiter Alert Tone</p>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          The sound this station rings when staff tap “Waiter” on a ticket to summon a server. Tap a
+          tone to preview and select it. Saved on this device.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {KDS_TONES.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => choose(t.id)}
+              className={
+                'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm border transition-colors ' +
+                (tone === t.id
+                  ? 'bg-primary text-primary-foreground border-primary'
+                  : 'bg-muted text-muted-foreground border-border hover:bg-muted/80')
+              }
+            >
+              {tone === t.id ? <Check className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
+              {t.label}
+            </button>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
   );
 }

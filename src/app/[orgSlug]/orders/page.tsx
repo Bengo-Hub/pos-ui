@@ -22,6 +22,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { TrackingIframeModal } from '@bengo-hub/shared-ui-lib';
 import { SplitPaymentModal } from '@/components/pos/split-payment-modal';
 import { PrintReceiptButton } from '@/components/pos/print-receipt-button';
+import { VoidBillButton } from '@/components/pos/void-bill-button';
 import { useAuthStore } from '@/store/auth';
 
 const PAGE_SIZE = 20;
@@ -356,6 +357,16 @@ export default function OrdersPage() {
                   className="w-full justify-center"
                 />
               )}
+
+              {/* Void the bill (permission-gated; cashiers require manager approval). Only shows
+                  for still-voidable bills — this is the "void bill" entry point in My Bills/Orders. */}
+              <VoidBillButton
+                orderId={selectedOrder.id}
+                orderNumber={selectedOrder.order_number}
+                status={selectedOrder.status}
+                className="w-full justify-center flex items-center gap-2 px-4 py-2 rounded-xl border border-destructive/40 text-destructive text-sm font-semibold hover:bg-destructive/5 transition-colors"
+                onVoided={() => { setSelectedOrder(null); queryClient.invalidateQueries({ queryKey: ['pos-orders'] }); }}
+              />
 
               {isDeliveryOrder(selectedOrder) && (
                 <Button variant="outline" className="w-full gap-2" onClick={() => setTrackingOpen(true)}>

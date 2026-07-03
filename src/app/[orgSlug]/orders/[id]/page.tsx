@@ -3,6 +3,7 @@
 import { Badge } from '@/components/ui/base';
 import { useOrder } from '@/hooks/usePOS';
 import { PrintReceiptButton } from '@/components/pos/print-receipt-button';
+import { VoidBillButton } from '@/components/pos/void-bill-button';
 import { Loader2 } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
 
@@ -11,7 +12,7 @@ export default function OrderDetailPage() {
   const id = params?.id as string;
   const router = useRouter();
 
-  const { data: order, isLoading } = useOrder(id);
+  const { data: order, isLoading, refetch } = useOrder(id);
 
   if (isLoading) {
     return (
@@ -55,6 +56,8 @@ export default function OrderDetailPage() {
           {order.status !== 'cancelled' && (
             <PrintReceiptButton orderId={id} label={order.status === 'completed' ? 'Print Receipt' : 'Print Bill'} />
           )}
+          {/* Void the bill (post-placement) — permission-gated, with manager approval for cashiers. */}
+          <VoidBillButton orderId={id} orderNumber={order.order_number} status={order.status} onVoided={() => refetch()} />
           <button
             onClick={() => router.back()}
             className="text-sm text-primary underline"

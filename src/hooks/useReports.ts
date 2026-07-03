@@ -29,8 +29,11 @@ export interface RefundSummary {
   total_refunded: number;
 }
 
+export type Granularity = 'day' | 'week' | 'month' | 'quarter' | 'semiannual' | 'year';
+
 export interface DayRow {
   date: string;
+  granularity?: string;
   revenue: number;
   order_count: number;
 }
@@ -44,6 +47,7 @@ export interface TopItem {
 
 export interface StaffRow {
   user_id: string;
+  staff_name?: string;
   order_count: number;
   revenue: number;
 }
@@ -172,6 +176,7 @@ export interface ProductMixRow {
 
 export interface VoidRow {
   voided_by: string;
+  staff_name?: string;
   void_count: number;
   total_voided_amount: number;
   reasons: Record<string, number>;
@@ -219,11 +224,14 @@ export function useRefundSummary(from: string, to: string) {
   });
 }
 
-export function useDailyBreakdown(from: string, to: string, enabled = true) {
+export function useDailyBreakdown(from: string, to: string, enabled = true, granularity: Granularity = 'day') {
   const tenantID = useTenantID();
   return useQuery({
-    queryKey: reportKeys.daily(tenantID, from, to),
-    queryFn: () => apiClient.get<DayRow[]>(`${basePath(tenantID)}/daily-breakdown`, { from, to }),
+    queryKey: [...reportKeys.daily(tenantID, from, to), granularity],
+    queryFn: async () => {
+      const res = await apiClient.get<DayRow[] | { data?: DayRow[] }>(`${basePath(tenantID)}/daily-breakdown`, { from, to, granularity });
+      return Array.isArray(res) ? res : res?.data ?? [];
+    },
     enabled: !!tenantID && !!from && !!to && enabled,
   });
 }
@@ -282,7 +290,11 @@ export function useSalesByHour(from: string, to: string) {
   const tenantID = useTenantID();
   return useQuery({
     queryKey: reportKeys.salesByHour(tenantID, from, to),
-    queryFn: () => apiClient.get<HourRow[]>(`${basePath(tenantID)}/sales-by-hour`, { from, to }),
+    // Backend returns { date, hours: [...] } — unwrap to the array the UI maps over.
+    queryFn: async () => {
+      const res = await apiClient.get<{ hours?: HourRow[] } | HourRow[]>(`${basePath(tenantID)}/sales-by-hour`, { from, to });
+      return Array.isArray(res) ? res : res?.hours ?? [];
+    },
     enabled: !!tenantID && !!from && !!to,
     staleTime: 2 * 60_000,
   });
@@ -292,7 +304,11 @@ export function useSalesByCategory(from: string, to: string) {
   const tenantID = useTenantID();
   return useQuery({
     queryKey: reportKeys.salesByCategory(tenantID, from, to),
-    queryFn: () => apiClient.get<CategoryRow[]>(`${basePath(tenantID)}/sales-by-category`, { from, to }),
+    // Backend returns { data: [...], total } — unwrap to the array the UI maps over.
+    queryFn: async () => {
+      const res = await apiClient.get<{ data?: CategoryRow[] } | CategoryRow[]>(`${basePath(tenantID)}/sales-by-category`, { from, to });
+      return Array.isArray(res) ? res : res?.data ?? [];
+    },
     enabled: !!tenantID && !!from && !!to,
     staleTime: 2 * 60_000,
   });
@@ -302,7 +318,11 @@ export function useProductMix(from: string, to: string) {
   const tenantID = useTenantID();
   return useQuery({
     queryKey: reportKeys.productMix(tenantID, from, to),
-    queryFn: () => apiClient.get<ProductMixRow[]>(`${basePath(tenantID)}/product-mix`, { from, to }),
+    // Backend returns { from, to, by_subtype, top_items } — the product-level table uses top_items.
+    queryFn: async () => {
+      const res = await apiClient.get<{ top_items?: ProductMixRow[] } | ProductMixRow[]>(`${basePath(tenantID)}/product-mix`, { from, to });
+      return Array.isArray(res) ? res : res?.top_items ?? [];
+    },
     enabled: !!tenantID && !!from && !!to,
     staleTime: 2 * 60_000,
   });
@@ -312,7 +332,11 @@ export function useVoidSummary(from: string, to: string) {
   const tenantID = useTenantID();
   return useQuery({
     queryKey: reportKeys.voidSummary(tenantID, from, to),
-    queryFn: () => apiClient.get<VoidRow[]>(`${basePath(tenantID)}/void-summary`, { from, to }),
+    // Backend returns { from, to, items: [...] } — unwrap to the array the UI maps over.
+    queryFn: async () => {
+      const res = await apiClient.get<{ items?: VoidRow[] } | VoidRow[]>(`${basePath(tenantID)}/void-summary`, { from, to });
+      return Array.isArray(res) ? res : res?.items ?? [];
+    },
     enabled: !!tenantID && !!from && !!to,
     staleTime: 2 * 60_000,
   });
@@ -320,6 +344,24 @@ export function useVoidSummary(from: string, to: string) {
 
 export function useReportExportUrl(tenantID: string, from: string, to: string) {
   return `/api/v1/${tenantID}/pos/reports/export?from=${from}&to=${to}`;
+}
+
+/**
+ * Download the sales CSV through the AUTHENTICATED api client and save it via a temporary
+ * object URL. A bare <a href download> navigated the browser to the export endpoint WITHOUT
+ * the bearer token → 401 → "file wasn't available on site". This fetches the blob with auth
+ * and triggers a real file save.
+ */
+export async function downloadReportCSV(tenantID: string, from: string, to: string): Promise<void> {
+  const blob = await apiClient.getBlob(`${basePath(tenantID)}/export`, { from, to });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `sales-${from}-${to}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }
 
 export function useShiftReportDetail(sessionId: string) {

@@ -4,7 +4,9 @@ import { ModuleGate } from '@/components/auth/module-gate';
 import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
 
 import { Badge } from '@/components/ui/base';
-import { cn } from '@/lib/utils';
+import { cn, formatElapsed } from '@/lib/utils';
+import { useNow } from '@/hooks/useNow';
+import { playKDSTone } from '@/lib/kds-sounds';
 import {
   useKDSStations,
   useKDSTickets,
@@ -37,8 +39,8 @@ import type { KDSStationType } from '@/hooks/useKDS';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function elapsedMinutes(receivedAt: string): number {
-  return Math.max(0, Math.floor((Date.now() - new Date(receivedAt).getTime()) / 60_000));
+function elapsedMinutes(receivedAt: string, now: number = Date.now()): number {
+  return Math.max(0, Math.floor((now - new Date(receivedAt).getTime()) / 60_000));
 }
 
 function timerClasses(minutes: number): string {
@@ -141,7 +143,9 @@ function TicketCard({ ticket }: { ticket: KDSTicket }) {
   // but cannot fire/bump tickets — only KDS_CHANGE holders see prep actions.
   const canChange  = can(P.KDS_CHANGE);
 
-  const mins        = elapsedMinutes(ticket.received_at);
+  const now         = useNow(1000); // live-ticking clock so the age timer counts up in real time
+  const mins        = elapsedMinutes(ticket.received_at, now);
+  const elapsedLabel = formatElapsed(now - new Date(ticket.received_at).getTime());
   const isPending   = ticket.status === 'pending';
   const isInProgress = ticket.status === 'in_progress';
   const isReady     = ticket.status === 'ready';
@@ -171,7 +175,7 @@ function TicketCard({ ticket }: { ticket: KDSTicket }) {
         {/* Timer */}
         <div className={cn('flex items-center gap-1.5 text-xs', timerClasses(mins))}>
           <Clock className="h-3.5 w-3.5" />
-          <span>{mins}m ago</span>
+          <span>{elapsedLabel} ago</span>
           {mins > 10 && <span className="text-[10px] opacity-80">— overdue</span>}
         </div>
       </div>
@@ -226,7 +230,10 @@ function TicketCard({ ticket }: { ticket: KDSTicket }) {
           <ActionButton
             icon={<PhoneCall className="h-3.5 w-3.5" />}
             label="Waiter"
-            onClick={() => callWaiter.mutate(ticket.id)}
+            onClick={() => {
+              playKDSTone(); // ring the configured tone to summon a waiter to this station
+              callWaiter.mutate(ticket.id);
+            }}
             loading={callWaiter.isPending}
             className="bg-muted hover:bg-muted/80 text-muted-foreground shrink-0"
           />

@@ -9,12 +9,14 @@ import {
   useDailyBreakdown,
   useTopItems,
   useSalesByStaff,
-  useReportExportUrl,
+  downloadReportCSV,
+  type Granularity,
 } from '@/hooks/useReports';
 import { useAuthStore } from '@/store/auth';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 import {
   BarChart3,
   DollarSign,
@@ -28,35 +30,71 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 
-function periodToRange(period: 'today' | 'week' | 'month'): { from: string; to: string } {
+// Each drill-down granularity drives BOTH the trend bucket size and how far back the report
+// range spans (enough buckets to be a meaningful trend). Buckets: day/week/month/quarter/
+// half-year (semiannual = "bi-quarterly")/year.
+const GRAN_OPTIONS: { key: Granularity; label: string; buckets: number }[] = [
+  { key: 'day', label: 'Daily', buckets: 30 },
+  { key: 'week', label: 'Weekly', buckets: 12 },
+  { key: 'month', label: 'Monthly', buckets: 12 },
+  { key: 'quarter', label: 'Quarterly', buckets: 8 },
+  { key: 'semiannual', label: 'Half-Year', buckets: 6 },
+  { key: 'year', label: 'Yearly', buckets: 5 },
+];
+
+function granularityToRange(gran: Granularity, buckets: number): { from: string; to: string } {
   const now = new Date();
   const fmt = (d: Date) => d.toISOString().slice(0, 10);
-  if (period === 'today') return { from: fmt(now), to: fmt(now) };
-  if (period === 'week') {
-    const start = new Date(now);
-    start.setDate(now.getDate() - 6);
-    return { from: fmt(start), to: fmt(now) };
+  const start = new Date(now);
+  switch (gran) {
+    case 'day': start.setDate(now.getDate() - (buckets - 1)); break;
+    case 'week': start.setDate(now.getDate() - (buckets - 1) * 7); break;
+    case 'month': start.setMonth(now.getMonth() - (buckets - 1)); break;
+    case 'quarter': start.setMonth(now.getMonth() - (buckets - 1) * 3); break;
+    case 'semiannual': start.setMonth(now.getMonth() - (buckets - 1) * 6); break;
+    case 'year': start.setFullYear(now.getFullYear() - (buckets - 1)); break;
   }
-  const start = new Date(now.getFullYear(), now.getMonth(), 1);
   return { from: fmt(start), to: fmt(now) };
 }
 
-const PERIODS = ['today', 'week', 'month'] as const;
-type Period = (typeof PERIODS)[number];
-const PERIOD_LABELS: Record<Period, string> = { today: 'Today', week: 'This Week', month: 'This Month' };
+// Human label for a bucket start date given the granularity.
+function bucketLabel(dateISO: string, gran: Granularity): string {
+  const d = new Date(dateISO + 'T00:00:00');
+  const mon = d.toLocaleString(undefined, { month: 'short' });
+  switch (gran) {
+    case 'day': return dateISO.slice(5);
+    case 'week': return `${mon} ${d.getDate()}`;
+    case 'month': return `${mon} ${String(d.getFullYear()).slice(2)}`;
+    case 'quarter': return `Q${Math.floor(d.getMonth() / 3) + 1} ${String(d.getFullYear()).slice(2)}`;
+    case 'semiannual': return `${d.getMonth() < 6 ? 'H1' : 'H2'} ${String(d.getFullYear()).slice(2)}`;
+    case 'year': return String(d.getFullYear());
+  }
+}
 
 function ReportsPage() {
   const tenantID = useAuthStore((s) => s.user?.tenant_id ?? '');
   const orgSlug = (useParams()?.orgSlug as string) || '';
-  const [period, setPeriod] = useState<Period>('today');
-  const { from, to } = periodToRange(period);
+  const [gran, setGran] = useState<Granularity>('day');
+  const [exporting, setExporting] = useState(false);
+  const buckets = GRAN_OPTIONS.find((g) => g.key === gran)?.buckets ?? 30;
+  const { from, to } = granularityToRange(gran, buckets);
 
   const { data: sales, isLoading: salesLoading, isError: salesError, refetch: refetchSales } = useSalesSummary(from, to);
   const { data: refunds } = useRefundSummary(from, to);
-  const { data: daily = [] } = useDailyBreakdown(from, to, period !== 'today');
+  const { data: daily = [] } = useDailyBreakdown(from, to, true, gran);
   const { data: topItems = [] } = useTopItems(from, to);
   const { data: staffSales = [] } = useSalesByStaff(from, to);
-  const exportUrl = useReportExportUrl(tenantID, from, to);
+
+  async function handleExport() {
+    setExporting(true);
+    try {
+      await downloadReportCSV(tenantID, from, to);
+    } catch {
+      toast.error('Could not export the report. Please try again.');
+    } finally {
+      setExporting(false);
+    }
+  }
 
   const kpis = sales
     ? [
@@ -77,26 +115,26 @@ function ReportsPage() {
           <p className="text-sm text-muted-foreground mt-1">Sales and performance summary</p>
         </div>
         <div className="flex gap-2 flex-wrap">
-          {PERIODS.map((p) => (
+          {GRAN_OPTIONS.map((g) => (
             <button
-              key={p}
-              onClick={() => setPeriod(p)}
+              key={g.key}
+              onClick={() => setGran(g.key)}
               className={cn(
                 'px-4 py-2 rounded-xl text-sm font-medium transition-colors',
-                period === p ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/80',
+                gran === g.key ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/80',
               )}
             >
-              {PERIOD_LABELS[p]}
+              {g.label}
             </button>
           ))}
-          <a
-            href={exportUrl}
-            download
-            className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium bg-muted text-muted-foreground hover:bg-muted/80 transition-colors"
+          <button
+            onClick={handleExport}
+            disabled={exporting}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium bg-muted text-muted-foreground hover:bg-muted/80 transition-colors disabled:opacity-60"
           >
-            <Download className="h-3.5 w-3.5" />
+            {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
             Export CSV
-          </a>
+          </button>
           <Link
             href={`/${orgSlug}/reports/analytics`}
             className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium bg-muted text-muted-foreground hover:bg-muted/80 transition-colors"
@@ -161,31 +199,37 @@ function ReportsPage() {
             </Card>
           )}
 
-          {daily.length > 1 && (
-            <Card>
-              <CardContent className="p-5">
-                <p className="text-sm font-semibold mb-4">Daily Revenue</p>
+          <Card>
+            <CardContent className="p-5">
+              <p className="text-sm font-semibold mb-4">
+                {GRAN_OPTIONS.find((g) => g.key === gran)?.label ?? 'Revenue'} Revenue Trend
+              </p>
+              {daily.length === 0 || daily.every((r) => r.revenue === 0) ? (
+                <div className="h-32 flex items-center justify-center text-sm text-muted-foreground">
+                  No revenue recorded in this period.
+                </div>
+              ) : (
                 <div className="flex items-end gap-1 h-32">
                   {daily.map((row) => {
                     const pct = maxRevenue > 0 ? (row.revenue / maxRevenue) * 100 : 0;
                     return (
-                      <div key={row.date} className="flex-1 flex flex-col items-center gap-1 group" title={`${row.date}: KES ${row.revenue.toLocaleString()}`}>
-                        <div className="w-full bg-primary/20 rounded-t-sm relative" style={{ height: '100%' }}>
+                      <div key={row.date} className="flex-1 flex flex-col items-center gap-1 group" title={`${bucketLabel(row.date, gran)}: KES ${row.revenue.toLocaleString()}`}>
+                        <div className="w-full bg-primary/20 rounded-t-sm relative flex-1">
                           <div
                             className="absolute bottom-0 w-full bg-primary rounded-t-sm transition-all"
                             style={{ height: `${pct}%` }}
                           />
                         </div>
-                        <span className="text-[9px] text-muted-foreground rotate-45 origin-left hidden sm:block">
-                          {row.date.slice(5)}
+                        <span className="text-[9px] text-muted-foreground rotate-45 origin-left hidden sm:block whitespace-nowrap">
+                          {bucketLabel(row.date, gran)}
                         </span>
                       </div>
                     );
                   })}
                 </div>
-              </CardContent>
-            </Card>
-          )}
+              )}
+            </CardContent>
+          </Card>
 
           {topItems.length > 0 && (
             <Card>
@@ -231,7 +275,7 @@ function ReportsPage() {
                   {staffSales.map((row) => (
                     <div key={row.user_id} className="flex items-center justify-between py-2.5 text-sm">
                       <div>
-                        <p className="font-medium text-foreground font-mono text-xs">{row.user_id.slice(0, 8)}…</p>
+                        <p className="font-medium text-foreground">{row.staff_name || `${row.user_id.slice(0, 8)}…`}</p>
                         <p className="text-xs text-muted-foreground">{row.order_count} orders</p>
                       </div>
                       <p className="font-semibold text-foreground">KES {row.revenue.toLocaleString()}</p>

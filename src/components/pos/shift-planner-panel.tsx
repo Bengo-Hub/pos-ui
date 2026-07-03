@@ -8,6 +8,7 @@ import { useAllShiftOverrides } from '@/hooks/useShiftOverrides';
 import { useLeaveRequests } from '@/hooks/useLeaveRequests';
 import { useAllActiveRotationDetails } from '@/hooks/useShiftRotations';
 import { useAuthStore } from '@/store/auth';
+import { useOutletFilterStore } from '@/store/outlet-filter';
 import type { StaffMember } from '@/lib/api/staff';
 import type { ShiftOverride } from '@/lib/api/shift-overrides';
 import type { LeaveRequest } from '@/lib/api/leave-requests';
@@ -186,12 +187,22 @@ function StaffScheduleRow({
 export function ShiftPlannerPanel() {
   const user = useAuthStore((s) => s.user);
   const tenantId = user?.tenant_id ?? '';
+  // Scope the planner to the CURRENT outlet so staff/roles from other outlets & use cases don't
+  // mix (e.g. a Pharmacist/Therapist appearing on a hospitality outlet's roster). When an HQ admin
+  // has drilled into an outlet, use that; otherwise the operator's home outlet.
+  const drillOutletId = useOutletFilterStore((s) => s.selectedOutlet?.id);
+  const homeOutletId = useAuthStore((s) => s.selectedOutletId || s.outlet?.id);
+  const currentOutletId = drillOutletId || homeOutletId || '';
 
   const [weekStart, setWeekStart] = useState(() => getWeekStart(new Date()));
   const [selectedStaff, setSelectedStaff] = useState<StaffMember | null>(null);
 
   const { data, isLoading } = useStaffAdmin(tenantId);
-  const members: StaffMember[] = (data?.data ?? []).filter((m) => m.is_active);
+  const members: StaffMember[] = (data?.data ?? [])
+    .filter((m) => m.is_active)
+    // Only show staff assigned to the current outlet. Without a resolved outlet (pure HQ view)
+    // fall back to showing all so nothing disappears unexpectedly.
+    .filter((m) => !currentOutletId || m.outlet_id === currentOutletId);
 
   const today = new Date();
   const isCurrentWeek = weekStart.toDateString() === getWeekStart(today).toDateString();

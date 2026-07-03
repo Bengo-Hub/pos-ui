@@ -1,0 +1,99 @@
+'use client';
+
+import { useState } from 'react';
+import { Ban } from 'lucide-react';
+import { toast } from 'sonner';
+import { useVoidOrder } from '@/hooks/usePOS';
+import { usePermissions, P } from '@/hooks/usePermissions';
+import { useAuthStore } from '@/store/auth';
+import { VoidOrderModal } from '@/components/pos/void-order-modal';
+import { ManagerPinDialog } from '@/components/pos/manager-pin-dialog';
+
+// Roles allowed to void a bill WITHOUT a manager step-up. Everyone else who holds pos.orders.void
+// (e.g. cashiers) must get a manager PIN/QR approval first. Kept in sync with the terminal flow.
+const VOID_SELF_ROLES = ['admin', 'manager', 'pos_admin', 'store_manager', 'owner', 'super_admin', 'superuser'];
+
+// Bill states that can still be voided. Paid/closed bills go through Returns/Refunds instead;
+// already cancelled/voided bills are terminal.
+const VOIDABLE_STATUSES = ['open', 'pending', 'draft', 'sent', 'in_progress', 'parked', 'unpaid', 'partial'];
+
+interface VoidBillButtonProps {
+  orderId: string;
+  orderNumber: string;
+  status: string;
+  onVoided?: () => void;
+  className?: string;
+}
+
+/**
+ * Reusable "Void Bill" control for the Orders list / bill detail / My Bills — the same
+ * permission + reason + manager-approval flow the live terminal uses, so a bill can be voided
+ * AFTER it was placed (not only while it is open in the terminal). Hidden entirely for users
+ * without pos.orders.void and for bills that are no longer voidable.
+ */
+export function VoidBillButton({ orderId, orderNumber, status, onVoided, className }: VoidBillButtonProps) {
+  const { can } = usePermissions();
+  const role = (useAuthStore((s) => s.user?.roles?.[0]) ?? '') as string;
+  const voidOrder = useVoidOrder();
+
+  const [reasonOpen, setReasonOpen] = useState(false);
+  const [pendingReason, setPendingReason] = useState<string | null>(null);
+
+  // Gate on permission AND a voidable status.
+  if (!can(P.ORDERS_VOID)) return null;
+  if (!VOIDABLE_STATUSES.includes((status || '').toLowerCase())) return null;
+
+  async function finalizeVoid(reason: string, approvalToken?: string) {
+    try {
+      await voidOrder.mutateAsync({ orderId, reason, approvalToken });
+      toast.success(`Bill #${orderNumber} voided`);
+      onVoided?.();
+    } catch {
+      toast.error('Could not void this bill. Please try again.');
+    }
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setReasonOpen(true)}
+        className={
+          className ??
+          'flex items-center gap-2 px-4 py-2 rounded-xl border border-destructive/40 text-destructive text-sm font-semibold hover:bg-destructive/5 transition-colors'
+        }
+      >
+        <Ban className="h-4 w-4" />
+        Void Bill
+      </button>
+
+      <VoidOrderModal
+        open={reasonOpen}
+        orderId={orderId}
+        orderNumber={orderNumber}
+        onClose={() => setReasonOpen(false)}
+        onConfirm={async (reason) => {
+          if (VOID_SELF_ROLES.includes(role)) {
+            await finalizeVoid(reason);
+          } else {
+            // Cashier / non-manager: require a manager PIN/QR step-up before the void lands.
+            setReasonOpen(false);
+            setPendingReason(reason);
+          }
+        }}
+      />
+
+      <ManagerPinDialog
+        open={pendingReason !== null}
+        action="order.void"
+        label={`void bill #${orderNumber}`}
+        onClose={() => setPendingReason(null)}
+        onApproved={async (token) => {
+          const reason = pendingReason ?? '';
+          setPendingReason(null);
+          await finalizeVoid(reason, token);
+        }}
+      />
+    </>
+  );
+}

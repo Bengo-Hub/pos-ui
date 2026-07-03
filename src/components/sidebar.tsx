@@ -286,9 +286,11 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
         // Hospitality parks bills on tables, not a back-office drafts list.
         { label: 'Drafts', icon: FileText, href: '/sell/drafts', moduleKey: 'orders', permission: [P.ORDERS_ADD, P.ORDERS_CHANGE_OWN, P.ORDERS_CHANGE, P.ORDERS_MANAGE], waiterHidden: true, hideForProfiles: ['hospitality', 'quick_service'] },
         // Credit Sale = sell on account (on_account tender → treasury AR; credit limit enforced).
-        { label: 'Credit Sale', icon: HandCoins, href: '/sell/add?credit=1', moduleKey: 'new_order', permission: [P.ORDERS_ADD, P.ORDERS_MANAGE], waiterHidden: true, cashierHospHidden: true },
+        // Back-office (retail/services/pharmacy) only — hospitality/QSR settle per table/room at the terminal.
+        { label: 'Credit Sale', icon: HandCoins, href: '/sell/add?credit=1', moduleKey: 'new_order', permission: [P.ORDERS_ADD, P.ORDERS_MANAGE], waiterHidden: true, cashierHospHidden: true, hideForProfiles: ['hospitality', 'quick_service'] },
         // Quotations are owned by treasury — link to its UI rather than duplicating the page.
-        { label: 'Quotations', icon: FileText, href: `${TREASURY_URL}/${orgSlug}/quotations`, moduleKey: 'orders', permission: [P.ORDERS_ADD, P.ORDERS_MANAGE, P.REPORTS_VIEW], waiterHidden: true },
+        // Not applicable to hospitality/QSR (no B2B quoting off a restaurant/bar terminal).
+        { label: 'Quotations', icon: FileText, href: `${TREASURY_URL}/${orgSlug}/quotations`, moduleKey: 'orders', permission: [P.ORDERS_ADD, P.ORDERS_MANAGE, P.REPORTS_VIEW], waiterHidden: true, hideForProfiles: ['hospitality', 'quick_service'] },
         { label: 'Layaway', icon: Package, href: '/layaway', moduleKey: 'layaway', permission: [P.ORDERS_ADD, P.ORDERS_CHANGE_OWN, P.ORDERS_CHANGE, P.ORDERS_MANAGE], subFeature: 'layaway', subPlan: 'Growth', waiterHidden: true },
         { label: 'Sell Returns', icon: RotateCcw, href: '/returns', moduleKey: 'returns', permission: [P.ORDERS_CHANGE_OWN, P.ORDERS_CHANGE, P.ORDERS_MANAGE], waiterHidden: true },
       ],
