@@ -8,6 +8,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import {
   useAllKDSStations, useCreateKDSStation, useUpdateKDSStation, useDeleteKDSStation,
 } from '@/hooks/useKDS';
+import { useCategories } from '@/hooks/usePOS';
 import { usePermissions } from '@/hooks/usePermissions';
 import { P } from '@/lib/rbac/permissions';
 import { useAuthStore } from '@/store/auth';
@@ -15,15 +16,64 @@ import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { Toggle, inputClass, labelClass } from './shared';
 
-const KDS_CATEGORIES = [
-  'food', 'mains', 'starters', 'desserts', 'drinks',
-  'cocktails', 'mocktails', 'beverages', 'sides',
-];
-
 type StationRef = { id: string; name: string; is_active: boolean };
+
+// Merge the live inventory categories with any values already selected on a station so that
+// stale filters (a category that no longer exists in inventory) still render and can be removed.
+function mergeCategories(live: string[], selected: string[]): string[] {
+  const seen = new Set(live.map((c) => c.toLowerCase()));
+  const extra = selected.filter((c) => !seen.has(c.toLowerCase()));
+  return [...live, ...extra];
+}
+
+// CategoryChips renders the category filter picker. Chips already claimed by ANOTHER station are
+// shown deactivated so the same category cannot be routed to two stations.
+function CategoryChips({
+  categories, selected, usedElsewhere, onToggle, loading,
+}: {
+  categories: string[];
+  selected: string[];
+  usedElsewhere: Set<string>; // lowercased category names claimed by other stations
+  onToggle: (cat: string) => void;
+  loading?: boolean;
+}) {
+  if (loading) {
+    return <p className="text-xs text-muted-foreground">Loading categories…</p>;
+  }
+  if (categories.length === 0) {
+    return <p className="text-xs text-muted-foreground">No categories found in inventory.</p>;
+  }
+  return (
+    <div className="flex flex-wrap gap-2">
+      {categories.map((cat) => {
+        const isSel = selected.includes(cat);
+        const blocked = !isSel && usedElsewhere.has(cat.toLowerCase());
+        return (
+          <button
+            key={cat}
+            type="button"
+            disabled={blocked}
+            title={blocked ? 'Already assigned to another station' : undefined}
+            onClick={() => onToggle(cat)}
+            className={`px-3 py-1 rounded-full text-xs font-semibold border transition-colors ${
+              isSel
+                ? 'bg-primary text-primary-foreground border-primary'
+                : blocked
+                ? 'border-border/40 text-muted-foreground/40 line-through cursor-not-allowed'
+                : 'border-border text-muted-foreground hover:border-primary'
+            }`}
+          >
+            {cat}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
 export function KDSStationsTab() {
   const { data, isLoading } = useAllKDSStations();
+  const { data: categoriesData, isLoading: catsLoading } = useCategories();
   const createStation = useCreateKDSStation();
   const updateStation = useUpdateKDSStation();
   const deleteStation = useDeleteKDSStation();
@@ -39,6 +89,16 @@ export function KDSStationsTab() {
   const [confirmDelete, setConfirmDelete] = useState<StationRef | null>(null);
 
   const stations = data?.data ?? [];
+  const liveCategories = (categoriesData ?? []).map((c) => c.name);
+
+  // Categories claimed by other stations (lowercased). excludeId keeps a station from
+  // conflicting with itself when editing. Drives chip deactivation to prevent duplicates.
+  const usedByOthers = (excludeId?: string) =>
+    new Set(
+      stations
+        .filter((s) => s.id !== excludeId)
+        .flatMap((s) => (s.category_filter ?? []).map((c) => c.toLowerCase())),
+    );
 
   const handleCreate = async () => {
     if (!form.name.trim()) return;
@@ -146,30 +206,18 @@ export function KDSStationsTab() {
             </div>
             <div className="space-y-1">
               <label className={labelClass}>Category Filters (leave empty to show all)</label>
-              <div className="flex flex-wrap gap-2">
-                {KDS_CATEGORIES.map((cat) => {
-                  const selected = form.category_filter.includes(cat);
-                  return (
-                    <button
-                      key={cat}
-                      type="button"
-                      onClick={() => setForm((f) => ({
-                        ...f,
-                        category_filter: selected
-                          ? f.category_filter.filter((c) => c !== cat)
-                          : [...f.category_filter, cat],
-                      }))}
-                      className={`px-3 py-1 rounded-full text-xs font-semibold border transition-colors ${
-                        selected
-                          ? 'bg-primary text-primary-foreground border-primary'
-                          : 'border-border text-muted-foreground hover:border-primary'
-                      }`}
-                    >
-                      {cat}
-                    </button>
-                  );
-                })}
-              </div>
+              <CategoryChips
+                categories={mergeCategories(liveCategories, form.category_filter)}
+                selected={form.category_filter}
+                usedElsewhere={usedByOthers()}
+                loading={catsLoading}
+                onToggle={(cat) => setForm((f) => ({
+                  ...f,
+                  category_filter: f.category_filter.includes(cat)
+                    ? f.category_filter.filter((c) => c !== cat)
+                    : [...f.category_filter, cat],
+                }))}
+              />
             </div>
             <div className="flex gap-2 justify-end">
               <Button variant="outline" size="sm" onClick={() => setShowForm(false)}>Cancel</Button>
@@ -217,30 +265,18 @@ export function KDSStationsTab() {
                   </div>
                   <div className="space-y-1">
                     <label className={labelClass}>Category Filters</label>
-                    <div className="flex flex-wrap gap-2">
-                      {KDS_CATEGORIES.map((cat) => {
-                        const sel = editForm.category_filter.includes(cat);
-                        return (
-                          <button
-                            key={cat}
-                            type="button"
-                            onClick={() => setEditForm((f) => ({
-                              ...f,
-                              category_filter: sel
-                                ? f.category_filter.filter((c) => c !== cat)
-                                : [...f.category_filter, cat],
-                            }))}
-                            className={`px-3 py-1 rounded-full text-xs font-semibold border transition-colors ${
-                              sel
-                                ? 'bg-primary text-primary-foreground border-primary'
-                                : 'border-border text-muted-foreground hover:border-primary'
-                            }`}
-                          >
-                            {cat}
-                          </button>
-                        );
-                      })}
-                    </div>
+                    <CategoryChips
+                      categories={mergeCategories(liveCategories, editForm.category_filter)}
+                      selected={editForm.category_filter}
+                      usedElsewhere={usedByOthers(station.id)}
+                      loading={catsLoading}
+                      onToggle={(cat) => setEditForm((f) => ({
+                        ...f,
+                        category_filter: f.category_filter.includes(cat)
+                          ? f.category_filter.filter((c) => c !== cat)
+                          : [...f.category_filter, cat],
+                      }))}
+                    />
                   </div>
                   <div className="flex gap-2 justify-end">
                     <Button variant="outline" size="sm" onClick={() => setEditingId(null)}>

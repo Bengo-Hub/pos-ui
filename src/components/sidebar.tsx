@@ -50,8 +50,6 @@ import Link from 'next/link';
 import { useParams, usePathname } from 'next/navigation';
 import { useState } from 'react';
 import { OutletSwitcher } from './outlet-switcher';
-
-const SUBSCRIBE_URL = process.env.NEXT_PUBLIC_SUBSCRIPTIONS_UI_URL || 'https://pricing.codevertexitsolutions.com';
 const INVENTORY_URL = process.env.NEXT_PUBLIC_INVENTORY_UI_URL || 'https://inventory.codevertexitsolutions.com';
 // Cross-service UIs we LINK to (never duplicate their pages). Code fallback is the real safety net
 // since NEXT_PUBLIC URLs are baked at build time.
@@ -110,23 +108,15 @@ function NavLink({ item, orgSlug, onClose, locked, subPlan }: {
       : pathname.startsWith(href);
   const Icon = item.icon;
 
-  if (locked) {
-    return (
-      <a
-        href={`${SUBSCRIBE_URL}/subscribe`}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="group flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 text-sm text-sidebar-foreground/35 hover:text-sidebar-foreground/55 hover:bg-sidebar-foreground/5 font-medium"
-      >
-        <Icon className="h-4.5 w-4.5 shrink-0 opacity-50" />
-        <span className="truncate flex-1">{item.label}</span>
-        <span className="flex items-center gap-1 rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-bold text-amber-500 border border-amber-500/20 shrink-0">
-          <Lock className="h-2.5 w-2.5" />
-          {subPlan ?? 'Pro'}
-        </span>
-      </a>
-    );
-  }
+  // Subscription-locked items stay navigable — they open the real page, which surfaces its
+  // own upgrade blocker. We only add an amber "upgrade" badge as a hint; never a dead-end
+  // link to the pricing page (that hid the feature behind an external bounce).
+  const lockBadge = locked ? (
+    <span className="flex items-center gap-1 rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-bold text-amber-500 border border-amber-500/20 shrink-0">
+      <Lock className="h-2.5 w-2.5" />
+      {subPlan ?? 'Pro'}
+    </span>
+  ) : null;
 
   if (isExternal) {
     return (
@@ -158,7 +148,8 @@ function NavLink({ item, orgSlug, onClose, locked, subPlan }: {
       )}
     >
       <Icon className={cn('h-4.5 w-4.5 shrink-0 transition-transform duration-200', !active && 'group-hover:scale-110')} />
-      <span className="truncate">{item.label}</span>
+      <span className="truncate flex-1">{item.label}</span>
+      {!active && lockBadge}
     </Link>
   );
 }
