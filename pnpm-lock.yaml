@@ -15,8 +15,8 @@ importers:
         specifier: ^1.5.0
         version: 1.5.0(@types/react@19.2.14)(date-fns@4.1.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       '@bengo-hub/shared-ui-lib':
-        specifier: github:Bengo-Hub/shared-ui-lib#v0.1.25
-        version: https://codeload.github.com/Bengo-Hub/shared-ui-lib/tar.gz/3a464d543d9da9c88ff418d89ca3babf4a735ee0(lucide-react@0.475.0(react@19.2.4))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+        specifier: github:Bengo-Hub/shared-ui-lib#v0.1.26
+        version: https://codeload.github.com/Bengo-Hub/shared-ui-lib/tar.gz/f8f2166ea334556d82caedd7d74fda11bbb12eb2(lucide-react@0.475.0(react@19.2.4))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       '@ducanh2912/next-pwa':
         specifier: ^10.2.9
         version: 10.2.9(next@16.2.3(@babel/core@7.29.0)(@playwright/test@1.58.2)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(webpack@5.105.4)
@@ -793,9 +793,9 @@ packages:
       '@types/react':
         optional: true
 
-  '@bengo-hub/shared-ui-lib@https://codeload.github.com/Bengo-Hub/shared-ui-lib/tar.gz/3a464d543d9da9c88ff418d89ca3babf4a735ee0':
-    resolution: {tarball: https://codeload.github.com/Bengo-Hub/shared-ui-lib/tar.gz/3a464d543d9da9c88ff418d89ca3babf4a735ee0}
-    version: 0.1.25
+  '@bengo-hub/shared-ui-lib@https://codeload.github.com/Bengo-Hub/shared-ui-lib/tar.gz/f8f2166ea334556d82caedd7d74fda11bbb12eb2':
+    resolution: {tarball: https://codeload.github.com/Bengo-Hub/shared-ui-lib/tar.gz/f8f2166ea334556d82caedd7d74fda11bbb12eb2}
+    version: 0.1.26
     peerDependencies:
       lucide-react: '>=0.400.0'
       react: '>=18.0.0'
@@ -5280,7 +5280,7 @@ snapshots:
     optionalDependencies:
       '@types/react': 19.2.14
 
-  '@bengo-hub/shared-ui-lib@https://codeload.github.com/Bengo-Hub/shared-ui-lib/tar.gz/3a464d543d9da9c88ff418d89ca3babf4a735ee0(lucide-react@0.475.0(react@19.2.4))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)':
+  '@bengo-hub/shared-ui-lib@https://codeload.github.com/Bengo-Hub/shared-ui-lib/tar.gz/f8f2166ea334556d82caedd7d74fda11bbb12eb2(lucide-react@0.475.0(react@19.2.4))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)':
     dependencies:
       react: 19.2.4
       react-dom: 19.2.4(react@19.2.4)
