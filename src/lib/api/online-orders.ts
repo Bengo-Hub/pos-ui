@@ -78,6 +78,12 @@ export const onlineOrdersApi = {
       .get<{ data: DeliveryOrder[]; total: number } | DeliveryOrder[]>(`${onlineBase(tenantID)}/dispatch`)
       .then((res): DeliveryOrder[] => unwrapList(res)),
 
+  /** Collection history: collected + uncollected pickup/takeaway/delivery orders. */
+  listHistory: (tenantID: string, outcome?: 'collected' | 'uncollected') =>
+    apiClient
+      .get<{ data: DeliveryOrder[]; total: number } | DeliveryOrder[]>(`${onlineBase(tenantID)}/history`, outcome ? { outcome } : undefined)
+      .then((res): DeliveryOrder[] => unwrapList(res)),
+
   markReady: (tenantID: string, orderID: string) =>
     apiClient.post(`${onlineBase(tenantID)}/${orderID}/ready`, {}),
 

@@ -28,6 +28,17 @@ export function useDeliveryDispatch() {
   });
 }
 
+/** usePickupHistory — collection records (collected + uncollected). Lazy: pass enabled. */
+export function usePickupHistory(outcome?: 'collected' | 'uncollected', enabled = true) {
+  const tenantID = useTenantID();
+  return useQuery({
+    queryKey: [...onlineOrderKeys.dispatch(tenantID), 'history', outcome ?? 'all'],
+    queryFn: () => onlineOrdersApi.listHistory(tenantID, outcome),
+    enabled: !!tenantID && enabled,
+    staleTime: 30_000,
+  });
+}
+
 /**
  * useDeliveryOrders — active online DELIVERY orders (metadata.source "online_delivery").
  * Mirrors the pickup query's polling cadence so both sections refresh together.
