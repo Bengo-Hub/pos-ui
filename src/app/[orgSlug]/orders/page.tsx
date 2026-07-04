@@ -23,6 +23,7 @@ import { TrackingIframeModal } from '@bengo-hub/shared-ui-lib';
 import { SplitPaymentModal } from '@/components/pos/split-payment-modal';
 import { PrintReceiptButton } from '@/components/pos/print-receipt-button';
 import { VoidBillButton } from '@/components/pos/void-bill-button';
+import { GenerateVoidCodeButton } from '@/components/pos/generate-void-code-button';
 import { useAuthStore } from '@/store/auth';
 
 const PAGE_SIZE = 20;
@@ -358,8 +359,16 @@ export default function OrdersPage() {
                 />
               )}
 
-              {/* Void the bill (permission-gated; cashiers require manager approval). Only shows
-                  for still-voidable bills — this is the "void bill" entry point in My Bills/Orders. */}
+              {/* Manager: generate a shareable one-time code to authorize a remote void. */}
+              <GenerateVoidCodeButton
+                orderId={selectedOrder.id}
+                orderNumber={selectedOrder.order_number}
+                status={selectedOrder.status}
+                className="w-full justify-center flex items-center gap-2 px-4 py-2 rounded-xl border border-amber-500/40 text-amber-600 dark:text-amber-400 text-sm font-semibold hover:bg-amber-500/5 transition-colors"
+              />
+
+              {/* Void the bill (permission-gated; cashiers require manager approval via scan/PIN/code).
+                  Only shows for still-voidable bills — the "void bill" entry point in My Bills/Orders. */}
               <VoidBillButton
                 orderId={selectedOrder.id}
                 orderNumber={selectedOrder.order_number}

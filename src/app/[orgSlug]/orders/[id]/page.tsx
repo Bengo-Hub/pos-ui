@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/base';
 import { useOrder } from '@/hooks/usePOS';
 import { PrintReceiptButton } from '@/components/pos/print-receipt-button';
 import { VoidBillButton } from '@/components/pos/void-bill-button';
+import { GenerateVoidCodeButton } from '@/components/pos/generate-void-code-button';
 import { Loader2 } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
 
@@ -56,7 +57,10 @@ export default function OrderDetailPage() {
           {order.status !== 'cancelled' && (
             <PrintReceiptButton orderId={id} label={order.status === 'completed' ? 'Print Receipt' : 'Print Bill'} />
           )}
-          {/* Void the bill (post-placement) — permission-gated, with manager approval for cashiers. */}
+          {/* Manager: generate a one-time code to authorize a remote void (shown to managers only). */}
+          <GenerateVoidCodeButton orderId={id} orderNumber={order.order_number} status={order.status} />
+          {/* Void the bill (post-placement) — permission-gated, with manager approval for cashiers
+              (scan card, PIN, or the one-time code the manager shared). */}
           <VoidBillButton orderId={id} orderNumber={order.order_number} status={order.status} onVoided={() => refetch()} />
           <button
             onClick={() => router.back()}

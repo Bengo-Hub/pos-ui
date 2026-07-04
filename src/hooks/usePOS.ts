@@ -883,7 +883,7 @@ export function useVoidOrder() {
   const isOnline = useOnline();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ orderId, reason, approvalToken }: { orderId: string; reason: string; approvalToken?: string }) => {
+    mutationFn: async ({ orderId, reason, approvalToken, voidCode }: { orderId: string; reason: string; approvalToken?: string; voidCode?: string }) => {
       const localId = uuidv4();
       if (!isOnline) {
         // If voiding an offline (not-yet-synced) order, key by local_order_id so the void
@@ -905,12 +905,27 @@ export function useVoidOrder() {
       }
       return apiClient.patch(
         `${basePath(tenantID)}/orders/${orderId}/void`,
-        { reason, approval_token: approvalToken },
+        { reason, approval_token: approvalToken, void_code: voidCode },
         idemHeaders(localId),
       );
     },
     networkMode: 'always',
     onSuccess: () => qc.invalidateQueries({ queryKey: ['pos-orders'] }),
+  });
+}
+
+/**
+ * useGenerateVoidCode lets a manager generate a one-time, order-scoped code to SHARE with a
+ * waiter/cashier so they can void a specific bill when the manager isn't at the terminal.
+ */
+export function useGenerateVoidCode() {
+  const tenantID = useTenantID();
+  return useMutation({
+    mutationFn: ({ orderId, reason }: { orderId: string; reason?: string }) =>
+      apiClient.post<{ code: string; order_number: string; expires_at: string; expires_in: number; approver_name: string }>(
+        `${basePath(tenantID)}/orders/${orderId}/void-code`,
+        { reason },
+      ),
   });
 }
 

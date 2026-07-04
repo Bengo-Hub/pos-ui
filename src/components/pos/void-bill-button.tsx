@@ -7,7 +7,7 @@ import { useVoidOrder } from '@/hooks/usePOS';
 import { usePermissions, P } from '@/hooks/usePermissions';
 import { useAuthStore } from '@/store/auth';
 import { VoidOrderModal } from '@/components/pos/void-order-modal';
-import { ManagerPinDialog } from '@/components/pos/manager-pin-dialog';
+import { VoidApprovalDialog, type VoidApproval } from '@/components/pos/void-approval-dialog';
 
 // Roles allowed to void a bill WITHOUT a manager step-up. Everyone else who holds pos.orders.void
 // (e.g. cashiers) must get a manager PIN/QR approval first. Kept in sync with the terminal flow.
@@ -43,13 +43,13 @@ export function VoidBillButton({ orderId, orderNumber, status, onVoided, classNa
   if (!can(P.ORDERS_VOID)) return null;
   if (!VOIDABLE_STATUSES.includes((status || '').toLowerCase())) return null;
 
-  async function finalizeVoid(reason: string, approvalToken?: string) {
+  async function finalizeVoid(reason: string, approval?: VoidApproval) {
     try {
-      await voidOrder.mutateAsync({ orderId, reason, approvalToken });
+      await voidOrder.mutateAsync({ orderId, reason, approvalToken: approval?.approvalToken, voidCode: approval?.voidCode });
       toast.success(`Bill #${orderNumber} voided`);
       onVoided?.();
     } catch {
-      toast.error('Could not void this bill. Please try again.');
+      toast.error('Could not void this bill. Please check the approval and try again.');
     }
   }
 
@@ -76,22 +76,21 @@ export function VoidBillButton({ orderId, orderNumber, status, onVoided, classNa
           if (VOID_SELF_ROLES.includes(role)) {
             await finalizeVoid(reason);
           } else {
-            // Cashier / non-manager: require a manager PIN/QR step-up before the void lands.
+            // Cashier / non-manager: require manager approval (scan card, PIN, or a shared code).
             setReasonOpen(false);
             setPendingReason(reason);
           }
         }}
       />
 
-      <ManagerPinDialog
+      <VoidApprovalDialog
         open={pendingReason !== null}
-        action="order.void"
-        label={`void bill #${orderNumber}`}
+        orderNumber={orderNumber}
         onClose={() => setPendingReason(null)}
-        onApproved={async (token) => {
+        onApproved={async (approval) => {
           const reason = pendingReason ?? '';
           setPendingReason(null);
-          await finalizeVoid(reason, token);
+          await finalizeVoid(reason, approval);
         }}
       />
     </>

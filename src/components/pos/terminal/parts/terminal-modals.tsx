@@ -19,6 +19,7 @@ import { ParkedSalesModal } from '@/components/pos/parked-sales-modal';
 import { ReceiptPreview } from '@/components/pos/receipt-preview';
 import { CalculatorOverlay } from '@/components/pos/calculator-overlay';
 import { ManagerPinDialog } from '@/components/pos/manager-pin-dialog';
+import { VoidApprovalDialog } from '@/components/pos/void-approval-dialog';
 import { DiscountModal } from '@/components/pos/discount-modal';
 import { LinePriceModal } from '@/components/pos/line-price-modal';
 import { OrderPlacedDialog } from '@/components/pos/order-placed-dialog';
@@ -39,8 +40,8 @@ export function TerminalModals() {
   // Manager-PIN step-up state for voiding an order when the cashier is not a manager.
   const [pendingVoidReason, setPendingVoidReason] = useState<string | null>(null);
 
-  async function finalizeVoid(reason: string, approvalToken?: string) {
-    await t.voidOrderMutateAsync({ orderId: t.currentOrderId, reason, approvalToken });
+  async function finalizeVoid(reason: string, approval?: { approvalToken?: string; voidCode?: string }) {
+    await t.voidOrderMutateAsync({ orderId: t.currentOrderId, reason, approvalToken: approval?.approvalToken, voidCode: approval?.voidCode });
     toast.success(`Order #${t.currentOrderNumber} voided`);
     t.setCurrentOrderId('');
     t.setCurrentOrderNumber('');
@@ -146,15 +147,14 @@ export function TerminalModals() {
         onClose={() => t.setPriceEditIndex(null)}
       />
 
-      <ManagerPinDialog
+      <VoidApprovalDialog
         open={pendingVoidReason !== null}
-        action="order.void"
-        label={`void order #${t.currentOrderNumber}`}
+        orderNumber={t.currentOrderNumber}
         onClose={() => setPendingVoidReason(null)}
-        onApproved={async (token) => {
+        onApproved={async (approval) => {
           const reason = pendingVoidReason ?? '';
           setPendingVoidReason(null);
-          await finalizeVoid(reason, token);
+          await finalizeVoid(reason, approval);
         }}
       />
 
