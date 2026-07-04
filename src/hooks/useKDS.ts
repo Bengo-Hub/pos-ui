@@ -250,6 +250,24 @@ export function useVoidTicket() {
   });
 }
 
+/**
+ * useClearBoard bulk-serves all active tickets for the current outlet (optionally only those
+ * older than `olderThanHours`). Lets a manager clear a cluttered board from a single terminal —
+ * essential when the kitchen has no device to bump tickets one by one.
+ */
+export function useClearBoard() {
+  const tenantID = useTenantID();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => apiClient.post<{ cleared: number }>(`${basePath(tenantID)}/tickets/clear`, {}),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['kds-tickets'] });
+      qc.invalidateQueries({ queryKey: ['kds-kitchen'] });
+      qc.invalidateQueries({ queryKey: ['kds-bar'] });
+    },
+  });
+}
+
 /** @deprecated Use useReadyTicket instead */
 export function useBumpTicket() {
   return useReadyTicket();

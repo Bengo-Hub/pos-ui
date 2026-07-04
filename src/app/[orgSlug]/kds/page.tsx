@@ -14,8 +14,11 @@ import {
   useReadyTicket,
   useServeTicket,
   useCallWaiter,
+  useClearBoard,
 } from '@/hooks/useKDS';
 import type { KDSTicket, KDSStation, OrderSource } from '@/hooks/useKDS';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { toast } from 'sonner';
 import {
   Beer,
   CheckCircle,
@@ -29,6 +32,7 @@ import {
   PhoneCall,
   PlayCircle,
   Snowflake,
+  Trash2,
   Utensils,
   Wifi,
 } from 'lucide-react';
@@ -364,7 +368,10 @@ function StationTab({
 function KDSPage() {
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all');
   const [selectedStation, setSelectedStation] = useState<string | null>(null);
+  const [confirmClear, setConfirmClear] = useState(false);
   const user = useAuthStore((s) => s.user);
+  const { can } = usePermissions();
+  const clearBoard = useClearBoard();
 
   const { data: stationsData, isLoading: stationsLoading } = useKDSStations();
   const { data: ticketsData, isLoading: ticketsLoading } = useKDSTickets();
@@ -422,6 +429,19 @@ function KDSPage() {
               <Wifi className="h-3 w-3" />
               Live
             </span>
+            {/* Manager: bulk-clear the board (serve all active tickets) — for printer-only kitchens
+                with no device to bump tickets one by one, or to clear a cluttered board. */}
+            {can(P.ORDERS_MANAGE) && allTickets.length > 0 && (
+              <button
+                onClick={() => setConfirmClear(true)}
+                disabled={clearBoard.isPending}
+                className="flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full border border-border text-muted-foreground hover:bg-accent transition-colors disabled:opacity-50"
+                title="Clear all active tickets"
+              >
+                <Trash2 className="h-3 w-3" />
+                Clear board
+              </button>
+            )}
           </div>
           <SourceFilterBar
             value={sourceFilter}
@@ -509,6 +529,24 @@ function KDSPage() {
           </>
         )}
       </div>
+
+      <ConfirmDialog
+        open={confirmClear}
+        onOpenChange={setConfirmClear}
+        title="Clear the board?"
+        description="This marks ALL active tickets as served and removes them from every station. Use this when the kitchen has no device to bump tickets, or to clear stale ones. This cannot be undone."
+        confirmLabel="Clear board"
+        onConfirm={async () => {
+          try {
+            const res = await clearBoard.mutateAsync();
+            toast.success(`Cleared ${res?.cleared ?? 0} ticket${res?.cleared === 1 ? '' : 's'}`);
+          } catch {
+            toast.error('Could not clear the board. Please try again.');
+          } finally {
+            setConfirmClear(false);
+          }
+        }}
+      />
     </div>
   );
 }
