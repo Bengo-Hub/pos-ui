@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Users, SplitSquareHorizontal, CreditCard, Layers, Minus, Plus, X, ListOrdered } from 'lucide-react';
+import { Users, SplitSquareHorizontal, CreditCard, Layers, Minus, Plus, X, ListOrdered, Printer, Loader2 } from 'lucide-react';
 import { POSPaymentModal } from './payment-modal';
 import { createSplits, settleSplit, splitReceiptUrl, type CreateSplitInput } from '@/lib/api/bill-splits';
 import { apiClient } from '@/lib/api/client';
@@ -167,6 +167,19 @@ export function SplitPaymentModal({
 
   // ─── By-item split → BillSplit records (with item ids) + per-split receipts ───
   const itemSplitIdsRef = useRef<Record<number, string>>({});
+  const [printingGuest, setPrintingGuest] = useState<number | null>(null);
+
+  // Split into a per-guest printable bill: ensure the split exists (with its item ids) then print
+  // that guest's own itemised bill. Works before payment, so each guest can get their bill.
+  async function handlePrintGuestBill(guest: number) {
+    setPrintingGuest(guest);
+    try {
+      await ensureItemSplits();
+      await printGuestReceipt(guest);
+    } finally {
+      setPrintingGuest(null);
+    }
+  }
 
   function guestLineIds(guest: number): string[] {
     return orderLines.filter((_, i) => lineAssignments[i] === guest).map((l) => l.id).filter(Boolean);
@@ -570,17 +583,19 @@ export function SplitPaymentModal({
                       <span className="text-sm font-medium">Guest {guest}</span>
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-semibold">{fmt(amt)}</span>
+                        {/* Print this guest's OWN itemised bill — available before payment, so the
+                            order can be split into separate printable bills per guest. */}
+                        <button
+                          type="button"
+                          disabled={unassignedTotal() > 0 || printingGuest === guest}
+                          onClick={() => handlePrintGuestBill(guest)}
+                          className="flex items-center gap-1 px-2.5 py-1 rounded-lg border border-border text-xs font-semibold hover:bg-accent disabled:opacity-40 transition-colors"
+                        >
+                          {printingGuest === guest ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Printer className="h-3.5 w-3.5" />}
+                          Bill
+                        </button>
                         {paid ? (
-                          <>
-                            <span className="text-xs text-green-600 font-bold">Paid</span>
-                            <button
-                              type="button"
-                              onClick={() => printGuestReceipt(guest)}
-                              className="px-2.5 py-1 rounded-lg border border-border text-xs font-semibold hover:bg-accent transition-colors"
-                            >
-                              Print
-                            </button>
-                          </>
+                          <span className="text-xs text-green-600 font-bold">Paid</span>
                         ) : (
                           <button
                             type="button"
