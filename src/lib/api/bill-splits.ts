@@ -28,6 +28,13 @@ export interface BillSplit {
 export interface CreateSplitInput {
   label: string;
   amount: number;
+  /** POSOrderLine ids in this split (split-by-item) — enables a per-split, item-level receipt. */
+  order_line_ids?: string[];
+}
+
+/** Build the authenticated per-split receipt URL (server filters lines to this split's items). */
+export function splitReceiptUrl(tenantID: string, orderID: string, splitID: string) {
+  return `/api/v1/${tenantID}/pos/orders/${orderID}/receipt/html?split_id=${splitID}`;
 }
 
 const splitsBase = (tenantID: string, orderID: string) =>

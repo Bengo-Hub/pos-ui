@@ -367,6 +367,7 @@ function StationTab({
 
 function KDSPage() {
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all');
+  const [typeFilter, setTypeFilter] = useState<string>('all');
   const [selectedStation, setSelectedStation] = useState<string | null>(null);
   const [confirmClear, setConfirmClear] = useState(false);
   const user = useAuthStore((s) => s.user);
@@ -385,10 +386,26 @@ function KDSPage() {
   const onlineCnt = allTickets.filter((t) => t.order_source === 'online').length;
 
   const filteredTickets = allTickets.filter((t) => {
-    if (sourceFilter === 'pos')    return t.order_source !== 'online';
-    if (sourceFilter === 'online') return t.order_source === 'online';
+    if (sourceFilter === 'pos'    && t.order_source === 'online') return false;
+    if (sourceFilter === 'online' && t.order_source !== 'online') return false;
+    // Order-type filter (dine-in / takeaway / delivery / room-service / bar).
+    if (typeFilter !== 'all' && (t.order_subtype || 'dine_in') !== typeFilter) return false;
     return true;
   });
+
+  // Counts per order type for the filter chips (over the source-filtered set).
+  const typeSourceTickets = allTickets.filter((t) =>
+    sourceFilter === 'all' ? true : sourceFilter === 'online' ? t.order_source === 'online' : t.order_source !== 'online',
+  );
+  const typeCount = (st: string) => typeSourceTickets.filter((t) => (t.order_subtype || 'dine_in') === st).length;
+  const ORDER_TYPE_FILTERS: { key: string; label: string }[] = [
+    { key: 'all', label: 'All Types' },
+    { key: 'dine_in', label: 'Dine-in' },
+    { key: 'takeaway', label: 'Takeaway' },
+    { key: 'delivery', label: 'Delivery' },
+    { key: 'room_service', label: 'Room Service' },
+    { key: 'bar_tab', label: 'Bar' },
+  ];
 
   const activeStations = stations.filter((s) => s.is_active).sort((a, b) => a.sort_order - b.sort_order);
 
@@ -449,6 +466,28 @@ function KDSPage() {
             posCnt={posCnt}
             onlineCnt={onlineCnt}
           />
+        </div>
+
+        {/* Order-type filter chips (dine-in / takeaway / delivery / room / bar). */}
+        <div className="flex gap-2 overflow-x-auto scrollbar-none pb-0.5">
+          {ORDER_TYPE_FILTERS.map((f) => {
+            const count = f.key === 'all' ? filteredTickets.length : typeCount(f.key);
+            if (f.key !== 'all' && count === 0) return null;
+            const active = typeFilter === f.key;
+            return (
+              <button
+                key={f.key}
+                onClick={() => setTypeFilter(f.key)}
+                className={cn(
+                  'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors shrink-0',
+                  active ? 'bg-primary text-primary-foreground border-primary' : 'bg-card text-muted-foreground border-border hover:bg-accent',
+                )}
+              >
+                {f.label}
+                <span className={cn('px-1.5 rounded-full text-[10px]', active ? 'bg-primary-foreground/20' : 'bg-muted')}>{count}</span>
+              </button>
+            );
+          })}
         </div>
 
         {/* Station tabs */}

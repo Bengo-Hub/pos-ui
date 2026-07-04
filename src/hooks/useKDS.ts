@@ -47,6 +47,8 @@ export interface KDSTicket {
   order_source?: OrderSource;
   /** Table number or online channel label (e.g. "Table 5", "Online - Uber Eats") */
   order_label?: string;
+  /** dine_in | takeaway | delivery | room_service | bar_tab — drives the order-type filter */
+  order_subtype?: string;
   items: KDSTicketItem[];
   received_at: string;
   started_at?: string;

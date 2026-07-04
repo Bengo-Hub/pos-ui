@@ -3,6 +3,7 @@
 import { apiClient } from '@/lib/api/client';
 import { useAuthStore } from '@/store/auth';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import {
   cacheCatalogItems,
   getCachedCatalog,
@@ -1148,11 +1149,19 @@ export function useCloseShift() {
   return useMutation({
     mutationFn: (data: { endingCash?: number }) =>
       apiClient.post<DeviceSession>(`${basePath(tenantID)}/devices/current/sessions/close`, {
-        ending_cash: data.endingCash ?? 0,
+        closing_float: data.endingCash ?? 0,
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['pos-session-current'] });
       qc.invalidateQueries({ queryKey: ['pos-session-summary'] });
+    },
+    onError: (e: any) => {
+      // Shift-close guard: the backend blocks closing while the waiter has set-aside items still
+      // unclaimed. Surface a clear, actionable message (resolve them in Tables → My Bills).
+      const data = e?.response?.data;
+      if (e?.response?.status === 409 && data?.code === 'held_items_outstanding') {
+        toast.error(`You have ${data.held_count ?? ''} set-aside item(s) to claim or void before closing your shift (Tables → My Bills).`);
+      }
     },
   });
 }

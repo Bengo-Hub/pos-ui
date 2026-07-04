@@ -3,6 +3,7 @@
 import { ModuleGate } from '@/components/auth/module-gate';
 import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
 import { SeatGuestsModal } from '@/components/pos/seat-guests-modal';
+import { HeldItemsPanel } from '@/components/pos/held-items-panel';
 import { PrintReceiptButton } from '@/components/pos/print-receipt-button';
 import { POSPaymentModal } from '@/components/pos/payment-modal';
 import { Badge, Button } from '@/components/ui/base';
@@ -23,6 +24,7 @@ import {
   Layers,
   Loader2,
   MapPin,
+  Plus,
   ReceiptText,
   Shuffle,
   Table2,
@@ -390,8 +392,24 @@ function TableCard({
 
 // ─── My Bills tab ─────────────────────────────────────────────────────────────
 
+// Build the terminal add-to-bill URL for an existing open order (adds more items to the same bill).
+function buildAddToBillUrl(orgSlug: string, order: any): string {
+  const tableId = order.table_id ?? order.metadata?.table_id ?? '';
+  const tableName = order.table_reference ?? order.metadata?.table_name ?? '';
+  const params = new URLSearchParams({
+    order_id: order.id,
+    order_total: String(order.total_amount ?? 0),
+    covers: String(order.covers_count ?? 1),
+    mode: 'add_to_bill',
+  });
+  if (tableId) params.set('table_id', tableId);
+  if (tableName) params.set('table_name', tableName);
+  return `/${orgSlug}/order?${params.toString()}`;
+}
+
 function MyBillsTab({ orgSlug }: { orgSlug: string }) {
   const [filter, setFilter] = useState<'active' | 'settled' | 'voided'>('active');
+  const router = useRouter();
   const { can } = usePermissions();
   const user = useAuthStore((s) => s.user);
   const outlet = useAuthStore((s) => s.outlet);
@@ -474,7 +492,9 @@ function MyBillsTab({ orgSlug }: { orgSlug: string }) {
       </div>
 
       {/* Orders list */}
-      <div className="flex-1 overflow-y-auto px-6 py-3">
+      <div className="flex-1 overflow-y-auto px-6 py-3 space-y-4">
+        {/* Set-aside (held) items — claim for a new customer or void unclaimed ones before shift close. */}
+        {filter === 'active' && <HeldItemsPanel compact />}
         {isLoading && (
           <div className="flex items-center justify-center h-32">
             <Loader2 className="h-6 w-6 animate-spin text-primary" />
@@ -520,6 +540,16 @@ function MyBillsTab({ orgSlug }: { orgSlug: string }) {
                 <span className="font-bold text-sm text-primary">{fmt(order.total_amount ?? 0)}</span>
               </div>
               <div className="mt-2 space-y-2">
+                {(order.status === 'open' || order.status === 'pending_payment') && can(P.ORDERS_ADD) && (
+                  <Button
+                    variant="outline"
+                    className="w-full gap-2 justify-center"
+                    onClick={() => router.push(buildAddToBillUrl(orgSlug, order))}
+                  >
+                    <Plus className="h-4 w-4" />
+                    Add to Bill
+                  </Button>
+                )}
                 {(order.status === 'open' || order.status === 'pending_payment') && can(P.PAYMENTS_ADD) && (
                   <Button
                     className="w-full gap-2 justify-center"

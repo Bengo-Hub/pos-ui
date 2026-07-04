@@ -5,7 +5,9 @@ import { useOrder } from '@/hooks/usePOS';
 import { PrintReceiptButton } from '@/components/pos/print-receipt-button';
 import { VoidBillButton } from '@/components/pos/void-bill-button';
 import { GenerateVoidCodeButton } from '@/components/pos/generate-void-code-button';
-import { Loader2 } from 'lucide-react';
+import { useSetAsideLine } from '@/hooks/useHeldItems';
+import { Loader2, Plus, PackageOpen } from 'lucide-react';
+import { toast } from 'sonner';
 import { useParams, useRouter } from 'next/navigation';
 
 export default function OrderDetailPage() {
@@ -14,6 +16,19 @@ export default function OrderDetailPage() {
   const router = useRouter();
 
   const { data: order, isLoading, refetch } = useOrder(id);
+  const setAside = useSetAsideLine();
+
+  const handleSetAside = async (lineId: string, name: string) => {
+    const reason = window.prompt(`Set aside "${name}"? Enter a reason (e.g. wrong order):`, 'wrong order');
+    if (reason === null) return;
+    try {
+      await setAside.mutateAsync({ orderId: id, lineId, reason });
+      toast.success(`${name} set aside for resale`);
+      refetch();
+    } catch {
+      toast.error('Could not set aside this item.');
+    }
+  };
 
   if (isLoading) {
     return (
@@ -54,6 +69,19 @@ export default function OrderDetailPage() {
           </div>
         </div>
         <div className="flex items-center gap-3 shrink-0">
+          {['open', 'pending_payment'].includes(order.status) && (
+            <button
+              onClick={() => {
+                const p = new URLSearchParams({ order_id: id, order_total: String(order.total_amount ?? 0), covers: String((order as any).covers_count ?? 1), mode: 'add_to_bill' });
+                if (order.table_reference) p.set('table_name', order.table_reference);
+                if ((order as any).metadata?.table_id) p.set('table_id', (order as any).metadata.table_id);
+                router.push(`/${(params?.orgSlug as string) || ''}/order?${p.toString()}`);
+              }}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl border border-border text-sm font-semibold hover:bg-accent transition-colors"
+            >
+              <Plus className="h-4 w-4" /> Add to Bill
+            </button>
+          )}
           {order.status !== 'cancelled' && (
             <PrintReceiptButton orderId={id} label={order.status === 'completed' ? 'Print Receipt' : 'Print Bill'} />
           )}
@@ -86,6 +114,9 @@ export default function OrderDetailPage() {
                     <th className="text-center px-4 py-3 font-semibold text-muted-foreground">Qty</th>
                     <th className="text-right px-4 py-3 font-semibold text-muted-foreground">Unit</th>
                     <th className="text-right px-4 py-3 font-semibold text-muted-foreground">Total</th>
+                    {['open', 'pending_payment'].includes(order.status) && (
+                      <th className="text-right px-4 py-3 font-semibold text-muted-foreground"></th>
+                    )}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
@@ -104,6 +135,20 @@ export default function OrderDetailPage() {
                           (line.unit_price ?? 0) * (line.quantity ?? 0)
                         ).toLocaleString()}
                       </td>
+                      {['open', 'pending_payment'].includes(order.status) && (
+                        <td className="px-4 py-3 text-right">
+                          {line.id && !line.voided_qty && (
+                            <button
+                              onClick={() => handleSetAside(line.id, line.name ?? line.item_name ?? 'Item')}
+                              disabled={setAside.isPending}
+                              title="Set aside for resale (wrong order, already made)"
+                              className="inline-flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400 hover:underline disabled:opacity-50"
+                            >
+                              <PackageOpen className="h-3.5 w-3.5" /> Set aside
+                            </button>
+                          )}
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>

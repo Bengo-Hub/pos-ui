@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Users, SplitSquareHorizontal, CreditCard, Layers, Minus, Plus, X, ListOrdered } from 'lucide-react';
 import { POSPaymentModal } from './payment-modal';
-import { createSplits, settleSplit, type CreateSplitInput } from '@/lib/api/bill-splits';
+import { createSplits, settleSplit, splitReceiptUrl, type CreateSplitInput } from '@/lib/api/bill-splits';
+import { apiClient } from '@/lib/api/client';
 
 // 'split_tender' = one bill paid across several tenders (e.g. part Cash + part M-Pesa).
 // 'equal' / 'custom' / 'by_item' = split among several people, each paying their own portion.
@@ -164,6 +165,45 @@ export function SplitPaymentModal({
     }, 0);
   }
 
+  // ─── By-item split → BillSplit records (with item ids) + per-split receipts ───
+  const itemSplitIdsRef = useRef<Record<number, string>>({});
+
+  function guestLineIds(guest: number): string[] {
+    return orderLines.filter((_, i) => lineAssignments[i] === guest).map((l) => l.id).filter(Boolean);
+  }
+
+  // Create one BillSplit per guest (with their assigned line ids) once — so the backend knows which
+  // items each split contains and can print a per-split receipt. Best-effort (splits are a record layer).
+  async function ensureItemSplits() {
+    if (!tenantId || Object.keys(itemSplitIdsRef.current).length > 0) return;
+    const guests = Array.from({ length: guestCount }, (_, i) => i + 1).filter((g) => guestTotal(g) > 0);
+    try {
+      const res = await createSplits(
+        tenantId,
+        orderId,
+        guests.map((g) => ({ label: `Guest ${g}`, amount: guestTotal(g), order_line_ids: guestLineIds(g) })),
+      );
+      const ids = (res?.data ?? []).map((s) => s.id);
+      guests.forEach((g, idx) => { if (ids[idx]) itemSplitIdsRef.current[g] = ids[idx]; });
+    } catch { /* best-effort */ }
+  }
+
+  // Print this guest's own itemised bill (server filters lines to the split's items).
+  async function printGuestReceipt(guest: number) {
+    const id = itemSplitIdsRef.current[guest];
+    if (!id || !tenantId) return;
+    try {
+      const html = await apiClient.get<string>(splitReceiptUrl(tenantId, orderId, id));
+      const win = window.open('', '_blank', 'width=380,height=640');
+      if (!win) return;
+      win.document.write(html as string);
+      win.document.close();
+      const doPrint = () => { win.focus(); win.print(); };
+      win.onload = doPrint;
+      setTimeout(doPrint, 500);
+    } catch { /* ignore */ }
+  }
+
   function handleItemGuestPaid(guest: number) {
     const next = new Set(paidGuests).add(guest);
     setPaidGuests(next);
@@ -242,7 +282,13 @@ export function SplitPaymentModal({
         tenderId={tenderId}
         isHospitality={isHospitality}
         customerEmail={customerEmail}
-        onPaymentConfirmed={() => handleItemGuestPaid(itemSplitPayer)}
+        onPaymentConfirmed={async (method) => {
+          // Record the split (with its item ids) + mark it paid, so the per-split receipt is itemised.
+          await ensureItemSplits();
+          const id = itemSplitIdsRef.current[itemSplitPayer];
+          if (id && tenantId) { try { await settleSplit(tenantId, orderId, id, method); } catch { /* best-effort */ } }
+          handleItemGuestPaid(itemSplitPayer);
+        }}
       />
     );
   }
@@ -525,7 +571,16 @@ export function SplitPaymentModal({
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-semibold">{fmt(amt)}</span>
                         {paid ? (
-                          <span className="text-xs text-green-600 font-bold">Paid</span>
+                          <>
+                            <span className="text-xs text-green-600 font-bold">Paid</span>
+                            <button
+                              type="button"
+                              onClick={() => printGuestReceipt(guest)}
+                              className="px-2.5 py-1 rounded-lg border border-border text-xs font-semibold hover:bg-accent transition-colors"
+                            >
+                              Print
+                            </button>
+                          </>
                         ) : (
                           <button
                             type="button"

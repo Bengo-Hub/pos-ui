@@ -191,6 +191,9 @@ export const ROLE_PERMISSIONS: Record<string, Permission[]> = {
   ],
   cashier: [
     P.ORDERS_ADD, P.ORDERS_VIEW, P.ORDERS_VIEW_OWN, P.ORDERS_CHANGE_OWN,
+    // Void: cashier may INITIATE a void; not a manager override role, so it still requires
+    // manager approval (card / PIN / one-time code). Mirrors the backend seed.
+    P.ORDERS_VOID,
     P.PAYMENTS_ADD, P.PAYMENTS_VIEW, P.PAYMENTS_VIEW_OWN,
     P.CATALOG_VIEW,
     P.DRAWERS_ADD, P.DRAWERS_VIEW_OWN, P.DRAWERS_CHANGE_OWN,
@@ -208,6 +211,9 @@ export const ROLE_PERMISSIONS: Record<string, Permission[]> = {
     // ORDERS_CHANGE (not just _own) lets waiters act on unassigned online
     // pickup/delivery orders (mark ready, collected, assign rider).
     P.ORDERS_ADD, P.ORDERS_VIEW_OWN, P.ORDERS_CHANGE, P.ORDERS_CHANGE_OWN,
+    // Void: waiter may INITIATE a void; not a manager override role, so it still requires
+    // manager approval (card / PIN / one-time code). Mirrors the backend seed.
+    P.ORDERS_VOID,
     // Settle bills at the table — cash or mobile-money ref (e.g. M-Pesa).
     P.PAYMENTS_ADD, P.PAYMENTS_VIEW_OWN,
     P.CATALOG_VIEW,
