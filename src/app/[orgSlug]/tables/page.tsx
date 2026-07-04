@@ -4,6 +4,8 @@ import { ModuleGate } from '@/components/auth/module-gate';
 import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
 import { SeatGuestsModal } from '@/components/pos/seat-guests-modal';
 import { HeldItemsPanel } from '@/components/pos/held-items-panel';
+import { VoidBillButton } from '@/components/pos/void-bill-button';
+import { SplitPaymentModal } from '@/components/pos/split-payment-modal';
 import { PrintReceiptButton } from '@/components/pos/print-receipt-button';
 import { POSPaymentModal } from '@/components/pos/payment-modal';
 import { Badge, Button } from '@/components/ui/base';
@@ -26,6 +28,7 @@ import {
   MapPin,
   Plus,
   ReceiptText,
+  SplitSquareHorizontal,
   Shuffle,
   Table2,
   Users,
@@ -416,6 +419,7 @@ function MyBillsTab({ orgSlug }: { orgSlug: string }) {
   const queryClient = useQueryClient();
   const releaseTable = useReleaseTable();
   const [payOrder, setPayOrder] = useState<any | null>(null);
+  const [splitOrder, setSplitOrder] = useState<any | null>(null);
   const isHospitality = ['hospitality', 'quick_service', 'hotel'].includes(
     (outlet?.use_case ?? (user as any)?.outlet_use_case ?? '').toLowerCase()
   );
@@ -562,11 +566,30 @@ function MyBillsTab({ orgSlug }: { orgSlug: string }) {
                     )}
                   </Button>
                 )}
+                {(order.status === 'open' || order.status === 'pending_payment') && can(P.PAYMENTS_ADD) && (order.total_amount ?? 0) > 0 && (
+                  <Button
+                    variant="outline"
+                    className="w-full gap-2 justify-center"
+                    onClick={() => setSplitOrder(order)}
+                  >
+                    <SplitSquareHorizontal className="h-4 w-4" />
+                    Split Order
+                  </Button>
+                )}
                 <PrintReceiptButton
                   orderId={order.id}
                   label={order.status === 'completed' ? 'Print Receipt' : 'Print Bill'}
                   className="w-full justify-center"
                 />
+                {(order.status === 'open' || order.status === 'pending_payment') && (
+                  <VoidBillButton
+                    orderId={order.id}
+                    orderNumber={order.order_number}
+                    status={order.status}
+                    className="w-full justify-center flex items-center gap-2 px-4 py-2 rounded-xl border border-destructive/40 text-destructive text-sm font-semibold hover:bg-destructive/5 transition-colors"
+                    onVoided={() => queryClient.invalidateQueries({ queryKey: ['pos-orders'] })}
+                  />
+                )}
               </div>
             </div>
           );
@@ -619,6 +642,30 @@ function MyBillsTab({ orgSlug }: { orgSlug: string }) {
             if (tableId) {
               releaseTable.mutate(tableId);
             }
+          }}
+        />
+      )}
+
+      {splitOrder && (
+        <SplitPaymentModal
+          open={!!splitOrder}
+          onClose={() => setSplitOrder(null)}
+          orderId={splitOrder.id}
+          orderNumber={splitOrder.order_number}
+          total={splitOrder.total_amount ?? 0}
+          tenantId={user?.tenant_id ?? ''}
+          tenantSlug={orgSlug}
+          isHospitality={isHospitality}
+          orderLines={(splitOrder.edges?.lines ?? splitOrder.lines ?? []).map((l: any) => ({
+            id: l.id,
+            name: l.name ?? l.item_name ?? 'Item',
+            quantity: l.quantity ?? 1,
+            totalPrice: l.total_price ?? l.line_total ?? (l.unit_price ?? 0) * (l.quantity ?? 1),
+          }))}
+          onPaymentConfirmed={() => {
+            setSplitOrder(null);
+            queryClient.invalidateQueries({ queryKey: ['pos-orders'] });
+            queryClient.invalidateQueries({ queryKey: ['pos-tables'] });
           }}
         />
       )}
