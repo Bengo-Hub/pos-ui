@@ -10,7 +10,7 @@ import { useTenantBranding } from '@/providers/tenant-branding-provider';
 import { useAuthStore } from '@/store/auth';
 import { useOutletFilterStore } from '@/store/outlet-filter';
 import { useQuery } from '@tanstack/react-query';
-import { BookOpen, Building2, Check, ChevronDown, ExternalLink, Globe, LogOut, MapPin, Menu, Package, Search, Settings, ShoppingCart, Square, Tag, User, Users } from 'lucide-react';
+import { BookOpen, Building2, Check, ChevronDown, ExternalLink, Globe, LogOut, MapPin, Menu, Package, PanelLeft, Search, Settings, ShoppingCart, Square, Tag, User, Users } from 'lucide-react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
@@ -168,9 +168,12 @@ function displayName(user: { fullName?: string; name?: string; email?: string } 
 
 interface HeaderProps {
   onMenuClick?: () => void;
+  // Desktop sidebar collapse toggle (used on the POS terminal to free up screen width).
+  onToggleSidebar?: () => void;
+  sidebarCollapsed?: boolean;
 }
 
-export function Header({ onMenuClick }: HeaderProps) {
+export function Header({ onMenuClick, onToggleSidebar, sidebarCollapsed }: HeaderProps) {
   const params = useParams();
   const orgSlug = (params?.orgSlug as string) || 'codevertex';
   const router = useRouter();
@@ -220,6 +223,19 @@ export function Header({ onMenuClick }: HeaderProps) {
         <button type="button" onClick={onMenuClick} className="lg:hidden p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-white/10 transition-colors shrink-0" aria-label="Open menu">
           <Menu className="h-5 w-5 text-slate-500" />
         </button>
+        {/* Desktop sidebar collapse toggle — lets the cashier reclaim width on the POS terminal. */}
+        {onToggleSidebar && (
+          <button
+            type="button"
+            onClick={onToggleSidebar}
+            className="hidden lg:inline-flex p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-white/10 transition-colors shrink-0"
+            aria-label={sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'}
+            aria-pressed={!sidebarCollapsed}
+            title={sidebarCollapsed ? 'Show menu' : 'Hide menu'}
+          >
+            <PanelLeft className={cn('h-5 w-5 transition-colors', sidebarCollapsed ? 'text-primary' : 'text-slate-500')} />
+          </button>
+        )}
         <div className="flex items-center gap-6 min-w-0">
             <h1 className="text-lg sm:text-xl font-black tracking-tight text-foreground uppercase truncate max-w-[150px] sm:max-w-none shrink-0">
                 {getServiceTitle('POS')}

@@ -8,7 +8,7 @@ import { apiClient } from '@/lib/api/client';
 import { useOnline } from '@/hooks/use-online';
 import { v4 as uuidv4 } from 'uuid';
 import { useState, useEffect, useRef } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { Loader2, Plus, RotateCcw, Search, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -544,11 +544,13 @@ function InitiateReturnModal({ onClose }: { onClose: () => void }) {
 // ReturnByInvoiceModal looks a sale up by its exact receipt/invoice number (pos-api
 // GET /pos/orders/by-number/{n}) and initiates a full return for it — the godigital
 // "Sell Return by Invoice No." flow. Partial / line-level returns use Initiate Return.
-function ReturnByInvoiceModal({ onClose }: { onClose: () => void }) {
+function ReturnByInvoiceModal({ onClose, initialInvoice = '' }: { onClose: () => void; initialInvoice?: string }) {
   const user = useAuthStore((s) => s.user);
   const tenantID = user?.tenant_id ?? '';
-  const [invoiceNo, setInvoiceNo] = useState('');
-  const [query, setQuery] = useState('');
+  // Seed from initialInvoice so the terminal "Sell Return" flow (which passes ?invoice=) looks the
+  // sale up immediately instead of dumping the cashier on an empty list.
+  const [invoiceNo, setInvoiceNo] = useState(initialInvoice);
+  const [query, setQuery] = useState(initialInvoice.trim());
   const [returnType, setReturnType] = useState('refund');
   const [reason, setReason] = useState(RETURN_REASONS[0]);
   const [refundChannel, setRefundChannel] = useState('cash');
@@ -710,16 +712,34 @@ function ReturnsPage() {
   const [statusFilter, setStatusFilter] = useState('pending');
   const [showModal, setShowModal] = useState(false);
   const [showInvoice, setShowInvoice] = useState(false);
+  const [invoicePrefill, setInvoicePrefill] = useState('');
   const { data, isLoading } = useReturns(statusFilter);
   const returns = data?.data ?? [];
   const params = useParams<{ orgSlug: string }>();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const orgSlug = params?.orgSlug ?? '';
+
+  // Terminal top-bar "Sell Return" and other entry points deep-link here with ?invoice=<no.>.
+  // Open the Return-by-Invoice modal prefilled + auto-searching, then strip the param so a refresh
+  // or close doesn't reopen it.
+  const invoiceParam = searchParams?.get('invoice') ?? '';
+  useEffect(() => {
+    if (!invoiceParam) return;
+    setInvoicePrefill(invoiceParam);
+    setShowInvoice(true);
+    router.replace(`/${orgSlug}/returns`);
+  }, [invoiceParam, orgSlug, router]);
 
   return (
     <div className="p-6">
       {showModal && <InitiateReturnModal onClose={() => setShowModal(false)} />}
-      {showInvoice && <ReturnByInvoiceModal onClose={() => setShowInvoice(false)} />}
+      {showInvoice && (
+        <ReturnByInvoiceModal
+          initialInvoice={invoicePrefill}
+          onClose={() => { setShowInvoice(false); setInvoicePrefill(''); }}
+        />
+      )}
 
       {/* Header */}
       <div className="flex items-center justify-between mb-6">

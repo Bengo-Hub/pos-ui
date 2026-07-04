@@ -226,7 +226,7 @@ export interface TerminalContextValue {
   currentOrderLines: OrderLineItem[];
   resumeTotal: number | null;
   setResumeTotal: (v: number | null) => void;
-  handlePaymentConfirmed: () => Promise<void>;
+  handlePaymentConfirmed: (settled?: CreatedOrder) => Promise<void>;
 
   expenseOpen: boolean;
   setExpenseOpen: (v: boolean) => void;
@@ -1077,8 +1077,13 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
   // Sync the keyboard-checkout ref to the current closure each render.
   placeOrderRef.current = handlePlaceOrder;
 
-  const handlePaymentConfirmed = useCallback(async () => {
-    toast.success(`Order ${currentOrderNumber} paid!`);
+  // settled (optional) carries the just-created order so the receipt fetch never races the async
+  // setCurrentOrderId state update in the inline-bar flow — the terminal reliably shows the printable
+  // receipt right after payment (QA: a print-receipt option on the terminal, not only under All Sales).
+  const handlePaymentConfirmed = useCallback(async (settled?: CreatedOrder) => {
+    const settledOrderId = settled?.orderId || currentOrderId;
+    const settledOrderNumber = settled?.orderNumber || currentOrderNumber;
+    toast.success(`Order ${settledOrderNumber} paid!`);
     // Loyalty feedback: when the sale carried a registered customer, tell the cashier the points the
     // customer earned (credited server-side on pos.sale.finalized). Anonymous walk-ins earn nothing,
     // so this only shows when a loyalty phone was attached.
@@ -1100,12 +1105,12 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
       releaseTable.mutate(tableId);
     }
 
-    // Fetch receipt data and show the receipt preview
+    // Fetch receipt data and show the receipt preview (the terminal's after-payment print surface).
     const tenantId = user?.tenant_id ?? '';
-    if (tenantId && currentOrderId) {
+    if (tenantId && settledOrderId) {
       try {
         const data = await apiClient.get<ReceiptData>(
-          `/api/v1/${tenantId}/pos/orders/${currentOrderId}/receipt`
+          `/api/v1/${tenantId}/pos/orders/${settledOrderId}/receipt`
         );
         // "Served by" — fall back to the logged-in user when the API omits it.
         setReceiptData({ ...data, cashier_name: data.cashier_name || user?.fullName || user?.email });
@@ -1204,7 +1209,8 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
       setOrderPlacedOpen(true);
       return;
     }
-    handlePaymentConfirmed();
+    // Pass the just-settled order through so the receipt fetch uses its id directly (no state race).
+    handlePaymentConfirmed(ord);
   }, [handlePaymentConfirmed, isHospitality, cart, tableName, posSettings]);
 
   // Multiple Pay → the order already exists (created by the bar); open the split modal against it.

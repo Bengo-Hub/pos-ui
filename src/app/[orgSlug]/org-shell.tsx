@@ -146,8 +146,14 @@ export function OrgShell({ children }: { children: ReactNode }) {
       })
   );
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  // Desktop sidebar collapse. The POS terminal (/order) defaults to collapsed so the cart + product
+  // grid get the full screen width; the cashier can toggle it back via the header button. Navigating
+  // away from the terminal restores the expanded sidebar.
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const pathname = usePathname();
   const kiosk = isKioskRoute(pathname);
+  const isTerminal = /\/order(\/|$)/.test(pathname ?? '');
+  useEffect(() => { setSidebarCollapsed(isTerminal); }, [isTerminal]);
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -183,9 +189,13 @@ export function OrgShell({ children }: { children: ReactNode }) {
           ) : (
             // Standard app shell
             <div className="flex h-screen overflow-hidden bg-background">
-              <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+              <Sidebar open={sidebarOpen} collapsed={sidebarCollapsed} onClose={() => setSidebarOpen(false)} />
               <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-                <Header onMenuClick={() => setSidebarOpen(true)} />
+                <Header
+                  onMenuClick={() => setSidebarOpen(true)}
+                  sidebarCollapsed={sidebarCollapsed}
+                  onToggleSidebar={() => setSidebarCollapsed((v) => !v)}
+                />
                 <SubscriptionBanner />
                 <main className="flex-1 overflow-y-auto bg-accent/5">
                   <StartShiftGate>

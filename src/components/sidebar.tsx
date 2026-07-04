@@ -59,6 +59,9 @@ const MARKETFLOW_URL = process.env.NEXT_PUBLIC_MARKETFLOW_UI_URL || 'https://mar
 interface SidebarProps {
   open?: boolean;
   onClose?: () => void;
+  // collapsed hides the desktop sidebar entirely (the POS terminal defaults to this to give the
+  // cart/product grid the full width). Mobile still uses the `open` overlay, unaffected by collapse.
+  collapsed?: boolean;
 }
 
 // ── Nav item type ─────────────────────────────────────────────────────────────
@@ -214,7 +217,7 @@ function NavGroupSection({
 
 // ── Sidebar ───────────────────────────────────────────────────────────────────
 
-export function Sidebar({ open = false, onClose }: SidebarProps) {
+export function Sidebar({ open = false, onClose, collapsed = false }: SidebarProps) {
   const params = useParams();
   const pathname = usePathname();
   const orgSlug = params?.orgSlug as string;
@@ -568,7 +571,9 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
         className={cn(
           'fixed inset-y-0 left-0 z-50 flex w-64 flex-col transition-transform duration-300',
           'lg:sticky lg:top-0 lg:h-screen lg:z-auto lg:translate-x-0',
-          open ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+          open ? 'translate-x-0' : '-translate-x-full lg:translate-x-0',
+          // Desktop collapse: drop the sidebar out of the flex row so main content spans full width.
+          collapsed && 'lg:hidden'
         )}
       >
         {/* Mobile header bar */}

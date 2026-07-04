@@ -5,8 +5,11 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api/client';
 import { useAuthStore } from '@/store/auth';
 import { useState } from 'react';
-import { ArrowLeft, CheckCircle2, Loader2, RotateCcw, XCircle } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Loader2, PackageCheck, RotateCcw, ShieldCheck, XCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
+import { apiErrorMessage } from '@/lib/api/error-message';
+import { usePermissions, P } from '@/hooks/usePermissions';
 
 interface ReturnLine {
   id: string;
@@ -22,6 +25,9 @@ interface ReturnDetail {
   id: string;
   return_number: string;
   order_id: string;
+  // order_number is the original sale's human-readable receipt/invoice number, resolved by pos-api
+  // so the UI never renders the raw order UUID.
+  order_number?: string;
   return_type: 'refund' | 'exchange' | 'store_credit';
   status: 'pending' | 'approved' | 'rejected' | 'completed';
   reason?: string;
@@ -83,6 +89,21 @@ function useApproveReturn(returnId: string) {
   });
 }
 
+// useCompleteReturn fulfils an APPROVED return — settles the refund + restocks the goods and moves
+// the return into the Completed tab. This is the till/cashier step that follows a manager approval.
+function useCompleteReturn(returnId: string) {
+  const tenantID = useAuthStore((s) => s.user?.tenant_id ?? '');
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: { notes?: string; refund_channel?: string }) =>
+      apiClient.post(`/api/v1/${tenantID}/pos/returns/${returnId}/complete`, payload),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['return', tenantID, returnId] });
+      qc.invalidateQueries({ queryKey: ['returns', tenantID] });
+    },
+  });
+}
+
 export default function ReturnDetailPage() {
   const params = useParams<{ orgSlug: string; id: string }>();
   const router = useRouter();
@@ -91,9 +112,14 @@ export default function ReturnDetailPage() {
 
   const { data: ret, isLoading } = useReturnDetail(returnId);
   const approve = useApproveReturn(returnId);
+  const complete = useCompleteReturn(returnId);
+  const { canManageOrders, canAny } = usePermissions();
   const [notes, setNotes] = useState('');
   // Approval-time refund channel override; seeded from the return once loaded (default cash).
   const [refundChannel, setRefundChannel] = useState('');
+  // Completion-time notes + optional refund-channel confirm (till step).
+  const [completeNotes, setCompleteNotes] = useState('');
+  const [completeChannel, setCompleteChannel] = useState('');
 
   if (isLoading) {
     return (
@@ -113,9 +139,16 @@ export default function ReturnDetailPage() {
   const lines = ret.edges?.lines ?? [];
   const cfg = STATUS_CONFIG[ret.status] ?? { label: ret.status, className: 'bg-muted text-muted-foreground border-border' };
   const isPending = ret.status === 'pending';
+  const isApproved = ret.status === 'approved';
+  const showChannelPicker = ret.return_type !== 'exchange';
   // Effective channel for the approval selector: local override → existing channel on the return → cash.
   const effectiveChannel = refundChannel || ret.refund_channel || 'cash';
-  const showChannelPicker = ret.return_type !== 'exchange';
+  // Effective channel for the completion confirm: local override → channel chosen at approval → cash.
+  const effectiveCompleteChannel = completeChannel || ret.refund_channel || 'cash';
+  const channelLabel = (v: string) => REFUND_CHANNELS.find((c) => c.value === v)?.label ?? v.replace('_', ' ');
+  // Stage RBAC: managers approve/reject; a cashier/manager at the till completes an approved return.
+  const canApprove = canManageOrders;
+  const canComplete = canAny([P.ORDERS_CHANGE_OWN, P.ORDERS_CHANGE, P.ORDERS_MANAGE]);
 
   return (
     <div className="p-6 max-w-3xl mx-auto space-y-6">
@@ -175,7 +208,7 @@ export default function ReturnDetailPage() {
         )}
         <div>
           <p className="text-xs text-muted-foreground">Original Order</p>
-          <p className="text-xs font-mono text-muted-foreground mt-0.5 truncate">{ret.order_id}</p>
+          <p className="text-sm font-semibold font-mono mt-0.5 truncate">{ret.order_number || '—'}</p>
         </div>
         {ret.treasury_refund_ref && (
           <div>
@@ -185,41 +218,15 @@ export default function ReturnDetailPage() {
         )}
       </div>
 
-      {/* Return lines */}
-      {lines.length > 0 && (
-        <div className="rounded-2xl border border-border overflow-hidden bg-card">
-          <div className="px-4 py-3 border-b border-border bg-accent/20">
-            <p className="text-sm font-bold">Returned Items</p>
-          </div>
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border">
-                <th className="text-left px-4 py-2.5 font-semibold text-muted-foreground text-xs">Item</th>
-                <th className="text-left px-4 py-2.5 font-semibold text-muted-foreground text-xs">SKU</th>
-                <th className="text-right px-4 py-2.5 font-semibold text-muted-foreground text-xs">Qty</th>
-                <th className="text-right px-4 py-2.5 font-semibold text-muted-foreground text-xs">Unit Price</th>
-                <th className="text-right px-4 py-2.5 font-semibold text-muted-foreground text-xs">Total</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {lines.map((l) => (
-                <tr key={l.id}>
-                  <td className="px-4 py-3">{l.name}</td>
-                  <td className="px-4 py-3 text-muted-foreground text-xs font-mono">{l.sku ?? '—'}</td>
-                  <td className="px-4 py-3 text-right">{l.quantity}</td>
-                  <td className="px-4 py-3 text-right">KES {l.unit_price.toLocaleString()}</td>
-                  <td className="px-4 py-3 text-right font-semibold">KES {l.total_price.toLocaleString()}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      {/* ── Action panel — sits right under the summary; returned items render below it ── */}
 
-      {/* Approve / Reject (only when pending) */}
-      {isPending && (
+      {/* Stage 1: Pending → manager approves or rejects */}
+      {isPending && canApprove && (
         <div className="rounded-2xl border border-border bg-card p-5 space-y-4">
-          <p className="text-sm font-bold">Action Required</p>
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="h-4 w-4 text-primary" />
+            <p className="text-sm font-bold">Manager Approval</p>
+          </div>
           {showChannelPicker && (
             <div>
               <label className="text-xs font-semibold text-muted-foreground">Refund Method</label>
@@ -244,7 +251,10 @@ export default function ReturnDetailPage() {
           </div>
           <div className="flex gap-3">
             <button
-              onClick={() => approve.mutate({ action: 'reject', notes })}
+              onClick={() => approve.mutate({ action: 'reject', notes }, {
+                onSuccess: () => toast.success('Return rejected'),
+                onError: async (e) => toast.error(await apiErrorMessage(e, 'Failed to reject return')),
+              })}
               disabled={approve.isPending}
               className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-red-200 text-red-600 bg-red-50 text-sm font-semibold hover:bg-red-100 transition-colors disabled:opacity-50"
             >
@@ -252,13 +262,132 @@ export default function ReturnDetailPage() {
               Reject
             </button>
             <button
-              onClick={() => approve.mutate({ action: 'approve', notes, ...(showChannelPicker ? { refund_channel: effectiveChannel } : {}) })}
+              onClick={() => approve.mutate({ action: 'approve', notes, ...(showChannelPicker ? { refund_channel: effectiveChannel } : {}) }, {
+                onSuccess: () => toast.success('Return approved — ready to complete'),
+                onError: async (e) => toast.error(await apiErrorMessage(e, 'Failed to approve return')),
+              })}
               disabled={approve.isPending}
               className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50"
             >
               {approve.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
               Approve Return
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Pending but the viewer can't approve → awaiting a manager */}
+      {isPending && !canApprove && (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 flex items-center gap-3">
+          <ShieldCheck className="h-5 w-5 text-amber-600 shrink-0" />
+          <p className="text-sm text-amber-800">Awaiting manager approval before this return can be completed.</p>
+        </div>
+      )}
+
+      {/* Stage 2: Approved → cashier/manager completes (settles refund + restocks) */}
+      {isApproved && canComplete && (
+        <div className="rounded-2xl border border-emerald-200 bg-card p-5 space-y-4">
+          <div className="flex items-center gap-2">
+            <PackageCheck className="h-4 w-4 text-emerald-600" />
+            <p className="text-sm font-bold">Complete Return</p>
+          </div>
+          <div className="rounded-xl bg-emerald-50 border border-emerald-100 px-4 py-3 text-xs text-emerald-800">
+            Completing will restock the returned items
+            {ret.return_type !== 'exchange' && ret.refund_amount > 0 && (
+              <> and settle a <span className="font-semibold">KES {ret.refund_amount.toLocaleString()}</span> {ret.return_type === 'store_credit' ? 'store credit' : 'refund'} via <span className="font-semibold">{channelLabel(effectiveCompleteChannel)}</span></>
+            )}
+            .
+          </div>
+          {showChannelPicker && (
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground">Confirm Refund Method</label>
+              <select
+                value={effectiveCompleteChannel}
+                onChange={(e) => setCompleteChannel(e.target.value)}
+                className="mt-1 w-full bg-background border border-border rounded-xl py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+              >
+                {REFUND_CHANNELS.map((ch) => <option key={ch.value} value={ch.value}>{ch.label}</option>)}
+              </select>
+            </div>
+          )}
+          <div>
+            <label className="text-xs font-semibold text-muted-foreground">Notes (optional)</label>
+            <textarea
+              value={completeNotes}
+              onChange={(e) => setCompleteNotes(e.target.value)}
+              rows={2}
+              placeholder="e.g. cash handed to customer, goods restocked…"
+              className="mt-1 w-full bg-background border border-border rounded-xl py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 resize-none"
+            />
+          </div>
+          <button
+            onClick={() => complete.mutate(
+              { notes: completeNotes, ...(showChannelPicker ? { refund_channel: effectiveCompleteChannel } : {}) },
+              {
+                onSuccess: () => toast.success('Return completed'),
+                onError: async (e) => toast.error(await apiErrorMessage(e, 'Failed to complete return')),
+              },
+            )}
+            disabled={complete.isPending}
+            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 transition-colors disabled:opacity-50"
+          >
+            {complete.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <PackageCheck className="h-4 w-4" />}
+            Complete Return
+          </button>
+        </div>
+      )}
+
+      {/* Approved but the viewer can't complete */}
+      {isApproved && !canComplete && (
+        <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4 flex items-center gap-3">
+          <PackageCheck className="h-5 w-5 text-blue-600 shrink-0" />
+          <p className="text-sm text-blue-800">Approved — awaiting completion at the till.</p>
+        </div>
+      )}
+
+      {/* Terminal states */}
+      {ret.status === 'completed' && (
+        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 flex items-center gap-3">
+          <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0" />
+          <p className="text-sm text-emerald-800">This return has been completed. The refund was settled and the items restocked.</p>
+        </div>
+      )}
+      {ret.status === 'rejected' && (
+        <div className="rounded-2xl border border-red-200 bg-red-50 p-4 flex items-center gap-3">
+          <XCircle className="h-5 w-5 text-red-600 shrink-0" />
+          <p className="text-sm text-red-700">This return was rejected.</p>
+        </div>
+      )}
+
+      {/* Return lines — below the action panel per the QA layout note */}
+      {lines.length > 0 && (
+        <div className="rounded-2xl border border-border overflow-hidden bg-card">
+          <div className="px-4 py-3 border-b border-border bg-accent/20">
+            <p className="text-sm font-bold">Returned Items</p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border">
+                  <th className="text-left px-4 py-2.5 font-semibold text-muted-foreground text-xs">Item</th>
+                  <th className="text-left px-4 py-2.5 font-semibold text-muted-foreground text-xs">SKU</th>
+                  <th className="text-right px-4 py-2.5 font-semibold text-muted-foreground text-xs">Qty</th>
+                  <th className="text-right px-4 py-2.5 font-semibold text-muted-foreground text-xs">Unit Price</th>
+                  <th className="text-right px-4 py-2.5 font-semibold text-muted-foreground text-xs">Total</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {lines.map((l) => (
+                  <tr key={l.id}>
+                    <td className="px-4 py-3">{l.name}</td>
+                    <td className="px-4 py-3 text-muted-foreground text-xs font-mono">{l.sku ?? '—'}</td>
+                    <td className="px-4 py-3 text-right">{l.quantity}</td>
+                    <td className="px-4 py-3 text-right">KES {l.unit_price.toLocaleString()}</td>
+                    <td className="px-4 py-3 text-right font-semibold">KES {l.total_price.toLocaleString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       )}
