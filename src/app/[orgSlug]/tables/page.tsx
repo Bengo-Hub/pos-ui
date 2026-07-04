@@ -660,7 +660,9 @@ function MyBillsTab({ orgSlug }: { orgSlug: string }) {
             id: l.id,
             name: l.name ?? l.item_name ?? 'Item',
             quantity: l.quantity ?? 1,
+            unitPrice: l.unit_price ?? 0,
             totalPrice: l.total_price ?? l.line_total ?? (l.unit_price ?? 0) * (l.quantity ?? 1),
+            seat: l.metadata?.seat, // pre-populate split from seat tagged at order-entry
           }))}
           onPaymentConfirmed={() => {
             setSplitOrder(null);

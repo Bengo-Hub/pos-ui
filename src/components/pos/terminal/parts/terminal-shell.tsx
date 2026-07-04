@@ -203,8 +203,21 @@ export function TerminalShell() {
                       {/* Per-line course selector (hospitality) — restored: lets the waiter assign each
                           line to a course (Starter/Main/Dessert/Bar) for kitchen firing. */}
                       {cfg.showCourses && (
-                        <div className="mt-1">
+                        <div className="mt-1 flex items-center gap-1.5">
                           <CourseSelector value={item.courseNumber ?? 0} onChange={(c) => t.updateCourse(idx, c)} compact />
+                          {/* Per-line seat/guest — pre-populates split-by-item so each guest gets
+                              their own bill without re-creating the order. */}
+                          <select
+                            value={item.seat ?? 0}
+                            onChange={(e) => t.setItemSeat(idx, parseInt(e.target.value))}
+                            title="Assign to a guest"
+                            className="h-6 rounded-md border border-border bg-background px-1.5 text-[11px] focus:outline-none focus:ring-1 focus:ring-primary/30"
+                          >
+                            <option value={0}>Guest…</option>
+                            {Array.from({ length: 8 }, (_, g) => (
+                              <option key={g + 1} value={g + 1}>Guest {g + 1}</option>
+                            ))}
+                          </select>
                         </div>
                       )}
                     </div>

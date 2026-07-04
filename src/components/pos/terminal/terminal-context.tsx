@@ -96,6 +96,8 @@ export interface CartItem extends MenuItem {
   serialNumber?: string;
   notes?: string;
   courseNumber?: CourseValue;
+  /** Seat/guest this item belongs to (1-based; 0/undefined = shared/unassigned). Pre-populates split-by-item. */
+  seat?: number;
   /** Catalog price before a manual price override (markdown). */
   originalPrice?: number;
   overrideReason?: string;
@@ -176,6 +178,7 @@ export interface TerminalContextValue {
   removeFromCart: (index: number) => void;
   clearCart: () => void;
   updateCourse: (index: number, course: CourseValue) => void;
+  setItemSeat: (index: number, seat: number) => void;
 
   // ── pricing profile ──
   pricingProfile: string;
@@ -841,6 +844,11 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
     setCart((prev) => prev.map((c, i) => i === index ? { ...c, courseNumber: course } : c));
   };
 
+  // Assign a cart line to a seat/guest (1-based; 0 = shared). Drives split-by-item pre-population.
+  const setItemSeat = (index: number, seat: number) => {
+    setCart((prev) => prev.map((c, i) => i === index ? { ...c, seat: seat || undefined } : c));
+  };
+
   // Per-item tax: each line carries its own treasury-sourced rate/inclusive flag (enriched by
   // inventory-api, passed through pos-api). We aggregate per line instead of applying one flat
   // outlet rate over the whole cart — this eliminates the double-tax on tax-inclusive items and
@@ -886,6 +894,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
     total_price: (item.price + (item.modifierTotal ?? 0)) * item.quantity,
     course_number: item.courseNumber ?? 0,
     metadata: {
+      ...(item.seat ? { seat: item.seat } : {}),
       ...(item.selectedModifiers ? { modifiers: item.selectedModifiers } : {}),
       ...(item.notes ? { notes: item.notes } : {}),
       ...(item.serialNumber ? { serial_number: item.serialNumber } : {}),
@@ -969,6 +978,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
             quantity: item.quantity,
             unitPrice: item.price + (item.modifierTotal ?? 0),
             totalPrice: (item.price + (item.modifierTotal ?? 0)) * item.quantity,
+            seat: item.seat,
           })));
 
           // Mark table occupied when a dine-in order is created with a table
@@ -1215,7 +1225,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
     pendingApprovalAction, setPendingApprovalAction, confirmApproval,
     priceEditIndex, setPriceEditIndex, setLinePrice,
     addItemToCart, handleItemTap, proceedWithItem, handleScaleAddToCart,
-    updateQuantity, removeFromCart, clearCart, updateCourse,
+    updateQuantity, removeFromCart, clearCart, updateCourse, setItemSeat,
     pricingProfile, pricingTiers, repricing, repriceCart,
     loyaltyState, setLoyaltyState, scaleDeviceId,
     orderSubtype, setOrderSubtype, deliveryInfo, setDeliveryInfo, tableId, tableName,

@@ -21,6 +21,8 @@ export interface OrderLineItem {
   quantity: number;
   unitPrice: number;
   totalPrice: number;
+  /** Seat/guest assigned at order-entry (1-based; 0/undefined = unassigned). Pre-populates split. */
+  seat?: number;
 }
 
 interface SplitPaymentModalProps {
@@ -61,9 +63,12 @@ export function SplitPaymentModal({
   // Split Tender: one bill, several tenders each with its own amount + payment method.
   const [tenderLines, setTenderLines] = useState<CustomSplit[]>([{ amount: '', paid: false }, { amount: '', paid: false }]);
   const [tenderPayer, setTenderPayer] = useState<number | null>(null);
-  // By Item: guestCount guests, lineAssignments[lineIndex] = guestIndex (1-based, 0 = unassigned)
-  const [guestCount, setGuestCount] = useState(2);
-  const [lineAssignments, setLineAssignments] = useState<number[]>(() => new Array(orderLines.length).fill(0));
+  // By Item: guestCount guests, lineAssignments[lineIndex] = guestIndex (1-based, 0 = unassigned).
+  // Pre-populate from seats tagged at order-entry (seat-based ordering) so the waiter doesn't
+  // re-assign items — Guest 1's fish/chips and Guest 2's espresso are already grouped.
+  const seatMax = Math.max(2, ...orderLines.map((l) => l.seat ?? 0));
+  const [guestCount, setGuestCount] = useState(seatMax);
+  const [lineAssignments, setLineAssignments] = useState<number[]>(() => orderLines.map((l) => l.seat ?? 0));
   const [itemSplitPayer, setItemSplitPayer] = useState<number | null>(null); // guest index (1-based)
   const [paidGuests, setPaidGuests] = useState<Set<number>>(new Set());
   const [cashGiven, setCashGiven] = useState('');
