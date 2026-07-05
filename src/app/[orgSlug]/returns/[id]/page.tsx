@@ -10,6 +10,9 @@ import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { usePermissions, P } from '@/hooks/usePermissions';
+import { allowedRefundChannels, defaultRefundChannel, refundChannelAdvisory, REFUND_CHANNELS } from '@/lib/returns-policy';
+import { ExchangeLinesPicker, exchangeTotal, type ExchangeLine } from '@/components/pos/returns/exchange-lines-picker';
+import { SplitPaymentModal } from '@/components/pos/split-payment-modal';
 
 interface ReturnLine {
   id: string;
@@ -37,18 +40,14 @@ interface ReturnDetail {
   requested_by: string;
   approved_by?: string;
   treasury_refund_ref?: string;
+  exchange_order_id?: string;
+  metadata?: Record<string, any>;
   created_at: string;
   updated_at: string;
   edges?: { lines?: ReturnLine[] };
 }
 
-const REFUND_CHANNELS: { value: string; label: string }[] = [
-  { value: 'cash',         label: 'Cash'         },
-  { value: 'mpesa',        label: 'M-Pesa'       },
-  { value: 'bank',         label: 'Bank'         },
-  { value: 'cheque',       label: 'Cheque'       },
-  { value: 'store_credit', label: 'Store Credit' },
-];
+// Refund channels + the reason/on-account policy live in the shared lib (mirrors pos-api).
 
 const STATUS_CONFIG: Record<ReturnDetail['status'], { label: string; className: string }> = {
   pending:   { label: 'Pending',   className: 'bg-amber-500/10 text-amber-700 border-amber-200' },
@@ -91,12 +90,24 @@ function useApproveReturn(returnId: string) {
 
 // useCompleteReturn fulfils an APPROVED return — settles the refund + restocks the goods and moves
 // the return into the Completed tab. This is the till/cashier step that follows a manager approval.
+interface CompleteReturnResponse {
+  id: string;
+  exchange?: {
+    order_id: string;
+    order_number: string;
+    replacement_total: number;
+    exchange_credit: number;
+    amount_payable: number;
+    leftover_refund: number;
+  };
+}
+
 function useCompleteReturn(returnId: string) {
   const tenantID = useAuthStore((s) => s.user?.tenant_id ?? '');
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (payload: { notes?: string; refund_channel?: string }) =>
-      apiClient.post(`/api/v1/${tenantID}/pos/returns/${returnId}/complete`, payload),
+    mutationFn: (payload: { notes?: string; refund_channel?: string; exchange_lines?: any[] }) =>
+      apiClient.post<CompleteReturnResponse>(`/api/v1/${tenantID}/pos/returns/${returnId}/complete`, payload),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['return', tenantID, returnId] });
       qc.invalidateQueries({ queryKey: ['returns', tenantID] });
@@ -120,6 +131,9 @@ export default function ReturnDetailPage() {
   // Completion-time notes + optional refund-channel confirm (till step).
   const [completeNotes, setCompleteNotes] = useState('');
   const [completeChannel, setCompleteChannel] = useState('');
+  // Exchange completion: replacement items + the top-up payment flow for a dearer swap.
+  const [exchangeLines, setExchangeLines] = useState<ExchangeLine[]>([]);
+  const [topUpOrder, setTopUpOrder] = useState<{ id: string; number: string; total: number } | null>(null);
 
   if (isLoading) {
     return (
@@ -141,10 +155,17 @@ export default function ReturnDetailPage() {
   const isPending = ret.status === 'pending';
   const isApproved = ret.status === 'approved';
   const showChannelPicker = ret.return_type !== 'exchange';
-  // Effective channel for the approval selector: local override → existing channel on the return → cash.
-  const effectiveChannel = refundChannel || ret.refund_channel || 'cash';
-  // Effective channel for the completion confirm: local override → channel chosen at approval → cash.
-  const effectiveCompleteChannel = completeChannel || ret.refund_channel || 'cash';
+  const isExchange = ret.return_type === 'exchange';
+  // Reason/on-account policy (mirrors pos-api returns_policy.go; the server enforces it).
+  const onAccount = !!ret.metadata?.on_account_sale;
+  const channelOptions = allowedRefundChannels(ret.reason_code, onAccount);
+  const channelAdvisory = refundChannelAdvisory(ret.reason_code, onAccount);
+  const policyDefault = defaultRefundChannel(ret.return_type, onAccount);
+  const validChannel = (v: string) => (channelOptions.some((c) => c.value === v) ? v : policyDefault);
+  // Effective channel: local override → existing channel on the return → policy default —
+  // always snapped back into the allowed set.
+  const effectiveChannel = validChannel(refundChannel || ret.refund_channel || policyDefault);
+  const effectiveCompleteChannel = validChannel(completeChannel || ret.refund_channel || policyDefault);
   const channelLabel = (v: string) => REFUND_CHANNELS.find((c) => c.value === v)?.label ?? v.replace('_', ' ');
   // Stage RBAC: managers approve/reject; a cashier/manager at the till completes an approved return.
   const canApprove = canManageOrders;
@@ -235,8 +256,11 @@ export default function ReturnDetailPage() {
                 onChange={(e) => setRefundChannel(e.target.value)}
                 className="mt-1 w-full bg-background border border-border rounded-xl py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
               >
-                {REFUND_CHANNELS.map((ch) => <option key={ch.value} value={ch.value}>{ch.label}</option>)}
+                {channelOptions.map((ch) => <option key={ch.value} value={ch.value}>{ch.label}</option>)}
               </select>
+              {channelAdvisory && (
+                <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-2">{channelAdvisory}</p>
+              )}
             </div>
           )}
           <div>
@@ -292,12 +316,24 @@ export default function ReturnDetailPage() {
             <p className="text-sm font-bold">Complete Return</p>
           </div>
           <div className="rounded-xl bg-emerald-50 border border-emerald-100 px-4 py-3 text-xs text-emerald-800">
-            Completing will restock the returned items
-            {ret.return_type !== 'exchange' && ret.refund_amount > 0 && (
-              <> and settle a <span className="font-semibold">KES {ret.refund_amount.toLocaleString()}</span> {ret.return_type === 'store_credit' ? 'store credit' : 'refund'} via <span className="font-semibold">{channelLabel(effectiveCompleteChannel)}</span></>
+            {isExchange ? (
+              <>Completing will restock the returned items and raise the replacement sale — a dearer replacement collects the difference at the till; a cheaper one refunds the leftover.</>
+            ) : (
+              <>Completing will restock the returned items
+                {ret.refund_amount > 0 && (
+                  <> and settle a <span className="font-semibold">KES {ret.refund_amount.toLocaleString()}</span> {ret.return_type === 'store_credit' ? 'store credit' : 'refund'} via <span className="font-semibold">{channelLabel(effectiveCompleteChannel)}</span></>
+                )}.
+              </>
             )}
-            .
           </div>
+          {isExchange && (
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground">Replacement Items</label>
+              <div className="mt-1">
+                <ExchangeLinesPicker lines={exchangeLines} onChange={setExchangeLines} returnedValue={ret.refund_amount} />
+              </div>
+            </div>
+          )}
           {showChannelPicker && (
             <div>
               <label className="text-xs font-semibold text-muted-foreground">Confirm Refund Method</label>
@@ -306,8 +342,11 @@ export default function ReturnDetailPage() {
                 onChange={(e) => setCompleteChannel(e.target.value)}
                 className="mt-1 w-full bg-background border border-border rounded-xl py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
               >
-                {REFUND_CHANNELS.map((ch) => <option key={ch.value} value={ch.value}>{ch.label}</option>)}
+                {channelOptions.map((ch) => <option key={ch.value} value={ch.value}>{ch.label}</option>)}
               </select>
+              {channelAdvisory && (
+                <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-2">{channelAdvisory}</p>
+              )}
             </div>
           )}
           <div>
@@ -322,19 +361,62 @@ export default function ReturnDetailPage() {
           </div>
           <button
             onClick={() => complete.mutate(
-              { notes: completeNotes, ...(showChannelPicker ? { refund_channel: effectiveCompleteChannel } : {}) },
               {
-                onSuccess: () => toast.success('Return completed'),
+                notes: completeNotes,
+                ...(showChannelPicker ? { refund_channel: effectiveCompleteChannel } : {}),
+                ...(isExchange
+                  ? {
+                      exchange_lines: exchangeLines.map((l) => ({
+                        catalog_item_id: l.item.id,
+                        sku: l.item.sku,
+                        name: l.item.name,
+                        quantity: l.quantity,
+                        unit_price: l.unitPrice,
+                        total_price: l.unitPrice * l.quantity,
+                      })),
+                    }
+                  : {}),
+              },
+              {
+                onSuccess: (resp) => {
+                  const ex = resp?.exchange;
+                  if (ex && ex.amount_payable > 0.009) {
+                    toast.success(`Exchange raised ${ex.order_number} — collect the KES ${ex.amount_payable.toLocaleString()} top-up`);
+                    setTopUpOrder({ id: ex.order_id, number: ex.order_number, total: ex.amount_payable });
+                  } else if (ex && ex.leftover_refund > 0.009) {
+                    toast.success(`Exchange completed — refund KES ${ex.leftover_refund.toLocaleString()} to the customer (${channelLabel(effectiveCompleteChannel)})`);
+                  } else {
+                    toast.success(isExchange ? 'Exchange completed' : 'Return completed');
+                  }
+                },
                 onError: async (e) => toast.error(await apiErrorMessage(e, 'Failed to complete return')),
               },
             )}
-            disabled={complete.isPending}
+            disabled={complete.isPending || (isExchange && exchangeLines.length === 0)}
             className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 transition-colors disabled:opacity-50"
           >
             {complete.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <PackageCheck className="h-4 w-4" />}
-            Complete Return
+            {isExchange
+              ? exchangeTotal(exchangeLines) - ret.refund_amount > 0.009
+                ? 'Complete Exchange & Collect Top-up'
+                : 'Complete Exchange'
+              : 'Complete Return'}
           </button>
         </div>
+      )}
+
+      {/* Exchange top-up payment — the replacement order's payable balance, collected
+          through the ordinary payment flow. */}
+      {topUpOrder && (
+        <SplitPaymentModal
+          open
+          onClose={() => setTopUpOrder(null)}
+          onPaymentConfirmed={() => { setTopUpOrder(null); toast.success('Top-up collected — exchange settled'); }}
+          orderId={topUpOrder.id}
+          orderNumber={topUpOrder.number}
+          total={topUpOrder.total}
+          tenantSlug={orgSlug}
+        />
       )}
 
       {/* Approved but the viewer can't complete */}

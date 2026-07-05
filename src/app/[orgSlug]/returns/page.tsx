@@ -13,6 +13,7 @@ import { Loader2, Plus, RotateCcw, Search, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api/error-message';
+import { allowedRefundChannels, defaultRefundChannel, refundChannelAdvisory } from '@/lib/returns-policy';
 
 interface ReturnItem {
   id: string;
@@ -70,15 +71,7 @@ interface InitiateReturnPayload {
   lines: ReturnLinePayload[];
 }
 
-// REFUND_CHANNELS are the settlement methods a cashier can pick for a refund/store-credit return.
-// Mirrors the pos-api POSReturn.refund_channel enum + treasury's refund_channel field.
-const REFUND_CHANNELS: { value: string; label: string }[] = [
-  { value: 'cash',         label: 'Cash'         },
-  { value: 'mpesa',        label: 'M-Pesa'       },
-  { value: 'bank',         label: 'Bank'         },
-  { value: 'cheque',       label: 'Cheque'       },
-  { value: 'store_credit', label: 'Store Credit' },
-];
+// Refund channels + reason policy live in the shared lib (mirrors pos-api returns_policy.go).
 
 function useInitiateReturn() {
   const user = useAuthStore((s) => s.user);
@@ -181,6 +174,28 @@ function InitiateReturnModal({ onClose }: { onClose: () => void }) {
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const { mutate, isPending, isError } = useInitiateReturn();
+
+  // Was the original sale settled on account (credit sale)? Detected from its payments'
+  // tender types — an unpaid credit sale must be settled by offsetting the customer's
+  // balance, never by paying out money (mirrors pos-api returns_policy.go).
+  const { data: orderPayments } = useQuery({
+    queryKey: ['pos-order-payments', tenantID, selectedOrder?.id],
+    queryFn: () => apiClient.get<any>(`/api/v1/${tenantID}/pos/orders/${selectedOrder.id}/payments`),
+    enabled: !!tenantID && !!selectedOrder?.id,
+    staleTime: 60_000,
+  });
+  const onAccount = ((orderPayments as any)?.data ?? []).some(
+    (p: any) => p.tender_type === 'on_account' && p.status === 'completed',
+  );
+  const channelOptions = allowedRefundChannels(reasonCode || undefined, onAccount);
+  const channelAdvisory = refundChannelAdvisory(reasonCode || undefined, onAccount);
+  // Keep the selection valid when the reason/on-account context narrows the options.
+  useEffect(() => {
+    if (returnType !== 'exchange' && !channelOptions.some((c) => c.value === refundChannel)) {
+      setRefundChannel(defaultRefundChannel(returnType, onAccount));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reasonCode, onAccount, returnType]);
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedQuery(searchQuery), 400);
@@ -446,12 +461,13 @@ function InitiateReturnModal({ onClose }: { onClose: () => void }) {
             </div>
           </div>
 
-          {/* Refund method / channel — for refund & store-credit returns */}
+          {/* Refund method / channel — for refund & store-credit returns. Options are
+              narrowed by the reason + on-account policy (server enforces the same). */}
           {returnType !== 'exchange' && (
             <div>
               <label className="text-xs font-semibold text-muted-foreground">Refund Method</label>
               <div className="flex flex-wrap gap-2 mt-1">
-                {REFUND_CHANNELS.map((ch) => (
+                {channelOptions.map((ch) => (
                   <button
                     key={ch.value}
                     type="button"
@@ -467,6 +483,11 @@ function InitiateReturnModal({ onClose }: { onClose: () => void }) {
                   </button>
                 ))}
               </div>
+              {channelAdvisory && (
+                <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-2">
+                  {channelAdvisory}
+                </p>
+              )}
             </div>
           )}
 
@@ -565,6 +586,25 @@ function ReturnByInvoiceModal({ onClose, initialInvoice = '' }: { onClose: () =>
   });
 
   const lines: any[] = order?.edges?.lines ?? order?.lines ?? [];
+
+  // On-account (credit-sale) detection + reason-based channel policy (mirrors the server).
+  const { data: byInvPayments } = useQuery({
+    queryKey: ['pos-order-payments', tenantID, order?.id],
+    queryFn: () => apiClient.get<any>(`/api/v1/${tenantID}/pos/orders/${order.id}/payments`),
+    enabled: !!tenantID && !!order?.id,
+    staleTime: 60_000,
+  });
+  const onAccount = ((byInvPayments as any)?.data ?? []).some(
+    (p: any) => p.tender_type === 'on_account' && p.status === 'completed',
+  );
+  const channelOptions = allowedRefundChannels(undefined, onAccount);
+  const channelAdvisory = refundChannelAdvisory(undefined, onAccount);
+  useEffect(() => {
+    if (returnType !== 'exchange' && !channelOptions.some((c) => c.value === refundChannel)) {
+      setRefundChannel(defaultRefundChannel(returnType, onAccount));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onAccount, returnType]);
 
   async function handleProcess() {
     if (!order) return;
@@ -683,8 +723,13 @@ function ReturnByInvoiceModal({ onClose, initialInvoice = '' }: { onClose: () =>
                   onChange={(e) => setRefundChannel(e.target.value)}
                   className="mt-1 w-full bg-background border border-border rounded-xl py-2 px-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
                 >
-                  {REFUND_CHANNELS.map((ch) => <option key={ch.value} value={ch.value}>{ch.label}</option>)}
+                  {channelOptions.map((ch) => <option key={ch.value} value={ch.value}>{ch.label}</option>)}
                 </select>
+                {channelAdvisory && (
+                  <span className="block text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-2">
+                    {channelAdvisory}
+                  </span>
+                )}
               </label>
             )}
 
