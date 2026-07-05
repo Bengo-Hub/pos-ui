@@ -10,12 +10,17 @@ import {
   type CreateLayawayInput,
 } from '@/hooks/useLayaway';
 import { cn } from '@/lib/utils';
-import { Loader2, Plus, X } from 'lucide-react';
+import { Loader2, Plus, User, Users, X } from 'lucide-react';
 import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api/error-message';
+import { FeatureLock, useFeatureUpgrade } from '@bengo-hub/shared-ui-lib/subscription';
+import { useStaffAdmin } from '@/hooks/useStaff';
+import { useAuthStore } from '@/store/auth';
+
+const STAFF_CREDIT_FEATURE = 'staff_fund_from_salary';
 
 function statusVariant(status: LayawayPlan['status']): 'default' | 'success' | 'outline' {
   if (status === 'completed') return 'success';
@@ -44,6 +49,17 @@ function LayawayListPage() {
 
   const [createOpen, setCreateOpen] = useState(false);
   const [form, setForm] = useState<CreateLayawayInput>(EMPTY_FORM);
+  // Party selection + staff fund-from-salary (premium).
+  const [partyType, setPartyType] = useState<'customer' | 'staff'>('customer');
+  const [staffId, setStaffId] = useState('');
+  const [fundFromSalary, setFundFromSalary] = useState(false);
+  const [months, setMonths] = useState(1);
+  const tenantId = useAuthStore((s) => s.user?.tenant_id ?? '');
+  const { data: staffResp } = useStaffAdmin(tenantId);
+  const staff: any[] = Array.isArray(staffResp) ? staffResp : ((staffResp as any)?.data ?? []);
+  const staffCredit = useFeatureUpgrade(STAFF_CREDIT_FEATURE);
+
+  const resetParty = () => { setPartyType('customer'); setStaffId(''); setFundFromSalary(false); setMonths(1); };
 
   // ?new=1 from redirect (e.g. navigating to /layaway/new)
   useEffect(() => {
@@ -62,6 +78,10 @@ function LayawayListPage() {
       toast.error('Please fill in all required fields');
       return;
     }
+    if (partyType === 'staff' && !staffId) {
+      toast.error('Please select a staff member');
+      return;
+    }
     const payload: CreateLayawayInput = {
       customer_name: form.customer_name,
       total_amount: Number(form.total_amount),
@@ -71,12 +91,22 @@ function LayawayListPage() {
     if (form.customer_email) payload.customer_email = form.customer_email;
     if (form.due_date) payload.due_date = form.due_date;
     if (form.notes) payload.notes = form.notes;
+    if (partyType === 'staff') {
+      payload.party_type = 'staff';
+      payload.staff_member_id = staffId;
+      // Fund-from-salary is only sent when the tenant is entitled (the toggle is locked otherwise).
+      if (fundFromSalary && !staffCredit.locked) {
+        payload.fund_from_salary = true;
+        payload.installment_months = Math.max(1, months);
+      }
+    }
 
     createLayaway.mutate(payload, {
       onSuccess: (plan) => {
         toast.success('Layaway plan created');
         setCreateOpen(false);
         setForm(EMPTY_FORM);
+        resetParty();
         router.push(`/${orgSlug}/layaway/${plan.id}`);
       },
       onError: async (e) => toast.error(await apiErrorMessage(e, 'Failed to create layaway plan')),
@@ -170,7 +200,7 @@ function LayawayListPage() {
                 <p className="text-xs text-muted-foreground mt-0.5">Set up a customer payment plan</p>
               </div>
               <button
-                onClick={() => { setCreateOpen(false); setForm(EMPTY_FORM); }}
+                onClick={() => { setCreateOpen(false); setForm(EMPTY_FORM); resetParty(); }}
                 className="h-9 w-9 rounded-xl flex items-center justify-center hover:bg-accent"
               >
                 <X className="h-4 w-4" />
@@ -178,19 +208,88 @@ function LayawayListPage() {
             </div>
 
             <form onSubmit={handleCreate} className="space-y-4">
-              <div>
-                <label className="text-xs font-semibold text-muted-foreground mb-1.5 block">
-                  Customer Name <span className="text-destructive">*</span>
-                </label>
-                <input
-                  required
-                  value={form.customer_name}
-                  onChange={(e) => setField('customer_name', e.target.value)}
-                  placeholder="Full name"
-                  className="w-full bg-background border border-border rounded-xl py-2.5 px-3.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
-                  autoFocus
-                />
+              {/* Party: existing customer vs staff member (funded from salary) */}
+              <div className="grid grid-cols-2 gap-2">
+                {([['customer', 'Customer', User], ['staff', 'Staff', Users]] as const).map(([val, label, Icon]) => (
+                  <button
+                    key={val}
+                    type="button"
+                    onClick={() => { setPartyType(val); if (val === 'customer') { setStaffId(''); setFundFromSalary(false); } }}
+                    className={cn(
+                      'flex items-center justify-center gap-2 py-2 rounded-xl text-sm font-semibold border transition-colors',
+                      partyType === val ? 'bg-primary text-primary-foreground border-primary' : 'border-border text-muted-foreground hover:text-foreground',
+                    )}
+                  >
+                    <Icon className="h-4 w-4" /> {label}
+                  </button>
+                ))}
               </div>
+
+              {partyType === 'staff' ? (
+                <div>
+                  <label className="text-xs font-semibold text-muted-foreground mb-1.5 block">
+                    Staff Member <span className="text-destructive">*</span>
+                  </label>
+                  <select
+                    value={staffId}
+                    onChange={(e) => {
+                      setStaffId(e.target.value);
+                      const s = staff.find((x: any) => x.id === e.target.value);
+                      if (s) setField('customer_name', s.name);
+                    }}
+                    className="w-full bg-background border border-border rounded-xl py-2.5 px-3.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+                  >
+                    <option value="">— Select staff —</option>
+                    {staff.map((s: any) => (
+                      <option key={s.id} value={s.id}>{s.name}{s.role ? ` · ${s.role}` : ''}</option>
+                    ))}
+                  </select>
+                </div>
+              ) : (
+                <div>
+                  <label className="text-xs font-semibold text-muted-foreground mb-1.5 block">
+                    Customer Name <span className="text-destructive">*</span>
+                  </label>
+                  <input
+                    required
+                    value={form.customer_name}
+                    onChange={(e) => setField('customer_name', e.target.value)}
+                    placeholder="Full name"
+                    className="w-full bg-background border border-border rounded-xl py-2.5 px-3.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+                    autoFocus
+                  />
+                </div>
+              )}
+
+              {/* Staff: fund the balance from salary (premium — visible + upgrade-gated, never hidden) */}
+              {partyType === 'staff' && (
+                <FeatureLock feature={STAFF_CREDIT_FEATURE} mode="overlay">
+                  <div className="rounded-xl border border-border bg-accent/20 p-3 space-y-3">
+                    <label className="flex items-center gap-2 text-sm font-semibold cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={fundFromSalary}
+                        onChange={(e) => setFundFromSalary(e.target.checked)}
+                        className="rounded"
+                      />
+                      Fund from salary (recover via payroll deductions)
+                    </label>
+                    {fundFromSalary && (
+                      <div>
+                        <label className="text-xs font-semibold text-muted-foreground mb-1.5 block">Spread over (payroll periods)</label>
+                        <input
+                          type="number"
+                          min={1}
+                          max={36}
+                          value={months}
+                          onChange={(e) => setMonths(Math.max(1, parseInt(e.target.value) || 1))}
+                          className="w-28 bg-background border border-border rounded-xl py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+                        />
+                      </div>
+                    )}
+                  </div>
+                </FeatureLock>
+              )}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs font-semibold text-muted-foreground mb-1.5 block">Phone</label>
@@ -267,7 +366,7 @@ function LayawayListPage() {
                   type="button"
                   variant="outline"
                   className="flex-1 min-h-11"
-                  onClick={() => { setCreateOpen(false); setForm(EMPTY_FORM); }}
+                  onClick={() => { setCreateOpen(false); setForm(EMPTY_FORM); resetParty(); }}
                   disabled={createLayaway.isPending}
                 >
                   Cancel

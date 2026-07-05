@@ -47,6 +47,11 @@ export interface CreateLayawayInput {
   deposit_amount: number;
   due_date?: string;
   notes?: string;
+  // Party: an existing customer (default) or a staff member funded from salary (premium).
+  party_type?: 'customer' | 'staff';
+  staff_member_id?: string;
+  fund_from_salary?: boolean;
+  installment_months?: number;
 }
 
 export interface RecordPaymentInput {

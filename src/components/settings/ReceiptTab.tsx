@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Bluetooth, Download, HelpCircle, Inbox, Loader2, Lock, Network, Printer, Receipt, Save, Usb } from 'lucide-react';
+import { Bluetooth, Download, HelpCircle, Inbox, Loader2, Lock, Network, Printer, Receipt, Save, Usb, Wifi } from 'lucide-react';
 
 // pos-api base — the print-agent installer download is served by pos-api, not the pos-ui host.
 const POS_API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'https://posapi.codevertexitsolutions.com';
@@ -17,7 +17,8 @@ import { P } from '@/lib/rbac/permissions';
 import type { PrinterProfile, PrinterConnType } from '@/lib/api/settings';
 import {
   discoverPrinters, openCashDrawerProfile, requestUSBPrinter, requestBluetoothPrinter,
-  printProfileHtml, agentAvailable, type DrawerKickCode, type DiscoveredDevice,
+  printProfileHtml, agentAvailable, pingNetworkPrinter, fetchTestTicketEscposHex,
+  type DrawerKickCode, type DiscoveredDevice,
 } from '@/lib/pos/printer-discovery';
 import { BILL_PROFILE_ID, WAITER_PROFILE_ID, paperOf } from '@/lib/pos/printer-stations';
 import { Toggle, inputClass, labelClass } from './shared';
@@ -98,6 +99,8 @@ export function ReceiptTab() {
   const [showPrinterHelp, setShowPrinterHelp] = useState(false);
   const [testingDrawer, setTestingDrawer] = useState(false);
   const [agentUp, setAgentUp] = useState<boolean | null>(null);
+  // Per-card in-flight state for the "Ping printer" button (keyed by profile id).
+  const [pingingId, setPingingId] = useState<string | null>(null);
 
   // Probe the local print agent once so the status pill and setup help reflect reality.
   useEffect(() => { void agentAvailable().then(setAgentUp); }, []);
@@ -163,8 +166,29 @@ export function ReceiptTab() {
     const html = `<div style="font-family:'Courier New',monospace;text-align:center">
       <h3>Test Print</h3><p>${card.label}</p><p>${paperOf(p)}</p>
       <p>${new Date().toLocaleString()}</p></div>`;
-    await printProfileHtml(p, `Test — ${card.label}`, html);
+    // For a network (IP) printer, fetch server-built ESC/POS bytes and print SILENTLY in the
+    // background via QZ/the local agent — instead of opening the browser print dialog. Other
+    // connection types still print via QZ (silent) or the browser dialog as before.
+    let escposHex: string | undefined;
+    if (p.printer_type === 'network' && p.printer_ip) {
+      escposHex = (await fetchTestTicketEscposHex(card.label, paperOf(p))) ?? undefined;
+    }
+    await printProfileHtml(p, `Test — ${card.label}`, html, escposHex);
     toast.success('Test page sent.');
+  };
+
+  const handlePing = async (card: PrinterCard) => {
+    const p = getProfile(card.id);
+    if (!p.printer_ip) { toast.info('Enter the printer IP first.'); return; }
+    setPingingId(card.id);
+    try {
+      const res = await pingNetworkPrinter(p.printer_ip, p.printer_port ?? 9100);
+      if (res.ok) toast.success(`Printer reachable at ${p.printer_ip}:${p.printer_port ?? 9100}${res.ms != null ? ` (${res.ms} ms)` : ''}.`);
+      else if (res.agentDown) toast.error('Local print agent not running — install & start it to ping network printers.');
+      else toast.error(`Could not reach ${p.printer_ip}:${p.printer_port ?? 9100} — ${res.error ?? 'unreachable'}.`);
+    } finally {
+      setPingingId(null);
+    }
   };
 
   useEffect(() => {
@@ -507,6 +531,21 @@ export function ReceiptTab() {
                         className={`${inputClass} font-mono`}
                       />
                     </div>
+                    </div>
+                    {/* Confirm the network printer is reachable (TCP connect via the local agent) before
+                        printing — no data is sent to the printer. */}
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => handlePing(card)}
+                        disabled={pingingId === card.id || !p.printer_ip}
+                        className="gap-2 h-8 text-xs"
+                      >
+                        {pingingId === card.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wifi className="h-3.5 w-3.5" />}
+                        {pingingId === card.id ? 'Pinging…' : 'Ping printer'}
+                      </Button>
+                      <span className="text-[11px] text-muted-foreground">Checks the printer is on this network.</span>
                     </div>
                   </div>
                 )}

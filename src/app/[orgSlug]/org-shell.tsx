@@ -4,6 +4,7 @@ import { Header } from '@/components/header';
 import { Sidebar } from '@/components/sidebar';
 import { AuthProvider } from '@/providers/auth-provider';
 import { TenantBrandingProvider } from '@/providers/tenant-branding-provider';
+import { SubscriptionEntitlementsProvider } from '@/providers/subscription-entitlements-provider';
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import { ReactNode, useState } from 'react';
 import { useOnline } from '@/hooks/use-online';
@@ -159,6 +160,7 @@ export function OrgShell({ children }: { children: ReactNode }) {
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <TenantBrandingProvider>
+          <SubscriptionEntitlementsProvider>
           <ManifestInjector />
           {/* Shared top ribbon: offline-mode (cash/manual only) + animated "Syncing offline
               data… (N)" driven by the real IndexedDB queue. SW is registered by registerBackgroundSync. */}
@@ -208,6 +210,7 @@ export function OrgShell({ children }: { children: ReactNode }) {
               </div>
             </div>
           )}
+          </SubscriptionEntitlementsProvider>
         </TenantBrandingProvider>
       </AuthProvider>
     </QueryClientProvider>

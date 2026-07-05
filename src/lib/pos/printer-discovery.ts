@@ -565,6 +565,58 @@ export async function fetchReceiptEscposHex(
   }
 }
 
+/** Result of a network-printer connectivity check. */
+export interface PingResult {
+  ok: boolean;
+  ms?: number;
+  error?: string;
+  /** true when the local print agent itself was unreachable (vs. the printer being down). */
+  agentDown?: boolean;
+}
+
+/**
+ * Ping a raw (JetDirect/9100) network printer by opening a short-lived TCP connection to ip:port via
+ * the Local Print Agent, then closing it — no data is sent to the printer. Only the on-terminal agent
+ * can do a raw TCP connectivity check (a browser cannot), so this reports `agentDown` when the agent
+ * isn't running so the UI can tell the operator to start it. Backs the "Ping printer" button.
+ */
+export async function pingNetworkPrinter(host: string, port = 9100): Promise<PingResult> {
+  if (typeof window === 'undefined') return { ok: false, error: 'unavailable' };
+  if (!host) return { ok: false, error: 'no printer IP set' };
+  try {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 4500);
+    const res = await fetch(`${AGENT_BASE}/ping?ip=${encodeURIComponent(host)}&port=${port || 9100}`, {
+      signal: ctrl.signal,
+      mode: 'cors',
+    });
+    clearTimeout(t);
+    const body = (await res.json().catch(() => ({}))) as { ok?: boolean; ms?: number; error?: string };
+    if (res.ok && body?.ok) return { ok: true, ms: body.ms };
+    return { ok: false, error: body?.error || `unreachable (HTTP ${res.status})` };
+  } catch {
+    // Agent not installed/running (or blocked): the browser can't TCP-ping on its own.
+    return { ok: false, agentDown: true, error: 'Local print agent not reachable' };
+  }
+}
+
+/** Fetch server-built ESC/POS bytes (hex) for a diagnostic test ticket, WITHOUT dispatching. The
+ *  browser relays these to the Local Print Agent (or QZ) for a SILENT background test print — no
+ *  browser print dialog. Returns null on failure (caller falls back to the browser window). */
+export async function fetchTestTicketEscposHex(station: string, paper: string): Promise<string | null> {
+  const slug = tenantSlug();
+  if (!slug) return null;
+  try {
+    const res = await apiClient.post<{ escpos_hex?: string }>(
+      `/api/v1/${slug}/pos/printing/test-ticket`,
+      { station, paper },
+    );
+    return res?.escpos_hex ?? null;
+  } catch {
+    return null;
+  }
+}
+
 /** Send raw ESC/POS bytes (hex) to a network printer via the local agent — used when there is no QZ
  *  bridge. Returns true on success. */
 async function printRawToNetwork(host: string, port: number, hex: string): Promise<boolean> {
