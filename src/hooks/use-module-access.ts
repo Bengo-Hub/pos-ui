@@ -16,6 +16,7 @@ import { useAuthStore } from '@/store/auth';
 import { useOutletFilterStore } from '@/store/outlet-filter';
 import { usePOSSettings } from './usePOSSettings';
 import { normalizeUseCase } from '@/lib/use-case-config';
+import { CORE_MODULE_KEYS } from '@/lib/pos/nav-config';
 
 // ─── Module keys ────────────────────────────────────────────────────────────
 export type ModuleKey =
@@ -167,6 +168,10 @@ export function useModuleAccess() {
    * Returns false when use case hasn't resolved yet (isResolved=false).
    */
   function hasModule(moduleKey: string): boolean {
+    // Outlet admin turned this whole module off (declutter to only the screens they use). Applies
+    // to every role so the sidebar and page guards agree — except CORE modules (e.g. settings),
+    // which can never be hidden or you'd lock yourself out.
+    if (posSettings?.disabled_modules?.includes(moduleKey) && !CORE_MODULE_KEYS.has(moduleKey)) return false;
     if (isSuperUser) return true;
     if (!useCase) return false; // not yet resolved — hide everything
     if (!enabledModules.includes(moduleKey as ModuleKey)) return false;
@@ -202,6 +207,10 @@ export function useModuleAccess() {
 
     // Module check
     hasModule,
+
+    // Outlet-level sidebar visibility overrides (declutter to only the screens they use).
+    disabledModules: new Set(posSettings?.disabled_modules ?? []),
+    hiddenItems: new Set(posSettings?.hidden_items ?? []),
 
     // Convenience flags for common sidebar checks
     showTables: hasModule('tables'),

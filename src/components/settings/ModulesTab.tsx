@@ -1,148 +1,150 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useParams } from 'next/navigation';
 import {
-  BadgeCheck, BedDouble, Calendar, ChefHat, Clock,
-  FlaskConical, Loader2, Lock, Package, ShoppingCart,
-  UtensilsCrossed, Wrench,
+  BadgeCheck, ChefHat, ChevronDown, EyeOff, FlaskConical, Loader2, Lock,
+  ShoppingCart, UtensilsCrossed, Wrench,
 } from 'lucide-react';
 import { usePOSSettings, useUpdatePOSModules, useUpdateOutletConfig } from '@/hooks/usePOSSettings';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useModuleAccess } from '@/hooks/use-module-access';
 import { P } from '@/lib/rbac/permissions';
 import { useAuthStore } from '@/store/auth';
+import { buildNavGroups, CORE_MODULE_KEYS, type NavItem } from '@/lib/pos/nav-config';
+import type { UpdatePOSModulesInput } from '@/lib/api/settings';
 import { Toggle } from './shared';
 
-type ModuleToggleKey =
-  | 'hotel_module_enabled'
-  | 'enable_kds'
-  | 'enable_appointments'
-  | 'layaway_enabled'
-  | 'shift_reports_enabled';
+// Backend feature flags that some sidebar modules ALSO drive (not just visibility). Toggling such a
+// module writes both the disabled_modules list (visibility) and the functional flag, so hiding a
+// module the outlet doesn't use also stops its background processing.
+type BackendFlagKey = 'hotel_module_enabled' | 'enable_kds' | 'enable_appointments' | 'layaway_enabled';
+const BACKEND_FLAG: Record<string, BackendFlagKey> = {
+  hotel: 'hotel_module_enabled',
+  kds: 'enable_kds',
+  appointments: 'enable_appointments',
+  layaway: 'layaway_enabled',
+};
 
-interface FeatureDef {
-  key: ModuleToggleKey;
-  label: string;
-  icon: React.ElementType;
-  description: string;
-}
+// Friendly module names for the visibility tree (falls back to a title-cased key).
+const MODULE_LABELS: Record<string, string> = {
+  dashboard: 'Dashboard', cash_drawer: 'Cash Drawer', clients: 'Clients', shifts: 'Shifts',
+  new_order: 'Point of Sale', orders: 'Sales & Orders', layaway: 'Layaway', returns: 'Returns',
+  tables: 'Tables', reservations: 'Reservations', appointments: 'Appointments', packages: 'Service Packages',
+  queue: 'Walk-in Queue', repairs: 'Repairs', staff_schedule: 'Staff Schedule', resources: 'Resources',
+  kds: 'Kitchen Display (KDS)', hotel: 'Hotel / Rooms', online_orders: 'Online Orders',
+  pharmacy: 'Pharmacy', patients: 'Patients', purchase_orders: 'Purchase Orders', inventory: 'Inventory',
+  accounting: 'Accounting', crm: 'CRM & Marketing', reports: 'Reports & Analytics',
+  loyalty: 'Loyalty', commissions: 'Commissions', settings: 'Settings',
+};
 
-interface UseCaseDef {
-  id: string;
-  label: string;
-  icon: React.ElementType;
-  description: string;
-  configurable: FeatureDef[];
-  alwaysOn: string[];
-}
-
-const USE_CASE_DEFS: UseCaseDef[] = [
-  {
-    id: 'hospitality',
-    label: 'Hospitality',
-    icon: UtensilsCrossed,
-    description: 'Restaurants, cafes, hotels — table management, kitchen display, room billing.',
-    configurable: [
-      { key: 'enable_kds', label: 'Kitchen Display System', icon: ChefHat, description: 'Show orders on kitchen/bar screens; staff bump tickets to mark items ready.' },
-      { key: 'hotel_module_enabled', label: 'Hotel / Rooms', icon: BedDouble, description: 'Room management, check-in/check-out, and room billing.' },
-      { key: 'enable_appointments', label: 'Appointments', icon: Calendar, description: 'Bookings for services, events, or seated reservations.' },
-      { key: 'shift_reports_enabled', label: 'Shift Reports', icon: Clock, description: 'Shift summaries, cash reconciliation, and end-of-day reports.' },
-    ],
-    alwaysOn: ['Tables & Floor Plan', 'Bar Display (with KDS)', 'Loyalty', 'Commissions', 'Online Orders'],
-  },
-  {
-    id: 'retail',
-    label: 'Retail',
-    icon: ShoppingCart,
-    description: 'General retail — supermarkets, hardware stores, fashion — barcode scanning and inventory.',
-    configurable: [
-      { key: 'layaway_enabled', label: 'Layaway', icon: Package, description: 'Reserve items with a deposit; customers pay the balance later.' },
-      { key: 'shift_reports_enabled', label: 'Shift Reports', icon: Clock, description: 'Shift summaries, cash reconciliation, and end-of-day reports.' },
-    ],
-    alwaysOn: ['Barcode Scanner', 'Loyalty', 'Commissions', 'Online Orders', 'Purchase Orders', 'Returns', 'Clients'],
-  },
-  {
-    id: 'services',
-    label: 'Services',
-    icon: Wrench,
-    description: 'Salons, spas, repair shops — appointment calendar, client records, staff scheduling.',
-    configurable: [
-      { key: 'enable_appointments', label: 'Appointments', icon: Calendar, description: 'Booking calendar for services, stylists, or technicians.' },
-      { key: 'layaway_enabled', label: 'Layaway / Instalment', icon: Package, description: 'Allow customers to pay for services in instalments.' },
-      { key: 'shift_reports_enabled', label: 'Shift Reports', icon: Clock, description: 'Shift summaries, cash reconciliation, and end-of-day reports.' },
-    ],
-    alwaysOn: ['Clients', 'Staff Schedule', 'Resources', 'Queue Management', 'Loyalty', 'Commissions'],
-  },
-  {
-    id: 'quick_service',
-    label: 'Quick Service',
-    icon: ChefHat,
-    description: 'Fast-food outlets, food courts, kiosks — simple order flow and kitchen display.',
-    configurable: [
-      { key: 'enable_kds', label: 'Kitchen Display System', icon: ChefHat, description: 'Show orders on kitchen screens; staff bump tickets to mark items ready.' },
-      { key: 'shift_reports_enabled', label: 'Shift Reports', icon: Clock, description: 'Shift summaries, cash reconciliation, and end-of-day reports.' },
-    ],
-    alwaysOn: ['Online Orders'],
-  },
-  {
-    id: 'pharmacy',
-    label: 'Pharmacy',
-    icon: FlaskConical,
-    description: 'Dispensaries and pharmacies — drug inventory, prescription records, patient management.',
-    configurable: [
-      { key: 'shift_reports_enabled', label: 'Shift Reports', icon: Clock, description: 'Shift summaries, cash reconciliation, and end-of-day reports.' },
-    ],
-    alwaysOn: ['Patients', 'Drug Inventory', 'Controlled Substances Log'],
-  },
+const USE_CASES = [
+  { id: 'hospitality', label: 'Hospitality', icon: UtensilsCrossed, description: 'Restaurants, cafes, hotels — tables, kitchen display, room billing.' },
+  { id: 'retail', label: 'Retail', icon: ShoppingCart, description: 'Supermarkets, hardware, fashion — barcode scanning and inventory.' },
+  { id: 'services', label: 'Services', icon: Wrench, description: 'Salons, spas, repair shops — appointments, clients, scheduling.' },
+  { id: 'quick_service', label: 'Quick Service', icon: ChefHat, description: 'Fast-food, food courts, kiosks — simple order flow + KDS.' },
+  { id: 'pharmacy', label: 'Pharmacy', icon: FlaskConical, description: 'Dispensaries — drug inventory, prescriptions, patients.' },
 ];
 
+function titleize(key: string): string {
+  return key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+interface ModuleNode {
+  key: string;
+  label: string;
+  icon: React.ElementType;
+  items: NavItem[];
+}
+
 export function ModulesTab() {
+  const params = useParams();
+  const orgSlug = (params?.orgSlug as string) ?? '';
   const { data: settings, isLoading } = usePOSSettings();
   const updateModules = useUpdatePOSModules();
   const updateOutletConfig = useUpdateOutletConfig();
   const { can } = usePermissions();
-  const { useCase: resolvedUseCase, isSuperUser } = useModuleAccess();
+  const { useCase: resolvedUseCase, enabledModules, isSuperUser } = useModuleAccess();
   const setOutlet = useAuthStore((s) => s.setOutlet);
   const outlet = useAuthStore((s) => s.outlet);
   const canEdit = can(P.CONFIG_MANAGE) || can(P.CONFIG_CHANGE) || isSuperUser;
 
   const [activeUC, setActiveUC] = useState<string>(resolvedUseCase ?? 'hospitality');
-  const [modules, setModules] = useState<Record<ModuleToggleKey, boolean>>({
-    hotel_module_enabled: false,
-    enable_kds: false,
-    enable_appointments: false,
-    layaway_enabled: false,
-    shift_reports_enabled: false,
+  const [disabled, setDisabled] = useState<Set<string>>(new Set());
+  const [hidden, setHidden] = useState<Set<string>>(new Set());
+  const [flags, setFlags] = useState<Record<BackendFlagKey, boolean>>({
+    hotel_module_enabled: false, enable_kds: false, enable_appointments: false, layaway_enabled: false,
   });
   const [saving, setSaving] = useState<string | null>(null);
   const [assigningUC, setAssigningUC] = useState(false);
 
-  useEffect(() => {
-    if (resolvedUseCase) setActiveUC(resolvedUseCase);
-  }, [resolvedUseCase]);
+  useEffect(() => { if (resolvedUseCase) setActiveUC(resolvedUseCase); }, [resolvedUseCase]);
 
   useEffect(() => {
     if (settings) {
-      setModules({
+      setDisabled(new Set(settings.disabled_modules ?? []));
+      setHidden(new Set(settings.hidden_items ?? []));
+      setFlags({
         hotel_module_enabled: settings.hotel_module_enabled ?? false,
         enable_kds: settings.enable_kds ?? false,
         enable_appointments: settings.enable_appointments ?? false,
         layaway_enabled: settings.layaway_enabled ?? false,
-        shift_reports_enabled: settings.shift_reports_enabled ?? false,
       });
     }
   }, [settings]);
 
-  const toggle = (key: ModuleToggleKey) => async (value: boolean) => {
-    setModules((m) => ({ ...m, [key]: value }));
-    setSaving(key);
-    try {
-      await updateModules.mutateAsync({ [key]: value });
-    } catch {
-      setModules((m) => ({ ...m, [key]: !value }));
-    } finally {
-      setSaving(null);
+  // Modules available to THIS outlet's use case, in sidebar order, each with its child items — the
+  // exact set the sidebar renders (minus profile-inapplicable items), built from the shared nav config.
+  const modules: ModuleNode[] = useMemo(() => {
+    const items = buildNavGroups(orgSlug).flatMap((g) => g.items);
+    const order: string[] = [];
+    const byModule = new Map<string, NavItem[]>();
+    const enabled = enabledModules as string[];
+    for (const it of items) {
+      if (!enabled.includes(it.moduleKey)) continue;
+      if (resolvedUseCase && it.hideForProfiles?.includes(resolvedUseCase)) continue;
+      if (!byModule.has(it.moduleKey)) { byModule.set(it.moduleKey, []); order.push(it.moduleKey); }
+      byModule.get(it.moduleKey)!.push(it);
     }
+    return order.map((key) => ({
+      key,
+      label: MODULE_LABELS[key] ?? titleize(key),
+      icon: byModule.get(key)![0].icon,
+      items: byModule.get(key)!,
+    }));
+  }, [orgSlug, enabledModules, resolvedUseCase]);
+
+  const moduleOn = (key: string): boolean => {
+    if (disabled.has(key)) return false;
+    const flag = BACKEND_FLAG[key];
+    return flag ? flags[flag] : true;
+  };
+
+  const toggleModule = async (key: string, on: boolean) => {
+    if (CORE_MODULE_KEYS.has(key)) return;
+    const nextDisabled = new Set(disabled);
+    if (on) nextDisabled.delete(key); else nextDisabled.add(key);
+    setDisabled(nextDisabled);
+    const patch: UpdatePOSModulesInput = { disabled_modules: [...nextDisabled] };
+    const flag = BACKEND_FLAG[key];
+    if (flag) { setFlags((f) => ({ ...f, [flag]: on })); patch[flag] = on; }
+    setSaving(key);
+    try { await updateModules.mutateAsync(patch); }
+    catch {
+      // revert on failure
+      setDisabled(disabled);
+      if (flag) setFlags((f) => ({ ...f, [flag]: !on }));
+    } finally { setSaving(null); }
+  };
+
+  const toggleItem = async (href: string, visible: boolean) => {
+    const nextHidden = new Set(hidden);
+    if (visible) nextHidden.delete(href); else nextHidden.add(href);
+    setHidden(nextHidden);
+    setSaving(href);
+    try { await updateModules.mutateAsync({ hidden_items: [...nextHidden] }); }
+    catch { setHidden(hidden); }
+    finally { setSaving(null); }
   };
 
   const assignUseCase = async (ucId: string) => {
@@ -151,9 +153,7 @@ export function ModulesTab() {
       await updateOutletConfig.mutateAsync({ use_case: ucId });
       setActiveUC(ucId);
       if (outlet) setOutlet({ ...outlet, use_case: ucId });
-    } finally {
-      setAssigningUC(false);
-    }
+    } finally { setAssigningUC(false); }
   };
 
   if (isLoading) {
@@ -164,8 +164,8 @@ export function ModulesTab() {
     );
   }
 
-  const activeDef = USE_CASE_DEFS.find((uc) => uc.id === activeUC) ?? USE_CASE_DEFS[0];
-  const outletHasUseCase = !!resolvedUseCase;
+  const activeUCDef = USE_CASES.find((u) => u.id === activeUC) ?? USE_CASES[0];
+  const showTree = activeUC === resolvedUseCase && modules.length > 0;
 
   return (
     <div className="space-y-5">
@@ -176,18 +176,9 @@ export function ModulesTab() {
         </div>
       )}
 
-      {!outletHasUseCase && canEdit && (
-        <div className="p-4 rounded-2xl border border-dashed border-primary/40 bg-primary/5 text-sm text-primary">
-          <p className="font-semibold mb-1">Outlet type not configured</p>
-          <p className="text-xs text-muted-foreground">
-            Select a use case below to activate the matching feature set for this outlet.
-          </p>
-        </div>
-      )}
-
-      {/* Use-case tabs */}
+      {/* Use-case selector */}
       <div className="flex gap-1 p-1 rounded-2xl bg-muted/50 border border-border overflow-x-auto scrollbar-hide">
-        {USE_CASE_DEFS.map((uc) => {
+        {USE_CASES.map((uc) => {
           const Icon = uc.icon;
           const active = activeUC === uc.id;
           const isCurrent = resolvedUseCase === uc.id;
@@ -207,81 +198,144 @@ export function ModulesTab() {
         })}
       </div>
 
-      {/* Description + assign */}
       <div className="flex items-start justify-between gap-4 px-1">
         <div>
-          <p className="text-sm font-semibold">{activeDef.label}</p>
-          <p className="text-xs text-muted-foreground mt-0.5">{activeDef.description}</p>
+          <p className="text-sm font-semibold">{activeUCDef.label}</p>
+          <p className="text-xs text-muted-foreground mt-0.5">{activeUCDef.description}</p>
         </div>
-        {canEdit && resolvedUseCase !== activeDef.id && (
+        {canEdit && resolvedUseCase !== activeUCDef.id && (
           <button
             type="button"
             disabled={assigningUC}
-            onClick={() => assignUseCase(activeDef.id)}
+            onClick={() => assignUseCase(activeUCDef.id)}
             className="shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-xl bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 disabled:opacity-60"
           >
             {assigningUC ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
             {resolvedUseCase ? 'Switch to this use case' : 'Set use case'}
           </button>
         )}
-        {resolvedUseCase === activeDef.id && (
+        {resolvedUseCase === activeUCDef.id && (
           <span className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary/10 text-primary text-xs font-semibold">
             <BadgeCheck className="h-3.5 w-3.5" /> Active use case
           </span>
         )}
       </div>
 
-      {/* Configurable modules — 2-column grid on wider screens */}
-      {activeDef.configurable.length > 0 && (
+      {/* Module & screen visibility tree */}
+      {showTree ? (
         <div className="space-y-3">
-          <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground px-1">Configurable Modules</p>
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
-            {activeDef.configurable.map((feat) => {
-              const Icon = feat.icon;
-              const on = modules[feat.key];
-              return (
-                <label
-                  key={feat.key}
-                  className={`flex items-start gap-4 p-4 rounded-2xl border cursor-pointer transition-colors select-none
-                    ${on ? 'border-primary/30 bg-primary/5' : 'border-border bg-card'}
-                    ${!canEdit ? 'cursor-default opacity-70' : ''}`}
-                >
-                  <div className={`h-9 w-9 rounded-xl flex items-center justify-center shrink-0 mt-0.5 ${on ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground'}`}>
-                    {saving === feat.key
-                      ? <Loader2 className="h-4 w-4 animate-spin" />
-                      : <Icon className="h-4 w-4" />}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-bold">{feat.label}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">{feat.description}</p>
-                  </div>
-                  <Toggle
-                    checked={on}
-                    onChange={(v) => toggle(feat.key)(v)}
-                    disabled={!canEdit || saving === feat.key}
-                  />
-                </label>
-              );
-            })}
+          <div className="px-1">
+            <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Modules & Screens</p>
+            <p className="text-[11px] text-muted-foreground mt-1">
+              Turn a module off to hide it and all its screens from the sidebar — keep only what this
+              outlet uses (e.g. a guest house can keep just Hotel). Expand a module to hide individual screens.
+            </p>
           </div>
-        </div>
-      )}
-
-      {/* Always-on — grid of cards */}
-      {activeDef.alwaysOn.length > 0 && (
-        <div className="space-y-3">
-          <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground px-1">Always Included</p>
-          <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2">
-            {activeDef.alwaysOn.map((feat) => (
-              <div
-                key={feat}
-                className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl border border-border bg-card text-xs font-semibold text-muted-foreground"
-              >
-                <BadgeCheck className="h-3.5 w-3.5 text-primary shrink-0" />
-                <span className="truncate">{feat}</span>
-              </div>
+          <div className="space-y-2">
+            {modules.map((mod) => (
+              <ModuleRow
+                key={mod.key}
+                mod={mod}
+                on={moduleOn(mod.key)}
+                core={CORE_MODULE_KEYS.has(mod.key)}
+                canEdit={canEdit}
+                saving={saving}
+                hidden={hidden}
+                onToggleModule={toggleModule}
+                onToggleItem={toggleItem}
+              />
             ))}
           </div>
+        </div>
+      ) : (
+        <div className="p-4 rounded-2xl border border-dashed border-primary/40 bg-primary/5 text-sm">
+          {!resolvedUseCase ? (
+            <>
+              <p className="font-semibold text-primary mb-1">Outlet type not configured</p>
+              <p className="text-xs text-muted-foreground">Select a use case above to activate the matching modules for this outlet.</p>
+            </>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              Switch to <span className="font-semibold text-foreground">{USE_CASES.find((u) => u.id === resolvedUseCase)?.label}</span> (this outlet&apos;s active use case) to manage its module visibility.
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ModuleRow({
+  mod, on, core, canEdit, saving, hidden, onToggleModule, onToggleItem,
+}: {
+  mod: ModuleNode;
+  on: boolean;
+  core: boolean;
+  canEdit: boolean;
+  saving: string | null;
+  hidden: Set<string>;
+  onToggleModule: (key: string, on: boolean) => void;
+  onToggleItem: (href: string, visible: boolean) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const Icon = mod.icon;
+  const hasChildren = mod.items.length > 1;
+
+  return (
+    <div className={`rounded-2xl border transition-colors ${on ? 'border-border bg-card' : 'border-border bg-muted/30'}`}>
+      <div className="flex items-center gap-3 p-4">
+        <div className={`h-9 w-9 rounded-xl flex items-center justify-center shrink-0 ${on ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground'}`}>
+          {saving === mod.key ? <Loader2 className="h-4 w-4 animate-spin" /> : <Icon className="h-4 w-4" />}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <p className="text-sm font-bold">{mod.label}</p>
+            {core && <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-muted-foreground"><Lock className="h-3 w-3" /> Required</span>}
+            {!on && !core && <span className="text-[10px] font-semibold text-muted-foreground">Hidden</span>}
+          </div>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            {hasChildren ? `${mod.items.length} screens` : mod.items[0]?.label}
+          </p>
+        </div>
+        {hasChildren && (
+          <button
+            type="button"
+            onClick={() => setExpanded((v) => !v)}
+            className="h-7 w-7 flex items-center justify-center rounded-lg text-muted-foreground hover:bg-accent/40"
+            aria-label="Expand screens"
+          >
+            <ChevronDown className={`h-4 w-4 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+          </button>
+        )}
+        {core ? (
+          <Lock className="h-4 w-4 text-muted-foreground shrink-0" />
+        ) : (
+          <Toggle checked={on} onChange={(v) => onToggleModule(mod.key, v)} disabled={!canEdit || saving === mod.key} />
+        )}
+      </div>
+
+      {hasChildren && expanded && (
+        <div className="border-t border-border px-4 py-2 space-y-1">
+          {mod.items.map((it) => {
+            const visible = on && !hidden.has(it.href);
+            return (
+              <div key={it.href} className="flex items-center gap-3 py-1.5">
+                <it.icon className={`h-4 w-4 shrink-0 ${visible ? 'text-foreground' : 'text-muted-foreground/50'}`} />
+                <div className="flex-1 min-w-0">
+                  <p className={`text-sm ${visible ? '' : 'text-muted-foreground line-through'}`}>{it.label}</p>
+                </div>
+                {!on ? (
+                  <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground"><EyeOff className="h-3 w-3" /> module off</span>
+                ) : (
+                  <Toggle
+                    checked={!hidden.has(it.href)}
+                    onChange={(v) => onToggleItem(it.href, v)}
+                    disabled={!canEdit || saving === it.href}
+                  />
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

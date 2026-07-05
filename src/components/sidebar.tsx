@@ -6,55 +6,15 @@ import { useSubscription } from '@/hooks/use-subscription';
 import { usePermissions } from '@/hooks/usePermissions';
 import { isPlatformOwner as checkPlatformOwner } from '@/lib/auth/permissions';
 import { isKnownFeature, requiredPlanLabel } from '@/lib/subscription/feature-catalog';
-import type { Permission } from '@/lib/rbac/permissions';
-import { P } from '@/lib/rbac/permissions';
 import { cn } from '@/lib/utils';
 import { useTenantBranding } from '@/providers/tenant-branding-provider';
 import { useAuthStore } from '@/store/auth';
-import {
-  BarChart3,
-  BedDouble,
-  Calendar,
-  ChefHat,
-  ChevronDown,
-  ClipboardList,
-  Clock,
-  Cpu,
-  FilePlus,
-  FileText,
-  HandCoins,
-  Gift,
-  Grid3x3,
-  LayoutDashboard,
-  Lock,
-  LogOut,
-  Monitor,
-  Package,
-  Pill,
-  Plus,
-  Presentation,
-  RotateCcw,
-  Settings,
-  ShoppingBag,
-  Sofa,
-  TrendingUp,
-  Truck,
-  UserSquare,
-  Users,
-  Wallet,
-  Wine,
-  Wrench,
-  X
-} from 'lucide-react';
+import { ChevronDown, Lock, LogOut, Monitor, X } from 'lucide-react';
 import Link from 'next/link';
 import { useParams, usePathname } from 'next/navigation';
 import { useState } from 'react';
 import { OutletSwitcher } from './outlet-switcher';
-const INVENTORY_URL = process.env.NEXT_PUBLIC_INVENTORY_UI_URL || 'https://inventory.codevertexitsolutions.com';
-// Cross-service UIs we LINK to (never duplicate their pages). Code fallback is the real safety net
-// since NEXT_PUBLIC URLs are baked at build time.
-const TREASURY_URL = process.env.NEXT_PUBLIC_TREASURY_UI_URL || 'https://books.codevertexitsolutions.com';
-const MARKETFLOW_URL = process.env.NEXT_PUBLIC_MARKETFLOW_UI_URL || 'https://marketflow.codevertexitsolutions.com';
+import { buildNavGroups, type NavItem, type NavGroup } from '@/lib/pos/nav-config';
 
 interface SidebarProps {
   open?: boolean;
@@ -62,34 +22,6 @@ interface SidebarProps {
   // collapsed hides the desktop sidebar entirely (the POS terminal defaults to this to give the
   // cart/product grid the full width). Mobile still uses the `open` overlay, unaffected by collapse.
   collapsed?: boolean;
-}
-
-// ── Nav item type ─────────────────────────────────────────────────────────────
-
-interface NavItem {
-  label: string;
-  icon: React.ElementType;
-  href: string;
-  moduleKey: string;
-  /** At least one of these permissions must be held */
-  permission?: Permission | Permission[];
-  /** Subscription feature code — shows upgrade lock badge if not in plan */
-  subFeature?: string;
-  /** Human-readable plan label shown in the lock badge, e.g. "Pro" */
-  subPlan?: string;
-  /** Hidden for waiter role — waiter sees Tables + Shifts only */
-  waiterHidden?: boolean;
-  /** Hidden for cashier in hospitality/quick_service — they work from the Orders page only */
-  cashierHospHidden?: boolean;
-  /** Hidden for these normalized outlet profiles (e.g. retail back-office items hidden on hospitality). */
-  hideForProfiles?: string[];
-}
-
-interface NavGroup {
-  label: string;
-  /** If true, this group starts collapsed by default (unless it has the active route). */
-  defaultCollapsed?: boolean;
-  items: NavItem[];
 }
 
 // ── Nav link ──────────────────────────────────────────────────────────────────
@@ -224,7 +156,7 @@ export function Sidebar({ open = false, onClose, collapsed = false }: SidebarPro
   const { tenant } = useTenantBranding();
   const logout = useAuthStore((s) => s.logout);
   const user = useAuthStore((s) => s.user);
-  const { hasModule, isSuperUser, isResolved } = useModuleAccess();
+  const { hasModule, isSuperUser, isResolved, hiddenItems } = useModuleAccess();
   const { canAny, isSuperuser } = usePermissions();
   const { hasFeature, isLoading: subLoading, info: subInfo } = useSubscription();
   // Platform-owner-only (device fleet, platform config, licensing). A tenant `admin` is
@@ -252,138 +184,10 @@ export function Sidebar({ open = false, onClose, collapsed = false }: SidebarPro
   // surface, so quick-service cashiers must keep it. Hence: hospitality only, not QSR.
   const isCashierHosp = !isHQUser && userRoles.includes('cashier') && outletProfile === 'hospitality';
 
-  const navGroups: NavGroup[] = [
-    {
-      label: 'Operations',
-      items: [
-        { label: 'Dashboard', icon: LayoutDashboard, href: '/dashboard', moduleKey: 'dashboard', waiterHidden: true },
-        // Waiters who settle bills run their own cash float, so they need the drawer.
-        { label: 'Cash Drawer', icon: Wallet, href: '/drawer', moduleKey: 'cash_drawer', permission: [P.DRAWERS_ADD, P.DRAWERS_MANAGE, P.DRAWERS_VIEW_OWN] },
-        { label: 'Clients', icon: Users, href: '/clients', moduleKey: 'clients', permission: [P.CLIENTS_VIEW, P.CLIENTS_MANAGE], waiterHidden: true },
-        { label: isWaiter ? 'My Shifts' : 'Shifts', icon: Clock, href: '/shifts', moduleKey: 'shifts', permission: [P.SESSIONS_ADD, P.SESSIONS_VIEW, P.SESSIONS_VIEW_OWN], subFeature: 'shift_reports', subPlan: 'Pro', cashierHospHidden: true },
-      ],
-    },
-    {
-      // "Sell" groups every sale-entry surface — the fast POS terminal AND back-office sales
-      // (mirrors godigital's Sell module). Each item keeps its own use_case/role/feature gating;
-      // future: Add Sale (full form), Quotations (treasury S2S), Drafts, Shipments, Discounts, Import.
-      label: 'Sell',
-      items: [
-        { label: 'POS Terminal', icon: Plus, href: '/order', moduleKey: 'new_order', permission: P.ORDERS_ADD, waiterHidden: true, cashierHospHidden: true },
-        // Back-office full sale form (wholesaler/credit/delivery) — distinct from the fast terminal.
-        // Retail/services/pharmacy back-office only — hospitality/QSR work from the POS terminal + tables.
-        { label: 'Add Sale', icon: FilePlus, href: '/sell/add', moduleKey: 'new_order', permission: [P.ORDERS_ADD, P.ORDERS_MANAGE], waiterHidden: true, cashierHospHidden: true, hideForProfiles: ['hospitality', 'quick_service'] },
-        // (Legacy standalone /retail POS retired — retail outlets now use the adaptive /order terminal above.)
-        // All sales (the sale/order list) — add/change or reports access; excludes kitchen/bar (KDS-only view).
-        { label: 'All Sales', icon: ClipboardList, href: '/orders', moduleKey: 'orders', permission: [P.ORDERS_ADD, P.ORDERS_CHANGE_OWN, P.ORDERS_CHANGE, P.ORDERS_MANAGE, P.ORDERS_VIEW_OWN, P.REPORTS_VIEW], waiterHidden: true },
-        // Drafts = saved-but-unpaid sales (POSOrder status=draft) from terminal Park / Add Sale.
-        // Hospitality parks bills on tables, not a back-office drafts list.
-        { label: 'Drafts', icon: FileText, href: '/sell/drafts', moduleKey: 'orders', permission: [P.ORDERS_ADD, P.ORDERS_CHANGE_OWN, P.ORDERS_CHANGE, P.ORDERS_MANAGE], waiterHidden: true, hideForProfiles: ['hospitality', 'quick_service'] },
-        // Credit Sale = sell on account (on_account tender → treasury AR; credit limit enforced).
-        // Back-office (retail/services/pharmacy) only — hospitality/QSR settle per table/room at the terminal.
-        { label: 'Credit Sale', icon: HandCoins, href: '/sell/add?credit=1', moduleKey: 'new_order', permission: [P.ORDERS_ADD, P.ORDERS_MANAGE], waiterHidden: true, cashierHospHidden: true, hideForProfiles: ['hospitality', 'quick_service'] },
-        // Quotations are owned by treasury — link to its UI rather than duplicating the page.
-        // Not applicable to hospitality/QSR (no B2B quoting off a restaurant/bar terminal).
-        { label: 'Quotations', icon: FileText, href: `${TREASURY_URL}/${orgSlug}/quotations`, moduleKey: 'orders', permission: [P.ORDERS_ADD, P.ORDERS_MANAGE, P.REPORTS_VIEW], waiterHidden: true, hideForProfiles: ['hospitality', 'quick_service'] },
-        { label: 'Layaway', icon: Package, href: '/layaway', moduleKey: 'layaway', permission: [P.ORDERS_ADD, P.ORDERS_CHANGE_OWN, P.ORDERS_CHANGE, P.ORDERS_MANAGE], subFeature: 'layaway', subPlan: 'Growth', waiterHidden: true },
-        { label: 'Sell Returns', icon: RotateCcw, href: '/returns', moduleKey: 'returns', permission: [P.ORDERS_CHANGE_OWN, P.ORDERS_CHANGE, P.ORDERS_MANAGE], waiterHidden: true },
-      ],
-    },
-    {
-      label: 'Floor & Service',
-      items: [
-        { label: 'Tables', icon: Grid3x3, href: '/tables', moduleKey: 'tables', permission: [P.TABLES_VIEW, P.TABLES_MANAGE], subFeature: 'table_management', subPlan: 'Pro', cashierHospHidden: true },
-        { label: 'Reservations', icon: Calendar, href: '/reservations', moduleKey: 'reservations', permission: [P.TABLES_VIEW, P.TABLES_MANAGE], waiterHidden: true },
-        { label: 'Appointments', icon: Calendar, href: '/appointments', moduleKey: 'appointments', permission: [P.APPOINTMENTS_VIEW, P.APPOINTMENTS_ADD, P.APPOINTMENTS_CHANGE, P.APPOINTMENTS_MANAGE], waiterHidden: true },
-        { label: 'Service Packages', icon: Package, href: '/packages', moduleKey: 'packages', permission: [P.PACKAGES_VIEW, P.PACKAGES_MANAGE], waiterHidden: true },
-        { label: 'Walk-in Queue', icon: ClipboardList, href: '/queue', moduleKey: 'queue', permission: [P.QUEUE_VIEW, P.QUEUE_CHANGE, P.QUEUE_MANAGE], waiterHidden: true },
-        // Repair / job-card surface — device repairs gated by the retail/orders permission set
-        // (backend gates on pos.retail.add/manage; closest UI permission is ORDERS_ADD/MANAGE).
-        { label: 'Repair', icon: Wrench, href: '/repair', moduleKey: 'repairs', permission: [P.ORDERS_ADD, P.ORDERS_MANAGE], waiterHidden: true },
-        { label: 'Staff Schedule', icon: Users, href: '/staff-schedule', moduleKey: 'staff_schedule', permission: [P.STAFF_VIEW, P.STAFF_MANAGE], waiterHidden: true },
-        { label: 'Resources', icon: Sofa, href: '/resources', moduleKey: 'resources', permission: [P.CONFIG_VIEW], waiterHidden: true },
-      ],
-    },
-    {
-      label: 'Display Board',
-      defaultCollapsed: true,
-      items: [
-        // Waiters get read-only KDS (P.KDS_VIEW) to see what's ready to serve/hand off.
-        { label: 'KDS', icon: ChefHat, href: '/kds', moduleKey: 'kds', permission: [P.KDS_VIEW, P.KDS_CHANGE, P.KDS_MANAGE] },
-      ],
-    },
-    {
-      label: 'Hotel',
-      defaultCollapsed: true,
-      items: [
-        { label: 'Hotel Overview', icon: LayoutDashboard, href: '/hotel', moduleKey: 'hotel', permission: [P.HOTEL_VIEW, P.HOTEL_MANAGE], subFeature: 'hotel_module', subPlan: 'Pro', waiterHidden: true },
-        { label: 'Rooms', icon: BedDouble, href: '/hotel/rooms', moduleKey: 'hotel', permission: [P.HOTEL_VIEW, P.HOTEL_MANAGE], subFeature: 'hotel_module', subPlan: 'Pro', waiterHidden: true },
-        { label: 'Bookings', icon: Users, href: '/hotel/bookings', moduleKey: 'hotel', permission: [P.HOTEL_VIEW, P.HOTEL_MANAGE], subFeature: 'hotel_module', subPlan: 'Pro', waiterHidden: true },
-        { label: 'Facilities', icon: Cpu, href: '/hotel/facilities', moduleKey: 'hotel', permission: [P.HOTEL_VIEW, P.HOTEL_MANAGE], subFeature: 'hotel_module', subPlan: 'Pro', waiterHidden: true },
-        { label: 'Conferences', icon: Presentation, href: '/hotel/conference', moduleKey: 'hotel', permission: [P.CONFERENCE_VIEW, P.CONFERENCE_MANAGE, P.HOTEL_MANAGE], subFeature: 'conference_events', subPlan: 'Pro', waiterHidden: true },
-        { label: 'Happy Hour', icon: Wine, href: '/hotel/happy-hour', moduleKey: 'hotel', permission: [P.PROMOTIONS_VIEW, P.PROMOTIONS_MANAGE, P.HOTEL_MANAGE], subFeature: 'happy_hour', subPlan: 'Pro', waiterHidden: true },
-      ],
-    },
-    {
-      label: 'Online Orders',
-      defaultCollapsed: true,
-      items: [
-        // Waiters handle pickup hand-off + delivery rider assignment (P.ORDERS_CHANGE).
-        { label: 'Pickup Queue', icon: ShoppingBag, href: '/online-orders', moduleKey: 'online_orders', permission: [P.ORDERS_MANAGE, P.ORDERS_CHANGE, P.QUEUE_MANAGE], subFeature: 'online_ordering', subPlan: 'Pro' },
-      ],
-    },
-    {
-      label: 'Pharmacy',
-      defaultCollapsed: true,
-      items: [
-        { label: 'Prescriptions', icon: Pill, href: '/pharmacy', moduleKey: 'pharmacy', permission: [P.PHARMACY_VIEW, P.PHARMACY_ADD, P.PHARMACY_CHANGE, P.PHARMACY_MANAGE], waiterHidden: true },
-        { label: 'Patient Profiles', icon: UserSquare, href: '/patients', moduleKey: 'patients', permission: [P.PHARMACY_VIEW, P.PHARMACY_MANAGE], waiterHidden: true },
-        // Drug stock / expiry / batch lives in the linked inventory app (Inventory → Manage
-        // Inventory). No separate in-POS "Drug Inventory" entry — it duplicated the inventory surface.
-      ],
-    },
-    {
-      label: 'Inventory',
-      defaultCollapsed: true,
-      items: [
-        { label: 'Purchase Orders', icon: Truck, href: '/purchase-orders', moduleKey: 'purchase_orders', permission: [P.CATALOG_MANAGE, P.CATALOG_CHANGE], waiterHidden: true },
-        { label: 'Manage Inventory', icon: Truck, href: `${INVENTORY_URL}/${orgSlug}`, moduleKey: 'inventory', permission: [P.CATALOG_MANAGE, P.CATALOG_CHANGE], waiterHidden: true },
-      ],
-    },
-    {
-      // Accounting lives in treasury-ui — LINK, don't duplicate. Gated by a manager permission;
-      // treasury-ui enforces its own RBAC on arrival.
-      label: 'Accounting',
-      defaultCollapsed: true,
-      items: [
-        { label: 'Invoices', icon: FileText, href: `${TREASURY_URL}/${orgSlug}/invoices`, moduleKey: 'accounting', permission: [P.REPORTS_VIEW, P.REPORTS_MANAGE, P.CONFIG_MANAGE], waiterHidden: true },
-        { label: 'Expenses', icon: Wallet, href: `${TREASURY_URL}/${orgSlug}/expenses`, moduleKey: 'accounting', permission: [P.REPORTS_VIEW, P.REPORTS_MANAGE, P.CONFIG_MANAGE], waiterHidden: true },
-        { label: 'Credit Notes', icon: RotateCcw, href: `${TREASURY_URL}/${orgSlug}/credit-notes`, moduleKey: 'accounting', permission: [P.REPORTS_VIEW, P.REPORTS_MANAGE, P.CONFIG_MANAGE], waiterHidden: true },
-        { label: 'Finance Reports', icon: BarChart3, href: `${TREASURY_URL}/${orgSlug}/reports`, moduleKey: 'accounting', permission: [P.REPORTS_VIEW, P.REPORTS_MANAGE, P.CONFIG_MANAGE], waiterHidden: true },
-      ],
-    },
-    {
-      // CRM + bulk SMS live in marketflow-ui — LINK, don't duplicate.
-      label: 'CRM & Marketing',
-      defaultCollapsed: true,
-      items: [
-        { label: 'Campaigns & SMS', icon: Gift, href: `${MARKETFLOW_URL}/${orgSlug}/campaigns`, moduleKey: 'crm', permission: [P.CLIENTS_VIEW, P.CLIENTS_MANAGE, P.REPORTS_VIEW], waiterHidden: true },
-        { label: 'Contacts', icon: UserSquare, href: `${MARKETFLOW_URL}/${orgSlug}/contacts`, moduleKey: 'crm', permission: [P.CLIENTS_VIEW, P.CLIENTS_MANAGE], waiterHidden: true },
-        { label: 'Segments', icon: Users, href: `${MARKETFLOW_URL}/${orgSlug}/crm/segments`, moduleKey: 'crm', permission: [P.CLIENTS_VIEW, P.CLIENTS_MANAGE], waiterHidden: true },
-      ],
-    },
-    {
-      label: 'Management',
-      defaultCollapsed: true,
-      items: [
-        { label: 'Reports', icon: BarChart3, href: '/reports', moduleKey: 'reports', permission: [P.REPORTS_VIEW, P.REPORTS_MANAGE], subFeature: 'shift_reports', subPlan: 'Pro', waiterHidden: true },
-        { label: 'Most Profitable', icon: TrendingUp, href: '/reports/most-profitable', moduleKey: 'reports', permission: [P.REPORTS_VIEW, P.REPORTS_MANAGE], subFeature: 'shift_reports', subPlan: 'Pro', waiterHidden: true },
-        { label: 'Loyalty', icon: Gift, href: '/loyalty', moduleKey: 'loyalty', permission: [P.LOYALTY_VIEW, P.LOYALTY_ADD, P.LOYALTY_MANAGE], subFeature: 'loyalty_program', subPlan: 'Growth', waiterHidden: true, cashierHospHidden: true },
-        { label: 'Commissions', icon: TrendingUp, href: '/commissions', moduleKey: 'commissions', permission: [P.COMMISSIONS_VIEW, P.COMMISSIONS_VIEW_OWN, P.COMMISSIONS_MANAGE], subFeature: 'commissions', subPlan: 'Pro', waiterHidden: true },
-        { label: 'Settings', icon: Settings, href: '/settings', moduleKey: 'settings', permission: [P.CONFIG_VIEW, P.CONFIG_CHANGE, P.CONFIG_MANAGE], waiterHidden: true },
-      ],
-    },
-  ];
+  // Single source of truth for the nav — shared with the Modules settings tab so the "hide these
+  // screens" toggles always match what renders. Gating (permission/role/profile/subscription/hidden)
+  // is applied below.
+  const navGroups: NavGroup[] = buildNavGroups(orgSlug);
 
   // ── Filter by module + permission; subscription features shown but locked ───
 
@@ -411,6 +215,8 @@ export function Sidebar({ open = false, onClose, collapsed = false }: SidebarPro
       items: group.items
         .filter((item) => {
           if (!hasModule(item.moduleKey)) return false;
+          // Outlet admin hid this individual sidebar item (by href) via Settings → Modules.
+          if (hiddenItems.has(item.href)) return false;
           // Hide items not relevant to this outlet's use case (e.g. retail back-office on hospitality).
           if (item.hideForProfiles?.includes(outletProfile)) return false;
           // Waiter role: only Tables + Shifts
@@ -437,6 +243,10 @@ export function Sidebar({ open = false, onClose, collapsed = false }: SidebarPro
           // Services outlets: the terminal is the "New Sale" surface (matches the terminal title).
           if (isServices && item.href === '/order') {
             return { ...item, label: 'New Sale' };
+          }
+          // Waiters see their own shift page as "My Shifts".
+          if (isWaiter && item.href === '/shifts') {
+            return { ...item, label: 'My Shifts' };
           }
           return item;
         }),

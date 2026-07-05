@@ -78,6 +78,9 @@ export interface POSSettings {
   bank_account_number?: string | null;
   bank_account_name?: string | null;
   show_payment_info_on_receipt: boolean;
+  // Sidebar visibility — moduleKeys the outlet hid entirely, and individual sidebar item hrefs hid.
+  disabled_modules?: string[];
+  hidden_items?: string[];
   updated_at: string;
 }
 
@@ -128,6 +131,10 @@ export interface UpdatePOSModulesInput {
   shift_reports_enabled?: boolean;
   enable_kds?: boolean;
   enable_appointments?: boolean;
+  // Whole-module hide (by moduleKey) and individual sidebar item hide (by href). A provided array
+  // replaces the stored list; omit to leave unchanged.
+  disabled_modules?: string[];
+  hidden_items?: string[];
 }
 
 function settingsBase(tenantID: string) {
