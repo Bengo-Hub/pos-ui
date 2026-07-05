@@ -15,8 +15,17 @@
 
 import { apiClient } from '@/lib/api/client';
 import { useAuthStore } from '@/store/auth';
+import type { PrinterProfile } from '@/lib/api/settings';
+import { paperOf } from '@/lib/pos/printer-stations';
 
-export type PrinterSource = 'network' | 'qz' | 'webusb' | 'bluetooth' | 'none';
+export type PrinterSource = 'agent' | 'network' | 'qz' | 'webusb' | 'bluetooth' | 'none';
+
+/** Local print agent — a tiny helper the operator runs on the terminal (like QZ Tray). Because it
+ *  runs ON the terminal it can actually scan the LAN (mDNS + TCP 9100) and print to raw network
+ *  printers, which a browser and a cloud pos-api cannot. Loopback is a secure context, so an HTTPS
+ *  POS page may call it. Override the port with NEXT_PUBLIC_PRINT_AGENT_PORT. */
+const AGENT_PORT = (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_PRINT_AGENT_PORT) || '9330';
+const AGENT_BASE = `http://127.0.0.1:${AGENT_PORT}`;
 
 export interface DiscoveredDevice {
   name: string;
@@ -212,6 +221,43 @@ async function detectBackend(): Promise<{ devices: DiscoveredDevice[]; note?: st
   }
 }
 
+/** ── Local print agent (on-terminal LAN scan) ────────────────────────────────────
+ *  The one source that can auto-find a printer sharing the terminal's LAN. Reaches the agent over
+ *  loopback; returns [] silently when the agent isn't installed/running. */
+async function detectAgent(): Promise<{ devices: DiscoveredDevice[]; note?: string; ok: boolean }> {
+  if (typeof window === 'undefined') return { devices: [], ok: false };
+  try {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 5000);
+    const res = await fetch(`${AGENT_BASE}/discover`, { signal: ctrl.signal, mode: 'cors' });
+    clearTimeout(t);
+    if (!res.ok) return { devices: [], ok: true, note: 'Local print agent: reachable but returned an error.' };
+    const body = (await res.json()) as { printers?: Array<{ name?: string; ip?: string; port?: number; model?: string }> };
+    const devices: DiscoveredDevice[] = (body.printers ?? []).map((p) => ({
+      name: p.name || (p.ip ? `${p.ip}:${p.port ?? 9100}` : 'Network printer'),
+      source: 'network' as const,
+      detail: p.ip ? `${p.ip}${p.port ? ':' + p.port : ''}${p.model ? ' · ' + p.model : ''}` : p.model,
+    }));
+    return { devices, ok: true, note: `Local print agent: found ${devices.length} network printer(s).` };
+  } catch {
+    return { devices: [], ok: false };
+  }
+}
+
+/** Is the local print agent running? (UI hint / status pill.) */
+export async function agentAvailable(): Promise<boolean> {
+  if (typeof window === 'undefined') return false;
+  try {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 2500);
+    const res = await fetch(`${AGENT_BASE}/health`, { signal: ctrl.signal, mode: 'cors' });
+    clearTimeout(t);
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Discover printers across every available source on this terminal:
  *  - QZ Tray (OS / network / USB / Bluetooth printers already installed in the OS) — silent printing,
@@ -227,12 +273,23 @@ export async function discoverPrinters(): Promise<DiscoverResult> {
   let primary: PrinterSource = 'none';
   let defaultPrinter: string | undefined;
 
-  // 0) Backend LAN scan FIRST (on-prem pos-api on the same network). On a cloud deployment this is
+  // 0a) Local print agent FIRST — the only source that can auto-scan the terminal's own LAN and so
+  //     find a network printer that isn't installed in the OS. This is the fix for "printer is on the
+  //     same Wi-Fi but nothing is detected". Silent no-op when the agent isn't running.
+  const agent = await detectAgent();
+  if (agent.devices.length) {
+    agent.devices.forEach((d) => devices.push(d));
+    primary = 'network';
+  }
+  if (agent.note) notes.push(agent.note);
+  else notes.push('Local print agent: not running on this terminal. Install & start it to auto-detect and print to network printers on this Wi-Fi/LAN without adding them to the OS first.');
+
+  // 0b) Backend LAN scan (on-prem pos-api on the same network). On a cloud deployment this is
   //    disabled server-side and returns nothing, so we fall through to the local bridges below.
   const backend = await detectBackend();
   if (backend.devices.length) {
     backend.devices.forEach((d) => devices.push(d));
-    primary = 'network';
+    if (primary === 'none') primary = 'network';
   }
   if (backend.note) notes.push(backend.note);
 
@@ -338,6 +395,29 @@ export async function openCashDrawer(
   }
 }
 
+/**
+ * Pop the cash drawer wired to a printer PROFILE (supports OS/USB/BT by name and raw network by IP).
+ * Prefers the QZ bridge; for a network drawer with no QZ it kicks via the local agent. Never throws.
+ */
+export async function openCashDrawerProfile(
+  profile: PrinterProfile | undefined,
+  code: DrawerKickCode = 'default',
+): Promise<boolean> {
+  const target = targetOf(profile);
+  if (!target) return false;
+  const hex = kickHex(code);
+  const qz = await loadQz();
+  if (qz) {
+    try {
+      const cfg = 'host' in target ? qz.configs.create({ host: target.host, port: target.port }) : qz.configs.create(target.name);
+      await qz.print(cfg, [{ type: 'raw', format: 'command', flavor: 'hex', data: hex }]);
+      return true;
+    } catch { /* fall through to the agent for network drawers */ }
+  }
+  if ('host' in target) return printRawToNetwork(target.host, target.port, hex);
+  return false;
+}
+
 /** Best-effort sync check: is a QZ connection already active? (Used for UI hints only.) */
 export function canSilentPrint(): boolean {
   if (typeof window === 'undefined') return false;
@@ -345,14 +425,38 @@ export function canSilentPrint(): boolean {
   return Boolean(qz?.websocket?.isActive?.());
 }
 
-function browserPrint(title: string, html: string, paperWidth = '80mm') {
+// ── Paper geometry ───────────────────────────────────────────────────────────────
+// Thermal roll widths print as a continuous strip (fixed width, auto height); cut-sheet sizes
+// (A6…A4, Letter) print a full page. Drives both the QZ config and the browser @page fallback.
+const THERMAL_WIDTHS: Record<string, number> = { '58mm': 58, '76mm': 76, '80mm': 80 };
+const SHEET_MM: Record<string, { w: number; h: number }> = {
+  A6: { w: 105, h: 148 }, A5: { w: 148, h: 210 }, A4: { w: 210, h: 297 }, Letter: { w: 216, h: 279 },
+};
+
+/** QZ config size for a paper size: thermal → fixed width + continuous height; sheet → full page. */
+function qzSize(size: string): { size: { width: number; height: number | null }; units: 'mm' } | undefined {
+  if (THERMAL_WIDTHS[size]) return { size: { width: THERMAL_WIDTHS[size], height: null }, units: 'mm' };
+  const s = SHEET_MM[size];
+  if (s) return { size: { width: s.w, height: s.h }, units: 'mm' };
+  return undefined;
+}
+
+/** CSS @page size token for the browser fallback. */
+function cssPageSize(size: string): string {
+  if (THERMAL_WIDTHS[size]) return `${THERMAL_WIDTHS[size]}mm auto`;
+  if (size === 'Letter') return 'letter';
+  if (SHEET_MM[size]) return size; // A4 / A5 / A6 are valid @page size keywords
+  return '80mm auto';
+}
+
+function browserPrint(title: string, html: string, paperSize = '80mm') {
   if (typeof window === 'undefined') return;
-  const w = paperWidth === '58mm' ? '58mm' : '80mm';
-  const win = window.open('', '_blank', 'width=380,height=640');
+  const margin = THERMAL_WIDTHS[paperSize] ? '3mm 4mm' : '8mm';
+  const win = window.open('', '_blank', 'width=420,height=680');
   if (!win) { window.print(); return; }
   win.document.write(
     `<!doctype html><html><head><meta charset="utf-8"/><title>${title}</title>` +
-    `<style>@page{size:${w} auto;margin:3mm 4mm}html,body{margin:0;padding:0;background:#fff}</style>` +
+    `<style>@page{size:${cssPageSize(paperSize)};margin:${margin}}html,body{margin:0;padding:0;background:#fff}</style>` +
     `</head><body>${html}</body></html>`,
   );
   win.document.close();
@@ -362,25 +466,70 @@ function browserPrint(title: string, html: string, paperWidth = '80mm') {
   setTimeout(doPrint, 600);
 }
 
+/** A resolved print destination — an OS/QZ/USB/BT printer by name, or a raw network printer by host. */
+type PrintTarget = { name: string } | { host: string; port: number };
+
+function targetOf(p?: PrinterProfile | null): PrintTarget | null {
+  if (!p) return null;
+  if (p.printer_type === 'network' && p.printer_ip) return { host: p.printer_ip, port: p.printer_port || 9100 };
+  const named = p.printer_name && p.printer_name.toLowerCase() !== 'browser' ? p.printer_name : '';
+  return named ? { name: named } : null;
+}
+
 /**
- * Print HTML to a station's assigned printer. With QZ Tray + a real printer name it prints silently to
- * that printer; otherwise (no bridge, or printerName empty/'browser') it falls back to the browser
- * print window so a receipt is never lost.
+ * Print HTML to a resolved printer profile. Order of preference:
+ *  1. QZ Tray — silent, works for OS/USB/BT printers (by name) AND raw network printers (by host/port,
+ *     no OS install needed).
+ *  2. Browser print window — so a receipt is never lost when there is no bridge.
+ * A network profile with no QZ bridge falls back to the browser dialog (the local agent handles raw
+ * ESC/POS via printRawToNetwork for KOT/drawer bytes, not full HTML receipts).
+ */
+export async function printProfileHtml(profile: PrinterProfile | undefined, title: string, html: string): Promise<void> {
+  const size = paperOf(profile);
+  const target = targetOf(profile);
+  if (!target) { browserPrint(title, html, size); return; }
+  const qz = await loadQz();
+  if (!qz) { browserPrint(title, html, size); return; }
+  try {
+    const opts = qzSize(size);
+    const cfg = 'host' in target
+      ? qz.configs.create({ host: target.host, port: target.port }, opts)
+      : qz.configs.create(target.name, opts);
+    await qz.print(cfg, [{ type: 'html', format: 'plain', data: `<div style="font-family:'Courier New',monospace">${html}</div>` }]);
+  } catch {
+    browserPrint(title, html, size); // never lose the receipt
+  }
+}
+
+/**
+ * Back-compat: print HTML to a named printer (or browser when empty/'browser'). New code should use
+ * printProfileHtml so network IP printers and the full paper-size range are honoured.
  */
 export async function printHtmlToPrinter(
   printerName: string | undefined,
   title: string,
   html: string,
-  paperWidth = '80mm',
+  paperSize = '80mm',
 ): Promise<void> {
   const named = printerName && printerName.toLowerCase() !== 'browser' ? printerName : '';
-  if (!named) { browserPrint(title, html, paperWidth); return; }
-  const qz = await loadQz();
-  if (!qz) { browserPrint(title, html, paperWidth); return; }
+  return printProfileHtml(
+    named ? { id: 'adhoc', label: named, printer_type: 'os', printer_name: named, paper_size: paperSize as PrinterProfile['paper_size'] } : undefined,
+    title,
+    html,
+  );
+}
+
+/** Send raw ESC/POS bytes (hex) to a network printer via the local agent — used when there is no QZ
+ *  bridge. Returns true on success. */
+async function printRawToNetwork(host: string, port: number, hex: string): Promise<boolean> {
   try {
-    const cfg = qz.configs.create(named, { size: { width: paperWidth === '58mm' ? 58 : 80, height: null }, units: 'mm' });
-    await qz.print(cfg, [{ type: 'html', format: 'plain', data: `<div style="font-family:'Courier New',monospace">${html}</div>` }]);
+    const res = await fetch(`${AGENT_BASE}/print`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ip: host, port, format: 'rawhex', data: hex }),
+    });
+    return res.ok;
   } catch {
-    browserPrint(title, html, paperWidth); // never lose the receipt
+    return false;
   }
 }

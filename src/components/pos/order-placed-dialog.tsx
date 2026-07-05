@@ -4,8 +4,8 @@ import { apiClient } from '@/lib/api/client';
 import { useKDSStations } from '@/hooks/useKDS';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { useAuthStore } from '@/store/auth';
-import { configFor, hasRealPrinter } from '@/lib/pos/printer-stations';
-import { printHtmlToPrinter } from '@/lib/pos/printer-discovery';
+import { configFor, hasRealPrinter, BILL_PROFILE_ID } from '@/lib/pos/printer-stations';
+import { printProfileHtml } from '@/lib/pos/printer-discovery';
 import { CheckCircle2, Loader2, Printer, AlertTriangle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -65,7 +65,7 @@ export function OrderPlacedDialog({ open, orderNumber, orderId, tenantId, orgSlu
   // Resolve the Bill/customer station printer. When one is assigned we print SILENTLY to it (via the
   // backend / QZ Tray) with no browser dialog; otherwise we ask before falling back to the browser.
   const billProfile = useMemo(
-    () => configFor((posSettings as { printer_profiles?: Parameters<typeof configFor>[0] })?.printer_profiles, 'bill'),
+    () => configFor((posSettings as { printer_profiles?: Parameters<typeof configFor>[0] })?.printer_profiles, BILL_PROFILE_ID),
     [posSettings],
   );
   const printerConfigured = hasRealPrinter(billProfile);
@@ -81,9 +81,9 @@ export function OrderPlacedDialog({ open, orderNumber, orderId, tenantId, orgSlu
       const q = servedBy ? `?served_by=${encodeURIComponent(servedBy)}` : '';
       const html = await apiClient.get<string>(`/api/v1/${tenantId}/pos/orders/${orderId}/receipt/html${q}`);
       if (printerConfigured) {
-        // Configured printer → push the job straight to it via the backend/QZ print logic.
+        // Configured printer → push the job straight to it (QZ Tray, incl. raw network by IP).
         // No browser print window at all.
-        await printHtmlToPrinter(billProfile.printer_name, `Receipt ${orderNumber}`, html as string, billProfile.paper_width);
+        await printProfileHtml(billProfile, `Receipt ${orderNumber}`, html as string);
         handleLogout();
       } else {
         // No configured printer → DO NOT auto-open the browser print window. Ask first.

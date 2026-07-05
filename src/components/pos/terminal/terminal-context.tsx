@@ -30,6 +30,7 @@ import {
   useAssignTable, useReleaseTable, usePricingTiers, type OrderSubtype,
 } from '@/hooks/usePOS';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
+import { useKDSStations } from '@/hooks/useKDS';
 import { useLoyaltyPrograms } from '@/hooks/useLoyalty';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useAuthStore } from '@/store/auth';
@@ -320,6 +321,9 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
   const { can, isSuperuser } = usePermissions();
   const { data: posSettings } = usePOSSettings();
   const taxRate = (posSettings?.vat_rate ?? 16) / 100;
+  // Live KDS stations — drive per-station ticket routing/printing (same category_filter routing the
+  // kitchen displays use), so a ticket prints on the printer of the station it was routed to.
+  const { data: kdsStationsData } = useKDSStations();
   // Active loyalty program — used to tell the cashier how many points the customer just earned.
   const { data: loyaltyPrograms } = useLoyaltyPrograms();
 
@@ -1193,6 +1197,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
             unitPrice: c.price + (c.modifierTotal ?? 0),
             totalPrice: (c.price + (c.modifierTotal ?? 0)) * c.quantity,
           })),
+          kdsStations: kdsStationsData?.data ?? [],
           stations: (posSettings as any)?.printer_profiles ?? [],
           includeCustomerBill: true,
           currency: (posSettings as any)?.currency ?? 'KES',

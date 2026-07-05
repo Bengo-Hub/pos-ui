@@ -1,55 +1,80 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { HelpCircle, Inbox, Loader2, Lock, Printer, Receipt, Save } from 'lucide-react';
+import { Bluetooth, HelpCircle, Inbox, Loader2, Lock, Network, Printer, Receipt, Save, Usb } from 'lucide-react';
 import { Button, Card, CardContent, CardHeader } from '@/components/ui/base';
 import { usePOSSettings, useUpdatePOSSettings } from '@/hooks/usePOSSettings';
+import { useAllKDSStations, type KDSStation } from '@/hooks/useKDS';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useModuleAccess } from '@/hooks/use-module-access';
 import { useTenantBranding } from '@/providers/tenant-branding-provider';
 import { useAuthStore } from '@/store/auth';
 import { useOutletFilterStore } from '@/store/outlet-filter';
 import { P } from '@/lib/rbac/permissions';
-import type { PrinterProfile } from '@/lib/api/settings';
-import { discoverPrinters, openCashDrawer, requestUSBPrinter, requestBluetoothPrinter, type DrawerKickCode } from '@/lib/pos/printer-discovery';
+import type { PrinterProfile, PrinterConnType } from '@/lib/api/settings';
+import {
+  discoverPrinters, openCashDrawerProfile, requestUSBPrinter, requestBluetoothPrinter,
+  printProfileHtml, agentAvailable, type DrawerKickCode,
+} from '@/lib/pos/printer-discovery';
+import { BILL_PROFILE_ID, WAITER_PROFILE_ID, paperOf } from '@/lib/pos/printer-stations';
 import { Toggle, inputClass, labelClass } from './shared';
 import { toast } from 'sonner';
 
-// Each station declares whether it is a Kitchen-Order-Ticket station (kitchen/bar/coffee) or a
-// waiter copy, so we can hide KOT/waiter stations on use cases that don't have a kitchen or table
-// service (e.g. retail/pharmacy) — they only ever print the customer bill.
-const RECEIPT_PRINTER_ROLES = [
-  { id: 'customer', label: 'Bill / Customer Receipt', desc: 'Full receipt (prices) printed at point of sale', kot: false, waiter: false },
-  { id: 'kitchen', label: 'KOT Kitchen Printer', desc: 'Kitchen ticket (food, no prices) on order open', kot: true, waiter: false },
-  { id: 'bar', label: 'KOT Bar Printer', desc: 'Bar ticket for alcohol & cold drinks', kot: true, waiter: false },
-  { id: 'coffee', label: 'KOT Coffee Shop', desc: 'Dedicated coffee/tea ticket (else folds into Kitchen)', kot: true, waiter: false },
-  { id: 'waiter', label: 'Waiter Copy', desc: 'Order summary for the serving staff', kot: false, waiter: true },
+// Full supported paper range — thermal roll widths through cut-sheet sizes.
+const PAPER_OPTIONS: { value: string; label: string }[] = [
+  { value: '58mm', label: '58 mm (thermal)' },
+  { value: '76mm', label: '76 mm (thermal / dot-matrix)' },
+  { value: '80mm', label: '80 mm (72 mm print)' },
+  { value: 'A6', label: 'A6 (105 × 148 mm)' },
+  { value: 'A5', label: 'A5 (148 × 210 mm)' },
+  { value: 'A4', label: 'A4 (210 × 297 mm)' },
+  { value: 'Letter', label: 'Letter (8.5 × 11 in)' },
 ];
 
-const PAPER_OPTIONS = ['80mm', '58mm'];
+// Connection types; each swaps the fields shown on the card.
+const CONN_TYPES: { value: Exclude<PrinterConnType, 'thermal' | 'none'>; label: string; icon: React.ReactNode }[] = [
+  { value: 'browser', label: 'Browser dialog', icon: <Printer className="h-3.5 w-3.5" /> },
+  { value: 'os', label: 'OS / QZ Tray', icon: <Printer className="h-3.5 w-3.5" /> },
+  { value: 'network', label: 'Network (IP)', icon: <Network className="h-3.5 w-3.5" /> },
+  { value: 'usb', label: 'USB', icon: <Usb className="h-3.5 w-3.5" /> },
+  { value: 'bluetooth', label: 'Bluetooth', icon: <Bluetooth className="h-3.5 w-3.5" /> },
+];
 
-// Sensible default footer when the tenant hasn't set one yet.
 const DEFAULT_RECEIPT_FOOTER = 'Thank you for your business!';
+
+/** Effective connection type for the selector (maps legacy/none to a sensible current value). */
+function connOf(p: PrinterProfile): Exclude<PrinterConnType, 'thermal' | 'none'> {
+  const t = p.printer_type;
+  if (t === 'network' || t === 'usb' || t === 'bluetooth' || t === 'os') return t;
+  if (t === 'thermal') return 'os';
+  if (p.printer_ip) return 'network';
+  if (p.printer_name && p.printer_name !== 'browser') return 'os';
+  return 'browser';
+}
+
+interface PrinterCard {
+  id: string;
+  label: string;
+  desc: string;
+  categories?: string[];
+  station?: KDSStation;
+}
 
 export function ReceiptTab() {
   const { data: settings, isLoading } = usePOSSettings();
+  const { data: kdsData } = useAllKDSStations();
   const updateSettings = useUpdatePOSSettings();
   const { can } = usePermissions();
   const { hasModule } = useModuleAccess();
-  // KOT stations (kitchen/bar/coffee) only make sense where there's a kitchen display; the waiter
-  // copy only where there's table service. Retail/pharmacy print just the customer bill.
+  // Per-station KOT printers only make sense where there's a kitchen display; the waiter copy only
+  // where there's table service. Retail/pharmacy print just the customer bill.
   const showKitchenStations = hasModule('kds');
   const showWaiterStation = hasModule('tables');
-  const printerRoles = RECEIPT_PRINTER_ROLES.filter(
-    (r) => (!r.kot || showKitchenStations) && (!r.waiter || showWaiterStation),
-  );
   const { tenant } = useTenantBranding();
   const authOutlet = useAuthStore((s) => s.outlet);
   const selectedOutlet = useOutletFilterStore((s) => s.selectedOutlet);
   const canEdit = can(P.CONFIG_CHANGE) || can(P.CONFIG_MANAGE);
   const tenantName = tenant?.orgName || tenant?.name || '';
-  // Prefer the currently-active outlet's name (HQ drill-down aware), falling back to the
-  // tenant/business name. Receipts are per-outlet, so the outlet name is the better header default.
   const defaultHeader = selectedOutlet?.name || authOutlet?.name || tenantName;
 
   const [form, setForm] = useState({
@@ -63,32 +88,49 @@ export function ReceiptTab() {
     cashDrawerKickCode: 'default',
   });
   const [profiles, setProfiles] = useState<PrinterProfile[]>([]);
-  // Discovered printers (from the QZ Tray bridge, when available) for the printer-name dropdowns.
   const [discovered, setDiscovered] = useState<string[]>([]);
-  const [discoverNote, setDiscoverNote] = useState('');
   const [discoverNotes, setDiscoverNotes] = useState<string[]>([]);
   const [discovering, setDiscovering] = useState(false);
   const [showPrinterHelp, setShowPrinterHelp] = useState(false);
   const [testingDrawer, setTestingDrawer] = useState(false);
+  const [agentUp, setAgentUp] = useState<boolean | null>(null);
 
-  // The drawer is wired to a printer; default to the Bill/customer station printer when unset.
-  const drawerPrinterName = (): string => {
-    if (form.cashDrawerPrinter) return form.cashDrawerPrinter;
-    const bill = profiles.find((p) => p.id === 'customer');
-    return bill?.printer_name && bill.printer_name !== 'browser' ? bill.printer_name : '';
+  // Probe the local print agent once so the status pill and setup help reflect reality.
+  useEffect(() => { void agentAvailable().then(setAgentUp); }, []);
+
+  // The printers shown: fixed Customer/Bill (+ Waiter where table service) then one per active KDS
+  // station — so printers are auto-created from and linked to the live KDS stations, not hardcoded.
+  const stations = (kdsData?.data ?? []).filter((s) => s.is_active !== false);
+  const printerCards: PrinterCard[] = [
+    { id: BILL_PROFILE_ID, label: 'Bill / Customer Receipt', desc: 'Full receipt (prices) printed at point of sale' },
+    ...(showWaiterStation ? [{ id: WAITER_PROFILE_ID, label: 'Waiter Copy', desc: 'Order summary for the serving staff' }] : []),
+    ...(showKitchenStations
+      ? stations.map((s): PrinterCard => ({
+          id: s.id,
+          label: s.name,
+          desc: (s.category_filter?.length ? '' : 'All categories') + ` · ${s.station_type}`,
+          categories: s.category_filter,
+          station: s,
+        }))
+      : []),
+  ];
+
+  const drawerProfile = (): PrinterProfile | undefined => {
+    if (form.cashDrawerPrinter) return { id: 'drawer', label: 'Drawer', printer_type: 'os', printer_name: form.cashDrawerPrinter };
+    return profiles.find((p) => p.id === BILL_PROFILE_ID);
   };
 
   const handleTestDrawer = async () => {
-    const printer = drawerPrinterName();
-    if (!printer) {
+    const profile = drawerProfile();
+    if (!profile) {
       toast.info('Assign a drawer printer (or a Bill station printer) and run Detect Printers first.');
       return;
     }
     setTestingDrawer(true);
     try {
-      const ok = await openCashDrawer(printer, form.cashDrawerKickCode as DrawerKickCode);
+      const ok = await openCashDrawerProfile(profile, form.cashDrawerKickCode as DrawerKickCode);
       if (ok) toast.success('Drawer kick sent.');
-      else toast.error('Could not reach the drawer. Is QZ Tray running with the printer connected?');
+      else toast.error('Could not reach the drawer. Is QZ Tray / the print agent running with the printer connected?');
     } finally {
       setTestingDrawer(false);
     }
@@ -97,46 +139,31 @@ export function ReceiptTab() {
   const handleDetectPrinters = async () => {
     setDiscovering(true);
     try {
-      const res = await discoverPrinters();
-      // Merge with any names already added via the USB/Bluetooth pair buttons so they aren't lost.
+      const [res, up] = await Promise.all([discoverPrinters(), agentAvailable()]);
+      setAgentUp(up);
       setDiscovered((prev) => Array.from(new Set([...res.printers, ...prev])));
       setDiscoverNotes(res.notes ?? (res.note ? [res.note] : []));
-      setDiscoverNote(res.note ?? '');
       if (res.printers.length) toast.success(`Detected ${res.printers.length} printer(s).`);
       else {
         toast.info('No printers detected — see the setup steps below.');
-        setShowPrinterHelp(true); // surface manual-intervention guidance
+        setShowPrinterHelp(true);
       }
     } finally {
       setDiscovering(false);
     }
   };
 
-  const handleAddUSB = async () => {
-    const d = await requestUSBPrinter();
-    if (d) {
-      setDiscovered((prev) => Array.from(new Set([d.name, ...prev])));
-      toast.success(`Added USB printer: ${d.name}`);
-    } else {
-      toast.info('No USB printer selected (or WebUSB unsupported on this browser).');
-    }
-  };
-
-  const handleAddBluetooth = async () => {
-    const d = await requestBluetoothPrinter();
-    if (d) {
-      setDiscovered((prev) => Array.from(new Set([d.name, ...prev])));
-      toast.success(`Paired Bluetooth printer: ${d.name}`);
-    } else {
-      toast.info('No Bluetooth printer paired (or Web Bluetooth unsupported on this browser).');
-    }
+  const handleTestPrint = async (card: PrinterCard) => {
+    const p = getProfile(card.id);
+    const html = `<div style="font-family:'Courier New',monospace;text-align:center">
+      <h3>Test Print</h3><p>${card.label}</p><p>${paperOf(p)}</p>
+      <p>${new Date().toLocaleString()}</p></div>`;
+    await printProfileHtml(p, `Test — ${card.label}`, html);
+    toast.success('Test page sent.');
   };
 
   useEffect(() => {
     if (settings) {
-      // Prefill sensible defaults when the outlet hasn't configured the text yet:
-      // header → current outlet name (or business name), footer → a friendly default. These become
-      // editable form values so the operator sees them and persists them on Save.
       setForm({
         receiptHeader: settings.receipt_header ?? defaultHeader,
         receiptFooter: settings.receipt_footer ?? DEFAULT_RECEIPT_FOOTER,
@@ -151,20 +178,47 @@ export function ReceiptTab() {
     }
   }, [settings, defaultHeader]);
 
-  const set = (k: keyof typeof form, v: unknown) =>
-    setForm((f) => ({ ...f, [k]: v }));
+  const set = (k: keyof typeof form, v: unknown) => setForm((f) => ({ ...f, [k]: v }));
 
-  const setProfile = (id: string, field: keyof PrinterProfile, value: unknown) => {
+  const getProfile = (id: string): PrinterProfile => {
+    const card = printerCards.find((c) => c.id === id);
+    return profiles.find((p) => p.id === id) ?? { id, label: card?.label ?? id, printer_type: 'none' };
+  };
+
+  /** Merge a patch into a profile, auto-creating it (with its KDS-station link) on first edit. */
+  const patchProfile = (card: PrinterCard, patch: Partial<PrinterProfile>) => {
     setProfiles((prev) => {
-      const existing = prev.find((p) => p.id === id);
-      if (existing) return prev.map((p) => (p.id === id ? { ...p, [field]: value } : p));
-      const role = RECEIPT_PRINTER_ROLES.find((r) => r.id === id);
-      return [...prev, { id, label: role?.label ?? id, printer_type: 'none', [field]: value } as PrinterProfile];
+      const base: PrinterProfile = prev.find((p) => p.id === card.id) ?? {
+        id: card.id,
+        label: card.label,
+        printer_type: 'none',
+        ...(card.station ? { station_id: card.station.id, station_type: card.station.station_type, categories: card.station.category_filter } : {}),
+      };
+      const next = { ...base, ...patch, label: card.label };
+      return prev.some((p) => p.id === card.id) ? prev.map((p) => (p.id === card.id ? next : p)) : [...prev, next];
     });
   };
 
-  const getProfile = (id: string): PrinterProfile =>
-    profiles.find((p) => p.id === id) ?? { id, label: id, printer_type: 'none' };
+  // Switching connection type resets the fields that don't apply to the new type.
+  const changeConnType = (card: PrinterCard, type: Exclude<PrinterConnType, 'thermal' | 'none'>) => {
+    const patch: Partial<PrinterProfile> = { printer_type: type };
+    if (type === 'browser') { patch.printer_name = ''; patch.printer_ip = ''; }
+    if (type === 'network') { patch.printer_name = ''; patch.printer_port = getProfile(card.id).printer_port ?? 9100; }
+    if (type === 'os' || type === 'usb' || type === 'bluetooth') patch.printer_ip = '';
+    patchProfile(card, patch);
+  };
+
+  const handlePairUSB = async (card: PrinterCard) => {
+    const d = await requestUSBPrinter();
+    if (d) { patchProfile(card, { printer_type: 'usb', printer_name: d.name }); setDiscovered((prev) => Array.from(new Set([d.name, ...prev]))); toast.success(`Paired USB: ${d.name}`); }
+    else toast.info('No USB printer selected (or WebUSB unsupported on this browser).');
+  };
+
+  const handlePairBluetooth = async (card: PrinterCard) => {
+    const d = await requestBluetoothPrinter();
+    if (d) { patchProfile(card, { printer_type: 'bluetooth', printer_name: d.name }); setDiscovered((prev) => Array.from(new Set([d.name, ...prev]))); toast.success(`Paired Bluetooth: ${d.name}`); }
+    else toast.info('No Bluetooth printer paired (or Web Bluetooth unsupported on this browser).');
+  };
 
   const handleSave = () => {
     updateSettings.mutate({
@@ -176,9 +230,10 @@ export function ReceiptTab() {
       cash_drawer_printer: form.cashDrawerPrinter || null,
       cash_drawer_auto_open: form.cashDrawerAutoOpen,
       cash_drawer_kick_code: form.cashDrawerKickCode,
-      // Keep any station the operator configured: a non-disabled type, an assigned printer name, or auto-print on.
+      // Keep any station the operator configured (a chosen connection type, a device, an IP, or auto-print on).
       printer_profiles: profiles.filter(
-        (p) => p.printer_type !== 'none' || (p.printer_name && p.printer_name !== 'browser') || p.auto_print,
+        (p) => (p.printer_type !== 'none' && p.printer_type !== 'browser') ||
+          (p.printer_name && p.printer_name !== 'browser') || p.printer_ip || p.auto_print,
       ),
     });
   };
@@ -239,9 +294,8 @@ export function ReceiptTab() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {[
               { key: 'autoPrintOrder' as const, label: 'Auto-Print Receipt on Completion', desc: 'Automatically print customer receipt when a sale is completed.' },
-              // Kitchen auto-print only applies where a kitchen display/ticket exists.
               ...(showKitchenStations
-                ? [{ key: 'autoPrintKitchen' as const, label: 'Auto-Print Kitchen Ticket', desc: 'Send a kitchen order ticket when an order is created.' }]
+                ? [{ key: 'autoPrintKitchen' as const, label: 'Auto-Print Station Tickets', desc: 'Send each KDS station its ticket (on its printer) when an order is created.' }]
                 : []),
             ].map((item) => (
               <div key={item.key} className="flex items-center justify-between p-4 rounded-xl bg-accent/10 border border-border gap-4">
@@ -261,52 +315,35 @@ export function ReceiptTab() {
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <Printer className="h-4 w-4 text-primary" />
-              <span className="font-bold text-sm">Order Printing — Stations</span>
+              <span className="font-bold text-sm">Order Printing — Station Printers</span>
             </div>
-            <div className="flex items-center gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={handleAddUSB}
-                className="gap-2 h-8 text-xs"
-              >
-                <Printer className="h-3.5 w-3.5" /> Add USB
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={handleAddBluetooth}
-                className="gap-2 h-8 text-xs"
-              >
-                <Printer className="h-3.5 w-3.5" /> Add Bluetooth
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={handleDetectPrinters}
-                disabled={discovering}
-                className="gap-2 h-8 text-xs"
-              >
-                {discovering ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Printer className="h-3.5 w-3.5" />}
-                {discovering ? 'Detecting…' : 'Detect Printers'}
-              </Button>
-            </div>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleDetectPrinters}
+              disabled={discovering}
+              className="gap-2 h-8 text-xs"
+            >
+              {discovering ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Printer className="h-3.5 w-3.5" />}
+              {discovering ? 'Detecting…' : 'Detect Printers'}
+            </Button>
           </div>
           <p className="text-xs text-muted-foreground mt-1">
-            Assign a printer to each station (Bill, Kitchen, Bar, Coffee). Detect Printers scans OS &amp;
-            network printers via QZ Tray and already-granted USB/Bluetooth devices; use Add USB / Add
-            Bluetooth to pair a new device. With none detected, printing uses the browser dialog.
+            Each printer below is linked to a live KDS station (plus the customer bill). When an order is
+            routed to a station, its ticket prints on that station&apos;s printer. Pick a connection type
+            per printer — the fields change to match.
           </p>
-          {discoverNotes.length > 0 ? (
+          <div className="mt-1.5 flex items-center gap-2 text-[11px]">
+            <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 font-semibold ${agentUp ? 'bg-emerald-500/15 text-emerald-600' : 'bg-muted text-muted-foreground'}`}>
+              <span className={`h-1.5 w-1.5 rounded-full ${agentUp ? 'bg-emerald-500' : 'bg-muted-foreground/50'}`} />
+              {agentUp == null ? 'Checking print agent…' : agentUp ? 'Local print agent running' : 'Local print agent not detected'}
+            </span>
+          </div>
+          {discoverNotes.length > 0 && (
             <ul className="text-[11px] mt-1.5 rounded-lg bg-accent/30 px-3 py-2 text-muted-foreground space-y-1 list-disc list-inside">
               {discoverNotes.map((n, i) => <li key={i}>{n}</li>)}
             </ul>
-          ) : discoverNote ? (
-            <p className="text-[11px] mt-1.5 rounded-lg bg-accent/30 px-3 py-2 text-muted-foreground">{discoverNote}</p>
-          ) : null}
-
-          {/* Manual-intervention guidance: detection can only see printers already installed in the OS,
-              so direct the operator through driver install / Windows protected-print-mode / QZ Tray. */}
+          )}
           <button
             type="button"
             onClick={() => setShowPrinterHelp((v) => !v)}
@@ -317,106 +354,149 @@ export function ReceiptTab() {
           </button>
           {showPrinterHelp && (
             <div className="mt-1.5 rounded-lg border border-border bg-background px-3 py-3 text-[11px] text-muted-foreground space-y-2">
-              <p className="font-semibold text-foreground">
-                Detection lists printers that are installed on this computer. If yours isn&apos;t showing, work through these:
-              </p>
               <ol className="list-decimal list-inside space-y-1.5">
                 <li>
-                  <span className="font-medium text-foreground">Install the driver &amp; add the printer in Windows.</span>{' '}
-                  Settings → Bluetooth &amp; devices → Printers &amp; scanners → <em>Add device</em>. For a network
-                  printer, add a <em>Standard TCP/IP</em> port using its <em>static</em> IP, choose “Local Port”, and
-                  uncheck “Query the printer”.
+                  <span className="font-medium text-foreground">Best for network printers: install the Local Print Agent</span> on this
+                  terminal. It scans this Wi-Fi/LAN and auto-lists printers, and prints to them by IP — no OS install needed.
                 </li>
                 <li>
-                  <span className="font-medium text-foreground">Windows 11: turn off “Windows protected print mode”.</span>{' '}
-                  It removes printers that use manufacturer drivers (most thermal/POS printers). Same Printers &amp;
-                  scanners page → <em>Printer preferences</em>, switch it off, then re-add the printer.{' '}
-                  <a className="text-primary hover:underline" href="https://learn.microsoft.com/en-us/windows/modern-print/windows-protected-print-mode/windows-protected-mode-faq" target="_blank" rel="noreferrer">Learn more</a>.
+                  <span className="font-medium text-foreground">Or add the printer to this computer</span> (Windows → Bluetooth &amp;
+                  devices → Printers &amp; scanners → Add device; for network use a Standard TCP/IP port with its static IP), then
+                  install &amp; start <a className="text-primary hover:underline" href="https://qz.io/download/" target="_blank" rel="noreferrer">QZ Tray</a> and click Detect Printers.
                 </li>
                 <li>
-                  <span className="font-medium text-foreground">Install &amp; start QZ Tray</span> on this terminal for
-                  silent printing and OS-printer detection, then click <em>Detect Printers</em> again.{' '}
-                  <a className="text-primary hover:underline" href="https://qz.io/download/" target="_blank" rel="noreferrer">Download QZ Tray</a>.
+                  <span className="font-medium text-foreground">Or just choose “Network (IP)”</span> on a printer below and type its IP
+                  and port (9100) — it prints via QZ Tray or the agent with no OS setup.
                 </li>
                 <li>
-                  <span className="font-medium text-foreground">Network printer not reachable?</span> Make sure this
-                  device and the printer are on the same Wi-Fi/LAN and the router does <em>not</em> have
-                  “client/AP isolation” (guest mode) enabled.
-                </li>
-                <li>
-                  <span className="font-medium text-foreground">USB or Bluetooth printer:</span> use{' '}
-                  <em>Add USB</em> / <em>Add Bluetooth</em> above (Chrome or Edge) and pick your device.
+                  <span className="font-medium text-foreground">Windows 11:</span> turn off “Windows protected print mode” if a thermal/POS
+                  printer won&apos;t appear, then re-add it.
                 </li>
               </ol>
             </div>
           )}
         </CardHeader>
         <CardContent>
+          {printerCards.length === 0 ? (
+            <p className="text-xs text-muted-foreground">No KDS stations configured yet. Add stations under KDS Stations to create their printers here.</p>
+          ) : (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-          {printerRoles.map((role) => {
-            const p = getProfile(role.id);
+          {printerCards.map((card) => {
+            const p = getProfile(card.id);
+            const conn = connOf(p);
             const currentName = p.printer_name ?? '';
-            // Build the dropdown options: browser default + discovered + any previously-saved name.
             const names = Array.from(new Set([...discovered, ...(currentName && currentName !== 'browser' ? [currentName] : [])]));
             return (
-              <div key={role.id} className="rounded-xl border border-border p-4 space-y-3">
+              <div key={card.id} className="rounded-xl border border-border p-4 space-y-3">
                 <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="text-sm font-bold">{role.label}</p>
-                    <p className="text-xs text-muted-foreground">{role.desc}</p>
+                    <p className="text-sm font-bold">{card.label}</p>
+                    <p className="text-xs text-muted-foreground">{card.desc}</p>
+                    {card.categories && card.categories.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {card.categories.map((c) => (
+                          <span key={c} className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded-full font-semibold">{c}</span>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <span className="text-[10px] font-semibold uppercase text-muted-foreground">Auto-print</span>
-                    <Toggle checked={p.auto_print ?? false} onChange={(v) => setProfile(role.id, 'auto_print', v)} disabled={!canEdit} />
+                    <Toggle checked={p.auto_print ?? false} onChange={(v) => patchProfile(card, { auto_print: v })} disabled={!canEdit} />
                   </div>
                 </div>
+
                 <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className={labelClass}>Connection</label>
+                    <select
+                      value={conn}
+                      onChange={(e) => changeConnType(card, e.target.value as Exclude<PrinterConnType, 'thermal' | 'none'>)}
+                      disabled={!canEdit}
+                      className={inputClass}
+                    >
+                      {CONN_TYPES.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+                    </select>
+                  </div>
                   <div className="space-y-1">
                     <label className={labelClass}>Paper Size</label>
                     <select
-                      value={p.paper_width ?? '80mm'}
-                      onChange={(e) => setProfile(role.id, 'paper_width', e.target.value)}
+                      value={paperOf(p)}
+                      onChange={(e) => patchProfile(card, { paper_size: e.target.value as PrinterProfile['paper_size'] })}
                       disabled={!canEdit}
                       className={inputClass}
                     >
-                      {PAPER_OPTIONS.map((w) => <option key={w} value={w}>{w === '80mm' ? '80 (72) x 297mm' : '58mm'}</option>)}
-                    </select>
-                  </div>
-                  <div className="space-y-1">
-                    <label className={labelClass}>Printer Name</label>
-                    <select
-                      value={currentName || 'browser'}
-                      onChange={(e) => {
-                        const v = e.target.value;
-                        setProfile(role.id, 'printer_name', v === 'browser' ? '' : v);
-                        // Reflect choice in printer_type so legacy consumers + the save filter behave.
-                        setProfile(role.id, 'printer_type', v === 'browser' ? 'browser' : 'network');
-                      }}
-                      disabled={!canEdit}
-                      className={inputClass}
-                    >
-                      <option value="browser">Browser print (default)</option>
-                      {names.map((n) => <option key={n} value={n}>{n}</option>)}
+                      {PAPER_OPTIONS.map((w) => <option key={w.value} value={w.value}>{w.label}</option>)}
                     </select>
                   </div>
                 </div>
-                {/* Optional explicit network IP for ESC/POS printers not exposed via the bridge. */}
-                {p.printer_type === 'network' && !currentName && (
+
+                {/* Fields that depend on the connection type. */}
+                {conn === 'os' && (
                   <div className="space-y-1">
-                    <label className={labelClass}>Network Printer IP (optional)</label>
-                    <input
-                      value={p.printer_ip ?? ''}
-                      onChange={(e) => setProfile(role.id, 'printer_ip', e.target.value)}
+                    <label className={labelClass}>Printer (from Detect)</label>
+                    <select
+                      value={currentName || ''}
+                      onChange={(e) => patchProfile(card, { printer_name: e.target.value })}
                       disabled={!canEdit}
-                      placeholder="192.168.1.100"
-                      className={`${inputClass} font-mono`}
-                    />
+                      className={inputClass}
+                    >
+                      <option value="">Select a detected printer…</option>
+                      {names.map((n) => <option key={n} value={n}>{n}</option>)}
+                    </select>
                   </div>
                 )}
+                {conn === 'network' && (
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="col-span-2 space-y-1">
+                      <label className={labelClass}>Printer IP</label>
+                      <input
+                        value={p.printer_ip ?? ''}
+                        onChange={(e) => patchProfile(card, { printer_ip: e.target.value })}
+                        disabled={!canEdit}
+                        placeholder="192.168.1.100"
+                        className={`${inputClass} font-mono`}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className={labelClass}>Port</label>
+                      <input
+                        type="number"
+                        value={p.printer_port ?? 9100}
+                        onChange={(e) => patchProfile(card, { printer_port: parseInt(e.target.value) || 9100 })}
+                        disabled={!canEdit}
+                        className={`${inputClass} font-mono`}
+                      />
+                    </div>
+                  </div>
+                )}
+                {conn === 'usb' && (
+                  <div className="flex items-center gap-2">
+                    <Button type="button" variant="outline" onClick={() => handlePairUSB(card)} disabled={!canEdit} className="gap-2 h-8 text-xs">
+                      <Usb className="h-3.5 w-3.5" /> {currentName ? 'Re-pair USB' : 'Pair USB'}
+                    </Button>
+                    {currentName && <span className="text-xs text-muted-foreground truncate">{currentName}</span>}
+                  </div>
+                )}
+                {conn === 'bluetooth' && (
+                  <div className="flex items-center gap-2">
+                    <Button type="button" variant="outline" onClick={() => handlePairBluetooth(card)} disabled={!canEdit} className="gap-2 h-8 text-xs">
+                      <Bluetooth className="h-3.5 w-3.5" /> {currentName ? 'Re-pair Bluetooth' : 'Pair Bluetooth'}
+                    </Button>
+                    {currentName && <span className="text-xs text-muted-foreground truncate">{currentName}</span>}
+                  </div>
+                )}
+
+                <div className="flex justify-end">
+                  <Button type="button" variant="ghost" onClick={() => handleTestPrint(card)} className="h-7 text-[11px] gap-1.5">
+                    <Printer className="h-3 w-3" /> Test print
+                  </Button>
+                </div>
               </div>
             );
           })}
           </div>
+          )}
         </CardContent>
       </Card>
 
@@ -428,7 +508,7 @@ export function ReceiptTab() {
           </div>
           <p className="text-xs text-muted-foreground mt-1">
             The drawer connects to a receipt printer&apos;s RJ11/12 port and is opened by an ESC/POS
-            kick pulse sent to that printer via QZ Tray. Assign the printer the drawer is wired to.
+            kick pulse sent to that printer. Assign the printer the drawer is wired to.
           </p>
         </CardHeader>
         <CardContent className="space-y-4">

@@ -1,22 +1,22 @@
 /**
- * Kitchen/Bar ticket printing for the POS.
+ * Kitchen/Bar ticket printing for the POS — routed by the SAME KDS stations the kitchen displays use.
  *
- * "Send to kitchen" routes order lines to a kitchen ticket and a bar ticket. How they print depends
- * on the outlet's printer configuration (OutletSetting.printer_profiles):
- *   - SINGLE printer (no extra profiles): one combined "3-in-1" job is printed on the one thermal
- *     printer — Customer Bill section, then Kitchen Order section, then Bar Order section.
- *   - MULTIPLE printers (one profile per station, each with `categories`): separate jobs are sent so
- *     the kitchen printer prints food and the bar printer prints drinks, while the customer bill
- *     prints on the POS/receipt printer.
+ * "Send to kitchen" splits the order lines across the outlet's live KDS stations by their
+ * `category_filter` (an exact mirror of the pos-api `routeLinesToStations` rule), then prints each
+ * station's ticket to that station's assigned printer (OutletSetting.printer_profiles, keyed by the
+ * station id). The priced Customer Bill prints to the fixed 'customer' profile.
  *
- * Routing mirrors the pos-api KDS rule: coffee/tea & food → kitchen; alcohol & cold drinks → bar.
- * Printing uses isolated browser print windows (same approach as the receipt preview) — no native
- * driver. The operator selects the physical printer per window when multiple printers are configured.
+ *   - MULTIPLE printers (a real printer assigned to any station) → one silent job per station.
+ *   - SINGLE / no printer → one combined "3-in-1" browser job (Bill + each station section).
+ *
+ * Because routing uses the station category_filter (not keyword guessing), a ticket always lands on
+ * the printer of the station the KDS routed it to.
  */
 
-import { printHtmlToPrinter } from './printer-discovery';
-import { stationConfigMap, coffeeStationActive, hasRealPrinter, type PrintStation } from './printer-stations';
+import { printProfileHtml } from './printer-discovery';
+import { configFor, anyRealPrinter, BILL_PROFILE_ID } from './printer-stations';
 import type { PrinterProfile } from '@/lib/api/settings';
+import type { KDSStation } from '@/hooks/useKDS';
 
 export interface TicketLine {
   name: string;
@@ -27,50 +27,69 @@ export interface TicketLine {
   totalPrice?: number;
 }
 
-export type Station = 'kitchen' | 'bar' | 'coffee';
-
+// Hot beverages are kitchen items (never bar), mirroring the pos-api isHotBeverage rule.
 const HOT_BEVERAGES = [
   'coffee', 'tea', 'espresso', 'cappuccino', 'latte', 'americano', 'macchiato',
   'mocha', 'hot chocolate', 'chai', 'flat white', 'cortado', 'affogato', 'hot beverage', 'hot drink',
 ];
 
-const BAR_KEYWORDS = [
-  'beer', 'wine', 'spirit', 'whisky', 'whiskey', 'vodka', 'gin', 'rum', 'tequila', 'brandy',
-  'cocktail', 'lager', 'cider', 'liqueur', 'champagne', 'shooter', 'shot',
-  'soda', 'soft drink', 'juice', 'water', 'mineral water', 'cold beverage', 'cold drink',
-  'iced', 'smoothie', 'milkshake', 'mocktail', 'energy drink', 'bar',
-];
-
-function matches(hay: string, needles: string[]): boolean {
+function includesAny(hay: string, needles: string[]): boolean {
   const h = hay.toLowerCase();
   return needles.some((n) => h.includes(n));
 }
 
-/** Decide which station a line belongs to. Hot beverages → coffee; alcohol & cold drinks → bar;
- *  everything else → kitchen. When no dedicated coffee printer is configured the caller folds the
- *  coffee bucket back into the kitchen (so "coffee & tea go to the kitchen" by default). */
-export function stationForLine(line: TicketLine): Station {
-  const hay = `${line.name} ${line.category ?? ''}`;
-  // Iced coffee/tea are cold drinks → bar, even though they contain coffee/tea.
-  if (matches(hay, ['iced coffee', 'iced tea', 'ice coffee', 'ice tea'])) return 'bar';
-  if (matches(hay, HOT_BEVERAGES)) return 'coffee';
-  if (matches(hay, BAR_KEYWORDS)) return 'bar';
-  return 'kitchen';
+/** Iced coffee/tea are cold drinks, not hot beverages. */
+function isHotBeverage(name: string, category: string): boolean {
+  const hay = `${name} ${category}`.toLowerCase();
+  if (includesAny(hay, ['iced coffee', 'iced tea', 'ice coffee', 'ice tea'])) return false;
+  return includesAny(hay, HOT_BEVERAGES);
 }
 
-/** Split lines into kitchen/bar/coffee buckets. When `coffeeActive` is false the coffee bucket is
- *  merged into kitchen. */
-export function splitByStation(lines: TicketLine[], coffeeActive = false): { kitchen: TicketLine[]; bar: TicketLine[]; coffee: TicketLine[] } {
-  const kitchen: TicketLine[] = [];
-  const bar: TicketLine[] = [];
-  const coffee: TicketLine[] = [];
+/**
+ * Route lines to KDS stations, mirroring pos-api `routeLinesToStations` exactly:
+ *  - hot beverages → the kitchen station (when one exists), before category matching;
+ *  - else STRICT category match: the line's category must equal one of a station's category_filter
+ *    entries (case-insensitive); when the line has no category, fall back to a name-substring match;
+ *  - unrouted lines → every expo/all station, else the first active station.
+ * Returns a Map of stationId → lines. Bar stations are skipped for hot beverages.
+ */
+export function routeLinesToStations(lines: TicketLine[], stations: KDSStation[]): Map<string, TicketLine[]> {
+  const active = stations.filter((s) => s.is_active !== false);
+  const buckets = new Map<string, TicketLine[]>();
+  const push = (id: string, l: TicketLine) => {
+    const arr = buckets.get(id);
+    if (arr) arr.push(l); else buckets.set(id, [l]);
+  };
+  const expo = active.filter((s) => s.station_type === 'expo' || s.station_type === 'all');
+  const kitchen = active.find((s) => s.station_type === 'kitchen');
+
   for (const l of lines) {
-    const st = stationForLine(l);
-    if (st === 'bar') bar.push(l);
-    else if (st === 'coffee') (coffeeActive ? coffee : kitchen).push(l);
-    else kitchen.push(l);
+    const cat = (l.category ?? '').trim().toLowerCase();
+    const name = (l.name ?? '').toLowerCase();
+    const hot = isHotBeverage(name, cat);
+    let routed: string | null = null;
+
+    if (hot && kitchen) routed = kitchen.id;
+
+    if (!routed) {
+      for (const s of active) {
+        if (s.station_type === 'expo' || s.station_type === 'all') continue;
+        if (hot && s.station_type === 'bar') continue;
+        for (const c of s.category_filter ?? []) {
+          const needle = c.trim().toLowerCase();
+          if (!needle) continue;
+          const match = cat ? cat === needle : name.includes(needle);
+          if (match) { routed = s.id; break; }
+        }
+        if (routed) break;
+      }
+    }
+
+    if (routed) { push(routed, l); continue; }
+    if (expo.length) { expo.forEach((e) => push(e.id, l)); continue; }
+    if (active.length) push(active[0].id, l);
   }
-  return { kitchen, bar, coffee };
+  return buckets;
 }
 
 const TICKET_CSS = `
@@ -144,74 +163,76 @@ export interface PrintTicketsOptions {
   orderNumber: string;
   tableRef?: string;
   lines: TicketLine[];
-  /** Per-station printer config from OutletSetting.printer_profiles. */
+  /** Live KDS stations — drives routing (by category_filter) and the printed station titles. */
+  kdsStations?: KDSStation[];
+  /** Per-station printer config from OutletSetting.printer_profiles (keyed by station id + 'customer'). */
   stations?: PrinterProfile[];
   /** Include the customer bill section/job (true for dine-in send-to-kitchen). */
   includeCustomerBill?: boolean;
   currency?: string;
-  /** Outlet setting auto_print_kitchen — only auto-print kitchen/bar/coffee tickets when true. */
+  /** Outlet setting auto_print_kitchen — only auto-print station tickets when true. */
   autoPrintKitchen?: boolean;
   /** Outlet setting auto_print_order — only auto-print the customer bill when true. */
   autoPrintBill?: boolean;
 }
 
-function hasAssignedPrinter(profiles?: PrinterProfile[] | null): boolean {
-  return (profiles ?? []).some((p) => hasRealPrinter(p));
-}
-
 /**
- * Print kitchen/bar/coffee tickets according to the outlet's printer setup.
- *  - If any station has an assigned (QZ Tray) printer → one silent job per station routed to its
- *    printer (Bill, Kitchen, Bar, Coffee), honoring each station's paper size + auto_print.
- *  - Otherwise (no bridge / all browser) → a single combined 3-in-1 browser job (Bill + Kitchen + Bar
- *    + Coffee), matching the "one thermal printer prints 3-in-1" requirement.
- * Returns a promise but is safe to fire-and-forget.
+ * Print per-KDS-station tickets according to the outlet's printer setup.
+ *  - If any station (or the bill) has an assigned printer → one silent job per station routed to its
+ *    printer, honoring each station's paper size + auto_print.
+ *  - Otherwise → a single combined 3-in-1 browser job (Bill + each station section).
+ * Safe to fire-and-forget.
  */
 export async function printKitchenBarTickets(opts: PrintTicketsOptions): Promise<void> {
   const {
-    orderNumber, tableRef = '', lines, stations = [], includeCustomerBill = true, currency = 'KES',
-    autoPrintKitchen = false, autoPrintBill = false,
+    orderNumber, tableRef = '', lines, kdsStations = [], stations = [],
+    includeCustomerBill = true, currency = 'KES', autoPrintKitchen = false, autoPrintBill = false,
   } = opts;
   if (lines.length === 0) return;
 
-  // Respect the outlet's auto-print settings. With both off (and routing handled by the KDS),
-  // do NOT pop a browser print dialog or fire a silent job — the cashier uses the explicit
-  // "Print Bill" action instead. This is the gate that stops the print dialog from auto-opening.
+  // Respect the outlet's auto-print settings. With both off (routing handled by the KDS screens),
+  // do NOT pop a browser dialog or fire a silent job — the cashier uses the explicit "Print Bill".
   const printBill = includeCustomerBill && autoPrintBill;
   const printStations = autoPrintKitchen;
   if (!printBill && !printStations) return;
 
-  const cfg = stationConfigMap(stations);
-  const coffeeActive = coffeeStationActive(stations);
-  const { kitchen, bar, coffee } = splitByStation(lines, coffeeActive);
+  // Route lines to the live KDS stations by category_filter (falls back to a single "Kitchen"
+  // bucket when no stations are configured, so nothing is lost on a bare outlet).
+  const buckets = kdsStations.length
+    ? routeLinesToStations(lines, kdsStations)
+    : new Map<string, TicketLine[]>([['__kitchen__', lines]]);
+  const stationById = new Map(kdsStations.map((s) => [s.id, s]));
 
   const billHtml = customerBillSectionHtml(orderNumber, tableRef, lines, currency);
-  const kitchenHtml = stationSectionHtml('Kitchen Order', orderNumber, tableRef, kitchen);
-  const barHtml = stationSectionHtml('Bar Order', orderNumber, tableRef, bar);
-  const coffeeHtml = stationSectionHtml('Coffee Order', orderNumber, tableRef, coffee);
 
-  if (hasAssignedPrinter(stations)) {
-    // Separate silent jobs per station (QZ Tray), each to its assigned printer + paper size.
+  if (anyRealPrinter(stations)) {
     const jobs: Array<Promise<void>> = [];
-    const send = (s: PrintStation, title: string, html: string, force = false) => {
-      if (!html) return;
-      const c = cfg[s];
-      if (!force && c.auto_print === false) return; // station auto-print disabled
-      jobs.push(printHtmlToPrinter(c.printer_name, title, `<div class="t-root">${html}</div>`, c.paper_width ?? '80mm'));
-    };
-    if (printBill) send('bill', `Bill ${orderNumber}`, billHtml, true);
+    if (printBill) {
+      jobs.push(printProfileHtml(configFor(stations, BILL_PROFILE_ID, 'Customer Bill'), `Bill ${orderNumber}`, `<div class="t-root">${billHtml}</div>`));
+    }
     if (printStations) {
-      send('kitchen', `Kitchen ${orderNumber}`, kitchenHtml);
-      send('bar', `Bar ${orderNumber}`, barHtml);
-      send('coffee', `Coffee ${orderNumber}`, coffeeHtml);
+      for (const [stationId, stationLines] of buckets) {
+        const station = stationById.get(stationId);
+        const title = station?.name ?? 'Kitchen';
+        const html = stationSectionHtml(`${title} Order`, orderNumber, tableRef, stationLines);
+        if (!html) continue;
+        const profile = configFor(stations, stationId, title);
+        if (profile.auto_print === false) continue; // station auto-print disabled
+        jobs.push(printProfileHtml(profile, `${title} ${orderNumber}`, `<div class="t-root">${html}</div>`));
+      }
     }
     await Promise.all(jobs);
     return;
   }
 
   // No assigned printers → single combined 3-in-1 browser job (only the enabled sections).
-  const combined =
-    (printBill ? billHtml : '') + (printStations ? kitchenHtml + barHtml + coffeeHtml : '');
+  let combined = printBill ? billHtml : '';
+  if (printStations) {
+    for (const [stationId, stationLines] of buckets) {
+      const title = stationById.get(stationId)?.name ?? 'Kitchen';
+      combined += stationSectionHtml(`${title} Order`, orderNumber, tableRef, stationLines);
+    }
+  }
   if (!combined) return;
   openPrintWindow(`Order ${orderNumber}`, combined);
 }

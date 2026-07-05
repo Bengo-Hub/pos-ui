@@ -1,15 +1,31 @@
 import { apiClient } from './client';
 
+/** Connection type for a printer. 'os' = an OS/QZ-listed printer picked by name; 'network' = a raw
+ *  ESC/POS printer addressed by IP:port; 'usb'/'bluetooth' = a WebUSB/Web-Bluetooth paired device;
+ *  'browser' = the browser print dialog; 'none' = unconfigured. ('thermal' kept for back-compat read). */
+export type PrinterConnType = 'browser' | 'os' | 'network' | 'usb' | 'bluetooth' | 'thermal' | 'none';
+
+/** Full supported paper range — thermal roll widths through cut-sheet sizes. */
+export type PaperSize = '58mm' | '76mm' | '80mm' | 'A6' | 'A5' | 'A4' | 'Letter';
+
 export interface PrinterProfile {
-  id: string;
+  id: string;                 // 'customer' | 'waiter' | a KDS station UUID
   label: string;
-  printer_type: 'network' | 'thermal' | 'bluetooth' | 'browser' | 'none';
+  printer_type: PrinterConnType;
   printer_ip?: string;
-  /** OS/QZ-Tray printer name selected from discovery; '' or 'browser' => browser print dialog. */
+  /** Raw ESC/POS TCP port for a network printer (default 9100). */
+  printer_port?: number;
+  /** OS/QZ-Tray/USB/Bluetooth printer name selected from discovery; '' or 'browser' => browser dialog. */
   printer_name?: string;
-  paper_width?: '58mm' | '80mm';
+  /** @deprecated legacy field kept for back-compat reads; new code writes `paper_size`. */
+  paper_width?: string;
+  paper_size?: PaperSize;
   auto_print?: boolean;
+  /** Category codes routed here — mirrors the linked KDS station's category_filter. */
   categories?: string[];
+  /** KDS station this printer is bound to (for station printers). */
+  station_id?: string;
+  station_type?: string;
 }
 
 export interface POSSettings {

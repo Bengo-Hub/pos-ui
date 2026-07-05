@@ -15,7 +15,9 @@
 
 import { useCallback } from 'react';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
-import { openCashDrawer, type DrawerKickCode } from '@/lib/pos/printer-discovery';
+import { openCashDrawerProfile, type DrawerKickCode } from '@/lib/pos/printer-discovery';
+import { hasRealPrinter, BILL_PROFILE_ID } from '@/lib/pos/printer-stations';
+import type { PrinterProfile } from '@/lib/api/settings';
 
 export function useCashDrawer() {
   const { data: settings } = usePOSSettings();
@@ -24,33 +26,33 @@ export function useCashDrawer() {
   const autoOpen = settings?.cash_drawer_auto_open ?? false;
   const kickCode = (settings?.cash_drawer_kick_code ?? 'default') as DrawerKickCode;
 
-  // Resolve the printer the drawer is wired to: explicit setting, else the Bill/customer station.
-  const resolvePrinter = useCallback((): string => {
+  // Resolve the printer PROFILE the drawer is wired to: an explicit named printer, else the
+  // Customer/Bill station profile (which may be OS/USB/BT by name OR a raw network printer by IP).
+  const resolveProfile = useCallback((): PrinterProfile | undefined => {
     const explicit = settings?.cash_drawer_printer;
-    if (explicit) return explicit;
-    const bill = settings?.printer_profiles?.find((p) => p.id === 'customer');
-    return bill?.printer_name && bill.printer_name !== 'browser' ? bill.printer_name : '';
+    if (explicit) return { id: 'drawer', label: 'Drawer', printer_type: 'os', printer_name: explicit };
+    return settings?.printer_profiles?.find((p) => p.id === BILL_PROFILE_ID);
   }, [settings]);
 
-  const canOpen = enabled && resolvePrinter() !== '';
+  const canOpen = enabled && hasRealPrinter(resolveProfile());
 
   /** Manually pop the drawer. Returns true on success. */
   const openDrawer = useCallback(async (): Promise<boolean> => {
     if (!enabled) return false;
-    const printer = resolvePrinter();
-    if (!printer) return false;
-    return openCashDrawer(printer, kickCode);
-  }, [enabled, resolvePrinter, kickCode]);
+    const profile = resolveProfile();
+    if (!hasRealPrinter(profile)) return false;
+    return openCashDrawerProfile(profile, kickCode);
+  }, [enabled, resolveProfile, kickCode]);
 
   /** Pop the drawer after a cash/card settlement when auto-open is on. Fire-and-forget. */
   const autoOpenOnSettle = useCallback((tenderMethod: string) => {
     if (!enabled || !autoOpen) return;
     const isDrawerTender = ['cash', 'card_pdq', 'card_manual', 'pdq', 'card_terminal'].includes(tenderMethod);
     if (!isDrawerTender) return;
-    const printer = resolvePrinter();
-    if (!printer) return;
-    void openCashDrawer(printer, kickCode);
-  }, [enabled, autoOpen, resolvePrinter, kickCode]);
+    const profile = resolveProfile();
+    if (!hasRealPrinter(profile)) return;
+    void openCashDrawerProfile(profile, kickCode);
+  }, [enabled, autoOpen, resolveProfile, kickCode]);
 
   return { enabled, autoOpen, canOpen, openDrawer, autoOpenOnSettle };
 }
