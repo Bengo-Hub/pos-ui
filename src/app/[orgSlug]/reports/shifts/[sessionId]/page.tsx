@@ -4,6 +4,7 @@ import { ModuleGate } from '@/components/auth/module-gate';
 import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
 import { Card, CardContent } from '@/components/ui/base';
 import { useShiftReportDetail } from '@/hooks/useReports';
+import { ReportDocumentButton } from '@/components/reports/report-document-button';
 import { ArrowLeft, Clock, DollarSign, Loader2, ShoppingCart, TrendingDown } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
@@ -58,7 +59,7 @@ function ShiftDetailContent() {
         <Link href={`/${orgSlug}/reports/shifts`} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
           <ArrowLeft className="h-4 w-4" />
         </Link>
-        <div>
+        <div className="flex-1">
           <h1 className="text-2xl font-bold">Shift Detail</h1>
           <p className="text-sm text-muted-foreground">
             {fmt(shift.started_at)}
@@ -66,6 +67,13 @@ function ShiftDetailContent() {
             {duration ? ` · ${duration} min` : ''}
           </p>
         </div>
+        <ReportDocumentButton
+          report={`shift/${sessionId}`}
+          fileName={`shift-${sessionId}.pdf`}
+          title="Shift / X Report"
+          label="Print / Export"
+          className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium bg-muted text-muted-foreground hover:bg-muted/80 transition-colors"
+        />
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

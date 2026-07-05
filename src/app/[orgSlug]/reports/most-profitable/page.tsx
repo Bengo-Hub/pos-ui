@@ -4,6 +4,7 @@ import { ModuleGate } from '@/components/auth/module-gate';
 import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
 import { Card, CardContent } from '@/components/ui/base';
 import { useMostProfitable } from '@/hooks/useReports';
+import { ReportDocumentButton } from '@/components/reports/report-document-button';
 import { Coins, Loader2, TrendingUp } from 'lucide-react';
 import { useState } from 'react';
 
@@ -59,6 +60,15 @@ function MostProfitableContent() {
               className="px-3 py-2 rounded-xl text-sm bg-muted text-foreground border border-transparent focus:border-primary outline-none"
             />
           </label>
+          <ReportDocumentButton
+            report="most-profitable-document"
+            params={{ from, to }}
+            fileName={`most-profitable-${to}.pdf`}
+            title="Most Profitable Items"
+            orientation="landscape"
+            label="Print / Export"
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium bg-muted text-muted-foreground hover:bg-muted/80 transition-colors"
+          />
         </div>
       </div>
 

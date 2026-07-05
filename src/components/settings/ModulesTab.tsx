@@ -9,6 +9,7 @@ import {
 import { usePOSSettings, useUpdatePOSModules, useUpdateOutletConfig } from '@/hooks/usePOSSettings';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useModuleAccess } from '@/hooks/use-module-access';
+import { useRbacRoles } from '@/hooks/useRbac';
 import { P } from '@/lib/rbac/permissions';
 import { useAuthStore } from '@/store/auth';
 import { buildNavGroups, CORE_MODULE_KEYS, type NavItem } from '@/lib/pos/nav-config';
@@ -67,11 +68,18 @@ export function ModulesTab() {
   const { useCase: resolvedUseCase, enabledModules, isSuperUser } = useModuleAccess();
   const setOutlet = useAuthStore((s) => s.setOutlet);
   const outlet = useAuthStore((s) => s.outlet);
+  const tenantId = useAuthStore((s) => s.user?.tenant_id ?? '');
+  const { data: roles = [] } = useRbacRoles(tenantId);
   const canEdit = can(P.CONFIG_MANAGE) || can(P.CONFIG_CHANGE) || isSuperUser;
 
   const [activeUC, setActiveUC] = useState<string>(resolvedUseCase ?? 'hospitality');
-  const [disabled, setDisabled] = useState<Set<string>>(new Set());
-  const [hidden, setHidden] = useState<Set<string>>(new Set());
+  // Hiding SCOPE: '' = All roles (the flat tenant-wide lists); a role_code = hide additionally for
+  // that role only. Platform-owner/superuser users always see everything regardless of these hides.
+  const [scopeRole, setScopeRole] = useState<string>('');
+  const [flatDisabled, setFlatDisabled] = useState<Set<string>>(new Set());
+  const [flatHidden, setFlatHidden] = useState<Set<string>>(new Set());
+  const [byRoleDisabled, setByRoleDisabled] = useState<Record<string, string[]>>({});
+  const [byRoleHidden, setByRoleHidden] = useState<Record<string, string[]>>({});
   const [flags, setFlags] = useState<Record<BackendFlagKey, boolean>>({
     hotel_module_enabled: false, enable_kds: false, enable_appointments: false, layaway_enabled: false,
   });
@@ -82,8 +90,10 @@ export function ModulesTab() {
 
   useEffect(() => {
     if (settings) {
-      setDisabled(new Set(settings.disabled_modules ?? []));
-      setHidden(new Set(settings.hidden_items ?? []));
+      setFlatDisabled(new Set(settings.disabled_modules ?? []));
+      setFlatHidden(new Set(settings.hidden_items ?? []));
+      setByRoleDisabled(settings.disabled_modules_by_role ?? {});
+      setByRoleHidden(settings.hidden_items_by_role ?? {});
       setFlags({
         hotel_module_enabled: settings.hotel_module_enabled ?? false,
         enable_kds: settings.enable_kds ?? false,
@@ -92,6 +102,11 @@ export function ModulesTab() {
       });
     }
   }, [settings]);
+
+  // The sets shown/edited for the ACTIVE scope: the flat lists for "All roles", else that role's
+  // bucket. Toggles below write back to whichever scope is selected.
+  const disabled = scopeRole ? new Set(byRoleDisabled[scopeRole] ?? []) : flatDisabled;
+  const hidden = scopeRole ? new Set(byRoleHidden[scopeRole] ?? []) : flatHidden;
 
   // Modules available to THIS outlet's use case, in sidebar order, each with its child items — the
   // exact set the sidebar renders (minus profile-inapplicable items), built from the shared nav config.
@@ -124,15 +139,29 @@ export function ModulesTab() {
     if (CORE_MODULE_KEYS.has(key)) return;
     const nextDisabled = new Set(disabled);
     if (on) nextDisabled.delete(key); else nextDisabled.add(key);
-    setDisabled(nextDisabled);
-    const patch: UpdatePOSModulesInput = { disabled_modules: [...nextDisabled] };
+    let patch: UpdatePOSModulesInput;
+    if (scopeRole) {
+      // Per-role hide: write only this role's bucket. The functional backend flag is tenant-wide, so
+      // per-role hides never touch it (they only change sidebar visibility for that role).
+      const prev = byRoleDisabled;
+      const nextByRole = { ...byRoleDisabled, [scopeRole]: [...nextDisabled] };
+      setByRoleDisabled(nextByRole);
+      patch = { disabled_modules_by_role: nextByRole };
+      setSaving(key);
+      try { await updateModules.mutateAsync(patch); }
+      catch { setByRoleDisabled(prev); }
+      finally { setSaving(null); }
+      return;
+    }
+    setFlatDisabled(nextDisabled);
+    patch = { disabled_modules: [...nextDisabled] };
     const flag = BACKEND_FLAG[key];
     if (flag) { setFlags((f) => ({ ...f, [flag]: on })); patch[flag] = on; }
     setSaving(key);
     try { await updateModules.mutateAsync(patch); }
     catch {
       // revert on failure
-      setDisabled(disabled);
+      setFlatDisabled(flatDisabled);
       if (flag) setFlags((f) => ({ ...f, [flag]: !on }));
     } finally { setSaving(null); }
   };
@@ -140,10 +169,19 @@ export function ModulesTab() {
   const toggleItem = async (href: string, visible: boolean) => {
     const nextHidden = new Set(hidden);
     if (visible) nextHidden.delete(href); else nextHidden.add(href);
-    setHidden(nextHidden);
     setSaving(href);
+    if (scopeRole) {
+      const prev = byRoleHidden;
+      const nextByRole = { ...byRoleHidden, [scopeRole]: [...nextHidden] };
+      setByRoleHidden(nextByRole);
+      try { await updateModules.mutateAsync({ hidden_items_by_role: nextByRole }); }
+      catch { setByRoleHidden(prev); }
+      finally { setSaving(null); }
+      return;
+    }
+    setFlatHidden(nextHidden);
     try { await updateModules.mutateAsync({ hidden_items: [...nextHidden] }); }
-    catch { setHidden(hidden); }
+    catch { setFlatHidden(flatHidden); }
     finally { setSaving(null); }
   };
 
@@ -220,6 +258,29 @@ export function ModulesTab() {
           </span>
         )}
       </div>
+
+      {/* Hiding scope: all roles (tenant-wide) or a specific role */}
+      {showTree && (
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 px-1">
+          <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Hide for</label>
+          <select
+            value={scopeRole}
+            onChange={(e) => setScopeRole(e.target.value)}
+            disabled={!canEdit}
+            className="bg-card border border-border rounded-xl py-1.5 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:opacity-60"
+          >
+            <option value="">All roles (everyone)</option>
+            {roles.map((r) => (
+              <option key={r.id} value={r.role_code}>{r.name}</option>
+            ))}
+          </select>
+          <span className="text-[11px] text-muted-foreground">
+            {scopeRole
+              ? 'Hides the toggled screens for this role only (in addition to any all-roles hides).'
+              : 'Hides for every non-admin user. Platform owners always see everything.'}
+          </span>
+        </div>
+      )}
 
       {/* Module & screen visibility tree */}
       {showTree ? (

@@ -79,8 +79,12 @@ export interface POSSettings {
   bank_account_name?: string | null;
   show_payment_info_on_receipt: boolean;
   // Sidebar visibility — moduleKeys the outlet hid entirely, and individual sidebar item hrefs hid.
+  // The flat lists apply to ALL roles; the *_by_role maps (role code → hrefs/module keys) hide
+  // additionally for specific roles only. Platform-owner/superuser users are exempt from both.
   disabled_modules?: string[];
   hidden_items?: string[];
+  disabled_modules_by_role?: Record<string, string[]>;
+  hidden_items_by_role?: Record<string, string[]>;
   updated_at: string;
 }
 
@@ -132,9 +136,11 @@ export interface UpdatePOSModulesInput {
   enable_kds?: boolean;
   enable_appointments?: boolean;
   // Whole-module hide (by moduleKey) and individual sidebar item hide (by href). A provided array
-  // replaces the stored list; omit to leave unchanged.
+  // replaces the stored list; omit to leave unchanged. The *_by_role maps hide additionally per role.
   disabled_modules?: string[];
   hidden_items?: string[];
+  disabled_modules_by_role?: Record<string, string[]>;
+  hidden_items_by_role?: Record<string, string[]>;
 }
 
 function settingsBase(tenantID: string) {

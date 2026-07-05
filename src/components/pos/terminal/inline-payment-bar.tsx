@@ -26,6 +26,7 @@ import { savePendingPayment, getOfflineOrderByLocalId } from '@/lib/db/pos-db';
 import { useCashDrawer } from '@/hooks/useCashDrawer';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { usePOSGateways } from '@/hooks/use-pos-gateways';
+import { usePermissions } from '@/hooks/usePermissions';
 import { useHotelRooms } from '@/hooks/useHotel';
 import { hotelApi } from '@/lib/api/hotel';
 import type { TerminalProfile } from '@/lib/use-case-config';
@@ -54,6 +55,8 @@ export interface InlinePaymentBarProps {
   disabled?: boolean;
   /** dine-in shows Send-to-Kitchen; everything else shows tender buttons. */
   mode?: 'pay' | 'send_to_kitchen';
+  /** True when a real customer is selected (loyalty phone attached). Credit Sale requires one. */
+  hasCustomer?: boolean;
   /** 'panel' = stacked tiles (narrow cart column); 'bar' = compact horizontal button row (GoDigital
    *  full-width bottom action bar). Defaults to 'panel'. */
   layout?: 'panel' | 'bar';
@@ -99,9 +102,15 @@ function tenderIcon(key: TenderKey) {
 export function InlinePaymentBar(props: InlinePaymentBarProps) {
   const {
     total, tenantSlug, profile, isHospitality, allowCOD = false, customerEmail,
-    tenderId = NIL_TENDER, disabled = false, mode = 'pay', layout = 'panel',
+    tenderId = NIL_TENDER, disabled = false, mode = 'pay', layout = 'panel', hasCustomer = true,
     createOrderAsync, onSettled, onDraft, onQuotation, onCancel, onSplit,
   } = props;
+
+  // Credit Sale and Quotation are back-office/manager actions — same permission that approves sale
+  // returns (pos.orders.manage). Ordinary cashiers must not ring a sale onto a customer's account or
+  // raise a quotation. admin/superuser auto-pass in usePermissions.
+  const { can } = usePermissions();
+  const canPrivileged = can('pos.orders.manage');
 
   const roundedTotal = Math.max(0, Math.ceil(total));
   const isOnline = useOnline();
@@ -127,11 +136,15 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
   const [roomSearch, setRoomSearch] = useState('');
 
   const actions = useMemo(
-    () => paymentActionsFor(profile, gateways, { isHospitality, isOnline, allowCOD }),
-    [profile, gateways, isHospitality, isOnline, allowCOD],
+    () => paymentActionsFor(profile, gateways, { isHospitality, isOnline, allowCOD })
+      // Credit Sale (on_account) is manager-gated — drop it for users without pos.orders.manage.
+      .filter((a) => a.key !== 'on_account' || canPrivileged),
+    [profile, gateways, isHospitality, isOnline, allowCOD, canPrivileged],
   );
   // Back-office profiles (retail/pharmacy/services) get Draft + Quotation; hospitality/QSR do not.
+  // Quotation is additionally manager-gated (canPrivileged).
   const isBackOffice = profile === 'retail' || profile === 'pharmacy' || profile === 'services';
+  const showQuotation = isBackOffice && canPrivileged;
 
   const reset = useCallback(() => {
     setCapture(null); setBusyKey(null); setCashTendered(''); setCardRef('');
@@ -235,6 +248,12 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
         setCapture('card_pdq');
         return;
       case 'on_account':
+        // A credit sale must be booked against a real customer account (never the walk-in ghost) —
+        // the server rejects it too, but block early with a clear prompt to select a customer.
+        if (!hasCustomer) {
+          toast.error('Select a customer before recording a credit sale');
+          return;
+        }
         await settleImmediate('on_account');
         return;
       case 'cod': {
@@ -368,7 +387,7 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
            the Total Payable pinned right. */
         <div className="flex flex-wrap items-center gap-2 px-3 py-2.5">
           {isBackOffice && <BadgeBtn icon={FileText} label="Draft" onClick={onDraft} disabled={disabled || anyBusy} />}
-          {isBackOffice && <BadgeBtn icon={FileText} label="Quotation" onClick={onQuotation} disabled={anyBusy} />}
+          {showQuotation && <BadgeBtn icon={FileText} label="Quotation" onClick={onQuotation} disabled={anyBusy} />}
           {actions.map((a) => {
             const Icon = tenderIcon(a.key);
             const tone = TONES[a.tone];
@@ -436,9 +455,11 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
             </div>
             {/* Secondary workflow actions. Draft/Quotation are retail/back-office concepts — hospitality
                 & QSR hold orders on tables / send to kitchen, so only Cancel shows there. */}
-            <div className={cn('grid gap-2 pt-1', isBackOffice ? 'grid-cols-3' : 'grid-cols-1')}>
+            <div className={cn('grid gap-2 pt-1',
+              // columns = Cancel (always) + Draft (back-office) + Quotation (manager-gated)
+              [null, 'grid-cols-1', 'grid-cols-2', 'grid-cols-3'][1 + (isBackOffice ? 1 : 0) + (showQuotation ? 1 : 0)])}>
               {isBackOffice && <SecondaryBtn icon={FileText} label="Draft" onClick={onDraft} disabled={disabled || anyBusy} />}
-              {isBackOffice && <SecondaryBtn icon={FileText} label="Quotation" onClick={onQuotation} disabled={anyBusy} />}
+              {showQuotation && <SecondaryBtn icon={FileText} label="Quotation" onClick={onQuotation} disabled={anyBusy} />}
               <SecondaryBtn icon={X} label="Cancel" tone="danger" onClick={onCancel} disabled={anyBusy} />
             </div>
           </div>

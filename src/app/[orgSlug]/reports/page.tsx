@@ -1,5 +1,6 @@
 'use client';
 
+import { ReportDocumentButton } from '@/components/reports/report-document-button';
 import { ModuleGate } from '@/components/auth/module-gate';
 import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
 import { Card, CardContent } from '@/components/ui/base';
@@ -135,6 +136,25 @@ function ReportsPage() {
             {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
             Export CSV
           </button>
+          {/* Professional branded PDF documents (preview → print / download) for the current range. */}
+          <ReportDocumentButton
+            report="reset-summary"
+            params={{ from, to }}
+            fileName={`reset-summary-${to}.pdf`}
+            title="Reset / Z Summary Report"
+            label="Reset Summary"
+            variant="outline"
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium bg-muted text-muted-foreground hover:bg-muted/80 transition-colors"
+          />
+          <ReportDocumentButton
+            report="sales-by-item-type"
+            params={{ from, to }}
+            fileName={`sales-by-item-type-${to}.pdf`}
+            title="Sales by Item Type"
+            label="Item-Type PDF"
+            variant="outline"
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium bg-muted text-muted-foreground hover:bg-muted/80 transition-colors"
+          />
           <Link
             href={`/${orgSlug}/reports/analytics`}
             className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium bg-muted text-muted-foreground hover:bg-muted/80 transition-colors"

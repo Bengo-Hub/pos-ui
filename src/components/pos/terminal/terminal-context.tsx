@@ -65,6 +65,10 @@ export interface MenuItem {
   /** Hard selling-price guardrails from inventory; enforced server-side at sale. */
   minSellingPrice?: number;
   maxSellingPrice?: number;
+  /** Supplier/purchase cost — ONLY sent by pos-api to managers (pos.catalog.view_cost /
+   *  pos.orders.manage). Undefined for cashier terminals. Drives the manager-only cart cost/margin
+   *  columns (cost stays masked behind an eye toggle). */
+  costPrice?: number;
   category: string;
   brandName?: string;       // ItemBrand name (retail/pharmacy) — for the Brands tab
   brandCode?: string;
@@ -480,6 +484,8 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
       priceIsFallback,
       minSellingPrice: typeof item.min_selling_price === 'number' ? item.min_selling_price : undefined,
       maxSellingPrice: typeof item.max_selling_price === 'number' ? item.max_selling_price : undefined,
+      // Only present when pos-api served cost to a manager (pos.catalog.view_cost / pos.orders.manage).
+      costPrice: typeof item.cost_price === 'number' ? item.cost_price : undefined,
       category: item.category || 'Uncategorized',
       brandName: item.brand_name ?? item.brand ?? undefined,
       brandCode: item.brand_code ?? undefined,

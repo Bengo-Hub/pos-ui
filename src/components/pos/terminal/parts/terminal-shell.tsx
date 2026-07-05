@@ -341,6 +341,7 @@ export function TerminalShell() {
             // COD is delivery-only (paid to the rider on delivery) — never for takeaway/counter/dine-in.
             allowCOD={t.orderSubtype === 'delivery'}
             customerEmail={(t.loyaltyState as any)?.customerEmail}
+            hasCustomer={!!t.loyaltyState?.customerPhone}
             disabled={cart.length === 0}
             mode={t.isHospitality && t.orderSubtype === 'dine_in' ? 'send_to_kitchen' : 'pay'}
             createOrderAsync={t.createOrderAsync}

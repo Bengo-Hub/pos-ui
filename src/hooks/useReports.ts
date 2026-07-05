@@ -342,6 +342,41 @@ export function useVoidSummary(from: string, to: string) {
   });
 }
 
+// ─── Register Details (GoDigital-style detailed register report) ────────────────
+export interface PaymentMethodRow { method: string; sell_amount: number; expense_amount: number }
+export interface ProductSoldRow { sku: string; name: string; quantity: number; total_amount: number }
+export interface BrandSoldRow { brand: string; quantity: number; total_amount: number }
+export interface RegisterDetails {
+  from: string;
+  to: string;
+  payment_methods: PaymentMethodRow[];
+  total_sales: number;
+  total_refund: number;
+  refund_by_method: PaymentMethodRow[];
+  total_payment: number;
+  credit_sales: number;
+  total_expense: number;
+  order_tax: number;
+  shipping_total: number;
+  grand_total: number;
+  order_count: number;
+  refund_count: number;
+  products_sold: ProductSoldRow[];
+  products_by_brand: BrandSoldRow[];
+}
+
+/** Detailed register report powering the POS "Register Details" modal. */
+export function useRegisterDetails(from: string, to: string, outletId?: string, enabled = true) {
+  const tenantID = useTenantID();
+  return useQuery({
+    queryKey: ['reports', tenantID, 'register-details', from, to, outletId],
+    queryFn: () =>
+      apiClient.get<RegisterDetails>(`${basePath(tenantID)}/register-details`, { from, to, outlet_id: outletId }),
+    enabled: !!tenantID && !!from && !!to && enabled,
+    staleTime: 30_000,
+  });
+}
+
 export function useReportExportUrl(tenantID: string, from: string, to: string) {
   return `/api/v1/${tenantID}/pos/reports/export?from=${from}&to=${to}`;
 }

@@ -4,6 +4,7 @@ import { ModuleGate } from '@/components/auth/module-gate';
 import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
 import { Card, CardContent } from '@/components/ui/base';
 import { useTaxReport } from '@/hooks/useReports';
+import { ReportDocumentButton } from '@/components/reports/report-document-button';
 import { cn } from '@/lib/utils';
 import { Download, Loader2, Receipt } from 'lucide-react';
 import { useState } from 'react';
@@ -48,6 +49,14 @@ function TaxReportContent() {
           <a href={exportUrl} download className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium bg-muted text-muted-foreground hover:bg-muted/80 transition-colors">
             <Download className="h-3.5 w-3.5" /> Export
           </a>
+          <ReportDocumentButton
+            report="tax-document"
+            params={{ from, to }}
+            fileName={`tax-report-${to}.pdf`}
+            title="Tax Report"
+            label="PDF"
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium bg-muted text-muted-foreground hover:bg-muted/80 transition-colors"
+          />
         </div>
       </div>
 

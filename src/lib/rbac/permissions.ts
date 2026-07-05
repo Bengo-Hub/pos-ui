@@ -44,6 +44,9 @@ export const P = {
   CATALOG_CHANGE:    'pos.catalog.change',
   CATALOG_DELETE:    'pos.catalog.delete',
   CATALOG_MANAGE:    'pos.catalog.manage',
+  // Reveal supplier COST price + margin on the POS cart (manager/admin). Separate from view/manage so
+  // it can be granted to e.g. an accountant without full catalog edit rights.
+  CATALOG_VIEW_COST: 'pos.catalog.view_cost',
 
   // Tables
   TABLES_VIEW:       'pos.tables.view',
@@ -168,7 +171,7 @@ export const ROLE_PERMISSIONS: Record<string, Permission[]> = {
   manager: [
     P.ORDERS_ADD, P.ORDERS_VIEW, P.ORDERS_CHANGE, P.ORDERS_DELETE, P.ORDERS_MANAGE, P.ORDERS_VOID,
     P.PAYMENTS_ADD, P.PAYMENTS_VIEW, P.PAYMENTS_MANAGE,
-    P.CATALOG_ADD, P.CATALOG_VIEW, P.CATALOG_CHANGE, P.CATALOG_DELETE, P.CATALOG_MANAGE,
+    P.CATALOG_ADD, P.CATALOG_VIEW, P.CATALOG_CHANGE, P.CATALOG_DELETE, P.CATALOG_MANAGE, P.CATALOG_VIEW_COST,
     P.TABLES_VIEW, P.TABLES_CHANGE, P.TABLES_MANAGE,
     P.DRAWERS_ADD, P.DRAWERS_VIEW, P.DRAWERS_MANAGE,
     P.SESSIONS_ADD, P.SESSIONS_VIEW, P.SESSIONS_MANAGE,

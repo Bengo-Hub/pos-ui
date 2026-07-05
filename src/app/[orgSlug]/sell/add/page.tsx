@@ -16,6 +16,7 @@ import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { SplitPaymentModal } from '@/components/pos/split-payment-modal';
 import { CustomerSearch, WALK_IN_CUSTOMER, type SelectedCustomer } from '@/components/pos/customer-search';
 import { useAuthStore } from '@/store/auth';
+import { usePermissions } from '@/hooks/usePermissions';
 import { apiClient } from '@/lib/api/client';
 import { Button } from '@/components/ui/base';
 import { toast } from 'sonner';
@@ -104,6 +105,10 @@ export default function AddSalePage() {
   // payment collected now — treasury enforces the credit limit. No payment modal.
   const [creditSale, setCreditSale] = useState(searchParams.get('credit') === '1');
   const [notes, setNotes] = useState('');
+  // Credit Sale + Quotation are manager/back-office actions (same permission that approves sale
+  // returns). Cashiers can raise ordinary sales/drafts but not on-account sales or quotations.
+  const { can } = usePermissions();
+  const canPrivileged = can('pos.orders.manage');
   const [quotationSaving, setQuotationSaving] = useState(false);
 
   const createOrder = useCreateOrder();
@@ -140,6 +145,9 @@ export default function AddSalePage() {
   function buildPayload(subtype: 'retail' | 'draft') {
     return {
       outletId,
+      // Tag sales entered here as back-office so the All-Sales "Sources" filter and the
+      // separate POS-only list can distinguish them from POS-terminal sales.
+      source: 'back_office' as const,
       orderSubtype: subtype === 'draft' ? ('draft' as any) : ('retail' as const),
       discountAmount: discount || undefined,
       customerPhone: custPhone || undefined,
@@ -341,10 +349,12 @@ export default function AddSalePage() {
             <div className="flex justify-between pt-2 border-t border-border"><span className="font-bold">Total</span><span className="font-bold text-primary tabular-nums">{fmt(total)}</span></div>
           </div>
 
-          <label className="flex items-center gap-2 text-sm px-1">
-            <input type="checkbox" checked={creditSale} onChange={(e) => setCreditSale(e.target.checked)} className="rounded" />
-            <span>Credit sale (on account → AR)</span>
-          </label>
+          {canPrivileged && (
+            <label className="flex items-center gap-2 text-sm px-1">
+              <input type="checkbox" checked={creditSale} onChange={(e) => setCreditSale(e.target.checked)} className="rounded" />
+              <span>Credit sale (on account → AR)</span>
+            </label>
+          )}
           <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Sale note (optional)" rows={2}
             className="w-full bg-card border border-border rounded-xl py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" />
 
@@ -356,9 +366,11 @@ export default function AddSalePage() {
             <Button variant="outline" onClick={() => save('draft')} disabled={lines.length === 0 || createOrder.isPending} className="w-full rounded-xl">
               Save as Draft
             </Button>
-            <Button variant="outline" onClick={saveQuotation} disabled={lines.length === 0 || quotationSaving} className="w-full rounded-xl">
-              {quotationSaving ? 'Saving…' : 'Save as Quotation'}
-            </Button>
+            {canPrivileged && (
+              <Button variant="outline" onClick={saveQuotation} disabled={lines.length === 0 || quotationSaving} className="w-full rounded-xl">
+                {quotationSaving ? 'Saving…' : 'Save as Quotation'}
+              </Button>
+            )}
           </div>
         </div>
       </div>

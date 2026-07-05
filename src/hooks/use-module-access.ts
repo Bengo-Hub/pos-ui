@@ -161,6 +161,24 @@ export function useModuleAccess() {
   // Enabled modules for the current use case (empty until use case resolves)
   const enabledModules: ModuleKey[] = useCase ? USE_CASE_MODULES[useCase] : [];
 
+  // ── Per-role sidebar hiding ──────────────────────────────────────────────
+  // A tenant admin can hide modules/items for ALL roles (the flat lists) OR for specific roles only
+  // (the *_by_role maps, keyed by role code). The EFFECTIVE hidden set for the current user is the
+  // union of the flat list and every per-role list matching one of the user's roles. Superusers /
+  // platform owners are exempt (handled by isSuperUser guards at the call sites).
+  const userRoles = (user?.roles ?? []).map((r) => String(r).toLowerCase());
+  function effectiveHidden(flat?: string[], byRole?: Record<string, string[]>): Set<string> {
+    const s = new Set(flat ?? []);
+    if (byRole) {
+      const lowered: Record<string, string[]> = {};
+      for (const [role, list] of Object.entries(byRole)) lowered[role.toLowerCase()] = list;
+      for (const role of userRoles) for (const v of lowered[role] ?? []) s.add(v);
+    }
+    return s;
+  }
+  const effectiveDisabledModules = effectiveHidden(posSettings?.disabled_modules, posSettings?.disabled_modules_by_role);
+  const effectiveHiddenItems = effectiveHidden(posSettings?.hidden_items, posSettings?.hidden_items_by_role);
+
   /**
    * Check if a module is enabled for the current outlet.
    * Superusers always have access.
@@ -175,7 +193,7 @@ export function useModuleAccess() {
     // Tenant admin turned this whole module off (declutter to only the screens they use). Scoped to
     // THIS tenant's non-superuser users only (never other tenants, never system-wide) — except CORE
     // modules (e.g. settings), which can never be hidden or you'd lock yourself out.
-    if (posSettings?.disabled_modules?.includes(moduleKey) && !CORE_MODULE_KEYS.has(moduleKey)) return false;
+    if (effectiveDisabledModules.has(moduleKey) && !CORE_MODULE_KEYS.has(moduleKey)) return false;
     if (!useCase) return false; // not yet resolved — hide everything
     if (!enabledModules.includes(moduleKey as ModuleKey)) return false;
     // Overlay backend toggle flags from outlet settings.
@@ -211,9 +229,11 @@ export function useModuleAccess() {
     // Module check
     hasModule,
 
-    // Outlet-level sidebar visibility overrides (declutter to only the screens they use).
-    disabledModules: new Set(posSettings?.disabled_modules ?? []),
-    hiddenItems: new Set(posSettings?.hidden_items ?? []),
+    // Outlet-level sidebar visibility overrides (declutter to only the screens they use). These are
+    // the EFFECTIVE sets for the current user (flat tenant-wide lists ∪ per-role lists for the user's
+    // roles). Superuser/platform-owner exemption is applied at the sidebar call site.
+    disabledModules: effectiveDisabledModules,
+    hiddenItems: effectiveHiddenItems,
 
     // Convenience flags for common sidebar checks
     showTables: hasModule('tables'),

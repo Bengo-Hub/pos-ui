@@ -18,8 +18,9 @@ import { useTerminal } from '@/components/pos/terminal/terminal-context';
 import { useTenantBranding } from '@/providers/tenant-branding-provider';
 import { cn } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
+import { useState } from 'react';
 import {
-  Ban, ChefHat, Flame, Loader2, Minus, Plus, ShoppingCart, Tag, Trash2, X,
+  Ban, ChefHat, Eye, EyeOff, Flame, Loader2, Minus, Plus, ShoppingCart, Tag, Trash2, X,
 } from 'lucide-react';
 
 export function TerminalCart() {
@@ -27,6 +28,12 @@ export function TerminalCart() {
   const router = useRouter();
   const { tenant } = useTenantBranding();
   const { cfg, cart } = t;
+  // Manager-only cost/margin insight on cart lines. Cost price is SENSITIVE — kept masked by default
+  // (so a customer glancing at the screen can't read it) and revealed only when the eye is clicked.
+  // pos-api only sends costPrice to managers (pos.catalog.view_cost / pos.orders.manage), so the row
+  // never renders for a cashier even if this gate were bypassed.
+  const canViewCost = t.can('pos.orders.manage');
+  const [costRevealed, setCostRevealed] = useState(false);
 
   return (
     <>
@@ -223,6 +230,32 @@ export function TerminalCart() {
                           />
                         )}
                       </div>
+                      {/* Manager-only cost / selling / margin row (cost masked until the eye is clicked). */}
+                      {canViewCost && typeof item.costPrice === 'number' && item.costPrice > 0 && (() => {
+                        const sell = item.price;
+                        const cost = item.costPrice;
+                        const margin = sell > 0 ? ((sell - cost) / sell) * 100 : 0;
+                        return (
+                          <div className="flex items-center gap-2 mt-1 text-[10px] font-mono text-muted-foreground">
+                            <span title="Selling price">Sell {sell.toLocaleString()}</span>
+                            <button
+                              type="button"
+                              onClick={() => setCostRevealed((v) => !v)}
+                              title={costRevealed ? 'Hide cost price' : 'Show cost price'}
+                              className="inline-flex items-center gap-1 hover:text-foreground"
+                            >
+                              {costRevealed ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                              <span>Cost {costRevealed ? cost.toLocaleString() : '••••'}</span>
+                            </button>
+                            <span
+                              title="Margin %"
+                              className={cn('font-semibold', margin < 0 ? 'text-destructive' : margin < 15 ? 'text-amber-600' : 'text-emerald-600')}
+                            >
+                              {margin.toFixed(0)}%
+                            </span>
+                          </div>
+                        );
+                      })()}
                     </div>
                     {/* Qty controls + delete */}
                     <div className="flex items-center gap-1 shrink-0">
@@ -340,6 +373,7 @@ export function TerminalCart() {
               // "Cash" at the till). Gate strictly on the delivery subtype, not the outlet profile.
               allowCOD={t.orderSubtype === 'delivery'}
               customerEmail={(t.loyaltyState as any)?.customerEmail || tenant?.contactEmail || undefined}
+              hasCustomer={!!t.loyaltyState?.customerPhone}
               disabled={cart.length === 0}
               mode={t.isHospitality && t.orderSubtype === 'dine_in' ? 'send_to_kitchen' : 'pay'}
               createOrderAsync={t.createOrderAsync}

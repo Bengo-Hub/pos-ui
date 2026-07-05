@@ -747,7 +747,26 @@ export function useOrder(id: string) {
   });
 }
 
-export function useOrders(filters?: { status?: string; staffId?: string; limit?: number; page?: number }) {
+/** Advanced All-Sales filters. All optional; omitted values are not sent. */
+export interface OrderListFilters {
+  status?: string;          // CSV of order statuses (e.g. "completed,refunded")
+  staffId?: string;         // legacy alias for userId
+  userId?: string;
+  outletId?: string;        // business location; "all" lists every outlet
+  from?: string;            // YYYY-MM-DD or RFC3339
+  to?: string;
+  customer?: string;        // phone or name (contains)
+  paymentStatus?: string;   // paid | due | partial
+  paymentMethod?: string;   // tender type (cash, card, cheque, bank_transfer, ...)
+  shippingStatus?: string;
+  source?: string;          // pos_terminal | back_office | all
+  subscriptions?: boolean;
+  orderNumber?: string;
+  limit?: number;
+  page?: number;
+}
+
+export function useOrders(filters?: OrderListFilters) {
   const tenantID = useTenantID();
   return useQuery({
     queryKey: ['pos-orders', tenantID, filters],
@@ -757,6 +776,17 @@ export function useOrders(filters?: { status?: string; staffId?: string; limit?:
         {
           status: filters?.status,
           staff_id: filters?.staffId,
+          user_id: filters?.userId,
+          outlet_id: filters?.outletId,
+          from: filters?.from,
+          to: filters?.to,
+          customer: filters?.customer,
+          payment_status: filters?.paymentStatus,
+          payment_method: filters?.paymentMethod,
+          shipping_status: filters?.shippingStatus,
+          source: filters?.source,
+          subscriptions: filters?.subscriptions ? 'true' : undefined,
+          order_number: filters?.orderNumber,
           limit: filters?.limit ?? 20,
           page: filters?.page ?? 1,
           sort: 'created_at',
@@ -765,6 +795,51 @@ export function useOrders(filters?: { status?: string; staffId?: string; limit?:
       ),
     enabled: !!tenantID,
     staleTime: 15_000,
+  });
+}
+
+/** Quotations for the Recent-Transactions "Quotation" tab (proxied from treasury). */
+export function useQuotations(params?: { page?: number; limit?: number; status?: string }, enabled = true) {
+  const tenantID = useTenantID();
+  return useQuery({
+    queryKey: ['pos-quotations', tenantID, params],
+    queryFn: () =>
+      apiClient.get<{ data: any[]; total: number; meta?: { total: number } }>(
+        `${basePath(tenantID)}/quotations`,
+        { page: params?.page ?? 1, limit: params?.limit ?? 10, status: params?.status },
+      ),
+    enabled: !!tenantID && enabled,
+    staleTime: 15_000,
+  });
+}
+
+/** Edit Shipping (All-Sales action) — updates shipping status/address/charges. */
+export function useUpdateShipping() {
+  const tenantID = useTenantID();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { orderId: string; shipping_status?: string; shipping_address?: string; shipping_amount?: number; tracking_number?: string; delivery_person?: string; delivery_phone?: string }) =>
+      apiClient.patch(`${basePath(tenantID)}/orders/${data.orderId}/shipping`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['pos-orders'] }),
+  });
+}
+
+/** New Sale Notification (All-Sales action) — (re)sends the customer their receipt. */
+export function useNotifySale() {
+  const tenantID = useTenantID();
+  return useMutation({
+    mutationFn: (data: { orderId: string; phone?: string; email?: string }) =>
+      apiClient.post(`${basePath(tenantID)}/orders/${data.orderId}/notify`, { phone: data.phone, email: data.email }),
+  });
+}
+
+/** View Payments (All-Sales action) — lists an order's payments. */
+export function useOrderPayments(orderId: string, enabled = true) {
+  const tenantID = useTenantID();
+  return useQuery({
+    queryKey: ['pos-order-payments', tenantID, orderId],
+    queryFn: () => apiClient.get<any>(`${basePath(tenantID)}/orders/${orderId}/payments`),
+    enabled: !!tenantID && !!orderId && enabled,
   });
 }
 
@@ -785,6 +860,8 @@ interface CreateOrderInput {
   approvalToken?: string;
   /** Order-level metadata (e.g. delivery_address/delivery_lat/delivery_lng/delivery_notes for delivery orders). */
   metadata?: Record<string, unknown>;
+  /** Origin of the sale: "pos_terminal" (default) or "back_office" (the Add Sale flow). */
+  source?: 'pos_terminal' | 'back_office';
   lines: Array<{
     catalog_item_id: string;
     sku: string;
@@ -855,6 +932,7 @@ export function useCreateOrder() {
           metadata: data.metadata,
           lines: data.lines,
           client_reference: localId,
+          source: data.source,
         },
         idemHeaders(localId),
       );

@@ -64,6 +64,24 @@ function EODDetailContent() {
             {eod.notes && <p className="text-xs text-muted-foreground">{eod.notes}</p>}
           </div>
         </div>
+        <div className="ml-auto flex gap-2">
+          <ReportDocumentButton
+            report="reset-summary"
+            params={{ from: date, to: date }}
+            fileName={`reset-summary-${date}.pdf`}
+            title="Reset / Z Summary Report"
+            label="Z Report"
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium bg-muted text-muted-foreground hover:bg-muted/80 transition-colors"
+          />
+          <ReportDocumentButton
+            report="daily-sales"
+            params={{ from: date, to: date }}
+            fileName={`daily-sales-${date}.pdf`}
+            title="Daily Sales Report"
+            label="Daily PDF"
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium bg-muted text-muted-foreground hover:bg-muted/80 transition-colors"
+          />
+        </div>
       </div>
 
       {/* KPI grid */}
