@@ -31,6 +31,9 @@ export interface DiscoveredDevice {
   name: string;
   source: PrinterSource;
   detail?: string;
+  /** For network printers found by the agent/backend LAN scan — used to auto-fill the IP+port. */
+  ip?: string;
+  port?: number;
 }
 
 export interface DiscoverResult {
@@ -214,6 +217,8 @@ async function detectBackend(): Promise<{ devices: DiscoveredDevice[]; note?: st
       name: p.name || (p.ip ? `${p.ip}:${p.port ?? 9100}` : 'Network printer'),
       source: 'network' as const,
       detail: p.ip ? `${p.ip}${p.port ? ':' + p.port : ''}${p.model ? ' · ' + p.model : ''}` : p.model,
+      ip: p.ip,
+      port: p.port ?? (p.ip ? 9100 : undefined),
     }));
     return { devices, note: res.note || `Server network scan: ${devices.length} printer(s).` };
   } catch {
@@ -237,6 +242,8 @@ async function detectAgent(): Promise<{ devices: DiscoveredDevice[]; note?: stri
       name: p.name || (p.ip ? `${p.ip}:${p.port ?? 9100}` : 'Network printer'),
       source: 'network' as const,
       detail: p.ip ? `${p.ip}${p.port ? ':' + p.port : ''}${p.model ? ' · ' + p.model : ''}` : p.model,
+      ip: p.ip,
+      port: p.port ?? (p.ip ? 9100 : undefined),
     }));
     return { devices, ok: true, note: `Local print agent: found ${devices.length} network printer(s).` };
   } catch {
@@ -480,25 +487,42 @@ function targetOf(p?: PrinterProfile | null): PrintTarget | null {
  * Print HTML to a resolved printer profile. Order of preference:
  *  1. QZ Tray — silent, works for OS/USB/BT printers (by name) AND raw network printers (by host/port,
  *     no OS install needed).
- *  2. Browser print window — so a receipt is never lost when there is no bridge.
- * A network profile with no QZ bridge falls back to the browser dialog (the local agent handles raw
- * ESC/POS via printRawToNetwork for KOT/drawer bytes, not full HTML receipts).
+ *  2. Local Print Agent — for a NETWORK printer when QZ isn't present: relay server-built ESC/POS
+ *     bytes (pass `escposHex`) straight to the printer's IP:port. This is how a network printer prints
+ *     silently from a cloud deployment without QZ Tray.
+ *  3. Browser print window — so a receipt is never lost when there is no bridge.
  */
-export async function printProfileHtml(profile: PrinterProfile | undefined, title: string, html: string): Promise<void> {
+export async function printProfileHtml(
+  profile: PrinterProfile | undefined,
+  title: string,
+  html: string,
+  escposHex?: string,
+): Promise<void> {
   const size = paperOf(profile);
   const target = targetOf(profile);
   if (!target) { browserPrint(title, html, size); return; }
+
   const qz = await loadQz();
-  if (!qz) { browserPrint(title, html, size); return; }
-  try {
-    const opts = qzSize(size);
-    const cfg = 'host' in target
-      ? qz.configs.create({ host: target.host, port: target.port }, opts)
-      : qz.configs.create(target.name, opts);
-    await qz.print(cfg, [{ type: 'html', format: 'plain', data: `<div style="font-family:'Courier New',monospace">${html}</div>` }]);
-  } catch {
-    browserPrint(title, html, size); // never lose the receipt
+  if (qz) {
+    try {
+      const opts = qzSize(size);
+      const cfg = 'host' in target
+        ? qz.configs.create({ host: target.host, port: target.port }, opts)
+        : qz.configs.create(target.name, opts);
+      await qz.print(cfg, [{ type: 'html', format: 'plain', data: `<div style="font-family:'Courier New',monospace">${html}</div>` }]);
+      return;
+    } catch {
+      /* fall through to the agent / browser */
+    }
   }
+
+  // No QZ (or QZ failed): a network printer can print via the on-terminal agent using ESC/POS bytes.
+  if ('host' in target && escposHex) {
+    const ok = await printRawToNetwork(target.host, target.port, escposHex);
+    if (ok) return;
+  }
+
+  browserPrint(title, html, size); // never lose the receipt
 }
 
 /**
@@ -517,6 +541,28 @@ export async function printHtmlToPrinter(
     title,
     html,
   );
+}
+
+/** Fetch server-built ESC/POS bytes (hex) for an order's receipt/ticket, WITHOUT dispatching (the
+ *  cloud can't reach the LAN printer). The browser relays these to the Local Print Agent for a
+ *  silent network print. Returns null on failure (caller falls back to browser/QZ). tenantId is the
+ *  tenant UUID (the print endpoint parses it as a UUID). */
+export async function fetchReceiptEscposHex(
+  tenantId: string,
+  orderId: string,
+  type: 'customer' | 'kitchen_ticket' | 'waiter_copy' | 'void' = 'customer',
+  printerId = 'customer',
+): Promise<string | null> {
+  if (!tenantId || !orderId) return null;
+  try {
+    const res = await apiClient.post<{ escpos_hex?: string }>(
+      `/api/v1/${tenantId}/pos/orders/${orderId}/print`,
+      { printer_id: printerId, type, build_only: true },
+    );
+    return res?.escpos_hex ?? null;
+  } catch {
+    return null;
+  }
 }
 
 /** Send raw ESC/POS bytes (hex) to a network printer via the local agent — used when there is no QZ

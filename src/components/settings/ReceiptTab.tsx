@@ -1,7 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Bluetooth, HelpCircle, Inbox, Loader2, Lock, Network, Printer, Receipt, Save, Usb } from 'lucide-react';
+import { Bluetooth, Download, HelpCircle, Inbox, Loader2, Lock, Network, Printer, Receipt, Save, Usb } from 'lucide-react';
+
+// pos-api base — the print-agent installer download is served by pos-api, not the pos-ui host.
+const POS_API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'https://posapi.codevertexitsolutions.com';
 import { Button, Card, CardContent, CardHeader } from '@/components/ui/base';
 import { usePOSSettings, useUpdatePOSSettings } from '@/hooks/usePOSSettings';
 import { useAllKDSStations, type KDSStation } from '@/hooks/useKDS';
@@ -14,7 +17,7 @@ import { P } from '@/lib/rbac/permissions';
 import type { PrinterProfile, PrinterConnType } from '@/lib/api/settings';
 import {
   discoverPrinters, openCashDrawerProfile, requestUSBPrinter, requestBluetoothPrinter,
-  printProfileHtml, agentAvailable, type DrawerKickCode,
+  printProfileHtml, agentAvailable, type DrawerKickCode, type DiscoveredDevice,
 } from '@/lib/pos/printer-discovery';
 import { BILL_PROFILE_ID, WAITER_PROFILE_ID, paperOf } from '@/lib/pos/printer-stations';
 import { Toggle, inputClass, labelClass } from './shared';
@@ -89,6 +92,7 @@ export function ReceiptTab() {
   });
   const [profiles, setProfiles] = useState<PrinterProfile[]>([]);
   const [discovered, setDiscovered] = useState<string[]>([]);
+  const [discoveredDevices, setDiscoveredDevices] = useState<DiscoveredDevice[]>([]);
   const [discoverNotes, setDiscoverNotes] = useState<string[]>([]);
   const [discovering, setDiscovering] = useState(false);
   const [showPrinterHelp, setShowPrinterHelp] = useState(false);
@@ -142,6 +146,7 @@ export function ReceiptTab() {
       const [res, up] = await Promise.all([discoverPrinters(), agentAvailable()]);
       setAgentUp(up);
       setDiscovered((prev) => Array.from(new Set([...res.printers, ...prev])));
+      setDiscoveredDevices(res.devices ?? []);
       setDiscoverNotes(res.notes ?? (res.note ? [res.note] : []));
       if (res.printers.length) toast.success(`Detected ${res.printers.length} printer(s).`);
       else {
@@ -358,6 +363,15 @@ export function ReceiptTab() {
                 <li>
                   <span className="font-medium text-foreground">Best for network printers: install the Local Print Agent</span> on this
                   terminal. It scans this Wi-Fi/LAN and auto-lists printers, and prints to them by IP — no OS install needed.
+                  It installs as a background service that auto-starts on boot.
+                  <a
+                    className="ml-1.5 inline-flex items-center gap-1 rounded-md bg-primary px-2 py-0.5 text-primary-foreground font-semibold hover:bg-primary/90"
+                    href={`${POS_API_BASE}/api/v1/pos/print-agent/download?os=windows`}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    <Download className="h-3 w-3" /> Download Print Agent (Windows)
+                  </a>
                 </li>
                 <li>
                   <span className="font-medium text-foreground">Or add the printer to this computer</span> (Windows → Bluetooth &amp;
@@ -386,6 +400,8 @@ export function ReceiptTab() {
             const conn = connOf(p);
             const currentName = p.printer_name ?? '';
             const names = Array.from(new Set([...discovered, ...(currentName && currentName !== 'browser' ? [currentName] : [])]));
+            // Detected network printers (from the agent/backend LAN scan) that carry a structured IP.
+            const netDevices = discoveredDevices.filter((d) => d.source === 'network' && !!d.ip);
             return (
               <div key={card.id} className="rounded-xl border border-border p-4 space-y-3">
                 <div className="flex items-center justify-between gap-3">
@@ -447,7 +463,30 @@ export function ReceiptTab() {
                   </div>
                 )}
                 {conn === 'network' && (
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="space-y-2">
+                    {/* Pick a detected network printer to auto-fill its IP + port (from the agent's LAN scan). */}
+                    {netDevices.length > 0 && (
+                      <div className="space-y-1">
+                        <label className={labelClass}>Detected network printers</label>
+                        <select
+                          value=""
+                          disabled={!canEdit}
+                          onChange={(e) => {
+                            const d = netDevices[Number(e.target.value)];
+                            if (d?.ip) patchProfile(card, { printer_ip: d.ip, printer_port: d.port ?? 9100 });
+                          }}
+                          className={inputClass}
+                        >
+                          <option value="">Select a detected printer…</option>
+                          {netDevices.map((d, i) => (
+                            <option key={`${d.ip}:${d.port}:${i}`} value={i}>
+                              {d.name}{d.ip ? ` — ${d.ip}:${d.port ?? 9100}` : ''}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                    <div className="grid grid-cols-3 gap-2">
                     <div className="col-span-2 space-y-1">
                       <label className={labelClass}>Printer IP</label>
                       <input
@@ -467,6 +506,7 @@ export function ReceiptTab() {
                         disabled={!canEdit}
                         className={`${inputClass} font-mono`}
                       />
+                    </div>
                     </div>
                   </div>
                 )}

@@ -5,7 +5,7 @@ import { useKDSStations } from '@/hooks/useKDS';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { useAuthStore } from '@/store/auth';
 import { configFor, hasRealPrinter, BILL_PROFILE_ID } from '@/lib/pos/printer-stations';
-import { printProfileHtml } from '@/lib/pos/printer-discovery';
+import { printProfileHtml, fetchReceiptEscposHex } from '@/lib/pos/printer-discovery';
 import { CheckCircle2, Loader2, Printer, AlertTriangle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -82,8 +82,12 @@ export function OrderPlacedDialog({ open, orderNumber, orderId, tenantId, orgSlu
       const html = await apiClient.get<string>(`/api/v1/${tenantId}/pos/orders/${orderId}/receipt/html${q}`);
       if (printerConfigured) {
         // Configured printer → push the job straight to it (QZ Tray, incl. raw network by IP).
-        // No browser print window at all.
-        await printProfileHtml(billProfile, `Receipt ${orderNumber}`, html as string);
+        // No browser print window at all. For a NETWORK printer, also fetch server-built ESC/POS
+        // bytes so the Local Print Agent can print it silently when QZ Tray isn't installed.
+        const escposHex = billProfile?.printer_type === 'network'
+          ? await fetchReceiptEscposHex(tenantId, orderId, 'customer', BILL_PROFILE_ID)
+          : null;
+        await printProfileHtml(billProfile, `Receipt ${orderNumber}`, html as string, escposHex ?? undefined);
         handleLogout();
       } else {
         // No configured printer → DO NOT auto-open the browser print window. Ask first.
