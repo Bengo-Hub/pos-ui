@@ -231,6 +231,9 @@ export function RecentTransactionsModal({ open, onClose, orgSlug }: { open: bool
   const [tab, setTab] = useState<RecentTab>('final');
   const [page, setPage] = useState(1);
   const [confirmDelete, setConfirmDelete] = useState<{ id: string; number: string } | null>(null);
+  // REQ-001: quotation rows expand to show their saved line items (already present in the
+  // treasury list payload — no extra fetch).
+  const [expandedQuote, setExpandedQuote] = useState<string | null>(null);
   const voidOrder = useVoidOrder();
 
   const activeTab = RECENT_TABS.find((t) => t.key === tab)!;
@@ -287,18 +290,61 @@ export function RecentTransactionsModal({ open, onClose, orgSlug }: { open: bool
         <p className="text-center text-sm text-muted-foreground py-8">No {activeTab.label.toLowerCase()} transactions.</p>
       ) : isQuotation ? (
         <div className="divide-y divide-border">
-          {rows.map((q: any, i: number) => (
-            <div key={q.id ?? i} className="flex items-center justify-between gap-3 py-2.5">
-              <div className="min-w-0">
-                <p className="font-semibold text-sm truncate">
-                  {q.quotation_number || q.number || q.id?.slice(0, 8)}
-                  {q.customer_name ? <span className="text-muted-foreground font-normal"> ({q.customer_name})</span> : null}
-                </p>
-                <p className="text-[11px] text-muted-foreground">{q.quote_date || q.created_at || ''}</p>
+          {rows.map((q: any, i: number) => {
+            const qid = q.id ?? String(i);
+            const qLines: any[] = q.lines ?? [];
+            const expanded = expandedQuote === qid;
+            return (
+              <div key={qid} className="py-2.5">
+                <button
+                  className="w-full flex items-center justify-between gap-3 text-left"
+                  onClick={() => setExpandedQuote(expanded ? null : qid)}
+                  title={expanded ? 'Hide line items' : 'Show line items'}
+                >
+                  <div className="min-w-0">
+                    <p className="font-semibold text-sm truncate">
+                      {q.quote_number || q.quotation_number || q.number || q.id?.slice(0, 8)}
+                      {q.customer_name ? <span className="text-muted-foreground font-normal"> ({q.customer_name})</span> : null}
+                    </p>
+                    <p className="text-[11px] text-muted-foreground">
+                      {q.quote_date || q.created_at || ''}{qLines.length ? ` · ${qLines.length} item${qLines.length === 1 ? '' : 's'}` : ''}
+                    </p>
+                  </div>
+                  <span className="font-bold text-sm tabular-nums shrink-0">{fmt(Number(q.total ?? q.total_amount ?? 0))}</span>
+                </button>
+                {expanded && (
+                  <div className="mt-2 rounded-lg border border-border bg-accent/10 p-2">
+                    {qLines.length === 0 ? (
+                      <p className="text-xs text-muted-foreground px-1 py-1">No line items on this quotation.</p>
+                    ) : (
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="text-muted-foreground text-left">
+                            <th className="py-1 px-2 font-semibold">Item</th>
+                            <th className="py-1 px-2 font-semibold">SKU</th>
+                            <th className="py-1 px-2 font-semibold text-right">Qty</th>
+                            <th className="py-1 px-2 font-semibold text-right">Unit Price</th>
+                            <th className="py-1 px-2 font-semibold text-right">Total</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-border/60">
+                          {qLines.map((l: any) => (
+                            <tr key={l.id}>
+                              <td className="py-1 px-2">{l.description || l.name}</td>
+                              <td className="py-1 px-2 font-mono">{l.item_sku || l.sku || '—'}</td>
+                              <td className="py-1 px-2 text-right tabular-nums">{Number(l.quantity)}</td>
+                              <td className="py-1 px-2 text-right tabular-nums">{fmt(Number(l.unit_price))}</td>
+                              <td className="py-1 px-2 text-right tabular-nums font-semibold">{fmt(Number(l.line_total ?? Number(l.quantity) * Number(l.unit_price)))}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                )}
               </div>
-              <span className="font-bold text-sm tabular-nums shrink-0">{fmt(Number(q.total ?? q.total_amount ?? 0))}</span>
-            </div>
-          ))}
+            );
+          })}
         </div>
       ) : (
         <div className="divide-y divide-border">

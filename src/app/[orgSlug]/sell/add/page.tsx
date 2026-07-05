@@ -7,10 +7,10 @@
  * Reuses the existing order + catalog + client hooks and SplitPaymentModal — no new sale logic.
  */
 
-import { useState, useMemo, useCallback } from 'react';
-import { useParams, useSearchParams } from 'next/navigation';
+import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { Loader2, Minus, Plus, Search, ShoppingCart, Trash2, User, Users } from 'lucide-react';
-import { useMenuItems, useCreateOrder, useCreatePaymentIntent, usePricingTiers, type CatalogItem } from '@/hooks/usePOS';
+import { useMenuItems, useCreateOrder, useCreatePaymentIntent, usePricingTiers, useOrder, useVoidOrder, type CatalogItem } from '@/hooks/usePOS';
 import { Tag } from 'lucide-react';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { SplitPaymentModal } from '@/components/pos/split-payment-modal';
@@ -48,6 +48,7 @@ const fmt = (n: number) => `KES ${n.toLocaleString(undefined, { maximumFractionD
 
 export default function AddSalePage() {
   const params = useParams();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const orgSlug = (params?.orgSlug as string) || '';
   const outlet = useAuthStore((s) => s.outlet);
@@ -128,14 +129,49 @@ export default function AddSalePage() {
   // returns). Cashiers can raise ordinary sales/drafts but not on-account sales or quotations.
   const { can } = usePermissions();
   const canPrivileged = can('pos.orders.manage');
+  // REQ-006: cost price + margin visibility for management roles at the point of sale.
+  const canViewCost = can('pos.catalog.view_cost');
   const [quotationSaving, setQuotationSaving] = useState(false);
 
   const createOrder = useCreateOrder();
   const createIntent = useCreatePaymentIntent();
+  const voidOrder = useVoidOrder();
   const [payOrder, setPayOrder] = useState<{ id: string; number: string; total: number } | null>(null);
+
+  // ── Resume / edit an existing draft (REQ-003) ── ?order_id= comes from the Drafts page
+  // "Resume Sale" action and the All-Sales "Edit" action. The draft's lines, customer and
+  // discount are prefilled; completing it settles the SAME order (no duplicate) unless the
+  // cart was modified, in which case a replacement order is created and the stale draft is
+  // voided as superseded.
+  const resumeId = searchParams.get('order_id') || searchParams.get('draft_id') || '';
+  const resumeQ = useOrder(resumeId);
+  const [resume, setResume] = useState<{ id: string; number: string } | null>(null);
+  const [linesDirty, setLinesDirty] = useState(false);
+  useEffect(() => {
+    const o: any = resumeQ.data;
+    if (!o || !resumeId || resume?.id === o.id) return;
+    if (o.status !== 'draft' && o.status !== 'open' && o.status !== 'pending_payment') {
+      toast.error(`${o.order_number} is ${o.status} — it can no longer be resumed.`);
+      return;
+    }
+    setResume({ id: o.id, number: o.order_number });
+    setLines((o.edges?.lines ?? []).map((l: any) => ({
+      item: { id: l.catalog_item_id, sku: l.sku, name: l.name, price: l.unit_price, category: '' } as CatalogItem,
+      quantity: l.quantity,
+      unitPrice: l.unit_price,
+      priceEdited: true, // keep the draft's prices — don't let profile switching overwrite them
+    })));
+    setDiscount(Number(o.discount_total) || 0);
+    if (o.customer_name || o.customer_phone) {
+      setCustomer({ name: o.customer_name ?? '', phone: o.customer_phone ?? '', isWalkIn: !o.customer_phone } as SelectedCustomer);
+    }
+    setLinesDirty(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resumeQ.data, resumeId]);
 
   const addLine = useCallback((item: CatalogItem) => {
     let newQty = 1;
+    setLinesDirty(true);
     setLines((prev) => {
       const idx = prev.findIndex((l) => l.item.id === item.id);
       if (idx >= 0) {
@@ -152,9 +188,14 @@ export default function AddSalePage() {
       });
     }
   }, [pricingProfile, resolvePrice]);
-  const setQty = (i: number, q: number) =>
-    q <= 0 ? setLines((p) => p.filter((_, x) => x !== i)) : setLines((p) => p.map((l, x) => (x === i ? { ...l, quantity: q } : l)));
-  const setPrice = (i: number, v: number) => setLines((p) => p.map((l, x) => (x === i ? { ...l, unitPrice: Math.max(0, v), priceEdited: true } : l)));
+  const setQty = (i: number, q: number) => {
+    setLinesDirty(true);
+    return q <= 0 ? setLines((p) => p.filter((_, x) => x !== i)) : setLines((p) => p.map((l, x) => (x === i ? { ...l, quantity: q } : l)));
+  };
+  const setPrice = (i: number, v: number) => {
+    setLinesDirty(true);
+    setLines((p) => p.map((l, x) => (x === i ? { ...l, unitPrice: Math.max(0, v), priceEdited: true } : l)));
+  };
 
   const subtotal = useMemo(() => lines.reduce((s, l) => s + l.unitPrice * l.quantity, 0), [lines]);
   const taxable = Math.max(0, subtotal - discount);
@@ -217,9 +258,35 @@ export default function AddSalePage() {
       toast.error('A customer is required for a credit sale.');
       return;
     }
+    // Resuming an UNMODIFIED draft → settle the SAME order (REQ-003: the draft is
+    // reclassified to completed by the payment, never duplicated).
+    if (resume && !linesDirty) {
+      if (mode === 'draft') { toast.info('Draft unchanged.'); return; }
+      if (creditSale) {
+        createIntent.mutate(
+          { orderId: resume.id, tenderMethod: 'on_account', amount: total },
+          {
+            onSuccess: () => { toast.success(`Sale posted on account · ${fmt(total)}`); reset(); },
+            onError: async (e) => toast.error(await apiErrorMessage(e, 'Failed to post credit sale to AR.')),
+          },
+        );
+      } else {
+        setPayOrder({ id: resume.id, number: resume.number, total });
+      }
+      return;
+    }
+
     createOrder.mutate(buildPayload(), {
       onSuccess: (o: any) => {
         const id = o.id || o.order_id || '';
+        // A MODIFIED resumed draft becomes a fresh order; the stale draft is voided as
+        // superseded (best-effort — if the void needs manager approval it stays visible).
+        if (resume && id && id !== resume.id) {
+          voidOrder.mutate(
+            { orderId: resume.id, reason: `Superseded by resumed sale ${o.order_number || id}` },
+            { onError: () => toast.warning(`Could not void the original draft ${resume.number} — remove it manually.`) },
+          );
+        }
         if (mode === 'draft') {
           toast.success('Saved as draft');
           reset();
@@ -245,6 +312,12 @@ export default function AddSalePage() {
   function reset() {
     setLines([]); setDiscount(0); setNotes(''); setCustomer(WALK_IN_CUSTOMER); setCreditSale(false);
     setPartyType('customer'); setStaffId(''); setFundFromSalary(false); setMonths(1);
+    setLinesDirty(false);
+    if (resume) {
+      setResume(null);
+      // Drop ?order_id= so the resume effect can't re-prefill the finished draft.
+      router.replace(`/${orgSlug}/sell/add`);
+    }
   }
 
   // Save as Quotation: forward the cart to treasury via the pos-api proxy (treasury owns quotations;
@@ -286,8 +359,12 @@ export default function AddSalePage() {
     <div className="p-6 max-w-6xl mx-auto space-y-6">
       <div className="flex items-center gap-3">
         <ShoppingCart className="h-6 w-6 text-primary" />
-        <h1 className="text-2xl font-bold tracking-tight">{creditSale ? 'Credit Sale' : 'Add Sale'}</h1>
-        <span className="text-sm text-muted-foreground">{creditSale ? 'Sell on account — posts to customer AR' : 'Back-office sale entry'}</span>
+        <h1 className="text-2xl font-bold tracking-tight">
+          {resume ? `Resume Sale — ${resume.number}` : creditSale ? 'Credit Sale' : 'Add Sale'}
+        </h1>
+        <span className="text-sm text-muted-foreground">
+          {resume ? 'Draft prefilled — collect payment to complete it' : creditSale ? 'Sell on account — posts to customer AR' : 'Back-office sale entry'}
+        </span>
       </div>
 
       {/* Customer — rich phone search; defaults to Walk-in (credit sales require a real customer).
@@ -423,29 +500,58 @@ export default function AddSalePage() {
               <thead><tr className="border-b border-border bg-muted/30 text-muted-foreground">
                 <th className="text-left px-4 py-2.5 font-medium">Product</th>
                 <th className="text-center px-2 py-2.5 font-medium">Qty</th>
+                {canViewCost && <th className="text-right px-3 py-2.5 font-medium">Cost price</th>}
                 <th className="text-right px-3 py-2.5 font-medium">Unit price</th>
                 <th className="text-right px-4 py-2.5 font-medium">Total</th>
                 <th></th>
               </tr></thead>
               <tbody className="divide-y divide-border">
-                {lines.length === 0 && <tr><td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">Search and add products to the sale</td></tr>}
-                {lines.map((l, i) => (
-                  <tr key={l.item.id}>
-                    <td className="px-4 py-3"><div className="font-medium">{l.item.name}</div><div className="text-xs text-muted-foreground font-mono">{l.item.sku}</div></td>
-                    <td className="px-2 py-3">
-                      <div className="flex items-center justify-center gap-1">
-                        <button onClick={() => setQty(i, l.quantity - 1)} className="h-6 w-6 rounded border border-border flex items-center justify-center hover:bg-accent"><Minus className="h-3 w-3" /></button>
-                        <input value={l.quantity} onChange={(e) => setQty(i, parseInt(e.target.value) || 0)} className="w-10 text-center bg-background border border-border rounded py-1 text-sm" />
-                        <button onClick={() => setQty(i, l.quantity + 1)} className="h-6 w-6 rounded border border-border flex items-center justify-center hover:bg-accent"><Plus className="h-3 w-3" /></button>
-                      </div>
-                    </td>
-                    <td className="px-3 py-3 text-right">
-                      <input value={l.unitPrice} onChange={(e) => setPrice(i, parseFloat(e.target.value) || 0)} className="w-24 text-right bg-background border border-border rounded py-1 px-2 text-sm tabular-nums" />
-                    </td>
-                    <td className="px-4 py-3 text-right font-semibold tabular-nums">{fmt(l.unitPrice * l.quantity)}</td>
-                    <td className="px-2"><button onClick={() => setQty(i, 0)} className="text-muted-foreground hover:text-destructive"><Trash2 className="h-4 w-4" /></button></td>
-                  </tr>
-                ))}
+                {lines.length === 0 && <tr><td colSpan={canViewCost ? 6 : 5} className="px-4 py-8 text-center text-muted-foreground">Search and add products to the sale</td></tr>}
+                {lines.map((l, i) => {
+                  // REQ-001: projected on-hand stock if this sale/quotation is completed —
+                  // client-side preview only; nothing is deducted until the sale finalizes.
+                  const stockQty = (l.item as any).stock_quantity;
+                  const projected = typeof stockQty === 'number' ? stockQty - l.quantity : null;
+                  // REQ-006: supplier cost + margin — only serialized by pos-api to
+                  // pos.catalog.view_cost holders, so it's simply absent for cashiers.
+                  const cost = Number((l.item as any).cost_price ?? 0);
+                  const margin = canViewCost && cost > 0 && l.unitPrice > 0 ? ((l.unitPrice - cost) / l.unitPrice) * 100 : null;
+                  return (
+                    <tr key={l.item.id}>
+                      <td className="px-4 py-3">
+                        <div className="font-medium">{l.item.name}</div>
+                        <div className="text-xs text-muted-foreground font-mono">{l.item.sku}</div>
+                        {projected != null && (
+                          <div className={`text-[11px] mt-0.5 ${projected < 0 ? 'text-destructive font-semibold' : 'text-muted-foreground'}`}>
+                            Stock after sale: {projected}{projected < 0 ? ' — exceeds on-hand stock' : ''}
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-2 py-3">
+                        <div className="flex items-center justify-center gap-1">
+                          <button onClick={() => setQty(i, l.quantity - 1)} className="h-6 w-6 rounded border border-border flex items-center justify-center hover:bg-accent"><Minus className="h-3 w-3" /></button>
+                          <input value={l.quantity} onChange={(e) => setQty(i, parseInt(e.target.value) || 0)} className="w-10 text-center bg-background border border-border rounded py-1 text-sm" />
+                          <button onClick={() => setQty(i, l.quantity + 1)} className="h-6 w-6 rounded border border-border flex items-center justify-center hover:bg-accent"><Plus className="h-3 w-3" /></button>
+                        </div>
+                      </td>
+                      {canViewCost && (
+                        <td className="px-3 py-3 text-right text-xs tabular-nums text-muted-foreground">
+                          {cost > 0 ? (
+                            <>
+                              {fmt(cost)}
+                              {margin != null && <div className={margin < 0 ? 'text-destructive' : 'text-emerald-600'}>{margin.toFixed(0)}% margin</div>}
+                            </>
+                          ) : '—'}
+                        </td>
+                      )}
+                      <td className="px-3 py-3 text-right">
+                        <input value={l.unitPrice} onChange={(e) => setPrice(i, parseFloat(e.target.value) || 0)} className="w-24 text-right bg-background border border-border rounded py-1 px-2 text-sm tabular-nums" />
+                      </td>
+                      <td className="px-4 py-3 text-right font-semibold tabular-nums">{fmt(l.unitPrice * l.quantity)}</td>
+                      <td className="px-2"><button onClick={() => setQty(i, 0)} className="text-muted-foreground hover:text-destructive"><Trash2 className="h-4 w-4" /></button></td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -475,7 +581,7 @@ export default function AddSalePage() {
           <div className="space-y-2">
             <Button onClick={() => save('pay')} disabled={lines.length === 0 || createOrder.isPending} className="w-full min-h-12 font-bold rounded-xl gap-2">
               {createOrder.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShoppingCart className="h-4 w-4" />}
-              {creditSale ? 'Save — On Account' : 'Save & Pay'} · {fmt(total)}
+              {resume && !linesDirty ? 'Complete Sale' : creditSale ? 'Save — On Account' : 'Save & Pay'} · {fmt(total)}
             </Button>
             <Button variant="outline" onClick={() => save('draft')} disabled={lines.length === 0 || createOrder.isPending} className="w-full rounded-xl">
               Save as Draft

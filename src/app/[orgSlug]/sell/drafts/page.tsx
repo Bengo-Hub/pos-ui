@@ -38,7 +38,7 @@ export default function DraftsPage() {
             return (
               <Link
                 key={o.id}
-                href={`/${org}/orders/${o.id}`}
+                href={`/${org}/sell/add?order_id=${o.id}`}
                 className="flex items-center justify-between gap-4 px-5 py-4 hover:bg-accent/40 transition-colors"
               >
                 <div className="min-w-0">
@@ -51,7 +51,9 @@ export default function DraftsPage() {
                 </div>
                 <div className="flex items-center gap-3 shrink-0">
                   <span className="font-bold text-sm tabular-nums">KES {(o.total_amount ?? 0).toLocaleString()}</span>
-                  <span className="inline-flex items-center gap-1 text-xs font-semibold text-primary">Resume <ArrowRight className="h-3.5 w-3.5" /></span>
+                  {/* REQ-003: resumes into Add Sale with lines/customer prefilled; completing
+                      payment reclassifies THIS draft (no duplicate). */}
+                  <span className="inline-flex items-center gap-1 text-xs font-semibold text-primary">Resume Sale <ArrowRight className="h-3.5 w-3.5" /></span>
                 </div>
               </Link>
             );

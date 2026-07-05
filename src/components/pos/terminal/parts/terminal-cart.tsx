@@ -230,6 +230,16 @@ export function TerminalCart() {
                           />
                         )}
                       </div>
+                      {/* REQ-001: projected on-hand stock if this cart is completed — preview
+                          only, nothing deducts until the sale finalizes. */}
+                      {typeof item.stockQuantity === 'number' && (() => {
+                        const projected = item.stockQuantity - item.quantity;
+                        return (
+                          <div className={cn('text-[10px] font-mono mt-0.5', projected < 0 ? 'text-destructive font-semibold' : 'text-muted-foreground')}>
+                            Stock after sale: {projected}{projected < 0 ? ' — exceeds on-hand' : ''}
+                          </div>
+                        );
+                      })()}
                       {/* Manager-only cost / selling / margin row (cost masked until the eye is clicked). */}
                       {canViewCost && typeof item.costPrice === 'number' && item.costPrice > 0 && (() => {
                         const sell = item.price;
