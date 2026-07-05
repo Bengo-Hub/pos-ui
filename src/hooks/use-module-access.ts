@@ -168,11 +168,14 @@ export function useModuleAccess() {
    * Returns false when use case hasn't resolved yet (isResolved=false).
    */
   function hasModule(moduleKey: string): boolean {
-    // Outlet admin turned this whole module off (declutter to only the screens they use). Applies
-    // to every role so the sidebar and page guards agree — except CORE modules (e.g. settings),
-    // which can never be hidden or you'd lock yourself out.
-    if (posSettings?.disabled_modules?.includes(moduleKey) && !CORE_MODULE_KEYS.has(moduleKey)) return false;
+    // Platform owners / superusers are EXEMPT from a tenant's hide settings — they must always be
+    // able to see every module a tenant hid (support, oversight, config on the tenant's behalf).
+    // Checked before the tenant hide gate below.
     if (isSuperUser) return true;
+    // Tenant admin turned this whole module off (declutter to only the screens they use). Scoped to
+    // THIS tenant's non-superuser users only (never other tenants, never system-wide) — except CORE
+    // modules (e.g. settings), which can never be hidden or you'd lock yourself out.
+    if (posSettings?.disabled_modules?.includes(moduleKey) && !CORE_MODULE_KEYS.has(moduleKey)) return false;
     if (!useCase) return false; // not yet resolved — hide everything
     if (!enabledModules.includes(moduleKey as ModuleKey)) return false;
     // Overlay backend toggle flags from outlet settings.

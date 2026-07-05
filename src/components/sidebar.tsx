@@ -215,8 +215,9 @@ export function Sidebar({ open = false, onClose, collapsed = false }: SidebarPro
       items: group.items
         .filter((item) => {
           if (!hasModule(item.moduleKey)) return false;
-          // Outlet admin hid this individual sidebar item (by href) via Settings → Modules.
-          if (hiddenItems.has(item.href)) return false;
+          // Tenant admin hid this individual item (by href) via Settings → Modules. Platform owners /
+          // superusers are EXEMPT (they see everything a tenant hid); the hide is tenant-scoped only.
+          if (hiddenItems.has(item.href) && !isSuperUser && !isSuperuser && !isPlatformOwner) return false;
           // Hide items not relevant to this outlet's use case (e.g. retail back-office on hospitality).
           if (item.hideForProfiles?.includes(outletProfile)) return false;
           // Waiter role: only Tables + Shifts
