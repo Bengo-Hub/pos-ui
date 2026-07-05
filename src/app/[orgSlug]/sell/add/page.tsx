@@ -9,7 +9,7 @@
 
 import { useState, useMemo, useCallback } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
-import { Loader2, Minus, Plus, Search, ShoppingCart, Trash2 } from 'lucide-react';
+import { Loader2, Minus, Plus, Search, ShoppingCart, Trash2, User, Users } from 'lucide-react';
 import { useMenuItems, useCreateOrder, useCreatePaymentIntent, usePricingTiers, type CatalogItem } from '@/hooks/usePOS';
 import { Tag } from 'lucide-react';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
@@ -17,10 +17,16 @@ import { SplitPaymentModal } from '@/components/pos/split-payment-modal';
 import { CustomerSearch, WALK_IN_CUSTOMER, type SelectedCustomer } from '@/components/pos/customer-search';
 import { useAuthStore } from '@/store/auth';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useStaffAdmin } from '@/hooks/useStaff';
+import { FeatureLock, useFeatureUpgrade } from '@bengo-hub/shared-ui-lib/subscription';
 import { apiClient } from '@/lib/api/client';
 import { Button } from '@/components/ui/base';
+import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api/error-message';
+
+// Premium: staff credit funded from salary (ERP payroll deduction). Shown + upgrade-gated below top tier.
+const STAFF_CREDIT_FEATURE = 'staff_fund_from_salary';
 
 interface SaleLine {
   item: CatalogItem;
@@ -53,8 +59,21 @@ export default function AddSalePage() {
   // ── Customer ── (rich phone search; defaults to the seeded Walk-in Customer)
   const [customer, setCustomer] = useState<SelectedCustomer | null>(WALK_IN_CUSTOMER);
   const realCustomer = !!(customer && !customer.isWalkIn && customer.phone);
-  const custPhone = customer && !customer.isWalkIn ? customer.phone : '';
-  const custName = customer?.name ?? '';
+
+  // ── Bill-to party (credit sales): existing customer OR a staff member. Staff credit can be
+  // funded from salary (premium) — pos-api routes it to an ERP payroll deduction instead of AR.
+  const [partyType, setPartyType] = useState<'customer' | 'staff'>('customer');
+  const [staffId, setStaffId] = useState('');
+  const [fundFromSalary, setFundFromSalary] = useState(false);
+  const [months, setMonths] = useState(1);
+  const { data: staffResp } = useStaffAdmin(tenantId);
+  const staff: any[] = Array.isArray(staffResp) ? staffResp : ((staffResp as any)?.data ?? []);
+  const selectedStaff = staff.find((s: any) => s.id === staffId);
+  const staffCredit = useFeatureUpgrade(STAFF_CREDIT_FEATURE);
+
+  const staffParty = partyType === 'staff';
+  const custPhone = !staffParty && customer && !customer.isWalkIn ? customer.phone : '';
+  const custName = staffParty ? (selectedStaff?.name ?? '') : (customer?.name ?? '');
 
   // ── Pricing profile (tier) — Retail / Wholesale / custom. Switching re-prices the sale so a
   // back-office user can bill at the right profile (e.g. a wholesale order). Same tiers as the terminal.
@@ -152,7 +171,21 @@ export default function AddSalePage() {
       discountAmount: discount || undefined,
       customerPhone: custPhone || undefined,
       customerName: custName || undefined,
-      metadata: pricingProfile ? { pricing_profile: pricingProfile } : undefined,
+      metadata: (() => {
+        const md: Record<string, any> = {};
+        if (pricingProfile) md.pricing_profile = pricingProfile;
+        if (creditSale && staffParty && staffId) {
+          md.party_type = 'staff';
+          md.staff_member_id = staffId;
+          // Fund-from-salary only when entitled (the toggle is upgrade-locked otherwise);
+          // pos-api reads these keys in recordCreditSale to route the debt to ERP payroll.
+          if (fundFromSalary && !staffCredit.locked) {
+            md.fund_from_salary = true;
+            md.installment_months = Math.max(1, months);
+          }
+        }
+        return Object.keys(md).length > 0 ? md : undefined;
+      })(),
       lines: lines.map((l) => ({
         catalog_item_id: l.item.id,
         sku: l.item.sku,
@@ -173,7 +206,11 @@ export default function AddSalePage() {
       toast.error('Credit sales require manager permissions.');
       return;
     }
-    if (creditSale && !realCustomer) {
+    if (creditSale && staffParty && !staffId) {
+      toast.error('Please select a staff member.');
+      return;
+    }
+    if (creditSale && !staffParty && !realCustomer) {
       toast.error('A customer is required for a credit sale.');
       return;
     }
@@ -204,6 +241,7 @@ export default function AddSalePage() {
   }
   function reset() {
     setLines([]); setDiscount(0); setNotes(''); setCustomer(WALK_IN_CUSTOMER); setCreditSale(false);
+    setPartyType('customer'); setStaffId(''); setFundFromSalary(false); setMonths(1);
   }
 
   // Save as Quotation: forward the cart to treasury via the pos-api proxy (treasury owns quotations;
@@ -249,12 +287,79 @@ export default function AddSalePage() {
         <span className="text-sm text-muted-foreground">{creditSale ? 'Sell on account — posts to customer AR' : 'Back-office sale entry'}</span>
       </div>
 
-      {/* Customer — rich phone search; defaults to Walk-in (credit sales require a real customer). */}
+      {/* Customer — rich phone search; defaults to Walk-in (credit sales require a real customer).
+          Credit sales can instead be billed to a STAFF member, optionally funded from salary
+          (premium — shown + upgrade-gated, never hidden). */}
       <div className="bg-card border border-border rounded-2xl p-5 space-y-4">
-        <div className="space-y-2">
-          <label className="text-xs font-semibold text-muted-foreground">Customer</label>
-          <CustomerSearch value={customer} onChange={setCustomer} requireRealCustomer={creditSale} />
-        </div>
+        {creditSale && (
+          <div className="grid grid-cols-2 gap-2">
+            {([['customer', 'Customer', User], ['staff', 'Staff', Users]] as const).map(([val, label, Icon]) => (
+              <button
+                key={val}
+                type="button"
+                onClick={() => { setPartyType(val); if (val === 'customer') { setStaffId(''); setFundFromSalary(false); } }}
+                className={cn(
+                  'flex items-center justify-center gap-2 py-2 rounded-xl text-sm font-semibold border transition-colors',
+                  partyType === val ? 'bg-primary text-primary-foreground border-primary' : 'border-border text-muted-foreground hover:text-foreground',
+                )}
+              >
+                <Icon className="h-4 w-4" /> {label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {creditSale && staffParty ? (
+          <div className="space-y-3">
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-muted-foreground">
+                Staff Member <span className="text-destructive">*</span>
+              </label>
+              <select
+                value={staffId}
+                onChange={(e) => setStaffId(e.target.value)}
+                className="w-full bg-background border border-border rounded-xl py-2.5 px-3.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+              >
+                <option value="">— Select staff —</option>
+                {staff.map((s: any) => (
+                  <option key={s.id} value={s.id}>{s.name}{s.role ? ` · ${s.role}` : ''}</option>
+                ))}
+              </select>
+            </div>
+            {/* Fund from salary (premium — visible + upgrade-gated, never hidden) */}
+            <FeatureLock feature={STAFF_CREDIT_FEATURE} mode="overlay">
+              <div className="rounded-xl border border-border bg-accent/20 p-3 space-y-3">
+                <label className="flex items-center gap-2 text-sm font-semibold cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={fundFromSalary}
+                    onChange={(e) => setFundFromSalary(e.target.checked)}
+                    className="rounded"
+                  />
+                  Fund from salary (recover via payroll deductions)
+                </label>
+                {fundFromSalary && (
+                  <div>
+                    <label className="text-xs font-semibold text-muted-foreground mb-1.5 block">Spread over (payroll periods)</label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={36}
+                      value={months}
+                      onChange={(e) => setMonths(Math.max(1, parseInt(e.target.value) || 1))}
+                      className="w-28 bg-background border border-border rounded-xl py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+                    />
+                  </div>
+                )}
+              </div>
+            </FeatureLock>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            <label className="text-xs font-semibold text-muted-foreground">Customer</label>
+            <CustomerSearch value={customer} onChange={setCustomer} requireRealCustomer={creditSale} />
+          </div>
+        )}
 
         {/* Pricing profile (tier) — switch to bill this sale at Retail / Wholesale / a custom profile. */}
         {pricingTiers.length > 0 && (
