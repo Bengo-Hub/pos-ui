@@ -67,11 +67,35 @@ export default function AddSalePage() {
   const results: CatalogItem[] = catalog?.data ?? [];
   const [lines, setLines] = useState<SaleLine[]>([]);
 
-  // Switch profile → re-price every line that wasn't manually overridden.
+  // Authoritative tier price from inventory-api (same endpoint the POS terminal uses). Returns the
+  // resolved unit price for a profile, or null to fall back to the local/default price.
+  const resolvePrice = useCallback(async (itemId: string, quantity: number, profile: string): Promise<number | null> => {
+    if (!profile || !tenantId) return null; // '' = Default Price → use the item's default price
+    try {
+      const res = await apiClient.get<{ unit_price?: number }>(
+        `/api/v1/${tenantId}/pos/catalog/pricing/resolve?item_id=${encodeURIComponent(itemId)}&quantity=${quantity}&profile=${encodeURIComponent(profile)}`,
+      );
+      return res && typeof res.unit_price === 'number' && res.unit_price > 0 ? res.unit_price : null;
+    } catch {
+      return null;
+    }
+  }, [tenantId]);
+
+  // Switch profile → re-price every line that wasn't manually overridden. Optimistically use any
+  // local tier price, then confirm each from inventory-api's resolve endpoint (quantity-break aware).
   const changeProfile = useCallback((profile: string) => {
     setPricingProfile(profile);
     setLines((prev) => prev.map((l) => (l.priceEdited ? l : { ...l, unitPrice: tierPrice(l.item, profile) })));
-  }, []);
+    setLines((prev) => {
+      prev.forEach((l) => {
+        if (l.priceEdited) return;
+        resolvePrice(l.item.id, l.quantity, profile).then((p) => {
+          if (p != null) setLines((cur) => cur.map((x) => (x.item.id === l.item.id && !x.priceEdited ? { ...x, unitPrice: p } : x)));
+        });
+      });
+      return prev;
+    });
+  }, [resolvePrice]);
 
   // ── Order-level ──
   const [discount, setDiscount] = useState(0);
@@ -87,12 +111,23 @@ export default function AddSalePage() {
   const [payOrder, setPayOrder] = useState<{ id: string; number: string; total: number } | null>(null);
 
   const addLine = useCallback((item: CatalogItem) => {
+    let newQty = 1;
     setLines((prev) => {
       const idx = prev.findIndex((l) => l.item.id === item.id);
-      if (idx >= 0) return prev.map((l, i) => (i === idx ? { ...l, quantity: l.quantity + 1 } : l));
+      if (idx >= 0) {
+        newQty = prev[idx].quantity + 1;
+        return prev.map((l, i) => (i === idx ? { ...l, quantity: newQty } : l));
+      }
       return [...prev, { item, quantity: 1, unitPrice: tierPrice(item, pricingProfile) }];
     });
-  }, [pricingProfile]);
+    // Confirm the profile price from inventory-api (mirrors the terminal). Skips if the user already
+    // hand-edited this line's price.
+    if (pricingProfile) {
+      resolvePrice(item.id, newQty, pricingProfile).then((p) => {
+        if (p != null) setLines((cur) => cur.map((l) => (l.item.id === item.id && !l.priceEdited ? { ...l, unitPrice: p } : l)));
+      });
+    }
+  }, [pricingProfile, resolvePrice]);
   const setQty = (i: number, q: number) =>
     q <= 0 ? setLines((p) => p.filter((_, x) => x !== i)) : setLines((p) => p.map((l, x) => (x === i ? { ...l, quantity: q } : l)));
   const setPrice = (i: number, v: number) => setLines((p) => p.map((l, x) => (x === i ? { ...l, unitPrice: Math.max(0, v), priceEdited: true } : l)));
