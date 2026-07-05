@@ -10,7 +10,8 @@
 import { useState, useMemo, useCallback } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import { Loader2, Minus, Plus, Search, ShoppingCart, Trash2 } from 'lucide-react';
-import { useMenuItems, useCreateOrder, useCreatePaymentIntent, type CatalogItem } from '@/hooks/usePOS';
+import { useMenuItems, useCreateOrder, useCreatePaymentIntent, usePricingTiers, type CatalogItem } from '@/hooks/usePOS';
+import { Tag } from 'lucide-react';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { SplitPaymentModal } from '@/components/pos/split-payment-modal';
 import { CustomerSearch, WALK_IN_CUSTOMER, type SelectedCustomer } from '@/components/pos/customer-search';
@@ -24,6 +25,16 @@ interface SaleLine {
   item: CatalogItem;
   quantity: number;
   unitPrice: number;
+  /** True once the user manually edited this line's price — switching profile won't overwrite it. */
+  priceEdited?: boolean;
+}
+
+// Resolve an item's price for the selected pricing profile (tier). Falls back to the item's default
+// price when the profile has no own price — mirrors the POS terminal's tier resolution.
+function tierPrice(item: any, profile: string): number {
+  const prices = item?.prices && typeof item.prices === 'object' ? (item.prices as Record<string, number>) : undefined;
+  if (profile && prices && (prices[profile] ?? 0) > 0) return prices[profile];
+  return item?.price ?? 0;
 }
 
 const fmt = (n: number) => `KES ${n.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
@@ -44,11 +55,23 @@ export default function AddSalePage() {
   const custPhone = customer && !customer.isWalkIn ? customer.phone : '';
   const custName = customer?.name ?? '';
 
+  // ── Pricing profile (tier) — Retail / Wholesale / custom. Switching re-prices the sale so a
+  // back-office user can bill at the right profile (e.g. a wholesale order). Same tiers as the terminal.
+  const { data: tiersResp } = usePricingTiers();
+  const pricingTiers = tiersResp?.data ?? [];
+  const [pricingProfile, setPricingProfile] = useState<string>('');
+
   // ── Line items ──
   const [search, setSearch] = useState('');
   const { data: catalog, isFetching } = useMenuItems({ search: search || undefined, limit: 25 });
   const results: CatalogItem[] = catalog?.data ?? [];
   const [lines, setLines] = useState<SaleLine[]>([]);
+
+  // Switch profile → re-price every line that wasn't manually overridden.
+  const changeProfile = useCallback((profile: string) => {
+    setPricingProfile(profile);
+    setLines((prev) => prev.map((l) => (l.priceEdited ? l : { ...l, unitPrice: tierPrice(l.item, profile) })));
+  }, []);
 
   // ── Order-level ──
   const [discount, setDiscount] = useState(0);
@@ -67,12 +90,12 @@ export default function AddSalePage() {
     setLines((prev) => {
       const idx = prev.findIndex((l) => l.item.id === item.id);
       if (idx >= 0) return prev.map((l, i) => (i === idx ? { ...l, quantity: l.quantity + 1 } : l));
-      return [...prev, { item, quantity: 1, unitPrice: item.price ?? 0 }];
+      return [...prev, { item, quantity: 1, unitPrice: tierPrice(item, pricingProfile) }];
     });
-  }, []);
+  }, [pricingProfile]);
   const setQty = (i: number, q: number) =>
     q <= 0 ? setLines((p) => p.filter((_, x) => x !== i)) : setLines((p) => p.map((l, x) => (x === i ? { ...l, quantity: q } : l)));
-  const setPrice = (i: number, v: number) => setLines((p) => p.map((l, x) => (x === i ? { ...l, unitPrice: Math.max(0, v) } : l)));
+  const setPrice = (i: number, v: number) => setLines((p) => p.map((l, x) => (x === i ? { ...l, unitPrice: Math.max(0, v), priceEdited: true } : l)));
 
   const subtotal = useMemo(() => lines.reduce((s, l) => s + l.unitPrice * l.quantity, 0), [lines]);
   const taxable = Math.max(0, subtotal - discount);
@@ -86,6 +109,7 @@ export default function AddSalePage() {
       discountAmount: discount || undefined,
       customerPhone: custPhone || undefined,
       customerName: custName || undefined,
+      metadata: pricingProfile ? { pricing_profile: pricingProfile } : undefined,
       lines: lines.map((l) => ({
         catalog_item_id: l.item.id,
         sku: l.item.sku,
@@ -177,9 +201,40 @@ export default function AddSalePage() {
       </div>
 
       {/* Customer — rich phone search; defaults to Walk-in (credit sales require a real customer). */}
-      <div className="bg-card border border-border rounded-2xl p-5 space-y-2">
-        <label className="text-xs font-semibold text-muted-foreground">Customer</label>
-        <CustomerSearch value={customer} onChange={setCustomer} requireRealCustomer={creditSale} />
+      <div className="bg-card border border-border rounded-2xl p-5 space-y-4">
+        <div className="space-y-2">
+          <label className="text-xs font-semibold text-muted-foreground">Customer</label>
+          <CustomerSearch value={customer} onChange={setCustomer} requireRealCustomer={creditSale} />
+        </div>
+
+        {/* Pricing profile (tier) — switch to bill this sale at Retail / Wholesale / a custom profile. */}
+        {pricingTiers.length > 0 && (
+          <div className="space-y-2">
+            <label className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
+              <Tag className="h-3.5 w-3.5" /> Pricing profile
+            </label>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => changeProfile('')}
+                className={`px-3 py-1.5 rounded-lg text-sm font-semibold border transition-colors ${pricingProfile === '' ? 'bg-primary text-primary-foreground border-primary' : 'bg-card text-muted-foreground border-border hover:bg-accent'}`}
+              >
+                Default Price
+              </button>
+              {pricingTiers.map((tier) => (
+                <button
+                  key={tier.code}
+                  type="button"
+                  onClick={() => changeProfile(tier.code)}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-semibold border transition-colors ${pricingProfile === tier.code ? 'bg-primary text-primary-foreground border-primary' : 'bg-card text-muted-foreground border-border hover:bg-accent'}`}
+                >
+                  {tier.name}
+                </button>
+              ))}
+            </div>
+            <p className="text-[11px] text-muted-foreground">Switching re-prices lines you haven&apos;t manually edited.</p>
+          </div>
+        )}
       </div>
 
       <div className="grid lg:grid-cols-3 gap-6">
@@ -200,7 +255,7 @@ export default function AddSalePage() {
                     <Plus className="h-4 w-4 text-primary" />
                     <span className="flex-1 text-sm font-medium truncate">{it.name}</span>
                     <span className="text-xs text-muted-foreground font-mono">{it.sku}</span>
-                    <span className="text-sm font-bold text-primary">{fmt(it.price ?? 0)}</span>
+                    <span className="text-sm font-bold text-primary">{fmt(tierPrice(it, pricingProfile))}</span>
                   </button>
                 ))}
             </div>
