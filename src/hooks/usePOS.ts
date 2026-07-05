@@ -833,13 +833,57 @@ export function useNotifySale() {
   });
 }
 
-/** View Payments (All-Sales action) — lists an order's payments. */
+/** View Payments (All-Sales action) — lists an order's payments (detailed rows with
+ * tender name/type, note and a voidable flag). */
 export function useOrderPayments(orderId: string, enabled = true) {
   const tenantID = useTenantID();
   return useQuery({
     queryKey: ['pos-order-payments', tenantID, orderId],
     queryFn: () => apiClient.get<any>(`${basePath(tenantID)}/orders/${orderId}/payments`),
     enabled: !!tenantID && !!orderId && enabled,
+  });
+}
+
+/** Edit a recorded payment's descriptive fields — reference/note/date/tender, never the
+ * amount (void + re-record to change money). Manager-only; manual tenders only. */
+export function useUpdateOrderPayment() {
+  const tenantID = useTenantID();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { orderId: string; paymentId: string; reference?: string; note?: string; occurred_at?: string; tender_id?: string }) =>
+      apiClient.patch(`${basePath(tenantID)}/orders/${data.orderId}/payments/${data.paymentId}`, {
+        reference: data.reference, note: data.note, occurred_at: data.occurred_at, tender_id: data.tender_id,
+      }),
+    onSuccess: (_d, v) => {
+      qc.invalidateQueries({ queryKey: ['pos-order-payments', tenantID, v.orderId] });
+      qc.invalidateQueries({ queryKey: ['pos-orders'] });
+    },
+  });
+}
+
+/** Void (soft-delete) a recorded payment — reversing treasury entry, paid totals recomputed,
+ * completed order reopens if no longer covered. Manager-only; manual tenders only. */
+export function useVoidOrderPayment() {
+  const tenantID = useTenantID();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { orderId: string; paymentId: string; reason?: string }) =>
+      apiClient.delete(`${basePath(tenantID)}/orders/${data.orderId}/payments/${data.paymentId}`, {
+        data: { reason: data.reason },
+      }),
+    onSuccess: (_d, v) => {
+      qc.invalidateQueries({ queryKey: ['pos-order-payments', tenantID, v.orderId] });
+      qc.invalidateQueries({ queryKey: ['pos-orders'] });
+    },
+  });
+}
+
+/** Send the customer a payment-received confirmation for one payment (View Payments action). */
+export function useNotifyOrderPayment() {
+  const tenantID = useTenantID();
+  return useMutation({
+    mutationFn: (data: { orderId: string; paymentId: string }) =>
+      apiClient.post(`${basePath(tenantID)}/orders/${data.orderId}/payments/${data.paymentId}/notify`, {}),
   });
 }
 

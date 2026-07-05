@@ -161,13 +161,16 @@ export default function AddSalePage() {
   const tax = taxable * taxRate;
   const total = taxable + tax;
 
-  function buildPayload(subtype: 'retail' | 'draft') {
+  function buildPayload() {
     return {
       outletId,
       // Tag sales entered here as back-office so the All-Sales "Sources" filter and the
       // separate POS-only list can distinguish them from POS-terminal sales.
       source: 'back_office' as const,
-      orderSubtype: subtype === 'draft' ? ('draft' as any) : ('retail' as const),
+      // Always 'retail' — "draft" is an order STATUS, not a subtype (retail orders start in
+      // draft status until paid). Sending order_subtype:'draft' used to 500 (DEF-001); the
+      // backend now normalizes it, but send the correct value in the first place.
+      orderSubtype: 'retail' as const,
       discountAmount: discount || undefined,
       customerPhone: custPhone || undefined,
       customerName: custName || undefined,
@@ -214,7 +217,7 @@ export default function AddSalePage() {
       toast.error('A customer is required for a credit sale.');
       return;
     }
-    createOrder.mutate(buildPayload(mode === 'draft' ? 'draft' : 'retail'), {
+    createOrder.mutate(buildPayload(), {
       onSuccess: (o: any) => {
         const id = o.id || o.order_id || '';
         if (mode === 'draft') {

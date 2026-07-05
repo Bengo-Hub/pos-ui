@@ -193,7 +193,9 @@ export const ROLE_PERMISSIONS: Record<string, Permission[]> = {
     P.PHARMACY_ADD, P.PHARMACY_VIEW, P.PHARMACY_CHANGE, P.PHARMACY_MANAGE,
   ],
   cashier: [
-    P.ORDERS_ADD, P.ORDERS_VIEW, P.ORDERS_VIEW_OWN, P.ORDERS_CHANGE_OWN,
+    // view_own (NOT view): cashiers see only their OWN sales/drafts ("My Sales", REQ-007).
+    // Server-side enforcement lives in pos-api ListOrders/GetOrder; mirrors the backend seed.
+    P.ORDERS_ADD, P.ORDERS_VIEW_OWN, P.ORDERS_CHANGE_OWN,
     // Void: cashier may INITIATE a void; not a manager override role, so it still requires
     // manager approval (card / PIN / one-time code). Mirrors the backend seed.
     P.ORDERS_VOID,

@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Calendar } from 'lucide-react';
-import { format, startOfMonth, startOfDay, subDays, startOfYear } from 'date-fns';
+import { format, startOfMonth, startOfDay, startOfWeek, subDays, startOfYear } from 'date-fns';
 import { cn } from '@/lib/utils';
 
 export interface DateRange {
@@ -12,13 +12,15 @@ export interface DateRange {
 
 const fmt = (d: Date) => format(d, 'yyyy-MM-dd');
 
-// Quick presets mirroring the GoDigital date-range dropdown.
+// Quick presets — the REQ-002 period modes (Day / Week / Month / Year) plus the rolling
+// windows, with the explicit Custom from/to pickers below.
 const PRESETS: { label: string; range: () => DateRange }[] = [
   { label: 'Today', range: () => ({ from: fmt(startOfDay(new Date())), to: fmt(new Date()) }) },
-  { label: 'Last 7 days', range: () => ({ from: fmt(subDays(new Date(), 6)), to: fmt(new Date()) }) },
-  { label: 'Last 30 days', range: () => ({ from: fmt(subDays(new Date(), 29)), to: fmt(new Date()) }) },
+  { label: 'This week', range: () => ({ from: fmt(startOfWeek(new Date(), { weekStartsOn: 1 })), to: fmt(new Date()) }) },
   { label: 'This month', range: () => ({ from: fmt(startOfMonth(new Date())), to: fmt(new Date()) }) },
   { label: 'This year', range: () => ({ from: fmt(startOfYear(new Date())), to: fmt(new Date()) }) },
+  { label: 'Last 7 days', range: () => ({ from: fmt(subDays(new Date(), 6)), to: fmt(new Date()) }) },
+  { label: 'Last 30 days', range: () => ({ from: fmt(subDays(new Date(), 29)), to: fmt(new Date()) }) },
 ];
 
 /**
@@ -63,6 +65,9 @@ export function DateRangePicker({
                   {p.label}
                 </button>
               ))}
+            </div>
+            <div className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider pt-2 border-t border-border">
+              Custom range
             </div>
             <div className="grid grid-cols-2 gap-2">
               <label className="text-[11px] font-semibold text-muted-foreground">

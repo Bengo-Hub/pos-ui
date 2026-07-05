@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { PrintReceiptButton } from '@/components/pos/print-receipt-button';
 import { useNotifySale } from '@/hooks/usePOS';
+import { usePermissions, P } from '@/hooks/usePermissions';
 
 interface SalesActionsMenuProps {
   order: any;
@@ -34,6 +35,16 @@ export function SalesActionsMenu({ order, orgSlug, onView, onEditShipping, onVie
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const notify = useNotifySale();
+
+  // Permission gating — items the user cannot act on are HIDDEN (not disabled). The
+  // backend enforces the same permissions, so this is UX, not the security boundary.
+  const { can, canAny } = usePermissions();
+  const canView = canAny([P.ORDERS_VIEW, P.ORDERS_VIEW_OWN]);
+  const canChange = canAny([P.ORDERS_CHANGE_OWN, P.ORDERS_CHANGE, P.ORDERS_MANAGE]);
+  const canDelete = canAny([P.ORDERS_VOID, P.ORDERS_MANAGE]);
+  const canViewPayments = canAny([P.PAYMENTS_VIEW, P.PAYMENTS_VIEW_OWN, P.PAYMENTS_MANAGE]);
+  const canReturn = canChange; // return initiation mirrors the backend change_own/change/manage gate
+  const canNotify = can(P.ORDERS_MANAGE);
 
   useEffect(() => {
     if (!open) return;
@@ -81,30 +92,32 @@ export function SalesActionsMenu({ order, orgSlug, onView, onEditShipping, onVie
 
       {open && (
         <div className="absolute left-0 top-full mt-1 z-50 w-52 rounded-xl border border-border bg-card shadow-xl py-1.5">
-          <button className={item} onClick={() => { onView(order); close(); }}><Eye className="h-4 w-4 text-muted-foreground" /> View</button>
-          <button className={item} onClick={() => { router.push(`/${orgSlug}/sell/add?order_id=${order.id}`); close(); }}><Pencil className="h-4 w-4 text-muted-foreground" /> Edit</button>
-          <button className={item} onClick={() => { onDelete(order); close(); }}><Trash2 className="h-4 w-4 text-destructive" /> Delete</button>
-          <button className={item} onClick={() => { onEditShipping(order); close(); }}><Truck className="h-4 w-4 text-muted-foreground" /> Edit Shipping</button>
+          {canView && <button className={item} onClick={() => { onView(order); close(); }}><Eye className="h-4 w-4 text-muted-foreground" /> View</button>}
+          {canChange && <button className={item} onClick={() => { router.push(`/${orgSlug}/sell/add?order_id=${order.id}`); close(); }}><Pencil className="h-4 w-4 text-muted-foreground" /> Edit</button>}
+          {canDelete && <button className={item} onClick={() => { onDelete(order); close(); }}><Trash2 className="h-4 w-4 text-destructive" /> Delete</button>}
+          {canChange && <button className={item} onClick={() => { onEditShipping(order); close(); }}><Truck className="h-4 w-4 text-muted-foreground" /> Edit Shipping</button>}
 
           {/* Print pipeline — the receipt document reused for invoice / packing slip / delivery note. */}
-          <div className="px-1">
-            <PrintReceiptButton orderId={order.id} label="Print Invoice" variant="ghost" className="w-full !justify-start gap-2.5 !px-2 h-9 text-sm font-normal" />
-            <PrintReceiptButton orderId={order.id} label="Packing Slip" variant="ghost" className="w-full !justify-start gap-2.5 !px-2 h-9 text-sm font-normal" />
-            {isDelivery && (
-              <PrintReceiptButton orderId={order.id} label="Delivery Note" variant="ghost" className="w-full !justify-start gap-2.5 !px-2 h-9 text-sm font-normal" />
-            )}
-          </div>
+          {canView && (
+            <div className="px-1">
+              <PrintReceiptButton orderId={order.id} label="Print Invoice" variant="ghost" className="w-full !justify-start gap-2.5 !px-2 h-9 text-sm font-normal" />
+              <PrintReceiptButton orderId={order.id} label="Packing Slip" variant="ghost" className="w-full !justify-start gap-2.5 !px-2 h-9 text-sm font-normal" />
+              {isDelivery && (
+                <PrintReceiptButton orderId={order.id} label="Delivery Note" variant="ghost" className="w-full !justify-start gap-2.5 !px-2 h-9 text-sm font-normal" />
+              )}
+            </div>
+          )}
 
           <div className="my-1 border-t border-border" />
 
-          <button className={item} onClick={() => { onViewPayments(order); close(); }}><CreditCard className="h-4 w-4 text-muted-foreground" /> View Payments</button>
-          {isFinal && (
+          {canViewPayments && <button className={item} onClick={() => { onViewPayments(order); close(); }}><CreditCard className="h-4 w-4 text-muted-foreground" /> View Payments</button>}
+          {isFinal && canReturn && (
             <button className={item} onClick={() => { router.push(`/${orgSlug}/returns?invoice=${encodeURIComponent(order.order_number)}`); close(); }}>
               <RotateCcw className="h-4 w-4 text-muted-foreground" /> Sell Return
             </button>
           )}
-          <button className={item} onClick={copyInvoiceUrl}><Link2 className="h-4 w-4 text-muted-foreground" /> Invoice URL</button>
-          <button className={item} onClick={sendNotification}><Mail className="h-4 w-4 text-muted-foreground" /> New Sale Notification</button>
+          {canView && <button className={item} onClick={copyInvoiceUrl}><Link2 className="h-4 w-4 text-muted-foreground" /> Invoice URL</button>}
+          {canNotify && <button className={item} onClick={sendNotification}><Mail className="h-4 w-4 text-muted-foreground" /> New Sale Notification</button>}
         </div>
       )}
     </div>

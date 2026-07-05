@@ -183,8 +183,8 @@ class ApiClient {
     return this.instance.patch<T>(url, data, config).then((res: AxiosResponse<T>) => res.data);
   }
 
-  public delete<T>(url: string): Promise<T> {
-    return this.instance.delete<T>(url).then((res: AxiosResponse<T>) => res.data);
+  public delete<T>(url: string, config?: { data?: any; headers?: Record<string, string> }): Promise<T> {
+    return this.instance.delete<T>(url, config).then((res: AxiosResponse<T>) => res.data);
   }
 }
 
