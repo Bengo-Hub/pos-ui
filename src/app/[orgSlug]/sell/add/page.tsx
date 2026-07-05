@@ -167,6 +167,12 @@ export default function AddSalePage() {
 
   function save(mode: 'pay' | 'draft') {
     if (lines.length === 0) return;
+    // ?credit=1 can pre-set creditSale even for a user whose checkbox is hidden — hard-stop here
+    // too (the server also 403s an on_account intent without pos.orders.manage).
+    if (creditSale && !canPrivileged) {
+      toast.error('Credit sales require manager permissions.');
+      return;
+    }
     if (creditSale && !realCustomer) {
       toast.error('A customer is required for a credit sale.');
       return;
