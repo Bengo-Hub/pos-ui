@@ -251,6 +251,9 @@ export interface TerminalContextValue {
   setCartOpen: (v: boolean) => void;
   parkedOpen: boolean;
   setParkedOpen: (v: boolean) => void;
+  /** Hospitality Parked Items (set-aside/upsell) panel. */
+  heldItemsOpen: boolean;
+  setHeldItemsOpen: (v: boolean) => void;
 
   modifierItem: MenuItem | null;
   setModifierItem: (i: MenuItem | null) => void;
@@ -403,6 +406,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
   // Parked sales (suspend/resume): a parked sale is persisted as a draft order; resuming opens its
   // payment modal, using resumeTotal to override the (now-empty) cart total.
   const [parkedOpen, setParkedOpen] = useState(false);
+  const [heldItemsOpen, setHeldItemsOpen] = useState(false);
   const [resumeTotal, setResumeTotal] = useState<number | null>(null);
 
   // Void order modal
@@ -1285,6 +1289,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
     expenseOpen, setExpenseOpen, recentOpen, setRecentOpen, registerOpen, setRegisterOpen,
     sellReturnOpen, setSellReturnOpen, calcOpen, setCalcOpen, cartOpen, setCartOpen,
     parkedOpen, setParkedOpen,
+    heldItemsOpen, setHeldItemsOpen,
     modifierItem, setModifierItem,
     variantItem, setVariantItem, handleVariantChosen,
     voidOpen, setVoidOpen, voidOrderMutateAsync: voidOrder.mutateAsync, setCurrentOrderId, setCurrentOrderNumber,

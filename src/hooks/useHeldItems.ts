@@ -52,24 +52,36 @@ export function useHeldItems(status: 'held' | 'claimed' | 'voided' = 'held', ena
   });
 }
 
-/** Claim a held item for a new customer (optionally into their order). */
+/**
+ * Claim a held item INTO an active order — the backend appends a real line to that order and
+ * bumps its totals (no KDS ticket: the item is already made). claimedOrderId is required.
+ */
 export function useClaimHeldItem() {
   const tenantID = useTenantID();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, claimedOrderId }: { id: string; claimedOrderId?: string }) =>
-      apiClient.post(`${base(tenantID)}/held-items/${id}/claim`, { claimed_order_id: claimedOrderId }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['held-items'] }),
+    mutationFn: ({ id, claimedOrderId, reason }: { id: string; claimedOrderId: string; reason?: string }) =>
+      apiClient.post(`${base(tenantID)}/held-items/${id}/claim`, { claimed_order_id: claimedOrderId, reason }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['held-items'] });
+      // The target order gained a line + new totals — refresh order lists and any open bill views.
+      qc.invalidateQueries({ queryKey: ['pos-orders'] });
+      qc.invalidateQueries({ queryKey: ['orders'] });
+    },
   });
 }
 
-/** Void an unclaimed held item (e.g. at shift close). */
+/**
+ * Void an unclaimed held item (the end-of-shift last resort). Manager-gated on the backend:
+ * non-manager callers must pass an approvalToken from a step-up for action "held_item.void" —
+ * a 403 {code:"approval_required"} response means open the manager PIN dialog.
+ */
 export function useVoidHeldItem() {
   const tenantID = useTenantID();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, reason }: { id: string; reason?: string }) =>
-      apiClient.post(`${base(tenantID)}/held-items/${id}/void`, { reason }),
+    mutationFn: ({ id, reason, approvalToken }: { id: string; reason?: string; approvalToken?: string }) =>
+      apiClient.post(`${base(tenantID)}/held-items/${id}/void`, { reason, approval_token: approvalToken }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['held-items'] }),
   });
 }

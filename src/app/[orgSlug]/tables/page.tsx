@@ -656,15 +656,25 @@ function MyBillsTab({ orgSlug }: { orgSlug: string }) {
           tenantId={user?.tenant_id ?? ''}
           tenantSlug={orgSlug}
           isHospitality={isHospitality}
-          orderLines={(splitOrder.edges?.lines ?? splitOrder.lines ?? []).map((l: any) => ({
-            id: l.id,
-            name: l.name ?? l.item_name ?? 'Item',
-            quantity: l.quantity ?? 1,
-            unitPrice: l.unit_price ?? 0,
-            totalPrice: l.total_price ?? l.line_total ?? (l.unit_price ?? 0) * (l.quantity ?? 1),
-            seat: l.metadata?.seat, // pre-populate split from seat tagged at order-entry
-          }))}
+          orderLines={(splitOrder.edges?.lines ?? splitOrder.lines ?? [])
+            // Soft-voided lines (removed / set aside) are no longer payable — keep them out of the split.
+            .filter((l: any) => l.voided_qty == null)
+            .map((l: any) => ({
+              id: l.id,
+              name: l.name ?? l.item_name ?? 'Item',
+              quantity: l.quantity ?? 1,
+              unitPrice: l.unit_price ?? 0,
+              totalPrice: l.total_price ?? l.line_total ?? (l.unit_price ?? 0) * (l.quantity ?? 1),
+              seat: l.metadata?.seat, // pre-populate split from seat tagged at order-entry
+            }))}
           onPaymentConfirmed={() => {
+            setSplitOrder(null);
+            queryClient.invalidateQueries({ queryKey: ['pos-orders'] });
+            queryClient.invalidateQueries({ queryKey: ['pos-tables'] });
+          }}
+          onLinesChanged={() => {
+            // The order's lines changed under this snapshot — refresh and reopen Split for the
+            // fresh line list rather than splitting against stale items.
             setSplitOrder(null);
             queryClient.invalidateQueries({ queryKey: ['pos-orders'] });
             queryClient.invalidateQueries({ queryKey: ['pos-tables'] });

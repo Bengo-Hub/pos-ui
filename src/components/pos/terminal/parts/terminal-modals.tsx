@@ -16,6 +16,7 @@ import { SplitPaymentModal } from '@/components/pos/split-payment-modal';
 import { VoidOrderModal } from '@/components/pos/void-order-modal';
 import { AddExpenseModal } from '@/components/pos/add-expense-modal';
 import { ParkedSalesModal } from '@/components/pos/parked-sales-modal';
+import { HeldItemsPanel } from '@/components/pos/held-items-panel';
 import { ReceiptPreview } from '@/components/pos/receipt-preview';
 import { CalculatorOverlay } from '@/components/pos/calculator-overlay';
 import { ManagerPinDialog } from '@/components/pos/manager-pin-dialog';
@@ -25,17 +26,17 @@ import { LinePriceModal } from '@/components/pos/line-price-modal';
 import { OrderPlacedDialog } from '@/components/pos/order-placed-dialog';
 import { RegisterDetailsModal, RecentTransactionsModal, SellReturnModal } from '@/components/pos/terminal/toolbar-modals';
 import { resolveBillProfile } from '@/lib/pos/printer-stations';
+import { VOID_SELF_ROLES } from '@/lib/pos/rbac-constants';
 import { useTerminal } from '@/components/pos/terminal/terminal-context';
 import { AlertTriangle, Calculator } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
-
-// Roles allowed to void without a separate manager approval.
-const VOID_SELF_ROLES = ['admin', 'manager', 'pos_admin', 'store_manager', 'owner', 'super_admin', 'superuser'];
+import { useQueryClient } from '@tanstack/react-query';
 
 export function TerminalModals() {
   const t = useTerminal();
   const { cfg } = t;
+  const queryClient = useQueryClient();
 
   // Manager-PIN step-up state for voiding an order when the cashier is not a manager.
   const [pendingVoidReason, setPendingVoidReason] = useState<string | null>(null);
@@ -69,6 +70,31 @@ export function TerminalModals() {
       )}
 
       {t.parkedOpen && <ParkedSalesModal onClose={() => t.setParkedOpen(false)} onResume={t.handleResumeParked} />}
+
+      {/* Hospitality Parked Items (set-aside/upsell pool) — claim into any active bill or void
+          with manager approval. Same panel the My Bills tab and shift-close guard use. */}
+      {t.heldItemsOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => t.setHeldItemsOpen(false)}>
+          <div
+            className="bg-card rounded-2xl border border-border shadow-2xl w-full max-w-md max-h-[80vh] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-4 pt-4 pb-3 border-b border-border flex items-center justify-between">
+              <h3 className="text-base font-bold">Parked Items</h3>
+              <button
+                onClick={() => t.setHeldItemsOpen(false)}
+                className="h-8 w-8 rounded-lg flex items-center justify-center hover:bg-accent"
+                aria-label="Close"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="p-4 overflow-y-auto min-h-0">
+              <HeldItemsPanel />
+            </div>
+          </div>
+        </div>
+      )}
 
       {t.variantItem && (
         <VariantPickerModal
@@ -104,6 +130,13 @@ export function TerminalModals() {
         orderLines={t.currentOrderLines}
         isHospitality={t.isHospitality}
         onPaymentConfirmed={t.handlePaymentConfirmed}
+        onLinesChanged={() => {
+          // A line was replaced — the snapshot in currentOrderLines is stale. Close the split so
+          // it reopens against the refreshed order.
+          t.setPaymentOpen(false);
+          t.setResumeTotal(null);
+          queryClient.invalidateQueries({ queryKey: ['pos-orders'] });
+        }}
       />
 
       <VoidOrderModal

@@ -1,8 +1,10 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Users, SplitSquareHorizontal, CreditCard, Layers, Minus, Plus, X, ListOrdered, Printer, Loader2 } from 'lucide-react';
+import { Users, SplitSquareHorizontal, CreditCard, Layers, Minus, Plus, X, ListOrdered, Printer, Loader2, Repeat } from 'lucide-react';
+import { toast } from 'sonner';
 import { POSPaymentModal } from './payment-modal';
+import { ReplaceItemDialog, type ReplaceableLine } from './replace-item-dialog';
 import { createSplits, settleSplit, splitReceiptUrl, type CreateSplitInput } from '@/lib/api/bill-splits';
 import { apiClient } from '@/lib/api/client';
 
@@ -39,6 +41,8 @@ interface SplitPaymentModalProps {
   isHospitality?: boolean;
   customerEmail?: string;
   onPaymentConfirmed: () => void;
+  /** Called after a line is replaced (set aside + swapped) so the caller refetches orderLines. */
+  onLinesChanged?: () => void;
 }
 
 export function SplitPaymentModal({
@@ -54,6 +58,7 @@ export function SplitPaymentModal({
   isHospitality = false,
   customerEmail,
   onPaymentConfirmed,
+  onLinesChanged,
 }: SplitPaymentModalProps) {
   const [mode, setMode] = useState<SplitMode>('full');
   const [peopleCount, setPeopleCount] = useState(2);
@@ -72,6 +77,8 @@ export function SplitPaymentModal({
   const [itemSplitPayer, setItemSplitPayer] = useState<number | null>(null); // guest index (1-based)
   const [paidGuests, setPaidGuests] = useState<Set<number>>(new Set());
   const [cashGiven, setCashGiven] = useState('');
+  // Replace-item flow (hospitality): set the original aside into Parked Items + swap in a new item.
+  const [replacingLine, setReplacingLine] = useState<ReplaceableLine | null>(null);
 
   // Best-effort server-side persistence of splits (reporting only — never blocks payment).
   // splitIdsRef[i] holds the BillSplit id for portion i of the active layout; createdRef guards
@@ -550,6 +557,18 @@ export function SplitPaymentModal({
                     <span className="text-xs font-semibold shrink-0 w-16 text-right">
                       {fmt(line.totalPrice)}
                     </span>
+                    {/* Customer changed their mind before serving → park the original (upsell pool)
+                        and swap in the new item. Hidden once this line's guest already paid. */}
+                    {isHospitality && !paidGuests.has(lineAssignments[i]) && (
+                      <button
+                        type="button"
+                        title="Replace item (original goes to Parked Items)"
+                        onClick={() => setReplacingLine({ id: line.id, name: line.name, quantity: line.quantity, unitPrice: line.unitPrice })}
+                        className="h-7 w-7 shrink-0 rounded-lg border border-border flex items-center justify-center text-muted-foreground hover:text-primary hover:border-primary/40 transition-colors"
+                      >
+                        <Repeat className="h-3.5 w-3.5" />
+                      </button>
+                    )}
                     <select
                       value={lineAssignments[i]}
                       onChange={(e) => {
@@ -686,6 +705,22 @@ export function SplitPaymentModal({
           )}
         </div>
       </div>
+
+      {/* Replace-item flow: original line → Parked Items, replacement → kitchen. On completion the
+          line list changed, so guest assignments no longer line up — reset them and tell the caller
+          to refetch orderLines. */}
+      <ReplaceItemDialog
+        open={replacingLine !== null}
+        onClose={() => setReplacingLine(null)}
+        orderId={orderId}
+        line={replacingLine}
+        onDone={() => {
+          setLineAssignments(orderLines.map(() => 0));
+          setPaidGuests(new Set());
+          toast.info('Items changed — re-assign guests for the split.');
+          onLinesChanged?.();
+        }}
+      />
     </div>
   );
 }

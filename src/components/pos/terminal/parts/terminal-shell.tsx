@@ -68,6 +68,7 @@ export function TerminalShell() {
           showCalculator={cfg.showCalculator}
           onCalculator={() => t.setCalcOpen(true)}
           onParkedSales={() => t.setParkedOpen(true)}
+          onHeldItems={() => t.setHeldItemsOpen(true)}
           onAddExpense={() => t.setExpenseOpen(true)}
           onRecentTransactions={() => t.setRecentOpen(true)}
           onRegisterDetails={() => t.setRegisterOpen(true)}

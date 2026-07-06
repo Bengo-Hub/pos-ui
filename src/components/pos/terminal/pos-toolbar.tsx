@@ -11,11 +11,12 @@
 import { cn } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
 import {
-  Calculator, ClipboardList, Inbox, PauseCircle, Receipt, RotateCcw, Wallet, Wrench,
+  Calculator, ClipboardList, Inbox, PackageOpen, PauseCircle, Receipt, RotateCcw, Wallet, Wrench,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { TerminalProfile } from '@/lib/use-case-config';
 import { useCashDrawer } from '@/hooks/useCashDrawer';
+import { useHeldItems } from '@/hooks/useHeldItems';
 
 export interface PosToolbarProps {
   orgSlug: string;
@@ -26,6 +27,8 @@ export interface PosToolbarProps {
   showCalculator?: boolean;
   onCalculator: () => void;
   onParkedSales: () => void;
+  /** Open the hospitality Parked Items (set-aside/upsell) panel. */
+  onHeldItems?: () => void;
   onAddExpense: () => void;
   /** Open the Recent Transactions modal (instead of navigating to All Sales). */
   onRecentTransactions: () => void;
@@ -45,11 +48,14 @@ interface ToolbarBtn {
 
 export function PosToolbar({
   orgSlug, profile, canRegister = true, showCalculator = false,
-  onCalculator, onParkedSales, onAddExpense, onRecentTransactions, onRegisterDetails, onSellReturn,
+  onCalculator, onParkedSales, onHeldItems, onAddExpense, onRecentTransactions, onRegisterDetails, onSellReturn,
 }: PosToolbarProps) {
   const router = useRouter();
   const go = (path: string) => router.push(`/${orgSlug}${path}`);
   const isRetailish = profile === 'retail' || profile === 'pharmacy' || profile === 'services';
+  const isHospitality = profile === 'hospitality' || profile === 'quick_service';
+  // Parked (set-aside) item count for the hospitality badge — only fetched where the button shows.
+  const { data: heldItems = [] } = useHeldItems('held', isHospitality && !!onHeldItems);
 
   // Cash drawer manual open — only roles that handle the drawer (same gate as Register Details).
   const { canOpen: canOpenDrawer, openDrawer } = useCashDrawer();
@@ -68,6 +74,14 @@ export function PosToolbar({
     { key: 'drawer',   label: 'Open Drawer',         icon: Inbox,         onClick: handleOpenDrawer, show: canRegister && canOpenDrawer },
     { key: 'calc',     label: 'Calculator',          icon: Calculator,    onClick: onCalculator, show: showCalculator },
     { key: 'suspended',label: 'Suspended Sales',     icon: PauseCircle,   onClick: onParkedSales, show: isRetailish },
+    // Hospitality upsell pool: items set aside on a replace, claimable into any active bill.
+    {
+      key: 'held',
+      label: heldItems.length > 0 ? `Parked Items (${heldItems.length})` : 'Parked Items',
+      icon: PackageOpen,
+      onClick: () => onHeldItems?.(),
+      show: isHospitality && !!onHeldItems,
+    },
     { key: 'expense',  label: 'Add Expense',         icon: Receipt,       onClick: onAddExpense, show: true },
     { key: 'repair',   label: 'Repair',              icon: Wrench,        onClick: () => go('/repair'), show: isRetailish },
   ];

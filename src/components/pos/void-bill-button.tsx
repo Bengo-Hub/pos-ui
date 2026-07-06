@@ -8,10 +8,7 @@ import { usePermissions, P } from '@/hooks/usePermissions';
 import { useAuthStore } from '@/store/auth';
 import { VoidOrderModal } from '@/components/pos/void-order-modal';
 import { VoidApprovalDialog, type VoidApproval } from '@/components/pos/void-approval-dialog';
-
-// Roles allowed to void a bill WITHOUT a manager step-up. Everyone else who holds pos.orders.void
-// (e.g. cashiers) must get a manager PIN/QR approval first. Kept in sync with the terminal flow.
-const VOID_SELF_ROLES = ['admin', 'manager', 'pos_admin', 'store_manager', 'owner', 'super_admin', 'superuser'];
+import { VOID_SELF_ROLES } from '@/lib/pos/rbac-constants';
 
 // Bill states that can still be voided. Paid/closed bills go through Returns/Refunds instead;
 // already cancelled/voided bills are terminal.
