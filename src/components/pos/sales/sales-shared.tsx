@@ -20,6 +20,8 @@ export const prettyMethod = (m: string) =>
 export const PAYMENT_STATUSES = [
   { value: '', label: 'All' }, { value: 'paid', label: 'Paid' },
   { value: 'due', label: 'Due' }, { value: 'partial', label: 'Partial' },
+  { value: 'overdue', label: 'Overdue' }, { value: 'refunded', label: 'Refunded' },
+  { value: 'voided', label: 'Voided' }, { value: 'cancelled', label: 'Cancelled' },
 ];
 
 export const SHIPPING_STATUSES = [
@@ -35,6 +37,7 @@ export const SOURCES = [
 export function payStatusBadge(s: string) {
   if (s === 'paid') return <Badge variant="success">Paid</Badge>;
   if (s === 'partial') return <Badge variant="warning">Partial</Badge>;
+  if (s === 'overdue') return <Badge variant="error">Overdue</Badge>;
   if (s === 'refunded' || s === 'voided' || s === 'cancelled') return <Badge variant="error">{s}</Badge>;
   return <Badge variant="default">Due</Badge>;
 }
