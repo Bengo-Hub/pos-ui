@@ -24,6 +24,7 @@ import { usePathname, useParams } from 'next/navigation';
 import { useNotificationStream } from '@/hooks/use-notification-stream';
 import { useAuthStore } from '@/store/auth';
 import { apiClient } from '@/lib/api/client';
+import { resolveActiveOutlet } from '@/lib/auth/outlet-resolver';
 
 /**
  * Client-side belt-and-suspenders for the tenant manifest link. The authoritative
@@ -91,6 +92,44 @@ function CatalogPrewarm() {
     })();
     return () => { cancelled = true; };
   }, [tenantID, isOnline, queryClient]);
+  return null;
+}
+
+/**
+ * OutletContextHealer — repairs SSO sessions whose outlet context never resolved.
+ *
+ * Root cause of "sidebar items fail to load after SSO login": logout clears the store's
+ * outlet but deliberately KEEPS `pos-selected-outlet-id` in localStorage (pin-login
+ * auto-select). The SSO callback then saw the leftover key and skipped the outlet
+ * selector WITHOUT hydrating the store — outlet.use_case stayed null, useModuleAccess
+ * never resolved, and the sidebar rendered its skeleton forever. PIN login always calls
+ * setOutlet with a full outlet, which is why it worked.
+ *
+ * Whenever an authenticated non-terminal session has no outlet use_case, resolve the
+ * active outlet from the API (last-used → single → HQ → first) and hydrate the store.
+ * Also self-heals already-stuck sessions without forcing a re-login.
+ */
+function OutletContextHealer() {
+  const status = useAuthStore((s) => s.status);
+  const isTerminalSession = useAuthStore((s) => s.isTerminalSession);
+  const outletUseCase = useAuthStore((s) => s.outlet?.use_case);
+  const outletId = useAuthStore((s) => s.outlet?.id);
+  const tenantID = useAuthStore((s) => (s.user as any)?.tenant_id ?? '');
+  useEffect(() => {
+    if (status !== 'authenticated' || isTerminalSession || outletUseCase || !tenantID) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const resolved = await resolveActiveOutlet(tenantID, outletId);
+        if (!cancelled && resolved) {
+          useAuthStore.getState().setOutlet(resolved);
+        }
+      } catch {
+        /* best-effort — the sidebar keeps its skeleton until the next attempt */
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [status, isTerminalSession, outletUseCase, outletId, tenantID]);
   return null;
 }
 
@@ -174,6 +213,7 @@ export function OrgShell({ children }: { children: ReactNode }) {
           <SyncStatusIndicator />
           <OfflineSyncWorker />
           <CatalogPrewarm />
+          <OutletContextHealer />
           <NotificationListener />
           <PlatformDrillInConfinement />
           <PWARegistration />

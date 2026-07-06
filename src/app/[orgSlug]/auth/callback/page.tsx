@@ -1,6 +1,7 @@
 'use client';
 
 import { useAuthStore } from '@/store/auth';
+import { resolveActiveOutlet } from '@/lib/auth/outlet-resolver';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useRef } from 'react';
 
@@ -31,14 +32,25 @@ function AuthCallbackContent() {
         ? localStorage.getItem('pos-selected-outlet-id')
         : null;
 
+      const { user: authUser, setOutlet, outlet: storeOutlet } = useAuthStore.getState();
+
+      // A leftover last-used outlet id skips the selector — but ONLY as a route decision.
+      // Logout clears the STORE outlet while keeping this key (pin-login auto-select), so
+      // the store must be re-hydrated with the full outlet (incl. use_case) or the sidebar
+      // never resolves its modules ("sidebar items fail to load"). Hydrate here when we
+      // can; the org-shell OutletContextHealer covers any path that lands unresolved.
       if (storedOutlet) {
+        if (!storeOutlet?.use_case) {
+          resolveActiveOutlet(authUser?.tenant_id ?? '', storedOutlet)
+            .then((o) => { if (o) useAuthStore.getState().setOutlet(o); })
+            .catch(() => { /* healer retries from the shell */ });
+        }
         router.replace(returnTo || `/${orgSlug}`);
         return;
       }
 
       // Auto-preselect outlet from JWT claims for non-HQ single-outlet users.
       // This skips the outlet selector entirely for staff assigned to one outlet.
-      const { user: authUser, setOutlet } = useAuthStore.getState();
       const jwtOutletId = (authUser as any)?.outlet_id || (authUser as any)?.outletId;
       const isHqUser = (authUser as any)?.is_hq_user || (authUser as any)?.isHqUser;
 
