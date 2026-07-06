@@ -14,6 +14,7 @@ import { useMenuItems, useCreateOrder, useCreatePaymentIntent, usePricingTiers, 
 import { Tag } from 'lucide-react';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { SplitPaymentModal } from '@/components/pos/split-payment-modal';
+import { CostHeaderToggle, MaskedCost } from '@/components/pos/cost-price';
 import { CustomerSearch, WALK_IN_CUSTOMER, type SelectedCustomer } from '@/components/pos/customer-search';
 import { useAuthStore } from '@/store/auth';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -127,10 +128,14 @@ export default function AddSalePage() {
   const [notes, setNotes] = useState('');
   // Credit Sale + Quotation are manager/back-office actions (same permission that approves sale
   // returns). Cashiers can raise ordinary sales/drafts but not on-account sales or quotations.
-  const { can } = usePermissions();
+  const { can, canAny } = usePermissions();
   const canPrivileged = can('pos.orders.manage');
   // REQ-006: cost price + margin visibility for management roles at the point of sale.
-  const canViewCost = can('pos.catalog.view_cost');
+  // Values render MASKED by default (customers can see the screen); the header eye toggle
+  // reveals/hides the whole column. Same gate as pos-api's cost serialization
+  // (pos.catalog.view_cost OR pos.orders.manage) so the column never renders empty.
+  const canViewCost = canAny(['pos.catalog.view_cost', 'pos.orders.manage']);
+  const [costRevealed, setCostRevealed] = useState(false);
   const [quotationSaving, setQuotationSaving] = useState(false);
 
   const createOrder = useCreateOrder();
@@ -238,6 +243,10 @@ export default function AddSalePage() {
         unit_price: l.unitPrice,
         total_price: l.unitPrice * l.quantity,
         metadata: notes ? { notes } : undefined,
+        // Tax as priced in the catalog — keeps the server payable equal to what is charged here.
+        ...(l.item.tax_code_id ? { tax_code_id: l.item.tax_code_id } : {}),
+        ...(l.item.tax_inclusive != null ? { price_includes_tax: l.item.tax_inclusive } : {}),
+        ...(typeof l.item.tax_rate === 'number' ? { tax_rate: l.item.tax_rate } : {}),
       })),
     };
   }
@@ -500,7 +509,11 @@ export default function AddSalePage() {
               <thead><tr className="border-b border-border bg-muted/30 text-muted-foreground">
                 <th className="text-left px-4 py-2.5 font-medium">Product</th>
                 <th className="text-center px-2 py-2.5 font-medium">Qty</th>
-                {canViewCost && <th className="text-right px-3 py-2.5 font-medium">Cost price</th>}
+                {canViewCost && (
+                  <th className="text-right px-3 py-2.5 font-medium">
+                    <CostHeaderToggle revealed={costRevealed} onToggle={() => setCostRevealed((v) => !v)} label="Cost price" className="normal-case" />
+                  </th>
+                )}
                 <th className="text-right px-3 py-2.5 font-medium">Unit price</th>
                 <th className="text-right px-4 py-2.5 font-medium">Total</th>
                 <th></th>
@@ -515,7 +528,6 @@ export default function AddSalePage() {
                   // REQ-006: supplier cost + margin — only serialized by pos-api to
                   // pos.catalog.view_cost holders, so it's simply absent for cashiers.
                   const cost = Number((l.item as any).cost_price ?? 0);
-                  const margin = canViewCost && cost > 0 && l.unitPrice > 0 ? ((l.unitPrice - cost) / l.unitPrice) * 100 : null;
                   return (
                     <tr key={l.item.id}>
                       <td className="px-4 py-3">
@@ -535,13 +547,8 @@ export default function AddSalePage() {
                         </div>
                       </td>
                       {canViewCost && (
-                        <td className="px-3 py-3 text-right text-xs tabular-nums text-muted-foreground">
-                          {cost > 0 ? (
-                            <>
-                              {fmt(cost)}
-                              {margin != null && <div className={margin < 0 ? 'text-destructive' : 'text-emerald-600'}>{margin.toFixed(0)}% margin</div>}
-                            </>
-                          ) : '—'}
+                        <td className="px-3 py-3 text-right text-xs">
+                          <MaskedCost cost={cost} sell={l.unitPrice} revealed={costRevealed} />
                         </td>
                       )}
                       <td className="px-3 py-3 text-right">

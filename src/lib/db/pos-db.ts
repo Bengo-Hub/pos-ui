@@ -71,6 +71,10 @@ export interface OfflineOrderLine {
   quantity: number;
   unit_price: number;
   total_price: number;
+  /** Per-line tax as charged at the till — replayed to the server on sync. */
+  tax_code_id?: string;
+  price_includes_tax?: boolean;
+  tax_rate?: number;
 }
 
 export interface OfflineOrder extends SyncState {

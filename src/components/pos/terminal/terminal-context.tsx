@@ -903,6 +903,11 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
     unit_price: item.price + (item.modifierTotal ?? 0),
     total_price: (item.price + (item.modifierTotal ?? 0)) * item.quantity,
     course_number: item.courseNumber ?? 0,
+    // Per-line tax exactly as this till charged it (treasury-enriched catalog) — the server
+    // uses these to make the recorded payable equal the amount rung up (no phantom flat VAT).
+    ...(item.taxCodeId ? { tax_code_id: item.taxCodeId } : {}),
+    ...(item.taxInclusive != null ? { price_includes_tax: item.taxInclusive } : {}),
+    ...(typeof item.taxRate === 'number' ? { tax_rate: item.taxRate } : {}),
     metadata: {
       ...(item.seat ? { seat: item.seat } : {}),
       ...(item.selectedModifiers ? { modifiers: item.selectedModifiers } : {}),

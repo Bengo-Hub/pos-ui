@@ -373,6 +373,11 @@ export default function ReturnDetailPage() {
                         quantity: l.quantity,
                         unit_price: l.unitPrice,
                         total_price: l.unitPrice * l.quantity,
+                        // Tax as priced in the catalog — the exchange delta the cashier saw
+                        // must equal the replacement order's payable.
+                        ...(l.item.tax_code_id ? { tax_code_id: l.item.tax_code_id } : {}),
+                        ...(l.item.tax_inclusive != null ? { price_includes_tax: l.item.tax_inclusive } : {}),
+                        ...(typeof l.item.tax_rate === 'number' ? { tax_rate: l.item.tax_rate } : {}),
                       })),
                     }
                   : {}),

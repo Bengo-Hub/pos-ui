@@ -63,6 +63,8 @@ export function AccessoriesModal({ open, orderId, orderNumber, onClose, onAdded 
         quantity: r.qty,
         unit_price: unit,
         total_price: unit * r.qty,
+        // The typed price IS the final charge — never let the server add flat VAT on top.
+        price_includes_tax: true,
         metadata: { accessory: true, billable: r.charge },
       };
     });

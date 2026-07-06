@@ -915,6 +915,11 @@ interface CreateOrderInput {
     total_price: number;
     course_number?: number;
     metadata?: Record<string, unknown>;
+    /** Per-line tax as charged at the till (treasury-enriched catalog) — keeps the server's
+     *  payable identical to the rung-up amount (no phantom flat VAT on inclusive prices). */
+    tax_code_id?: string;
+    price_includes_tax?: boolean;
+    tax_rate?: number;
   }>;
 }
 
@@ -938,6 +943,9 @@ export function useCreateOrder() {
           quantity: l.quantity,
           unit_price: l.unit_price,
           total_price: l.total_price,
+          tax_code_id: l.tax_code_id,
+          price_includes_tax: l.price_includes_tax,
+          tax_rate: l.tax_rate,
         }));
         const subtotal = lines.reduce((s, l) => s + l.total_price, 0);
         const totalAmount = Math.max(0, subtotal - (data.discountAmount ?? 0));

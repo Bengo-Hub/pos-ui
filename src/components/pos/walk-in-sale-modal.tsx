@@ -74,6 +74,10 @@ export function WalkInSaleModal({ open, onClose, tenantSlug }: WalkInSaleModalPr
           quantity: l.quantity,
           unit_price: l.item.price ?? 0,
           total_price: (l.item.price ?? 0) * l.quantity,
+          // Tax as priced in the catalog — server payable must equal the charged amount.
+          ...(l.item.tax_code_id ? { tax_code_id: l.item.tax_code_id } : {}),
+          ...(l.item.tax_inclusive != null ? { price_includes_tax: l.item.tax_inclusive } : {}),
+          ...(typeof l.item.tax_rate === 'number' ? { tax_rate: l.item.tax_rate } : {}),
         })),
       },
       {

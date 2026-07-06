@@ -27,6 +27,7 @@ import { TerminalProductGrid } from '@/components/pos/terminal/parts/terminal-pr
 import { TerminalModals } from '@/components/pos/terminal/parts/terminal-modals';
 import { InlinePaymentBar } from '@/components/pos/terminal/inline-payment-bar';
 import { useTerminal } from '@/components/pos/terminal/terminal-context';
+import { CostHeaderToggle, MaskedCost } from '@/components/pos/cost-price';
 import { searchPlaceholderFor } from '@/lib/use-case-config';
 import { cn } from '@/lib/utils';
 import {
@@ -40,6 +41,14 @@ export function TerminalShell() {
   const router = useRouter();
   // Full-screen category/brand picker drawer (godigital-style "browse").
   const [browseOpen, setBrowseOpen] = useState(false);
+  // REQ-006: management roles see a Cost column on the cart (pos-api only serializes
+  // cost_price to pos.catalog.view_cost holders). Values are MASKED by default — the
+  // header eye reveals/hides the whole column (customers can see the screen).
+  const canViewCost = t.can('pos.catalog.view_cost') || t.can('pos.orders.manage');
+  const [costRevealed, setCostRevealed] = useState(false);
+  const cartGridCols = canViewCost
+    ? 'grid-cols-[1fr_auto_auto_auto_auto]'
+    : 'grid-cols-[1fr_auto_auto_auto]';
 
   return (
     <div className="flex flex-col bg-background" style={{ height: 'calc(100vh - 80px)' }}>
@@ -171,9 +180,14 @@ export function TerminalShell() {
               <button onClick={t.clearCart} className="text-[11px] text-destructive font-semibold hover:underline">Clear all</button>
             )}
           </div>
-          <div className="grid grid-cols-[1fr_auto_auto_auto] gap-2 px-4 py-2 shrink-0 text-[10px] font-bold uppercase tracking-wider text-muted-foreground border-b border-border">
+          <div className={cn('grid gap-2 px-4 py-2 shrink-0 text-[10px] font-bold uppercase tracking-wider text-muted-foreground border-b border-border', cartGridCols)}>
             <span>Product</span>
             <span className="w-24 text-center">Quantity</span>
+            {canViewCost && (
+              <span className="w-20 text-right">
+                <CostHeaderToggle revealed={costRevealed} onToggle={() => setCostRevealed((v) => !v)} />
+              </span>
+            )}
             <span className="w-20 text-right">Price inc. tax</span>
             <span className="w-20 text-right">Subtotal</span>
           </div>
@@ -190,7 +204,7 @@ export function TerminalShell() {
               cart.map((item, idx) => {
                 const lineTotal = (item.price + (item.modifierTotal ?? 0)) * item.quantity;
                 return (
-                  <div key={`${item.id}-${idx}`} className="grid grid-cols-[1fr_auto_auto_auto] gap-2 items-center px-4 py-2.5 border-b border-border/60 hover:bg-primary/5 transition-colors">
+                  <div key={`${item.id}-${idx}`} className={cn('grid gap-2 items-center px-4 py-2.5 border-b border-border/60 hover:bg-primary/5 transition-colors', cartGridCols)}>
                     <div className="min-w-0">
                       <p className="text-sm font-bold truncate leading-tight">{item.name}</p>
                       <div className="flex items-center gap-1.5 mt-0.5">
@@ -227,6 +241,11 @@ export function TerminalShell() {
                       <span className="w-7 text-center text-sm font-bold tabular-nums">{item.quantity}</span>
                       <button onClick={() => t.updateQuantity(idx, 1)} className="h-6 w-6 rounded-md border border-border flex items-center justify-center hover:bg-accent"><Plus className="h-3 w-3" /></button>
                     </div>
+                    {canViewCost && (
+                      <span className="w-20 text-right text-xs">
+                        <MaskedCost cost={item.costPrice} sell={item.price} revealed={costRevealed} />
+                      </span>
+                    )}
                     <span className="w-20 text-right text-xs font-mono text-muted-foreground">{item.price.toLocaleString()}</span>
                     <div className="w-20 flex items-center justify-end gap-1.5">
                       <span className="text-sm font-bold font-mono tabular-nums">{lineTotal.toLocaleString()}</span>
