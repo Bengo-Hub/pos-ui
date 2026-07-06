@@ -1,11 +1,14 @@
 'use client';
 
 import '@/styles/receipt.css';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/base';
 import { Printer, Download, X } from 'lucide-react';
+import { toast } from 'sonner';
 import { ReceiptPrint } from './receipt-print';
-import { printHtmlToPrinter } from '@/lib/pos/printer-discovery';
+import { printHtmlToPrinter, printProfileHtml, fetchReceiptEscposHex } from '@/lib/pos/printer-discovery';
+import { hasRealPrinter } from '@/lib/pos/printer-stations';
+import type { PrinterProfile } from '@/lib/api/settings';
 import { useTenantBranding } from '@/providers/tenant-branding-provider';
 
 // Thermal-receipt styles inlined into the dedicated print window (mirrors src/styles/receipt.css).
@@ -80,15 +83,54 @@ interface ReceiptPreviewProps {
   onClose: () => void;
   outletName?: string;
   tenantName?: string;
-  /** Assigned bill/customer printer name (QZ Tray). When set + bridge present, prints silently to it. */
+  /** @deprecated pass `printerProfile` instead — a name can't address network (IP) printers. */
   printerName?: string;
+  /** Resolved bill printer profile — supports OS/USB/BT names AND network IP printers. */
+  printerProfile?: PrinterProfile;
+  /** Tenant UUID + order id — needed to build ESC/POS bytes for silent network printing. */
+  tenantId?: string;
+  orderId?: string;
+  /** Outlet auto_print_order: silently print once on open (never a browser dialog). */
+  autoPrint?: boolean;
 }
 
-export function ReceiptPreview({ receipt, open, onClose, outletName, tenantName, printerName }: ReceiptPreviewProps) {
+export function ReceiptPreview({
+  receipt, open, onClose, outletName, tenantName, printerName, printerProfile, tenantId, orderId, autoPrint,
+}: ReceiptPreviewProps) {
   const [printing, setPrinting] = useState(false);
   // Logo only — brand colours are intentionally omitted (they print faint on thermal printers).
   const { tenant } = useTenantBranding();
   const logoUrl = tenant?.logoUrl || '';
+  // One-shot per open, and only after the hidden print root has rendered (hence effect, not render).
+  const autoFiredRef = useRef(false);
+
+  const realProfile = hasRealPrinter(printerProfile) ? printerProfile : undefined;
+
+  // Silent print to the resolved profile. Returns false when nothing printed (silent mode + no bridge).
+  const printToProfile = async (silent: boolean): Promise<boolean> => {
+    const node = typeof document !== 'undefined' ? document.getElementById('receipt-print-root') : null;
+    if (!node || !realProfile || !receipt) return false;
+    const escposHex = realProfile.printer_type === 'network' && tenantId && orderId
+      ? await fetchReceiptEscposHex(tenantId, orderId, 'customer', realProfile.id)
+      : null;
+    return printProfileHtml(realProfile, `Receipt ${receipt.order_number}`, node.innerHTML, escposHex ?? undefined, { silent });
+  };
+
+  // Auto-print on payment completion: fire once per open, silently — skip with a toast when no real
+  // printer is configured. The preview stays on screen either way (manual Print still available).
+  useEffect(() => {
+    if (!open) { autoFiredRef.current = false; return; }
+    if (!autoPrint || autoFiredRef.current || !receipt) return;
+    autoFiredRef.current = true;
+    if (!realProfile) {
+      toast.info('Auto-print skipped — no receipt printer configured (Settings → Receipt).');
+      return;
+    }
+    void printToProfile(true).then((ok) => {
+      if (!ok) toast.error('Receipt did not print — check the printer connection (QZ Tray / print agent).');
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, autoPrint, receipt]);
 
   if (!receipt || !open) return null;
 
@@ -101,8 +143,13 @@ export function ReceiptPreview({ receipt, open, onClose, outletName, tenantName,
       window.print();
       return;
     }
-    // When a bill printer is assigned, route through printHtmlToPrinter — it prints silently via QZ
-    // Tray when reachable and otherwise falls back to the browser print window on its own.
+    // A real configured printer (incl. network by IP) → silent job with browser fallback (manual
+    // action, so falling back to a window is fine — the receipt must never be lost).
+    if (realProfile) {
+      void printToProfile(false);
+      return;
+    }
+    // Legacy name-only routing (older call sites) — QZ when reachable, else browser window.
     if (printerName && printerName.toLowerCase() !== 'browser') {
       void printHtmlToPrinter(printerName, `Receipt ${receipt.order_number}`, node.innerHTML, receipt.paper_width ?? '80mm');
       return;

@@ -46,3 +46,18 @@ export function hasRealPrinter(p?: PrinterProfile | null): boolean {
 export function anyRealPrinter(profiles?: PrinterProfile[] | null): boolean {
   return (profiles ?? []).some((p) => hasRealPrinter(p));
 }
+
+/**
+ * Resolve the profile the customer bill should print to. Operators often assign a printer only to
+ * a kitchen station (or the waiter copy) and leave the Bill card unset — the bill must still reach
+ * a real printer instead of "No printer detected". Preference: customer → waiter → any real
+ * printer → the raw customer profile (so paper-size etc. still apply to browser fallbacks).
+ */
+export function resolveBillProfile(profiles?: PrinterProfile[] | null): PrinterProfile {
+  const customer = configFor(profiles, BILL_PROFILE_ID);
+  if (hasRealPrinter(customer)) return customer;
+  const waiter = (profiles ?? []).find((p) => p.id === WAITER_PROFILE_ID);
+  if (waiter && hasRealPrinter(waiter)) return waiter;
+  const anyReal = (profiles ?? []).find((p) => hasRealPrinter(p));
+  return anyReal ?? customer;
+}

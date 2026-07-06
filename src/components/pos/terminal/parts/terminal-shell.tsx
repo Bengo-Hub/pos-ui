@@ -54,7 +54,9 @@ export function TerminalShell() {
     : 'grid-cols-[minmax(0,1fr)_6.5rem_5rem_5.5rem]';
 
   return (
-    <div className="flex flex-col bg-background" style={{ height: 'calc(100vh - 80px)' }}>
+    // Height uses dvh (dynamic viewport) so mobile browser chrome never pushes the bottom action
+    // bar (Place Order / tenders) below the fold — the 100vh fallback covers older WebViews.
+    <div className="flex flex-col bg-background h-[calc(100vh-80px)] supports-[height:100dvh]:h-[calc(100dvh-80px)]">
       {/* ─────────── 1. QUICK-ACTION TOOLBAR STRIP ───────────
           (No GoDigital "Location" band — outlet selection already lives in the app header; we use
            outlets, not locations.) */}
@@ -76,8 +78,10 @@ export function TerminalShell() {
       {/* ─────────── 2. BODY: order builder (left) + product picker (right) ───────────
           On lg+ a fixed two-column grid (52% / 48%) keeps the split robust — neither column
           can grow past its track, so the order-builder no longer gets squeezed by the product
-          grid. Each column scrolls independently (min-h-0). Below lg the columns stack. */}
-      <div className="flex-1 flex flex-col lg:grid lg:grid-cols-[52%_48%] min-h-0 overflow-hidden">
+          grid. Below lg the sections STACK on a bounded row grid (55% / 45%) so both share the
+          viewport and scroll internally — the cart/totals actions and the product grid can never
+          push the bottom action bar off-screen. Each section scrolls independently (min-h-0). */}
+      <div className="flex-1 grid grid-rows-[minmax(0,55%)_minmax(0,45%)] lg:grid-rows-none lg:grid-cols-[52%_48%] min-h-0 overflow-hidden">
 
         {/* ===== LEFT: ORDER BUILDER ===== */}
         <div className="flex flex-col min-h-0 overflow-hidden lg:border-r border-border">

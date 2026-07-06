@@ -14,7 +14,7 @@
  */
 
 import { printProfileHtml } from './printer-discovery';
-import { configFor, anyRealPrinter, BILL_PROFILE_ID } from './printer-stations';
+import { configFor, anyRealPrinter, hasRealPrinter, BILL_PROFILE_ID } from './printer-stations';
 import type { PrinterProfile } from '@/lib/api/settings';
 import type { KDSStation } from '@/hooks/useKDS';
 
@@ -174,6 +174,16 @@ export interface PrintTicketsOptions {
   autoPrintKitchen?: boolean;
   /** Outlet setting auto_print_order — only auto-print the customer bill when true. */
   autoPrintBill?: boolean;
+  /** Background/auto-print mode: NEVER open a browser print dialog — skip jobs with no real
+   *  printer and report them in the result instead. */
+  silent?: boolean;
+}
+
+export interface PrintTicketsResult {
+  /** Number of jobs actually dispatched to a printer (or browser window in non-silent mode). */
+  printed: number;
+  /** Jobs skipped in silent mode because no real printer was assigned (labels, e.g. 'Kitchen'). */
+  skipped: string[];
 }
 
 /**
@@ -183,18 +193,20 @@ export interface PrintTicketsOptions {
  *  - Otherwise → a single combined 3-in-1 browser job (Bill + each station section).
  * Safe to fire-and-forget.
  */
-export async function printKitchenBarTickets(opts: PrintTicketsOptions): Promise<void> {
+export async function printKitchenBarTickets(opts: PrintTicketsOptions): Promise<PrintTicketsResult> {
   const {
     orderNumber, tableRef = '', lines, kdsStations = [], stations = [],
     includeCustomerBill = true, currency = 'KES', autoPrintKitchen = false, autoPrintBill = false,
+    silent = false,
   } = opts;
-  if (lines.length === 0) return;
+  const result: PrintTicketsResult = { printed: 0, skipped: [] };
+  if (lines.length === 0) return result;
 
   // Respect the outlet's auto-print settings. With both off (routing handled by the KDS screens),
   // do NOT pop a browser dialog or fire a silent job — the cashier uses the explicit "Print Bill".
   const printBill = includeCustomerBill && autoPrintBill;
   const printStations = autoPrintKitchen;
-  if (!printBill && !printStations) return;
+  if (!printBill && !printStations) return result;
 
   // Route lines to the live KDS stations by category_filter (falls back to a single "Kitchen"
   // bucket when no stations are configured, so nothing is lost on a bare outlet).
@@ -207,8 +219,16 @@ export async function printKitchenBarTickets(opts: PrintTicketsOptions): Promise
 
   if (anyRealPrinter(stations)) {
     const jobs: Array<Promise<void>> = [];
+    const dispatch = (profile: PrinterProfile, label: string, title: string, html: string) => {
+      // In silent (background) mode a job with no real printer must not fall back to a browser
+      // dialog — record it as skipped so the caller can toast instead.
+      if (silent && !hasRealPrinter(profile)) { result.skipped.push(label); return; }
+      jobs.push(printProfileHtml(profile, title, html, undefined, { silent }).then((ok) => {
+        if (ok) result.printed += 1; else result.skipped.push(label);
+      }));
+    };
     if (printBill) {
-      jobs.push(printProfileHtml(configFor(stations, BILL_PROFILE_ID, 'Customer Bill'), `Bill ${orderNumber}`, `<div class="t-root">${billHtml}</div>`));
+      dispatch(configFor(stations, BILL_PROFILE_ID, 'Customer Bill'), 'Customer Bill', `Bill ${orderNumber}`, `<div class="t-root">${billHtml}</div>`);
     }
     if (printStations) {
       for (const [stationId, stationLines] of buckets) {
@@ -218,14 +238,24 @@ export async function printKitchenBarTickets(opts: PrintTicketsOptions): Promise
         if (!html) continue;
         const profile = configFor(stations, stationId, title);
         if (profile.auto_print === false) continue; // station auto-print disabled
-        jobs.push(printProfileHtml(profile, `${title} ${orderNumber}`, `<div class="t-root">${html}</div>`));
+        dispatch(profile, title, `${title} ${orderNumber}`, `<div class="t-root">${html}</div>`);
       }
     }
     await Promise.all(jobs);
-    return;
+    return result;
   }
 
-  // No assigned printers → single combined 3-in-1 browser job (only the enabled sections).
+  // No assigned printers at all.
+  if (silent) {
+    // Background job: never pop the combined browser window — report everything as skipped.
+    if (printBill) result.skipped.push('Customer Bill');
+    if (printStations) {
+      for (const [stationId] of buckets) result.skipped.push(stationById.get(stationId)?.name ?? 'Kitchen');
+    }
+    return result;
+  }
+
+  // Manual path → single combined 3-in-1 browser job (only the enabled sections).
   let combined = printBill ? billHtml : '';
   if (printStations) {
     for (const [stationId, stationLines] of buckets) {
@@ -233,6 +263,8 @@ export async function printKitchenBarTickets(opts: PrintTicketsOptions): Promise
       combined += stationSectionHtml(`${title} Order`, orderNumber, tableRef, stationLines);
     }
   }
-  if (!combined) return;
+  if (!combined) return result;
   openPrintWindow(`Order ${orderNumber}`, combined);
+  result.printed += 1;
+  return result;
 }

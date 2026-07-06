@@ -8,6 +8,8 @@ import { apiClient } from '@/lib/api/client';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { useAuthStore } from '@/store/auth';
 import { useTenantBranding } from '@/providers/tenant-branding-provider';
+import { usePOSSettings } from '@/hooks/usePOSSettings';
+import { resolveBillProfile } from '@/lib/pos/printer-stations';
 import { ReceiptPreview, type ReceiptData } from './receipt-preview';
 
 interface PrintReceiptButtonProps {
@@ -41,6 +43,7 @@ export function PrintReceiptButton({
   const tenantId = user?.tenant_id ?? '';
   const { tenant } = useTenantBranding();
   const tenantName = tenant?.orgName || tenant?.name || undefined;
+  const { data: posSettings } = usePOSSettings();
 
   const [loading, setLoading] = useState(false);
   const [receipt, setReceipt] = useState<ReceiptData | null>(null);
@@ -87,6 +90,9 @@ export function PrintReceiptButton({
         }}
         outletName={outletName}
         tenantName={tenantName}
+        printerProfile={resolveBillProfile((posSettings as { printer_profiles?: Parameters<typeof resolveBillProfile>[0] })?.printer_profiles)}
+        tenantId={tenantId}
+        orderId={orderId}
       />
     </>
   );

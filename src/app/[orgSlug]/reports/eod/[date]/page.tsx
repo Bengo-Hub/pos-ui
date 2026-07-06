@@ -4,6 +4,7 @@ import { ModuleGate } from '@/components/auth/module-gate';
 import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
 import { Card, CardContent } from '@/components/ui/base';
 import { useEODList } from '@/hooks/useReports';
+import { ReportDocumentButton } from '@/components/reports/report-document-button';
 import { useAuthStore } from '@/store/auth';
 import { cn } from '@/lib/utils';
 import { ArrowLeft, Loader2 } from 'lucide-react';

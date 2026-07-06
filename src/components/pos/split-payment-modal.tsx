@@ -304,7 +304,7 @@ export function SplitPaymentModal({
           // Record the split (with its item ids) + mark it paid, so the per-split receipt is itemised.
           await ensureItemSplits();
           const id = itemSplitIdsRef.current[itemSplitPayer];
-          if (id && tenantId) { try { await settleSplit(tenantId, orderId, id, method); } catch { /* best-effort */ } }
+          if (id && tenantId && method) { try { await settleSplit(tenantId, orderId, id, method); } catch { /* best-effort */ } }
           handleItemGuestPaid(itemSplitPayer);
         }}
       />

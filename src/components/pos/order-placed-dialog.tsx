@@ -4,11 +4,12 @@ import { apiClient } from '@/lib/api/client';
 import { useKDSStations } from '@/hooks/useKDS';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { useAuthStore } from '@/store/auth';
-import { configFor, hasRealPrinter, BILL_PROFILE_ID } from '@/lib/pos/printer-stations';
+import { resolveBillProfile, hasRealPrinter, BILL_PROFILE_ID } from '@/lib/pos/printer-stations';
 import { printProfileHtml, fetchReceiptEscposHex } from '@/lib/pos/printer-discovery';
 import { CheckCircle2, Loader2, Printer, AlertTriangle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { toast } from 'sonner';
 
 interface OrderPlacedDialogProps {
   open: boolean;
@@ -62,10 +63,11 @@ export function OrderPlacedDialog({ open, orderNumber, orderId, tenantId, orgSlu
     ? stations.filter((s) => s.is_active !== false).map((s) => s.name).join(', ')
     : 'Kitchen';
 
-  // Resolve the Bill/customer station printer. When one is assigned we print SILENTLY to it (via the
-  // backend / QZ Tray) with no browser dialog; otherwise we ask before falling back to the browser.
+  // Resolve the bill printer with fallback (customer → waiter → any real printer): operators often
+  // assign only a station printer and leave the Bill card unset — the bill must still print silently
+  // instead of surfacing "No printer detected".
   const billProfile = useMemo(
-    () => configFor((posSettings as { printer_profiles?: Parameters<typeof configFor>[0] })?.printer_profiles, BILL_PROFILE_ID),
+    () => resolveBillProfile((posSettings as { printer_profiles?: Parameters<typeof resolveBillProfile>[0] })?.printer_profiles),
     [posSettings],
   );
   const printerConfigured = hasRealPrinter(billProfile);
@@ -75,9 +77,19 @@ export function OrderPlacedDialog({ open, orderNumber, orderId, tenantId, orgSlu
     router.replace(`/${orgSlug}/pin-login`);
   }, [onClose, router, orgSlug]);
 
-  const handlePrint = useCallback(async () => {
+  /**
+   * auto=true → background auto-print: silent or skipped-with-toast, NEVER a browser dialog and
+   * never the "No printer detected" modal. auto=false → the explicit Print Bill button keeps the
+   * ask-before-browser-print behavior.
+   */
+  const handlePrint = useCallback(async (auto = false) => {
     setPrinting(true);
     try {
+      if (auto && !printerConfigured) {
+        toast.info('Auto-print skipped — no receipt printer configured (Settings → Receipt).');
+        handleLogout();
+        return;
+      }
       const q = servedBy ? `?served_by=${encodeURIComponent(servedBy)}` : '';
       const html = await apiClient.get<string>(`/api/v1/${tenantId}/pos/orders/${orderId}/receipt/html${q}`);
       if (printerConfigured) {
@@ -85,12 +97,13 @@ export function OrderPlacedDialog({ open, orderNumber, orderId, tenantId, orgSlu
         // No browser print window at all. For a NETWORK printer, also fetch server-built ESC/POS
         // bytes so the Local Print Agent can print it silently when QZ Tray isn't installed.
         const escposHex = billProfile?.printer_type === 'network'
-          ? await fetchReceiptEscposHex(tenantId, orderId, 'customer', BILL_PROFILE_ID)
+          ? await fetchReceiptEscposHex(tenantId, orderId, 'customer', billProfile.id ?? BILL_PROFILE_ID)
           : null;
-        await printProfileHtml(billProfile, `Receipt ${orderNumber}`, html as string, escposHex ?? undefined);
+        const ok = await printProfileHtml(billProfile, `Receipt ${orderNumber}`, html as string, escposHex ?? undefined, { silent: auto });
+        if (auto && !ok) toast.error('Receipt did not print — check the printer connection (QZ Tray / print agent).');
         handleLogout();
       } else {
-        // No configured printer → DO NOT auto-open the browser print window. Ask first.
+        // Manual print with no configured printer → DO NOT auto-open the browser print window. Ask first.
         setBrowserPrompt(html as string);
       }
     } catch {
@@ -101,8 +114,8 @@ export function OrderPlacedDialog({ open, orderNumber, orderId, tenantId, orgSlu
     }
   }, [servedBy, tenantId, orderId, orderNumber, billProfile, printerConfigured, handleLogout]);
 
-  // Auto-print path: only auto-prints when a printer is CONFIGURED (silent). With no printer we
-  // still surface the confirmation modal rather than popping a browser dialog unexpectedly.
+  // Auto-print path: silent when configured; skipped with a toast when not. The "No printer
+  // detected" modal is strictly a MANUAL-print concern now.
   useEffect(() => {
     if (!open) {
       autoFiredRef.current = false;
@@ -111,7 +124,7 @@ export function OrderPlacedDialog({ open, orderNumber, orderId, tenantId, orgSlu
     }
     if (posSettings?.auto_print_order && !autoFiredRef.current) {
       autoFiredRef.current = true;
-      handlePrint();
+      handlePrint(true);
     }
   }, [open, posSettings, handlePrint]);
 
@@ -192,7 +205,7 @@ export function OrderPlacedDialog({ open, orderNumber, orderId, tenantId, orgSlu
         {/* Actions */}
         <div className="flex gap-3 w-full">
           <button
-            onClick={handlePrint}
+            onClick={() => handlePrint(false)}
             disabled={printing}
             className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl border-2 border-border text-sm font-semibold hover:bg-accent/30 transition-colors disabled:opacity-50"
           >

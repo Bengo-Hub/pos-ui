@@ -2,8 +2,9 @@
 
 import { apiClient } from '@/lib/api/client';
 import { useAuthStore } from '@/store/auth';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import { useRef } from 'react';
 import {
   cacheCatalogItems,
   getCachedCatalog,
@@ -342,51 +343,117 @@ async function fetchAllCatalogItems(tenantID: string): Promise<CatalogItem[]> {
   return all;
 }
 
+export const FULL_CATALOG_QUERY_KEY = 'pos-catalog-full';
+
+// Single-flight guard: at most ONE background catalog revalidation per tenant at a time
+// (mount + version-poll + reconnect can all ask for one in the same tick).
+const catalogRevalidateInflight = new Set<string>();
+
 /**
- * Load the full catalog with the local cache as the first source of truth:
- *  - Online  → fetch every page from the API, write ALL items through to IndexedDB
- *              (upsert — the local cache keeps improving), and return the fresh set.
- *              If the network fails mid-session, fall back to whatever is cached.
- *  - Offline → serve the complete IndexedDB cache.
- * Shared by `useFullCatalog` (terminal) and the shell-level prewarm so there is one
- * code path and one query-cache key.
+ * Fetch the COMPLETE catalog from the API in the background and propagate it everywhere:
+ * IndexedDB (write-through upsert — the local cache keeps improving) AND the TanStack
+ * query cache (so any mounted terminal re-renders with the new items immediately, no
+ * refresh / re-login). Failures are swallowed — the terminal keeps serving its cache.
+ * Returns the fresh set, or null when skipped (in-flight) / failed.
  */
-export async function loadFullCatalog(tenantID: string, isOnline: boolean): Promise<CatalogItem[]> {
-  if (!tenantID) return [];
-  if (!isOnline) {
-    const cached = await getCachedCatalog(tenantID);
-    return cached.map(offlineToCatalogItem);
-  }
+export async function revalidateFullCatalog(
+  qc: QueryClient,
+  tenantID: string,
+): Promise<CatalogItem[] | null> {
+  if (!tenantID || catalogRevalidateInflight.has(tenantID)) return null;
+  catalogRevalidateInflight.add(tenantID);
   try {
     const all = await fetchAllCatalogItems(tenantID);
-    cacheCatalogPage(tenantID, all); // write-through (best-effort, non-blocking)
+    if (all.length) {
+      cacheCatalogPage(tenantID, all); // write-through (best-effort, non-blocking)
+      qc.setQueryData([FULL_CATALOG_QUERY_KEY, tenantID], all);
+    }
     return all;
-  } catch (err) {
-    const cached = await getCachedCatalog(tenantID);
-    if (cached.length) return cached.map(offlineToCatalogItem);
-    throw err;
+  } catch {
+    return null; // offline / transient — cache stays authoritative
+  } finally {
+    catalogRevalidateInflight.delete(tenantID);
   }
 }
 
-export const FULL_CATALOG_QUERY_KEY = 'pos-catalog-full';
+/**
+ * Load the full catalog, local-cache-FIRST (stale-while-revalidate):
+ *  - Cache has items → return it immediately (instant paint even on a slow connection)
+ *    and, when online, kick a background revalidation that refreshes IndexedDB + the
+ *    query cache when the network answers.
+ *  - Cache empty + online (true cold start) → block on the network once, write through.
+ *  - Offline → serve the IndexedDB cache, full stop.
+ * IndexedDB is only *fully* relied on when there is no connection; with a connection the
+ * background sync keeps the cache active on every load and version bump.
+ */
+export async function loadFullCatalog(
+  tenantID: string,
+  isOnline: boolean,
+  qc?: QueryClient,
+): Promise<CatalogItem[]> {
+  if (!tenantID) return [];
+  const cached = await getCachedCatalog(tenantID).catch(() => []);
+  if (!isOnline) {
+    return cached.map(offlineToCatalogItem);
+  }
+  if (cached.length) {
+    if (qc) void revalidateFullCatalog(qc, tenantID); // background — never blocks the paint
+    return cached.map(offlineToCatalogItem);
+  }
+  // Cold start: nothing cached yet, so the network is the only source.
+  const all = await fetchAllCatalogItems(tenantID);
+  cacheCatalogPage(tenantID, all);
+  return all;
+}
 
 /**
  * The terminal's catalog source. Returns the COMPLETE catalog so the terminal can
  * resolve category/search/brand/pagination locally over the full set. It is
- * cache-first: the shell prewarm seeds this query from IndexedDB before the terminal
- * mounts (instant paint), and every fetch revalidates from the API and refreshes the
- * IndexedDB cache. Falls back to the local cache when offline or on network error.
+ * cache-first: IndexedDB answers instantly (even on a slow connection) while a
+ * background revalidation refreshes both caches. Falls back to the local cache when
+ * offline or on network error.
  */
 export function useFullCatalog() {
   const tenantID = useTenantID();
   const isOnline = useOnline();
+  const qc = useQueryClient();
   return useQuery({
     queryKey: [FULL_CATALOG_QUERY_KEY, tenantID],
-    queryFn: () => loadFullCatalog(tenantID, isOnline),
+    queryFn: () => loadFullCatalog(tenantID, isOnline, qc),
     enabled: !!tenantID,
     staleTime: 5 * 60_000,
     networkMode: 'always',
     placeholderData: (prev) => prev,
+  });
+}
+
+/**
+ * Polls the cheap `GET /pos/catalog/version` fingerprint (~45s, rate-limit-exempt server-side)
+ * and background-refreshes the full catalog whenever it changes — this is how a newly added
+ * inventory item appears on the terminal within a minute, with no refresh and no re-login.
+ * The fingerprint bumps whenever pos-api's inventory.item.created/updated NATS consumer
+ * touches the tenant's catalog projection. Offline → the poll pauses automatically.
+ */
+export function useCatalogVersionSync() {
+  const tenantID = useTenantID();
+  const isOnline = useOnline();
+  const qc = useQueryClient();
+  const lastVersion = useRef<string | null>(null);
+  useQuery({
+    queryKey: ['pos-catalog-version', tenantID],
+    queryFn: async () => {
+      const res = await apiClient.get<{ version: string }>(`${basePath(tenantID)}/catalog/version`);
+      const v = res?.version ?? '0-0';
+      if (lastVersion.current !== null && v !== lastVersion.current) {
+        void revalidateFullCatalog(qc, tenantID);
+      }
+      lastVersion.current = v;
+      return v;
+    },
+    enabled: !!tenantID && isOnline,
+    refetchInterval: 45_000,
+    staleTime: 0,
+    gcTime: 0,
   });
 }
 
@@ -739,6 +806,8 @@ interface POSOrder {
   total_amount: number;
   currency: string;
   created_at: string;
+  /** Human-readable table label (hospitality orders), e.g. "Table 4". */
+  table_reference?: string;
   edges?: { lines?: any[]; payments?: any[] };
 }
 

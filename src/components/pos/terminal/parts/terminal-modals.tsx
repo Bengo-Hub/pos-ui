@@ -24,7 +24,7 @@ import { DiscountModal } from '@/components/pos/discount-modal';
 import { LinePriceModal } from '@/components/pos/line-price-modal';
 import { OrderPlacedDialog } from '@/components/pos/order-placed-dialog';
 import { RegisterDetailsModal, RecentTransactionsModal, SellReturnModal } from '@/components/pos/terminal/toolbar-modals';
-import { configFor, BILL_PROFILE_ID } from '@/lib/pos/printer-stations';
+import { resolveBillProfile } from '@/lib/pos/printer-stations';
 import { useTerminal } from '@/components/pos/terminal/terminal-context';
 import { AlertTriangle, Calculator } from 'lucide-react';
 import { useState } from 'react';
@@ -165,7 +165,10 @@ export function TerminalModals() {
           t.setReceiptOpen(false);
           t.setReceiptData(null);
         }}
-        printerName={configFor((t.posSettings as any)?.printer_profiles, BILL_PROFILE_ID).printer_name}
+        printerProfile={resolveBillProfile((t.posSettings as any)?.printer_profiles)}
+        tenantId={t.user?.tenant_id ?? ''}
+        orderId={t.receiptOrderId}
+        autoPrint={Boolean((t.posSettings as any)?.auto_print_order)}
       />
 
       <OrderPlacedDialog

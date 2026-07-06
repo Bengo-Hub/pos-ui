@@ -10,7 +10,7 @@ import { ReactNode, useState } from 'react';
 import { useOnline } from '@/hooks/use-online';
 import { getCachedCatalog, getSyncStatusCounts } from '@/lib/db/pos-db';
 import { OfflineBar } from '@bengo-hub/shared-ui-lib/offline';
-import { loadFullCatalog, offlineToCatalogItem, FULL_CATALOG_QUERY_KEY } from '@/hooks/usePOS';
+import { revalidateFullCatalog, useCatalogVersionSync, offlineToCatalogItem, FULL_CATALOG_QUERY_KEY } from '@/hooks/usePOS';
 import { Footer } from '@/components/footer';
 import { SubscriptionBanner } from '@/components/subscription/subscription-banner';
 import { SyncStatusIndicator } from '@/components/pos/sync-status-indicator';
@@ -61,12 +61,16 @@ function OfflineSyncWorker() {
  * terminal, so the product grid paints instantly (cache-first):
  *  1. Seed the TanStack query from the IndexedDB cache (resolves before network).
  *  2. Revalidate the complete catalog from the API in the background, writing every
- *     item through to IndexedDB so the local cache keeps improving over time.
+ *     item through to IndexedDB so the local cache keeps improving over time — the
+ *     network NEVER blocks the paint, even on a slow connection.
+ *  3. Poll the cheap catalog-version fingerprint (useCatalogVersionSync) so items
+ *     added in inventory appear on the terminal automatically — no refresh/re-login.
  */
 function CatalogPrewarm() {
   const queryClient = useQueryClient();
   const tenantID = useAuthStore((s) => (s.user as any)?.tenant_id ?? '');
   const isOnline = useOnline();
+  useCatalogVersionSync();
   useEffect(() => {
     if (!tenantID) return;
     let cancelled = false;
@@ -81,13 +85,8 @@ function CatalogPrewarm() {
         }
       } catch { /* cache seed is best-effort */ }
       if (!cancelled && isOnline) {
-        queryClient
-          .fetchQuery({
-            queryKey: [FULL_CATALOG_QUERY_KEY, tenantID],
-            queryFn: () => loadFullCatalog(tenantID, true),
-            staleTime: 0,
-          })
-          .catch(() => { /* offline / transient — terminal falls back to cache */ });
+        // Background revalidation — refreshes IndexedDB + the query cache when it lands.
+        void revalidateFullCatalog(queryClient, tenantID);
       }
     })();
     return () => { cancelled = true; };

@@ -490,27 +490,37 @@ function targetOf(p?: PrinterProfile | null): PrintTarget | null {
  *  2. Local Print Agent — for a NETWORK printer when QZ isn't present: relay server-built ESC/POS
  *     bytes (pass `escposHex`) straight to the printer's IP:port. This is how a network printer prints
  *     silently from a cloud deployment without QZ Tray.
- *  3. Browser print window — so a receipt is never lost when there is no bridge.
+ *  3. Browser print window — so a receipt is never lost when there is no bridge. With
+ *     `opts.silent` (auto-print flows) this fallback is DISABLED: the promise resolves false and the
+ *     caller decides (toast/skip) — a background job must never pop a browser print dialog.
+ *
+ * Returns true when the job reached a destination (bridge or browser window), false when silent mode
+ * had nowhere to print.
  */
 export async function printProfileHtml(
   profile: PrinterProfile | undefined,
   title: string,
   html: string,
   escposHex?: string,
-): Promise<void> {
+  opts?: { silent?: boolean },
+): Promise<boolean> {
   const size = paperOf(profile);
   const target = targetOf(profile);
-  if (!target) { browserPrint(title, html, size); return; }
+  if (!target) {
+    if (opts?.silent) return false;
+    browserPrint(title, html, size);
+    return true;
+  }
 
   const qz = await loadQz();
   if (qz) {
     try {
-      const opts = qzSize(size);
+      const qzOpts = qzSize(size);
       const cfg = 'host' in target
-        ? qz.configs.create({ host: target.host, port: target.port }, opts)
-        : qz.configs.create(target.name, opts);
+        ? qz.configs.create({ host: target.host, port: target.port }, qzOpts)
+        : qz.configs.create(target.name, qzOpts);
       await qz.print(cfg, [{ type: 'html', format: 'plain', data: `<div style="font-family:'Courier New',monospace">${html}</div>` }]);
-      return;
+      return true;
     } catch {
       /* fall through to the agent / browser */
     }
@@ -519,10 +529,12 @@ export async function printProfileHtml(
   // No QZ (or QZ failed): a network printer can print via the on-terminal agent using ESC/POS bytes.
   if ('host' in target && escposHex) {
     const ok = await printRawToNetwork(target.host, target.port, escposHex);
-    if (ok) return;
+    if (ok) return true;
   }
 
+  if (opts?.silent) return false; // background job: report failure instead of opening a dialog
   browserPrint(title, html, size); // never lose the receipt
+  return true;
 }
 
 /**
@@ -534,7 +546,7 @@ export async function printHtmlToPrinter(
   title: string,
   html: string,
   paperSize = '80mm',
-): Promise<void> {
+): Promise<boolean> {
   const named = printerName && printerName.toLowerCase() !== 'browser' ? printerName : '';
   return printProfileHtml(
     named ? { id: 'adhoc', label: named, printer_type: 'os', printer_name: named, paper_size: paperSize as PrinterProfile['paper_size'] } : undefined,

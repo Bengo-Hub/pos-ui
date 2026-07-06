@@ -269,6 +269,8 @@ export interface TerminalContextValue {
   receiptOpen: boolean;
   setReceiptOpen: (v: boolean) => void;
   setReceiptData: (v: ReceiptData | null) => void;
+  /** Order id the open receipt belongs to (ESC/POS silent print needs it; ReceiptData lacks it). */
+  receiptOrderId: string;
 
   orderPlacedOpen: boolean;
   setOrderPlacedOpen: (v: boolean) => void;
@@ -412,6 +414,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
   // Receipt
   const [receiptData, setReceiptData] = useState<ReceiptData | null>(null);
   const [receiptOpen, setReceiptOpen] = useState(false);
+  const [receiptOrderId, setReceiptOrderId] = useState('');
 
   // Order placed dialog (dine-in + add-to-bill success)
   const [orderPlacedOpen, setOrderPlacedOpen] = useState(false);
@@ -1142,6 +1145,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
         );
         // "Served by" — fall back to the logged-in user when the API omits it.
         setReceiptData({ ...data, cashier_name: data.cashier_name || user?.fullName || user?.email });
+        setReceiptOrderId(settledOrderId);
         setReceiptOpen(true);
       } catch {
         // Receipt fetch failed — not critical, payment already confirmed
@@ -1207,10 +1211,12 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
   // unpaid=false → tender settled: reuse handlePaymentConfirmed (receipt + table release + reset).
   const handleInlineSettled = useCallback((ord: CreatedOrder, opts?: { unpaid?: boolean }) => {
     if (opts?.unpaid) {
-      // Send-to-Kitchen (dine-in) / COD: print kitchen + bar tickets per the outlet's printer setup
-      // (single printer → 3-in-1 bill+kitchen+bar; multiple → split jobs) before clearing the cart.
+      // Send-to-Kitchen (dine-in) / COD: print kitchen + bar STATION tickets per the outlet's
+      // printer setup. The customer bill is NOT printed here — OrderPlacedDialog owns the bill
+      // (server-rendered receipt) so it never prints twice. This is a background job: silent mode
+      // means skipped stations toast instead of ever opening a browser print dialog.
       if (isHospitality && cart.length > 0) {
-        printKitchenBarTickets({
+        void printKitchenBarTickets({
           orderNumber: ord.orderNumber || ord.orderId.slice(0, 8),
           tableRef: tableName ? `Table ${tableName}` : '',
           lines: cart.map((c) => ({
@@ -1223,12 +1229,17 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
           })),
           kdsStations: kdsStationsData?.data ?? [],
           stations: (posSettings as any)?.printer_profiles ?? [],
-          includeCustomerBill: true,
+          includeCustomerBill: false,
           currency: (posSettings as any)?.currency ?? 'KES',
           // Only auto-print when the outlet enabled it — otherwise the kitchen gets the order via
           // the KDS and the cashier prints manually (no surprise browser print dialog).
           autoPrintKitchen: (posSettings as any)?.auto_print_kitchen ?? false,
           autoPrintBill: (posSettings as any)?.auto_print_order ?? false,
+          silent: true,
+        }).then((res) => {
+          if (res.skipped.length > 0) {
+            toast.info(`Ticket print skipped (no printer): ${[...new Set(res.skipped)].join(', ')} — check Settings → Receipt.`);
+          }
         });
       }
       clearCart();
@@ -1277,7 +1288,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
     modifierItem, setModifierItem,
     variantItem, setVariantItem, handleVariantChosen,
     voidOpen, setVoidOpen, voidOrderMutateAsync: voidOrder.mutateAsync, setCurrentOrderId, setCurrentOrderNumber,
-    receiptData, receiptOpen, setReceiptOpen, setReceiptData,
+    receiptData, receiptOpen, setReceiptOpen, setReceiptData, receiptOrderId,
     orderPlacedOpen, setOrderPlacedOpen, orderPlacedId, orderPlacedNumber,
     pendingOverride, setPendingOverride,
     serialPrompt, setSerialPrompt, serialInput, setSerialInput,

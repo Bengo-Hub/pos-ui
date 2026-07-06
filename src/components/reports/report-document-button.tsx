@@ -27,7 +27,7 @@ export interface ReportDocumentButtonProps {
   orientation?: 'portrait' | 'landscape';
   label?: string;
   size?: 'sm' | 'default';
-  variant?: 'default' | 'outline' | 'ghost';
+  variant?: 'primary' | 'outline' | 'ghost';
   className?: string;
   disabled?: boolean;
 }

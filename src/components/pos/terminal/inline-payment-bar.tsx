@@ -378,7 +378,7 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
             className="w-full min-h-12 rounded-xl bg-primary text-primary-foreground font-bold flex items-center justify-center gap-2 disabled:opacity-40 hover:bg-primary/90 transition-colors"
           >
             {anyBusy ? <Loader2 className="h-5 w-5 animate-spin" /> : <ChefHat className="h-5 w-5" />}
-            Send to Kitchen
+            Place Order
           </button>
         </div>
       ) : layout === 'bar' ? (

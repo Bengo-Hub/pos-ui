@@ -20,7 +20,7 @@ import {
   printProfileHtml, agentAvailable, pingNetworkPrinter, fetchTestTicketEscposHex,
   type DrawerKickCode, type DiscoveredDevice,
 } from '@/lib/pos/printer-discovery';
-import { BILL_PROFILE_ID, WAITER_PROFILE_ID, paperOf } from '@/lib/pos/printer-stations';
+import { BILL_PROFILE_ID, WAITER_PROFILE_ID, paperOf, hasRealPrinter, resolveBillProfile } from '@/lib/pos/printer-stations';
 import { Toggle, inputClass, labelClass } from './shared';
 import { toast } from 'sonner';
 
@@ -174,7 +174,14 @@ export function ReceiptTab() {
       escposHex = (await fetchTestTicketEscposHex(card.label, paperOf(p))) ?? undefined;
     }
     await printProfileHtml(p, `Test — ${card.label}`, html, escposHex);
-    toast.success('Test page sent.');
+    // Test print uses the card's CURRENT (possibly unsaved) config; live sale printing reads the
+    // SAVED settings. Nudge to Save so "test works but receipts don't print" can't happen.
+    const saved = (settings?.printer_profiles ?? []).find((sp) => sp.id === card.id);
+    if (JSON.stringify(saved ?? null) !== JSON.stringify(profiles.find((lp) => lp.id === card.id) ?? null)) {
+      toast.warning('Test page sent — remember to Save: receipts print with the saved settings, not this unsaved test config.');
+    } else {
+      toast.success('Test page sent.');
+    }
   };
 
   const handlePing = async (card: PrinterCard) => {
@@ -259,10 +266,12 @@ export function ReceiptTab() {
       cash_drawer_printer: form.cashDrawerPrinter || null,
       cash_drawer_auto_open: form.cashDrawerAutoOpen,
       cash_drawer_kick_code: form.cashDrawerKickCode,
-      // Keep any station the operator configured (a chosen connection type, a device, an IP, or auto-print on).
+      // Keep any station the operator touched: a real printer (same hasRealPrinter predicate the
+      // runtime print paths use — save and runtime must never disagree), an explicit connection
+      // type choice (including "browser"), or a per-card auto-print flag. Only truly untouched
+      // 'none' placeholders are dropped.
       printer_profiles: profiles.filter(
-        (p) => (p.printer_type !== 'none' && p.printer_type !== 'browser') ||
-          (p.printer_name && p.printer_name !== 'browser') || p.printer_ip || p.auto_print,
+        (p) => hasRealPrinter(p) || p.printer_type !== 'none' || p.auto_print,
       ),
     });
   };
@@ -336,6 +345,14 @@ export function ReceiptTab() {
               </div>
             ))}
           </div>
+          {form.autoPrintOrder && !hasRealPrinter(getProfile(BILL_PROFILE_ID)) && (
+            <div className="mt-3 rounded-xl border border-amber-300 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-800 px-4 py-3 text-xs text-amber-800 dark:text-amber-300">
+              <span className="font-bold">Auto-print is on but no Bill / Customer Receipt printer is set.</span>{' '}
+              {hasRealPrinter(resolveBillProfile(profiles))
+                ? <>Receipts will fall back to the “{resolveBillProfile(profiles).label}” printer. Assign a printer on the Bill / Customer Receipt card below to control this.</>
+                : <>Receipts will NOT print automatically until you assign a printer on the Bill / Customer Receipt card below and Save.</>}
+            </div>
+          )}
         </CardContent>
       </Card>
 
