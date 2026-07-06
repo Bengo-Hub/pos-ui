@@ -63,7 +63,10 @@ async function pinLogin(page: Page) {
   // Quick Service outlet: pay-mode inline checkout (not hospitality send-to-kitchen) and the
   // richest demo catalog, so the product grid actually populates.
   const outlet = page.getByRole('button', { name: /Quick Service/i }).first();
-  const keypad = page.getByTestId('pin-key-1');
+  // The redesigned pin-login renders BOTH the mobile stack and the desktop 3-zone layout in
+  // the DOM (one is display-hidden), so every pin-key testid resolves twice — always target
+  // the visible instance to satisfy strict mode.
+  const key = (d: string) => page.locator(`[data-testid="pin-key-${d}"]:visible`).first();
 
   // The keypad renders first (default step), then an effect switches multi-outlet tenants to
   // the outlet step once outlets load. So wait for the outlet step to APPEAR (don't trust an
@@ -74,10 +77,10 @@ async function pinLogin(page: Page) {
     await outlet.click();
   }
 
-  await expect(keypad).toBeVisible({ timeout: 20_000 });
+  await expect(key('1')).toBeVisible({ timeout: 20_000 });
   await page.waitForTimeout(600);
   for (const d of PIN.split('')) {
-    await page.getByTestId(`pin-key-${d}`).click();
+    await key(d).click();
     await page.waitForTimeout(150);
   }
 

@@ -29,9 +29,9 @@ async function idbCatalogCount(page: Page): Promise<number> {
         const req = indexedDB.open('pos_offline_db');
         req.onsuccess = () => {
           const db = req.result;
-          if (!db.objectStoreNames.contains('catalog_items')) return resolve(0);
-          const tx = db.transaction('catalog_items', 'readonly');
-          const count = tx.objectStore('catalog_items').count();
+          if (!db.objectStoreNames.contains('catalogItems')) return resolve(0);
+          const tx = db.transaction('catalogItems', 'readonly');
+          const count = tx.objectStore('catalogItems').count();
           count.onsuccess = () => resolve(count.result);
           count.onerror = () => resolve(0);
         };
@@ -40,13 +40,14 @@ async function idbCatalogCount(page: Page): Promise<number> {
   );
 }
 
-async function getAuth(page: Page): Promise<{ token: string; tenantId: string }> {
+async function getAuth(page: Page): Promise<{ token: string; tenantId: string; outletId: string }> {
   return page.evaluate(() => {
     const raw = localStorage.getItem('pos-auth-storage');
     const s = raw ? JSON.parse(raw).state : {};
     return {
       token: s?.session?.accessToken ?? '',
       tenantId: s?.user?.tenant_id ?? '',
+      outletId: s?.outlet?.id ?? s?.selectedOutletId ?? localStorage.getItem('pos-selected-outlet-id') ?? '',
     };
   });
 }
@@ -54,13 +55,16 @@ async function getAuth(page: Page): Promise<{ token: string; tenantId: string }>
 async function pinLogin(page: Page) {
   await page.goto(`/${ORG}/pin-login`, { waitUntil: 'domcontentloaded' });
   const outlet = page.getByRole('button', { name: /Quick Service/i }).first();
-  const keypad = page.getByTestId('pin-key-1');
+  // The redesigned pin-login renders BOTH the mobile stack and the desktop 3-zone layout in the
+  // DOM (one is display-hidden), so every pin-key testid resolves twice — always target the
+  // visible instance to satisfy strict mode.
+  const key = (d: string) => page.locator(`[data-testid="pin-key-${d}"]:visible`).first();
   const onOutletStep = await outlet.waitFor({ state: 'visible', timeout: 15_000 }).then(() => true).catch(() => false);
   if (onOutletStep) await outlet.click();
-  await expect(keypad).toBeVisible({ timeout: 20_000 });
+  await expect(key('1')).toBeVisible({ timeout: 20_000 });
   await page.waitForTimeout(600);
   for (const d of PIN.split('')) {
-    await page.getByTestId(`pin-key-${d}`).click();
+    await key(d).click();
     await page.waitForTimeout(150);
   }
   await page.waitForURL(new RegExp(`/${ORG}/(dashboard|order|orders|sell)`), { timeout: 30_000 });
@@ -82,14 +86,14 @@ test.describe('POS catalog sync (live)', () => {
     // Give the background revalidation + write-through a moment to finish.
     await page.waitForTimeout(5_000);
 
-    const { token, tenantId } = await getAuth(page);
+    const { token, tenantId, outletId } = await getAuth(page);
     expect(token, 'PIN session must expose an access token').toBeTruthy();
     expect(tenantId, 'PIN session must expose the tenant id').toBeTruthy();
 
-    // 1) COMPLETENESS: API total == what the terminal cached locally (write-through worked and
-    //    nothing was truncated by the upstream 100-row pagination cap).
+    // 1) COMPLETENESS: OUTLET-SCOPED API total == what the terminal cached locally (the
+    //    terminal caches its outlet's catalog; nothing truncated by the 100-row upstream cap).
     const res = await page.request.get(`${API}/api/v1/${tenantId}/pos/catalog/items?limit=1`, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: { Authorization: `Bearer ${token}`, ...(outletId ? { 'X-Outlet-ID': outletId } : {}) },
     });
     expect(res.ok(), `catalog items endpoint responded ${res.status()}`).toBe(true);
     const body = await res.json();
