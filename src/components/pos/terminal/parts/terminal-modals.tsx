@@ -131,10 +131,9 @@ export function TerminalModals() {
         isHospitality={t.isHospitality}
         onPaymentConfirmed={t.handlePaymentConfirmed}
         onLinesChanged={() => {
-          // A line was replaced — the snapshot in currentOrderLines is stale. Close the split so
-          // it reopens against the refreshed order.
-          t.setPaymentOpen(false);
-          t.setResumeTotal(null);
+          // A line was replaced — refresh the snapshot with fresh server line ids IN PLACE so the
+          // split modal stays open and keeps working (closing mid-flow was reported as a bug).
+          void t.refreshCurrentOrderLines();
           queryClient.invalidateQueries({ queryKey: ['pos-orders'] });
         }}
       />

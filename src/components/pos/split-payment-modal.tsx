@@ -74,6 +74,16 @@ export function SplitPaymentModal({
   const seatMax = Math.max(2, ...orderLines.map((l) => l.seat ?? 0));
   const [guestCount, setGuestCount] = useState(seatMax);
   const [lineAssignments, setLineAssignments] = useState<number[]>(() => orderLines.map((l) => l.seat ?? 0));
+  // Re-derive guest assignments whenever the LINE LIST itself changes (an item was replaced /
+  // added) — stale indexes would price the wrong lines to guests. Seat tags repopulate defaults.
+  const lineIdsKey = orderLines.map((l) => l.id).join('|');
+  const prevLineIdsRef = useRef(lineIdsKey);
+  useEffect(() => {
+    if (prevLineIdsRef.current === lineIdsKey) return;
+    prevLineIdsRef.current = lineIdsKey;
+    setLineAssignments(orderLines.map((l) => l.seat ?? 0));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lineIdsKey]);
   const [itemSplitPayer, setItemSplitPayer] = useState<number | null>(null); // guest index (1-based)
   const [paidGuests, setPaidGuests] = useState<Set<number>>(new Set());
   const [cashGiven, setCashGiven] = useState('');
@@ -706,18 +716,16 @@ export function SplitPaymentModal({
         </div>
       </div>
 
-      {/* Replace-item flow: original line → Parked Items, replacement → kitchen. On completion the
-          line list changed, so guest assignments no longer line up — reset them and tell the caller
-          to refetch orderLines. */}
+      {/* Replace-item flow: original line → Parked Items, replacement → kitchen. The caller
+          refetches orderLines; the lineIdsKey effect above re-derives guest assignments when the
+          fresh list arrives. */}
       <ReplaceItemDialog
         open={replacingLine !== null}
         onClose={() => setReplacingLine(null)}
         orderId={orderId}
         line={replacingLine}
         onDone={() => {
-          setLineAssignments(orderLines.map(() => 0));
-          setPaidGuests(new Set());
-          toast.info('Items changed — re-assign guests for the split.');
+          toast.info('Items updated — check guest assignments before collecting payment.');
           onLinesChanged?.();
         }}
       />

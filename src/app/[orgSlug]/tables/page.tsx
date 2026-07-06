@@ -14,6 +14,7 @@ import { useTables, useSections, useUpdateTableStatus, useReleaseTable, useMerge
 import { usePermissions, P } from '@/hooks/usePermissions';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { useAuthStore } from '@/store/auth';
+import { apiClient } from '@/lib/api/client';
 import {
   Calendar,
   CheckSquare,
@@ -672,12 +673,18 @@ function MyBillsTab({ orgSlug }: { orgSlug: string }) {
             queryClient.invalidateQueries({ queryKey: ['pos-orders'] });
             queryClient.invalidateQueries({ queryKey: ['pos-tables'] });
           }}
-          onLinesChanged={() => {
-            // The order's lines changed under this snapshot — refresh and reopen Split for the
-            // fresh line list rather than splitting against stale items.
-            setSplitOrder(null);
+          onLinesChanged={async () => {
+            // An item was replaced under this snapshot — refetch the order and swap it in place so
+            // the split modal STAYS OPEN with the fresh line list (closing mid-flow was reported
+            // as a bug). Fall back to closing only if the refetch fails.
             queryClient.invalidateQueries({ queryKey: ['pos-orders'] });
             queryClient.invalidateQueries({ queryKey: ['pos-tables'] });
+            try {
+              const fresh = await apiClient.get<any>(`/api/v1/${user?.tenant_id}/pos/orders/${splitOrder.id}`);
+              setSplitOrder(fresh);
+            } catch {
+              setSplitOrder(null);
+            }
           }}
         />
       )}

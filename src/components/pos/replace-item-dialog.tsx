@@ -116,8 +116,18 @@ export function ReplaceItemDialog({
   };
 
   return (
-    <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-card rounded-2xl border border-border shadow-2xl w-full max-w-md flex flex-col max-h-[80vh]">
+    // This dialog is mounted INSIDE other modals (e.g. SplitPaymentModal, whose backdrop closes on
+    // click) — stop every click here from bubbling up, or the first click (selecting a search
+    // result) would close the parent modal and abort the replace mid-flow. Backdrop click closes
+    // only THIS dialog.
+    <div
+      className="fixed inset-0 z-60 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+      onClick={(e) => { e.stopPropagation(); reset(); onClose(); }}
+    >
+      <div
+        className="bg-card rounded-2xl border border-border shadow-2xl w-full max-w-md flex flex-col max-h-[80vh]"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="px-4 pt-4 pb-3 border-b border-border flex items-start justify-between gap-3">
           <div className="min-w-0">
             <h3 className="text-base font-bold flex items-center gap-2">

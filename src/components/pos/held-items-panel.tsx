@@ -97,8 +97,15 @@ export function HeldItemsPanel({ compact = false }: { compact?: boolean }) {
 
       {/* Void confirmation with reason — the write-off "last resort" path. */}
       {voiding && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-card rounded-2xl border border-border shadow-2xl w-full max-w-sm p-5 space-y-3">
+        // Panel can sit inside click-to-close modals — keep clicks from bubbling to their backdrops.
+        <div
+          className="fixed inset-0 z-60 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+          onClick={(e) => { e.stopPropagation(); setVoiding(null); }}
+        >
+          <div
+            className="bg-card rounded-2xl border border-border shadow-2xl w-full max-w-sm p-5 space-y-3"
+            onClick={(e) => e.stopPropagation()}
+          >
             <h4 className="text-sm font-bold flex items-center gap-2">
               <Ban className="h-4 w-4 text-destructive" /> Void parked item
             </h4>

@@ -233,6 +233,8 @@ export interface TerminalContextValue {
   paymentOpen: boolean;
   setPaymentOpen: (v: boolean) => void;
   currentOrderLines: OrderLineItem[];
+  /** Refetch the current order's lines (fresh server line ids) after they changed server-side. */
+  refreshCurrentOrderLines: () => Promise<void>;
   resumeTotal: number | null;
   setResumeTotal: (v: number | null) => void;
   handlePaymentConfirmed: (settled?: CreatedOrder) => Promise<void>;
@@ -303,6 +305,25 @@ export function useTerminal(): TerminalContextValue {
 }
 
 // ─── Provider ─────────────────────────────────────────────────────────────────
+
+/**
+ * Map server order lines (ent JSON, `edges.lines`) → the split modal's OrderLineItem shape.
+ * Soft-voided / set-aside lines are dropped (no longer payable). Per-line operations
+ * (set-aside / replace) REQUIRE the server's POSOrderLine ids — cart items carry catalog ids,
+ * which those endpoints 404 on, so server lines are always preferred when available.
+ */
+function mapServerLines(lines: any[]): OrderLineItem[] {
+  return (lines ?? [])
+    .filter((l) => l.voided_qty == null)
+    .map((l) => ({
+      id: l.id,
+      name: l.name ?? l.item_name ?? l.sku ?? 'Item',
+      quantity: l.quantity ?? 1,
+      unitPrice: l.unit_price ?? 0,
+      totalPrice: l.total_price ?? (l.unit_price ?? 0) * (l.quantity ?? 1),
+      seat: l.metadata?.seat,
+    }));
+}
 
 export function TerminalProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -1007,14 +1028,19 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
           setCurrentOrderNumber(data.order_number || '');
           setFiredCourses(0);
           setCurrentOrderCourses(courses);
-          setCurrentOrderLines(cart.map((item) => ({
-            id: item.id,
-            name: item.name,
-            quantity: item.quantity,
-            unitPrice: item.price + (item.modifierTotal ?? 0),
-            totalPrice: (item.price + (item.modifierTotal ?? 0)) * item.quantity,
-            seat: item.seat,
-          })));
+          {
+            // Prefer the SERVER lines from the create response (real POSOrderLine ids — required
+            // by per-line set-aside/replace); the cart mapping is only an offline/legacy fallback.
+            const serverLines: any[] = data.edges?.lines ?? data.lines ?? [];
+            setCurrentOrderLines(serverLines.length ? mapServerLines(serverLines) : cart.map((item) => ({
+              id: item.id,
+              name: item.name,
+              quantity: item.quantity,
+              unitPrice: item.price + (item.modifierTotal ?? 0),
+              totalPrice: (item.price + (item.modifierTotal ?? 0)) * item.quantity,
+              seat: item.seat,
+            })));
+          }
 
           // Mark table occupied when a dine-in order is created with a table
           if (tableId && orderId) {
@@ -1092,22 +1118,27 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
 
   // Resume a parked (draft) sale: load it as the current order and open its payment modal.
   const handleResumeParked = (order: any) => {
-    const lines: any[] = order.edges?.lines ?? order.lines ?? [];
     setCurrentOrderId(order.id);
     setCurrentOrderNumber(order.order_number ?? '');
-    setCurrentOrderLines(
-      lines.map((l) => ({
-        id: l.id,
-        name: l.name ?? l.item_name ?? l.sku ?? 'Item',
-        quantity: l.quantity ?? 1,
-        unitPrice: l.unit_price ?? 0,
-        totalPrice: (l.unit_price ?? 0) * (l.quantity ?? 1),
-      }))
-    );
+    setCurrentOrderLines(mapServerLines(order.edges?.lines ?? order.lines ?? []));
     setResumeTotal(order.total_amount ?? 0);
     setParkedOpen(false);
     setPaymentOpen(true);
   };
+
+  // Refetch the current order's lines from the server (e.g. after a replace-item changed them
+  // under the open split modal) so the modal keeps working against fresh line ids in place.
+  const refreshCurrentOrderLines = useCallback(async () => {
+    const tenantId = user?.tenant_id ?? '';
+    if (!tenantId || !currentOrderId) return;
+    try {
+      const fresh = await apiClient.get<any>(`/api/v1/${tenantId}/pos/orders/${currentOrderId}`);
+      setCurrentOrderLines(mapServerLines(fresh.edges?.lines ?? fresh.lines ?? []));
+      if (typeof fresh.total_amount === 'number') setResumeTotal(fresh.total_amount);
+    } catch {
+      // keep the stale snapshot; list invalidation still refreshes other surfaces
+    }
+  }, [user, currentOrderId]);
 
   // Sync the keyboard-checkout ref to the current closure each render.
   placeOrderRef.current = handlePlaceOrder;
@@ -1196,13 +1227,17 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
       setCurrentOrderNumber(orderNumber);
       setFiredCourses(0);
       setCurrentOrderCourses(courses);
-      setCurrentOrderLines(cart.map((item) => ({
-        id: item.id,
-        name: item.name,
-        quantity: item.quantity,
-        unitPrice: item.price + (item.modifierTotal ?? 0),
-        totalPrice: (item.price + (item.modifierTotal ?? 0)) * item.quantity,
-      })));
+      {
+        // Same as handlePlaceOrder: server line ids when present, cart mapping as fallback.
+        const serverLines: any[] = data.edges?.lines ?? data.lines ?? [];
+        setCurrentOrderLines(serverLines.length ? mapServerLines(serverLines) : cart.map((item) => ({
+          id: item.id,
+          name: item.name,
+          quantity: item.quantity,
+          unitPrice: item.price + (item.modifierTotal ?? 0),
+          totalPrice: (item.price + (item.modifierTotal ?? 0)) * item.quantity,
+        })));
+      }
       if (tableId && orderId) assignTable.mutate({ tableId, orderId });
       return { orderId, orderNumber };
     } catch (e) {
@@ -1285,7 +1320,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
     createOrderPending: createOrder.isPending,
     addOrderLinesPending: addOrderLines.isPending,
     currentOrderId, currentOrderNumber, currentOrderCourses, firedCourses, firingCourse, handleFireCourse,
-    paymentOpen, setPaymentOpen, currentOrderLines, resumeTotal, setResumeTotal, handlePaymentConfirmed,
+    paymentOpen, setPaymentOpen, currentOrderLines, refreshCurrentOrderLines, resumeTotal, setResumeTotal, handlePaymentConfirmed,
     expenseOpen, setExpenseOpen, recentOpen, setRecentOpen, registerOpen, setRegisterOpen,
     sellReturnOpen, setSellReturnOpen, calcOpen, setCalcOpen, cartOpen, setCartOpen,
     parkedOpen, setParkedOpen,

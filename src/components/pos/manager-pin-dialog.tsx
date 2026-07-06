@@ -76,7 +76,9 @@ export function ManagerPinDialog({ open, action, label, onApproved, onClose }: M
   }
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center">
+    // May be nested inside click-to-close modals (e.g. HeldItemsPanel) — don't let clicks bubble
+    // to a parent backdrop and dismiss the flow mid-approval.
+    <div className="fixed inset-0 z-[60] flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
       <div className="fixed inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
       <div className="relative z-[61] w-full max-w-sm mx-4 bg-card border border-border rounded-2xl shadow-xl p-5 space-y-4">
         <div className="flex items-center justify-between">
