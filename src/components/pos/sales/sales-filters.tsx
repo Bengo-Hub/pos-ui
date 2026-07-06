@@ -24,12 +24,14 @@ export interface SalesFilterState {
  * payment methods from the tenant's LIVE tenders (not a hardcoded list), staff from the
  * staff list. Emits partial patches; the parent owns state + page reset.
  */
-export function SalesFilters({ state, onChange, outlets, staff, fixedSource }: {
+export function SalesFilters({ state, onChange, outlets, staff, fixedSource, hideUserFilter }: {
   state: SalesFilterState;
   onChange: (patch: Partial<SalesFilterState>) => void;
   outlets: { id: string; name: string }[];
   staff: any[];
   fixedSource?: string;
+  /** Own-only users (cashiers/waiters on "My Sales") must not filter by other users (QA req 6). */
+  hideUserFilter?: boolean;
 }) {
   const tendersQ = useTenders();
   // Distinct tender types configured for this tenant → the Payment Method options.
@@ -71,12 +73,14 @@ export function SalesFilters({ state, onChange, outlets, staff, fixedSource }: {
         <div className="text-[11px] font-semibold text-muted-foreground">Date Range
           <DateRangePicker value={state.range} onChange={(range) => onChange({ range })} className="mt-0.5" />
         </div>
-        <label className="text-[11px] font-semibold text-muted-foreground">User
-          <select className={selectCls} value={state.userId} onChange={(e) => onChange({ userId: e.target.value })}>
-            <option value="">All</option>
-            {staff.map((s: any) => <option key={s.id} value={s.user_id}>{s.name}</option>)}
-          </select>
-        </label>
+        {!hideUserFilter && (
+          <label className="text-[11px] font-semibold text-muted-foreground">User
+            <select className={selectCls} value={state.userId} onChange={(e) => onChange({ userId: e.target.value })}>
+              <option value="">All</option>
+              {staff.map((s: any) => <option key={s.id} value={s.user_id}>{s.name}</option>)}
+            </select>
+          </label>
+        )}
         <label className="text-[11px] font-semibold text-muted-foreground">Shipping Status
           <select className={selectCls} value={state.shippingStatus} onChange={(e) => onChange({ shippingStatus: e.target.value })}>
             {SHIPPING_STATUSES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}

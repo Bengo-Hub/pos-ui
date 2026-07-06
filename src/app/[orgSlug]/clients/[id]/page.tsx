@@ -5,6 +5,7 @@ import { ArrowLeft, Calendar, Gift, Phone, ShoppingBag, Star, UserX } from 'luci
 import { ModuleGate } from '@/components/auth/module-gate';
 import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
 import { useClient, useClientOrders } from '@/hooks/useClients';
+import { CreditTermsCard } from '@/components/pos/clients/credit-terms';
 import { useModuleAccess } from '@/hooks/use-module-access';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api/client';
@@ -140,6 +141,9 @@ export default function ClientDetailPage() {
                 <p className="text-xs text-muted-foreground">Points</p>
               </div>
             </div>
+
+            {/* Credit terms (QA req 1): AR balance + credit limit / payment period from treasury */}
+            <CreditTermsCard accountId={account.id} />
 
             {/* Service preferences */}
             {topServices.length > 0 && (

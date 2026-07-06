@@ -6,11 +6,34 @@ export interface LoyaltyAccount {
   customer_id?: string;
   customer_phone: string;
   customer_name: string;
+  customer_email?: string;
+  crm_contact_id?: string;
   points_balance: number;
   lifetime_points: number;
   program_id?: string;
   created_at: string;
   updated_at: string;
+}
+
+/** Search params for the customer picker — the backend matches each as a substring. */
+export interface CustomerSearchParams {
+  phone?: string;
+  name?: string;
+  email?: string;
+}
+
+/**
+ * classifySearchQuery routes one free-text query to the right search param (QA req 2:
+ * search by name, phone OR email everywhere): contains "@" → email; mostly digits with
+ * ≥7 of them → phone; anything else → name.
+ */
+export function classifySearchQuery(q: string): CustomerSearchParams {
+  const query = q.trim();
+  if (!query) return {};
+  if (query.includes('@')) return { email: query };
+  const digits = query.replace(/\D/g, '');
+  if (digits.length >= 7 && /^[\d\s+\-()]+$/.test(query)) return { phone: query };
+  return { name: query };
 }
 
 export interface LoyaltyTransaction {
@@ -40,11 +63,11 @@ export const clientsApi = {
   // (NOT `{ accounts }`). Read `data` (falling back to `accounts`/array) and re-expose it as
   // `accounts` so callers get a stable shape — reading `.accounts` off the raw envelope always
   // yielded undefined, which is why customer search reported "not found" for real customers.
-  searchAccounts: (tenantID: string, phone?: string, name?: string) =>
+  searchAccounts: (tenantID: string, phone?: string, name?: string, email?: string) =>
     apiClient
       .get<{ data?: LoyaltyAccount[]; accounts?: LoyaltyAccount[]; total?: number } | LoyaltyAccount[]>(
         `${base(tenantID)}/loyalty/accounts`,
-        { phone, name }
+        { phone, name, email }
       )
       .then((res) => {
         const accounts = Array.isArray(res) ? res : res.data ?? res.accounts ?? [];

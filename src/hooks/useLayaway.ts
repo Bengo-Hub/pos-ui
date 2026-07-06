@@ -25,6 +25,7 @@ export interface LayawayPayment {
 
 export interface LayawayPlan {
   id: string;
+  outlet_id?: string;
   customer_name: string;
   customer_phone?: string;
   customer_email?: string;
@@ -40,9 +41,13 @@ export interface LayawayPlan {
 }
 
 export interface CreateLayawayInput {
+  /** Branch/outlet the plan belongs to — required by the backend (defaults to the user's outlet). */
+  outlet_id: string;
   customer_name: string;
   customer_phone?: string;
   customer_email?: string;
+  /** Loyalty account of the picked/created customer (CRM-synced) — required for customer party. */
+  loyalty_account_id?: string;
   total_amount: number;
   deposit_amount: number;
   due_date?: string;
@@ -65,18 +70,21 @@ export interface RecordPaymentInput {
 
 export const layawayKeys = {
   all: (tid: string) => ['layaways', tid] as const,
-  list: (tid: string, status?: string) => ['layaways', tid, 'list', status] as const,
+  list: (tid: string, status?: string, outletId?: string) => ['layaways', tid, 'list', status, outletId] as const,
   detail: (tid: string, id: string) => ['layaways', tid, id] as const,
 };
 
 // ─── Hooks ───────────────────────────────────────────────────────────────────
 
-export function useLayawayPlans(status?: string) {
+export function useLayawayPlans(status?: string, outletId?: string) {
   const tenantID = useTenantID();
   return useQuery({
-    queryKey: layawayKeys.list(tenantID, status),
+    queryKey: layawayKeys.list(tenantID, status, outletId),
     queryFn: () =>
-      apiClient.get<{ data: LayawayPlan[]; total: number }>(basePath(tenantID), status ? { status } : undefined),
+      apiClient.get<{ data: LayawayPlan[]; total: number }>(basePath(tenantID), {
+        ...(status ? { status } : {}),
+        ...(outletId ? { outlet_id: outletId } : {}),
+      }),
     enabled: !!tenantID,
     select: (res) => res.data ?? [],
   });

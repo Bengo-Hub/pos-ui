@@ -1,28 +1,34 @@
 'use client';
 
 /**
- * CustomerSearch — a rich, phone-first customer picker (same UX as the POS loyalty field).
+ * CustomerSearch — a rich customer picker that searches by NAME, PHONE or EMAIL (QA req 2).
  *
- * Type a phone → it searches the tenant's CRM/loyalty customers (debounced, format-normalized) and
- * shows matches. Pick one to attach it. If none match, an "Add new customer" inline form creates the
- * contact (loyalty account → synced to MarketFlow CRM) and selects it. When nothing is chosen the
- * field falls back to the seeded **Walk-in Customer** (anonymous) — so every sale has a customer.
+ * Type anything → the query is classified (contains "@" = email, mostly digits = phone, else
+ * name) and searched against the tenant's CRM/loyalty customers (debounced, phone
+ * format-normalized). Pick a match to attach it. If none match, an "Add new customer" inline
+ * form creates the contact (loyalty account → synced to MarketFlow CRM) and selects it. When
+ * nothing is chosen the field falls back to the seeded **Walk-in Customer** (anonymous) — so
+ * every sale has a customer.
  *
  * Emits the selected customer (or the walk-in sentinel) via onChange. Parents that need a real
- * debtor (e.g. credit sales) should disallow walk-in via `requireRealCustomer`.
+ * debtor (credit sales, layaway, quotations) should disallow walk-in via `requireRealCustomer`.
  */
 
 import { useEffect, useState } from 'react';
 import { Loader2, UserPlus, UserRound, X, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { useClientSearch, useCreateLoyaltyAccount } from '@/hooks/useClients';
+import { classifySearchQuery } from '@/lib/api/clients';
 import { apiErrorMessage } from '@/lib/api/error-message';
-import { normalizeKePhone, nationalSubscriberDigits, isUsablePhone } from '@/lib/phone';
+import { normalizeKePhone, nationalSubscriberDigits } from '@/lib/phone';
 
 export interface SelectedCustomer {
   phone: string;
   name: string;
   isWalkIn: boolean;
+  /** Loyalty account id — set when picked from search or newly created (layaway needs it). */
+  accountId?: string;
+  email?: string;
 }
 
 export const WALK_IN_CUSTOMER: SelectedCustomer = {
@@ -36,22 +42,31 @@ interface CustomerSearchProps {
   onChange: (c: SelectedCustomer) => void;
   /** When true, the walk-in fallback is not offered (e.g. credit sales need a real debtor). */
   requireRealCustomer?: boolean;
+  /** Context shown when a real customer is required (default "a credit sale"). */
+  requiredForLabel?: string;
 }
 
-export function CustomerSearch({ value, onChange, requireRealCustomer = false }: CustomerSearchProps) {
-  const [phone, setPhone] = useState('');
+export function CustomerSearch({ value, onChange, requireRealCustomer = false, requiredForLabel = 'a credit sale' }: CustomerSearchProps) {
+  const [query, setQuery] = useState('');
   const [debounced, setDebounced] = useState('');
   const [showAdd, setShowAdd] = useState(false);
   const [newName, setNewName] = useState('');
+  const [newPhone, setNewPhone] = useState('');
+  const [newEmail, setNewEmail] = useState('');
 
   useEffect(() => {
-    const t = setTimeout(() => setDebounced(phone), 400);
+    const t = setTimeout(() => setDebounced(query), 400);
     return () => clearTimeout(t);
-  }, [phone]);
+  }, [query]);
 
-  // Search the CRM/loyalty customers by the 9-digit national number so any stored format matches.
+  // Classify the free-text query into name / phone / email; phones search by the 9-digit
+  // national number so any stored format matches.
+  const params = classifySearchQuery(debounced);
+  const searchActive = debounced.trim().length >= 2;
   const { data, isLoading } = useClientSearch(
-    isUsablePhone(debounced) ? nationalSubscriberDigits(debounced) || debounced.trim() : undefined,
+    searchActive && params.phone ? nationalSubscriberDigits(params.phone) || params.phone.trim() : undefined,
+    searchActive ? params.name : undefined,
+    searchActive ? params.email : undefined,
   );
   const matches = data?.accounts ?? [];
   const createAccount = useCreateLoyaltyAccount();
@@ -59,22 +74,43 @@ export function CustomerSearch({ value, onChange, requireRealCustomer = false }:
   const selected = value && !value.isWalkIn ? value : null;
 
   const select = (c: SelectedCustomer) => {
-    setPhone('');
+    setQuery('');
     setDebounced('');
     setShowAdd(false);
     setNewName('');
+    setNewPhone('');
+    setNewEmail('');
     onChange(c);
   };
 
+  const openAdd = () => {
+    // Seed the add-new form from whatever was typed: a phone query prefills the phone, a
+    // name query prefills the name, an email query prefills the email.
+    setNewPhone(params.phone ? normalizeKePhone(params.phone) : '');
+    setNewName(params.name ?? '');
+    setNewEmail(params.email ?? '');
+    setShowAdd(true);
+  };
+
   const handleAdd = () => {
-    const p = normalizeKePhone(phone);
+    const p = normalizeKePhone(newPhone);
     if (!newName.trim() || !p) return;
     createAccount.mutate(
-      { customer_name: newName.trim(), customer_phone: p },
       {
-        onSuccess: () => {
+        customer_name: newName.trim(),
+        customer_phone: p,
+        ...(newEmail.trim() ? { customer_email: newEmail.trim() } : {}),
+      },
+      {
+        onSuccess: (res) => {
           toast.success(`${newName.trim()} added`);
-          select({ phone: p, name: newName.trim(), isWalkIn: false });
+          select({
+            phone: p,
+            name: newName.trim(),
+            isWalkIn: false,
+            accountId: res?.id,
+            email: newEmail.trim() || undefined,
+          });
         },
         onError: async (e) => toast.error(await apiErrorMessage(e, 'Failed to add customer')),
       },
@@ -89,7 +125,11 @@ export function CustomerSearch({ value, onChange, requireRealCustomer = false }:
           <UserRound className="h-4 w-4 text-primary shrink-0" />
           <div className="min-w-0">
             <p className="text-sm font-semibold truncate">{selected.name}</p>
-            {selected.phone && <p className="text-xs text-muted-foreground truncate">{selected.phone}</p>}
+            {(selected.phone || selected.email) && (
+              <p className="text-xs text-muted-foreground truncate">
+                {[selected.phone, selected.email].filter(Boolean).join(' · ')}
+              </p>
+            )}
           </div>
         </div>
         <button
@@ -104,8 +144,7 @@ export function CustomerSearch({ value, onChange, requireRealCustomer = false }:
     );
   }
 
-  const showNotFound =
-    isUsablePhone(debounced) && !isLoading && matches.length === 0;
+  const showNotFound = searchActive && !isLoading && matches.length === 0;
 
   return (
     <div className="space-y-2">
@@ -120,13 +159,13 @@ export function CustomerSearch({ value, onChange, requireRealCustomer = false }:
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <input
-          type="tel"
-          value={phone}
-          onChange={(e) => setPhone(e.target.value)}
-          placeholder="Search customer by phone (e.g. 0712 345 678)"
+          type="text"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search by name, phone or email"
           className="w-full bg-background border border-border rounded-xl py-2.5 pl-10 pr-9 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
         />
-        {isLoading && isUsablePhone(debounced) && (
+        {isLoading && searchActive && (
           <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
         )}
       </div>
@@ -138,18 +177,28 @@ export function CustomerSearch({ value, onChange, requireRealCustomer = false }:
             <button
               key={c.id}
               type="button"
-              onClick={() => select({ phone: c.customer_phone, name: c.customer_name, isWalkIn: false })}
+              onClick={() =>
+                select({
+                  phone: c.customer_phone,
+                  name: c.customer_name,
+                  isWalkIn: false,
+                  accountId: c.id,
+                  email: c.customer_email || undefined,
+                })
+              }
               className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-accent transition-colors"
             >
               <UserRound className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
               <span className="text-sm font-medium truncate flex-1">{c.customer_name}</span>
-              <span className="text-xs text-muted-foreground">{c.customer_phone}</span>
+              <span className="text-xs text-muted-foreground truncate">
+                {[c.customer_phone, c.customer_email].filter(Boolean).join(' · ')}
+              </span>
             </button>
           ))}
         </div>
       )}
 
-      {/* Not found → add new customer */}
+      {/* Not found → add new customer (search-first: this only appears after no match) */}
       {showNotFound && (
         showAdd ? (
           <div className="space-y-2 rounded-xl border border-dashed border-border p-3">
@@ -160,7 +209,20 @@ export function CustomerSearch({ value, onChange, requireRealCustomer = false }:
               placeholder="Customer name"
               className="w-full bg-background border border-border rounded-lg py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
             />
-            <p className="text-xs text-muted-foreground">Phone: {normalizeKePhone(phone)}</p>
+            <input
+              type="tel"
+              value={newPhone}
+              onChange={(e) => setNewPhone(e.target.value)}
+              placeholder="Phone (e.g. 0712 345 678)"
+              className="w-full bg-background border border-border rounded-lg py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+            />
+            <input
+              type="email"
+              value={newEmail}
+              onChange={(e) => setNewEmail(e.target.value)}
+              placeholder="Email (optional)"
+              className="w-full bg-background border border-border rounded-lg py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+            />
             <div className="flex gap-2">
               <button
                 type="button"
@@ -171,7 +233,7 @@ export function CustomerSearch({ value, onChange, requireRealCustomer = false }:
               </button>
               <button
                 type="button"
-                disabled={!newName.trim() || createAccount.isPending}
+                disabled={!newName.trim() || !normalizeKePhone(newPhone) || createAccount.isPending}
                 onClick={handleAdd}
                 className="flex-1 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 disabled:opacity-50 flex items-center justify-center gap-2"
               >
@@ -183,17 +245,17 @@ export function CustomerSearch({ value, onChange, requireRealCustomer = false }:
         ) : (
           <button
             type="button"
-            onClick={() => setShowAdd(true)}
+            onClick={openAdd}
             className="w-full py-2 rounded-xl border border-dashed border-border text-sm text-muted-foreground hover:border-primary hover:text-primary transition-colors flex items-center justify-center gap-2"
           >
             <UserPlus className="h-3.5 w-3.5" />
-            Add &ldquo;{normalizeKePhone(phone)}&rdquo; as a new customer
+            No match — add &ldquo;{debounced.trim()}&rdquo; as a new customer
           </button>
         )
       )}
 
       {requireRealCustomer && !showNotFound && matches.length === 0 && (
-        <p className="text-xs text-amber-600 px-1">A customer is required for a credit sale.</p>
+        <p className="text-xs text-amber-600 px-1">A customer is required for {requiredForLabel}.</p>
       )}
     </div>
   );

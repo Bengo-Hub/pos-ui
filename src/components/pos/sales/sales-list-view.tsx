@@ -128,7 +128,7 @@ export function SalesListView({ orgSlug, fixedSource, title, subtitle }: {
         </div>
       </div>
 
-      <SalesFilters state={filterState} onChange={patchFilters} outlets={outlets} staff={staff} fixedSource={fixedSource} />
+      <SalesFilters state={filterState} onChange={patchFilters} outlets={outlets} staff={staff} fixedSource={fixedSource} hideUserFilter={ownOnly} />
 
       <Card>
         <CardHeader className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between py-4">
@@ -172,7 +172,8 @@ export function SalesListView({ orgSlug, fixedSource, title, subtitle }: {
                         onOpenDetail={() => setDetailId(o.id)}
                         cashierName={staffNameByUserId[o.user_id]}
                         outletName={outletNameById[o.outlet_id]}
-                        onCashierClick={(userId) => patchFilters({ userId })}
+                        // Own-only users can't pivot the list to another cashier (QA req 6).
+                        onCashierClick={ownOnly ? undefined : (userId) => patchFilters({ userId })}
                         onEditShipping={setShippingOrder} onViewPayments={setPaymentsOrder}
                         onDelete={setDeleteOrder} colCount={colCount} />
                     ))}
@@ -201,7 +202,7 @@ function SaleRow({ order: o, orgSlug, expanded, onToggleExpand, onOpenDetail, ca
   order: any; orgSlug: string; expanded: boolean;
   onToggleExpand: () => void; onOpenDetail: () => void;
   cashierName?: string; outletName?: string;
-  onCashierClick: (userId: string) => void;
+  onCashierClick?: (userId: string) => void;
   onEditShipping: (o: any) => void; onViewPayments: (o: any) => void; onDelete: (o: any) => void;
   colCount: number;
 }) {
@@ -238,7 +239,7 @@ function SaleRow({ order: o, orgSlug, expanded, onToggleExpand, onOpenDetail, ca
           ) : '—'}
         </td>
         <td className={`${td} text-xs`} onClick={(e) => e.stopPropagation()}>
-          {cashierName && o.user_id ? (
+          {cashierName && o.user_id && onCashierClick ? (
             <button className="text-primary hover:underline" title="Filter sales by this cashier"
               onClick={() => onCashierClick(o.user_id)}>
               {cashierName}

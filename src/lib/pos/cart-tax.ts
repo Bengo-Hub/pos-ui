@@ -66,11 +66,38 @@ export function computeCartTax(lines: CartTaxLine[], fallbackRatePct: number): C
     }
   }
 
-  const tax = Math.round(addedTax);
+  // Components stay at 2dp; the single whole-number rounding happens ONCE at the order level
+  // via applyRoundOff (rounding per-component and again on the total would double-round).
+  const tax = round2(addedTax);
+  const sub = round2(subtotal);
   return {
-    subtotal: Math.round(subtotal),
+    subtotal: sub,
     tax,
-    inclusiveTax: Math.round(inclusiveTax),
-    total: Math.round(subtotal) + tax,
+    inclusiveTax: round2(inclusiveTax),
+    total: round2(sub + tax),
   };
+}
+
+/** round2 normalizes a float to 2 decimal places (money components). */
+export function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
+export interface RoundOffResult {
+  /** Amount added to reach the next whole number (0 <= roundOff < 1). */
+  roundOff: number;
+  /** ceil(raw) — the whole-number payable. */
+  total: number;
+}
+
+/**
+ * applyRoundOff rounds an order's raw payable UP to the next whole number (QA: POS totals
+ * have no decimal points), returning the added `roundOff` so receipts/orders can show it as
+ * an explicit component: total = raw + roundOff. Mirrors pos-api orders.finalizeTotals —
+ * the server recomputes the same math, so till total == stored total.
+ */
+export function applyRoundOff(rawTotal: number): RoundOffResult {
+  const raw = round2(Math.max(0, rawTotal));
+  const total = Math.ceil(raw);
+  return { roundOff: round2(total - raw), total };
 }

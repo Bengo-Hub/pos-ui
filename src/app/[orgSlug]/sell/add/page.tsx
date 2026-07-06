@@ -21,6 +21,8 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { useStaffAdmin } from '@/hooks/useStaff';
 import { FeatureLock, useFeatureUpgrade } from '@bengo-hub/shared-ui-lib/subscription';
 import { apiClient } from '@/lib/api/client';
+import { applyRoundOff, computeCartTax } from '@/lib/pos/cart-tax';
+import { CustomerCreditHint } from '@/components/pos/clients/credit-terms';
 import { Button } from '@/components/ui/base';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -205,10 +207,21 @@ export default function AddSalePage() {
     setLines((p) => p.map((l, x) => (x === i ? { ...l, unitPrice: Math.max(0, v), priceEdited: true } : l)));
   };
 
-  const subtotal = useMemo(() => lines.reduce((s, l) => s + l.unitPrice * l.quantity, 0), [lines]);
-  const taxable = Math.max(0, subtotal - discount);
-  const tax = taxable * taxRate;
-  const total = taxable + tax;
+  // Per-line inclusive-aware tax + a single order-level ceiling round-off — the SAME model the
+  // POS terminal and pos-api use (see src/lib/pos/cart-tax.ts), so this preview equals the
+  // server's stored totals instead of stacking a flat VAT over the whole (discounted) cart.
+  const { subtotal, tax } = useMemo(() => {
+    const r = computeCartTax(
+      lines.map((l) => ({
+        gross: l.unitPrice * l.quantity,
+        taxRate: typeof l.item.tax_rate === 'number' ? l.item.tax_rate : undefined,
+        taxInclusive: l.item.tax_inclusive ?? undefined,
+      })),
+      taxRate * 100,
+    );
+    return { subtotal: r.subtotal, tax: r.tax };
+  }, [lines, taxRate]);
+  const { roundOff, total } = applyRoundOff(subtotal + tax - discount);
 
   function buildPayload() {
     return {
@@ -343,11 +356,18 @@ export default function AddSalePage() {
   // pos persists nothing). pos-ui → pos-api → treasury S2S.
   async function saveQuotation() {
     if (lines.length === 0) return;
+    // Quotations need a REAL customer (QA req 3) — phone is the CRM key that attributes the
+    // quotation to the right customer in treasury. Server rejects walk-in too.
+    if (!realCustomer) {
+      toast.error('Select or add a customer (with phone) to save a quotation — walk-in is not allowed.');
+      return;
+    }
     setQuotationSaving(true);
     try {
       await apiClient.post(`/api/v1/${tenantId}/pos/quotations`, {
         customer_name: custName || undefined,
         customer_phone: custPhone || undefined,
+        customer_email: customer?.email || undefined,
         notes: notes || undefined,
         lines: lines.map((l) => ({ name: l.item.name, sku: l.item.sku, quantity: l.quantity, unit_price: l.unitPrice })),
       });
@@ -457,6 +477,7 @@ export default function AddSalePage() {
           <div className="space-y-2">
             <label className="text-xs font-semibold text-muted-foreground">Customer</label>
             <CustomerSearch value={customer} onChange={setCustomer} requireRealCustomer={creditSale} />
+            {creditSale && realCustomer && <CustomerCreditHint accountId={customer?.accountId} saleTotal={total} />}
           </div>
         )}
 
@@ -583,6 +604,9 @@ export default function AddSalePage() {
               <input value={discount} onChange={(e) => setDiscount(Math.max(0, parseFloat(e.target.value) || 0))} className="w-24 text-right bg-background border border-border rounded py-1 px-2 text-sm tabular-nums" />
             </div>
             <div className="flex justify-between text-sm"><span className="text-muted-foreground">VAT ({Math.round(taxRate * 100)}%)</span><span className="tabular-nums font-medium">{fmt(tax)}</span></div>
+            {roundOff > 0 && (
+              <div className="flex justify-between text-xs text-muted-foreground"><span>Round Off</span><span className="tabular-nums">{fmt(roundOff)}</span></div>
+            )}
             <div className="flex justify-between pt-2 border-t border-border"><span className="font-bold">Total</span><span className="font-bold text-primary tabular-nums">{fmt(total)}</span></div>
           </div>
 

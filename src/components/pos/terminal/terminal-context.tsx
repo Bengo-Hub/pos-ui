@@ -23,7 +23,7 @@ import type { ReceiptData } from '@/components/pos/receipt-preview';
 import type { LoyaltyState } from '@/components/retail/LoyaltyPanel';
 import type { CreatedOrder } from '@/components/pos/terminal/inline-payment-bar';
 import { printKitchenBarTickets } from '@/lib/pos/kitchen-bar-print';
-import { computeCartTax } from '@/lib/pos/cart-tax';
+import { applyRoundOff, computeCartTax } from '@/lib/pos/cart-tax';
 import { terminalConfigFor, type TerminalConfig } from '@/lib/use-case-config';
 import {
   useFullCatalog, useCategories, useCreateOrder, useAddOrderLines, useVoidOrder,
@@ -172,6 +172,18 @@ export interface TerminalContextValue {
   discountOpen: boolean;
   setDiscountOpen: (v: boolean) => void;
   applyDiscount: (amount: number, reason: string) => void;
+  // Manager quick-edit order adjustments (QA req 4): order-level tax + additional charges.
+  orderTax: number;
+  orderTaxOpen: boolean;
+  setOrderTaxOpen: (v: boolean) => void;
+  applyOrderTax: (amount: number) => void;
+  charges: Record<string, number>;
+  chargesTotal: number;
+  chargesOpen: boolean;
+  setChargesOpen: (v: boolean) => void;
+  applyCharges: (charges: Record<string, number>) => void;
+  /** Ceiling round-off so the payable is a whole number: total = raw + roundOff. */
+  roundOff: number;
   pendingApprovalAction: string | null;
   setPendingApprovalAction: (v: string | null) => void;
   confirmApproval: (approvalToken: string) => void;
@@ -482,6 +494,10 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
   // Manual order-level discount (KES amount) + reason; an over-limit discount
   // triggers a manager step-up (handled in handlePlaceOrder on a 422).
   const [manualDiscount, setManualDiscountState] = useState(0);
+  const [orderTax, setOrderTax] = useState(0);
+  const [orderTaxOpen, setOrderTaxOpen] = useState(false);
+  const [charges, setCharges] = useState<Record<string, number>>({});
+  const [chargesOpen, setChargesOpen] = useState(false);
   const [discountReason, setDiscountReason] = useState('');
   const [discountOpen, setDiscountOpen] = useState(false);
   // Action a manager must approve (order.discount_override | price.override), set
@@ -839,13 +855,36 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
     setCart((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const clearCart = () => { setCart([]); ageVerifiedRef.current = false; setManualDiscountState(0); setDiscountReason(''); };
+  const clearCart = () => {
+    setCart([]);
+    ageVerifiedRef.current = false;
+    setManualDiscountState(0);
+    setDiscountReason('');
+    setOrderTax(0);
+    setCharges({});
+  };
 
   // Apply or clear a manual order-level discount (KES amount).
   const applyDiscount = (amount: number, reason: string) => {
     setManualDiscountState(Math.max(0, amount));
     setDiscountReason(reason);
     setDiscountOpen(false);
+  };
+
+  // Manager quick-edit: order-level tax added on top of per-line tax (0 clears it).
+  const applyOrderTax = (amount: number) => {
+    setOrderTax(Math.max(0, amount));
+    setOrderTaxOpen(false);
+  };
+
+  // Manager quick-edit: additional costs (packaging/service/shipping); zero entries drop out.
+  const applyCharges = (next: Record<string, number>) => {
+    const cleaned: Record<string, number> = {};
+    for (const [k, v] of Object.entries(next)) {
+      if (v > 0) cleaned[k] = v;
+    }
+    setCharges(cleaned);
+    setChargesOpen(false);
   };
 
   // repriceCart switches the pricing profile and re-resolves each cart line's base price against the
@@ -912,7 +951,12 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
     return { subtotal: r.subtotal, tax: r.tax, inclusiveTax: r.inclusiveTax };
   }, [cart, taxRate]);
   const loyaltyDiscount = loyaltyState?.redeemDiscount ?? 0;
-  const total = Math.max(0, subtotal + tax - loyaltyDiscount - manualDiscount);
+  const chargesTotal = Object.values(charges).reduce((s, v) => s + (v > 0 ? v : 0), 0);
+  // Whole-number payable (QA req 5): ceiling round-off applied ONCE at the order level —
+  // the same math pos-api's finalizeTotals runs, so till total == stored total.
+  const { roundOff, total } = applyRoundOff(
+    subtotal + tax + orderTax + chargesTotal - loyaltyDiscount - manualDiscount
+  );
   const cartItemCount = cart.reduce((s, c) => s + c.quantity, 0);
 
   // ─── Place Order ────────────────────────────────────────────────────────
@@ -1007,6 +1051,8 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
         coversCount: coversParam > 1 ? coversParam : undefined,
         discountAmount: (loyaltyDiscount + manualDiscount) || undefined,
         discountReason: discountReason || undefined,
+        orderTaxAmount: orderTax || undefined,
+        charges: chargesTotal > 0 ? charges : undefined,
         approvalToken,
         customerPhone: loyaltyState?.customerPhone || undefined,
         customerName: loyaltyState?.customerName || undefined,
@@ -1310,6 +1356,8 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
     handleCategoryChange, handleSearchChange, handleSearchKeyDown,
     cart, cartItemCount, subtotal, tax, inclusiveTax, loyaltyDiscount, total,
     manualDiscount, discountReason, discountOpen, setDiscountOpen, applyDiscount,
+    orderTax, orderTaxOpen, setOrderTaxOpen, applyOrderTax,
+    charges, chargesTotal, chargesOpen, setChargesOpen, applyCharges, roundOff,
     pendingApprovalAction, setPendingApprovalAction, confirmApproval,
     priceEditIndex, setPriceEditIndex, setLinePrice,
     addItemToCart, handleItemTap, proceedWithItem, handleScaleAddToCart,

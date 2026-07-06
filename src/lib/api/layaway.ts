@@ -30,9 +30,13 @@ export interface LayawayPayment {
 }
 
 export interface CreateLayawayPlanInput {
+  /** Branch/outlet the plan belongs to — required by the backend. */
+  outlet_id: string;
   customer_name: string;
   customer_phone?: string;
   customer_email?: string;
+  /** Loyalty account of the picked/created customer (CRM-synced) — required for customer party. */
+  loyalty_account_id?: string;
   total_amount: number;
   deposit_amount: number;
   due_date?: string;
@@ -52,7 +56,7 @@ export function getCatalogItemByBarcode(tenantSlug: string, barcode: string) {
   return apiClient.get<any>(`${base(tenantSlug)}/catalog/barcode/${barcode}`);
 }
 
-export function listLayawayPlans(tenantSlug: string, params?: { status?: string }) {
+export function listLayawayPlans(tenantSlug: string, params?: { status?: string; outlet_id?: string }) {
   return apiClient.get<{ data: LayawayPlan[]; total: number }>(
     `${base(tenantSlug)}/layaways`,
     params,

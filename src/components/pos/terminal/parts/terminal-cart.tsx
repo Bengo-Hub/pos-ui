@@ -20,7 +20,7 @@ import { cn } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import {
-  Ban, ChefHat, Eye, EyeOff, Flame, Loader2, Minus, Plus, ShoppingCart, Tag, Trash2, X,
+  Ban, ChefHat, Eye, EyeOff, Flame, Loader2, Minus, Pencil, Plus, ShoppingCart, Tag, Trash2, X,
 } from 'lucide-react';
 
 export function TerminalCart() {
@@ -35,6 +35,9 @@ export function TerminalCart() {
   // (cfg.showCostMargin) — hospitality/QSR/services never show cost/margin, whatever the role.
   const canViewCost = cfg.showCostMargin && (t.can('pos.catalog.view_cost') || t.can('pos.orders.manage'));
   const [costRevealed, setCostRevealed] = useState(false);
+  // Manager/admin quick-edit for order-level tax + additional charges (QA req 4). The pencil
+  // triggers only render for managers; the server re-gates via order.adjustment regardless.
+  const canAdjustOrder = t.can('pos.orders.manage');
 
   return (
     <>
@@ -341,6 +344,43 @@ export function TerminalCart() {
                   className="flex items-center gap-1 text-xs text-muted-foreground hover:text-primary">
                   <Tag className="h-3.5 w-3.5" /> Add discount
                 </button>
+              )}
+              {/* Manager quick-edit adjustments (QA req 4): Order Tax(+) and Charges(+) rows with
+                  pencil edits for managers/admins; non-managers see values but the server gates
+                  edits behind a manager step-up (order.adjustment) anyway. */}
+              {(t.orderTax > 0 || canAdjustOrder) && (
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-muted-foreground flex items-center gap-1">
+                    Order Tax(+)
+                    {canAdjustOrder && (
+                      <button onClick={() => t.setOrderTaxOpen(true)} aria-label="Edit order tax"
+                        className="text-muted-foreground hover:text-primary">
+                        <Pencil className="h-3 w-3" />
+                      </button>
+                    )}
+                  </span>
+                  <span className="font-medium tabular-nums">KES {t.orderTax.toLocaleString()}</span>
+                </div>
+              )}
+              {(t.chargesTotal > 0 || canAdjustOrder) && (
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-muted-foreground flex items-center gap-1">
+                    Charges(+)
+                    {canAdjustOrder && (
+                      <button onClick={() => t.setChargesOpen(true)} aria-label="Edit additional charges"
+                        className="text-muted-foreground hover:text-primary">
+                        <Pencil className="h-3 w-3" />
+                      </button>
+                    )}
+                  </span>
+                  <span className="font-medium tabular-nums">KES {t.chargesTotal.toLocaleString()}</span>
+                </div>
+              )}
+              {t.roundOff > 0 && (
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span>Round Off</span>
+                  <span className="tabular-nums">KES {t.roundOff.toFixed(2)}</span>
+                </div>
               )}
               <div className="flex justify-between pt-2 border-t border-border">
                 <span className="font-bold text-base">Total</span>

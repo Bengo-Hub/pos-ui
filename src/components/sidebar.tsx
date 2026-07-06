@@ -15,6 +15,7 @@ import { useParams, usePathname } from 'next/navigation';
 import { useState } from 'react';
 import { OutletSwitcher } from './outlet-switcher';
 import { buildNavGroups, type NavItem, type NavGroup } from '@/lib/pos/nav-config';
+import { P } from '@/lib/rbac/permissions';
 
 interface SidebarProps {
   open?: boolean;
@@ -183,6 +184,12 @@ export function Sidebar({ open = false, onClose, collapsed = false }: SidebarPro
   // for them. Quick-service has NO table service — the POS terminal IS the cashier's order-entry
   // surface, so quick-service cashiers must keep it. Hence: hospitality only, not QSR.
   const isCashierHosp = !isHQUser && userRoles.includes('cashier') && outletProfile === 'hospitality';
+  // Own-only principals (view_own without view/change/manage — cashiers, waiters) see the sales
+  // menu as "My Sales"/"My POS" (QA req 6) — the SAME permission test the sales list uses for
+  // its scoped view, so sidebar labels and page titles can never disagree.
+  const ownSalesOnly =
+    !canAny([P.ORDERS_VIEW, P.ORDERS_MANAGE, P.ORDERS_CHANGE]) && canAny([P.ORDERS_VIEW_OWN]) &&
+    !isSuperuser && !isSuperUser && !isPlatformOwner;
 
   // Single source of truth for the nav — shared with the Modules settings tab so the "hide these
   // screens" toggles always match what renders. Gating (permission/role/profile/subscription/hidden)
@@ -248,6 +255,14 @@ export function Sidebar({ open = false, onClose, collapsed = false }: SidebarPro
           // Waiters see their own shift page as "My Shifts".
           if (isWaiter && item.href === '/shifts') {
             return { ...item, label: 'My Shifts' };
+          }
+          // Own-only users (cashiers/waiters): the sales lists are scoped to THEIR sales, so the
+          // menu reads "My Sales"/"My POS" instead of "All Sales"/"POS Sales" (QA req 6).
+          if (ownSalesOnly && item.href === '/sell/all-sales') {
+            return { ...item, label: 'My Sales' };
+          }
+          if (ownSalesOnly && item.href === '/sell/pos-sales') {
+            return { ...item, label: 'My POS' };
           }
           return item;
         }),

@@ -50,6 +50,10 @@ export interface ReceiptData {
   subtotal: number;
   tax_amount: number;
   discount_amount: number;
+  /** Additional order costs (packaging/service/shipping) included in total_amount. */
+  charges_total?: number;
+  /** Ceiling round-off added so total_amount is a whole number. */
+  round_off?: number;
   total_amount: number;
   payment_method: string;
   amount_tendered: number;
@@ -312,6 +316,18 @@ export function ReceiptPreview({
               <div className="flex justify-between py-0.5 text-green-600">
                 <span>Discount</span>
                 <span>-{formatCurrency(receipt.discount_amount)}</span>
+              </div>
+            )}
+            {(receipt.charges_total ?? 0) > 0 && (
+              <div className="flex justify-between py-0.5">
+                <span>Charges</span>
+                <span>{formatCurrency(receipt.charges_total ?? 0)}</span>
+              </div>
+            )}
+            {(receipt.round_off ?? 0) > 0 && (
+              <div className="flex justify-between py-0.5">
+                <span>Round Off</span>
+                <span>{formatCurrency(receipt.round_off ?? 0)}</span>
               </div>
             )}
 

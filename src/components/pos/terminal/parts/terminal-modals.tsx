@@ -21,7 +21,9 @@ import { ReceiptPreview } from '@/components/pos/receipt-preview';
 import { CalculatorOverlay } from '@/components/pos/calculator-overlay';
 import { ManagerPinDialog } from '@/components/pos/manager-pin-dialog';
 import { VoidApprovalDialog } from '@/components/pos/void-approval-dialog';
+import { ChargesModal } from '@/components/pos/charges-modal';
 import { DiscountModal } from '@/components/pos/discount-modal';
+import { OrderTaxModal } from '@/components/pos/order-tax-modal';
 import { LinePriceModal } from '@/components/pos/line-price-modal';
 import { OrderPlacedDialog } from '@/components/pos/order-placed-dialog';
 import { RegisterDetailsModal, RecentTransactionsModal, SellReturnModal } from '@/components/pos/terminal/toolbar-modals';
@@ -164,10 +166,31 @@ export function TerminalModals() {
         onClose={() => t.setDiscountOpen(false)}
       />
 
+      <OrderTaxModal
+        open={t.orderTaxOpen}
+        subtotal={t.subtotal}
+        currentAmount={t.orderTax}
+        onApply={t.applyOrderTax}
+        onClose={() => t.setOrderTaxOpen(false)}
+      />
+
+      <ChargesModal
+        open={t.chargesOpen}
+        current={t.charges}
+        onApply={t.applyCharges}
+        onClose={() => t.setChargesOpen(false)}
+      />
+
       <ManagerPinDialog
         open={!!t.pendingApprovalAction}
         action={t.pendingApprovalAction ?? ''}
-        label={t.pendingApprovalAction === 'price.override' ? 'approve this price override' : 'approve this discount'}
+        label={
+          t.pendingApprovalAction === 'price.override'
+            ? 'approve this price override'
+            : t.pendingApprovalAction === 'order.adjustment'
+              ? 'approve this order adjustment'
+              : 'approve this discount'
+        }
         onClose={() => t.setPendingApprovalAction(null)}
         onApproved={t.confirmApproval}
       />

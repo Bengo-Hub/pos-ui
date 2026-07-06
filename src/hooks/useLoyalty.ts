@@ -1,6 +1,7 @@
 'use client';
 
 import { apiClient } from '@/lib/api/client';
+import { classifySearchQuery, type CustomerSearchParams } from '@/lib/api/clients';
 import { useAuthStore } from '@/store/auth';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
@@ -31,6 +32,7 @@ export interface LoyaltyAccount {
   tenant_id: string;
   customer_phone: string;
   customer_name: string;
+  customer_email?: string;
   points_balance: number;
   lifetime_points: number;
   program_id?: string;
@@ -109,15 +111,26 @@ interface PaginatedResponse<T> {
   limit: number;
 }
 
-export function useLoyaltyAccounts(phone?: string) {
+/**
+ * useLoyaltyAccounts lists/searches loyalty accounts. Pass a raw string to search the way the
+ * customer picker does (classified into name / phone / email via classifySearchQuery), or a
+ * params object for explicit control.
+ */
+export function useLoyaltyAccounts(search?: string | CustomerSearchParams) {
   const tenantID = useTenantID();
+  const params: CustomerSearchParams | undefined =
+    typeof search === 'string' ? classifySearchQuery(search) : search;
+  const query =
+    params && (params.phone || params.name || params.email)
+      ? { ...(params.phone ? { phone: params.phone } : {}), ...(params.name ? { name: params.name } : {}), ...(params.email ? { email: params.email } : {}) }
+      : undefined;
   return useQuery({
-    queryKey: ['loyalty-accounts', tenantID, phone],
+    queryKey: ['loyalty-accounts', tenantID, query?.phone, query?.name, query?.email],
     queryFn: () =>
       apiClient
         .get<PaginatedResponse<LoyaltyAccount>>(
           `${base(tenantID)}/accounts`,
-          phone ? { phone } : undefined,
+          query,
         )
         .then((res) => (Array.isArray(res) ? res : res.data ?? []))
         .then((list) => list.map(normalizeAccount)),

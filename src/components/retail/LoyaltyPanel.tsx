@@ -57,6 +57,7 @@ function LoyaltyPanelInner({ onStateChange, orderId }: LoyaltyPanelProps) {
   const [debouncedPhone, setDebouncedPhone] = useState('');
   const [showRegister, setShowRegister] = useState(false);
   const [registerName, setRegisterName] = useState('');
+  const [registerPhone, setRegisterPhone] = useState('');
   const [redeemed, setRedeemed] = useState(false);
   const [linkedAccount, setLinkedAccount] = useState<LoyaltyAccount | null>(null);
 
@@ -65,8 +66,12 @@ function LoyaltyPanelInner({ onStateChange, orderId }: LoyaltyPanelProps) {
     return () => clearTimeout(t);
   }, [phone]);
 
+  // Free-text lookup (QA req 2): the query is classified into phone / name / email by the
+  // shared classifier inside useLoyaltyAccounts; phones are normalized to the local format.
+  const searchQuery = debouncedPhone.trim();
+  const searchActive = searchQuery.length >= 2 && (!/^[\d\s+\-()]+$/.test(searchQuery) || isValidPhone(searchQuery));
   const { data: accounts, isLoading: lookupLoading } = useLoyaltyAccounts(
-    isValidPhone(debouncedPhone) ? normalizeKePhone(debouncedPhone) : undefined,
+    searchActive ? (isValidPhone(searchQuery) && /^[\d\s+\-()]+$/.test(searchQuery) ? normalizeKePhone(searchQuery) : searchQuery) : undefined,
   );
   const { data: programs } = useLoyaltyPrograms();
   const program = programs?.[0];
@@ -88,9 +93,10 @@ function LoyaltyPanelInner({ onStateChange, orderId }: LoyaltyPanelProps) {
   }, [account?.id]);
 
   const handleRegister = () => {
-    if (!registerName.trim() || !phone.trim()) return;
+    const p = normalizeKePhone(registerPhone || phone);
+    if (!registerName.trim() || !isValidPhone(p)) return;
     createAccount.mutate(
-      { customer_phone: normalizeKePhone(phone), customer_name: registerName.trim() },
+      { customer_phone: p, customer_name: registerName.trim() },
       {
         onSuccess: (newAcc) => {
           setLinkedAccount(newAcc as unknown as LoyaltyAccount);
@@ -131,6 +137,7 @@ function LoyaltyPanelInner({ onStateChange, orderId }: LoyaltyPanelProps) {
     setLinkedAccount(null);
     setShowRegister(false);
     setRegisterName('');
+    setRegisterPhone('');
     setRedeemed(false);
     onStateChange(null);
   };
@@ -159,13 +166,13 @@ function LoyaltyPanelInner({ onStateChange, orderId }: LoyaltyPanelProps) {
           loyalty base grows). A matched customer attaches to the order and shows as one compact line. */}
       <div className="relative flex items-center gap-2">
         <input
-          type="tel"
+          type="text"
           value={phone}
           onChange={(e) => setPhone(e.target.value)}
-          placeholder="Loyalty phone (e.g. 0712 345 678)"
+          placeholder="Customer phone, name or email"
           className="flex-1 bg-accent/10 border border-border rounded-xl py-2 px-3 text-sm focus:ring-1 focus:ring-primary outline-none"
         />
-        {lookupLoading && isValidPhone(debouncedPhone) && (
+        {lookupLoading && searchActive && (
           <Loader2 className="h-4 w-4 animate-spin text-muted-foreground shrink-0" />
         )}
       </div>
@@ -195,13 +202,18 @@ function LoyaltyPanelInner({ onStateChange, orderId }: LoyaltyPanelProps) {
         </div>
       )}
 
-      {/* Unknown number — quick register (part of the loyalty + ordering workflow). */}
-      {!account && !lookupLoading && isValidPhone(debouncedPhone) && accounts !== undefined && accounts.length === 0 && canAdd && (
+      {/* No match — quick register (part of the loyalty + ordering workflow). */}
+      {!account && !lookupLoading && searchActive && accounts !== undefined && accounts.length === 0 && canAdd && (
         <>
           {!showRegister ? (
             <button
               type="button"
-              onClick={() => setShowRegister(true)}
+              onClick={() => {
+                // Seed the form from the query: a phone query prefills the phone field.
+                if (/^[\d\s+\-()]+$/.test(searchQuery)) setRegisterPhone(normalizeKePhone(searchQuery));
+                else setRegisterName(searchQuery);
+                setShowRegister(true);
+              }}
               className="w-full py-2 rounded-xl border border-dashed border-border text-sm text-muted-foreground hover:border-primary hover:text-primary transition-colors flex items-center justify-center gap-2"
             >
               <UserPlus className="h-3.5 w-3.5" />
@@ -216,6 +228,13 @@ function LoyaltyPanelInner({ onStateChange, orderId }: LoyaltyPanelProps) {
                 placeholder="Customer name"
                 className="w-full bg-accent/10 border border-border rounded-xl py-2 px-3 text-sm focus:ring-1 focus:ring-primary outline-none"
               />
+              <input
+                type="tel"
+                value={registerPhone}
+                onChange={(e) => setRegisterPhone(e.target.value)}
+                placeholder="Phone (e.g. 0712 345 678)"
+                className="w-full bg-accent/10 border border-border rounded-xl py-2 px-3 text-sm focus:ring-1 focus:ring-primary outline-none"
+              />
               <div className="flex gap-2">
                 <button
                   type="button"
@@ -226,7 +245,7 @@ function LoyaltyPanelInner({ onStateChange, orderId }: LoyaltyPanelProps) {
                 </button>
                 <button
                   type="button"
-                  disabled={!registerName.trim() || createAccount.isPending}
+                  disabled={!registerName.trim() || !isValidPhone(normalizeKePhone(registerPhone || phone)) || createAccount.isPending}
                   onClick={handleRegister}
                   className="flex-1 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
                 >

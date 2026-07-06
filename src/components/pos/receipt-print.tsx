@@ -133,6 +133,18 @@ export function ReceiptPrint({
           <span className="receipt-row-value">-{fmt(receipt.discount_amount)}</span>
         </div>
       )}
+      {(receipt.charges_total ?? 0) > 0 && (
+        <div className="receipt-row">
+          <span className="receipt-row-name">Charges</span>
+          <span className="receipt-row-value">{fmt(receipt.charges_total ?? 0)}</span>
+        </div>
+      )}
+      {(receipt.round_off ?? 0) > 0 && (
+        <div className="receipt-row">
+          <span className="receipt-row-name">Round Off</span>
+          <span className="receipt-row-value">{fmt(receipt.round_off ?? 0)}</span>
+        </div>
+      )}
 
       <div className="receipt-row receipt-total-row">
         <span className="receipt-row-name">TOTAL</span>
