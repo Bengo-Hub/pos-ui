@@ -31,8 +31,9 @@ export function TerminalCart() {
   // Manager-only cost/margin insight on cart lines. Cost price is SENSITIVE — kept masked by default
   // (so a customer glancing at the screen can't read it) and revealed only when the eye is clicked.
   // pos-api only sends costPrice to managers (pos.catalog.view_cost / pos.orders.manage), so the row
-  // never renders for a cashier even if this gate were bypassed.
-  const canViewCost = t.can('pos.orders.manage');
+  // never renders for a cashier even if this gate were bypassed. Retail/pharmacy only
+  // (cfg.showCostMargin) — hospitality/QSR/services never show cost/margin, whatever the role.
+  const canViewCost = cfg.showCostMargin && (t.can('pos.catalog.view_cost') || t.can('pos.orders.manage'));
   const [costRevealed, setCostRevealed] = useState(false);
 
   return (

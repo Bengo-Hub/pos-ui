@@ -8,6 +8,7 @@ import { useRef } from 'react';
 import {
   cacheCatalogItems,
   getCachedCatalog,
+  replaceCachedCatalog,
   saveDraftOrder,
   saveDraftDrawerSession,
   saveDraftDrawerClose,
@@ -28,6 +29,18 @@ function useTenantSlug() {
 
 function useOutletID() {
   return useAuthStore((s) => (s.user as (typeof s.user & { outlet_id?: string }) | null)?.outlet_id ?? '');
+}
+
+/**
+ * The outlet whose context every API call actually carries (apiClient X-Outlet-ID):
+ * an HQ drill-down override first, else the session's active outlet, else the login
+ * outlet claim. Cache keys for OUTLET-SCOPED data (the catalog) must use this so a
+ * different outlet never reads another outlet's cached rows.
+ */
+export function useEffectiveOutletID() {
+  return useAuthStore(
+    (s) => s.selectedOutletId ?? s.outlet?.id ?? (s.user as (typeof s.user & { outlet_id?: string }) | null)?.outlet_id ?? '',
+  );
 }
 
 /** Idempotency-Key header so the backend dedups a replayed/lost-response request. */
@@ -256,15 +269,14 @@ export interface PaginatedResponse<T> {
   page: number;
 }
 
-/** Write fetched catalog rows through to the IndexedDB offline cache (best-effort,
- *  non-blocking) so the terminal keeps working — and reopens instantly — offline.
- *  Maps the rich catalog DTO to the lean OfflineCatalogItem shape used by pos-db. */
-export function cacheCatalogPage(tenantID: string, items: CatalogItem[] | undefined): void {
-  if (!tenantID || !items?.length) return;
+/** Map rich catalog DTOs to the lean OfflineCatalogItem rows pos-db stores, stamped with the
+ *  outlet they were fetched for (the pos-api catalog is outlet-scoped). */
+function toOfflineCatalogRows(tenantID: string, outletID: string, items: CatalogItem[]): OfflineCatalogItem[] {
   const now = new Date().toISOString();
-  const rows: OfflineCatalogItem[] = items.map((i) => ({
+  return items.map((i) => ({
     id: i.id,
     tenant_id: tenantID,
+    outlet_id: outletID || undefined,
     sku: i.sku,
     name: i.name,
     category: i.category ?? '',
@@ -276,7 +288,13 @@ export function cacheCatalogPage(tenantID: string, items: CatalogItem[] | undefi
     metadata: i.metadata,
     cached_at: now,
   }));
-  void cacheCatalogItems(rows).catch(() => { /* offline cache is best-effort */ });
+}
+
+/** Write fetched catalog rows through to the IndexedDB offline cache (best-effort,
+ *  non-blocking) so the terminal keeps working — and reopens instantly — offline. */
+export function cacheCatalogPage(tenantID: string, outletID: string, items: CatalogItem[] | undefined): void {
+  if (!tenantID || !items?.length) return;
+  void cacheCatalogItems(toOfflineCatalogRows(tenantID, outletID, items)).catch(() => { /* offline cache is best-effort */ });
 }
 
 export function useMenuItems(filters?: {
@@ -287,10 +305,12 @@ export function useMenuItems(filters?: {
   limit?: number;
 }) {
   const tenantID = useTenantID();
+  const outletID = useEffectiveOutletID();
   const page = filters?.page ?? 1;
   const limit = filters?.limit ?? 50;
   return useQuery({
-    queryKey: ['pos-catalog-items', tenantID, filters?.category, filters?.search, filters?.itemType, page, limit],
+    // outletID keys the cache because the server list is outlet-scoped (use-case filtered).
+    queryKey: ['pos-catalog-items', tenantID, outletID, filters?.category, filters?.search, filters?.itemType, page, limit],
     queryFn: async () => {
       const res = await apiClient.get<PaginatedResponse<CatalogItem>>(`${basePath(tenantID)}/catalog/items`, {
         category: filters?.category,
@@ -300,7 +320,7 @@ export function useMenuItems(filters?: {
         limit,
       });
       // Keep the offline catalog cache fresh as the cashier browses (prices/availability).
-      cacheCatalogPage(tenantID, res?.data);
+      cacheCatalogPage(tenantID, outletID, res?.data);
       return res;
     },
     enabled: !!tenantID,
@@ -345,34 +365,40 @@ async function fetchAllCatalogItems(tenantID: string): Promise<CatalogItem[]> {
 
 export const FULL_CATALOG_QUERY_KEY = 'pos-catalog-full';
 
-// Single-flight guard: at most ONE background catalog revalidation per tenant at a time
+// Single-flight guard: at most ONE background catalog revalidation per tenant+outlet at a time
 // (mount + version-poll + reconnect can all ask for one in the same tick).
 const catalogRevalidateInflight = new Set<string>();
 
 /**
  * Fetch the COMPLETE catalog from the API in the background and propagate it everywhere:
- * IndexedDB (write-through upsert — the local cache keeps improving) AND the TanStack
- * query cache (so any mounted terminal re-renders with the new items immediately, no
- * refresh / re-login). Failures are swallowed — the terminal keeps serving its cache.
- * Returns the fresh set, or null when skipped (in-flight) / failed.
+ * IndexedDB (REPLACING this outlet's slice — removed/re-scoped items actually disappear)
+ * AND the TanStack query cache (so any mounted terminal re-renders with the new items
+ * immediately, no refresh / re-login). Failures are swallowed — the terminal keeps serving
+ * its cache. Returns the fresh set, or null when skipped (in-flight) / failed.
+ * outletID scopes both caches: the server list is outlet-scoped (use-case filtered), so a
+ * retail outlet must never serve/keep the hospitality outlet's menu.
  */
 export async function revalidateFullCatalog(
   qc: QueryClient,
   tenantID: string,
+  outletID: string,
 ): Promise<CatalogItem[] | null> {
-  if (!tenantID || catalogRevalidateInflight.has(tenantID)) return null;
-  catalogRevalidateInflight.add(tenantID);
+  const flightKey = `${tenantID}:${outletID}`;
+  if (!tenantID || catalogRevalidateInflight.has(flightKey)) return null;
+  catalogRevalidateInflight.add(flightKey);
   try {
     const all = await fetchAllCatalogItems(tenantID);
     if (all.length) {
-      cacheCatalogPage(tenantID, all); // write-through (best-effort, non-blocking)
-      qc.setQueryData([FULL_CATALOG_QUERY_KEY, tenantID], all);
+      // Replace (not union) this outlet's cached slice — best-effort, non-blocking.
+      void replaceCachedCatalog(tenantID, outletID, toOfflineCatalogRows(tenantID, outletID, all))
+        .catch(() => { /* offline cache is best-effort */ });
+      qc.setQueryData([FULL_CATALOG_QUERY_KEY, tenantID, outletID], all);
     }
     return all;
   } catch {
     return null; // offline / transient — cache stays authoritative
   } finally {
-    catalogRevalidateInflight.delete(tenantID);
+    catalogRevalidateInflight.delete(flightKey);
   }
 }
 
@@ -388,21 +414,24 @@ export async function revalidateFullCatalog(
  */
 export async function loadFullCatalog(
   tenantID: string,
+  outletID: string,
   isOnline: boolean,
   qc?: QueryClient,
 ): Promise<CatalogItem[]> {
   if (!tenantID) return [];
-  const cached = await getCachedCatalog(tenantID).catch(() => []);
+  // Only THIS outlet's cached slice — never another outlet's menu (server list is outlet-scoped).
+  const cached = await getCachedCatalog(tenantID, outletID).catch(() => [] as OfflineCatalogItem[]);
   if (!isOnline) {
     return cached.map(offlineToCatalogItem);
   }
   if (cached.length) {
-    if (qc) void revalidateFullCatalog(qc, tenantID); // background — never blocks the paint
+    if (qc) void revalidateFullCatalog(qc, tenantID, outletID); // background — never blocks the paint
     return cached.map(offlineToCatalogItem);
   }
-  // Cold start: nothing cached yet, so the network is the only source.
+  // Cold start: nothing cached yet for this outlet, so the network is the only source.
   const all = await fetchAllCatalogItems(tenantID);
-  cacheCatalogPage(tenantID, all);
+  void replaceCachedCatalog(tenantID, outletID, toOfflineCatalogRows(tenantID, outletID, all))
+    .catch(() => { /* offline cache is best-effort */ });
   return all;
 }
 
@@ -415,11 +444,14 @@ export async function loadFullCatalog(
  */
 export function useFullCatalog() {
   const tenantID = useTenantID();
+  const outletID = useEffectiveOutletID();
   const isOnline = useOnline();
   const qc = useQueryClient();
   return useQuery({
-    queryKey: [FULL_CATALOG_QUERY_KEY, tenantID],
-    queryFn: () => loadFullCatalog(tenantID, isOnline, qc),
+    // Keyed per tenant AND outlet: the server catalog is outlet-scoped (use-case filtered),
+    // so switching outlets must never serve the previous outlet's cached menu.
+    queryKey: [FULL_CATALOG_QUERY_KEY, tenantID, outletID],
+    queryFn: () => loadFullCatalog(tenantID, outletID, isOnline, qc),
     enabled: !!tenantID,
     staleTime: 5 * 60_000,
     networkMode: 'always',
@@ -436,16 +468,17 @@ export function useFullCatalog() {
  */
 export function useCatalogVersionSync() {
   const tenantID = useTenantID();
+  const outletID = useEffectiveOutletID();
   const isOnline = useOnline();
   const qc = useQueryClient();
   const lastVersion = useRef<string | null>(null);
   useQuery({
-    queryKey: ['pos-catalog-version', tenantID],
+    queryKey: ['pos-catalog-version', tenantID, outletID],
     queryFn: async () => {
       const res = await apiClient.get<{ version: string }>(`${basePath(tenantID)}/catalog/version`);
       const v = res?.version ?? '0-0';
       if (lastVersion.current !== null && v !== lastVersion.current) {
-        void revalidateFullCatalog(qc, tenantID);
+        void revalidateFullCatalog(qc, tenantID, outletID);
       }
       lastVersion.current = v;
       return v;
@@ -496,8 +529,11 @@ function normalizeCategories(raw: RawCategory[] | undefined): POSCategory[] {
 
 export function useCategories() {
   const tenantID = useTenantID();
+  const outletID = useEffectiveOutletID();
   return useQuery({
-    queryKey: ['pos-categories', tenantID],
+    // outletID keys the cache: categories derive from the outlet-scoped catalog, so a retail
+    // outlet must not paint the hospitality outlet's category tabs (and vice versa).
+    queryKey: ['pos-categories', tenantID, outletID],
     queryFn: () =>
       apiClient.get<{ data: RawCategory[] }>(`${basePath(tenantID)}/catalog/categories`),
     enabled: !!tenantID,
@@ -801,9 +837,11 @@ interface POSOrder {
   id: string;
   order_number: string;
   status: string;
-  subtotal: number;
-  tax_total: number;
-  total_amount: number;
+  /** Money fields are serialized with omitempty server-side — zero values arrive as
+   * missing keys, so consumers must treat them as optional. */
+  subtotal?: number;
+  tax_total?: number;
+  total_amount?: number;
   currency: string;
   created_at: string;
   /** Human-readable table label (hospitality orders), e.g. "Table 4". */

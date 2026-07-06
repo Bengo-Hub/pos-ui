@@ -163,17 +163,19 @@ export default function OrderDetailPage() {
           <div className="bg-card rounded-2xl border border-border p-5">
             <h2 className="font-bold text-base mb-4">Summary</h2>
             <div className="space-y-2.5 text-sm">
+              {/* pos-api serializes zero-value floats with omitempty — a 0 subtotal/tax/total
+                  arrives as a missing field, so every money read must default to 0. */}
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Subtotal</span>
-                <span className="font-mono font-semibold">KES {order.subtotal.toLocaleString()}</span>
+                <span className="font-mono font-semibold">KES {(order.subtotal ?? 0).toLocaleString()}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Tax</span>
-                <span className="font-mono font-semibold">KES {order.tax_total.toLocaleString()}</span>
+                <span className="font-mono font-semibold">KES {(order.tax_total ?? 0).toLocaleString()}</span>
               </div>
               <div className="flex justify-between border-t border-border pt-2.5 mt-1">
                 <span className="font-bold">Total</span>
-                <span className="font-mono font-bold text-primary text-base">KES {order.total_amount.toLocaleString()}</span>
+                <span className="font-mono font-bold text-primary text-base">KES {(order.total_amount ?? 0).toLocaleString()}</span>
               </div>
             </div>
           </div>

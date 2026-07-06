@@ -114,7 +114,7 @@ export function ClaimHeldItemDialog({
                   </p>
                 </div>
                 <span className="shrink-0 text-sm font-bold tabular-nums">
-                  {o.currency ?? 'KES'} {o.total_amount.toLocaleString()}
+                  {o.currency ?? 'KES'} {(o.total_amount ?? 0).toLocaleString()}
                 </span>
               </button>
             ))

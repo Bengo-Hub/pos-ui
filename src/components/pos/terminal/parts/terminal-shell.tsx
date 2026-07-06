@@ -44,7 +44,9 @@ export function TerminalShell() {
   // REQ-006: management roles see a Cost column on the cart (pos-api only serializes
   // cost_price to pos.catalog.view_cost holders). Values are MASKED by default — the
   // header eye reveals/hides the whole column (customers can see the screen).
-  const canViewCost = t.can('pos.catalog.view_cost') || t.can('pos.orders.manage');
+  // Cost/margin is a retail/pharmacy insight only (cfg.showCostMargin) — hospitality/QSR/
+  // services terminals never show the columns, whatever the role.
+  const canViewCost = cfg.showCostMargin && (t.can('pos.catalog.view_cost') || t.can('pos.orders.manage'));
   const [costRevealed, setCostRevealed] = useState(false);
   // Explicit column tracks (shared by header + rows) so the cart never cramps: the product
   // name flexes, the numeric columns get fixed, comfortably-spaced widths. Cost + Margin
@@ -77,12 +79,13 @@ export function TerminalShell() {
       </div>
 
       {/* ─────────── 2. BODY: order builder (left) + product picker (right) ───────────
-          On lg+ a fixed two-column grid (52% / 48%) keeps the split robust — neither column
-          can grow past its track, so the order-builder no longer gets squeezed by the product
-          grid. Below lg the sections STACK on a bounded row grid (55% / 45%) so both share the
-          viewport and scroll internally — the cart/totals actions and the product grid can never
-          push the bottom action bar off-screen. Each section scrolls independently (min-h-0). */}
-      <div className="flex-1 grid grid-rows-[minmax(0,55%)_minmax(0,45%)] lg:grid-rows-none lg:grid-cols-[52%_48%] min-h-0 overflow-hidden">
+          On lg+ a fixed two-column grid (58% / 42%) keeps the split robust — the wider left
+          track gives the cart TABLE room for every column (product/qty/cost/margin/price/
+          subtotal) while the product picker stays comfortable. Below lg the sections STACK on
+          a bounded row grid (55% / 45%) so both share the viewport and scroll internally — the
+          cart/totals actions and the product grid can never push the bottom action bar
+          off-screen. Each section scrolls independently (min-h-0). */}
+      <div className="flex-1 grid grid-rows-[minmax(0,55%)_minmax(0,45%)] lg:grid-rows-none lg:grid-cols-[58%_42%] min-h-0 overflow-hidden">
 
         {/* ===== LEFT: ORDER BUILDER ===== */}
         <div className="flex flex-col min-h-0 overflow-hidden lg:border-r border-border">

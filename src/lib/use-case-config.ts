@@ -35,6 +35,10 @@ export interface TerminalConfig {
   showScale: boolean;
   /** Intercept out-of-stock adds with a manager PIN override modal (retail/pharmacy). */
   managerOverride: boolean;
+  /** Show the cart Cost + Margin columns (retail/pharmacy back-office insight only — never on
+   *  hospitality/QSR/services terminals). Still permission-gated on top of this flag
+   *  (pos.catalog.view_cost / pos.orders.manage), so only managers/admins ever see it. */
+  showCostMargin: boolean;
   /** Title shown on the terminal header / new-order action. */
   terminalTitle: string;
 }
@@ -73,34 +77,40 @@ export function normalizeUseCase(useCase?: string | null): TerminalProfile {
 /** Pure terminal config for a given outlet use_case. */
 export function terminalConfigFor(useCase?: string | null): TerminalConfig {
   const profile = normalizeUseCase(useCase);
+  // Every use case defaults to the LIST display — the densest, fastest-to-scan layout; card /
+  // image grid stay available behind the display-mode toggle.
   switch (profile) {
     case 'hospitality':
       return {
-        profile, defaultDisplayMode: 'image_grid', barcodeFirst: false, showPricingProfile: false,
+        profile, defaultDisplayMode: 'list', barcodeFirst: false, showPricingProfile: false,
         showOrderType: true, showCourses: true, showCalculator: false,
         keyboardCheckout: false, showBrandGrid: false,
-        showStockBadge: false, showScale: false, managerOverride: false, terminalTitle: 'New Order',
+        showStockBadge: false, showScale: false, managerOverride: false, showCostMargin: false,
+        terminalTitle: 'New Order',
       };
     case 'quick_service':
       return {
-        profile, defaultDisplayMode: 'card', barcodeFirst: false, showPricingProfile: false,
+        profile, defaultDisplayMode: 'list', barcodeFirst: false, showPricingProfile: false,
         showOrderType: true, showCourses: false, showCalculator: false,
         keyboardCheckout: false, showBrandGrid: false,
-        showStockBadge: false, showScale: false, managerOverride: false, terminalTitle: 'New Order',
+        showStockBadge: false, showScale: false, managerOverride: false, showCostMargin: false,
+        terminalTitle: 'New Order',
       };
     case 'pharmacy':
       return {
         profile, defaultDisplayMode: 'list', barcodeFirst: true, showPricingProfile: true,
         showOrderType: false, showCourses: false, showCalculator: true,
         keyboardCheckout: true, showBrandGrid: true,
-        showStockBadge: true, showScale: true, managerOverride: true, terminalTitle: 'Walk-In Sale',
+        showStockBadge: true, showScale: true, managerOverride: true, showCostMargin: true,
+        terminalTitle: 'Walk-In Sale',
       };
     case 'services':
       return {
-        profile, defaultDisplayMode: 'card', barcodeFirst: false, showPricingProfile: true,
+        profile, defaultDisplayMode: 'list', barcodeFirst: false, showPricingProfile: true,
         showOrderType: false, showCourses: false, showCalculator: false,
         keyboardCheckout: false, showBrandGrid: false,
-        showStockBadge: false, showScale: false, managerOverride: false, terminalTitle: 'New Sale',
+        showStockBadge: false, showScale: false, managerOverride: false, showCostMargin: false,
+        terminalTitle: 'New Sale',
       };
     case 'retail':
     default:
@@ -108,7 +118,8 @@ export function terminalConfigFor(useCase?: string | null): TerminalConfig {
         profile: 'retail', defaultDisplayMode: 'list', barcodeFirst: true, showPricingProfile: true,
         showOrderType: false, showCourses: false, showCalculator: true,
         keyboardCheckout: true, showBrandGrid: true,
-        showStockBadge: true, showScale: true, managerOverride: true, terminalTitle: 'New Sale',
+        showStockBadge: true, showScale: true, managerOverride: true, showCostMargin: true,
+        terminalTitle: 'New Sale',
       };
   }
 }

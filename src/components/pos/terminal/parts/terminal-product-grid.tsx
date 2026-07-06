@@ -34,12 +34,12 @@ export function TerminalProductGrid() {
             )}
           </div>
         ) : displayMode === 'list' ? (
-          /* ─── LIST / DATATABLE MODE ─── */
+          /* ─── LIST / DATATABLE MODE — compact rows so the picker column stays narrow ─── */
           <div className="rounded-2xl border border-border overflow-hidden bg-card">
             {/* Table header */}
-            <div className="grid grid-cols-[1fr_auto_auto] gap-3 px-4 py-2.5 bg-muted/50 border-b border-border text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+            <div className="grid grid-cols-[1fr_auto_auto] gap-2.5 px-3 py-2 bg-muted/50 border-b border-border text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
               <span>Item</span>
-              <span className="text-right w-24">Price</span>
+              <span className="text-right w-20">Price</span>
               <span className="w-6" />
             </div>
             {filteredItems.map((item, idx) => {
@@ -50,7 +50,7 @@ export function TerminalProductGrid() {
                   data-testid="pos-product-card"
                   onClick={() => handleItemTap(item)}
                   className={cn(
-                    'w-full grid grid-cols-[1fr_auto_auto] gap-3 items-center px-4 py-3 transition-all touch-manipulation active:scale-[0.99]',
+                    'w-full grid grid-cols-[1fr_auto_auto] gap-2.5 items-center px-3 py-2 transition-all touch-manipulation active:scale-[0.99]',
                     idx !== 0 && 'border-t border-border',
                     inCart
                       ? 'bg-primary/5 hover:bg-primary/8'
@@ -94,7 +94,7 @@ export function TerminalProductGrid() {
                       )}
                     </div>
                   </div>
-                  <span className="text-sm font-bold font-mono text-right w-24">
+                  <span className="text-sm font-bold font-mono text-right w-20">
                     {item.nonBillable ? (
                       <span className="text-emerald-600" title="Non-billable — never charged; stock still deducts">FREE</span>
                     ) : (

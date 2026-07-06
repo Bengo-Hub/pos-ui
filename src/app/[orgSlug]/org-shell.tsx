@@ -70,6 +70,11 @@ function OfflineSyncWorker() {
 function CatalogPrewarm() {
   const queryClient = useQueryClient();
   const tenantID = useAuthStore((s) => (s.user as any)?.tenant_id ?? '');
+  // The catalog is OUTLET-scoped (use-case filtered server-side) — cache keys and the
+  // IndexedDB read must carry the effective outlet so outlets never see each other's menu.
+  const outletID = useAuthStore(
+    (s) => s.selectedOutletId ?? s.outlet?.id ?? (s.user as any)?.outlet_id ?? '',
+  );
   const isOnline = useOnline();
   useCatalogVersionSync();
   useEffect(() => {
@@ -77,21 +82,21 @@ function CatalogPrewarm() {
     let cancelled = false;
     (async () => {
       try {
-        const cached = await getCachedCatalog(tenantID);
+        const cached = await getCachedCatalog(tenantID, outletID);
         if (!cancelled && cached.length) {
           queryClient.setQueryData(
-            [FULL_CATALOG_QUERY_KEY, tenantID],
+            [FULL_CATALOG_QUERY_KEY, tenantID, outletID],
             cached.map(offlineToCatalogItem),
           );
         }
       } catch { /* cache seed is best-effort */ }
       if (!cancelled && isOnline) {
         // Background revalidation — refreshes IndexedDB + the query cache when it lands.
-        void revalidateFullCatalog(queryClient, tenantID);
+        void revalidateFullCatalog(queryClient, tenantID, outletID);
       }
     })();
     return () => { cancelled = true; };
-  }, [tenantID, isOnline, queryClient]);
+  }, [tenantID, outletID, isOnline, queryClient]);
   return null;
 }
 

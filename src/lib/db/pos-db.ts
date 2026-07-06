@@ -5,6 +5,10 @@ import Dexie, { type Table } from 'dexie';
 export interface OfflineCatalogItem {
   id: string; // server ID (PK for IndexedDB)
   tenant_id: string;
+  /** Outlet the row was fetched for. The pos-api catalog is OUTLET-scoped (use-case filtered),
+   *  so cached rows must never be served to a different outlet — a hospitality menu leaking
+   *  onto a retail till came from exactly that. Missing on legacy rows (pre-scoping). */
+  outlet_id?: string;
   sku: string;
   name: string;
   category: string;
@@ -276,6 +280,21 @@ class POSDatabase extends Dexie {
       etimsQueue:     '++id, order_id, tenant_id, status, created_at',
       snapshots:      'key, tenant_id',
     });
+
+    // v5: outlet-scoped catalog cache. The pos-api catalog list is filtered per outlet use case
+    // (retail vs hospitality menus differ), so cached rows carry outlet_id and reads filter on it.
+    this.version(5).stores({
+      catalogItems:   'id, tenant_id, outlet_id, sku, category, status, cached_at',
+      offlineOrders:  '++id, local_id, tenant_id, created_at',
+      offlinePayments:'++id, local_order_id, server_order_id, tenant_id',
+      offlineVoids:   '++id, local_id, server_order_id, local_order_id, tenant_id, created_at',
+      offlineReturns: '++id, local_id, server_order_id, local_order_id, tenant_id, created_at',
+      drawerSessions: '++id, local_id, tenant_id',
+      drawerCloses:   '++id, server_drawer_id, local_drawer_id, tenant_id',
+      staffProfiles:  'user_id, tenant_id',
+      etimsQueue:     '++id, order_id, tenant_id, status, created_at',
+      snapshots:      'key, tenant_id',
+    });
   }
 }
 
@@ -293,8 +312,37 @@ export async function cacheCatalogItems(items: OfflineCatalogItem[]): Promise<vo
   await posDB.catalogItems.bulkPut(items);
 }
 
-export async function getCachedCatalog(tenantId: string): Promise<OfflineCatalogItem[]> {
-  return posDB.catalogItems.where('tenant_id').equals(tenantId).toArray();
+/**
+ * Read the cached catalog for one tenant + outlet. The catalog is OUTLET-scoped server-side,
+ * so rows cached for another outlet (or legacy rows with no outlet_id) are never served — a
+ * hospitality menu must not paint on a retail till. With no outletId (outlet unknown yet /
+ * legacy callers) it falls back to the tenant-wide set.
+ */
+export async function getCachedCatalog(tenantId: string, outletId?: string): Promise<OfflineCatalogItem[]> {
+  const rows = await posDB.catalogItems.where('tenant_id').equals(tenantId).toArray();
+  if (!outletId) return rows;
+  return rows.filter((r) => r.outlet_id === outletId);
+}
+
+/**
+ * REPLACE the cached catalog slice for a tenant+outlet with a fresh full fetch: deletes the
+ * outlet's previous rows (and poisoned legacy rows with no outlet_id) before inserting, so
+ * items removed/re-scoped server-side actually disappear from the terminal instead of
+ * accumulating forever (the old bulkPut-only write built a union of every outlet's menu).
+ */
+export async function replaceCachedCatalog(
+  tenantId: string,
+  outletId: string,
+  items: OfflineCatalogItem[],
+): Promise<void> {
+  await posDB.transaction('rw', posDB.catalogItems, async () => {
+    await posDB.catalogItems
+      .where('tenant_id')
+      .equals(tenantId)
+      .filter((r) => r.outlet_id === outletId || r.outlet_id == null)
+      .delete();
+    if (items.length) await posDB.catalogItems.bulkPut(items);
+  });
 }
 
 // ── Order helpers ──────────────────────────────────────────────────────────────

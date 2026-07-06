@@ -75,13 +75,18 @@ interface ListResponse<T> {
  */
 export function useMenuItemsOffline(filters?: { category?: string; search?: string }) {
   const tenantID = useTenantID();
+  // Effective outlet — the catalog is outlet-scoped server-side, so both the cache key and
+  // the IndexedDB read/write must carry it (see usePOS.useEffectiveOutletID).
+  const effectiveOutletID = useAuthStore(
+    (s) => s.selectedOutletId ?? s.outlet?.id ?? (s.user as (typeof s.user & { outlet_id?: string }) | null)?.outlet_id ?? '',
+  );
   const isOnline = useOnline();
 
   return useQuery({
-    queryKey: ['pos-catalog-items-offline', tenantID, filters, isOnline],
+    queryKey: ['pos-catalog-items-offline', tenantID, effectiveOutletID, filters, isOnline],
     queryFn: async (): Promise<ListResponse<CatalogItem>> => {
       if (!isOnline) {
-        const cached = await getCachedCatalog(tenantID);
+        const cached = await getCachedCatalog(tenantID, effectiveOutletID);
         let items = cached.map((c) => ({
           id: c.id,
           sku: c.sku,
@@ -112,6 +117,7 @@ export function useMenuItemsOffline(filters?: { category?: string; search?: stri
       const toCache: OfflineCatalogItem[] = (result.data ?? []).map((item) => ({
         id: item.id,
         tenant_id: tenantID,
+        outlet_id: effectiveOutletID || undefined,
         sku: item.sku,
         name: item.name,
         category: item.category ?? '',
