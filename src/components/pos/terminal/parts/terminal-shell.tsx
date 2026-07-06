@@ -27,7 +27,7 @@ import { TerminalProductGrid } from '@/components/pos/terminal/parts/terminal-pr
 import { TerminalModals } from '@/components/pos/terminal/parts/terminal-modals';
 import { InlinePaymentBar } from '@/components/pos/terminal/inline-payment-bar';
 import { useTerminal } from '@/components/pos/terminal/terminal-context';
-import { CostHeaderToggle, MaskedCost } from '@/components/pos/cost-price';
+import { CostHeaderToggle, MaskedCost, MaskedMargin } from '@/components/pos/cost-price';
 import { searchPlaceholderFor } from '@/lib/use-case-config';
 import { cn } from '@/lib/utils';
 import {
@@ -46,9 +46,12 @@ export function TerminalShell() {
   // header eye reveals/hides the whole column (customers can see the screen).
   const canViewCost = t.can('pos.catalog.view_cost') || t.can('pos.orders.manage');
   const [costRevealed, setCostRevealed] = useState(false);
+  // Explicit column tracks (shared by header + rows) so the cart never cramps: the product
+  // name flexes, the numeric columns get fixed, comfortably-spaced widths. Cost + Margin
+  // only exist for management roles.
   const cartGridCols = canViewCost
-    ? 'grid-cols-[1fr_auto_auto_auto_auto]'
-    : 'grid-cols-[1fr_auto_auto_auto]';
+    ? 'grid-cols-[minmax(0,1fr)_6.5rem_4.5rem_3.5rem_5rem_5.5rem]'
+    : 'grid-cols-[minmax(0,1fr)_6.5rem_5rem_5.5rem]';
 
   return (
     <div className="flex flex-col bg-background" style={{ height: 'calc(100vh - 80px)' }}>
@@ -180,16 +183,19 @@ export function TerminalShell() {
               <button onClick={t.clearCart} className="text-[11px] text-destructive font-semibold hover:underline">Clear all</button>
             )}
           </div>
-          <div className={cn('grid gap-2 px-4 py-2 shrink-0 text-[10px] font-bold uppercase tracking-wider text-muted-foreground border-b border-border', cartGridCols)}>
+          <div className={cn('grid gap-3 px-4 py-2 shrink-0 text-[10px] font-bold uppercase tracking-wider text-muted-foreground border-b border-border', cartGridCols)}>
             <span>Product</span>
-            <span className="w-24 text-center">Quantity</span>
+            <span className="text-center">Quantity</span>
             {canViewCost && (
-              <span className="w-20 text-right">
-                <CostHeaderToggle revealed={costRevealed} onToggle={() => setCostRevealed((v) => !v)} />
-              </span>
+              <>
+                <span className="text-right">
+                  <CostHeaderToggle revealed={costRevealed} onToggle={() => setCostRevealed((v) => !v)} />
+                </span>
+                <span className="text-right">Margin</span>
+              </>
             )}
-            <span className="w-20 text-right">Price inc. tax</span>
-            <span className="w-20 text-right">Subtotal</span>
+            <span className="text-right">Price inc. tax</span>
+            <span className="text-right">Subtotal</span>
           </div>
           <div className="flex-1 overflow-y-auto min-h-0">
             {cart.length === 0 ? (
@@ -204,9 +210,16 @@ export function TerminalShell() {
               cart.map((item, idx) => {
                 const lineTotal = (item.price + (item.modifierTotal ?? 0)) * item.quantity;
                 return (
-                  <div key={`${item.id}-${idx}`} className={cn('grid gap-2 items-center px-4 py-2.5 border-b border-border/60 hover:bg-primary/5 transition-colors', cartGridCols)}>
+                  <div key={`${item.id}-${idx}`} className={cn('grid gap-3 items-center px-4 py-2.5 border-b border-border/60 hover:bg-primary/5 transition-colors', cartGridCols)}>
                     <div className="min-w-0">
-                      <p className="text-sm font-bold truncate leading-tight">{item.name}</p>
+                      <p className="text-sm font-bold truncate leading-tight">
+                        {item.name}
+                        {item.nonBillable && (
+                          <span className="ml-1.5 align-middle text-[9px] font-bold uppercase tracking-wide text-emerald-700 bg-emerald-500/10 border border-emerald-200 px-1.5 py-0.5 rounded-full" title="Non-billable — never charged; stock still deducts">
+                            Free
+                          </span>
+                        )}
+                      </p>
                       <div className="flex items-center gap-1.5 mt-0.5">
                         <span className="text-[11px] text-muted-foreground font-mono">{item.sku}</span>
                         {item.serialNumber && <span className="text-[10px] text-muted-foreground">SN: {item.serialNumber}</span>}
@@ -236,18 +249,23 @@ export function TerminalShell() {
                       )}
                     </div>
                     {/* Qty stepper */}
-                    <div className="flex items-center gap-1 w-24 justify-center">
+                    <div className="flex items-center gap-1 justify-center">
                       <button onClick={() => t.updateQuantity(idx, -1)} className="h-6 w-6 rounded-md border border-border flex items-center justify-center hover:bg-accent"><Minus className="h-3 w-3" /></button>
                       <span className="w-7 text-center text-sm font-bold tabular-nums">{item.quantity}</span>
                       <button onClick={() => t.updateQuantity(idx, 1)} className="h-6 w-6 rounded-md border border-border flex items-center justify-center hover:bg-accent"><Plus className="h-3 w-3" /></button>
                     </div>
                     {canViewCost && (
-                      <span className="w-20 text-right text-xs">
-                        <MaskedCost cost={item.costPrice} sell={item.price} revealed={costRevealed} />
-                      </span>
+                      <>
+                        <span className="text-right text-xs">
+                          <MaskedCost cost={item.costPrice} sell={item.price} revealed={costRevealed} showMargin={false} />
+                        </span>
+                        <span className="text-right text-xs">
+                          <MaskedMargin cost={item.costPrice} sell={item.price} revealed={costRevealed} />
+                        </span>
+                      </>
                     )}
-                    <span className="w-20 text-right text-xs font-mono text-muted-foreground">{item.price.toLocaleString()}</span>
-                    <div className="w-20 flex items-center justify-end gap-1.5">
+                    <span className="text-right text-xs font-mono text-muted-foreground">{item.price.toLocaleString()}</span>
+                    <div className="flex items-center justify-end gap-1.5">
                       <span className="text-sm font-bold font-mono tabular-nums">{lineTotal.toLocaleString()}</span>
                       <button onClick={() => t.removeFromCart(idx)} className="h-6 w-6 rounded-md flex items-center justify-center text-muted-foreground hover:bg-destructive/10 hover:text-destructive" aria-label="Remove"><Trash2 className="h-3.5 w-3.5" /></button>
                     </div>

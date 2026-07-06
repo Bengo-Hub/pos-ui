@@ -223,6 +223,10 @@ export interface CatalogItem {
   status?: string;
   is_available?: boolean;
   is_featured?: boolean;
+  /** Free-of-charge accompaniment (price forced 0 by pos-api; receipt shows Free). */
+  is_complimentary?: boolean;
+  /** Inventory Item.non_billable — never charged at the till even if a price exists. */
+  non_billable?: boolean;
   display_order?: number;
   image_url?: string;
   barcode?: string;

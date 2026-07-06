@@ -183,11 +183,14 @@ export default function AddSalePage() {
         newQty = prev[idx].quantity + 1;
         return prev.map((l, i) => (i === idx ? { ...l, quantity: newQty } : l));
       }
-      return [...prev, { item, quantity: 1, unitPrice: tierPrice(item, pricingProfile) }];
+      // Non-billable items (free accompaniments / supplies) are never charged — force 0
+      // regardless of tier pricing (the server zeroes the line as a belt anyway).
+      const free = item.non_billable === true || item.is_complimentary === true;
+      return [...prev, { item, quantity: 1, unitPrice: free ? 0 : tierPrice(item, pricingProfile) }];
     });
     // Confirm the profile price from inventory-api (mirrors the terminal). Skips if the user already
     // hand-edited this line's price.
-    if (pricingProfile) {
+    if (pricingProfile && !(item.non_billable === true || item.is_complimentary === true)) {
       resolvePrice(item.id, newQty, pricingProfile).then((p) => {
         if (p != null) setLines((cur) => cur.map((l) => (l.item.id === item.id && !l.priceEdited ? { ...l, unitPrice: p } : l)));
       });
@@ -235,19 +238,26 @@ export default function AddSalePage() {
         }
         return Object.keys(md).length > 0 ? md : undefined;
       })(),
-      lines: lines.map((l) => ({
-        catalog_item_id: l.item.id,
-        sku: l.item.sku,
-        name: l.item.name,
-        quantity: l.quantity,
-        unit_price: l.unitPrice,
-        total_price: l.unitPrice * l.quantity,
-        metadata: notes ? { notes } : undefined,
-        // Tax as priced in the catalog — keeps the server payable equal to what is charged here.
-        ...(l.item.tax_code_id ? { tax_code_id: l.item.tax_code_id } : {}),
-        ...(l.item.tax_inclusive != null ? { price_includes_tax: l.item.tax_inclusive } : {}),
-        ...(typeof l.item.tax_rate === 'number' ? { tax_rate: l.item.tax_rate } : {}),
-      })),
+      lines: lines.map((l) => {
+        const free = l.item.non_billable === true || l.item.is_complimentary === true;
+        const lineMeta: Record<string, any> = {};
+        if (notes) lineMeta.notes = notes;
+        // Free-of-charge marker — the server zeroes the line on this flag (belt & braces).
+        if (free) lineMeta.non_billable = true;
+        return {
+          catalog_item_id: l.item.id,
+          sku: l.item.sku,
+          name: l.item.name,
+          quantity: l.quantity,
+          unit_price: free ? 0 : l.unitPrice,
+          total_price: free ? 0 : l.unitPrice * l.quantity,
+          metadata: Object.keys(lineMeta).length > 0 ? lineMeta : undefined,
+          // Tax as priced in the catalog — keeps the server payable equal to what is charged here.
+          ...(l.item.tax_code_id ? { tax_code_id: l.item.tax_code_id } : {}),
+          ...(l.item.tax_inclusive != null ? { price_includes_tax: l.item.tax_inclusive } : {}),
+          ...(typeof l.item.tax_rate === 'number' ? { tax_rate: l.item.tax_rate } : {}),
+        };
+      }),
     };
   }
 

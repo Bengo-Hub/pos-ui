@@ -31,6 +31,9 @@ interface ReturnDetail {
   // order_number is the original sale's human-readable receipt/invoice number, resolved by pos-api
   // so the UI never renders the raw order UUID.
   order_number?: string;
+  // Original buyer, resolved by pos-api from the order — shown + deep-linked to the client profile.
+  customer_name?: string;
+  customer_phone?: string;
   return_type: 'refund' | 'exchange' | 'store_credit';
   status: 'pending' | 'approved' | 'rejected' | 'completed';
   reason?: string;
@@ -205,7 +208,7 @@ export default function ReturnDetailPage() {
         </div>
         <div>
           <p className="text-xs text-muted-foreground">Refund Amount</p>
-          <p className="text-sm font-bold text-emerald-600 mt-0.5">KES {ret.refund_amount.toLocaleString()}</p>
+          <p className="text-sm font-bold text-success mt-0.5">KES {ret.refund_amount.toLocaleString()}</p>
         </div>
         <div>
           <p className="text-xs text-muted-foreground">Reason Code</p>
@@ -229,12 +232,32 @@ export default function ReturnDetailPage() {
         )}
         <div>
           <p className="text-xs text-muted-foreground">Original Order</p>
-          <p className="text-sm font-semibold font-mono mt-0.5 truncate">{ret.order_number || '—'}</p>
+          {ret.order_number ? (
+            <a href={`/${orgSlug}/sell/all-sales?invoice=${encodeURIComponent(ret.order_number)}`}
+              className="text-sm font-semibold font-mono mt-0.5 truncate text-primary hover:underline block"
+              title="Find this sale in All Sales">
+              {ret.order_number}
+            </a>
+          ) : <p className="text-sm font-semibold font-mono mt-0.5">—</p>}
+        </div>
+        <div>
+          <p className="text-xs text-muted-foreground">Customer</p>
+          {ret.customer_phone ? (
+            <a href={`/${orgSlug}/clients?q=${encodeURIComponent(ret.customer_phone)}`}
+              className="text-sm font-semibold mt-0.5 text-primary hover:underline block truncate"
+              title="Open customer profile">
+              {ret.customer_name || ret.customer_phone}
+            </a>
+          ) : <p className="text-sm font-semibold mt-0.5">{ret.customer_name || '—'}</p>}
         </div>
         {ret.treasury_refund_ref && (
           <div>
             <p className="text-xs text-muted-foreground">Refund Reference</p>
-            <p className="text-xs font-mono text-emerald-600 mt-0.5">{ret.treasury_refund_ref}</p>
+            {/* The return number is the reference treasury stamps on the customer statement —
+                show that, not the internal refund UUID (kept in the tooltip for support). */}
+            <p className="text-xs font-mono text-success mt-0.5" title={`Treasury ref: ${ret.treasury_refund_ref}`}>
+              {ret.return_number}
+            </p>
           </div>
         )}
       </div>

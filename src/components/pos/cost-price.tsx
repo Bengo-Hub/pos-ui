@@ -31,6 +31,31 @@ export function CostHeaderToggle({ revealed, onToggle, label = 'Cost', className
   );
 }
 
+/** Masked margin% — margin reveals cost arithmetically (sell − margin ⇒ cost), so it
+ *  follows the same reveal state as the cost column. */
+export function MaskedMargin({ cost, sell, revealed, className }: {
+  cost?: number;
+  sell?: number;
+  revealed: boolean;
+  className?: string;
+}) {
+  if (typeof cost !== 'number' || cost <= 0 || typeof sell !== 'number' || sell <= 0) {
+    return <span className={cn('text-muted-foreground', className)}>—</span>;
+  }
+  if (!revealed) {
+    return <span className={cn('font-mono text-muted-foreground tracking-widest', className)}>••</span>;
+  }
+  const margin = ((sell - cost) / sell) * 100;
+  return (
+    <span
+      title="Margin %"
+      className={cn('font-mono tabular-nums font-semibold', margin < 0 ? 'text-destructive' : margin < 15 ? 'text-amber-600' : 'text-emerald-600', className)}
+    >
+      {margin.toFixed(0)}%
+    </span>
+  );
+}
+
 /** One masked cost value, with an optional margin badge against the selling price. */
 export function MaskedCost({ cost, sell, revealed, showMargin = true, className }: {
   cost?: number;

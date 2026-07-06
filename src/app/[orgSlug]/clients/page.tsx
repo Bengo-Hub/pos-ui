@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Users } from 'lucide-react';
 import { ModuleGate } from '@/components/auth/module-gate';
 import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
@@ -9,7 +10,9 @@ import { ClientProfileCard } from '@/components/service/ClientProfileCard';
 import { useClientSearch } from '@/hooks/useClients';
 
 export default function ClientsPage() {
-  const [query, setQuery] = useState('');
+  // ?q= lets other screens (sales list, returns, sell details) deep-link a customer here.
+  const searchParams = useSearchParams();
+  const [query, setQuery] = useState(searchParams.get('q') ?? '');
 
   const isPhone = /^\d/.test(query);
   const { data, isLoading } = useClientSearch(

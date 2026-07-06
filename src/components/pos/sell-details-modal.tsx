@@ -2,6 +2,7 @@
 
 import { X, Loader2 } from 'lucide-react';
 import { useOrder } from '@/hooks/usePOS';
+import { prettyMethod } from '@/components/pos/sales/sales-shared';
 
 const money = (n: number | undefined | null) =>
   `KSh ${Number(n ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -47,7 +48,14 @@ export function SellDetailsModal({ orderId, orgSlug, onClose }: { orderId: strin
                 <p><b>Payment Status:</b> {remaining <= 0.01 ? 'Paid' : totalPaid > 0 ? 'Partial' : 'Due'}</p>
               </div>
               <div>
-                <p><b>Customer:</b> {(order as any).customer_name || 'Walk-In Customer'}</p>
+                <p><b>Customer:</b>{' '}
+                  {(order as any).customer_phone ? (
+                    <a href={`/${orgSlug}/clients?q=${encodeURIComponent((order as any).customer_phone)}`}
+                      className="text-primary hover:underline" title="Open customer profile">
+                      {(order as any).customer_name || 'Walk-In Customer'}
+                    </a>
+                  ) : ((order as any).customer_name || 'Walk-In Customer')}
+                </p>
                 {(order as any).customer_phone && <p><b>Phone:</b> {(order as any).customer_phone}</p>}
                 {meta.shipping_address && <p><b>Address:</b> {meta.shipping_address}</p>}
               </div>
@@ -109,7 +117,7 @@ export function SellDetailsModal({ orderId, orgSlug, onClose }: { orderId: strin
                           <td className="px-3 py-2">{p.occurred_at ? new Date(p.occurred_at).toLocaleDateString('en-KE') : '—'}</td>
                           <td className="px-3 py-2">{p.external_reference || (p.id ? String(p.id).slice(0, 10) : '—')}</td>
                           <td className="px-3 py-2 text-right tabular-nums">{money(p.amount)}</td>
-                          <td className="px-3 py-2">{p.payment_data?.method || p.payment_data?.mode || 'Cash'}</td>
+                          <td className="px-3 py-2">{prettyMethod(p.payment_data?.method || p.payment_data?.mode || '')}</td>
                         </tr>
                       ))}
                     </tbody>

@@ -21,6 +21,7 @@ interface ReturnItem {
   original_order_id?: string;
   original_receipt_number?: string;
   customer_name?: string;
+  customer_phone?: string;
   reason: string;
   status: 'pending' | 'approved' | 'rejected' | 'completed';
   refund_amount?: number;
@@ -34,10 +35,10 @@ interface ReturnItem {
 }
 
 const STATUS_CONFIG: Record<ReturnItem['status'], { label: string; className: string }> = {
-  pending:   { label: 'Pending',   className: 'bg-amber-500/10 text-amber-700' },
-  approved:  { label: 'Approved',  className: 'bg-blue-500/10 text-blue-700' },
-  completed: { label: 'Completed', className: 'bg-emerald-500/10 text-emerald-700' },
-  rejected:  { label: 'Rejected',  className: 'bg-red-500/10 text-red-600' },
+  pending:   { label: 'Pending',   className: 'bg-warning/10 text-warning' },
+  approved:  { label: 'Approved',  className: 'bg-primary/10 text-primary' },
+  completed: { label: 'Completed', className: 'bg-success/10 text-success' },
+  rejected:  { label: 'Rejected',  className: 'bg-destructive/10 text-destructive' },
 };
 
 function useReturns(status: string) {
@@ -867,7 +868,14 @@ function ReturnsPage() {
                     onClick={() => router.push(`/${orgSlug}/returns/${ret.id}`)}
                   >
                     <td className="px-4 py-3.5 font-mono text-xs font-semibold text-primary underline-offset-2 hover:underline">{ret.return_number}</td>
-                    <td className="px-4 py-3.5">{ret.customer_name ?? '—'}</td>
+                    <td className="px-4 py-3.5" onClick={(e) => e.stopPropagation()}>
+                      {ret.customer_phone ? (
+                        <a href={`/${orgSlug}/clients?q=${encodeURIComponent(ret.customer_phone)}`}
+                          className="text-primary hover:underline" title="Open customer profile">
+                          {ret.customer_name || ret.customer_phone}
+                        </a>
+                      ) : (ret.customer_name ?? '—')}
+                    </td>
                     <td className="px-4 py-3.5 text-muted-foreground max-w-[180px] truncate">{ret.reason}</td>
                     <td className="px-4 py-3.5">
                       <span className={cn('text-[10px] font-bold px-2 py-0.5 rounded-full border border-transparent', cfg.className)}>

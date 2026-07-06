@@ -1,6 +1,8 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { Search, Loader2, Download, Plus, Minus } from 'lucide-react';
 import { Button, Card, CardContent, CardHeader } from '@/components/ui/base';
 import { useOrders, useVoidOrder, type OrderListFilters } from '@/hooks/usePOS';
@@ -49,7 +51,9 @@ export function SalesListView({ orgSlug, fixedSource, title, subtitle }: {
   const effectiveSubtitle = ownOnly ? 'Sales you rang up. Managers can see all sales.' : subtitle;
 
   const [page, setPage] = useState(1);
-  const [search, setSearch] = useState('');
+  // ?invoice= deep-links a specific sale here (e.g. from a return's "Original Order").
+  const searchParams = useSearchParams();
+  const [search, setSearch] = useState(searchParams.get('invoice') ?? '');
   const [filterState, setFilterState] = useState<SalesFilterState>({
     outletId: '', customer: '', paymentStatus: '', paymentMethod: '',
     shippingStatus: '', userId: '', source: '', subscriptions: false,
@@ -168,6 +172,7 @@ export function SalesListView({ orgSlug, fixedSource, title, subtitle }: {
                         onOpenDetail={() => setDetailId(o.id)}
                         cashierName={staffNameByUserId[o.user_id]}
                         outletName={outletNameById[o.outlet_id]}
+                        onCashierClick={(userId) => patchFilters({ userId })}
                         onEditShipping={setShippingOrder} onViewPayments={setPaymentsOrder}
                         onDelete={setDeleteOrder} colCount={colCount} />
                     ))}
@@ -192,10 +197,11 @@ export function SalesListView({ orgSlug, fixedSource, title, subtitle }: {
 }
 
 /** One sale row + its optional expanded line-items panel (treasury-style sibling <tr>). */
-function SaleRow({ order: o, orgSlug, expanded, onToggleExpand, onOpenDetail, cashierName, outletName, onEditShipping, onViewPayments, onDelete, colCount }: {
+function SaleRow({ order: o, orgSlug, expanded, onToggleExpand, onOpenDetail, cashierName, outletName, onCashierClick, onEditShipping, onViewPayments, onDelete, colCount }: {
   order: any; orgSlug: string; expanded: boolean;
   onToggleExpand: () => void; onOpenDetail: () => void;
   cashierName?: string; outletName?: string;
+  onCashierClick: (userId: string) => void;
   onEditShipping: (o: any) => void; onViewPayments: (o: any) => void; onDelete: (o: any) => void;
   colCount: number;
 }) {
@@ -215,9 +221,30 @@ function SaleRow({ order: o, orgSlug, expanded, onToggleExpand, onOpenDetail, ca
         </td>
         <td className={`${td} text-xs text-muted-foreground`}>{new Date(o.created_at).toLocaleString('en-KE')}</td>
         <td className={`${td} font-mono text-xs font-bold text-primary`}>{o.order_number}</td>
-        <td className={td}>{o.customer_name || 'Walk-In Customer'}</td>
-        <td className={`${td} text-xs`}>{o.customer_phone || '—'}</td>
-        <td className={`${td} text-xs`}>{cashierName || '—'}</td>
+        <td className={td} onClick={(e) => e.stopPropagation()}>
+          {o.customer_phone ? (
+            <Link href={`/${orgSlug}/clients?q=${encodeURIComponent(o.customer_phone)}`}
+              className="text-primary hover:underline" title="Open customer profile">
+              {o.customer_name || 'Walk-In Customer'}
+            </Link>
+          ) : (o.customer_name || 'Walk-In Customer')}
+        </td>
+        <td className={`${td} text-xs`}>
+          {o.customer_phone ? (
+            <Link href={`/${orgSlug}/clients?q=${encodeURIComponent(o.customer_phone)}`}
+              className="hover:underline" onClick={(e) => e.stopPropagation()}>
+              {o.customer_phone}
+            </Link>
+          ) : '—'}
+        </td>
+        <td className={`${td} text-xs`} onClick={(e) => e.stopPropagation()}>
+          {cashierName && o.user_id ? (
+            <button className="text-primary hover:underline" title="Filter sales by this cashier"
+              onClick={() => onCashierClick(o.user_id)}>
+              {cashierName}
+            </button>
+          ) : (cashierName || '—')}
+        </td>
         <td className={`${td} text-xs`}>{outletName || '—'}</td>
         <td className={`${td} text-center`}>{payStatusBadge(o.payment_status)}</td>
         <td className={`${td} text-xs capitalize`}>{prettyMethod(o.payment_method)}</td>

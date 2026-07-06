@@ -85,6 +85,10 @@ export interface MenuItem {
   /** On-hand stock for the StockBadge / out-of-stock override (retail/pharmacy). Only present
    *  when the backend catalog list projects stock_quantity — see integrator note. */
   stockQuantity?: number;
+  /** Never charged at the till (free accompaniments like ugali, supplies like packaging):
+   *  pos-api forces price 0 and the line carries a non_billable metadata flag so the server
+   *  zeroes it even if a price sneaks in. Shows the FREE chip. */
+  nonBillable?: boolean;
   // ── Per-item tax (enriched by inventory-api from treasury, the source of truth) ──
   // The terminal applies THESE at checkout instead of a flat outlet rate. See computeCartTax.
   taxCodeId?: string;
@@ -474,12 +478,16 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
       // Fallback = a non-default profile is selected but this item has no price for it, so we
       // show the default-tier price. Surfaced as a badge so "nothing changed on switch" is explainable.
       const priceIsFallback = !!pricingProfile && !hasProfilePrice;
+      // Non-billable / complimentary items are always FREE — no tier price may re-introduce
+      // a charge (the server zeroes the line as a belt anyway).
+      const nonBillable = item.non_billable === true || item.is_complimentary === true;
       return {
       id: item.id,
       name: item.name,
       sku: item.sku,
       description: item.description,
-      price: profilePrice,
+      price: nonBillable ? 0 : profilePrice,
+      nonBillable,
       prices: tierPrices,
       priceIsFallback,
       minSellingPrice: typeof item.min_selling_price === 'number' ? item.min_selling_price : undefined,
@@ -823,6 +831,8 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
       try {
         const updated = await Promise.all(
           cart.map(async (c) => {
+            // Non-billable lines stay FREE — no pricing tier may re-introduce a charge.
+            if (c.nonBillable) return c;
             // Fast path: the line already carries every tier's price from the catalog payload.
             const local = c.prices?.[profile];
             if (typeof local === 'number' && local > 0) {
@@ -920,6 +930,9 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
       ...(item.originalPrice != null && item.price < item.originalPrice
         ? { price_override: true, original_price: item.originalPrice, override_reason: item.overrideReason ?? '' }
         : {}),
+      // Free-of-charge flag (ugali-type accompaniments / supplies) — the server zeroes the
+      // line on this marker even if a price sneaks in.
+      ...(item.nonBillable ? { non_billable: true } : {}),
     },
   }));
 

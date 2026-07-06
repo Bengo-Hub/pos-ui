@@ -95,9 +95,15 @@ export function TerminalProductGrid() {
                     </div>
                   </div>
                   <span className="text-sm font-bold font-mono text-right w-24">
-                    KES {item.price.toLocaleString()}
-                    {item.priceIsFallback && (
-                      <span className="block text-[9px] font-normal text-amber-500" title="No price set for the selected pricing profile — showing default price">default price</span>
+                    {item.nonBillable ? (
+                      <span className="text-emerald-600" title="Non-billable — never charged; stock still deducts">FREE</span>
+                    ) : (
+                      <>
+                        KES {item.price.toLocaleString()}
+                        {item.priceIsFallback && (
+                          <span className="block text-[9px] font-normal text-amber-500" title="No price set for the selected pricing profile — showing default price">default price</span>
+                        )}
+                      </>
                     )}
                   </span>
                   {inCart ? (
@@ -154,9 +160,15 @@ export function TerminalProductGrid() {
                     )}
                     <div className="flex items-center justify-between mt-1">
                       <p className="text-xs font-bold font-mono text-primary">
-                        KES {item.price.toLocaleString()}
-                        {item.priceIsFallback && (
-                          <span className="ml-1 text-[9px] font-normal text-amber-500" title="No price set for the selected pricing profile — showing default price">(default)</span>
+                        {item.nonBillable ? (
+                          <span className="text-emerald-600" title="Non-billable — never charged; stock still deducts">FREE</span>
+                        ) : (
+                          <>
+                            KES {item.price.toLocaleString()}
+                            {item.priceIsFallback && (
+                              <span className="ml-1 text-[9px] font-normal text-amber-500" title="No price set for the selected pricing profile — showing default price">(default)</span>
+                            )}
+                          </>
                         )}
                       </p>
                       {(item.hasVariants || item.variants?.length) ? (
@@ -207,9 +219,15 @@ export function TerminalProductGrid() {
                   {/* Price row */}
                   <div className="flex items-center justify-between w-full mt-2">
                     <span className="text-xs font-bold font-mono text-primary">
-                      KES {item.price.toLocaleString()}
-                      {item.priceIsFallback && (
-                        <span className="ml-1 text-[9px] font-normal text-amber-500" title="No price set for the selected pricing profile — showing default price">(default)</span>
+                      {item.nonBillable ? (
+                        <span className="text-emerald-600" title="Non-billable — never charged; stock still deducts">FREE</span>
+                      ) : (
+                        <>
+                          KES {item.price.toLocaleString()}
+                          {item.priceIsFallback && (
+                            <span className="ml-1 text-[9px] font-normal text-amber-500" title="No price set for the selected pricing profile — showing default price">(default)</span>
+                          )}
+                        </>
                       )}
                     </span>
                     {item.item_type === 'SERVICE' ? (
