@@ -22,6 +22,10 @@
   --color-accent-foreground: hsl(var(--accent-foreground));
   --color-destructive: hsl(var(--destructive));
   --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-success: hsl(var(--success));
+  --color-success-foreground: hsl(var(--success-foreground));
+  --color-warning: hsl(var(--warning));
+  --color-warning-foreground: hsl(var(--warning-foreground));
   --color-border: hsl(var(--border));
   --color-input: hsl(var(--input));
   --color-ring: hsl(var(--ring));
@@ -268,6 +272,10 @@ button:focus-visible {
     --accent-foreground: 18 36% 18%;
     --destructive: 4 84% 48%;
     --destructive-foreground: 0 0% 100%;
+    --success: 152 60% 30%;
+    --success-foreground: 0 0% 100%;
+    --warning: 35 92% 33%;
+    --warning-foreground: 0 0% 100%;
     --border: 24 35% 82%;
     --input: 24 35% 82%;
     --ring: 24 91% 50%;
@@ -301,6 +309,10 @@ button:focus-visible {
     --accent-foreground: 24 82% 95%;
     --destructive: 3 68% 46%;
     --destructive-foreground: 0 0% 100%;
+    --success: 152 55% 58%;
+    --success-foreground: 152 60% 10%;
+    --warning: 38 92% 62%;
+    --warning-foreground: 30 60% 10%;
     --border: 18 32% 32%;
     --input: 18 32% 32%;
     --ring: 24 88% 65%;

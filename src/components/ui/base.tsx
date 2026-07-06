@@ -65,9 +65,9 @@ export function Button({
 export function Badge({ children, className, variant = 'default' }: { children: ReactNode; className?: string; variant?: 'default' | 'success' | 'warning' | 'error' | 'outline' }) {
   const variants = {
     default: 'bg-primary/10 text-primary border-primary/20',
-    success: 'bg-green-500/10 text-green-500 border-green-500/20',
-    warning: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20',
-    error: 'bg-red-500/10 text-red-500 border-red-500/20',
+    success: 'bg-success/10 text-success border-success/20',
+    warning: 'bg-warning/10 text-warning border-warning/20',
+    error: 'bg-destructive/10 text-destructive border-destructive/20',
     outline: 'bg-transparent text-muted-foreground border-border',
   };
 

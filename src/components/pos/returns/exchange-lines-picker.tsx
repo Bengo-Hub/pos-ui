@@ -96,9 +96,9 @@ export function ExchangeLinesPicker({ lines, onChange, returnedValue }: {
         <div className="flex justify-between"><span className="text-muted-foreground">Replacement total</span><span className="tabular-nums font-semibold">{fmt(total)}</span></div>
         <div className="flex justify-between pt-1 border-t border-border">
           {delta > 0.009 ? (
-            <><span className="font-bold text-amber-700">Top-up to collect</span><span className="tabular-nums font-bold text-amber-700">{fmt(delta)}</span></>
+            <><span className="font-bold text-warning">Top-up to collect</span><span className="tabular-nums font-bold text-warning">{fmt(delta)}</span></>
           ) : delta < -0.009 ? (
-            <><span className="font-bold text-emerald-700">Refund to customer</span><span className="tabular-nums font-bold text-emerald-700">{fmt(-delta)}</span></>
+            <><span className="font-bold text-success">Refund to customer</span><span className="tabular-nums font-bold text-success">{fmt(-delta)}</span></>
           ) : (
             <><span className="font-bold">Even swap</span><span className="font-bold">KES 0</span></>
           )}

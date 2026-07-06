@@ -23,9 +23,9 @@ interface StaffCreditLink {
 }
 
 const SYNC_CLS: Record<string, string> = {
-  synced: 'bg-emerald-500/10 text-emerald-700',
-  pending: 'bg-amber-500/10 text-amber-700',
-  failed: 'bg-red-500/10 text-red-600',
+  synced: 'bg-success/10 text-success',
+  pending: 'bg-warning/10 text-warning',
+  failed: 'bg-destructive/10 text-destructive',
 };
 const money = (v: number) => `KES ${Number(v || 0).toLocaleString()}`;
 
@@ -64,7 +64,7 @@ function StaffCreditPage() {
             <Loader2 className="h-5 w-5 animate-spin" /> Loading…
           </div>
         ) : isError ? (
-          <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-600">Failed to load. Please retry.</div>
+          <div className="rounded-xl border border-destructive/20 bg-destructive/10 p-4 text-sm text-destructive">Failed to load. Please retry.</div>
         ) : rows.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-40 text-muted-foreground gap-2">
             <Users className="h-8 w-8 opacity-30" />
@@ -89,7 +89,7 @@ function StaffCreditPage() {
                   <tr key={r.id} className="hover:bg-accent/20">
                     <td className="px-4 py-3 capitalize">{r.origin.replace('_', ' ')}</td>
                     <td className="px-4 py-3 text-right">{money(r.principal)}</td>
-                    <td className="px-4 py-3 text-right text-emerald-600">{money(r.amount_settled)}</td>
+                    <td className="px-4 py-3 text-right text-success">{money(r.amount_settled)}</td>
                     <td className="px-4 py-3 text-right font-semibold">{money(r.outstanding)}</td>
                     <td className="px-4 py-3">
                       <span className={cn('text-[10px] font-bold px-2 py-0.5 rounded-full', SYNC_CLS[r.sync_status] ?? 'bg-muted')}>

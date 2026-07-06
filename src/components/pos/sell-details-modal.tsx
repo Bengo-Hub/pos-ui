@@ -61,7 +61,7 @@ export function SellDetailsModal({ orderId, orgSlug, onClose }: { orderId: strin
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="bg-emerald-600 text-white text-left text-xs">
+                  <tr className="bg-primary text-primary-foreground text-left text-xs">
                     <th className="px-3 py-2 rounded-l-md">#</th><th className="px-3 py-2">Product</th>
                     <th className="px-3 py-2 text-right">Quantity</th><th className="px-3 py-2 text-right">Unit Price</th>
                     <th className="px-3 py-2 text-right">Discount</th><th className="px-3 py-2 text-right">Tax</th>
@@ -94,7 +94,7 @@ export function SellDetailsModal({ orderId, orgSlug, onClose }: { orderId: strin
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="bg-emerald-600 text-white text-left text-xs">
+                      <tr className="bg-primary text-primary-foreground text-left text-xs">
                         <th className="px-3 py-2">#</th><th className="px-3 py-2">Date</th>
                         <th className="px-3 py-2">Reference No</th><th className="px-3 py-2 text-right">Amount</th>
                         <th className="px-3 py-2">Mode</th>
@@ -125,7 +125,7 @@ export function SellDetailsModal({ orderId, orgSlug, onClose }: { orderId: strin
                 <TotalLine label="Shipping (+)" value={money(meta.shipping_amount)} />
                 <TotalLine label="Total Payable" value={money((order as any).total_amount)} bold />
                 <TotalLine label="Total paid" value={money(totalPaid)} />
-                <TotalLine label="Total remaining" value={money(remaining)} bold tone={remaining > 0.01 ? 'red' : undefined} />
+                <TotalLine label="Total remaining" value={money(remaining)} bold tone={remaining > 0.01 ? 'destructive' : undefined} />
               </div>
             </div>
 
@@ -142,11 +142,11 @@ export function SellDetailsModal({ orderId, orgSlug, onClose }: { orderId: strin
   );
 }
 
-function TotalLine({ label, value, bold, tone }: { label: string; value: string; bold?: boolean; tone?: 'red' }) {
+function TotalLine({ label, value, bold, tone }: { label: string; value: string; bold?: boolean; tone?: 'destructive' }) {
   return (
     <div className={`flex justify-between py-1.5 px-3 rounded-md ${bold ? 'font-bold bg-muted/40' : ''}`}>
       <span>{label}</span>
-      <span className={`tabular-nums ${tone === 'red' ? 'text-red-600' : ''}`}>{value}</span>
+      <span className={`tabular-nums ${tone === 'destructive' ? 'text-destructive' : ''}`}>{value}</span>
     </div>
   );
 }
