@@ -85,6 +85,9 @@ export interface POSSettings {
   hidden_items?: string[];
   disabled_modules_by_role?: Record<string, string[]>;
   hidden_items_by_role?: Record<string, string[]>;
+  /** A paired Local Print Agent polled the server recently: the till should rely on server-side
+   *  background print jobs (queue) and skip its own client-side auto-printing. */
+  print_agent_online?: boolean;
   updated_at: string;
 }
 

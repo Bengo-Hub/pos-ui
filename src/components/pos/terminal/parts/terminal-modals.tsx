@@ -200,7 +200,9 @@ export function TerminalModals() {
         printerProfile={resolveBillProfile((t.posSettings as any)?.printer_profiles)}
         tenantId={t.user?.tenant_id ?? ''}
         orderId={t.receiptOrderId}
-        autoPrint={Boolean((t.posSettings as any)?.auto_print_order)}
+        // When a Local Print Agent is online, payment finalization already enqueued the receipt on
+        // the SERVER print queue — client auto-printing it again would double-print.
+        autoPrint={Boolean((t.posSettings as any)?.auto_print_order) && !(t.posSettings as any)?.print_agent_online}
       />
 
       <OrderPlacedDialog

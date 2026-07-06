@@ -21,6 +21,8 @@ import {
   type DrawerKickCode, type DiscoveredDevice,
 } from '@/lib/pos/printer-discovery';
 import { BILL_PROFILE_ID, WAITER_PROFILE_ID, paperOf, hasRealPrinter, resolveBillProfile } from '@/lib/pos/printer-stations';
+import { localAgentPrinters } from '@/lib/pos/print-jobs';
+import { PrintAgentCard } from './PrintAgentCard';
 import { Toggle, inputClass, labelClass } from './shared';
 import { toast } from 'sonner';
 
@@ -146,9 +148,10 @@ export function ReceiptTab() {
   const handleDetectPrinters = async () => {
     setDiscovering(true);
     try {
-      const [res, up] = await Promise.all([discoverPrinters(), agentAvailable()]);
+      const [res, up, localNames] = await Promise.all([discoverPrinters(), agentAvailable(), localAgentPrinters()]);
       setAgentUp(up);
-      setDiscovered((prev) => Array.from(new Set([...res.printers, ...prev])));
+      // Local-agent OS printers included so a USB profile can be bound to its exact spooler name.
+      setDiscovered((prev) => Array.from(new Set([...res.printers, ...localNames, ...prev])));
       setDiscoveredDevices(res.devices ?? []);
       setDiscoverNotes(res.notes ?? (res.note ? [res.note] : []));
       if (res.printers.length) toast.success(`Detected ${res.printers.length} printer(s).`);
@@ -166,14 +169,23 @@ export function ReceiptTab() {
     const html = `<div style="font-family:'Courier New',monospace;text-align:center">
       <h3>Test Print</h3><p>${card.label}</p><p>${paperOf(p)}</p>
       <p>${new Date().toLocaleString()}</p></div>`;
-    // For a network (IP) printer, fetch server-built ESC/POS bytes and print SILENTLY in the
-    // background via QZ/the local agent — instead of opening the browser print dialog. Other
-    // connection types still print via QZ (silent) or the browser dialog as before.
-    let escposHex: string | undefined;
-    if (p.printer_type === 'network' && p.printer_ip) {
-      escposHex = (await fetchTestTicketEscposHex(card.label, paperOf(p))) ?? undefined;
+
+    // Every REAL printer (network IP, USB, OS, Bluetooth) tests the SAME way live printing works:
+    // server-built ESC/POS bytes dispatched silently via the Local Print Agent (network by ip:port,
+    // USB/OS by spooler name — agent >= 1.2.0) or QZ Tray. NEVER the browser print dialog — that's
+    // reserved for profiles explicitly set to "Browser dialog".
+    if (hasRealPrinter(p)) {
+      const escposHex = (await fetchTestTicketEscposHex(card.label, paperOf(p))) ?? undefined;
+      const ok = await printProfileHtml(p, `Test — ${card.label}`, html, escposHex, { silent: true });
+      if (!ok) {
+        toast.error('Could not reach the printer — install/start the Print Agent (or QZ Tray) and check the printer connection.');
+        setShowPrinterHelp(true);
+        return;
+      }
+    } else {
+      // Browser-dialog profile (or nothing configured yet): the dialog IS the chosen destination.
+      await printProfileHtml(p, `Test — ${card.label}`, html);
     }
-    await printProfileHtml(p, `Test — ${card.label}`, html, escposHex);
     // Test print uses the card's CURRENT (possibly unsaved) config; live sale printing reads the
     // SAVED settings. Nudge to Save so "test works but receipts don't print" can't happen.
     const saved = (settings?.printer_profiles ?? []).find((sp) => sp.id === card.id);
@@ -355,6 +367,8 @@ export function ReceiptTab() {
           )}
         </CardContent>
       </Card>
+
+      <PrintAgentCard canEdit={canEdit} />
 
       <Card>
         <CardHeader>

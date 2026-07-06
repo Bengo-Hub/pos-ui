@@ -25,7 +25,7 @@ export type PrinterSource = 'agent' | 'network' | 'qz' | 'webusb' | 'bluetooth' 
  *  printers, which a browser and a cloud pos-api cannot. Loopback is a secure context, so an HTTPS
  *  POS page may call it. Override the port with NEXT_PUBLIC_PRINT_AGENT_PORT. */
 const AGENT_PORT = (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_PRINT_AGENT_PORT) || '9330';
-const AGENT_BASE = `http://127.0.0.1:${AGENT_PORT}`;
+export const AGENT_BASE = `http://127.0.0.1:${AGENT_PORT}`;
 
 export interface DiscoveredDevice {
   name: string;
@@ -512,6 +512,16 @@ export async function printProfileHtml(
     return true;
   }
 
+  // Local Print Agent first when we have server-built ESC/POS bytes: it prints raw to BOTH
+  // network printers (ip:port) and locally-installed USB/OS printers (by name, agent >= 1.2.0)
+  // with no QZ dependency and no browser dialog. Fails fast when the agent isn't running.
+  if (escposHex) {
+    const ok = 'host' in target
+      ? await printRawToNetwork(target.host, target.port, escposHex)
+      : await printRawToLocalName(target.name, escposHex);
+    if (ok) return true;
+  }
+
   const qz = await loadQz();
   if (qz) {
     try {
@@ -524,12 +534,6 @@ export async function printProfileHtml(
     } catch {
       /* fall through to the agent / browser */
     }
-  }
-
-  // No QZ (or QZ failed): a network printer can print via the on-terminal agent using ESC/POS bytes.
-  if ('host' in target && escposHex) {
-    const ok = await printRawToNetwork(target.host, target.port, escposHex);
-    if (ok) return true;
   }
 
   if (opts?.silent) return false; // background job: report failure instead of opening a dialog
@@ -637,6 +641,21 @@ async function printRawToNetwork(host: string, port: number, hex: string): Promi
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ip: host, port, format: 'rawhex', data: hex }),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+/** Send raw ESC/POS bytes (hex) to a LOCALLY-INSTALLED (USB/OS) printer by name via the local
+ *  agent's OS-spooler path (agent >= 1.2.0). This is how USB printers print silently without QZ. */
+async function printRawToLocalName(name: string, hex: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${AGENT_BASE}/print`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, format: 'rawhex', data: hex }),
     });
     return res.ok;
   } catch {

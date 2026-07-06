@@ -7,6 +7,7 @@ import { Printer, Download, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { ReceiptPrint } from './receipt-print';
 import { printHtmlToPrinter, printProfileHtml, fetchReceiptEscposHex } from '@/lib/pos/printer-discovery';
+import { enqueuePrintJob } from '@/lib/pos/print-jobs';
 import { hasRealPrinter } from '@/lib/pos/printer-stations';
 import type { PrinterProfile } from '@/lib/api/settings';
 import { useTenantBranding } from '@/providers/tenant-branding-provider';
@@ -107,10 +108,11 @@ export function ReceiptPreview({
   const realProfile = hasRealPrinter(printerProfile) ? printerProfile : undefined;
 
   // Silent print to the resolved profile. Returns false when nothing printed (silent mode + no bridge).
+  // Server-built ESC/POS bytes serve BOTH network (ip:port) and USB/OS (spooler-name) agent printing.
   const printToProfile = async (silent: boolean): Promise<boolean> => {
     const node = typeof document !== 'undefined' ? document.getElementById('receipt-print-root') : null;
     if (!node || !realProfile || !receipt) return false;
-    const escposHex = realProfile.printer_type === 'network' && tenantId && orderId
+    const escposHex = tenantId && orderId
       ? await fetchReceiptEscposHex(tenantId, orderId, 'customer', realProfile.id)
       : null;
     return printProfileHtml(realProfile, `Receipt ${receipt.order_number}`, node.innerHTML, escposHex ?? undefined, { silent });
@@ -143,15 +145,38 @@ export function ReceiptPreview({
       window.print();
       return;
     }
-    // A real configured printer (incl. network by IP) → silent job with browser fallback (manual
-    // action, so falling back to a window is fine — the receipt must never be lost).
+    // A real configured printer (incl. network by IP and USB by name) → background job: server
+    // print queue first (on-site agent spooler), else the client silent transports. NEVER a
+    // surprise browser dialog when hardware is configured — failures toast instead.
     if (realProfile) {
-      void printToProfile(false);
+      void (async () => {
+        if (tenantId && orderId) {
+          const res = await enqueuePrintJob(tenantId, { job_type: 'receipt', order_id: orderId, profile_id: realProfile.id });
+          if (res.agent_online && res.jobs.length > 0) {
+            toast.success('Receipt sent to the printer.');
+            return;
+          }
+        }
+        const ok = await printToProfile(true);
+        if (ok) toast.success('Receipt sent to the printer.');
+        else toast.error('Receipt did not print — check the printer connection (print agent / QZ Tray).');
+      })();
       return;
     }
     // Legacy name-only routing (older call sites) — QZ when reachable, else browser window.
     if (printerName && printerName.toLowerCase() !== 'browser') {
       void printHtmlToPrinter(printerName, `Receipt ${receipt.order_number}`, node.innerHTML, receipt.paper_width ?? '80mm');
+      return;
+    }
+    openBrowserReceiptWindow(node);
+  };
+
+  // Explicit browser print window — the ONLY path that opens a dialog. Used when no real printer
+  // is configured, and by "Save PDF" (the window's Save-as-PDF destination yields a real PDF).
+  const openBrowserReceiptWindow = (nodeParam?: HTMLElement | null) => {
+    const node = nodeParam ?? (typeof document !== 'undefined' ? document.getElementById('receipt-print-root') : null);
+    if (!node || !receipt) {
+      window.print();
       return;
     }
     const win = window.open('', '_blank', 'width=380,height=640');
@@ -186,11 +211,11 @@ export function ReceiptPreview({
     setTimeout(() => setPrinting(false), 1000);
   };
 
-  // Real PDF: the print window's "Save as PDF" destination produces a proper PDF with the 80mm
-  // thermal layout. (The pos-api endpoint GET /{tenant}/pos/orders/{orderID}/receipt?format=pdf also
-  // returns a real application/pdf for programmatic/email use.)
+  // Real PDF: ALWAYS the browser window — its "Save as PDF" destination produces a proper PDF with
+  // the 80mm thermal layout, regardless of any configured hardware printer. (The pos-api endpoint
+  // GET /{tenant}/pos/orders/{orderID}/receipt?format=pdf also returns a real application/pdf.)
   const handleDownloadPDF = () => {
-    openReceiptPrintWindow();
+    openBrowserReceiptWindow();
   };
 
   const formatCurrency = (amount: number) =>

@@ -6,6 +6,7 @@ import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { useAuthStore } from '@/store/auth';
 import { resolveBillProfile, hasRealPrinter, BILL_PROFILE_ID } from '@/lib/pos/printer-stations';
 import { printProfileHtml, fetchReceiptEscposHex } from '@/lib/pos/printer-discovery';
+import { enqueuePrintJob } from '@/lib/pos/print-jobs';
 import { CheckCircle2, Loader2, Printer, AlertTriangle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -78,29 +79,68 @@ export function OrderPlacedDialog({ open, orderNumber, orderId, tenantId, orgSlu
   }, [onClose, router, orgSlug]);
 
   /**
-   * auto=true → background auto-print: silent or skipped-with-toast, NEVER a browser dialog and
-   * never the "No printer detected" modal. auto=false → the explicit Print Bill button keeps the
+   * auto=true → background auto-print: the logout is IMMEDIATE and printing runs in the
+   * background (AccuPOS model) — silent or skipped-with-toast, NEVER a browser dialog and never
+   * the "No printer detected" modal. auto=false → the explicit Print Bill button keeps the
    * ask-before-browser-print behavior.
+   *
+   * When a Local Print Agent is online, the server print queue owns the job: order create already
+   * enqueued the bill (auto), and the Print Bill button enqueues explicitly — nothing here waits
+   * on printer hardware.
    */
   const handlePrint = useCallback(async (auto = false) => {
-    setPrinting(true);
-    try {
-      if (auto && !printerConfigured) {
+    const agentOnline = !!posSettings?.print_agent_online;
+
+    if (auto) {
+      if (agentOnline) {
+        // Server-side queue already holds the bill job (enqueued at order create) — the on-site
+        // agent prints it in the background. Nothing to wait for.
+        handleLogout();
+        return;
+      }
+      if (!printerConfigured) {
         toast.info('Auto-print skipped — no receipt printer configured (Settings → Receipt).');
         handleLogout();
         return;
       }
+      // Client transports (agent relay / QZ): fire-and-forget so the waiter logs out instantly —
+      // the print round-trip must never block the pin-login handoff. The SPA navigation keeps
+      // this promise running; failures surface as a toast on the pin-login screen.
+      const q = servedBy ? `?served_by=${encodeURIComponent(servedBy)}` : '';
+      void (async () => {
+        try {
+          const html = await apiClient.get<string>(`/api/v1/${tenantId}/pos/orders/${orderId}/receipt/html${q}`);
+          const escposHex = await fetchReceiptEscposHex(tenantId, orderId, 'customer', billProfile?.id ?? BILL_PROFILE_ID);
+          const ok = await printProfileHtml(billProfile, `Receipt ${orderNumber}`, html as string, escposHex ?? undefined, { silent: true });
+          if (!ok) toast.error('Receipt did not print — check the printer connection (print agent / QZ Tray).');
+        } catch {
+          toast.error('Receipt did not print — check the printer connection.');
+        }
+      })();
+      handleLogout();
+      return;
+    }
+
+    // Manual "Print Bill" click.
+    setPrinting(true);
+    try {
+      if (agentOnline) {
+        const res = await enqueuePrintJob(tenantId, { job_type: 'bill', order_id: orderId });
+        if (res.agent_online && res.jobs.length > 0) {
+          toast.success('Bill sent to the printer.');
+          handleLogout();
+          return;
+        }
+        // Agent dropped offline between checks — fall through to the client transports.
+      }
       const q = servedBy ? `?served_by=${encodeURIComponent(servedBy)}` : '';
       const html = await apiClient.get<string>(`/api/v1/${tenantId}/pos/orders/${orderId}/receipt/html${q}`);
       if (printerConfigured) {
-        // Configured printer → push the job straight to it (QZ Tray, incl. raw network by IP).
-        // No browser print window at all. For a NETWORK printer, also fetch server-built ESC/POS
-        // bytes so the Local Print Agent can print it silently when QZ Tray isn't installed.
-        const escposHex = billProfile?.printer_type === 'network'
-          ? await fetchReceiptEscposHex(tenantId, orderId, 'customer', billProfile.id ?? BILL_PROFILE_ID)
-          : null;
-        const ok = await printProfileHtml(billProfile, `Receipt ${orderNumber}`, html as string, escposHex ?? undefined, { silent: auto });
-        if (auto && !ok) toast.error('Receipt did not print — check the printer connection (QZ Tray / print agent).');
+        // Configured printer → push the job straight to it (agent relay incl. USB-by-name, QZ
+        // Tray incl. raw network by IP). No browser print window at all.
+        const escposHex = await fetchReceiptEscposHex(tenantId, orderId, 'customer', billProfile?.id ?? BILL_PROFILE_ID);
+        const ok = await printProfileHtml(billProfile, `Receipt ${orderNumber}`, html as string, escposHex ?? undefined, { silent: true });
+        if (!ok) toast.error('Receipt did not print — check the printer connection (print agent / QZ Tray).');
         handleLogout();
       } else {
         // Manual print with no configured printer → DO NOT auto-open the browser print window. Ask first.
@@ -112,7 +152,7 @@ export function OrderPlacedDialog({ open, orderNumber, orderId, tenantId, orgSlu
     } finally {
       setPrinting(false);
     }
-  }, [servedBy, tenantId, orderId, orderNumber, billProfile, printerConfigured, handleLogout]);
+  }, [servedBy, tenantId, orderId, orderNumber, billProfile, printerConfigured, posSettings, handleLogout]);
 
   // Auto-print path: silent when configured; skipped with a toast when not. The "No printer
   // detected" modal is strictly a MANUAL-print concern now.

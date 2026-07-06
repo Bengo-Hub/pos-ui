@@ -1254,7 +1254,10 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
       // printer setup. The customer bill is NOT printed here — OrderPlacedDialog owns the bill
       // (server-rendered receipt) so it never prints twice. This is a background job: silent mode
       // means skipped stations toast instead of ever opening a browser print dialog.
-      if (isHospitality && cart.length > 0) {
+      //
+      // When a Local Print Agent is online, the SERVER print queue already enqueued the station
+      // tickets at order create (AccuPOS model) — printing again here would double-print.
+      if (isHospitality && cart.length > 0 && !(posSettings as any)?.print_agent_online) {
         void printKitchenBarTickets({
           orderNumber: ord.orderNumber || ord.orderId.slice(0, 8),
           tableRef: tableName ? `Table ${tableName}` : '',
