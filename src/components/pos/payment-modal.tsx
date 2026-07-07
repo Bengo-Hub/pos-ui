@@ -22,10 +22,11 @@ import {
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { useCreatePaymentIntent, useListC2BPayments, useClaimC2BPayment } from '@/hooks/usePOS';
-import { useOnline } from '@/hooks/use-online';
+import { useEffectiveOnline } from '@/lib/connectivity';
 import { usePaymentStream } from '@/hooks/usePaymentStream';
 import { savePendingPayment, getOfflineOrderByLocalId } from '@/lib/db/pos-db';
 import { usePOSGateways } from '@/hooks/use-pos-gateways';
+import { CreditSaleDetailsModal, type CreditSaleDetails } from '@/components/pos/credit-sale-details-modal';
 import { useHotelRooms } from '@/hooks/useHotel';
 import { hotelApi, type Room } from '@/lib/api/hotel';
 
@@ -82,9 +83,10 @@ export function POSPaymentModal({
   const [errorMsg, setErrorMsg] = useState('');
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
   const [roomSearch, setRoomSearch] = useState('');
+  const [creditDetailsOpen, setCreditDetailsOpen] = useState(false);
 
   const createIntent = useCreatePaymentIntent();
-  const isOnline = useOnline();
+  const isOnline = useEffectiveOnline();
   const { data: gateways } = usePOSGateways();
 
   // SSE-based payment detection: fires as soon as pos-api records the payment,
@@ -143,6 +145,7 @@ export function POSPaymentModal({
       setErrorMsg('');
       setSelectedRoom(null);
       setRoomSearch('');
+      setCreditDetailsOpen(false);
     }
   }, [open]);
 
@@ -189,13 +192,24 @@ export function POSPaymentModal({
       { orderId, tenderMethod: 'cash', amount: roundedTotal, tenderId },
       {
         onSuccess: () => { setStep('confirmed'); onPaymentConfirmed(methodRef.current); },
-        onError: (err: any) => {
+        onError: async (err: any) => {
+          // Write-behind on weak wifi: cash settles at the till, so a NETWORK failure queues
+          // the capture (replay is idempotent) instead of stranding a paid customer.
+          const { isNetworkShapedError } = await import('@/lib/connectivity');
+          if (isNetworkShapedError(err)) {
+            try {
+              await queueOfflinePayment('cash');
+              setStep('offline_queued');
+              onPaymentConfirmed(methodRef.current);
+              return;
+            } catch { /* fall through to the error state */ }
+          }
           setErrorMsg(err?.message ?? 'Cash payment failed. Please try again.');
           setStep('failed');
         },
       }
     );
-  }, [cashTendered, roundedTotal, orderId, tenderId, tenantSlug, isOnline, createIntent, onPaymentConfirmed]);
+  }, [cashTendered, roundedTotal, orderId, tenderId, tenantSlug, isOnline, createIntent, onPaymentConfirmed, queueOfflinePayment]);
 
   const handleManualConfirm = useCallback(async () => {
     methodRef.current = 'manual';
@@ -217,13 +231,24 @@ export function POSPaymentModal({
       { orderId, tenderMethod: 'manual', amount: roundedTotal, externalRef: manualRef.trim(), tenderId },
       {
         onSuccess: () => { setStep('confirmed'); onPaymentConfirmed(methodRef.current); },
-        onError: (err: any) => {
+        onError: async (err: any) => {
+          // The cashier already sighted the M-Pesa code — a NETWORK failure queues the
+          // capture (verified on sync) instead of stranding the sale.
+          const { isNetworkShapedError } = await import('@/lib/connectivity');
+          if (isNetworkShapedError(err)) {
+            try {
+              await queueOfflinePayment('manual', manualRef.trim());
+              setStep('offline_queued');
+              onPaymentConfirmed(methodRef.current);
+              return;
+            } catch { /* fall through to the error state */ }
+          }
           setErrorMsg(err?.message ?? 'Could not verify M-Pesa code. Please check and try again.');
           setStep('failed');
         },
       }
     );
-  }, [manualRef, roundedTotal, orderId, tenderId, tenantSlug, isOnline, createIntent, onPaymentConfirmed]);
+  }, [manualRef, roundedTotal, orderId, tenderId, tenantSlug, isOnline, createIntent, onPaymentConfirmed, queueOfflinePayment]);
 
   // Card / PDQ: the standalone card terminal already approved the swipe, so it settles immediately
   // like cash (treasury records it as card_manual). Optional approval/reference code is captured.
@@ -233,13 +258,23 @@ export function POSPaymentModal({
       { orderId, tenderMethod: 'card_manual', amount: roundedTotal, externalRef: cardRef.trim() || undefined, tenderId },
       {
         onSuccess: () => { setStep('confirmed'); onPaymentConfirmed(methodRef.current); },
-        onError: (err: any) => {
+        onError: async (err: any) => {
+          // The standalone PDQ already approved the swipe — a NETWORK failure queues the record.
+          const { isNetworkShapedError } = await import('@/lib/connectivity');
+          if (isNetworkShapedError(err)) {
+            try {
+              await queueOfflinePayment('card_manual', cardRef.trim() || undefined);
+              setStep('offline_queued');
+              onPaymentConfirmed(methodRef.current);
+              return;
+            } catch { /* fall through to the error state */ }
+          }
           setErrorMsg(err?.message ?? 'Card payment failed. Please try again.');
           setStep('failed');
         },
       }
     );
-  }, [orderId, roundedTotal, cardRef, tenderId, createIntent, onPaymentConfirmed]);
+  }, [orderId, roundedTotal, cardRef, tenderId, createIntent, onPaymentConfirmed, queueOfflinePayment]);
 
   const handleDigital = useCallback((method: string) => {
     methodRef.current = method;
@@ -259,16 +294,23 @@ export function POSPaymentModal({
     );
   }, [orderId, roundedTotal, tenderId, createIntent]);
 
-  // On Account (credit sale): the backend posts to the customer's treasury AR balance (credit limit
-  // enforced) and settles the order immediately — so it behaves like cash here, not a digital intent.
-  const handleOnAccount = useCallback(() => {
+  // On Account (credit sale): first capture the credit terms (reusable CreditSaleDetailsModal —
+  // due date defaults to +30 days, optional notes), then the backend posts to the customer's
+  // treasury AR balance (credit limit enforced) and settles the order immediately.
+  const handleOnAccount = useCallback(() => setCreditDetailsOpen(true), []);
+
+  const handleOnAccountConfirm = useCallback((details: CreditSaleDetails) => {
     methodRef.current = 'on_account';
     createIntent.mutate(
-      { orderId, tenderMethod: 'on_account', amount: roundedTotal, tenderId },
       {
-        onSuccess: () => { setStep('confirmed'); onPaymentConfirmed(methodRef.current); },
+        orderId, tenderMethod: 'on_account', amount: roundedTotal, tenderId,
+        paymentDueDate: details.dueDate, creditNotes: details.notes || undefined,
+      },
+      {
+        onSuccess: () => { setCreditDetailsOpen(false); setStep('confirmed'); onPaymentConfirmed(methodRef.current); },
         onError: (err: any) => {
-          setErrorMsg(err?.message ?? 'Could not charge to account — check the customer and their credit limit.');
+          setCreditDetailsOpen(false);
+          setErrorMsg((err as { normalizedMessage?: string })?.normalizedMessage ?? err?.message ?? 'Could not charge to account — check the customer and their credit limit.');
           setStep('failed');
         },
       }
@@ -837,6 +879,15 @@ export function POSPaymentModal({
           </div>
         </div>
       </div>
+
+      {/* Credit-sale terms capture (due date default +30d, notes) — shared component. */}
+      <CreditSaleDetailsModal
+        open={creditDetailsOpen}
+        amountLabel={`KES ${roundedTotal.toLocaleString()}`}
+        loading={createIntent.isPending}
+        onCancel={() => setCreditDetailsOpen(false)}
+        onConfirm={handleOnAccountConfirm}
+      />
     </>
   );
 }

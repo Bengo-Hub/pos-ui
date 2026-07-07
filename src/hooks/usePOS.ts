@@ -15,7 +15,7 @@ import {
   type OfflineCatalogItem,
   type OfflineOrderLine,
 } from '@/lib/db/pos-db';
-import { useOnline } from '@/hooks/use-online';
+import { useEffectiveOnline } from '@/lib/connectivity';
 import { v4 as uuidv4 } from 'uuid';
 
 // Get tenant ID from auth store
@@ -347,13 +347,14 @@ export function offlineToCatalogItem(c: OfflineCatalogItem): CatalogItem {
 
 /** Pull the ENTIRE catalog (loop every page) so client-side filter/search/pagination
  *  operate on the complete set — never a single page. Capped to avoid a runaway loop. */
-async function fetchAllCatalogItems(tenantID: string): Promise<CatalogItem[]> {
+async function fetchAllCatalogItems(tenantID: string, opts?: { timeout?: number }): Promise<CatalogItem[]> {
   const limit = 200;
   const all: CatalogItem[] = [];
   for (let page = 1; page <= 100; page++) {
     const res = await apiClient.get<PaginatedResponse<CatalogItem>>(
       `${basePath(tenantID)}/catalog/items`,
       { page, limit },
+      { suppressErrorToast: true, timeout: opts?.timeout },
     );
     const batch = res?.data ?? [];
     all.push(...batch);
@@ -394,8 +395,12 @@ export async function revalidateFullCatalog(
         .catch(() => { /* offline cache is best-effort */ });
       qc.setQueryData([FULL_CATALOG_QUERY_KEY, tenantID, outletID], all);
     }
+    void import('@/lib/db/kv-cache').then(({ appendSyncLog }) =>
+      appendSyncLog({ direction: 'pull', entity: 'catalog', status: 'ok', tenant_id: tenantID, detail: `${all.length} items` }));
     return all;
-  } catch {
+  } catch (err) {
+    void import('@/lib/db/kv-cache').then(({ appendSyncLog }) =>
+      appendSyncLog({ direction: 'pull', entity: 'catalog', status: 'error', tenant_id: tenantID, error: err instanceof Error ? err.message : 'refresh failed' }));
     return null; // offline / transient — cache stays authoritative
   } finally {
     catalogRevalidateInflight.delete(flightKey);
@@ -429,7 +434,9 @@ export async function loadFullCatalog(
     return cached.map(offlineToCatalogItem);
   }
   // Cold start: nothing cached yet for this outlet, so the network is the only source.
-  const all = await fetchAllCatalogItems(tenantID);
+  // Bounded per-page timeout: on weak wifi the terminal degrades to an empty grid that the
+  // background revalidate/version-poll fills in, instead of hanging on the axios 15s default.
+  const all = await fetchAllCatalogItems(tenantID, { timeout: 10_000 });
   void replaceCachedCatalog(tenantID, outletID, toOfflineCatalogRows(tenantID, outletID, all))
     .catch(() => { /* offline cache is best-effort */ });
   return all;
@@ -445,7 +452,7 @@ export async function loadFullCatalog(
 export function useFullCatalog() {
   const tenantID = useTenantID();
   const outletID = useEffectiveOutletID();
-  const isOnline = useOnline();
+  const isOnline = useEffectiveOnline();
   const qc = useQueryClient();
   return useQuery({
     // Keyed per tenant AND outlet: the server catalog is outlet-scoped (use-case filtered),
@@ -469,7 +476,7 @@ export function useFullCatalog() {
 export function useCatalogVersionSync() {
   const tenantID = useTenantID();
   const outletID = useEffectiveOutletID();
-  const isOnline = useOnline();
+  const isOnline = useEffectiveOnline();
   const qc = useQueryClient();
   const lastVersion = useRef<string | null>(null);
   useQuery({
@@ -530,14 +537,22 @@ function normalizeCategories(raw: RawCategory[] | undefined): POSCategory[] {
 export function useCategories() {
   const tenantID = useTenantID();
   const outletID = useEffectiveOutletID();
+  const qc = useQueryClient();
   return useQuery({
     // outletID keys the cache: categories derive from the outlet-scoped catalog, so a retail
     // outlet must not paint the hospitality outlet's category tabs (and vice versa).
-    queryKey: ['pos-categories', tenantID, outletID],
-    queryFn: () =>
-      apiClient.get<{ data: RawCategory[] }>(`${basePath(tenantID)}/catalog/categories`),
+    queryKey: ['pos-categories', tenantID, outletID || ''],
+    // IndexedDB-first: category tabs paint from cache; background revalidate keeps them fresh.
+    queryFn: async () => {
+      const { cacheFirst } = await import('@/lib/offline/cache-first');
+      const { getDataset, datasetCacheOpts } = await import('@/lib/offline/datasets');
+      return cacheFirst(
+        datasetCacheOpts(getDataset('pos-categories'), tenantID, outletID || undefined, qc),
+      ) as Promise<{ data: RawCategory[] }>;
+    },
     enabled: !!tenantID,
     staleTime: 10 * 60_000,
+    networkMode: 'always',
     select: (res) => normalizeCategories(res.data),
   });
 }
@@ -877,11 +892,22 @@ export interface OrderListFilters {
   page?: number;
 }
 
+/** True when the request is the plain "latest sales" page-1 list (no filters) — the only
+ *  shape the offline `recent-orders` dataset mirrors, so it's the only one that may
+ *  serve/refresh that cache. */
+function isDefaultOrderList(filters?: OrderListFilters): boolean {
+  if (!filters) return true;
+  const { limit: _l, page, ...rest } = filters;
+  return (page ?? 1) === 1 && Object.values(rest).every((v) => v === undefined || v === '' || v === false);
+}
+
 export function useOrders(filters?: OrderListFilters) {
   const tenantID = useTenantID();
+  const outletID = useEffectiveOutletID();
   return useQuery({
     queryKey: ['pos-orders', tenantID, filters],
-    queryFn: () =>
+    queryFn: async () => {
+      const fetchList = () =>
       apiClient.get<{ data: POSOrder[]; total: number; meta?: { total: number; page: number; limit: number } }>(
         `${basePath(tenantID)}/orders`,
         {
@@ -903,9 +929,29 @@ export function useOrders(filters?: OrderListFilters) {
           sort: 'created_at',
           order: 'desc',
         },
-      ),
+      );
+      // Offline resilience for the default "latest sales" list only: write it through to
+      // the recent-orders dataset online, serve that cache when the network is out. Filtered
+      // views still require connectivity (we never fake filtered results from a page-1 cache).
+      const { kvKey, setKV, getKV } = await import('@/lib/db/kv-cache');
+      const cacheKey = kvKey('recent-orders', tenantID, outletID || undefined);
+      if (!isDefaultOrderList(filters)) return fetchList();
+      try {
+        const res = await fetchList();
+        await setKV(cacheKey, tenantID, res).catch(() => {});
+        return res;
+      } catch (err) {
+        const { isNetworkShapedError } = await import('@/lib/connectivity');
+        if (isNetworkShapedError(err)) {
+          const cached = await getKV<Awaited<ReturnType<typeof fetchList>>>(cacheKey);
+          if (cached !== undefined) return cached;
+        }
+        throw err;
+      }
+    },
     enabled: !!tenantID,
     staleTime: 15_000,
+    networkMode: 'always',
   });
 }
 
@@ -1042,7 +1088,7 @@ export function useCreateOrder() {
   const tenantID = useTenantID();
   const tenantSlug = useTenantSlug();
   const outletID = useOutletID();
-  const isOnline = useOnline();
+  const isOnline = useEffectiveOnline();
   const qc = useQueryClient();
   return useMutation({
     // Generate the client reference up front and use it on BOTH paths: offline it is the
@@ -1050,7 +1096,7 @@ export function useCreateOrder() {
     // backend dedups a replayed (or lost-response) submission into a single order.
     mutationFn: async (data: CreateOrderInput) => {
       const localId = uuidv4();
-      if (!isOnline) {
+      const queueOffline = async () => {
         const lines: OfflineOrderLine[] = data.lines.map((l) => ({
           catalog_item_id: l.catalog_item_id,
           sku: l.sku,
@@ -1080,32 +1126,44 @@ export function useCreateOrder() {
         // Shape mirrors the server order enough for the place-order → payment handoff;
         // id === local_id so downstream offline payment can attach via isLocalOrder.
         return { id: localId, order_id: localId, local_id: localId, offline: true, status: 'open' };
+      };
+      if (!isOnline) return queueOffline();
+      try {
+        const res = await apiClient.post<{ id: string; order_number: string }>(
+          `${basePath(tenantID)}/orders`,
+          {
+            outlet_id: data.outletId,
+            device_id: data.deviceId,
+            currency: data.currency ?? 'KES',
+            order_subtype: data.orderSubtype ?? 'dine_in',
+            table_id: data.tableId,
+            covers_count: data.coversCount,
+            customer_phone: data.customerPhone,
+            customer_name: data.customerName,
+            age_verified: data.ageVerified,
+            discount_amount: data.discountAmount,
+            discount_reason: data.discountReason,
+            order_tax_amount: data.orderTaxAmount,
+            charges: data.charges,
+            approval_token: data.approvalToken,
+            metadata: data.metadata,
+            lines: data.lines,
+            client_reference: localId,
+            source: data.source,
+          },
+          idemHeaders(localId),
+        );
+        return { ...res, offline: false };
+      } catch (err) {
+        // Write-behind: a NETWORK-shaped failure (timeout/unreachable/gateway — weak wifi
+        // reads as "online") queues the sale instead of erroring at the till. Same localId
+        // ⇒ if the server actually processed the lost request, the replay dedups via
+        // client_reference/Idempotency-Key. Business 4xx/500 still throws.
+        const { isNetworkShapedError } = await import('@/lib/connectivity');
+        if (!isNetworkShapedError(err)) throw err;
+        toast.info('Network unreachable — sale saved offline and will sync automatically.');
+        return queueOffline();
       }
-      const res = await apiClient.post<{ id: string; order_number: string }>(
-        `${basePath(tenantID)}/orders`,
-        {
-          outlet_id: data.outletId,
-          device_id: data.deviceId,
-          currency: data.currency ?? 'KES',
-          order_subtype: data.orderSubtype ?? 'dine_in',
-          table_id: data.tableId,
-          covers_count: data.coversCount,
-          customer_phone: data.customerPhone,
-          customer_name: data.customerName,
-          age_verified: data.ageVerified,
-          discount_amount: data.discountAmount,
-          discount_reason: data.discountReason,
-          order_tax_amount: data.orderTaxAmount,
-          charges: data.charges,
-          approval_token: data.approvalToken,
-          metadata: data.metadata,
-          lines: data.lines,
-          client_reference: localId,
-          source: data.source,
-        },
-        idemHeaders(localId),
-      );
-      return { ...res, offline: false };
     },
     // Must run even when navigator.onLine is false — we handle offline internally
     // (write to IndexedDB). Without this, React Query pauses the mutation offline and the
@@ -1128,12 +1186,12 @@ export function useUpdateOrderStatus() {
 export function useVoidOrder() {
   const tenantID = useTenantID();
   const tenantSlug = useTenantSlug();
-  const isOnline = useOnline();
+  const isOnline = useEffectiveOnline();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ orderId, reason, approvalToken, voidCode }: { orderId: string; reason: string; approvalToken?: string; voidCode?: string }) => {
       const localId = uuidv4();
-      if (!isOnline) {
+      const queueOffline = async () => {
         // If voiding an offline (not-yet-synced) order, key by local_order_id so the void
         // syncs after the order resolves a server id.
         const { getOfflineOrderByLocalId, saveDraftVoid } = await import('@/lib/db/pos-db');
@@ -1150,12 +1208,23 @@ export function useVoidOrder() {
           synced: false,
         });
         return { offline: true };
+      };
+      if (!isOnline) return queueOffline();
+      try {
+        return await apiClient.patch(
+          `${basePath(tenantID)}/orders/${orderId}/void`,
+          { reason, approval_token: approvalToken, void_code: voidCode },
+          idemHeaders(localId),
+        );
+      } catch (err) {
+        // Write-behind on weak wifi — same localId, so a replay dedups server-side.
+        // NOTE: void_code is validated server-side and can expire before the queue drains,
+        // so only approval_token voids queue; a void-code void on a dead network still errors.
+        const { isNetworkShapedError } = await import('@/lib/connectivity');
+        if (!isNetworkShapedError(err) || voidCode) throw err;
+        toast.info('Network unreachable — void saved offline and will sync automatically.');
+        return queueOffline();
       }
-      return apiClient.patch(
-        `${basePath(tenantID)}/orders/${orderId}/void`,
-        { reason, approval_token: approvalToken, void_code: voidCode },
-        idemHeaders(localId),
-      );
     },
     networkMode: 'always',
     onSuccess: () => qc.invalidateQueries({ queryKey: ['pos-orders'] }),
@@ -1228,11 +1297,18 @@ interface Tender {
 
 export function useTenders() {
   const tenantID = useTenantID();
+  const qc = useQueryClient();
   return useQuery({
     queryKey: ['pos-tenders', tenantID],
-    queryFn: () => apiClient.get<PaginatedResponse<Tender>>(`${basePath(tenantID)}/tenders`),
+    // IndexedDB-first: tender types must resolve offline/weak-wifi or checkout dies.
+    queryFn: async () => {
+      const { cacheFirst } = await import('@/lib/offline/cache-first');
+      const { getDataset, datasetCacheOpts } = await import('@/lib/offline/datasets');
+      return cacheFirst(datasetCacheOpts(getDataset('pos-tenders'), tenantID, undefined, qc)) as Promise<PaginatedResponse<Tender>>;
+    },
     enabled: !!tenantID,
     staleTime: 5 * 60_000,
+    networkMode: 'always',
   });
 }
 
@@ -1255,6 +1331,8 @@ export function useCreatePaymentIntent() {
       tenderId,
       currency,
       externalRef,
+      paymentDueDate,
+      creditNotes,
     }: {
       orderId: string;
       tenderMethod: string;
@@ -1262,6 +1340,8 @@ export function useCreatePaymentIntent() {
       tenderId?: string;
       currency?: string;
       externalRef?: string; // cashier-entered reference for manual/paybill payments
+      paymentDueDate?: string; // credit sale due date (YYYY-MM-DD, from the credit-sale modal)
+      creditNotes?: string; // credit sale notes/terms
     }) =>
       apiClient.post<PaymentIntentResult>(`${basePath(tenantID)}/orders/${orderId}/payments/intent`, {
         tenderMethod,
@@ -1269,6 +1349,8 @@ export function useCreatePaymentIntent() {
         amount,
         currency: currency ?? 'KES',
         externalRef,
+        paymentDueDate,
+        creditNotes,
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['pos-orders'] });
@@ -1305,20 +1387,28 @@ interface CashDrawer {
 
 export function useCurrentDrawer() {
   const tenantID = useTenantID();
-  const isOnline = useOnline();
+  const isOnline = useEffectiveOnline();
   return useQuery({
     queryKey: ['pos-drawer-current', tenantID],
-    // Offline (incl. cold-start): serve the last-known drawer snapshot so the cashier sees
-    // their open drawer instead of a blank/zero state; cache it through on every online read.
+    // Offline (incl. cold-start, and weak-wifi "effectively offline"): serve the last-known
+    // drawer snapshot so the cashier sees their open drawer instead of a blank/zero state;
+    // cache it through on every online read. A network-shaped fetch failure also falls back.
     queryFn: async () => {
       const { getSnapshot, cacheSnapshot } = await import('@/lib/db/pos-db');
-      if (!navigator.onLine) {
-        const snap = await getSnapshot<{ drawer: CashDrawer | null; isOpen: boolean }>(`drawer:${tenantID}`);
-        if (snap !== undefined) return snap;
+      const snap = () => getSnapshot<{ drawer: CashDrawer | null; isOpen: boolean }>(`drawer:${tenantID}`);
+      if (!isOnline) {
+        const s = await snap();
+        if (s !== undefined) return s;
       }
-      const res = await apiClient.get<{ drawer: CashDrawer | null; isOpen: boolean }>(`${basePath(tenantID)}/drawers/current`);
-      await cacheSnapshot(`drawer:${tenantID}`, tenantID, res).catch(() => {});
-      return res;
+      try {
+        const res = await apiClient.get<{ drawer: CashDrawer | null; isOpen: boolean }>(`${basePath(tenantID)}/drawers/current`);
+        await cacheSnapshot(`drawer:${tenantID}`, tenantID, res).catch(() => {});
+        return res;
+      } catch (err) {
+        const s = await snap();
+        if (s !== undefined) return s;
+        throw err;
+      }
     },
     enabled: !!tenantID,
     staleTime: 5_000,
@@ -1417,12 +1507,12 @@ export function useOpenDrawer() {
   const tenantID = useTenantID();
   const tenantSlug = useTenantSlug();
   const outletID = useOutletID();
-  const isOnline = useOnline();
+  const isOnline = useEffectiveOnline();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (data: { outletId: string; startingCash: number; deviceId?: string }) => {
       const localId = uuidv4();
-      if (!isOnline) {
+      const queueOffline = async () => {
         await saveDraftDrawerSession({
           local_id: localId,
           tenant_id: tenantID,
@@ -1433,8 +1523,16 @@ export function useOpenDrawer() {
           synced: false,
         });
         return { id: localId, local_id: localId, offline: true };
+      };
+      if (!isOnline) return queueOffline();
+      try {
+        return await apiClient.post(`${basePath(tenantID)}/drawers/open`, data, idemHeaders(localId));
+      } catch (err) {
+        const { isNetworkShapedError } = await import('@/lib/connectivity');
+        if (!isNetworkShapedError(err)) throw err;
+        toast.info('Network unreachable — drawer opened offline and will sync automatically.');
+        return queueOffline();
       }
-      return apiClient.post(`${basePath(tenantID)}/drawers/open`, data, idemHeaders(localId));
     },
     networkMode: 'always',
     onSuccess: () => {
@@ -1447,14 +1545,14 @@ export function useOpenDrawer() {
 export function useCloseDrawer() {
   const tenantID = useTenantID();
   const tenantSlug = useTenantSlug();
-  const isOnline = useOnline();
+  const isOnline = useEffectiveOnline();
   const qc = useQueryClient();
   return useMutation({
     // isLocalDrawer = the drawer was opened offline and hasn't synced yet (drawerId is a
     // local uuid). The close is queued against local_drawer_id and applied after the
     // session syncs and resolves a server id.
     mutationFn: async ({ drawerId, endingCash, isLocalDrawer = false }: { drawerId: string; endingCash: number; isLocalDrawer?: boolean }) => {
-      if (!isOnline) {
+      const queueOffline = async () => {
         await saveDraftDrawerClose({
           server_drawer_id: isLocalDrawer ? undefined : drawerId,
           local_drawer_id: isLocalDrawer ? drawerId : undefined,
@@ -1465,12 +1563,20 @@ export function useCloseDrawer() {
           synced: false,
         });
         return { offline: true };
+      };
+      if (!isOnline) return queueOffline();
+      try {
+        return await apiClient.post(
+          `${basePath(tenantID)}/drawers/${drawerId}/close`,
+          { endingCash },
+          idemHeaders(`close-${drawerId}`),
+        );
+      } catch (err) {
+        const { isNetworkShapedError } = await import('@/lib/connectivity');
+        if (!isNetworkShapedError(err)) throw err;
+        toast.info('Network unreachable — drawer close saved offline and will sync automatically.');
+        return queueOffline();
       }
-      return apiClient.post(
-        `${basePath(tenantID)}/drawers/${drawerId}/close`,
-        { endingCash },
-        idemHeaders(`close-${drawerId}`),
-      );
     },
     networkMode: 'always',
     onSuccess: () => qc.invalidateQueries({ queryKey: ['pos-drawer-current'] }),

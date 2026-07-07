@@ -11,7 +11,7 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useOnline } from '@/hooks/use-online';
+import { useEffectiveOnline } from '@/lib/connectivity';
 import { useAuthStore } from '@/store/auth';
 import { apiClient } from '@/lib/api/client';
 import { v4 as uuidv4 } from 'uuid';
@@ -80,7 +80,7 @@ export function useMenuItemsOffline(filters?: { category?: string; search?: stri
   const effectiveOutletID = useAuthStore(
     (s) => s.selectedOutletId ?? s.outlet?.id ?? (s.user as (typeof s.user & { outlet_id?: string }) | null)?.outlet_id ?? '',
   );
-  const isOnline = useOnline();
+  const isOnline = useEffectiveOnline();
 
   return useQuery({
     queryKey: ['pos-catalog-items-offline', tenantID, effectiveOutletID, filters, isOnline],
@@ -176,7 +176,7 @@ export function useCreateOrderOffline() {
   const tenantID = useTenantID();
   const tenantSlug = useTenantSlug();
   const outletID = useOutletID();
-  const isOnline = useOnline();
+  const isOnline = useEffectiveOnline();
   const qc = useQueryClient();
 
   return useMutation({
@@ -247,7 +247,7 @@ export function useOpenDrawerOffline() {
   const tenantID = useTenantID();
   const tenantSlug = useTenantSlug();
   const outletID = useOutletID();
-  const isOnline = useOnline();
+  const isOnline = useEffectiveOnline();
   const qc = useQueryClient();
 
   return useMutation({
@@ -282,7 +282,7 @@ export function useOpenDrawerOffline() {
 export function useCloseDrawerOffline() {
   const tenantID = useTenantID();
   const tenantSlug = useTenantSlug();
-  const isOnline = useOnline();
+  const isOnline = useEffectiveOnline();
   const qc = useQueryClient();
 
   return useMutation({
@@ -328,7 +328,7 @@ export function useCloseDrawerOffline() {
 export function useRecordPaymentOffline() {
   const tenantID = useTenantID();
   const tenantSlug = useTenantSlug();
-  const isOnline = useOnline();
+  const isOnline = useEffectiveOnline();
   const qc = useQueryClient();
 
   return useMutation({

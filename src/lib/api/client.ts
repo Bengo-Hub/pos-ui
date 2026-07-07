@@ -1,5 +1,13 @@
 import axios, { AxiosInstance, AxiosResponse, InternalAxiosRequestConfig } from 'axios';
 import { isSubscriptionError } from '@/lib/api/error-handler';
+import { isNetworkShapedError, reportNetworkFailure, reportNetworkSuccess } from '@/lib/connectivity';
+
+declare module 'axios' {
+  export interface AxiosRequestConfig {
+    /** Set on background revalidates so a failed refresh never fires the global 5xx toast. */
+    suppressErrorToast?: boolean;
+  }
+}
 
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'https://posapi.codevertexitsolutions.com';
 
@@ -42,7 +50,11 @@ class ApiClient {
         return config;
     };
 
-    private handleResponse = (response: AxiosResponse) => response;
+    private handleResponse = (response: AxiosResponse) => {
+        // Any response at all means the API was reachable — feed the connectivity signal.
+        reportNetworkSuccess();
+        return response;
+    };
 
     private on401Callback: (() => void) | null = null;
     private onSubscription403Callback: ((data: any) => void) | null = null;
@@ -70,6 +82,14 @@ class ApiClient {
     }
 
     private handleError = async (error: any) => {
+        // Feed the effective-connectivity signal: transport failures (timeout/unreachable/
+        // gateway) count towards effectively-offline; any real HTTP response counts as
+        // reachable even when it is an error status.
+        if (isNetworkShapedError(error)) {
+            reportNetworkFailure();
+        } else if (error.response) {
+            reportNetworkSuccess();
+        }
         if (error.response?.status === 401) {
             // If token is already cleared (explicit logout in progress), skip entirely
             if (!this.accessToken) return Promise.reject(error);
@@ -103,7 +123,7 @@ class ApiClient {
                 this.onLimitReachedCallback(data);
             }
         }
-        if (error.response?.status >= 500 && this.onServerErrorCallback) {
+        if (error.response?.status >= 500 && this.onServerErrorCallback && !error.config?.suppressErrorToast) {
             const data = error.response?.data;
             const message = data?.message ?? data?.error ?? 'A server error occurred. Please try again.';
             this.onServerErrorCallback(error.response.status, message);
@@ -155,8 +175,8 @@ class ApiClient {
     return h;
   }
 
-  public get<T>(url: string, params?: any): Promise<T> {
-    return this.instance.get<T>(url, { params }).then((res: AxiosResponse<T>) => res.data);
+  public get<T>(url: string, params?: any, config?: { suppressErrorToast?: boolean; timeout?: number }): Promise<T> {
+    return this.instance.get<T>(url, { params, ...config }).then((res: AxiosResponse<T>) => res.data);
   }
 
   /**
@@ -171,7 +191,7 @@ class ApiClient {
       .then((res: AxiosResponse<Blob>) => res.data);
   }
 
-  public post<T>(url: string, data?: any, config?: { headers?: Record<string, string> }): Promise<T> {
+  public post<T>(url: string, data?: any, config?: { headers?: Record<string, string>; suppressErrorToast?: boolean; timeout?: number }): Promise<T> {
     return this.instance.post<T>(url, data, config).then((res: AxiosResponse<T>) => res.data);
   }
 

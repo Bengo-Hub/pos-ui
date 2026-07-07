@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { CloudUpload, AlertTriangle, RefreshCw, X, Check } from 'lucide-react';
-import { useOnline } from '@/hooks/use-online';
+import { useEffectiveOnline } from '@/lib/connectivity';
 import { usePendingSyncCount, triggerSyncNow } from '@/hooks/use-sync-offline-orders';
 import { getDeadLetterItems, retryDeadLetter, type DeadLetterItem } from '@/lib/db/pos-db';
 import { cn } from '@/lib/utils';
@@ -13,7 +13,7 @@ import { cn } from '@/lib/utils';
  * review + retry. Hidden when everything is synced. Complements the top OfflineBar ribbon.
  */
 export function SyncStatusIndicator() {
-  const online = useOnline();
+  const online = useEffectiveOnline();
   const { pending, deadLetter } = usePendingSyncCount();
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<DeadLetterItem[]>([]);

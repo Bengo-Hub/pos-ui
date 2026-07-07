@@ -12,7 +12,8 @@ export async function registerBackgroundSync(): Promise<void> {
   if (typeof window === 'undefined') return;
   if (!('serviceWorker' in navigator)) return;
   // Don't cache dev assets — only run the offline shell in production builds.
-  if (process.env.NODE_ENV !== 'production') return;
+  // NEXT_PUBLIC_ENABLE_SW=1 opts a dev build in so offline behavior is testable locally.
+  if (process.env.NODE_ENV !== 'production' && process.env.NEXT_PUBLIC_ENABLE_SW !== '1') return;
 
   try {
     // Register (or reuse) the offline-shell worker at the app root scope.

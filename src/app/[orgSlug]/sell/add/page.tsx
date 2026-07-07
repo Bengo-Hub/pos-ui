@@ -23,6 +23,7 @@ import { FeatureLock, useFeatureUpgrade } from '@bengo-hub/shared-ui-lib/subscri
 import { apiClient } from '@/lib/api/client';
 import { applyRoundOff, computeCartTax } from '@/lib/pos/cart-tax';
 import { CustomerCreditHint } from '@/components/pos/clients/credit-terms';
+import { CreditSaleDetailsModal, type CreditSaleDetails } from '@/components/pos/credit-sale-details-modal';
 import { Button } from '@/components/ui/base';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -127,9 +128,11 @@ export default function AddSalePage() {
   // posts the total straight to the customer's AR (on_account tender) and completes the order with no
   // payment collected now — treasury enforces the credit limit. No payment modal.
   const [creditSale, setCreditSale] = useState(searchParams.get('credit') === '1');
+  const [creditModalOpen, setCreditModalOpen] = useState(false);
   const [notes, setNotes] = useState('');
-  // Credit Sale + Quotation are manager/back-office actions (same permission that approves sale
-  // returns). Cashiers can raise ordinary sales/drafts but not on-account sales or quotations.
+  // Credit Sale is available to CASHIERS too (product decision 2026-07-07 — terms captured via
+  // the shared CreditSaleDetailsModal; treasury enforces the credit limit). Quotations remain a
+  // manager/back-office action (same permission that approves sale returns).
   const { can, canAny } = usePermissions();
   const canPrivileged = can('pos.orders.manage');
   // REQ-006: cost price + margin visibility for management roles at the point of sale.
@@ -274,14 +277,8 @@ export default function AddSalePage() {
     };
   }
 
-  function save(mode: 'pay' | 'draft') {
+  function save(mode: 'pay' | 'draft', creditDetails?: CreditSaleDetails) {
     if (lines.length === 0) return;
-    // ?credit=1 can pre-set creditSale even for a user whose checkbox is hidden — hard-stop here
-    // too (the server also 403s an on_account intent without pos.orders.manage).
-    if (creditSale && !canPrivileged) {
-      toast.error('Credit sales require manager permissions.');
-      return;
-    }
     if (creditSale && staffParty && !staffId) {
       toast.error('Please select a staff member.');
       return;
@@ -290,16 +287,26 @@ export default function AddSalePage() {
       toast.error('A customer is required for a credit sale.');
       return;
     }
+    // Credit sales (available to cashiers too — treasury enforces the credit limit) capture
+    // their terms first: due date (default +30 days) + notes via the shared modal, then this
+    // function is re-entered with the details.
+    if (creditSale && mode === 'pay' && !creditDetails) {
+      setCreditModalOpen(true);
+      return;
+    }
+    const creditExtras = creditDetails
+      ? { paymentDueDate: creditDetails.dueDate, creditNotes: creditDetails.notes || undefined }
+      : {};
     // Resuming an UNMODIFIED draft → settle the SAME order (REQ-003: the draft is
     // reclassified to completed by the payment, never duplicated).
     if (resume && !linesDirty) {
       if (mode === 'draft') { toast.info('Draft unchanged.'); return; }
       if (creditSale) {
         createIntent.mutate(
-          { orderId: resume.id, tenderMethod: 'on_account', amount: total },
+          { orderId: resume.id, tenderMethod: 'on_account', amount: total, ...creditExtras },
           {
-            onSuccess: () => { toast.success(`Sale posted on account · ${fmt(total)}`); reset(); },
-            onError: async (e) => toast.error(await apiErrorMessage(e, 'Failed to post credit sale to AR.')),
+            onSuccess: () => { setCreditModalOpen(false); toast.success(`Sale posted on account · ${fmt(total)}`); reset(); },
+            onError: async (e) => { setCreditModalOpen(false); toast.error(await apiErrorMessage(e, 'Failed to post credit sale to AR.')); },
           },
         );
       } else {
@@ -328,10 +335,10 @@ export default function AddSalePage() {
           // No payment modal — that's the whole point of a credit sale.
           const arAmount = Number(o.total_amount) || total;
           createIntent.mutate(
-            { orderId: id, tenderMethod: 'on_account', amount: arAmount },
+            { orderId: id, tenderMethod: 'on_account', amount: arAmount, ...creditExtras },
             {
-              onSuccess: () => { toast.success(`Sale posted on account · ${fmt(arAmount)}`); reset(); },
-              onError: async (e) => toast.error(await apiErrorMessage(e, 'Failed to post credit sale to AR.')),
+              onSuccess: () => { setCreditModalOpen(false); toast.success(`Sale posted on account · ${fmt(arAmount)}`); reset(); },
+              onError: async (e) => { setCreditModalOpen(false); toast.error(await apiErrorMessage(e, 'Failed to post credit sale to AR.')); },
             },
           );
         } else {
@@ -610,12 +617,10 @@ export default function AddSalePage() {
             <div className="flex justify-between pt-2 border-t border-border"><span className="font-bold">Total</span><span className="font-bold text-primary tabular-nums">{fmt(total)}</span></div>
           </div>
 
-          {canPrivileged && (
-            <label className="flex items-center gap-2 text-sm px-1">
-              <input type="checkbox" checked={creditSale} onChange={(e) => setCreditSale(e.target.checked)} className="rounded" />
-              <span>Credit sale (on account → AR)</span>
-            </label>
-          )}
+          <label className="flex items-center gap-2 text-sm px-1">
+            <input type="checkbox" checked={creditSale} onChange={(e) => setCreditSale(e.target.checked)} className="rounded" />
+            <span>Credit sale (on account → AR)</span>
+          </label>
           <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Sale note (optional)" rows={2}
             className="w-full bg-card border border-border rounded-xl py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" />
 
@@ -635,6 +640,16 @@ export default function AddSalePage() {
           </div>
         </div>
       </div>
+
+      {/* Credit-sale terms capture (due date default +30d, notes) — shared component. */}
+      <CreditSaleDetailsModal
+        open={creditModalOpen}
+        customerName={staffParty ? undefined : custName || undefined}
+        amountLabel={fmt(total)}
+        loading={createOrder.isPending || createIntent.isPending}
+        onCancel={() => setCreditModalOpen(false)}
+        onConfirm={(details) => save('pay', details)}
+      />
     </div>
   );
 }

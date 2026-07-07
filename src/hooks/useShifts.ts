@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '@/store/auth';
 import { shiftsApi, type SessionSummary } from '@/lib/api/shifts';
 import { getSnapshot, cacheSnapshot } from '@/lib/db/pos-db';
+import { isEffectivelyOnline, isNetworkShapedError } from '@/lib/connectivity';
 
 function useTenantId() {
   return useAuthStore((s) => s.user?.tenant_id ?? '');
@@ -13,16 +14,25 @@ export function useCurrentShift() {
   const tenantId = useTenantId();
   return useQuery({
     queryKey: ['shift-current', tenantId],
-    // Offline (incl. cold-start): serve the last-known shift snapshot so the gate resolves
-    // to the cashier's open shift instead of blocking; cache it through on every online read.
+    // Offline (incl. cold-start and weak-wifi "effectively offline"): serve the last-known
+    // shift snapshot so the gate resolves to the cashier's open shift instead of blocking;
+    // cache it through on every online read. Network-shaped failures also fall back.
     queryFn: async () => {
-      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      if (!isEffectivelyOnline()) {
         const snap = await getSnapshot(`shift:${tenantId}`);
         if (snap !== undefined) return snap;
       }
-      const res = await shiftsApi.getCurrent(tenantId);
-      await cacheSnapshot(`shift:${tenantId}`, tenantId, res).catch(() => {});
-      return res;
+      try {
+        const res = await shiftsApi.getCurrent(tenantId);
+        await cacheSnapshot(`shift:${tenantId}`, tenantId, res).catch(() => {});
+        return res;
+      } catch (err) {
+        if (isNetworkShapedError(err)) {
+          const snap = await getSnapshot(`shift:${tenantId}`);
+          if (snap !== undefined) return snap;
+        }
+        throw err;
+      }
     },
     enabled: !!tenantId,
     staleTime: 30_000,

@@ -5,7 +5,7 @@ import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
 import { useAuthStore } from '@/store/auth';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api/client';
-import { useOnline } from '@/hooks/use-online';
+import { useEffectiveOnline } from '@/lib/connectivity';
 import { v4 as uuidv4 } from 'uuid';
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
@@ -79,12 +79,12 @@ function useInitiateReturn() {
   const tenantID = user?.tenant_id ?? '';
   const tenantSlug = user?.tenant_slug ?? tenantID;
   const outletID = (user as (typeof user & { outlet_id?: string }) | null)?.outlet_id ?? '';
-  const isOnline = useOnline();
+  const isOnline = useEffectiveOnline();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ orderId, payload }: { orderId: string; payload: InitiateReturnPayload }) => {
       const localId = uuidv4();
-      if (!isOnline) {
+      const queueOffline = async () => {
         // Queue the return; the order shown in the picker came from a server search so its id
         // is a server id. Synced on reconnect (idempotent via the Idempotency-Key = local_id).
         const { saveDraftReturn } = await import('@/lib/db/pos-db');
@@ -112,12 +112,21 @@ function useInitiateReturn() {
           synced: false,
         });
         return { offline: true };
+      };
+      if (!isOnline) return queueOffline();
+      try {
+        return await apiClient.post(
+          `/api/v1/${tenantID}/pos/orders/${orderId}/returns`,
+          payload,
+          { headers: { 'Idempotency-Key': localId } },
+        );
+      } catch (err) {
+        // Write-behind on weak wifi: queue instead of erroring; replay dedups via local_id.
+        const { isNetworkShapedError } = await import('@/lib/connectivity');
+        if (!isNetworkShapedError(err)) throw err;
+        toast.info('Network unreachable — return saved offline and will sync automatically.');
+        return queueOffline();
       }
-      return apiClient.post(
-        `/api/v1/${tenantID}/pos/orders/${orderId}/returns`,
-        payload,
-        { headers: { 'Idempotency-Key': localId } },
-      );
     },
     networkMode: 'always',
     onSuccess: () => qc.invalidateQueries({ queryKey: ['returns', tenantID] }),

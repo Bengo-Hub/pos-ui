@@ -10,6 +10,7 @@ import { useModuleAccess } from '@/hooks/use-module-access';
 import { cn } from '@/lib/utils';
 
 import { GeneralTab } from '@/components/settings/GeneralTab';
+import { DisplayTab } from '@/components/settings/DisplayTab';
 import { TaxTab } from '@/components/settings/TaxTab';
 import { ReceiptTab } from '@/components/settings/ReceiptTab';
 import { ModulesTab } from '@/components/settings/ModulesTab';
@@ -30,6 +31,7 @@ import { BackupsTab } from '@/components/settings/BackupsTab';
 
 type Tab =
   | 'general'
+  | 'display'
   | 'tax'
   | 'receipt'
   | 'payment_display'
@@ -52,6 +54,7 @@ type Tab =
 // requireAdmin  → read-only account views shown to tenant admins/managers (and platform owners).
 const ALL_TABS: { id: Tab; label: string; icon: React.ElementType; requireModule?: string; requireAdmin?: boolean; description: string }[] = [
   { id: 'general',          label: 'Outlet Config',      icon: Settings,    description: 'Currency and returns policy' },
+  { id: 'display',          label: 'Display',            icon: Monitor,     description: 'Idle-screen screensavers (up to 3, rotating slideshow)' },
   { id: 'tax',              label: 'Tax',                icon: Percent,     description: 'Treasury tax codes (source of truth) and legacy fallback' },
   { id: 'receipt',          label: 'Receipt & Printing', icon: Receipt,     description: 'Receipt format and printer profiles' },
   { id: 'payment_display',  label: 'Payment Display',    icon: CreditCard,  description: 'Paybill, till, and bank details on receipts' },
@@ -133,6 +136,7 @@ export default function SettingsPage() {
         </div>
 
         {activeTab === 'general'          && <GeneralTab />}
+        {activeTab === 'display'          && <DisplayTab />}
         {activeTab === 'tax'              && <TaxTab />}
         {activeTab === 'receipt'          && <ReceiptTab />}
         {activeTab === 'payment_display'  && <PaymentDisplayTab />}

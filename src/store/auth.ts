@@ -164,7 +164,16 @@ export const useAuthStore = create<AuthState>()(
           const freshUser = await fetchProfile(session.accessToken);
           apiClient.setTenantInfo(freshUser.tenant_id, freshUser.tenant_slug);
           set({ user: freshUser, status: 'authenticated', lastAuthenticatedAt: Date.now() });
-        } catch {
+        } catch (err) {
+          // Offline / weak-wifi reload: a network-shaped failure says nothing about the
+          // session's validity — keep the persisted session so the terminal still works
+          // from cache; the profile revalidates on the next successful request. Only a
+          // real auth rejection (or missing persisted user) drops the session.
+          const { isNetworkShapedError } = await import('@/lib/connectivity');
+          if (isNetworkShapedError(err) && user) {
+            set({ status: 'authenticated', lastAuthenticatedAt: Date.now() });
+            return;
+          }
           set({ status: 'idle', session: null, user: null });
         }
       },

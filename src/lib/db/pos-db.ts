@@ -229,6 +229,30 @@ export interface CachedSnapshot {
   cached_at: string;
 }
 
+// ── Generic key-value dataset cache (IndexedDB-first reads) ──────────────────────
+//
+// One row per cached dataset (POS settings, tenders, categories, branding, outlet info,
+// recent orders …) keyed `${dataset}:${tenantId}[:${outletId}]`. Powers the cache-first
+// read helper (src/lib/offline/cache-first.ts) and the 5-min background refresher.
+export interface KVCacheRow {
+  key: string; // PK
+  tenant_id: string;
+  data: any;
+  cached_at: string;
+}
+
+// ── Sync activity log (sync-monitor page) ────────────────────────────────────────
+export interface SyncLogEntry {
+  id?: number;
+  ts: string; // ISO
+  direction: 'push' | 'pull';
+  entity: string; // e.g. 'order', 'payment', 'catalog', 'pos-settings'
+  detail?: string; // human summary, e.g. order number / item count
+  status: 'ok' | 'error' | 'skipped';
+  error?: string;
+  tenant_id?: string;
+}
+
 // ── Database ───────────────────────────────────────────────────────────────────
 
 class POSDatabase extends Dexie {
@@ -242,6 +266,8 @@ class POSDatabase extends Dexie {
   staffProfiles!: Table<CachedStaffProfile, string>;
   etimsQueue!: Table<OfflineETIMSSubmission, number>;
   snapshots!: Table<CachedSnapshot, string>;
+  kvCache!: Table<KVCacheRow, string>;
+  syncLog!: Table<SyncLogEntry, number>;
 
   constructor() {
     super('pos_offline_db');
@@ -294,6 +320,23 @@ class POSDatabase extends Dexie {
       staffProfiles:  'user_id, tenant_id',
       etimsQueue:     '++id, order_id, tenant_id, status, created_at',
       snapshots:      'key, tenant_id',
+    });
+
+    // v6: generic dataset cache (kvCache) for IndexedDB-first reads of settings/tenders/
+    // categories/branding/etc. + a bounded sync activity log for the sync-monitor page.
+    this.version(6).stores({
+      catalogItems:   'id, tenant_id, outlet_id, sku, category, status, cached_at',
+      offlineOrders:  '++id, local_id, tenant_id, created_at',
+      offlinePayments:'++id, local_order_id, server_order_id, tenant_id',
+      offlineVoids:   '++id, local_id, server_order_id, local_order_id, tenant_id, created_at',
+      offlineReturns: '++id, local_id, server_order_id, local_order_id, tenant_id, created_at',
+      drawerSessions: '++id, local_id, tenant_id',
+      drawerCloses:   '++id, server_drawer_id, local_drawer_id, tenant_id',
+      staffProfiles:  'user_id, tenant_id',
+      etimsQueue:     '++id, order_id, tenant_id, status, created_at',
+      snapshots:      'key, tenant_id',
+      kvCache:        'key, tenant_id, cached_at',
+      syncLog:        '++id, ts, direction, entity, status',
     });
   }
 }
@@ -501,6 +544,31 @@ export async function getSyncStatusCounts(): Promise<SyncStatusCounts> {
     pending: all.filter((r) => !r.synced && !r.dead_letter).length,
     deadLetter: all.filter((r) => r.dead_letter).length,
   };
+}
+
+/** Per-queue pending/dead/synced breakdown for the sync-monitor page. */
+export interface QueueBreakdownRow {
+  queue: string;
+  pending: number;
+  deadLetter: number;
+  synced: number;
+}
+
+export async function getSyncQueueBreakdown(): Promise<QueueBreakdownRow[]> {
+  const queues: Array<[string, SyncState[]]> = [
+    ['Sales', await posDB.offlineOrders.toArray()],
+    ['Payments', await posDB.offlinePayments.toArray()],
+    ['Voids', await posDB.offlineVoids.toArray()],
+    ['Returns', await posDB.offlineReturns.toArray()],
+    ['Drawer opens', await posDB.drawerSessions.toArray()],
+    ['Drawer closes', await posDB.drawerCloses.toArray()],
+  ];
+  return queues.map(([queue, rows]) => ({
+    queue,
+    pending: rows.filter((r) => !r.synced && !r.dead_letter).length,
+    deadLetter: rows.filter((r) => r.dead_letter).length,
+    synced: rows.filter((r) => r.synced).length,
+  }));
 }
 
 export interface DeadLetterItem {

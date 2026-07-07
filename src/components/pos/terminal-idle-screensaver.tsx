@@ -17,8 +17,9 @@
  */
 
 import { useCallback, useState } from 'react';
-import { usePathname } from 'next/navigation';
+import { usePathname, useParams } from 'next/navigation';
 import { Screensaver } from '@/components/pos/screensaver';
+import { buildScreensaverMedia } from '@/lib/screensaver';
 import { useIdleTimer, resolveScreensaverTimeoutMs } from '@/hooks/use-idle-timer';
 import { useAuthStore } from '@/store/auth';
 import { useTenantBranding } from '@/providers/tenant-branding-provider';
@@ -26,6 +27,7 @@ import { usePOSSettings } from '@/hooks/usePOSSettings';
 
 export function TerminalIdleScreensaver() {
   const pathname = usePathname();
+  const params = useParams();
   const isTerminalSession = useAuthStore((s) => s.isTerminalSession);
   const hasSession = useAuthStore((s) => !!s.session);
   const outlet = useAuthStore((s) => s.outlet);
@@ -63,11 +65,24 @@ export function TerminalIdleScreensaver() {
 
   if (!armed || !active) return null;
 
+  // Same media precedence as the PIN page: managed slideshow (up to 3) → legacy single
+  // URL → tenant brand URL → bundled per-slug defaults → branded gradient.
+  const settings = posSettings as { screensaver_url?: string | null; screensaver_urls?: string[] } | undefined;
+  const media = buildScreensaverMedia({
+    configuredUrls: [
+      ...(settings?.screensaver_urls ?? []),
+      settings?.screensaver_url,
+      tenant?.posScreensaverUrl,
+    ],
+    orgSlug: (params?.orgSlug as string | undefined) ?? tenant?.slug,
+  });
+
   return (
     <Screensaver
       active={active}
       onDismiss={dismiss}
-      screensaverUrl={(posSettings as { screensaver_url?: string | null } | undefined)?.screensaver_url ?? tenant?.posScreensaverUrl}
+      screensaverUrl={media.videoUrl}
+      playlist={media.images}
       tenantName={tenant?.orgName ?? tenant?.name}
       tenantLogoUrl={tenant?.logoUrl}
       outletName={outlet?.name}

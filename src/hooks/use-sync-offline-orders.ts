@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { useOnline } from '@/hooks/use-online';
+import { useEffectiveOnline, isEffectivelyOnline } from '@/lib/connectivity';
 import { useAuthStore } from '@/store/auth';
 import { useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api/client';
@@ -51,13 +51,14 @@ import {
  * worker Background Sync handler and a manual "retry" button can trigger a drain too.
  */
 export function useSyncOfflineOrders() {
-  const isOnline = useOnline();
+  const isOnline = useEffectiveOnline();
   const tenantID = useAuthStore((s) => s.user?.tenant_id ?? '');
   const syncingRef = useRef(false);
   const qc = useQueryClient();
 
   const runSync = useCallback(async () => {
-    if (!tenantID || syncingRef.current || typeof navigator !== 'undefined' && !navigator.onLine) return;
+    const { isBackgroundSyncPaused } = await import('@/lib/sync/sync-control');
+    if (!tenantID || syncingRef.current || !isEffectivelyOnline() || isBackgroundSyncPaused()) return;
     syncingRef.current = true;
     try {
       await syncDrawerSessions(tenantID);
@@ -132,6 +133,19 @@ function errMsg(err: any): string {
   return err?.response?.data?.error ?? err?.message ?? 'sync failed';
 }
 
+/** Sync-monitor activity feed — every replayed (or failed) push is logged, best-effort. */
+function logPush(entity: string, detail: string, err?: any) {
+  void import('@/lib/db/kv-cache').then(({ appendSyncLog }) =>
+    appendSyncLog({
+      direction: 'push',
+      entity,
+      detail,
+      status: err ? 'error' : 'ok',
+      error: err ? errMsg(err) : undefined,
+    }),
+  );
+}
+
 // ── Drawer session sync ────────────────────────────────────────────────────────
 
 async function syncDrawerSessions(tenantID: string) {
@@ -143,8 +157,10 @@ async function syncDrawerSessions(tenantID: string) {
         idem(session.local_id),
       );
       await markDrawerSessionSynced(session.local_id, res?.id ?? '');
+      logPush('drawer_open', `Float ${session.starting_cash.toFixed(2)}`);
     } catch (err: any) {
       await markDrawerSessionSyncFailed(session.local_id, errMsg(err), isTerminal(err));
+      logPush('drawer_open', `Float ${session.starting_cash.toFixed(2)}`, err);
     }
   }
 }
@@ -167,6 +183,7 @@ async function syncOrders(tenantID: string) {
       );
       const serverOrderId: string = res?.id ?? res?.order_id ?? '';
       await markOrderSynced(order.local_id, serverOrderId);
+      logPush('order', `Sale ${order.currency} ${order.total_amount.toFixed(2)}`);
 
       // Record a payment bundled with the order at creation time (if any).
       if (serverOrderId && order.pending_payment) {
@@ -188,6 +205,7 @@ async function syncOrders(tenantID: string) {
       }
     } catch (err: any) {
       await markOrderSyncFailed(order.local_id, errMsg(err), isTerminal(err));
+      logPush('order', `Sale ${order.currency} ${order.total_amount.toFixed(2)}`, err);
     }
   }
 }
@@ -218,8 +236,10 @@ async function syncPayments(tenantID: string) {
         idem(`pay-${payment.local_order_id ?? orderId}-${payment.tender_method}-${payment.external_ref ?? payment.amount}`),
       );
       await markPaymentSynced(payment.id!);
+      logPush('payment', `${payment.tender_method} ${payment.amount.toFixed(2)}`);
     } catch (err: any) {
       await markPaymentSyncFailed(payment.id!, errMsg(err), isTerminal(err));
+      logPush('payment', `${payment.tender_method} ${payment.amount.toFixed(2)}`, err);
     }
   }
 }
@@ -246,8 +266,10 @@ async function syncVoids(tenantID: string) {
         );
       }
       await markVoidSynced(v.id!);
+      logPush('void', v.line_id ? 'Line void' : 'Order void');
     } catch (err: any) {
       await markVoidSyncFailed(v.id!, errMsg(err), isTerminal(err));
+      logPush('void', v.line_id ? 'Line void' : 'Order void', err);
     }
   }
 }
@@ -273,8 +295,10 @@ async function syncReturns(tenantID: string) {
         idem(r.local_id),
       );
       await markReturnSynced(r.id!);
+      logPush('return', `Return ${r.refund_amount.toFixed(2)}`);
     } catch (err: any) {
       await markReturnSyncFailed(r.id!, errMsg(err), isTerminal(err));
+      logPush('return', `Return ${r.refund_amount.toFixed(2)}`, err);
     }
   }
 }
@@ -289,8 +313,10 @@ async function syncETIMSQueue(tenantID: string) {
         { order_id: sub.order_id, invoice_data: sub.invoice_data },
       );
       await markETIMSSubmissionSynced(sub.id!);
+      logPush('etims', `Order ${sub.order_id}`);
     } catch (err: any) {
       await markETIMSSubmissionFailed(sub.id!, errMsg(err));
+      logPush('etims', `Order ${sub.order_id}`, err);
     }
   }
 }
@@ -315,8 +341,10 @@ async function syncDrawerCloses(tenantID: string) {
         idem(`close-${drawerId}`),
       );
       await markDrawerCloseSynced(close.id!);
+      logPush('drawer_close', `Ending ${close.ending_cash.toFixed(2)}`);
     } catch (err: any) {
       await markDrawerCloseSyncFailed(close.id!, errMsg(err), isTerminal(err));
+      logPush('drawer_close', `Ending ${close.ending_cash.toFixed(2)}`, err);
     }
   }
 }

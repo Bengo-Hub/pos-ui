@@ -81,15 +81,29 @@ export function parseBrandFromTenant(t: TenantResponse): TenantBrand {
 export async function fetchTenantBySlug(slug: string): Promise<TenantBrand | null> {
   if (!slug) return null;
   const url = `${AUTH_API_BASE}/api/v1/tenants/by-slug/${encodeURIComponent(slug)}`;
-  try {
+  // IndexedDB-first: cached branding paints instantly (logo/colors survive offline reloads
+  // and weak wifi); a fresh fetch refreshes the cache in the background.
+  const { kvKey, setKV, getKV } = await import('@/lib/db/kv-cache');
+  const cacheKey = kvKey('tenant-brand', slug);
+  const refresh = async (): Promise<TenantBrand | null> => {
     const res = await fetch(url, {
       method: 'GET',
       headers: { Accept: 'application/json' },
+      signal: typeof AbortSignal !== 'undefined' && 'timeout' in AbortSignal ? AbortSignal.timeout(8000) : undefined,
     });
     if (!res.ok) return null;
-    const data = (await res.json()) as TenantResponse;
-    return parseBrandFromTenant(data);
+    const brand = parseBrandFromTenant((await res.json()) as TenantResponse);
+    if (brand) await setKV(cacheKey, slug, brand).catch(() => {});
+    return brand;
+  };
+  try {
+    const cached = await getKV<TenantBrand>(cacheKey).catch(() => undefined);
+    if (cached) {
+      void refresh().catch(() => {});
+      return cached;
+    }
+    return await refresh();
   } catch {
-    return null;
+    return (await getKV<TenantBrand>(cacheKey).catch(() => undefined)) ?? null;
   }
 }

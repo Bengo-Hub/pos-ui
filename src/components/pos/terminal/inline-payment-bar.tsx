@@ -21,9 +21,10 @@ import {
 import { useCallback, useMemo, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { useCreatePaymentIntent, useListC2BPayments, useClaimC2BPayment } from '@/hooks/usePOS';
-import { useOnline } from '@/hooks/use-online';
+import { useEffectiveOnline } from '@/lib/connectivity';
 import { savePendingPayment, getOfflineOrderByLocalId } from '@/lib/db/pos-db';
 import { useCashDrawer } from '@/hooks/useCashDrawer';
+import { CreditSaleDetailsModal, type CreditSaleDetails } from '@/components/pos/credit-sale-details-modal';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { usePOSGateways } from '@/hooks/use-pos-gateways';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -113,7 +114,7 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
   const canPrivileged = can('pos.orders.manage');
 
   const roundedTotal = Math.max(0, Math.ceil(total));
-  const isOnline = useOnline();
+  const isOnline = useEffectiveOnline();
   const { data: gateways } = usePOSGateways();
   const { data: posSettings } = usePOSSettings();
   const { autoOpenOnSettle } = useCashDrawer();
@@ -135,11 +136,12 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
   // Room charge.
   const [roomSearch, setRoomSearch] = useState('');
 
+  // Credit Sale (on_account) is available to cashiers too (product decision 2026-07-07):
+  // the real guardrails are a required customer + the treasury credit limit, both enforced
+  // server-side; terms (due date default +30d, notes) are captured via CreditSaleDetailsModal.
   const actions = useMemo(
-    () => paymentActionsFor(profile, gateways, { isHospitality, isOnline, allowCOD })
-      // Credit Sale (on_account) is manager-gated — drop it for users without pos.orders.manage.
-      .filter((a) => a.key !== 'on_account' || canPrivileged),
-    [profile, gateways, isHospitality, isOnline, allowCOD, canPrivileged],
+    () => paymentActionsFor(profile, gateways, { isHospitality, isOnline, allowCOD }),
+    [profile, gateways, isHospitality, isOnline, allowCOD],
   );
   // Back-office profiles (retail/pharmacy/services) get Draft + Quotation; hospitality/QSR do not.
   // Quotation is additionally manager-gated (canPrivileged).
@@ -165,7 +167,7 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
   }, [order, createOrderAsync]);
 
   // ── Immediate-settle tenders (cash / card-PDQ / credit) ──────────────────────
-  const settleImmediate = useCallback(async (key: TenderKey, externalRef?: string) => {
+  const settleImmediate = useCallback(async (key: TenderKey, externalRef?: string, creditDetails?: CreditSaleDetails) => {
     setBusyKey(key);
     const ord = await ensureOrder();
     if (!ord) { setBusyKey(null); return; }
@@ -175,7 +177,7 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
     // too — routed by local_order_id when the order itself is offline — so the sync worker
     // records it after the order syncs. Without this, offline cash would create an order but
     // never capture payment.
-    if (!isOnline) {
+    const queueOffline = async () => {
       try {
         const localOrder = await getOfflineOrderByLocalId(ord.orderId);
         await savePendingPayment({
@@ -197,14 +199,27 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
         setBusyKey(null);
         toast.error(await apiErrorMessage(e, 'Failed to save offline payment. Please try again.'));
       }
+    };
+    if (!isOnline) {
+      await queueOffline();
       return;
     }
 
     createIntent.mutate(
-      { orderId: ord.orderId, tenderMethod: method, amount: roundedTotal, tenderId, externalRef },
+      {
+        orderId: ord.orderId, tenderMethod: method, amount: roundedTotal, tenderId, externalRef,
+        paymentDueDate: creditDetails?.dueDate, creditNotes: creditDetails?.notes || undefined,
+      },
       {
         onSuccess: () => { autoOpenOnSettle(method); finish(ord); },
         onError: async (e: any) => {
+          // Write-behind on weak wifi: these tenders settle at the till, so a NETWORK-shaped
+          // failure queues the capture (idempotent replay) instead of erroring the sale.
+          const { isNetworkShapedError } = await import('@/lib/connectivity');
+          if (isNetworkShapedError(e)) {
+            await queueOffline();
+            return;
+          }
           setBusyKey(null);
           toast.error(await apiErrorMessage(e, 'Payment failed. Please try again.'));
         },
@@ -254,7 +269,8 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
           toast.error('Select a customer before recording a credit sale');
           return;
         }
-        await settleImmediate('on_account');
+        // Capture credit terms first (due date default +30d, notes) via the shared modal.
+        setCapture('on_account');
         return;
       case 'cod': {
         // COD: place the order; cash is collected on delivery (settled later from the order).
@@ -334,6 +350,15 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
           isOnline={isOnline}
           onCancel={reset}
           onClaimed={() => finish(order)}
+        />
+      )}
+      {capture === 'on_account' && (
+        <CreditSaleDetailsModal
+          open
+          amountLabel={fmt(roundedTotal)}
+          loading={anyBusy}
+          onCancel={reset}
+          onConfirm={(details) => { setCapture(null); void settleImmediate('on_account', undefined, details); }}
         />
       )}
       {capture === 'room' && order && (

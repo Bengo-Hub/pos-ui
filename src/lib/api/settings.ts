@@ -48,6 +48,8 @@ export interface POSSettings {
   auto_print_kitchen: boolean;
   pin_login_message?: string | null;
   screensaver_url?: string | null;
+  /** Up to 3 admin-managed screensaver media URLs (Settings → Display) — slideshow order. */
+  screensaver_urls?: string[];
   printer_profiles: PrinterProfile[];
   // cash drawer (ESC/POS drawer kick via the assigned printer)
   cash_drawer_enabled: boolean;
@@ -108,6 +110,7 @@ export interface UpdatePOSSettingsInput {
   auto_print_kitchen?: boolean;
   pin_login_message?: string | null;
   screensaver_url?: string | null;
+  screensaver_urls?: string[];
   printer_profiles?: PrinterProfile[];
   return_window_days?: number;
   // cash drawer
@@ -171,6 +174,31 @@ export const posSettingsApi = {
 
   getOutlet: (tenantID: string, outletID: string) =>
     apiClient.get<POSSettings>(`/api/v1/${tenantID}/pos/outlets/${outletID}/settings`),
+};
+
+/** Managed screensaver media (Settings → Display). URLs are RELATIVE /media/... paths —
+ *  resolve for display via resolveMediaUrl (lib/screensaver). Max 3; replacing requires an
+ *  explicit delete first (the backend 409s when full and removes the file on delete). */
+export const screensaverMediaApi = {
+  list: (tenantID: string) =>
+    apiClient.get<{ screensaver_urls: string[]; max: number }>(
+      `/api/v1/${tenantID}/pos/settings/screensavers`,
+    ),
+
+  upload: (tenantID: string, file: File) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    return apiClient.post<{ screensaver_urls: string[]; uploaded: string }>(
+      `/api/v1/${tenantID}/pos/settings/screensavers`,
+      fd,
+      { headers: { 'Content-Type': 'multipart/form-data' } },
+    );
+  },
+
+  remove: (tenantID: string, url: string) =>
+    apiClient.delete<{ screensaver_urls: string[]; deleted: string }>(
+      `/api/v1/${tenantID}/pos/settings/screensavers?url=${encodeURIComponent(url)}`,
+    ),
 };
 
 export const printApi = {

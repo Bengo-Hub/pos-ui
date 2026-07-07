@@ -7,13 +7,14 @@ import { compare as bcryptCompare } from 'bcryptjs';
 import {
   Building2, CalendarClock, Clock3, ExternalLink, Fingerprint, KeyRound, UserRound,
 } from 'lucide-react';
-import { useOnline } from '@/hooks/use-online';
+import { useEffectiveOnline } from '@/lib/connectivity';
 import { useIdleTimer, getScreensaverTimeoutMs, setScreensaverTimeoutMs, resolveScreensaverTimeoutMs } from '@/hooks/use-idle-timer';
 import { useBiometric } from '@/hooks/use-biometric';
 import { apiClient } from '@/lib/api/client';
 import { useAuthStore } from '@/store/auth';
-import { getCachedStaffProfiles, getCachedStaffProfile, cacheStaffProfile, type CachedStaffProfile } from '@/lib/db/pos-db';
+import { getCachedStaffProfiles, cacheStaffProfile, type CachedStaffProfile } from '@/lib/db/pos-db';
 import { Screensaver } from '@/components/pos/screensaver';
+import { buildScreensaverMedia } from '@/lib/screensaver';
 import {
   LoginHero, PinKeypad, OutletCard, DemoHints, USE_CASE_COLORS, USE_CASE_LABELS,
 } from '@/components/pos/pin-login-ui';
@@ -57,6 +58,8 @@ interface OutletInfo {
   settings?: {
     pin_login_message?: string;
     screensaver_url?: string;
+    /** Up to 3 admin-managed screensaver images (Settings → Display) — rotated as a slideshow. */
+    screensaver_urls?: string[];
     /** Centrally-configured idle timeout (seconds) before the branded screensaver shows. */
     screensaver_timeout_seconds?: number;
   };
@@ -99,7 +102,7 @@ function getDemoHints(useCase: string | undefined | null) {
 export default function PINLoginPage() {
   const { orgSlug } = useParams<{ orgSlug: string }>();
   const router = useRouter();
-  const isOnline = useOnline();
+  const isOnline = useEffectiveOnline();
   const { tenant, isLoading: tenantLoading } = useTenantBranding();
   const setTerminalSession = useAuthStore((s) => s.setTerminalSession);
   const setOutlet          = useAuthStore((s) => s.setOutlet);
@@ -189,39 +192,55 @@ export default function PINLoginPage() {
     ? (localStorage.getItem('pos-selected-outlet-id') ?? '')
     : '';
 
+  // Both outlet queries are IndexedDB-first (kvCache): the PIN page must render its outlet
+  // context (name, use case, screensaver, timeout) on an offline/weak-wifi cold start too.
   const { data: outletInfo } = useQuery<OutletInfo | null>({
     queryKey: ['pos-current-outlet', effectiveTenantID, storedOutletId],
     queryFn: async () => {
+      const { kvKey, setKV, getKV } = await import('@/lib/db/kv-cache');
+      const cacheKey = kvKey('pin-outlet-info', effectiveTenantID, storedOutletId || undefined);
       try {
         const params = storedOutletId ? `?outlet_id=${storedOutletId}` : '';
         const res = await apiClient.get<{ data: OutletInfo }>(
-          `/api/v1/${effectiveTenantID}/pos/outlets/current${params}`
+          `/api/v1/${effectiveTenantID}/pos/outlets/current${params}`,
+          undefined,
+          { suppressErrorToast: true, timeout: 8000 },
         );
-        return res.data ?? null;
+        const info = res.data ?? null;
+        if (info) await setKV(cacheKey, effectiveTenantID, info).catch(() => {});
+        return info;
       } catch {
-        return null;
+        return (await getKV<OutletInfo>(cacheKey).catch(() => undefined)) ?? null;
       }
     },
     enabled: !!effectiveTenantID && !tenantLoading,
     staleTime: 10 * 60_000,
     retry: false,
+    networkMode: 'always',
   });
 
   const { data: allOutlets = [], isLoading: outletsLoading } = useQuery<OutletInfo[]>({
     queryKey: ['pos-outlets-list', effectiveTenantID],
     queryFn: async () => {
+      const { kvKey, setKV, getKV } = await import('@/lib/db/kv-cache');
+      const cacheKey = kvKey('pin-outlets', effectiveTenantID);
       try {
         const res = await apiClient.get<OutletInfo[] | { data: OutletInfo[] }>(
-          `/api/v1/${effectiveTenantID}/pos/outlets`
+          `/api/v1/${effectiveTenantID}/pos/outlets`,
+          undefined,
+          { suppressErrorToast: true, timeout: 8000 },
         );
-        return Array.isArray(res) ? res : (res as { data: OutletInfo[] }).data ?? [];
+        const list = Array.isArray(res) ? res : (res as { data: OutletInfo[] }).data ?? [];
+        if (list.length) await setKV(cacheKey, effectiveTenantID, list).catch(() => {});
+        return list;
       } catch {
-        return [];
+        return (await getKV<OutletInfo[]>(cacheKey).catch(() => undefined)) ?? [];
       }
     },
     enabled: !!effectiveTenantID && !tenantLoading,
     staleTime: 5 * 60_000,
     retry: false,
+    networkMode: 'always',
   });
 
   // Apply a centrally-configured screensaver timeout (service_config / outlet setting) when the
@@ -257,36 +276,21 @@ export default function PINLoginPage() {
 
   const { } = useQuery<StaffProfile[]>({
     queryKey: ['pos-staff-profiles', effectiveTenantID, outletInfo?.id ?? ''],
+    // Shared with the 5-min background sync job — preserves cached pin_hash (offline PIN).
     queryFn: async () => {
-      const params = outletInfo?.id ? `?outlet_id=${outletInfo.id}` : '';
-      const body = await apiClient.get<{ data: StaffProfile[] }>(
-        `/api/v1/${effectiveTenantID}/pos/auth/pin/profile${params}`
-      );
-      const list: StaffProfile[] = body.data ?? [];
-      for (const p of list) {
-        // Preserve a pin_hash already cached at login — the public list never carries it,
-        // and we must not wipe a staff member's offline re-login capability.
-        const existing = await getCachedStaffProfile(p.user_id);
-        await cacheStaffProfile({
-          user_id:     p.user_id,
-          tenant_id:   p.tenant_id,
-          name:        p.name,
-          email:       existing?.email ?? '',
-          roles:       p.role ? [p.role] : existing?.roles ?? [],
-          permissions: existing?.permissions ?? [],
-          pin_hash:    existing?.pin_hash,
-          cached_at:   new Date().toISOString(),
-        });
-      }
-      return list;
+      const { refreshStaffProfiles } = await import('@/lib/offline/staff-profiles');
+      return (await refreshStaffProfiles(effectiveTenantID, outletInfo?.id)) as StaffProfile[];
     },
     enabled: isOnline && !!effectiveTenantID && !tenantLoading,
     staleTime: 5 * 60 * 1000,
     retry: false,
   });
 
+  // Load cached profiles UNCONDITIONALLY (not only when offline): on weak-but-connected
+  // wifi the online login can fail with a network error mid-submit, and the bcrypt
+  // fallback must already have the profiles in hand.
   useEffect(() => {
-    if (!isOnline && effectiveTenantID && !tenantLoading) {
+    if (effectiveTenantID && !tenantLoading) {
       getCachedStaffProfiles(effectiveTenantID).then(setOfflineProfiles);
     }
   }, [isOnline, effectiveTenantID, tenantLoading]);
@@ -344,13 +348,19 @@ export default function PINLoginPage() {
   const loginMutation = useMutation({
     mutationFn: (pin: string) => {
       const outletId = outletInfo?.id ?? storedOutletId;
+      // Bounded timeout: on weak wifi we fail fast and fall back to the cached-bcrypt
+      // offline branch in submitPasscode instead of hanging on the axios 15s default.
       return apiClient.post<PINLoginResponse>(
         `/api/v1/${effectiveTenantID}/pos/auth/pin/identify`,
-        { pin, outlet_id: outletId }
+        { pin, outlet_id: outletId },
+        { timeout: 5000, suppressErrorToast: true },
       );
     },
+    networkMode: 'always',
     onSuccess: handleLoginSuccess,
-    onError: (err: any) => {
+    onError: async (err: any) => {
+      const { isNetworkShapedError } = await import('@/lib/connectivity');
+      if (isNetworkShapedError(err)) return; // submitPasscode falls back to the offline branch
       const msg = err?.status === 429
         ? 'Too many attempts. Please wait.'
         : 'Incorrect PIN. Please try again.';
@@ -370,18 +380,25 @@ export default function PINLoginPage() {
   // ── PIN input handling ───────────────────────────────────────────────────────
 
   // Single submit path shared by: numeric auto-submit at 4 digits, the on-screen
-  // QWERTY ENTER key, and the hero "Login" button. Online → loginMutation; offline
-  // → bcrypt-match against cached profiles. No duplicate mutation/submit fns.
+  // QWERTY ENTER key, and the hero "Login" button. Online → loginMutation, and on a
+  // NETWORK-shaped failure (timeout / unreachable — weak wifi reads as "online") it
+  // falls back to the same bcrypt-match-against-cached-profiles branch used offline.
   async function submitPasscode(passcode?: string) {
     if (loginMutation.isPending) return;
     const pin = passcode ?? pinDigits.join('');
     if (!pin) return; // guard empty (hero Login / Enter on an empty field)
 
     if (isOnline) {
-      loginMutation.mutate(pin);
-      return;
+      try {
+        await loginMutation.mutateAsync(pin); // onSuccess handles the session + redirect
+        return;
+      } catch (err) {
+        const { isNetworkShapedError } = await import('@/lib/connectivity');
+        if (!isNetworkShapedError(err)) return; // real rejection — onError already showed it
+        // fall through to the offline bcrypt branch
+      }
     }
-    // Offline: scan all cached profiles for a bcrypt match
+    // Offline (or online login unreachable): scan cached profiles for a bcrypt match
     let matched: CachedStaffProfile | null = null;
     for (const cached of offlineProfiles) {
       if (cached.pin_hash && await bcryptCompare(pin, cached.pin_hash)) {
@@ -463,6 +480,18 @@ export default function PINLoginPage() {
   const useCaseColor = useCase ? USE_CASE_COLORS[useCase] : null;
   const useCaseLabel = useCase ? (USE_CASE_LABELS[useCase] ?? useCase) : null;
   const isDemoTenant = orgSlug === 'codevertex-demo';
+
+  // Screensaver media: configured outlet slideshow (up to 3) → legacy single URL →
+  // tenant-brand URL → bundled per-slug defaults → branded gradient. Shared resolver
+  // with TerminalIdleScreensaver so both idle screens rotate the same set.
+  const screensaverMedia = buildScreensaverMedia({
+    configuredUrls: [
+      ...(outletInfo?.settings?.screensaver_urls ?? []),
+      outletInfo?.settings?.screensaver_url,
+      tenant?.posScreensaverUrl,
+    ],
+    orgSlug,
+  });
 
   // Hero shared bits — brand backdrop image (screensaver/logo) + fallback initials.
   const heroBackdrop = tenant?.posScreensaverUrl ?? tenant?.logoUrl ?? null;
@@ -675,7 +704,8 @@ export default function PINLoginPage() {
       <Screensaver
         active={screensaverActive}
         onDismiss={() => setScreensaverActive(false)}
-        screensaverUrl={outletInfo?.settings?.screensaver_url ?? tenant?.posScreensaverUrl}
+        screensaverUrl={screensaverMedia.videoUrl}
+        playlist={screensaverMedia.images}
         tenantName={tenant?.orgName ?? tenant?.name}
         tenantLogoUrl={tenant?.logoUrl}
         outletName={outletName !== (tenant?.orgName ?? tenant?.name ?? orgSlug) ? outletName : undefined}

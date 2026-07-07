@@ -7,7 +7,7 @@ import { TenantBrandingProvider } from '@/providers/tenant-branding-provider';
 import { SubscriptionEntitlementsProvider } from '@/providers/subscription-entitlements-provider';
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import { ReactNode, useState } from 'react';
-import { useOnline } from '@/hooks/use-online';
+import { useEffectiveOnline } from '@/lib/connectivity';
 import { getCachedCatalog, getSyncStatusCounts } from '@/lib/db/pos-db';
 import { OfflineBar } from '@bengo-hub/shared-ui-lib/offline';
 import { revalidateFullCatalog, useCatalogVersionSync, offlineToCatalogItem, FULL_CATALOG_QUERY_KEY } from '@/hooks/usePOS';
@@ -17,9 +17,9 @@ import { SyncStatusIndicator } from '@/components/pos/sync-status-indicator';
 import { PWARegistration } from '@/components/pwa-registration';
 import { StartShiftGate } from '@/components/pos/start-shift-gate';
 import { TerminalIdleScreensaver } from '@/components/pos/terminal-idle-screensaver';
-import { useSyncOfflineOrders, triggerSyncNow } from '@/hooks/use-sync-offline-orders';
+import { triggerSyncNow } from '@/hooks/use-sync-offline-orders';
+import { useBackgroundSync } from '@/lib/sync/background-sync';
 import { useEffect } from 'react';
-import { registerBackgroundSync } from '@/lib/sw/register-sync';
 import { usePathname, useParams } from 'next/navigation';
 import { useNotificationStream } from '@/hooks/use-notification-stream';
 import { useAuthStore } from '@/store/auth';
@@ -51,9 +51,10 @@ function ManifestInjector() {
   return null;
 }
 
-function OfflineSyncWorker() {
-  useSyncOfflineOrders();
-  useEffect(() => { registerBackgroundSync(); }, []);
+/** The ONE dedicated background sync job: 10s queue drain + 5-min IndexedDB cache refresh
+ *  (settings/tenders/categories/loyalty/recent-orders/staff-profiles/catalog) + SW registration. */
+function BackgroundSyncWorker() {
+  useBackgroundSync();
   return null;
 }
 
@@ -75,7 +76,7 @@ function CatalogPrewarm() {
   const outletID = useAuthStore(
     (s) => s.selectedOutletId ?? s.outlet?.id ?? (s.user as any)?.outlet_id ?? '',
   );
-  const isOnline = useOnline();
+  const isOnline = useEffectiveOnline();
   useCatalogVersionSync();
   useEffect(() => {
     if (!tenantID) return;
@@ -216,7 +217,7 @@ export function OrgShell({ children }: { children: ReactNode }) {
           />
           {/* Floating pill kept for dead-letter review (failed items + manual retry). */}
           <SyncStatusIndicator />
-          <OfflineSyncWorker />
+          <BackgroundSyncWorker />
           <CatalogPrewarm />
           <OutletContextHealer />
           <NotificationListener />

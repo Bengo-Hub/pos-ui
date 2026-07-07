@@ -73,14 +73,22 @@ function normalizeProgram(p: LoyaltyProgram): LoyaltyProgram {
 
 export function useLoyaltyPrograms() {
   const tenantID = useTenantID();
+  const qc = useQueryClient();
   return useQuery({
+    // IndexedDB-first (raw response cached; normalization stays in `select` so background
+    // refreshes pushed by the sync job hydrate identically).
     queryKey: ['loyalty-programs', tenantID],
-    queryFn: () =>
-      apiClient
-        .get<PaginatedResponse<LoyaltyProgram>>(`${base(tenantID)}/programs`)
-        .then((res) => (Array.isArray(res) ? res : res.data ?? []))
-        .then((list) => list.map(normalizeProgram)),
+    queryFn: async () => {
+      const { cacheFirst } = await import('@/lib/offline/cache-first');
+      const { getDataset, datasetCacheOpts } = await import('@/lib/offline/datasets');
+      return cacheFirst(
+        datasetCacheOpts(getDataset('loyalty-programs'), tenantID, undefined, qc),
+      ) as Promise<PaginatedResponse<LoyaltyProgram> | LoyaltyProgram[]>;
+    },
     enabled: !!tenantID,
+    networkMode: 'always',
+    select: (res) =>
+      (Array.isArray(res) ? res : res.data ?? []).map(normalizeProgram),
   });
 }
 

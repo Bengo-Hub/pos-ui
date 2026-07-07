@@ -25,8 +25,21 @@ export function useMe() {
     queryKey: ['auth-me', accessToken],
     queryFn: async () => {
       if (!accessToken) return null;
-      const user = await fetchProfile(accessToken);
-      const profile = user as MeProfile;
+      let profile: MeProfile;
+      try {
+        profile = (await fetchProfile(accessToken)) as MeProfile;
+      } catch (err) {
+        // Weak wifi / offline: serve the last-known profile snapshot instead of erroring —
+        // the persisted zustand user stays authoritative for rendering; auth errors still throw.
+        const { isNetworkShapedError } = await import('@/lib/connectivity');
+        if (isNetworkShapedError(err)) {
+          const { getSnapshot } = await import('@/lib/db/pos-db');
+          const tenantId = useAuthStore.getState().user?.tenant_id ?? '';
+          const snap = await getSnapshot<MeProfile>(`me:${tenantId}`);
+          if (snap) return snap;
+        }
+        throw err;
+      }
       setUser(
         profile
           ? {
@@ -42,8 +55,14 @@ export function useMe() {
             }
           : null,
       );
+      // Write the me: snapshot so an offline/weak-wifi reload can still resolve the profile.
+      if (profile?.tenant_id) {
+        const { cacheSnapshot } = await import('@/lib/db/pos-db');
+        void cacheSnapshot(`me:${profile.tenant_id}`, profile.tenant_id, profile).catch(() => {});
+      }
       return profile;
     },
+    networkMode: 'always',
     // Never hit /auth/me for terminal sessions — the JWT is not an SSO token
     enabled: !!accessToken && !isTerminalSession,
     staleTime: ME_STALE_TIME_MS,

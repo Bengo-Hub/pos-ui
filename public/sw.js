@@ -9,16 +9,21 @@
 // offline shell so a reload mid-outage still boots and reads the offline queue from IndexedDB.
 //
 // Strategy:
-//   - navigations (document): network-first, fall back to the cached document for that URL
-//     (then to any cached navigation) when offline — this is what stops the blank screen.
+//   - navigations (document): network-first RACED against a short timeout, fall back to the
+//     cached document for that URL (then to any cached navigation) — this is what stops both
+//     the blank screen offline AND the long hang on weak-but-connected wifi.
 //   - /_next/static + assets: cache-first (immutable, content-hashed).
 //   - /api + cross-origin: network-only (the app handles offline via IndexedDB; never cache
 //     API responses or auth redirects).
 //   - sync / periodicsync 'sync-pos-data': wake open clients to drain the offline queue.
 
-const VERSION = 'pos-sw-v1';
+const VERSION = 'pos-sw-v2';
 const DOC_CACHE = `${VERSION}-documents`;
 const ASSET_CACHE = `${VERSION}-assets`;
+
+// A reload on weak wifi must paint from cache in seconds, not wait out the browser's own
+// network timeout. Only applies when a cached document exists to fall back to.
+const NAV_TIMEOUT_MS = 3500;
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
@@ -56,26 +61,46 @@ self.addEventListener('fetch', (event) => {
   if (url.origin !== self.location.origin) return;
   if (url.pathname.startsWith('/api/')) return;
 
-  // Navigations (full document loads / reloads) → network-first with cached-document fallback.
+  // Navigations (full document loads / reloads) → network-first with cached-document fallback,
+  // raced against NAV_TIMEOUT_MS when a cached copy exists (weak wifi ⇒ fast cache paint; the
+  // network fetch still completes in the background and refreshes the cache for next time).
   if (request.mode === 'navigate') {
     event.respondWith(
       (async () => {
-        try {
-          const fresh = await fetch(request);
-          // Cache successful HTML responses by URL so an offline reload can serve them back.
-          if (fresh && fresh.status === 200 && fresh.type === 'basic') {
-            const cache = await caches.open(DOC_CACHE);
-            cache.put(request, fresh.clone());
-          }
-          return fresh;
-        } catch {
-          const cache = await caches.open(DOC_CACHE);
+        const cache = await caches.open(DOC_CACHE);
+        const cachedDoc = async () => {
           // Prefer the exact URL; fall back to any cached navigation (the app shell boots the
           // right route client-side from the address bar + persisted state regardless).
           const exact = await cache.match(request, { ignoreSearch: true });
           if (exact) return exact;
           const any = (await cache.keys())[0];
-          if (any) return cache.match(any);
+          return any ? cache.match(any) : undefined;
+        };
+
+        const networkFetch = (async () => {
+          const fresh = await fetch(request);
+          // Cache successful HTML responses by URL so an offline reload can serve them back.
+          if (fresh && fresh.status === 200 && fresh.type === 'basic') {
+            cache.put(request, fresh.clone());
+          }
+          return fresh;
+        })();
+
+        try {
+          const hasCached = !!(await cache.match(request, { ignoreSearch: true })) || (await cache.keys()).length > 0;
+          if (!hasCached) return await networkFetch; // nothing to fall back to — let it ride
+
+          const timeout = new Promise((resolve) => setTimeout(() => resolve('timeout'), NAV_TIMEOUT_MS));
+          const winner = await Promise.race([networkFetch.catch(() => 'error'), timeout]);
+          if (winner !== 'timeout' && winner !== 'error') return winner;
+          // Slow or failed network — serve cache now; keep the fetch alive to refresh the cache.
+          networkFetch.catch(() => {});
+          const doc = await cachedDoc();
+          if (doc) return doc;
+          return await networkFetch; // cache raced away — fall through to the network after all
+        } catch {
+          const doc = await cachedDoc();
+          if (doc) return doc;
           return new Response(
             '<!doctype html><meta charset="utf-8"><title>Offline</title><body style="font-family:system-ui;padding:2rem">Offline — reopen when connection returns.</body>',
             { headers: { 'Content-Type': 'text/html' }, status: 200 },

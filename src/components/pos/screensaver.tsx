@@ -1,11 +1,17 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { ScreensaverSlideshow } from '@/components/pos/screensaver-slideshow';
+import { buildScreensaverMedia } from '@/lib/screensaver';
 
 interface ScreensaverProps {
   active: boolean;
   onDismiss: () => void;
+  /** Legacy single media URL (video or image) — still honored when no playlist is given. */
   screensaverUrl?: string | null;
+  /** Image playlist (rotating slideshow). Build via buildScreensaverMedia so precedence
+   *  (configured urls → bundled per-slug defaults → branded background) stays uniform. */
+  playlist?: string[];
   tenantName?: string | null;
   tenantLogoUrl?: string | null;
   outletName?: string | null;
@@ -109,6 +115,7 @@ export function Screensaver({
   active,
   onDismiss,
   screensaverUrl,
+  playlist,
   tenantName,
   tenantLogoUrl,
   outletName,
@@ -123,8 +130,13 @@ export function Screensaver({
 
   if (!active) return null;
 
-  const isVideo = !!screensaverUrl && /\.(mp4|webm|ogg)(\?.*)?$/i.test(screensaverUrl);
-  const hasMedia = !!screensaverUrl;
+  // Resolve media: explicit playlist wins; otherwise the legacy single URL feeds the same
+  // resolver (a video plays exclusively; an image becomes a one-slide show).
+  const media = playlist?.length
+    ? { videoUrl: null, images: playlist }
+    : buildScreensaverMedia({ configuredUrls: [screensaverUrl] });
+  const isVideo = !!media.videoUrl;
+  const hasImages = media.images.length > 0;
 
   return (
     <div
@@ -138,15 +150,15 @@ export function Screensaver({
       {/* ── Background ── */}
       {isVideo ? (
         <video
-          src={screensaverUrl!}
+          src={media.videoUrl!}
           autoPlay
           loop
           muted
           playsInline
           className="absolute inset-0 w-full h-full object-cover"
         />
-      ) : hasMedia ? (
-        <img src={screensaverUrl!} alt="" className="absolute inset-0 w-full h-full object-cover" />
+      ) : hasImages ? (
+        <ScreensaverSlideshow images={media.images} />
       ) : (
         <BrandBackground />
       )}

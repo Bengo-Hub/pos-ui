@@ -64,7 +64,8 @@ export function ReplaceItemDialog({
 
   const confirm = async () => {
     if (!replacement) return;
-    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    const { isEffectivelyOnline } = await import('@/lib/connectivity');
+    if (!isEffectivelyOnline()) {
       toast.error('Replacing an item needs a connection — try again when back online.');
       return;
     }
