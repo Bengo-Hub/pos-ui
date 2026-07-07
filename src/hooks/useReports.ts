@@ -198,16 +198,16 @@ export const reportKeys = {
   refunds: (tid: string, from: string, to: string) => ['reports', tid, 'refunds', from, to] as const,
   daily: (tid: string, from: string, to: string) => ['reports', tid, 'daily', from, to] as const,
   topItems: (tid: string, from: string, to: string) => ['reports', tid, 'top-items', from, to] as const,
-  staffSales: (tid: string, from: string, to: string) => ['reports', tid, 'staff-sales', from, to] as const,
+  staffSales: (tid: string, from: string, to: string, outletId?: string) => ['reports', tid, 'staff-sales', from, to, outletId] as const,
   shifts: (tid: string, from: string, to: string) => ['reports', tid, 'shifts', from, to] as const,
   shiftDetail: (tid: string, sessionId: string) => ['reports', tid, 'shift-detail', sessionId] as const,
   commissions: (tid: string, from: string, to: string) => ['reports', tid, 'commissions', from, to] as const,
   tax: (tid: string, from: string, to: string) => ['reports', tid, 'tax', from, to] as const,
-  salesByHour: (tid: string, from: string, to: string) => ['reports', tid, 'sales-by-hour', from, to] as const,
-  salesByCategory: (tid: string, from: string, to: string) => ['reports', tid, 'sales-by-category', from, to] as const,
+  salesByHour: (tid: string, date: string, outletId?: string) => ['reports', tid, 'sales-by-hour', date, outletId] as const,
+  salesByCategory: (tid: string, from: string, to: string, outletId?: string) => ['reports', tid, 'sales-by-category', from, to, outletId] as const,
   salesByKDSStation: (tid: string, from: string, to: string, outletId?: string) => ['reports', tid, 'sales-by-kds-station', from, to, outletId] as const,
-  productMix: (tid: string, from: string, to: string) => ['reports', tid, 'product-mix', from, to] as const,
-  voidSummary: (tid: string, from: string, to: string) => ['reports', tid, 'void-summary', from, to] as const,
+  productMix: (tid: string, from: string, to: string, outletId?: string) => ['reports', tid, 'product-mix', from, to, outletId] as const,
+  voidSummary: (tid: string, from: string, to: string, outletId?: string) => ['reports', tid, 'void-summary', from, to, outletId] as const,
   eodList: (tid: string, outletId: string, from: string, to: string) => ['reports', tid, 'eod', outletId, from, to] as const,
   stockConsumption: (tid: string, from: string, to: string) => ['reports', tid, 'stock-consumption', from, to] as const,
   returnsDetail: (tid: string, from: string, to: string) => ['reports', tid, 'returns-detail', from, to] as const,
@@ -256,11 +256,11 @@ export function useTopItems(from: string, to: string, limit = 10) {
   });
 }
 
-export function useSalesByStaff(from: string, to: string) {
+export function useSalesByStaff(from: string, to: string, outletId?: string) {
   const tenantID = useTenantID();
   return useQuery({
-    queryKey: reportKeys.staffSales(tenantID, from, to),
-    queryFn: () => apiClient.get<StaffRow[]>(`${basePath(tenantID)}/sales-by-staff`, { from, to }),
+    queryKey: reportKeys.staffSales(tenantID, from, to, outletId),
+    queryFn: () => apiClient.get<StaffRow[]>(`${basePath(tenantID)}/sales-by-staff`, { from, to, outlet_id: outletId }),
     enabled: !!tenantID && !!from && !!to,
     staleTime: 2 * 60_000,
   });
@@ -296,27 +296,30 @@ export function useTaxReport(from: string, to: string) {
   });
 }
 
-export function useSalesByHour(from: string, to: string) {
+// Sales by Hour is a single-day breakdown (pos-api reads ?date=, not a from/to range) — the
+// hour-of-day buckets only make sense for one specific day, so this takes its own `date` filter
+// rather than the shared report date range.
+export function useSalesByHour(date: string, outletId?: string) {
   const tenantID = useTenantID();
   return useQuery({
-    queryKey: reportKeys.salesByHour(tenantID, from, to),
+    queryKey: reportKeys.salesByHour(tenantID, date, outletId),
     // Backend returns { date, hours: [...] } — unwrap to the array the UI maps over.
     queryFn: async () => {
-      const res = await apiClient.get<{ hours?: HourRow[] } | HourRow[]>(`${basePath(tenantID)}/sales-by-hour`, { from, to });
+      const res = await apiClient.get<{ hours?: HourRow[] } | HourRow[]>(`${basePath(tenantID)}/sales-by-hour`, { date, outlet_id: outletId });
       return Array.isArray(res) ? res : res?.hours ?? [];
     },
-    enabled: !!tenantID && !!from && !!to,
+    enabled: !!tenantID && !!date,
     staleTime: 2 * 60_000,
   });
 }
 
-export function useSalesByCategory(from: string, to: string) {
+export function useSalesByCategory(from: string, to: string, outletId?: string) {
   const tenantID = useTenantID();
   return useQuery({
-    queryKey: reportKeys.salesByCategory(tenantID, from, to),
+    queryKey: reportKeys.salesByCategory(tenantID, from, to, outletId),
     // Backend returns { data: [...], total } — unwrap to the array the UI maps over.
     queryFn: async () => {
-      const res = await apiClient.get<{ data?: CategoryRow[] } | CategoryRow[]>(`${basePath(tenantID)}/sales-by-category`, { from, to });
+      const res = await apiClient.get<{ data?: CategoryRow[] } | CategoryRow[]>(`${basePath(tenantID)}/sales-by-category`, { from, to, outlet_id: outletId });
       return Array.isArray(res) ? res : res?.data ?? [];
     },
     enabled: !!tenantID && !!from && !!to,
@@ -343,13 +346,13 @@ export function useSalesByKDSStation(from: string, to: string, outletId?: string
   });
 }
 
-export function useProductMix(from: string, to: string) {
+export function useProductMix(from: string, to: string, outletId?: string) {
   const tenantID = useTenantID();
   return useQuery({
-    queryKey: reportKeys.productMix(tenantID, from, to),
+    queryKey: reportKeys.productMix(tenantID, from, to, outletId),
     // Backend returns { from, to, by_subtype, top_items } — the product-level table uses top_items.
     queryFn: async () => {
-      const res = await apiClient.get<{ top_items?: ProductMixRow[] } | ProductMixRow[]>(`${basePath(tenantID)}/product-mix`, { from, to });
+      const res = await apiClient.get<{ top_items?: ProductMixRow[] } | ProductMixRow[]>(`${basePath(tenantID)}/product-mix`, { from, to, outlet_id: outletId });
       return Array.isArray(res) ? res : res?.top_items ?? [];
     },
     enabled: !!tenantID && !!from && !!to,
@@ -357,13 +360,13 @@ export function useProductMix(from: string, to: string) {
   });
 }
 
-export function useVoidSummary(from: string, to: string) {
+export function useVoidSummary(from: string, to: string, outletId?: string) {
   const tenantID = useTenantID();
   return useQuery({
-    queryKey: reportKeys.voidSummary(tenantID, from, to),
+    queryKey: reportKeys.voidSummary(tenantID, from, to, outletId),
     // Backend returns { from, to, items: [...] } — unwrap to the array the UI maps over.
     queryFn: async () => {
-      const res = await apiClient.get<{ items?: VoidRow[] } | VoidRow[]>(`${basePath(tenantID)}/void-summary`, { from, to });
+      const res = await apiClient.get<{ items?: VoidRow[] } | VoidRow[]>(`${basePath(tenantID)}/void-summary`, { from, to, outlet_id: outletId });
       return Array.isArray(res) ? res : res?.items ?? [];
     },
     enabled: !!tenantID && !!from && !!to,
