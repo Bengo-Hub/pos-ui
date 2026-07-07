@@ -7,8 +7,9 @@
  */
 
 import { useState } from 'react';
-import { BarChart3, Users, Clock, Tag, Package, Ban } from 'lucide-react';
-import { useSalesByStaff, useSalesByHour, useSalesByCategory, useProductMix, useVoidSummary } from '@/hooks/useReports';
+import { BarChart3, Users, Clock, Tag, Package, Ban, ChefHat } from 'lucide-react';
+import { useSalesByStaff, useSalesByHour, useSalesByCategory, useSalesByKDSStation, useProductMix, useVoidSummary } from '@/hooks/useReports';
+import { ReportDocumentButton } from '@/components/reports/report-document-button';
 
 function isoDaysAgo(days: number): string {
   const d = new Date();
@@ -24,6 +25,7 @@ export default function AnalyticsReportPage() {
   const staff = useSalesByStaff(from, to);
   const hours = useSalesByHour(from, to);
   const cats = useSalesByCategory(from, to);
+  const kdsStations = useSalesByKDSStation(from, to);
   const mix = useProductMix(from, to);
   const voids = useVoidSummary(from, to);
 
@@ -53,6 +55,24 @@ export default function AnalyticsReportPage() {
         head={['Category', 'Qty Sold', 'Revenue']}
         rows={(cats.data ?? []).map((r) => [r.category_name, String(r.quantity_sold), fmt(r.revenue)])} />
 
+      <Section title="Sales by KDS Station" icon={ChefHat} loading={kdsStations.isLoading} empty={!kdsStations.data?.length}
+        head={['Station', 'Orders', 'Items', 'Revenue']}
+        rows={(kdsStations.data ?? []).map((r) => [
+          r.station_type ? `${r.station_name} (${r.station_type})` : r.station_name,
+          String(r.order_count), String(r.item_count), fmt(r.revenue),
+        ])}
+        actions={
+          <ReportDocumentButton
+            report="sales-by-kds-station-document"
+            params={{ from, to }}
+            fileName={`sales-by-kds-station-${from}-to-${to}.pdf`}
+            title="Sales by KDS Station"
+            label="Export"
+            size="sm"
+            className="gap-1.5 h-7 text-xs px-2.5"
+          />
+        } />
+
       <Section title="Product Mix" icon={Package} loading={mix.isLoading} empty={!mix.data?.length}
         head={['Product', 'Qty', 'Orders', 'Revenue']}
         rows={(mix.data ?? []).map((r) => [r.label, String(r.quantity), String(r.order_count), fmt(r.revenue)])} />
@@ -64,14 +84,16 @@ export default function AnalyticsReportPage() {
   );
 }
 
-function Section({ title, icon: Icon, loading, empty, head, rows }: {
+function Section({ title, icon: Icon, loading, empty, head, rows, actions }: {
   title: string; icon: React.ElementType; loading: boolean; empty: boolean; head: string[]; rows: string[][];
+  actions?: React.ReactNode;
 }) {
   return (
     <div className="bg-card border border-border rounded-2xl overflow-hidden">
       <div className="flex items-center gap-2 px-5 py-3 border-b border-border">
         <Icon className="h-4 w-4 text-primary" />
         <h2 className="font-semibold text-sm">{title}</h2>
+        {actions && <div className="ml-auto">{actions}</div>}
       </div>
       {loading ? (
         <div className="p-6 text-center text-sm text-muted-foreground">Loading…</div>

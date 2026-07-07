@@ -981,6 +981,9 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
     catalog_item_id: item.id,
     sku: item.sku || '',
     name: item.name,
+    // Drives server-side KDS station routing (kitchen vs bar) via category_filter — without
+    // it the server falls back to fragile name-substring matching or the first station.
+    category: item.category,
     quantity: item.quantity,
     unit_price: item.price + (item.modifierTotal ?? 0),
     total_price: (item.price + (item.modifierTotal ?? 0)) * item.quantity,

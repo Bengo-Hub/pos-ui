@@ -90,6 +90,7 @@ export function ReplaceItemDialog({
           catalog_item_id: replacement.id,
           sku: replacement.sku,
           name: replacement.name,
+          category: replacement.category,
           quantity,
           unit_price: unit,
           total_price: unit * quantity,

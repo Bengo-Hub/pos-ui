@@ -72,6 +72,9 @@ export interface OfflineOrderLine {
   catalog_item_id: string;
   sku: string;
   name: string;
+  /** Catalog category name — replayed to the server on sync so KDS station routing/reporting
+   *  works the same for offline sales as it does online. */
+  category?: string;
   quantity: number;
   unit_price: number;
   total_price: number;

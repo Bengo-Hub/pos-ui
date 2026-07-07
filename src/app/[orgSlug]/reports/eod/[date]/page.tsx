@@ -3,11 +3,11 @@
 import { ModuleGate } from '@/components/auth/module-gate';
 import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
 import { Card, CardContent } from '@/components/ui/base';
-import { useEODList } from '@/hooks/useReports';
+import { useEODList, useSalesByKDSStation } from '@/hooks/useReports';
 import { ReportDocumentButton } from '@/components/reports/report-document-button';
 import { useAuthStore } from '@/store/auth';
 import { cn } from '@/lib/utils';
-import { ArrowLeft, Loader2 } from 'lucide-react';
+import { ArrowLeft, ChefHat, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 
@@ -17,6 +17,9 @@ function EODDetailContent() {
 
   const { data: closings = [], isLoading } = useEODList(outletId, date, date);
   const eod = closings[0] as any;
+  // "How much did bar vs kitchen do today" — grouped by KDS station, same as the kitchen/bar
+  // displays, so a manager closing the day can see each station's contribution at a glance.
+  const stationBreakdown = useSalesByKDSStation(date, date, outletId);
 
   const STATUS_STYLES: Record<string, string> = {
     reconciled: 'bg-green-500/10 text-green-700',
@@ -101,6 +104,37 @@ function EODDetailContent() {
           </Card>
         ))}
       </div>
+
+      {/* KDS station breakdown — bar vs kitchen (vs any other configured station) */}
+      {!stationBreakdown.isLoading && (stationBreakdown.data?.length ?? 0) > 0 && (
+        <Card>
+          <CardContent className="p-5 space-y-3">
+            <div className="flex items-center gap-2">
+              <ChefHat className="h-4 w-4 text-primary" />
+              <p className="text-sm font-semibold">Sales by KDS Station</p>
+              <div className="ml-auto">
+                <ReportDocumentButton
+                  report="sales-by-kds-station-document"
+                  params={{ from: date, to: date, outlet_id: outletId }}
+                  fileName={`sales-by-kds-station-${date}.pdf`}
+                  title="Sales by KDS Station"
+                  label="Export"
+                  size="sm"
+                  className="gap-1.5 h-7 text-xs px-2.5"
+                />
+              </div>
+            </div>
+            {(stationBreakdown.data ?? []).map((row) => (
+              <div key={row.station_id || row.station_name} className="flex justify-between text-sm">
+                <span className="text-muted-foreground">
+                  {row.station_name}{row.station_type ? ` (${row.station_type})` : ''} · {row.order_count} order{row.order_count === 1 ? '' : 's'}
+                </span>
+                <span className="font-medium">KES {row.revenue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Tender breakdown */}
       {tenderRows.length > 0 && (

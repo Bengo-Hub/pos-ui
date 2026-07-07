@@ -7,6 +7,7 @@ import { KDS_TONES, getKDSTone, setKDSTone, playKDSTone, type KDSToneId } from '
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import {
   useAllKDSStations, useCreateKDSStation, useUpdateKDSStation, useDeleteKDSStation,
+  type KDSStationType,
 } from '@/hooks/useKDS';
 import { useCategories } from '@/hooks/usePOS';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -17,6 +18,38 @@ import { apiErrorMessage } from '@/lib/api/error-message';
 import { Toggle, inputClass, labelClass } from './shared';
 
 type StationRef = { id: string; name: string; is_active: boolean };
+
+// Station type determines which physical KDS screen/queue receives this station's tickets
+// (GetKitchenQueue / GetBarQueue on the server filter by this exact value) — get it wrong and a
+// "Bar" station created as the default "kitchen" type never shows up on the bar screen, while its
+// tickets bleed into the kitchen queue instead.
+const STATION_TYPES: { value: KDSStationType; label: string; hint: string }[] = [
+  { value: 'kitchen', label: 'Kitchen', hint: 'Hot food prep — shows on the Kitchen Display' },
+  { value: 'bar', label: 'Bar', hint: 'Drinks/cocktails — shows on the Bar Display' },
+  { value: 'cold', label: 'Cold Station', hint: 'Salads/cold prep' },
+  { value: 'expo', label: 'Expo', hint: 'Expediter — sees every unresolved item as a secondary copy' },
+  { value: 'all', label: 'All', hint: 'Receives a secondary copy of every unresolved item' },
+];
+
+function StationTypeSelect({ value, onChange }: { value: KDSStationType; onChange: (v: KDSStationType) => void }) {
+  return (
+    <div className="space-y-1">
+      <label className={labelClass}>Station Type</label>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value as KDSStationType)}
+        className={inputClass}
+      >
+        {STATION_TYPES.map((t) => (
+          <option key={t.value} value={t.value}>{t.label}</option>
+        ))}
+      </select>
+      <p className="text-[11px] text-muted-foreground">
+        {STATION_TYPES.find((t) => t.value === value)?.hint}
+      </p>
+    </div>
+  );
+}
 
 // Merge the live inventory categories with any values already selected on a station so that
 // stale filters (a category that no longer exists in inventory) still render and can be removed.
@@ -82,9 +115,9 @@ export function KDSStationsTab() {
   const canEdit = can(P.CONFIG_MANAGE) || can(P.CONFIG_CHANGE);
 
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ name: '', category_filter: [] as string[], sort_order: 0 });
+  const [form, setForm] = useState({ name: '', station_type: 'kitchen' as KDSStationType, category_filter: [] as string[], sort_order: 0 });
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState({ name: '', category_filter: [] as string[], sort_order: 0 });
+  const [editForm, setEditForm] = useState({ name: '', station_type: 'kitchen' as KDSStationType, category_filter: [] as string[], sort_order: 0 });
   const [confirmToggle, setConfirmToggle] = useState<StationRef | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<StationRef | null>(null);
 
@@ -106,10 +139,11 @@ export function KDSStationsTab() {
       await createStation.mutateAsync({
         outlet_id: outlet?.id ?? '',
         name: form.name,
+        station_type: form.station_type,
         category_filter: form.category_filter,
         sort_order: form.sort_order,
       });
-      setForm({ name: '', category_filter: [], sort_order: 0 });
+      setForm({ name: '', station_type: 'kitchen', category_filter: [], sort_order: 0 });
       setShowForm(false);
       toast.success('Station created');
     } catch (e) {
@@ -129,9 +163,9 @@ export function KDSStationsTab() {
     );
   };
 
-  const startEdit = (s: { id: string; name: string; category_filter: string[]; sort_order: number }) => {
+  const startEdit = (s: { id: string; name: string; station_type: KDSStationType; category_filter: string[]; sort_order: number }) => {
     setEditingId(s.id);
-    setEditForm({ name: s.name, category_filter: s.category_filter ?? [], sort_order: s.sort_order });
+    setEditForm({ name: s.name, station_type: s.station_type ?? 'kitchen', category_filter: s.category_filter ?? [], sort_order: s.sort_order });
   };
 
   const handleSaveEdit = async (stationID: string) => {
@@ -139,7 +173,7 @@ export function KDSStationsTab() {
     try {
       await updateStation.mutateAsync({
         stationID,
-        input: { name: editForm.name, category_filter: editForm.category_filter, sort_order: editForm.sort_order },
+        input: { name: editForm.name, station_type: editForm.station_type, category_filter: editForm.category_filter, sort_order: editForm.sort_order },
       });
       setEditingId(null);
       toast.success('Station updated');
@@ -182,7 +216,7 @@ export function KDSStationsTab() {
       {showForm && (
         <Card>
           <CardContent className="pt-4 space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-1">
                 <label className={labelClass}>Station Name</label>
                 <input
@@ -193,6 +227,7 @@ export function KDSStationsTab() {
                   className={inputClass}
                 />
               </div>
+              <StationTypeSelect value={form.station_type} onChange={(v) => setForm((f) => ({ ...f, station_type: v }))} />
               <div className="space-y-1">
                 <label className={labelClass}>Sort Order</label>
                 <input
@@ -242,7 +277,7 @@ export function KDSStationsTab() {
             <div key={station.id} className={`rounded-xl border bg-card transition-opacity ${!station.is_active ? 'opacity-50' : ''}`}>
               {isEditing ? (
                 <div className="p-4 space-y-3">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                     <div className="space-y-1">
                       <label className={labelClass}>Station Name</label>
                       <input
@@ -252,6 +287,7 @@ export function KDSStationsTab() {
                         className={inputClass}
                       />
                     </div>
+                    <StationTypeSelect value={editForm.station_type} onChange={(v) => setEditForm((f) => ({ ...f, station_type: v }))} />
                     <div className="space-y-1">
                       <label className={labelClass}>Sort Order</label>
                       <input
@@ -299,6 +335,9 @@ export function KDSStationsTab() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <p className="text-sm font-bold">{station.name}</p>
+                      <span className="text-[10px] font-semibold bg-secondary text-secondary-foreground px-2 py-0.5 rounded-full capitalize">
+                        {STATION_TYPES.find((t) => t.value === station.station_type)?.label ?? station.station_type}
+                      </span>
                       {!station.is_active && (
                         <span className="text-[10px] font-semibold bg-muted text-muted-foreground px-2 py-0.5 rounded-full">
                           Inactive

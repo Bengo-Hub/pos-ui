@@ -264,6 +264,7 @@ export default function AddSalePage() {
           catalog_item_id: l.item.id,
           sku: l.item.sku,
           name: l.item.name,
+          category: l.item.category,
           quantity: l.quantity,
           unit_price: free ? 0 : l.unitPrice,
           total_price: free ? 0 : l.unitPrice * l.quantity,

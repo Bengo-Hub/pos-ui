@@ -71,6 +71,7 @@ export function WalkInSaleModal({ open, onClose, tenantSlug }: WalkInSaleModalPr
           catalog_item_id: l.item.id,
           sku: l.item.sku,
           name: l.item.name,
+          category: l.item.category,
           quantity: l.quantity,
           unit_price: l.item.price ?? 0,
           total_price: (l.item.price ?? 0) * l.quantity,

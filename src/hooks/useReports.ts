@@ -167,6 +167,15 @@ export interface CategoryRow {
   revenue: number;
 }
 
+export interface KDSStationRow {
+  station_id: string;
+  station_name: string;
+  station_type: string;
+  order_count: number;
+  item_count: number;
+  revenue: number;
+}
+
 export interface ProductMixRow {
   label: string;
   quantity: number;
@@ -196,6 +205,7 @@ export const reportKeys = {
   tax: (tid: string, from: string, to: string) => ['reports', tid, 'tax', from, to] as const,
   salesByHour: (tid: string, from: string, to: string) => ['reports', tid, 'sales-by-hour', from, to] as const,
   salesByCategory: (tid: string, from: string, to: string) => ['reports', tid, 'sales-by-category', from, to] as const,
+  salesByKDSStation: (tid: string, from: string, to: string, outletId?: string) => ['reports', tid, 'sales-by-kds-station', from, to, outletId] as const,
   productMix: (tid: string, from: string, to: string) => ['reports', tid, 'product-mix', from, to] as const,
   voidSummary: (tid: string, from: string, to: string) => ['reports', tid, 'void-summary', from, to] as const,
   eodList: (tid: string, outletId: string, from: string, to: string) => ['reports', tid, 'eod', outletId, from, to] as const,
@@ -307,6 +317,25 @@ export function useSalesByCategory(from: string, to: string) {
     // Backend returns { data: [...], total } — unwrap to the array the UI maps over.
     queryFn: async () => {
       const res = await apiClient.get<{ data?: CategoryRow[] } | CategoryRow[]>(`${basePath(tenantID)}/sales-by-category`, { from, to });
+      return Array.isArray(res) ? res : res?.data ?? [];
+    },
+    enabled: !!tenantID && !!from && !!to,
+    staleTime: 2 * 60_000,
+  });
+}
+
+/** Sales grouped by KDS station (kitchen vs bar, etc.) — the same grouping the kitchen/bar
+ *  displays use, so this always matches what actually printed/showed at each station. */
+export function useSalesByKDSStation(from: string, to: string, outletId?: string) {
+  const tenantID = useTenantID();
+  return useQuery({
+    queryKey: reportKeys.salesByKDSStation(tenantID, from, to, outletId),
+    // Backend returns { data: [...], total } — unwrap to the array the UI maps over.
+    queryFn: async () => {
+      const res = await apiClient.get<{ data?: KDSStationRow[] } | KDSStationRow[]>(
+        `${basePath(tenantID)}/sales/by-kds-station`,
+        { from, to, outlet_id: outletId },
+      );
       return Array.isArray(res) ? res : res?.data ?? [];
     },
     enabled: !!tenantID && !!from && !!to,

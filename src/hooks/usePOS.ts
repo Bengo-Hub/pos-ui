@@ -1083,6 +1083,9 @@ interface CreateOrderInput {
     catalog_item_id: string;
     sku: string;
     name: string;
+    /** Catalog category name — drives KDS station routing (kitchen vs bar) server-side; without
+     *  it, routing falls back to fragile name-substring matching (see kitchen-bar-print.ts). */
+    category?: string;
     quantity: number;
     unit_price: number;
     total_price: number;
@@ -1113,6 +1116,7 @@ export function useCreateOrder() {
           catalog_item_id: l.catalog_item_id,
           sku: l.sku,
           name: l.name,
+          category: l.category,
           quantity: l.quantity,
           unit_price: l.unit_price,
           total_price: l.total_price,
