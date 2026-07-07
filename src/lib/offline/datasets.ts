@@ -20,7 +20,14 @@ export interface OfflineDataset {
   queryKey: (tenantID: string, outletID?: string) => readonly unknown[];
   fetch: (tenantID: string, outletID?: string) => Promise<unknown>;
   logDetail?: (data: unknown) => string;
+  /** Some datasets are gated server-side by outlet use case (e.g. loyalty is retail/services
+   *  only — pos-api 403s hospitality/QSR/pharmacy outlets). Mirror that gate here so the
+   *  background job never wastes a request (and never logs a permanent false-alarm error)
+   *  fetching a dataset this outlet can't use. Omit for datasets available to every use case. */
+  appliesTo?: (useCase: string | undefined) => boolean;
 }
+
+const LOYALTY_USE_CASES = new Set(['retail', 'services']);
 
 const pos = (tenantID: string) => `/api/v1/${tenantID}/pos`;
 const quiet = { suppressErrorToast: true };
@@ -57,6 +64,9 @@ export const OFFLINE_DATASETS: OfflineDataset[] = [
     // Raw paginated response is what's cached/pushed; the hook normalizes via `select`.
     queryKey: (t) => ['loyalty-programs', t] as const,
     fetch: (t) => apiClient.get(`${pos(t)}/loyalty/programs`, undefined, quiet),
+    // Mirrors pos-api's `ly.Use(RequireUseCase("retail","services"))` route gate — a
+    // hospitality/QSR/pharmacy outlet 403s this endpoint by design, not a real failure.
+    appliesTo: (useCase) => !!useCase && LOYALTY_USE_CASES.has(useCase),
   },
   {
     name: 'recent-orders',
@@ -98,13 +108,17 @@ export function datasetCacheOpts(
   };
 }
 
-/** Refresh every registered dataset once (the 5-min background job body). */
+/** Refresh every registered dataset once (the 5-min background job body). Datasets whose
+ *  `appliesTo` rejects this outlet's use case are skipped entirely — never fetched, never
+ *  logged as an error. */
 export async function refreshAllDatasets(
   tenantID: string,
   outletID: string | undefined,
   qc?: QueryClient,
+  opts: { force?: boolean; useCase?: string } = {},
 ): Promise<void> {
   for (const ds of OFFLINE_DATASETS) {
-    await revalidateDataset(datasetCacheOpts(ds, tenantID, outletID, qc));
+    if (ds.appliesTo && !ds.appliesTo(opts.useCase)) continue;
+    await revalidateDataset(datasetCacheOpts(ds, tenantID, outletID, qc), { force: opts.force });
   }
 }

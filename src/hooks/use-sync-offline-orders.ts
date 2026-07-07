@@ -61,17 +61,24 @@ export function useSyncOfflineOrders() {
     if (!tenantID || syncingRef.current || !isEffectivelyOnline() || isBackgroundSyncPaused()) return;
     syncingRef.current = true;
     try {
-      await syncDrawerSessions(tenantID);
-      await syncOrders(tenantID);
-      await syncPayments(tenantID);
-      await syncVoids(tenantID);
-      await syncReturns(tenantID);
-      await syncDrawerCloses(tenantID);
-      await syncETIMSQueue(tenantID);
+      // Each syncX returns how many queued items it attempted. Queues are usually empty
+      // (nothing offline happened recently), so the common case is a handful of cheap Dexie
+      // reads with ZERO network calls — only invalidate (forcing a drawer/orders refetch)
+      // when something actually synced, instead of hammering the server every 10s for nothing.
+      const synced =
+        (await syncDrawerSessions(tenantID)) +
+        (await syncOrders(tenantID)) +
+        (await syncPayments(tenantID)) +
+        (await syncVoids(tenantID)) +
+        (await syncReturns(tenantID)) +
+        (await syncDrawerCloses(tenantID)) +
+        (await syncETIMSQueue(tenantID));
 
-      qc.invalidateQueries({ queryKey: ['pos-orders'] });
-      qc.invalidateQueries({ queryKey: ['pos-drawer-current'] });
-      qc.invalidateQueries({ queryKey: ['pos-sync-status'] });
+      if (synced > 0) {
+        qc.invalidateQueries({ queryKey: ['pos-orders'] });
+        qc.invalidateQueries({ queryKey: ['pos-drawer-current'] });
+        qc.invalidateQueries({ queryKey: ['pos-sync-status'] });
+      }
     } finally {
       syncingRef.current = false;
     }
@@ -148,8 +155,9 @@ function logPush(entity: string, detail: string, err?: any) {
 
 // ── Drawer session sync ────────────────────────────────────────────────────────
 
-async function syncDrawerSessions(tenantID: string) {
-  for (const session of await getPendingSyncDrawerSessions()) {
+async function syncDrawerSessions(tenantID: string): Promise<number> {
+  const rows = await getPendingSyncDrawerSessions();
+  for (const session of rows) {
     try {
       const res: any = await apiClient.post(
         `/api/v1/${tenantID}/pos/drawers/open`,
@@ -163,12 +171,14 @@ async function syncDrawerSessions(tenantID: string) {
       logPush('drawer_open', `Float ${session.starting_cash.toFixed(2)}`, err);
     }
   }
+  return rows.length;
 }
 
 // ── Order sync ─────────────────────────────────────────────────────────────────
 
-async function syncOrders(tenantID: string) {
-  for (const order of await getPendingSyncOrders()) {
+async function syncOrders(tenantID: string): Promise<number> {
+  const rows = await getPendingSyncOrders();
+  for (const order of rows) {
     try {
       const res: any = await apiClient.post(
         `/api/v1/${tenantID}/pos/orders`,
@@ -208,20 +218,24 @@ async function syncOrders(tenantID: string) {
       logPush('order', `Sale ${order.currency} ${order.total_amount.toFixed(2)}`, err);
     }
   }
+  return rows.length;
 }
 
 // ── Payment sync ───────────────────────────────────────────────────────────────
 
-async function syncPayments(tenantID: string) {
+async function syncPayments(tenantID: string): Promise<number> {
+  let attempted = 0;
   for (const payment of await getPendingSyncPayments()) {
     // Resolve the server order id: either it already exists, or the order was created
     // offline and we look up the id it got when it synced. If still unresolved, skip —
-    // the order hasn't synced yet (or failed); we retry on the next pass.
+    // the order hasn't synced yet (or failed); we retry on the next pass (not counted as
+    // "attempted" — nothing actually happened, so it shouldn't force a query invalidation).
     let orderId = payment.server_order_id;
     if (!orderId && payment.local_order_id) {
       orderId = await resolveServerOrderId(payment.local_order_id);
     }
     if (!orderId) continue;
+    attempted++;
 
     try {
       await apiClient.post(
@@ -242,15 +256,18 @@ async function syncPayments(tenantID: string) {
       logPush('payment', `${payment.tender_method} ${payment.amount.toFixed(2)}`, err);
     }
   }
+  return attempted;
 }
 
 // ── Void sync ──────────────────────────────────────────────────────────────────
 
-async function syncVoids(tenantID: string) {
+async function syncVoids(tenantID: string): Promise<number> {
+  let attempted = 0;
   for (const v of await getPendingSyncVoids()) {
     let orderId = v.server_order_id;
     if (!orderId && v.local_order_id) orderId = await resolveServerOrderId(v.local_order_id);
     if (!orderId) continue;
+    attempted++;
     try {
       if (v.line_id) {
         await apiClient.post(
@@ -272,15 +289,18 @@ async function syncVoids(tenantID: string) {
       logPush('void', v.line_id ? 'Line void' : 'Order void', err);
     }
   }
+  return attempted;
 }
 
 // ── Return sync ────────────────────────────────────────────────────────────────
 
-async function syncReturns(tenantID: string) {
+async function syncReturns(tenantID: string): Promise<number> {
+  let attempted = 0;
   for (const r of await getPendingSyncReturns()) {
     let orderId = r.server_order_id;
     if (!orderId && r.local_order_id) orderId = await resolveServerOrderId(r.local_order_id);
     if (!orderId) continue;
+    attempted++;
     try {
       await apiClient.post(
         `/api/v1/${tenantID}/pos/orders/${orderId}/returns`,
@@ -301,12 +321,14 @@ async function syncReturns(tenantID: string) {
       logPush('return', `Return ${r.refund_amount.toFixed(2)}`, err);
     }
   }
+  return attempted;
 }
 
 // ── eTIMS queue sync ───────────────────────────────────────────────────────────
 
-async function syncETIMSQueue(tenantID: string) {
-  for (const sub of await getPendingETIMSSubmissions()) {
+async function syncETIMSQueue(tenantID: string): Promise<number> {
+  const rows = await getPendingETIMSSubmissions();
+  for (const sub of rows) {
     try {
       await apiClient.post(
         `/api/v1/${tenantID}/treasury/etims/queue`,
@@ -319,11 +341,13 @@ async function syncETIMSQueue(tenantID: string) {
       logPush('etims', `Order ${sub.order_id}`, err);
     }
   }
+  return rows.length;
 }
 
 // ── Drawer close sync ──────────────────────────────────────────────────────────
 
-async function syncDrawerCloses(tenantID: string) {
+async function syncDrawerCloses(tenantID: string): Promise<number> {
+  let attempted = 0;
   for (const close of await getPendingSyncDrawerCloses()) {
     // A close against a drawer opened offline waits until the session syncs and the local
     // drawer id resolves to a server id.
@@ -333,6 +357,7 @@ async function syncDrawerCloses(tenantID: string) {
       drawerId = await resolveServerDrawerId(close.local_drawer_id);
     }
     if (!drawerId) continue; // session not synced yet — retry next pass
+    attempted++;
 
     try {
       await apiClient.post(
@@ -347,6 +372,7 @@ async function syncDrawerCloses(tenantID: string) {
       logPush('drawer_close', `Ending ${close.ending_cash.toFixed(2)}`, err);
     }
   }
+  return attempted;
 }
 
 /**

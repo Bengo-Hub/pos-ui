@@ -9,7 +9,7 @@ import { refreshAllDatasets } from '@/lib/offline/datasets';
 import { refreshStaffProfiles } from '@/lib/offline/staff-profiles';
 import { revalidateFullCatalog, useEffectiveOutletID } from '@/hooks/usePOS';
 import { registerBackgroundSync } from '@/lib/sw/register-sync';
-import { isBackgroundSyncPaused, markCacheRefreshed } from '@/lib/sync/sync-control';
+import { isBackgroundSyncPaused, markCacheRefreshed, getLastCacheRefreshAt } from '@/lib/sync/sync-control';
 
 /**
  * THE dedicated background sync job (mounted once in org-shell):
@@ -35,8 +35,8 @@ export function useBackgroundSync(): void {
   const qc = useQueryClient();
   const tenantID = useAuthStore((s) => s.user?.tenant_id ?? '');
   const outletID = useEffectiveOutletID();
+  const useCase = useAuthStore((s) => s.outlet?.use_case);
   const isOnline = useEffectiveOnline();
-  const lastRunRef = useRef(0);
   const runningRef = useRef(false);
 
   // The push engine: 10s drain interval + online event + SW POS_SYNC + pos:sync-now.
@@ -48,18 +48,20 @@ export function useBackgroundSync(): void {
   const refreshCaches = useCallback(async (force = false) => {
     if (!tenantID || runningRef.current) return;
     if (!isEffectivelyOnline() || isBackgroundSyncPaused()) return;
-    if (!force && Date.now() - lastRunRef.current < MIN_REFRESH_GAP_MS) return;
+    // Persisted (localStorage) gate, not an in-memory ref: survives a component remount (dev
+    // Fast Refresh, or simply this worker mounting again) AND is shared across multiple tabs
+    // of the same device, so neither can defeat the 5-min cadence and hammer the server.
+    if (!force && Date.now() - (getLastCacheRefreshAt() ?? 0) < MIN_REFRESH_GAP_MS) return;
     runningRef.current = true;
-    lastRunRef.current = Date.now();
+    markCacheRefreshed();
     try {
-      await refreshAllDatasets(tenantID, outletID || undefined, qc);
+      await refreshAllDatasets(tenantID, outletID || undefined, qc, { force, useCase });
       await refreshStaffProfiles(tenantID, outletID || undefined).catch(() => {});
-      await revalidateFullCatalog(qc, tenantID, outletID || '');
-      markCacheRefreshed();
+      await revalidateFullCatalog(qc, tenantID, outletID || '', { force });
     } finally {
       runningRef.current = false;
     }
-  }, [tenantID, outletID, qc]);
+  }, [tenantID, outletID, useCase, qc]);
 
   // 5-minute pull loop (+ immediate warm-up shortly after mount/login).
   useEffect(() => {

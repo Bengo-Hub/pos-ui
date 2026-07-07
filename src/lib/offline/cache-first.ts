@@ -24,6 +24,18 @@ export const COLD_START_TIMEOUT_MS = 8_000;
 
 const inflight = new Set<string>();
 
+/**
+ * Per-dataset cooldown — a hard backstop independent of WHY revalidateDataset was called
+ * (opportunistic cache-first hit on a component mount, the 5-min background job, a
+ * reconnect/visibility trigger). The effective-online signal can legitimately flap on a
+ * genuinely weak connection (unlike static navigator.onLine), and several call sites react
+ * to that signal; without this, a flapping connection turns into a refetch storm. The
+ * scheduled background job runs every 5 min, well above this gap, so it is never blocked —
+ * this only suppresses ACCIDENTAL re-fires within the same short window.
+ */
+const REVALIDATE_COOLDOWN_MS = 30_000;
+const lastRevalidateAt = new Map<string, number>();
+
 export interface CacheFirstOpts<T> {
   /** kvCache key — build with kvKey(dataset, tenantId[, outletId]). */
   cacheKey: string;
@@ -39,12 +51,19 @@ export interface CacheFirstOpts<T> {
   logDetail?: (data: T) => string;
 }
 
-/** Fire-and-forget background refresh of one dataset (also used by the 5-min job). */
-export async function revalidateDataset<T>(opts: CacheFirstOpts<T>): Promise<T | null> {
+/** Fire-and-forget background refresh of one dataset (also used by the 5-min job).
+ *  Pass `force: true` to bypass the cooldown (the manual "Refresh caches now" action). */
+export async function revalidateDataset<T>(
+  opts: CacheFirstOpts<T>,
+  { force = false }: { force?: boolean } = {},
+): Promise<T | null> {
   const { cacheKey, tenantId, fetcher, queryKey, queryClient, logDetail } = opts;
   const entity = opts.logEntity ?? cacheKey.split(':')[0];
   if (inflight.has(cacheKey)) return null;
+  const last = lastRevalidateAt.get(cacheKey) ?? 0;
+  if (!force && Date.now() - last < REVALIDATE_COOLDOWN_MS) return null;
   inflight.add(cacheKey);
+  lastRevalidateAt.set(cacheKey, Date.now());
   try {
     const fresh = await fetcher({ background: true });
     await setKV(cacheKey, tenantId, fresh);

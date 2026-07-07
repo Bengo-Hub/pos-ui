@@ -370,12 +370,20 @@ export const FULL_CATALOG_QUERY_KEY = 'pos-catalog-full';
 // (mount + version-poll + reconnect can all ask for one in the same tick).
 const catalogRevalidateInflight = new Set<string>();
 
+// Cooldown backstop: CatalogPrewarm's isOnline-triggered effect and useBackgroundSync's
+// reconnect effect both call this uncooled on every connectivity change. The effective-online
+// signal can legitimately FLAP on a genuinely weak connection (that's the whole point of it —
+// unlike static navigator.onLine, which never flapped) — without this, a flapping connection
+// turns into a full-catalog refetch storm. The 5-min background job always clears it (30s « 5min).
+const CATALOG_REVALIDATE_COOLDOWN_MS = 30_000;
+const lastCatalogRevalidateAt = new Map<string, number>();
+
 /**
  * Fetch the COMPLETE catalog from the API in the background and propagate it everywhere:
  * IndexedDB (REPLACING this outlet's slice — removed/re-scoped items actually disappear)
  * AND the TanStack query cache (so any mounted terminal re-renders with the new items
  * immediately, no refresh / re-login). Failures are swallowed — the terminal keeps serving
- * its cache. Returns the fresh set, or null when skipped (in-flight) / failed.
+ * its cache. Returns the fresh set, or null when skipped (in-flight/cooldown) / failed.
  * outletID scopes both caches: the server list is outlet-scoped (use-case filtered), so a
  * retail outlet must never serve/keep the hospitality outlet's menu.
  */
@@ -383,10 +391,14 @@ export async function revalidateFullCatalog(
   qc: QueryClient,
   tenantID: string,
   outletID: string,
+  opts: { force?: boolean } = {},
 ): Promise<CatalogItem[] | null> {
   const flightKey = `${tenantID}:${outletID}`;
   if (!tenantID || catalogRevalidateInflight.has(flightKey)) return null;
+  const last = lastCatalogRevalidateAt.get(flightKey) ?? 0;
+  if (!opts.force && Date.now() - last < CATALOG_REVALIDATE_COOLDOWN_MS) return null;
   catalogRevalidateInflight.add(flightKey);
+  lastCatalogRevalidateAt.set(flightKey, Date.now());
   try {
     const all = await fetchAllCatalogItems(tenantID);
     if (all.length) {
