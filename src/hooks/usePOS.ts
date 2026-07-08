@@ -497,7 +497,10 @@ export function useCatalogVersionSync() {
       const res = await apiClient.get<{ version: string }>(`${basePath(tenantID)}/catalog/version`);
       const v = res?.version ?? '0-0';
       if (lastVersion.current !== null && v !== lastVersion.current) {
-        void revalidateFullCatalog(qc, tenantID, outletID);
+        // Force: this call is driven by an authoritative server signal (the version
+        // fingerprint actually changed), not a guess — it must never be silently dropped
+        // by the cooldown backstop meant for connectivity-flap-triggered revalidation.
+        void revalidateFullCatalog(qc, tenantID, outletID, { force: true });
       }
       lastVersion.current = v;
       return v;
