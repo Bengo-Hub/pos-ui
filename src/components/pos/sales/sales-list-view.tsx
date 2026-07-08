@@ -17,6 +17,7 @@ import { SalesActionsMenu } from '@/components/pos/sales/sales-actions-menu';
 import { SalesFilters, type SalesFilterState } from './sales-filters';
 import { EditShippingModal } from './edit-shipping-modal';
 import { ViewPaymentsModal } from './view-payments-modal';
+import { EditOrderLinesModal } from './edit-order-lines-modal';
 import { money, payStatusBadge, prettyMethod } from './sales-shared';
 import { toast } from 'sonner';
 
@@ -64,6 +65,7 @@ export function SalesListView({ orgSlug, fixedSource, title, subtitle }: {
   const [detailId, setDetailId] = useState<string | null>(null);
   const [shippingOrder, setShippingOrder] = useState<any>(null);
   const [paymentsOrder, setPaymentsOrder] = useState<any>(null);
+  const [editLinesOrder, setEditLinesOrder] = useState<any>(null);
   const [deleteOrder, setDeleteOrder] = useState<any>(null);
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
 
@@ -175,6 +177,7 @@ export function SalesListView({ orgSlug, fixedSource, title, subtitle }: {
                         // Own-only users can't pivot the list to another cashier (QA req 6).
                         onCashierClick={ownOnly ? undefined : (userId) => patchFilters({ userId })}
                         onEditShipping={setShippingOrder} onViewPayments={setPaymentsOrder}
+                        onEditLines={setEditLinesOrder}
                         onDelete={setDeleteOrder} colCount={colCount} />
                     ))}
                   </tbody>
@@ -190,6 +193,7 @@ export function SalesListView({ orgSlug, fixedSource, title, subtitle }: {
       {detailId && <SellDetailsModal orderId={detailId} orgSlug={orgSlug} onClose={() => setDetailId(null)} />}
       {shippingOrder && <EditShippingModal order={shippingOrder} onClose={() => setShippingOrder(null)} />}
       {paymentsOrder && <ViewPaymentsModal order={paymentsOrder} onClose={() => setPaymentsOrder(null)} />}
+      {editLinesOrder && <EditOrderLinesModal order={editLinesOrder} onClose={() => setEditLinesOrder(null)} />}
       <ConfirmDialog open={!!deleteOrder} onOpenChange={(o) => !o && setDeleteOrder(null)} title="Delete sale?"
         description={`This will void ${deleteOrder?.order_number}. It may require manager approval and will reverse the sale in treasury/inventory.`}
         confirmLabel="Delete" variant="danger" onConfirm={handleDelete} />
@@ -198,12 +202,12 @@ export function SalesListView({ orgSlug, fixedSource, title, subtitle }: {
 }
 
 /** One sale row + its optional expanded line-items panel (treasury-style sibling <tr>). */
-function SaleRow({ order: o, orgSlug, expanded, onToggleExpand, onOpenDetail, cashierName, outletName, onCashierClick, onEditShipping, onViewPayments, onDelete, colCount }: {
+function SaleRow({ order: o, orgSlug, expanded, onToggleExpand, onOpenDetail, cashierName, outletName, onCashierClick, onEditShipping, onViewPayments, onEditLines, onDelete, colCount }: {
   order: any; orgSlug: string; expanded: boolean;
   onToggleExpand: () => void; onOpenDetail: () => void;
   cashierName?: string; outletName?: string;
   onCashierClick?: (userId: string) => void;
-  onEditShipping: (o: any) => void; onViewPayments: (o: any) => void; onDelete: (o: any) => void;
+  onEditShipping: (o: any) => void; onViewPayments: (o: any) => void; onEditLines: (o: any) => void; onDelete: (o: any) => void;
   colCount: number;
 }) {
   const lines: any[] = o.edges?.lines ?? [];
@@ -218,7 +222,7 @@ function SaleRow({ order: o, orgSlug, expanded, onToggleExpand, onOpenDetail, ca
         </td>
         <td className={td} onClick={(e) => e.stopPropagation()}>
           <SalesActionsMenu order={o} orgSlug={orgSlug} onView={onOpenDetail}
-            onEditShipping={onEditShipping} onViewPayments={onViewPayments} onDelete={onDelete} />
+            onEditShipping={onEditShipping} onViewPayments={onViewPayments} onEditLines={onEditLines} onDelete={onDelete} />
         </td>
         <td className={`${td} text-xs text-muted-foreground`}>{new Date(o.created_at).toLocaleString('en-KE')}</td>
         <td className={`${td} font-mono text-xs font-bold text-primary`}>{o.order_number}</td>

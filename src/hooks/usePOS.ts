@@ -1278,6 +1278,26 @@ export function useAddOrderLines() {
   });
 }
 
+/** Manager/admin corrective tool: directly edit a persisted order line's price/qty instead
+ * of requiring a raw database fix for stale-priced sales. Gated server-side on pos.orders.manage. */
+export function useEditOrderLine() {
+  const tenantID = useTenantID();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ orderId, lineId, unitPrice, quantity, reason }: {
+      orderId: string; lineId: string; unitPrice?: number; quantity?: number; reason: string;
+    }) =>
+      apiClient.patch(`${basePath(tenantID)}/orders/${orderId}/lines/${lineId}`, {
+        unit_price: unitPrice, quantity, reason,
+      }),
+    onSuccess: (_d, v) => {
+      qc.invalidateQueries({ queryKey: ['pos-orders'] });
+      qc.invalidateQueries({ queryKey: ['pos-order', tenantID, v.orderId] });
+      qc.invalidateQueries({ queryKey: ['pos-tables'] });
+    },
+  });
+}
+
 export function useMergeTables() {
   const tenantID = useTenantID();
   const qc = useQueryClient();

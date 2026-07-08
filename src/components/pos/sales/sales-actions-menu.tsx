@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import {
   ChevronDown, Eye, Pencil, Trash2, Truck,
-  CreditCard, RotateCcw, Link2, Mail,
+  CreditCard, RotateCcw, Link2, Mail, Coins,
 } from 'lucide-react';
 import { PrintReceiptButton } from '@/components/pos/print-receipt-button';
 import { useNotifySale } from '@/hooks/usePOS';
@@ -17,20 +17,21 @@ interface SalesActionsMenuProps {
   onView: (order: any) => void;
   onEditShipping: (order: any) => void;
   onViewPayments: (order: any) => void;
+  onEditLines: (order: any) => void;
   onDelete: (order: any) => void;
 }
 
 /**
  * SalesActionsMenu — the GoDigital "Actions" dropdown for an All-Sales / POS-only row. Each item
  * routes to the correct integrated flow:
- *  - View / Edit Shipping / View Payments / Delete → open modals (delegated to the parent)
+ *  - View / Edit Shipping / View Payments / Edit Line Prices / Delete → open modals (delegated to the parent)
  *  - Edit → the back-office Add Sale editor
  *  - Print Invoice / Packing Slip / Delivery Note → the receipt/print pipeline (PrintReceiptButton)
  *  - Sell Return → the returns flow (pos-api → treasury refund + credit note + inventory restock)
  *  - Invoice URL → copy a shareable link to the sale
  *  - New Sale Notification → pos-api /notify → notifications-service (customer SMS receipt)
  */
-export function SalesActionsMenu({ order, orgSlug, onView, onEditShipping, onViewPayments, onDelete }: SalesActionsMenuProps) {
+export function SalesActionsMenu({ order, orgSlug, onView, onEditShipping, onViewPayments, onEditLines, onDelete }: SalesActionsMenuProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -45,6 +46,7 @@ export function SalesActionsMenu({ order, orgSlug, onView, onEditShipping, onVie
   const canViewPayments = canAny([P.PAYMENTS_VIEW, P.PAYMENTS_VIEW_OWN, P.PAYMENTS_MANAGE]);
   const canReturn = canChange; // return initiation mirrors the backend change_own/change/manage gate
   const canNotify = can(P.ORDERS_MANAGE);
+  const canEditLines = can(P.ORDERS_MANAGE);
 
   useEffect(() => {
     if (!open) return;
@@ -55,6 +57,7 @@ export function SalesActionsMenu({ order, orgSlug, onView, onEditShipping, onVie
 
   const isDelivery = order.order_subtype === 'delivery' || order.order_type === 'delivery';
   const isFinal = order.status === 'completed';
+  const linesLocked = ['completed', 'cancelled', 'voided', 'refunded'].includes(order.status);
 
   const close = () => setOpen(false);
   const item = 'flex items-center gap-2.5 w-full px-3 py-2 text-sm text-left hover:bg-accent transition-colors';
@@ -111,6 +114,7 @@ export function SalesActionsMenu({ order, orgSlug, onView, onEditShipping, onVie
           <div className="my-1 border-t border-border" />
 
           {canViewPayments && <button className={item} onClick={() => { onViewPayments(order); close(); }}><CreditCard className="h-4 w-4 text-muted-foreground" /> View Payments</button>}
+          {canEditLines && !linesLocked && <button className={item} onClick={() => { onEditLines(order); close(); }}><Coins className="h-4 w-4 text-muted-foreground" /> Edit Line Prices</button>}
           {isFinal && canReturn && (
             <button className={item} onClick={() => { router.push(`/${orgSlug}/returns?invoice=${encodeURIComponent(order.order_number)}`); close(); }}>
               <RotateCcw className="h-4 w-4 text-muted-foreground" /> Sell Return
