@@ -81,10 +81,13 @@ const USE_CASE_MODULES: Record<UseCaseType, ModuleKey[]> = {
   // Hospitality (hotel/restaurant/bar/cafe) does NOT include loyalty or commissions — those are
   // retail/services concepts. Bills are settled per table/room, not via customer loyalty balances
   // or per-staff sales commissions. (Removed per QA: no need for Loyalty/Commissions here.)
-  hospitality:   [...COMMON_MODULES, 'bar', 'tables', 'reservations', 'kds', 'appointments', 'packages', 'hotel', 'shifts', 'reports', 'online_orders'],
+  // purchase_orders IS included — every bar/restaurant/QSR reorders stock from suppliers,
+  // same "procurement is universal" principle inventory-ui's sidebar already encodes (its
+  // UNIVERSAL_MODULES set never hides purchase_orders/suppliers/rfqs by use_case).
+  hospitality:   [...COMMON_MODULES, 'bar', 'tables', 'reservations', 'kds', 'appointments', 'packages', 'hotel', 'shifts', 'reports', 'online_orders', 'purchase_orders'],
   retail:        [...COMMON_MODULES, 'retail', 'shifts', 'reports', 'layaway', 'loyalty', 'commissions', 'online_orders', 'purchase_orders', 'returns', 'clients', 'repairs'],
   services:      [...COMMON_MODULES, 'appointments', 'packages', 'shifts', 'reports', 'loyalty', 'commissions', 'clients', 'staff_schedule', 'resources', 'queue', 'repairs'],
-  quick_service: [...COMMON_MODULES, 'kds', 'shifts', 'reports', 'online_orders'],
+  quick_service: [...COMMON_MODULES, 'kds', 'shifts', 'reports', 'online_orders', 'purchase_orders'],
   pharmacy:      [...COMMON_MODULES, 'shifts', 'reports', 'pharmacy', 'patients', 'drug_inventory'],
 };
 
