@@ -12,10 +12,11 @@ import { BarChart3, Users, Clock, Tag, Package, Ban, ChefHat, Search, X } from '
 import {
   useSalesByStaff, useSalesByHour, useSalesByCategory, useSalesByKDSStation, useProductMix, useVoidSummary,
 } from '@/hooks/useReports';
-import { ReportDocumentButton } from '@/components/reports/report-document-button';
+import { ReportExportButtons } from '@/components/reports/report-document-button';
 import { OutletFilter } from '@/components/outlet-filter';
 import { useOutletFilterStore } from '@/store/outlet-filter';
 import { DateRangePicker, type DateRange } from '@/components/ui/date-range-picker';
+import { Card, CardContent } from '@/components/ui/base';
 import { cn } from '@/lib/utils';
 
 function isoDaysAgo(days: number): string {
@@ -102,6 +103,75 @@ export default function AnalyticsReportPage() {
     });
   }, [voids.data, voidSearch, voidReason]);
 
+  // ── At-a-glance stat tiles per tab — computed from the full fetched range (not the
+  // per-tab search filter), matching the totals the exported PDF's stat cards show. ──────
+  const staffStats = useMemo(() => {
+    const rows = staff.data ?? [];
+    const revenue = rows.reduce((s, r) => s + r.revenue, 0);
+    const orders = rows.reduce((s, r) => s + r.order_count, 0);
+    return [
+      { label: 'Total Revenue', value: fmt(revenue) },
+      { label: 'Orders', value: orders.toLocaleString() },
+      { label: 'Avg Ticket', value: fmt(orders ? revenue / orders : 0) },
+    ];
+  }, [staff.data]);
+
+  const hourStats = useMemo(() => {
+    const rows = hours.data ?? [];
+    const revenue = rows.reduce((s, r) => s + r.revenue, 0);
+    const orders = rows.reduce((s, r) => s + r.order_count, 0);
+    const peak = rows.reduce((best, r) => (r.revenue > (best?.revenue ?? -1) ? r : best), rows[0]);
+    return [
+      { label: 'Total Revenue', value: fmt(revenue) },
+      { label: 'Orders', value: orders.toLocaleString() },
+      { label: 'Peak Hour', value: peak ? `${String(peak.hour).padStart(2, '0')}:00` : '—' },
+    ];
+  }, [hours.data]);
+
+  const categoryStats = useMemo(() => {
+    const rows = cats.data ?? [];
+    const revenue = rows.reduce((s, r) => s + r.revenue, 0);
+    const qty = rows.reduce((s, r) => s + r.quantity_sold, 0);
+    return [
+      { label: 'Total Revenue', value: fmt(revenue) },
+      { label: 'Categories', value: rows.length.toLocaleString() },
+      { label: 'Qty Sold', value: qty.toLocaleString() },
+    ];
+  }, [cats.data]);
+
+  const kdsStats = useMemo(() => {
+    const rows = kdsStations.data ?? [];
+    const revenue = rows.reduce((s, r) => s + r.revenue, 0);
+    const orders = rows.reduce((s, r) => s + r.order_count, 0);
+    return [
+      { label: 'Total Revenue', value: fmt(revenue) },
+      { label: 'Stations', value: rows.length.toLocaleString() },
+      { label: 'Orders', value: orders.toLocaleString() },
+    ];
+  }, [kdsStations.data]);
+
+  const mixStats = useMemo(() => {
+    const rows = mix.data ?? [];
+    const revenue = rows.reduce((s, r) => s + r.revenue, 0);
+    const qty = rows.reduce((s, r) => s + r.quantity, 0);
+    return [
+      { label: 'Total Revenue', value: fmt(revenue) },
+      { label: 'Products Sold', value: rows.length.toLocaleString() },
+      { label: 'Qty Sold', value: qty.toLocaleString() },
+    ];
+  }, [mix.data]);
+
+  const voidStats = useMemo(() => {
+    const rows = voids.data ?? [];
+    const count = rows.reduce((s, r) => s + r.void_count, 0);
+    const amount = rows.reduce((s, r) => s + r.total_voided_amount, 0);
+    return [
+      { label: 'Total Voids', value: count.toLocaleString() },
+      { label: 'Total Voided Amount', value: fmt(amount) },
+      { label: 'Staff Involved', value: rows.length.toLocaleString() },
+    ];
+  }, [voids.data]);
+
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-5">
       {/* Header + shared filters */}
@@ -137,85 +207,140 @@ export default function AnalyticsReportPage() {
       </div>
 
       {tab === 'staff' && (
-        <Section title="Sales by Staff" icon={Users} loading={staff.isLoading} empty={!staffRows.length}
-          head={['Staff', 'Orders', 'Revenue']}
-          rows={staffRows.map((r) => [r.staff_name || `${r.user_id.slice(0, 8)}…`, String(r.order_count), fmt(r.revenue)])}
-          filters={<SearchBox value={staffSearch} onChange={setStaffSearch} placeholder="Search staff…" />}
-          actions={
-            <ReportDocumentButton
-              report="staff" params={{ from: range.from, to: range.to, outlet_id: outletId }}
-              fileName={`sales-by-staff-${range.from}-to-${range.to}.pdf`} title="Sales by Staff"
-              label="Export" size="sm" className="gap-1.5 h-7 text-xs px-2.5"
-            />
-          } />
+        <>
+          <StatCards items={staffStats} />
+          <Section title="Sales by Staff" icon={Users} loading={staff.isLoading} empty={!staffRows.length}
+            head={['Staff', 'Orders', 'Revenue']}
+            rows={staffRows.map((r) => [r.staff_name || `${r.user_id.slice(0, 8)}…`, String(r.order_count), fmt(r.revenue)])}
+            filters={<SearchBox value={staffSearch} onChange={setStaffSearch} placeholder="Search staff…" />}
+            actions={
+              <ReportExportButtons
+                report="staff" params={{ from: range.from, to: range.to, outlet_id: outletId }}
+                fileNameBase={`sales-by-staff-${range.from}-to-${range.to}`} title="Sales by Staff" orientation="landscape"
+              />
+            } />
+        </>
       )}
 
       {tab === 'hour' && (
-        <Section title="Sales by Hour" icon={Clock} loading={hours.isLoading} empty={!hours.data?.length}
-          head={['Hour', 'Orders', 'Revenue']}
-          rows={(hours.data ?? []).map((r) => [`${String(r.hour).padStart(2, '0')}:00`, String(r.order_count), fmt(r.revenue)])}
-          filters={
-            <label className="flex items-center gap-2 text-xs text-muted-foreground">
-              Day
-              <input type="date" value={hourDate} onChange={(e) => setHourDate(e.target.value)}
-                className="bg-card border border-border rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" />
-            </label>
-          } />
+        <>
+          <StatCards items={hourStats} />
+          <Section title="Sales by Hour" icon={Clock} loading={hours.isLoading} empty={!hours.data?.length}
+            head={['Hour', 'Orders', 'Revenue']}
+            rows={(hours.data ?? []).map((r) => [`${String(r.hour).padStart(2, '0')}:00`, String(r.order_count), fmt(r.revenue)])}
+            filters={
+              <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                Day
+                <input type="date" value={hourDate} onChange={(e) => setHourDate(e.target.value)}
+                  className="bg-card border border-border rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" />
+              </label>
+            }
+            actions={
+              <ReportExportButtons
+                report="sales-by-hour-document" params={{ date: hourDate, outlet_id: outletId }}
+                fileNameBase={`sales-by-hour-${hourDate}`} title="Sales by Hour"
+              />
+            } />
+        </>
       )}
 
       {tab === 'category' && (
-        <Section title="Sales by Category" icon={Tag} loading={cats.isLoading} empty={!categoryRows.length}
-          head={['Category', 'Qty Sold', 'Revenue']}
-          rows={categoryRows.map((r) => [r.category_name, String(r.quantity_sold), fmt(r.revenue)])}
-          filters={<SearchBox value={categorySearch} onChange={setCategorySearch} placeholder="Search categories…" />} />
+        <>
+          <StatCards items={categoryStats} />
+          <Section title="Sales by Category" icon={Tag} loading={cats.isLoading} empty={!categoryRows.length}
+            head={['Category', 'Qty Sold', 'Revenue']}
+            rows={categoryRows.map((r) => [r.category_name, String(r.quantity_sold), fmt(r.revenue)])}
+            filters={<SearchBox value={categorySearch} onChange={setCategorySearch} placeholder="Search categories…" />}
+            actions={
+              <ReportExportButtons
+                report="sales-by-category-document" params={{ from: range.from, to: range.to, outlet_id: outletId }}
+                fileNameBase={`sales-by-category-${range.from}-to-${range.to}`} title="Sales by Category"
+              />
+            } />
+        </>
       )}
 
       {tab === 'kds' && (
-        <Section title="Sales by KDS Station" icon={ChefHat} loading={kdsStations.isLoading} empty={!kdsRows.length}
-          head={['Station', 'Orders', 'Items', 'Revenue']}
-          rows={kdsRows.map((r) => [
-            r.station_type ? `${r.station_name} (${r.station_type})` : r.station_name,
-            String(r.order_count), String(r.item_count), fmt(r.revenue),
-          ])}
-          filters={
-            stationTypeOptions.length > 1 ? (
-              <SelectBox value={stationType} onChange={setStationType} placeholder="All station types"
-                options={stationTypeOptions.map((s) => ({ value: s, label: s }))} />
-            ) : undefined
-          }
-          actions={
-            <ReportDocumentButton
-              report="sales-by-kds-station-document" params={{ from: range.from, to: range.to, outlet_id: outletId }}
-              fileName={`sales-by-kds-station-${range.from}-to-${range.to}.pdf`} title="Sales by KDS Station"
-              label="Export" size="sm" className="gap-1.5 h-7 text-xs px-2.5"
-            />
-          } />
+        <>
+          <StatCards items={kdsStats} />
+          <Section title="Sales by KDS Station" icon={ChefHat} loading={kdsStations.isLoading} empty={!kdsRows.length}
+            head={['Station', 'Orders', 'Items', 'Revenue']}
+            rows={kdsRows.map((r) => [
+              r.station_type ? `${r.station_name} (${r.station_type})` : r.station_name,
+              String(r.order_count), String(r.item_count), fmt(r.revenue),
+            ])}
+            filters={
+              stationTypeOptions.length > 1 ? (
+                <SelectBox value={stationType} onChange={setStationType} placeholder="All station types"
+                  options={stationTypeOptions.map((s) => ({ value: s, label: s }))} />
+              ) : undefined
+            }
+            actions={
+              <ReportExportButtons
+                report="sales-by-kds-station-document" params={{ from: range.from, to: range.to, outlet_id: outletId }}
+                fileNameBase={`sales-by-kds-station-${range.from}-to-${range.to}`} title="Sales by KDS Station"
+              />
+            } />
+        </>
       )}
 
       {tab === 'mix' && (
-        <Section title="Product Mix" icon={Package} loading={mix.isLoading} empty={!mixRows.length}
-          head={['Product', 'Qty', 'Orders', 'Revenue']}
-          rows={mixRows.map((r) => [r.label, String(r.quantity), String(r.order_count), fmt(r.revenue)])}
-          filters={<SearchBox value={mixSearch} onChange={setMixSearch} placeholder="Search products…" />} />
+        <>
+          <StatCards items={mixStats} />
+          <Section title="Product Mix" icon={Package} loading={mix.isLoading} empty={!mixRows.length}
+            head={['Product', 'Qty', 'Orders', 'Revenue']}
+            rows={mixRows.map((r) => [r.label, String(r.quantity), String(r.order_count), fmt(r.revenue)])}
+            filters={<SearchBox value={mixSearch} onChange={setMixSearch} placeholder="Search products…" />}
+            actions={
+              <ReportExportButtons
+                report="product-mix-document" params={{ from: range.from, to: range.to, outlet_id: outletId }}
+                fileNameBase={`product-mix-${range.from}-to-${range.to}`} title="Product Mix"
+              />
+            } />
+        </>
       )}
 
       {tab === 'voids' && (
-        <Section title="Voids" icon={Ban} loading={voids.isLoading} empty={!voidRows.length}
-          head={['Staff', 'Voids', 'Amount', 'Reasons']}
-          rows={voidRows.map((r) => [
-            r.staff_name || `${(r.voided_by || '').slice(0, 8)}…`, String(r.void_count), fmt(r.total_voided_amount),
-            Object.keys(r.reasons || {}).join(', ') || '—',
-          ])}
-          filters={
-            <div className="flex flex-wrap items-center gap-2">
-              <SearchBox value={voidSearch} onChange={setVoidSearch} placeholder="Search staff…" />
-              {voidReasonOptions.length > 0 && (
-                <SelectBox value={voidReason} onChange={setVoidReason} placeholder="All reasons"
-                  options={voidReasonOptions.map((r) => ({ value: r, label: r }))} />
-              )}
-            </div>
-          } />
+        <>
+          <StatCards items={voidStats} />
+          <Section title="Voids" icon={Ban} loading={voids.isLoading} empty={!voidRows.length}
+            head={['Staff', 'Voids', 'Amount', 'Reasons']}
+            rows={voidRows.map((r) => [
+              r.staff_name || `${(r.voided_by || '').slice(0, 8)}…`, String(r.void_count), fmt(r.total_voided_amount),
+              Object.keys(r.reasons || {}).join(', ') || '—',
+            ])}
+            filters={
+              <div className="flex flex-wrap items-center gap-2">
+                <SearchBox value={voidSearch} onChange={setVoidSearch} placeholder="Search staff…" />
+                {voidReasonOptions.length > 0 && (
+                  <SelectBox value={voidReason} onChange={setVoidReason} placeholder="All reasons"
+                    options={voidReasonOptions.map((r) => ({ value: r, label: r }))} />
+                )}
+              </div>
+            }
+            actions={
+              <ReportExportButtons
+                report="void-summary-document" params={{ from: range.from, to: range.to, outlet_id: outletId }}
+                fileNameBase={`voids-${range.from}-to-${range.to}`} title="Voids"
+              />
+            } />
+        </>
       )}
+    </div>
+  );
+}
+
+function StatCards({ items }: { items: { label: string; value: string }[] }) {
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+      {items.map((s) => (
+        <Card key={s.label}>
+          <CardContent className="p-4">
+            <p className="text-lg font-bold tabular-nums truncate">{s.value}</p>
+            <p className="text-xs text-muted-foreground">{s.label}</p>
+          </CardContent>
+        </Card>
+      ))}
     </div>
   );
 }
@@ -266,8 +391,8 @@ function Section({ title, icon: Icon, loading, empty, head, rows, actions, filte
       <div className="flex flex-wrap items-center gap-2 px-5 py-3 border-b border-border">
         <Icon className="h-4 w-4 text-primary" />
         <h2 className="font-semibold text-sm">{title}</h2>
-        {actions && <div className="ml-auto flex items-center gap-2">{actions}</div>}
-        {filters && <div className={cn('flex items-center gap-2', !actions && 'ml-auto')}>{filters}</div>}
+        {filters && <div className="ml-auto flex items-center gap-2">{filters}</div>}
+        {actions && <div className={cn('flex items-center gap-2', !filters && 'ml-auto')}>{actions}</div>}
       </div>
       {loading ? (
         <div className="p-6 text-center text-sm text-muted-foreground">Loading…</div>
