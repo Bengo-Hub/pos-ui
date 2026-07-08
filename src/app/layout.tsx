@@ -39,8 +39,8 @@ export const viewport: Viewport = {
 
 export const metadata: Metadata = {
   title: {
-    default: "BengoBox POS",
-    template: "%s | BengoBox POS",
+    default: "Codevertex POS",
+    template: "%s | Codevertex POS",
   },
   description: "Fast, offline-ready Point of Sale for hospitality, retail and service businesses across Africa.",
   manifest: "/manifest.json",
@@ -56,10 +56,10 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable:         true,
     statusBarStyle:  "black-translucent",
-    title:           "BengoBox POS",
+    title:           "Codevertex POS",
     startupImage:    "/icons/splash-640x1136.png",
   },
-  applicationName: "BengoBox POS",
+  applicationName: "Codevertex POS",
   keywords:        ["pos", "point of sale", "restaurant", "hotel", "retail", "Africa", "Kenya"],
   robots: "noindex, nofollow",
 };

@@ -167,7 +167,7 @@ const USE_CASE_MODULES = {
 - Tenant brand colors fetched from auth-api v2 `TenantResponse` (`logo_url`, `brand_colors: {primary, secondary, accent}`)
 - Provider: `src/providers/tenant-branding-provider.tsx`
 - CSS: `--primary` (HSL triplet), `--ring`, `--brand-primary` / `--brand-emphasis` (RGB triplets) set dynamically
-- Fallback primary: `#ea8022` (BengoBox orange)
+- Fallback primary: `#ea8022` (Codevertex orange)
 
 ---
 

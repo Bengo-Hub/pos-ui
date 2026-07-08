@@ -3,7 +3,7 @@
 **Status:** ✅ Complete — all core scaffold, auth, RBAC, offline layer, and PIN kiosk delivered  
 **Timeline**: March 3 - March 17, 2026  
 **Last updated:** 2026-05-21  
-**Goal**: Scaffold pos-ui and deliver a functional touch-optimized POS terminal for order entry, cash payments, and cash drawer management. Ship as part of BengoBox MVP.
+**Goal**: Scaffold pos-ui and deliver a functional touch-optimized POS terminal for order entry, cash payments, and cash drawer management. Ship as part of Codevertex MVP.
 
 **Progress (March 7, 2026):** Full Next.js scaffold complete. SSO/PKCE, [orgSlug] routes, dashboard, order entry, orders list, tables, cash drawer, settings, platform admin. Tenant branding via TenantBrandingProvider. **Remaining:** Wire to posapi; deploy.
 

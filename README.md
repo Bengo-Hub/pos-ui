@@ -1,6 +1,6 @@
 # POS UI
 
-BengoBox point-of-sale UI. Order entry, tables, drawer, platform admin.
+Codevertex point-of-sale UI. Order entry, tables, drawer, platform admin.
 
 ## Dev
 

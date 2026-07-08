@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * Centralized module access hook for BengoBox POS.
+ * Centralized module access hook for Codevertex POS.
  * Two-level gating:
  *   1. Use-case level: does this use case support the module at all?
  *   2. Outlet setting level: is the module toggled on in pos-api outlet settings?

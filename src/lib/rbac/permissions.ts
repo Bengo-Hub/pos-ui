@@ -1,5 +1,5 @@
 /**
- * BengoBox POS permission constants.
+ * Codevertex POS permission constants.
  * Format: pos.{module}.{action}
  * Mirrors pos-api seed: cmd/seed/main.go seedRBACPermissions
  */
