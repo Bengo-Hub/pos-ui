@@ -81,7 +81,10 @@ export function buildNavGroups(orgSlug: string): NavGroup[] {
     {
       label: 'Floor & Service',
       items: [
-        { label: 'Tables', icon: Grid3x3, href: '/tables', moduleKey: 'tables', permission: [P.TABLES_VIEW, P.TABLES_MANAGE], subFeature: 'table_management', subPlan: 'Pro', cashierHospHidden: true },
+        // No subFeature lock: every hospitality plan tier already includes table_management
+        // (backend no longer enforces it either — see pos-api router.go), so a paywall badge
+        // here was misleading (and inconsistent — feature-catalog.ts separately claimed "Starter").
+        { label: 'Tables', icon: Grid3x3, href: '/tables', moduleKey: 'tables', permission: [P.TABLES_VIEW, P.TABLES_MANAGE], cashierHospHidden: true },
         { label: 'Reservations', icon: Calendar, href: '/reservations', moduleKey: 'reservations', permission: [P.TABLES_VIEW, P.TABLES_MANAGE], waiterHidden: true },
         { label: 'Appointments', icon: Calendar, href: '/appointments', moduleKey: 'appointments', permission: [P.APPOINTMENTS_VIEW, P.APPOINTMENTS_ADD, P.APPOINTMENTS_CHANGE, P.APPOINTMENTS_MANAGE], waiterHidden: true },
         { label: 'Service Packages', icon: Package, href: '/packages', moduleKey: 'packages', permission: [P.PACKAGES_VIEW, P.PACKAGES_MANAGE], waiterHidden: true },

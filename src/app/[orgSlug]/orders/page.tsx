@@ -25,6 +25,7 @@ import { SplitPaymentModal } from '@/components/pos/split-payment-modal';
 import { PrintReceiptButton } from '@/components/pos/print-receipt-button';
 import { VoidBillButton } from '@/components/pos/void-bill-button';
 import { GenerateVoidCodeButton } from '@/components/pos/generate-void-code-button';
+import { GenerateComplimentaryCodeButton } from '@/components/pos/generate-complimentary-code-button';
 import { useAuthStore } from '@/store/auth';
 
 const PAGE_SIZE = 20;
@@ -375,6 +376,15 @@ export default function OrdersPage() {
                 orderNumber={selectedOrder.order_number}
                 status={selectedOrder.status}
                 className="w-full justify-center flex items-center gap-2 px-4 py-2 rounded-xl border border-amber-500/40 text-amber-600 dark:text-amber-400 text-sm font-semibold hover:bg-amber-500/5 transition-colors"
+              />
+
+              {/* Manager: generate a shareable one-time code to authorize closing this bill as
+                  complimentary remotely — same "manager not around" flow as void. */}
+              <GenerateComplimentaryCodeButton
+                orderId={selectedOrder.id}
+                orderNumber={selectedOrder.order_number}
+                status={selectedOrder.status}
+                className="w-full justify-center flex items-center gap-2 px-4 py-2 rounded-xl border border-primary/40 text-primary text-sm font-semibold hover:bg-primary/5 transition-colors"
               />
 
               {/* Void the bill (permission-gated; cashiers require manager approval via scan/PIN/code).
