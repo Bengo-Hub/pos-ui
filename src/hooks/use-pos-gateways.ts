@@ -9,9 +9,12 @@ export interface POSGateways {
   paystack: boolean;
   wallet: boolean;
   cod: boolean;
+  complimentary: boolean;
 }
 
-const ALL_ENABLED: POSGateways = { mpesa: true, paystack: true, wallet: true, cod: true };
+// complimentary is deliberately false here — unlike the other rails, it's opt-in per tenant and
+// must never flash on before the real per-tenant toggle value loads from treasury.
+const ALL_ENABLED: POSGateways = { mpesa: true, paystack: true, wallet: true, cod: true, complimentary: false };
 
 export function usePOSGateways() {
   const tenantID = useAuthStore((s) => s.user?.tenant_id ?? '');

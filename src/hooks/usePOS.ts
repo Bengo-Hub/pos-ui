@@ -1297,6 +1297,22 @@ export function useGenerateVoidCode() {
   });
 }
 
+/**
+ * useGenerateComplimentaryCode lets a manager generate a one-time, order-scoped code to SHARE
+ * with a waiter/cashier so they can close a specific bill via the Complimentary/no-charge tender
+ * when the manager isn't at the terminal to scan a card or type their PIN.
+ */
+export function useGenerateComplimentaryCode() {
+  const tenantID = useTenantID();
+  return useMutation({
+    mutationFn: ({ orderId, reason }: { orderId: string; reason?: string }) =>
+      apiClient.post<{ code: string; order_number: string; expires_at: string; expires_in: number; approver_name: string }>(
+        `${basePath(tenantID)}/orders/${orderId}/complimentary-code`,
+        { reason },
+      ),
+  });
+}
+
 export function useAddOrderLines() {
   const tenantID = useTenantID();
   const qc = useQueryClient();
@@ -1404,6 +1420,9 @@ export function useCreatePaymentIntent() {
       externalRef,
       paymentDueDate,
       creditNotes,
+      reason,
+      approvalToken,
+      approvalCode,
     }: {
       orderId: string;
       tenderMethod: string;
@@ -1413,6 +1432,11 @@ export function useCreatePaymentIntent() {
       externalRef?: string; // cashier-entered reference for manual/paybill payments
       paymentDueDate?: string; // credit sale due date (YYYY-MM-DD, from the credit-sale modal)
       creditNotes?: string; // credit sale notes/terms
+      // Complimentary (no-charge) extras: a mandatory reason, plus ONE of a live manager
+      // approval token (PIN/card step-up) or a manager-generated one-time code.
+      reason?: string;
+      approvalToken?: string;
+      approvalCode?: string;
     }) =>
       apiClient.post<PaymentIntentResult>(`${basePath(tenantID)}/orders/${orderId}/payments/intent`, {
         tenderMethod,
@@ -1422,6 +1446,9 @@ export function useCreatePaymentIntent() {
         externalRef,
         paymentDueDate,
         creditNotes,
+        reason,
+        approvalToken,
+        approvalCode,
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['pos-orders'] });

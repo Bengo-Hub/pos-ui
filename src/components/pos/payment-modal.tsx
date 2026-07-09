@@ -8,6 +8,7 @@ import {
   CheckCircle2,
   Clock,
   CreditCard,
+  Gift,
   Hash,
   Landmark,
   Loader2,
@@ -27,6 +28,8 @@ import { usePaymentStream } from '@/hooks/usePaymentStream';
 import { savePendingPayment, getOfflineOrderByLocalId } from '@/lib/db/pos-db';
 import { usePOSGateways } from '@/hooks/use-pos-gateways';
 import { CreditSaleDetailsModal, type CreditSaleDetails } from '@/components/pos/credit-sale-details-modal';
+import { ComplimentarySaleModal } from '@/components/pos/complimentary-sale-modal';
+import { ApprovalDialog, type ApprovalResult } from '@/components/pos/approval-dialog';
 import { useHotelRooms } from '@/hooks/useHotel';
 import { hotelApi, type Room } from '@/lib/api/hotel';
 
@@ -84,6 +87,9 @@ export function POSPaymentModal({
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
   const [roomSearch, setRoomSearch] = useState('');
   const [creditDetailsOpen, setCreditDetailsOpen] = useState(false);
+  const [complimentaryReasonOpen, setComplimentaryReasonOpen] = useState(false);
+  const [complimentaryApprovalOpen, setComplimentaryApprovalOpen] = useState(false);
+  const [pendingComplimentaryReason, setPendingComplimentaryReason] = useState('');
 
   const createIntent = useCreatePaymentIntent();
   const isOnline = useEffectiveOnline();
@@ -146,6 +152,9 @@ export function POSPaymentModal({
       setSelectedRoom(null);
       setRoomSearch('');
       setCreditDetailsOpen(false);
+      setComplimentaryReasonOpen(false);
+      setComplimentaryApprovalOpen(false);
+      setPendingComplimentaryReason('');
     }
   }, [open]);
 
@@ -317,6 +326,38 @@ export function POSPaymentModal({
     );
   }, [orderId, roundedTotal, tenderId, createIntent, onPaymentConfirmed]);
 
+  // Complimentary (no-charge): reason first, then MANDATORY manager approval every time (scan
+  // card, PIN, or a one-time code a manager shared) — unlike Void, there is no self-approve
+  // bypass for managers-as-cashier here; the backend hard-requires an approval token/code
+  // regardless of the caller's own role, since a comp is a real, unrecovered inventory cost.
+  const handleComplimentary = useCallback(() => setComplimentaryReasonOpen(true), []);
+
+  const handleComplimentaryReasonConfirm = useCallback((reason: string) => {
+    setPendingComplimentaryReason(reason);
+    setComplimentaryReasonOpen(false);
+    setComplimentaryApprovalOpen(true);
+  }, []);
+
+  const handleComplimentaryApproved = useCallback((approval: ApprovalResult) => {
+    setComplimentaryApprovalOpen(false);
+    methodRef.current = 'complimentary';
+    createIntent.mutate(
+      {
+        orderId, tenderMethod: 'complimentary', amount: roundedTotal, tenderId,
+        reason: pendingComplimentaryReason,
+        approvalToken: approval.approvalToken,
+        approvalCode: approval.code,
+      },
+      {
+        onSuccess: () => { setStep('confirmed'); onPaymentConfirmed(methodRef.current); },
+        onError: (err: any) => {
+          setErrorMsg((err as { normalizedMessage?: string })?.normalizedMessage ?? err?.message ?? 'Could not close the bill as complimentary — check the approval and try again.');
+          setStep('failed');
+        },
+      }
+    );
+  }, [orderId, roundedTotal, tenderId, createIntent, onPaymentConfirmed, pendingComplimentaryReason]);
+
   const handleRoomCharge = useCallback(() => {
     methodRef.current = 'room_charge';
     if (!selectedRoom) return;
@@ -452,6 +493,18 @@ export function POSPaymentModal({
                       offlineBadge={!isOnline}
                       onClick={handleOnAccount}
                     />
+                    {gateways?.complimentary && (
+                      <PayBadge
+                        icon={<Gift className="h-4 w-4" />}
+                        color="text-pink-600"
+                        bg="bg-pink-500/10"
+                        label="Complimentary"
+                        sub="No charge"
+                        disabled={false}
+                        loading={createIntent.isPending}
+                        onClick={handleComplimentary}
+                      />
+                    )}
                     {isHospitality && (
                       <PayBadge
                         icon={<Building2 className="h-4 w-4" />}
@@ -887,6 +940,25 @@ export function POSPaymentModal({
         loading={createIntent.isPending}
         onCancel={() => setCreditDetailsOpen(false)}
         onConfirm={handleOnAccountConfirm}
+      />
+
+      {/* Complimentary (no-charge): reason first... */}
+      <ComplimentarySaleModal
+        open={complimentaryReasonOpen}
+        orderNumber={orderNumber}
+        amountLabel={`KES ${roundedTotal.toLocaleString()}`}
+        onClose={() => setComplimentaryReasonOpen(false)}
+        onConfirm={handleComplimentaryReasonConfirm}
+      />
+      {/* ...then MANDATORY manager approval (scan card / PIN / one-time code) — always shown, no
+          self-approve shortcut, since this books a real, unrecovered inventory cost. */}
+      <ApprovalDialog
+        open={complimentaryApprovalOpen}
+        action="order.complimentary"
+        description={`A manager must approve closing bill #${orderNumber} as complimentary.`}
+        confirmLabel="Authorize complimentary"
+        onApproved={handleComplimentaryApproved}
+        onClose={() => setComplimentaryApprovalOpen(false)}
       />
     </>
   );

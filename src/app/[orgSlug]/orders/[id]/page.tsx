@@ -5,6 +5,7 @@ import { useOrder } from '@/hooks/usePOS';
 import { PrintReceiptButton } from '@/components/pos/print-receipt-button';
 import { VoidBillButton } from '@/components/pos/void-bill-button';
 import { GenerateVoidCodeButton } from '@/components/pos/generate-void-code-button';
+import { GenerateComplimentaryCodeButton } from '@/components/pos/generate-complimentary-code-button';
 import { useSetAsideLine } from '@/hooks/useHeldItems';
 import { Loader2, Plus, PackageOpen } from 'lucide-react';
 import { toast } from 'sonner';
@@ -87,6 +88,9 @@ export default function OrderDetailPage() {
           )}
           {/* Manager: generate a one-time code to authorize a remote void (shown to managers only). */}
           <GenerateVoidCodeButton orderId={id} orderNumber={order.order_number} status={order.status} />
+          {/* Manager: generate a one-time code to authorize closing this bill as complimentary
+              remotely (shown to managers only) — same "manager not around" flow as void. */}
+          <GenerateComplimentaryCodeButton orderId={id} orderNumber={order.order_number} status={order.status} />
           {/* Void the bill (post-placement) — permission-gated, with manager approval for cashiers
               (scan card, PIN, or the one-time code the manager shared). */}
           <VoidBillButton orderId={id} orderNumber={order.order_number} status={order.status} onVoided={() => refetch()} />
