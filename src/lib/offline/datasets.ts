@@ -80,6 +80,20 @@ export const OFFLINE_DATASETS: OfflineDataset[] = [
       ),
     logDetail: listLen,
   },
+  {
+    name: 'pos-sections',
+    scope: 'outlet',
+    queryKey: (t, o) => ['pos-sections', t, o ?? ''] as const,
+    fetch: (t) => apiClient.get(`${pos(t)}/sections`, undefined, quiet),
+    logDetail: listLen,
+  },
+  {
+    name: 'pos-tables',
+    scope: 'outlet',
+    queryKey: (t, o) => ['pos-tables', t, o ?? ''] as const,
+    fetch: (t) => apiClient.get(`${pos(t)}/tables`, undefined, quiet),
+    logDetail: listLen,
+  },
 ];
 
 /** Lookup a registered dataset by name (throws on typo — fail fast in dev). */

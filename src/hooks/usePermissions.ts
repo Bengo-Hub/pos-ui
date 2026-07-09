@@ -31,8 +31,22 @@ export function usePermissions() {
 
     const roles = user.roles ?? [];
 
-    // Superuser / admin → full access
-    if (roles.some((r) => SUPERUSER_ROLES.includes(r))) {
+    // Superuser / admin / platform owner → full access. The isSuperUser/isPlatformOwner
+    // booleans (set directly from auth-service's /me response) are checked FIRST because
+    // they're the authoritative signal — unlike the roles-array string match below, they
+    // don't depend on exact casing or on this tenant having actually assigned the caller a
+    // 'superuser'/'admin' role. A platform owner drilling into a tenant they don't operate
+    // (no local RBAC assignment) still carries isPlatformOwner=true from auth-service, but
+    // their merged `roles` array can end up without a role that matches SUPERUSER_ROLES —
+    // exactly the gap that let a platform superuser's "Edit Line Prices" silently vanish
+    // (canEditLines = can(P.ORDERS_MANAGE)) while the header badge, which reads roles[0]
+    // directly, still showed "SUPERUSER". Role-array match is also case-insensitive now —
+    // auth-service role casing isn't guaranteed lowercase.
+    if (
+      user.isSuperUser === true ||
+      user.isPlatformOwner === true ||
+      roles.some((r) => SUPERUSER_ROLES.includes(String(r).toLowerCase()))
+    ) {
       return new Set(['*']);
     }
 

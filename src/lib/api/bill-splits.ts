@@ -32,9 +32,11 @@ export interface CreateSplitInput {
   order_line_ids?: string[];
 }
 
-/** Build the authenticated per-split receipt URL (server filters lines to this split's items). */
-export function splitReceiptUrl(tenantID: string, orderID: string, splitID: string) {
-  return `/api/v1/${tenantID}/pos/orders/${orderID}/receipt/html?split_id=${splitID}`;
+/** Build the authenticated per-split receipt JSON URL (server filters lines to this split's
+ *  items) — render it with the same <ReceiptPrint> component every other receipt uses
+ *  (see lib/pos/receipt-html.ts), not a server-rendered HTML string. */
+export function splitReceiptDataUrl(tenantID: string, orderID: string, splitID: string) {
+  return `/api/v1/${tenantID}/pos/orders/${orderID}/receipt?split_id=${splitID}`;
 }
 
 const splitsBase = (tenantID: string, orderID: string) =>

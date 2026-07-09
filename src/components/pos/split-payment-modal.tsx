@@ -5,8 +5,11 @@ import { Users, SplitSquareHorizontal, CreditCard, Layers, Minus, Plus, X, ListO
 import { toast } from 'sonner';
 import { POSPaymentModal } from './payment-modal';
 import { ReplaceItemDialog, type ReplaceableLine } from './replace-item-dialog';
-import { createSplits, settleSplit, splitReceiptUrl, type CreateSplitInput } from '@/lib/api/bill-splits';
+import { createSplits, settleSplit, splitReceiptDataUrl, type CreateSplitInput } from '@/lib/api/bill-splits';
 import { apiClient } from '@/lib/api/client';
+import { renderReceiptHtml, buildReceiptDocument, printReceiptDocument } from '@/lib/pos/receipt-html';
+import type { ReceiptData } from '@/components/pos/receipt-preview';
+import { useTenantBranding } from '@/providers/tenant-branding-provider';
 
 // 'split_tender' = one bill paid across several tenders (e.g. part Cash + part M-Pesa).
 // 'equal' / 'custom' / 'by_item' = split among several people, each paying their own portion.
@@ -60,6 +63,7 @@ export function SplitPaymentModal({
   onPaymentConfirmed,
   onLinesChanged,
 }: SplitPaymentModalProps) {
+  const { tenant } = useTenantBranding();
   const [mode, setMode] = useState<SplitMode>('full');
   const [peopleCount, setPeopleCount] = useState(2);
   const [currentPayer, setCurrentPayer] = useState<number | null>(null);
@@ -223,19 +227,15 @@ export function SplitPaymentModal({
     } catch { /* best-effort */ }
   }
 
-  // Print this guest's own itemised bill (server filters lines to the split's items).
+  // Print this guest's own itemised bill (server filters lines to the split's items), rendered
+  // through the same <ReceiptPrint> component every other receipt in the app uses.
   async function printGuestReceipt(guest: number) {
     const id = itemSplitIdsRef.current[guest];
     if (!id || !tenantId) return;
     try {
-      const html = await apiClient.get<string>(splitReceiptUrl(tenantId, orderId, id));
-      const win = window.open('', '_blank', 'width=380,height=640');
-      if (!win) return;
-      win.document.write(html as string);
-      win.document.close();
-      const doPrint = () => { win.focus(); win.print(); };
-      win.onload = doPrint;
-      setTimeout(doPrint, 500);
+      const receipt = await apiClient.get<ReceiptData>(splitReceiptDataUrl(tenantId, orderId, id));
+      const html = await renderReceiptHtml(receipt, { tenantName: tenant?.orgName || tenant?.name, logoUrl: tenant?.logoUrl ?? undefined });
+      printReceiptDocument(buildReceiptDocument(`Guest ${guest} Receipt`, html));
     } catch { /* ignore */ }
   }
 

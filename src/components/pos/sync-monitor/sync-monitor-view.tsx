@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import {
-  Activity, AlertTriangle, CloudUpload, Database, Pause, Play, RefreshCw, Wifi, WifiOff,
+  Activity, AlertTriangle, CloudUpload, Database, Pause, Play, RefreshCw, Tag, Wifi, WifiOff,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/store/auth';
@@ -18,9 +18,12 @@ import {
 } from '@/lib/db/pos-db';
 import { listKVRows, getSyncLog } from '@/lib/db/kv-cache';
 import type { KVCacheRow, SyncLogEntry } from '@/lib/db/pos-db';
+import { useEffectiveOutletID } from '@/hooks/usePOS';
 import { SyncLogTable } from './sync-log-table';
+import { PriceReconcileTab } from './price-reconcile-tab';
 
 const POLL_MS = 2_000;
+type SyncMonitorTab = 'overview' | 'prices';
 
 function timeAgo(iso?: string | number | null): string {
   if (!iso) return '—';
@@ -42,10 +45,13 @@ const DATASET_LABELS: Record<string, string> = {
   'pin-outlet-info': 'Outlet info (PIN page)',
   'pin-outlets': 'Outlet list (PIN page)',
   'tenant-brand': 'Tenant branding',
+  'pos-sections': 'Sections',
+  'pos-tables': 'Tables',
 };
 
 export function SyncMonitorView() {
   const tenantID = useAuthStore((s) => s.user?.tenant_id ?? '');
+  const outletID = useEffectiveOutletID();
   const conn = useConnectivityStore();
 
   const [queues, setQueues] = useState<QueueBreakdownRow[]>([]);
@@ -54,6 +60,7 @@ export function SyncMonitorView() {
   const [log, setLog] = useState<SyncLogEntry[]>([]);
   const [paused, setPaused] = useState(false);
   const [lastRefresh, setLastRefresh] = useState<number | null>(null);
+  const [tab, setTab] = useState<SyncMonitorTab>('overview');
 
   const load = useCallback(async () => {
     const [q, d, ds, l] = await Promise.all([
@@ -131,6 +138,36 @@ export function SyncMonitorView() {
         </div>
       )}
 
+      {/* ── Tab bar ── */}
+      <div className="flex border-b border-border">
+        <button
+          onClick={() => setTab('overview')}
+          className={cn(
+            'flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 transition-colors',
+            tab === 'overview'
+              ? 'border-primary text-primary'
+              : 'border-transparent text-muted-foreground hover:text-foreground',
+          )}
+        >
+          <Activity className="h-4 w-4" /> Overview
+        </button>
+        <button
+          onClick={() => setTab('prices')}
+          className={cn(
+            'flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 transition-colors',
+            tab === 'prices'
+              ? 'border-primary text-primary'
+              : 'border-transparent text-muted-foreground hover:text-foreground',
+          )}
+        >
+          <Tag className="h-4 w-4" /> Menu item prices
+        </button>
+      </div>
+
+      {tab === 'prices' && <PriceReconcileTab tenantID={tenantID} outletID={outletID} />}
+
+      {tab === 'overview' && (
+      <>
       {/* ── Status cards ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <div className="rounded-2xl border border-border bg-card p-4">
@@ -250,6 +287,8 @@ export function SyncMonitorView() {
 
       {/* ── Activity log ── */}
       <SyncLogTable entries={log} />
+      </>
+      )}
     </div>
   );
 }

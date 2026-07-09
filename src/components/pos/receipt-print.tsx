@@ -2,6 +2,7 @@
 
 import '@/styles/receipt.css';
 import type { ReceiptData } from './receipt-preview';
+import { buildReceiptRows } from '@/lib/pos/receipt-rows';
 
 interface ReceiptPrintProps {
   receipt: ReceiptData;
@@ -40,9 +41,6 @@ export function ReceiptPrint({
   const currency = receipt.currency || 'KES';
   const fmt = (n: number) => `${currency} ${n.toFixed(2)}`;
   const resolvedOutlet = outletName || receipt.outlet_name;
-  const vatRate = receipt.vat_rate ?? 16;
-  const showVat = receipt.vat_enabled !== false && receipt.tax_amount > 0;
-  const footerText = receipt.receipt_footer || 'Thank you for your business!';
   const fmtDate = (s: string) =>
     new Date(s).toLocaleString('en-KE', {
       day: '2-digit',
@@ -91,150 +89,97 @@ export function ReceiptPrint({
         <span className="receipt-bold">Receipt #{receipt.receipt_number}</span>
       </p>
       <p className="receipt-center receipt-small">{fmtDate(receipt.issued_at)}</p>
-      {receipt.cashier_name && (
-        <p className="receipt-center receipt-small">Served by: {receipt.cashier_name}</p>
-      )}
 
       <hr className="receipt-divider" />
 
-      {/* Line items */}
-      {receipt.lines.map((line, i) => (
-        <div key={i}>
-          <div className="receipt-row">
-            <span className="receipt-row-name">
-              {line.name}{line.modifiers ? ` (${line.modifiers})` : ''}
-            </span>
-            <span className="receipt-row-value">{line.total_price === 0 ? 'FREE' : fmt(line.total_price)}</span>
-          </div>
-          {line.quantity !== 1 && (
-            <div className="receipt-small" style={{ paddingLeft: 8 }}>
-              {line.quantity} × {fmt(line.unit_price)}
-            </div>
-          )}
-        </div>
-      ))}
-
-      <hr className="receipt-divider" />
-
-      {/* Totals */}
-      <div className="receipt-row">
-        <span className="receipt-row-name">Subtotal</span>
-        <span className="receipt-row-value">{fmt(receipt.subtotal)}</span>
-      </div>
-      {showVat && (
-        <div className="receipt-row">
-          <span className="receipt-row-name">VAT ({vatRate}%)</span>
-          <span className="receipt-row-value">{fmt(receipt.tax_amount)}</span>
-        </div>
-      )}
-      {receipt.discount_amount > 0 && (
-        <div className="receipt-row">
-          <span className="receipt-row-name">Discount</span>
-          <span className="receipt-row-value">-{fmt(receipt.discount_amount)}</span>
-        </div>
-      )}
-      {(receipt.charges_total ?? 0) > 0 && (
-        <div className="receipt-row">
-          <span className="receipt-row-name">Charges</span>
-          <span className="receipt-row-value">{fmt(receipt.charges_total ?? 0)}</span>
-        </div>
-      )}
-      {(receipt.round_off ?? 0) > 0 && (
-        <div className="receipt-row">
-          <span className="receipt-row-name">Round Off</span>
-          <span className="receipt-row-value">{fmt(receipt.round_off ?? 0)}</span>
-        </div>
-      )}
-
-      <div className="receipt-row receipt-total-row">
-        <span className="receipt-row-name">TOTAL</span>
-        <span className="receipt-row-value">{fmt(receipt.total_amount)}</span>
-      </div>
-
-      <hr className="receipt-divider" style={{ marginTop: 4 }} />
-
-      {/* Payment */}
-      <div className="receipt-row">
-        <span className="receipt-row-name" style={{ textTransform: 'capitalize' }}>
-          {(receipt.payment_method ?? 'cash').replace(/_/g, ' ')}
-        </span>
-        <span className="receipt-row-value">{fmt(receipt.amount_tendered)}</span>
-      </div>
-      {receipt.change_due > 0 && (
-        <div className="receipt-row">
-          <span className="receipt-row-name">Change</span>
-          <span className="receipt-row-value">{fmt(receipt.change_due)}</span>
-        </div>
-      )}
-
-      {/* eTIMS compliance section */}
-      {receipt.etims_invoice_number && (
-        <>
-          <hr className="receipt-divider" style={{ marginTop: 6 }} />
-          <p className="receipt-center receipt-small" style={{ marginBottom: 2 }}>
-            KRA eTIMS Invoice
-          </p>
-          <p className="receipt-center receipt-small">
-            CU#: {receipt.etims_invoice_number}
-          </p>
-          {receipt.etims_qr_code_url && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={receipt.etims_qr_code_url}
-              alt="eTIMS QR Code"
-              className="receipt-qr"
-            />
-          )}
-        </>
-      )}
-
-      {/* Payment methods HOW TO PAY section */}
-      {paymentMethods && Object.values(paymentMethods).some(Boolean) && (
-        <>
-          <hr className="receipt-divider" style={{ marginTop: 6 }} />
-          <p className="receipt-center receipt-bold" style={{ fontSize: 10, marginBottom: 3 }}>
-            HOW TO PAY
-          </p>
-          {paymentMethods.mpesa_paybill && (
-            <div className="receipt-row" style={{ fontSize: 10 }}>
-              <span className="receipt-row-name">M-PESA Paybill</span>
-              <span className="receipt-row-value receipt-bold">{paymentMethods.mpesa_paybill}</span>
-            </div>
-          )}
-          {paymentMethods.mpesa_account_reference && (
-            <div className="receipt-row" style={{ fontSize: 10 }}>
-              <span className="receipt-row-name">Account No.</span>
-              <span className="receipt-row-value receipt-bold">{paymentMethods.mpesa_account_reference}</span>
-            </div>
-          )}
-          {paymentMethods.mpesa_till && (
-            <div className="receipt-row" style={{ fontSize: 10 }}>
-              <span className="receipt-row-name">M-PESA Till</span>
-              <span className="receipt-row-value receipt-bold">{paymentMethods.mpesa_till}</span>
-            </div>
-          )}
-          {paymentMethods.mpesa_pochi && (
-            <div className="receipt-row" style={{ fontSize: 10 }}>
-              <span className="receipt-row-name">M-PESA Pochi</span>
-              <span className="receipt-row-value receipt-bold">{paymentMethods.mpesa_pochi}</span>
-            </div>
-          )}
-          {paymentMethods.bank_account_number && (
-            <div className="receipt-row" style={{ fontSize: 10 }}>
-              <span className="receipt-row-name">{paymentMethods.bank_name || 'Bank'}</span>
-              <span className="receipt-row-value receipt-bold">{paymentMethods.bank_account_number}</span>
-            </div>
-          )}
-          {paymentMethods.bank_account_name && (
-            <p className="receipt-center receipt-small">{paymentMethods.bank_account_name}</p>
-          )}
-        </>
-      )}
-
-      <hr className="receipt-divider" style={{ marginTop: 6 }} />
-      <p className="receipt-center" style={{ marginTop: 4, marginBottom: 2, fontSize: 10, whiteSpace: 'pre-wrap' }}>
-        {footerText}
-      </p>
+      {/* Line items + totals + payment + eTIMS + HOW TO PAY + served-by + footer — one shared row
+          list (buildReceiptRows) so this print output can never drift from the on-screen preview. */}
+      {buildReceiptRows({ ...receipt, payment_methods: paymentMethods ?? receipt.payment_methods }).map((row, i) => {
+        switch (row.kind) {
+          case 'line':
+            return (
+              <div key={i}>
+                <div className="receipt-row">
+                  <span className="receipt-row-name">
+                    {row.name}{row.modifiers ? ` (${row.modifiers})` : ''}
+                  </span>
+                  <span className="receipt-row-value">{row.free ? 'FREE' : fmt(row.total)}</span>
+                </div>
+                {row.quantity !== 1 && (
+                  <div className="receipt-small" style={{ paddingLeft: 8 }}>
+                    {row.quantity} × {fmt(row.unitPrice)}
+                  </div>
+                )}
+              </div>
+            );
+          case 'divider':
+            return <hr key={i} className="receipt-divider" />;
+          case 'money':
+            return (
+              <div key={i} className="receipt-row">
+                <span className="receipt-row-name">{row.label}</span>
+                <span className="receipt-row-value">{row.negative ? '-' : ''}{fmt(row.amount)}</span>
+              </div>
+            );
+          case 'total':
+            return (
+              <div key={i} className="receipt-row receipt-total-row">
+                <span className="receipt-row-name">{row.label}</span>
+                <span className="receipt-row-value">{fmt(row.amount)}</span>
+              </div>
+            );
+          case 'payment':
+            return (
+              <div key={i} className="receipt-row">
+                <span className="receipt-row-name" style={{ textTransform: 'capitalize' }}>{row.label}</span>
+                <span className="receipt-row-value">{fmt(row.amount)}</span>
+              </div>
+            );
+          case 'change':
+            return (
+              <div key={i} className="receipt-row">
+                <span className="receipt-row-name">Change</span>
+                <span className="receipt-row-value">{fmt(row.amount)}</span>
+              </div>
+            );
+          case 'etims':
+            return (
+              <div key={i}>
+                <p className="receipt-center receipt-small" style={{ marginBottom: 2 }}>KRA eTIMS Invoice</p>
+                <p className="receipt-center receipt-small">CU#: {row.invoiceNumber}</p>
+                {row.qrUrl && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={row.qrUrl} alt="eTIMS QR Code" className="receipt-qr" />
+                )}
+              </div>
+            );
+          case 'how-to-pay-title':
+            return (
+              <p key={i} className="receipt-center receipt-bold" style={{ fontSize: 10, marginBottom: 3 }}>
+                HOW TO PAY
+              </p>
+            );
+          case 'payment-method':
+            return (
+              <div key={i} className="receipt-row" style={{ fontSize: 10 }}>
+                <span className="receipt-row-name">{row.label}</span>
+                <span className="receipt-row-value receipt-bold">{row.value}</span>
+              </div>
+            );
+          case 'payment-account-name':
+            return <p key={i} className="receipt-center receipt-small">{row.text}</p>;
+          case 'served-by':
+            return <p key={i} className="receipt-center receipt-small">Served by: {row.name}</p>;
+          case 'footer':
+            return (
+              <p key={i} className="receipt-center" style={{ marginTop: 4, marginBottom: 2, fontSize: 10, whiteSpace: 'pre-wrap' }}>
+                {row.text}
+              </p>
+            );
+          default:
+            return null;
+        }
+      })}
     </div>
   );
 }

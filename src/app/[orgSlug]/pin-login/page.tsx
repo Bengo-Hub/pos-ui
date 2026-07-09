@@ -413,6 +413,15 @@ export default function PINLoginPage() {
     // Restore outlet context from the last selection so offline orders carry the right
     // outlet_id (and the API client sends X-Outlet-ID once back online).
     const offlineOutletId = outletInfo?.id ?? storedOutletId;
+    if (!offlineOutletId) {
+      // Neither the last-fetched outlet info nor a stored outlet id is available (e.g. the
+      // very first login on a fresh device while offline) — completing the login here would
+      // leave the session with NO outlet context, so every subsequent request (tables,
+      // sections, catalog) goes out with no X-Outlet-ID and silently gets the wrong outlet's
+      // data from the server's HQ fallback. Block instead of producing a broken session.
+      triggerPinError('Connect once to select an outlet, then you can log in offline.');
+      return;
+    }
     setTerminalSession('offline-terminal-session', {
       id:              matched.user_id,
       email:           matched.email,
@@ -423,19 +432,17 @@ export default function PINLoginPage() {
       tenant_slug:     orgSlug,
       isPlatformOwner: false,
       isSuperUser:     false,
-      ...(offlineOutletId ? { outlet_id: offlineOutletId } : {}),
+      outlet_id:       offlineOutletId,
     } as Parameters<typeof setTerminalSession>[1]);
-    if (offlineOutletId) {
-      setOutlet({
-        id:       offlineOutletId,
-        code:     '',
-        name:     outletInfo?.name ?? offlineOutletId,
-        use_case: outletInfo?.use_case ?? '',
-        is_hq:    outletInfo?.is_hq ?? false,
-        status:   'active',
-      });
-      apiClient.setOutletID(offlineOutletId);
-    }
+    setOutlet({
+      id:       offlineOutletId,
+      code:     '',
+      name:     outletInfo?.name ?? offlineOutletId,
+      use_case: outletInfo?.use_case ?? '',
+      is_hq:    outletInfo?.is_hq ?? false,
+      status:   'active',
+    });
+    apiClient.setOutletID(offlineOutletId);
     // Same success-redirect destination as the online path (Attendance → /shifts).
     router.push(postLoginRedirect ?? `/${orgSlug}/dashboard`);
   }

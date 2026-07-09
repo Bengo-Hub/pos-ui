@@ -119,7 +119,7 @@ export function KPICard({
             trend >= 0 ? 'text-emerald-500' : 'text-red-500'
           )}>
             <TrendingUp className={cn('h-3 w-3', trend < 0 && 'rotate-180')} />
-            {Math.abs(trend)}%
+            {Math.round(Math.abs(trend) * 100) / 100}%
           </span>
         )}
         {sub && <span className="text-xs text-muted-foreground">{sub}</span>}

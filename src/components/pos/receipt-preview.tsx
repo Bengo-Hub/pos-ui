@@ -9,28 +9,10 @@ import { ReceiptPrint } from './receipt-print';
 import { printHtmlToPrinter, printProfileHtml, fetchReceiptEscposHex } from '@/lib/pos/printer-discovery';
 import { enqueuePrintJob } from '@/lib/pos/print-jobs';
 import { hasRealPrinter } from '@/lib/pos/printer-stations';
+import { buildReceiptRows } from '@/lib/pos/receipt-rows';
+import { buildReceiptDocument, printReceiptDocument } from '@/lib/pos/receipt-html';
 import type { PrinterProfile } from '@/lib/api/settings';
 import { useTenantBranding } from '@/providers/tenant-branding-provider';
-
-// Thermal-receipt styles inlined into the dedicated print window (mirrors src/styles/receipt.css).
-const RECEIPT_PRINT_CSS = `
-  @page { size: 80mm auto; margin: 3mm 4mm; }
-  html, body { margin: 0; padding: 0; background: #fff; }
-  /* Thermal/non-colour printers render gray & brand colours faint — force pure-black bold ink on
-     white for every node, keep colours exact, and only the logo image keeps its pixels (dithered). */
-  .receipt-root, .receipt-root * { color: #000 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .receipt-root { font-family: 'Courier New', Courier, 'DejaVu Sans Mono', monospace; font-size: 12px; font-weight: bold; line-height: 1.45; color: #000; background: #fff; width: 72mm; padding: 4mm 0; margin: 0 auto; }
-  .receipt-logo { display: block; margin: 0 auto 4px; max-width: 48mm; max-height: 20mm; object-fit: contain; filter: grayscale(1) contrast(1.2); }
-  .receipt-center { text-align: center; }
-  .receipt-bold { font-weight: bold; }
-  .receipt-divider { border: none; border-top: 1px dashed #000; margin: 3px 0; }
-  .receipt-row { display: flex; justify-content: space-between; align-items: baseline; padding: 1px 0; }
-  .receipt-row-name { flex: 1; padding-right: 6px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-  .receipt-row-value { flex-shrink: 0; white-space: nowrap; }
-  .receipt-total-row { font-weight: bold; font-size: 13px; border-top: 1px solid #000; margin-top: 2px; padding-top: 2px; }
-  .receipt-small { font-size: 10px; color: #000; }
-  .receipt-qr { display: block; margin: 4px auto; width: 20mm; height: 20mm; object-fit: contain; }
-`;
 
 export interface ReceiptLine {
   sku: string;
@@ -58,7 +40,10 @@ export interface ReceiptData {
   payment_method: string;
   amount_tendered: number;
   change_due: number;
-  cashier_name?: string;
+  /** Guest/payer name for identified payments (M-Pesa/card/online), or "Walk-in customer" for cash. */
+  bill_to?: string;
+  /** Staff display name/email shown as "Served by" — from the pos-api receipt endpoint's `served_by`. */
+  served_by?: string;
   currency?: string;
   etims_invoice_number?: string;
   etims_qr_code_url?: string;
@@ -183,30 +168,7 @@ export function ReceiptPreview({
       window.print();
       return;
     }
-    const win = window.open('', '_blank', 'width=380,height=640');
-    if (!win) {
-      window.print(); // popup blocked — fall back to in-page print
-      return;
-    }
-    win.document.write(
-      `<!doctype html><html><head><meta charset="utf-8"/>` +
-        `<title>Receipt ${receipt.order_number}</title>` +
-        `<style>${RECEIPT_PRINT_CSS}</style></head>` +
-        `<body>${node.innerHTML}</body></html>`,
-    );
-    win.document.close();
-
-    let printed = false;
-    const doPrint = () => {
-      if (printed) return;
-      printed = true;
-      win.focus();
-      win.print();
-      setTimeout(() => win.close(), 400);
-    };
-    win.onload = doPrint;
-    // Fallback: document.write can complete before onload binds in some browsers.
-    setTimeout(doPrint, 600);
+    printReceiptDocument(buildReceiptDocument(`Receipt ${receipt.order_number}`, node.innerHTML));
   };
 
   const handlePrint = () => {
@@ -290,131 +252,83 @@ export function ReceiptPreview({
             </p>
             <div className="border-t border-dashed border-border my-2" />
 
-            {/* Line items */}
-            {receipt.lines.map((line, i) => (
-              <div key={i} className="flex justify-between py-0.5">
-                <span className="flex-1 truncate pr-2">
-                  {line.name} ×{line.quantity}
-                </span>
-                <span className="shrink-0">{line.total_price === 0 ? 'Free' : formatCurrency(line.total_price)}</span>
-              </div>
-            ))}
-
-            <div className="border-t border-dashed border-border my-2" />
-
-            <div className="flex justify-between py-0.5">
-              <span>Subtotal</span>
-              <span>{formatCurrency(receipt.subtotal)}</span>
-            </div>
-            {receipt.vat_enabled !== false && receipt.tax_amount > 0 && (
-              <div className="flex justify-between py-0.5">
-                <span>VAT ({receipt.vat_rate ?? 16}%)</span>
-                <span>{formatCurrency(receipt.tax_amount)}</span>
-              </div>
-            )}
-            {receipt.discount_amount > 0 && (
-              <div className="flex justify-between py-0.5 text-green-600">
-                <span>Discount</span>
-                <span>-{formatCurrency(receipt.discount_amount)}</span>
-              </div>
-            )}
-            {(receipt.charges_total ?? 0) > 0 && (
-              <div className="flex justify-between py-0.5">
-                <span>Charges</span>
-                <span>{formatCurrency(receipt.charges_total ?? 0)}</span>
-              </div>
-            )}
-            {(receipt.round_off ?? 0) > 0 && (
-              <div className="flex justify-between py-0.5">
-                <span>Round Off</span>
-                <span>{formatCurrency(receipt.round_off ?? 0)}</span>
-              </div>
-            )}
-
-            <div className="border-t border-dashed border-border my-2" />
-
-            <div className="flex justify-between py-0.5 font-bold text-sm">
-              <span>TOTAL</span>
-              <span>{formatCurrency(receipt.total_amount)}</span>
-            </div>
-            <div className="flex justify-between py-0.5">
-              <span className="capitalize">{(receipt.payment_method ?? 'cash').replace(/_/g, ' ')}</span>
-              <span>{formatCurrency(receipt.amount_tendered)}</span>
-            </div>
-            {receipt.change_due > 0 && (
-              <div className="flex justify-between py-0.5">
-                <span>Change</span>
-                <span>{formatCurrency(receipt.change_due)}</span>
-              </div>
-            )}
-
-            {receipt.etims_invoice_number && (
-              <>
-                <div className="border-t border-dashed border-border my-2" />
-                <p className="text-center text-muted-foreground text-[10px]">
-                  eTIMS: {receipt.etims_invoice_number}
-                </p>
-                {receipt.etims_qr_code_url && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={receipt.etims_qr_code_url}
-                    alt="eTIMS QR"
-                    className="mx-auto mt-1 h-16 w-16"
-                  />
-                )}
-              </>
-            )}
-
-            {receipt.payment_methods && Object.values(receipt.payment_methods).some(Boolean) && (
-              <>
-                <div className="border-t border-dashed border-border my-2" />
-                <p className="text-center font-semibold text-[10px] mb-1">HOW TO PAY</p>
-                {receipt.payment_methods.mpesa_paybill && (
-                  <div className="flex justify-between py-0.5 text-[10px]">
-                    <span>M-PESA Paybill</span>
-                    <span className="font-semibold">{receipt.payment_methods.mpesa_paybill}</span>
-                  </div>
-                )}
-                {receipt.payment_methods.mpesa_account_reference && (
-                  <div className="flex justify-between py-0.5 text-[10px]">
-                    <span>Account No.</span>
-                    <span className="font-semibold">{receipt.payment_methods.mpesa_account_reference}</span>
-                  </div>
-                )}
-                {receipt.payment_methods.mpesa_till && (
-                  <div className="flex justify-between py-0.5 text-[10px]">
-                    <span>M-PESA Till</span>
-                    <span className="font-semibold">{receipt.payment_methods.mpesa_till}</span>
-                  </div>
-                )}
-                {receipt.payment_methods.mpesa_pochi && (
-                  <div className="flex justify-between py-0.5 text-[10px]">
-                    <span>M-PESA Pochi</span>
-                    <span className="font-semibold">{receipt.payment_methods.mpesa_pochi}</span>
-                  </div>
-                )}
-                {receipt.payment_methods.bank_account_number && (
-                  <div className="flex justify-between py-0.5 text-[10px]">
-                    <span>{receipt.payment_methods.bank_name || 'Bank'}</span>
-                    <span className="font-semibold">{receipt.payment_methods.bank_account_number}</span>
-                  </div>
-                )}
-                {receipt.payment_methods.bank_account_name && (
-                  <p className="text-center text-muted-foreground text-[10px]">
-                    {receipt.payment_methods.bank_account_name}
-                  </p>
-                )}
-              </>
-            )}
-
-            {receipt.cashier_name && (
-              <p className="text-center text-muted-foreground mt-2">
-                Served by: {receipt.cashier_name}
-              </p>
-            )}
-            <p className="text-center text-muted-foreground mt-2 text-[10px] whitespace-pre-wrap">
-              {receipt.receipt_footer || 'Thank you for your business!'}
-            </p>
+            {/* Line items + totals + payment + eTIMS + HOW TO PAY + footer — one shared row list
+                (buildReceiptRows) so this on-screen card can never drift from the printed receipt. */}
+            {buildReceiptRows(receipt).map((row, i) => {
+              switch (row.kind) {
+                case 'line':
+                  return (
+                    <div key={i} className="flex justify-between py-0.5">
+                      <span className="flex-1 truncate pr-2">
+                        {row.name} ×{row.quantity}
+                        {row.modifiers ? ` (${row.modifiers})` : ''}
+                      </span>
+                      <span className="shrink-0">{row.free ? 'Free' : formatCurrency(row.total)}</span>
+                    </div>
+                  );
+                case 'divider':
+                  return <div key={i} className="border-t border-dashed border-border my-2" />;
+                case 'money':
+                  return (
+                    <div key={i} className={`flex justify-between py-0.5${row.negative ? ' text-green-600' : ''}`}>
+                      <span>{row.label}</span>
+                      <span>{row.negative ? '-' : ''}{formatCurrency(row.amount)}</span>
+                    </div>
+                  );
+                case 'total':
+                  return (
+                    <div key={i} className="flex justify-between py-0.5 font-bold text-sm">
+                      <span>{row.label}</span>
+                      <span>{formatCurrency(row.amount)}</span>
+                    </div>
+                  );
+                case 'payment':
+                  return (
+                    <div key={i} className="flex justify-between py-0.5">
+                      <span className="capitalize">{row.label}</span>
+                      <span>{formatCurrency(row.amount)}</span>
+                    </div>
+                  );
+                case 'change':
+                  return (
+                    <div key={i} className="flex justify-between py-0.5">
+                      <span>Change</span>
+                      <span>{formatCurrency(row.amount)}</span>
+                    </div>
+                  );
+                case 'etims':
+                  return (
+                    <div key={i}>
+                      <p className="text-center text-muted-foreground text-[10px]">eTIMS: {row.invoiceNumber}</p>
+                      {row.qrUrl && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={row.qrUrl} alt="eTIMS QR" className="mx-auto mt-1 h-16 w-16" />
+                      )}
+                    </div>
+                  );
+                case 'how-to-pay-title':
+                  return <p key={i} className="text-center font-semibold text-[10px] mb-1">HOW TO PAY</p>;
+                case 'payment-method':
+                  return (
+                    <div key={i} className="flex justify-between py-0.5 text-[10px]">
+                      <span>{row.label}</span>
+                      <span className="font-semibold">{row.value}</span>
+                    </div>
+                  );
+                case 'payment-account-name':
+                  return <p key={i} className="text-center text-muted-foreground text-[10px]">{row.text}</p>;
+                case 'served-by':
+                  return <p key={i} className="text-center text-muted-foreground mt-2">Served by: {row.name}</p>;
+                case 'footer':
+                  return (
+                    <p key={i} className="text-center text-muted-foreground mt-2 text-[10px] whitespace-pre-wrap">
+                      {row.text}
+                    </p>
+                  );
+                default:
+                  return null;
+              }
+            })}
           </div>
 
           {/* Action buttons */}

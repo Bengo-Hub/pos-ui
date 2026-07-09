@@ -102,18 +102,25 @@ function CatalogPrewarm() {
 }
 
 /**
- * OutletContextHealer — repairs SSO sessions whose outlet context never resolved.
+ * OutletContextHealer — repairs sessions whose outlet context never resolved.
  *
  * Root cause of "sidebar items fail to load after SSO login": logout clears the store's
  * outlet but deliberately KEEPS `pos-selected-outlet-id` in localStorage (pin-login
  * auto-select). The SSO callback then saw the leftover key and skipped the outlet
  * selector WITHOUT hydrating the store — outlet.use_case stayed null, useModuleAccess
- * never resolved, and the sidebar rendered its skeleton forever. PIN login always calls
- * setOutlet with a full outlet, which is why it worked.
+ * never resolved, and the sidebar rendered its skeleton forever.
  *
- * Whenever an authenticated non-terminal session has no outlet use_case, resolve the
- * active outlet from the API (last-used → single → HQ → first) and hydrate the store.
- * Also self-heals already-stuck sessions without forcing a re-login.
+ * Terminal (PIN) sessions normally always call setOutlet with a full outlet at login, so
+ * they're excluded from the use_case check below — EXCEPT the offline-login fallback can
+ * still complete with no `outlet.id` at all in rare edge cases (a pre-fix cached session,
+ * or a device that never had outlet info cached). That specific gap — missing outlet id,
+ * not missing use_case — is also self-healed here so "tables fail to load" doesn't need a
+ * re-login to recover.
+ *
+ * Whenever an authenticated non-terminal session has no outlet use_case, OR any
+ * authenticated session (including terminal) has no outlet id at all, resolve the active
+ * outlet from the API (last-used → single → HQ → first) and hydrate the store. Also
+ * self-heals already-stuck sessions without forcing a re-login.
  */
 function OutletContextHealer() {
   const status = useAuthStore((s) => s.status);
@@ -122,7 +129,9 @@ function OutletContextHealer() {
   const outletId = useAuthStore((s) => s.outlet?.id);
   const tenantID = useAuthStore((s) => (s.user as any)?.tenant_id ?? '');
   useEffect(() => {
-    if (status !== 'authenticated' || isTerminalSession || outletUseCase || !tenantID) return;
+    if (status !== 'authenticated' || !tenantID) return;
+    const needsHeal = isTerminalSession ? !outletId : !outletUseCase;
+    if (!needsHeal) return;
     let cancelled = false;
     (async () => {
       try {

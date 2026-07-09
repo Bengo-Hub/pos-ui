@@ -245,6 +245,10 @@ export interface CatalogItem {
   image_url?: string;
   barcode?: string;
   price?: number;
+  /** Raw inventory-api price and POS-DB manual override, before the price merge — used by the
+   *  sync-monitor price-reconcile tab to show all three sources side by side. */
+  inventory_price?: number;
+  pos_override_price?: number;
   // Tax — enriched by inventory-api from treasury-api (the source of truth). The POS terminal
   // applies THESE per-item values at checkout instead of a flat outlet rate.
   tax_code_id?: string;
@@ -271,7 +275,7 @@ export interface PaginatedResponse<T> {
 
 /** Map rich catalog DTOs to the lean OfflineCatalogItem rows pos-db stores, stamped with the
  *  outlet they were fetched for (the pos-api catalog is outlet-scoped). */
-function toOfflineCatalogRows(tenantID: string, outletID: string, items: CatalogItem[]): OfflineCatalogItem[] {
+export function toOfflineCatalogRows(tenantID: string, outletID: string, items: CatalogItem[]): OfflineCatalogItem[] {
   const now = new Date().toISOString();
   return items.map((i) => ({
     id: i.id,
@@ -587,10 +591,21 @@ interface Section {
 
 export function useSections() {
   const tenantID = useTenantID();
+  const outletID = useEffectiveOutletID();
+  const qc = useQueryClient();
   return useQuery({
-    queryKey: ['pos-sections', tenantID],
-    queryFn: () => apiClient.get<PaginatedResponse<Section>>(`${basePath(tenantID)}/sections`),
-    enabled: !!tenantID,
+    // outletID keys the cache — sections are outlet-scoped server-side, so a second waiter
+    // logging into a different outlet on a shared kiosk must never see the previous outlet's
+    // stale section list.
+    queryKey: ['pos-sections', tenantID, outletID],
+    queryFn: async () => {
+      const { cacheFirst } = await import('@/lib/offline/cache-first');
+      const { getDataset, datasetCacheOpts } = await import('@/lib/offline/datasets');
+      return cacheFirst(
+        datasetCacheOpts(getDataset('pos-sections'), tenantID, outletID || undefined, qc),
+      ) as Promise<PaginatedResponse<Section>>;
+    },
+    enabled: !!tenantID && !!outletID,
     staleTime: 30_000,
   });
 }
@@ -613,15 +628,32 @@ interface Table {
 
 export function useTables(filters?: { status?: string; sectionId?: string }) {
   const tenantID = useTenantID();
+  const outletID = useEffectiveOutletID();
+  const qc = useQueryClient();
   return useQuery({
-    queryKey: ['pos-tables', tenantID, filters],
-    queryFn: () =>
-      apiClient.get<PaginatedResponse<Table>>(`${basePath(tenantID)}/tables`, {
-        status: filters?.status,
-        section_id: filters?.sectionId,
-      }),
-    enabled: !!tenantID,
+    // outletID keys the cache — the server table list is outlet-scoped, so it must never be
+    // served across outlets on a shared kiosk. The underlying fetch is unfiltered (cache-first
+    // datasets are a single fixed query per outlet); status/section filters apply client-side
+    // below so callers keep the same filtered result they had before.
+    queryKey: ['pos-tables', tenantID, outletID],
+    queryFn: async () => {
+      const { cacheFirst } = await import('@/lib/offline/cache-first');
+      const { getDataset, datasetCacheOpts } = await import('@/lib/offline/datasets');
+      return cacheFirst(
+        datasetCacheOpts(getDataset('pos-tables'), tenantID, outletID || undefined, qc),
+      ) as Promise<PaginatedResponse<Table>>;
+    },
+    enabled: !!tenantID && !!outletID,
     staleTime: 10_000,
+    select: (res) => {
+      if (!filters?.status && !filters?.sectionId) return res;
+      return {
+        ...res,
+        data: res.data.filter((t) =>
+          (!filters.status || t.status === filters.status) &&
+          (!filters.sectionId || t.section_id === filters.sectionId)),
+      };
+    },
   });
 }
 

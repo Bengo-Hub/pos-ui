@@ -7,6 +7,9 @@ import { useAuthStore } from '@/store/auth';
 import { resolveBillProfile, hasRealPrinter, BILL_PROFILE_ID } from '@/lib/pos/printer-stations';
 import { printProfileHtml, fetchReceiptEscposHex } from '@/lib/pos/printer-discovery';
 import { enqueuePrintJob } from '@/lib/pos/print-jobs';
+import { renderReceiptHtml, buildReceiptDocument, printReceiptDocument } from '@/lib/pos/receipt-html';
+import type { ReceiptData } from '@/components/pos/receipt-preview';
+import { useTenantBranding } from '@/providers/tenant-branding-provider';
 import { CheckCircle2, Loader2, Printer, AlertTriangle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -21,39 +24,14 @@ interface OrderPlacedDialogProps {
   onClose?: () => void;
 }
 
-/**
- * Print a full HTML document via a popup window, waiting for it to fully load (fonts + logo image)
- * before invoking print. Printing synchronously after document.write() is what produced the BLANK
- * print preview — the print fired before the receipt rendered.
- */
-function browserPrintFullDoc(html: string) {
-  if (typeof window === 'undefined') return;
-  const win = window.open('', '_blank', 'width=400,height=640');
-  if (!win) { window.print(); return; }
-  win.document.open();
-  win.document.write(html);
-  win.document.close();
-  let printed = false;
-  const doPrint = () => {
-    if (printed) return;
-    printed = true;
-    win.focus();
-    win.print();
-    win.addEventListener('afterprint', () => win.close());
-    setTimeout(() => { try { win.close(); } catch { /* already closed */ } }, 1000);
-  };
-  win.onload = doPrint;
-  // Fallback in case onload doesn't fire (cached/instant docs).
-  setTimeout(doPrint, 700);
-}
-
 export function OrderPlacedDialog({ open, orderNumber, orderId, tenantId, orgSlug, onClose }: OrderPlacedDialogProps) {
   const router = useRouter();
   const { data: stationsData } = useKDSStations();
   const { data: posSettings } = usePOSSettings();
   const servedBy = useAuthStore((s) => s.user?.fullName || s.user?.email || '');
+  const { tenant } = useTenantBranding();
   const [printing, setPrinting] = useState(false);
-  // Holds the fetched receipt HTML when NO configured printer was found — drives the
+  // Holds the rendered receipt HTML fragment when NO configured printer was found — drives the
   // "print on browser?" confirmation modal instead of silently opening the browser print window.
   const [browserPrompt, setBrowserPrompt] = useState<string | null>(null);
   // Guards the one-shot auto-print so it fires once per dialog open, not on every re-render.
@@ -77,6 +55,15 @@ export function OrderPlacedDialog({ open, orderNumber, orderId, tenantId, orgSlu
     onClose?.();
     router.replace(`/${orgSlug}/pin-login`);
   }, [onClose, router, orgSlug]);
+
+  // Fetch the order's receipt JSON and render it through the SAME <ReceiptPrint> component the
+  // modal preview uses, so this bill print (auto or manual) is never a different rendering path
+  // from the browser one.
+  const fetchReceiptFragment = useCallback(async () => {
+    const q = servedBy ? `?served_by=${encodeURIComponent(servedBy)}` : '';
+    const data = await apiClient.get<ReceiptData>(`/api/v1/${tenantId}/pos/orders/${orderId}/receipt${q}`);
+    return renderReceiptHtml(data, { tenantName: tenant?.orgName || tenant?.name, logoUrl: tenant?.logoUrl ?? undefined });
+  }, [tenantId, orderId, servedBy, tenant]);
 
   /**
    * auto=true → background auto-print: the logout is IMMEDIATE and printing runs in the
@@ -106,12 +93,11 @@ export function OrderPlacedDialog({ open, orderNumber, orderId, tenantId, orgSlu
       // Client transports (agent relay / QZ): fire-and-forget so the waiter logs out instantly —
       // the print round-trip must never block the pin-login handoff. The SPA navigation keeps
       // this promise running; failures surface as a toast on the pin-login screen.
-      const q = servedBy ? `?served_by=${encodeURIComponent(servedBy)}` : '';
       void (async () => {
         try {
-          const html = await apiClient.get<string>(`/api/v1/${tenantId}/pos/orders/${orderId}/receipt/html${q}`);
+          const html = await fetchReceiptFragment();
           const escposHex = await fetchReceiptEscposHex(tenantId, orderId, 'customer', billProfile?.id ?? BILL_PROFILE_ID);
-          const ok = await printProfileHtml(billProfile, `Receipt ${orderNumber}`, html as string, escposHex ?? undefined, { silent: true });
+          const ok = await printProfileHtml(billProfile, `Receipt ${orderNumber}`, html, escposHex ?? undefined, { silent: true });
           if (!ok) toast.error('Receipt did not print — check the printer connection (print agent / QZ Tray).');
         } catch {
           toast.error('Receipt did not print — check the printer connection.');
@@ -133,18 +119,17 @@ export function OrderPlacedDialog({ open, orderNumber, orderId, tenantId, orgSlu
         }
         // Agent dropped offline between checks — fall through to the client transports.
       }
-      const q = servedBy ? `?served_by=${encodeURIComponent(servedBy)}` : '';
-      const html = await apiClient.get<string>(`/api/v1/${tenantId}/pos/orders/${orderId}/receipt/html${q}`);
+      const html = await fetchReceiptFragment();
       if (printerConfigured) {
         // Configured printer → push the job straight to it (agent relay incl. USB-by-name, QZ
         // Tray incl. raw network by IP). No browser print window at all.
         const escposHex = await fetchReceiptEscposHex(tenantId, orderId, 'customer', billProfile?.id ?? BILL_PROFILE_ID);
-        const ok = await printProfileHtml(billProfile, `Receipt ${orderNumber}`, html as string, escposHex ?? undefined, { silent: true });
+        const ok = await printProfileHtml(billProfile, `Receipt ${orderNumber}`, html, escposHex ?? undefined, { silent: true });
         if (!ok) toast.error('Receipt did not print — check the printer connection (print agent / QZ Tray).');
         handleLogout();
       } else {
         // Manual print with no configured printer → DO NOT auto-open the browser print window. Ask first.
-        setBrowserPrompt(html as string);
+        setBrowserPrompt(html);
       }
     } catch {
       // Print failed silently — still log out.
@@ -152,7 +137,7 @@ export function OrderPlacedDialog({ open, orderNumber, orderId, tenantId, orgSlu
     } finally {
       setPrinting(false);
     }
-  }, [servedBy, tenantId, orderId, orderNumber, billProfile, printerConfigured, posSettings, handleLogout]);
+  }, [tenantId, orderId, orderNumber, billProfile, printerConfigured, posSettings, handleLogout, fetchReceiptFragment]);
 
   // Auto-print path: silent when configured; skipped with a toast when not. The "No printer
   // detected" modal is strictly a MANUAL-print concern now.
@@ -192,7 +177,12 @@ export function OrderPlacedDialog({ open, orderNumber, orderId, tenantId, orgSlu
               Cancel
             </button>
             <button
-              onClick={() => { const h = browserPrompt; setBrowserPrompt(null); browserPrintFullDoc(h); handleLogout(); }}
+              onClick={() => {
+                const h = browserPrompt;
+                setBrowserPrompt(null);
+                printReceiptDocument(buildReceiptDocument(`Receipt ${orderNumber}`, h ?? ''));
+                handleLogout();
+              }}
               className="flex-1 py-3 rounded-2xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors"
             >
               Print on Browser

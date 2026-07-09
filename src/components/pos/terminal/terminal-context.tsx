@@ -1228,7 +1228,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
           `/api/v1/${tenantId}/pos/orders/${settledOrderId}/receipt`
         );
         // "Served by" — fall back to the logged-in user when the API omits it.
-        setReceiptData({ ...data, cashier_name: data.cashier_name || user?.fullName || user?.email });
+        setReceiptData({ ...data, served_by: data.served_by || user?.fullName || user?.email });
         setReceiptOrderId(settledOrderId);
         setReceiptOpen(true);
       } catch {
