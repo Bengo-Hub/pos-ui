@@ -184,11 +184,26 @@ export function SplitPaymentModal({
     }, 0);
   }
 
-  function unassignedTotal() {
+  function unassignedLinesTotal() {
     return orderLines.reduce((sum, line, i) => {
       if (lineAssignments[i] === 0) return sum + line.totalPrice;
       return sum;
     }, 0);
+  }
+
+  // Reconcile against the AUTHORITATIVE order total (the `total` prop), not just the lines this
+  // modal happens to know about — a stale/missing line or any other drift between what's shown
+  // here and what the order actually totals would otherwise let every guest "fully" pay a sum
+  // that never reaches what completeOrderIfFullyPaid requires, leaving the bill stuck "pending"
+  // with no visible explanation (see pos-api fix for the specific cause this caught: a voided
+  // line silently un-voided back into the total on a later "Add to Bill").
+  function unaccountedForTotal() {
+    const knownLinesTotal = orderLines.reduce((sum, line) => sum + line.totalPrice, 0);
+    return Math.max(0, total - knownLinesTotal);
+  }
+
+  function unassignedTotal() {
+    return unassignedLinesTotal() + unaccountedForTotal();
   }
 
   // ─── By-item split → BillSplit records (with item ids) + per-split receipts ───
@@ -597,9 +612,15 @@ export function SplitPaymentModal({
                 ))}
               </div>
 
-              {unassignedTotal() > 0 && (
+              {unassignedLinesTotal() > 0 && (
                 <p className="text-xs text-amber-600 font-medium">
-                  {fmt(unassignedTotal())} unassigned — assign all items before collecting payment.
+                  {fmt(unassignedLinesTotal())} unassigned — assign all items before collecting payment.
+                </p>
+              )}
+              {unassignedLinesTotal() === 0 && unaccountedForTotal() > 0 && (
+                <p className="text-xs text-amber-600 font-medium">
+                  {fmt(unaccountedForTotal())} of this bill isn&apos;t reflected in the items shown —
+                  close and reopen Split Bill to refresh before collecting payment.
                 </p>
               )}
 
