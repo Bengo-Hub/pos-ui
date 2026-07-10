@@ -159,6 +159,9 @@ export interface HourRow {
   hour: number;
   order_count: number;
   revenue: number;
+  cost: number;
+  profit: number;
+  margin_pct: number;
 }
 
 export interface CategoryRow {

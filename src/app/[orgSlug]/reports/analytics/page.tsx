@@ -138,11 +138,13 @@ export default function AnalyticsReportPage() {
     const rows = hours.data ?? [];
     const revenue = rows.reduce((s, r) => s + r.revenue, 0);
     const orders = rows.reduce((s, r) => s + r.order_count, 0);
+    const profit = rows.reduce((s, r) => s + (r.profit ?? 0), 0);
     const peak = rows.reduce((best, r) => (r.revenue > (best?.revenue ?? -1) ? r : best), rows[0]);
     return [
       { label: 'Total Revenue', value: fmt(revenue) },
       { label: 'Orders', value: orders.toLocaleString() },
       { label: 'Peak Hour', value: peak ? `${String(peak.hour).padStart(2, '0')}:00` : '—' },
+      { label: 'Profit Margin', value: revenue ? `${((profit / revenue) * 100).toFixed(1)}%` : '—' },
     ];
   }, [hours.data]);
 
@@ -244,8 +246,11 @@ export default function AnalyticsReportPage() {
         <>
           <StatCards items={hourStats} />
           <Section title="Sales by Hour" icon={Clock} loading={hours.isLoading} error={hours.error} empty={!hours.data?.length}
-            head={['Hour', 'Orders', 'Revenue']}
-            rows={(hours.data ?? []).map((r) => [`${String(r.hour).padStart(2, '0')}:00`, String(r.order_count), fmt(r.revenue)])}
+            head={['Hour', 'Orders', 'Revenue', 'Profit', 'Margin']}
+            rows={(hours.data ?? []).map((r) => [
+              `${String(r.hour).padStart(2, '0')}:00`, String(r.order_count), fmt(r.revenue),
+              fmt(r.profit ?? 0), `${(r.margin_pct ?? 0).toFixed(1)}%`,
+            ])}
             filters={
               <label className="flex items-center gap-2 text-xs text-muted-foreground">
                 Day
@@ -325,7 +330,11 @@ export default function AnalyticsReportPage() {
             }
             actions={
               <ReportExportButtons
-                report="product-mix-document" params={{ from: range.from, to: range.to, outlet_id: outletId }}
+                report="product-mix-document"
+                params={{
+                  from: range.from, to: range.to, outlet_id: outletId,
+                  categories: mixCategories.join(','), stations: mixStations.join(','),
+                }}
                 fileNameBase={`product-mix-${range.from}-to-${range.to}`} title="Product Mix"
               />
             } />
