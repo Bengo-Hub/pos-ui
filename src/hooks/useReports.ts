@@ -181,7 +181,15 @@ export interface ProductMixRow {
   quantity: number;
   revenue: number;
   order_count: number;
+  /** Only set on top_items rows — the item's category and resolved KDS station. */
+  category?: string;
+  station_name?: string;
+  station_type?: string;
 }
+
+/** by_category / by_station aggregate rows — same shape as ProductMixRow, label is the
+ *  category name or station name ("Unassigned" when a line has no resolved station). */
+export type ProductMixAggRow = ProductMixRow;
 
 export interface VoidRow {
   voided_by: string;
@@ -346,17 +354,30 @@ export function useSalesByKDSStation(from: string, to: string, outletId?: string
   });
 }
 
+export interface ProductMixResult {
+  items: ProductMixRow[];
+  byCategory: ProductMixAggRow[];
+  byStation: ProductMixAggRow[];
+}
+
+const EMPTY_PRODUCT_MIX: ProductMixResult = { items: [], byCategory: [], byStation: [] };
+
 export function useProductMix(from: string, to: string, outletId?: string) {
   const tenantID = useTenantID();
   return useQuery({
     queryKey: reportKeys.productMix(tenantID, from, to, outletId),
-    // Backend returns { from, to, by_subtype, top_items } — the product-level table uses top_items.
+    // Backend returns { from, to, by_subtype, top_items, by_category, by_station } — the
+    // product-level table uses top_items; by_category/by_station feed the mix charts + filters.
     queryFn: async () => {
-      const res = await apiClient.get<{ top_items?: ProductMixRow[] } | ProductMixRow[]>(`${basePath(tenantID)}/product-mix`, { from, to, outlet_id: outletId });
-      return Array.isArray(res) ? res : res?.top_items ?? [];
+      const res = await apiClient.get<Partial<{
+        top_items: ProductMixRow[]; by_category: ProductMixAggRow[]; by_station: ProductMixAggRow[];
+      }> | ProductMixRow[]>(`${basePath(tenantID)}/product-mix`, { from, to, outlet_id: outletId });
+      if (Array.isArray(res)) return { items: res, byCategory: [], byStation: [] };
+      return { items: res?.top_items ?? [], byCategory: res?.by_category ?? [], byStation: res?.by_station ?? [] };
     },
     enabled: !!tenantID && !!from && !!to,
     staleTime: 2 * 60_000,
+    placeholderData: EMPTY_PRODUCT_MIX,
   });
 }
 

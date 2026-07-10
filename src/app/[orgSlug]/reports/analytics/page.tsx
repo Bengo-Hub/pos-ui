@@ -9,8 +9,10 @@
 
 import { useMemo, useState } from 'react';
 import { BarChart3, Users, Clock, Tag, Package, Ban, ChefHat, Search, X } from 'lucide-react';
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import {
   useSalesByStaff, useSalesByHour, useSalesByCategory, useSalesByKDSStation, useProductMix, useVoidSummary,
+  type ProductMixAggRow,
 } from '@/hooks/useReports';
 import { ReportExportButtons } from '@/components/reports/report-document-button';
 import { OutletFilter } from '@/components/outlet-filter';
@@ -62,6 +64,8 @@ export default function AnalyticsReportPage() {
   const [categorySearch, setCategorySearch] = useState('');
   const [stationType, setStationType] = useState('');
   const [mixSearch, setMixSearch] = useState('');
+  const [mixCategories, setMixCategories] = useState<string[]>([]);
+  const [mixStations, setMixStations] = useState<string[]>([]);
   const [voidSearch, setVoidSearch] = useState('');
   const [voidReason, setVoidReason] = useState('');
 
@@ -84,10 +88,24 @@ export default function AnalyticsReportPage() {
     [kdsStations.data, stationType],
   );
 
+  const mixItems = mix.data?.items ?? [];
+  const mixCategoryOptions = useMemo(
+    () => Array.from(new Set(mixItems.map((r) => r.category).filter((c): c is string => !!c))).sort(),
+    [mixItems],
+  );
+  const mixStationOptions = useMemo(
+    () => Array.from(new Set(mixItems.map((r) => r.station_name || 'Unassigned'))).sort(),
+    [mixItems],
+  );
   const mixRows = useMemo(() => {
     const q = mixSearch.trim().toLowerCase();
-    return (mix.data ?? []).filter((r) => !q || r.label.toLowerCase().includes(q));
-  }, [mix.data, mixSearch]);
+    return mixItems.filter((r) => {
+      if (q && !r.label.toLowerCase().includes(q)) return false;
+      if (mixCategories.length && !mixCategories.includes(r.category || '')) return false;
+      if (mixStations.length && !mixStations.includes(r.station_name || 'Unassigned')) return false;
+      return true;
+    });
+  }, [mixItems, mixSearch, mixCategories, mixStations]);
 
   const voidReasonOptions = useMemo(() => {
     const set = new Set<string>();
@@ -151,7 +169,7 @@ export default function AnalyticsReportPage() {
   }, [kdsStations.data]);
 
   const mixStats = useMemo(() => {
-    const rows = mix.data ?? [];
+    const rows = mixItems;
     const revenue = rows.reduce((s, r) => s + r.revenue, 0);
     const qty = rows.reduce((s, r) => s + r.quantity, 0);
     return [
@@ -159,7 +177,7 @@ export default function AnalyticsReportPage() {
       { label: 'Products Sold', value: rows.length.toLocaleString() },
       { label: 'Qty Sold', value: qty.toLocaleString() },
     ];
-  }, [mix.data]);
+  }, [mixItems]);
 
   const voidStats = useMemo(() => {
     const rows = voids.data ?? [];
@@ -287,10 +305,24 @@ export default function AnalyticsReportPage() {
       {tab === 'mix' && (
         <>
           <StatCards items={mixStats} />
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <MixBarChart title="Revenue by Category" icon={Tag} rows={mix.data?.byCategory ?? []} loading={mix.isLoading} />
+            <MixBarChart title="Revenue by KDS Station" icon={ChefHat} rows={mix.data?.byStation ?? []} loading={mix.isLoading} />
+          </div>
           <Section title="Product Mix" icon={Package} loading={mix.isLoading} error={mix.error} empty={!mixRows.length}
-            head={['Product', 'Qty', 'Orders', 'Revenue']}
-            rows={mixRows.map((r) => [r.label, String(r.quantity), String(r.order_count), fmt(r.revenue)])}
-            filters={<SearchBox value={mixSearch} onChange={setMixSearch} placeholder="Search products…" />}
+            head={['Product', 'Category', 'Station', 'Qty', 'Orders', 'Revenue']}
+            rows={mixRows.map((r) => [r.label, r.category || '—', r.station_name || 'Unassigned', String(r.quantity), String(r.order_count), fmt(r.revenue)])}
+            filters={
+              <div className="flex flex-wrap items-center gap-2">
+                <SearchBox value={mixSearch} onChange={setMixSearch} placeholder="Search products…" />
+                {mixCategoryOptions.length > 1 && (
+                  <MultiSelectChips label="Category" options={mixCategoryOptions} selected={mixCategories} onChange={setMixCategories} />
+                )}
+                {mixStationOptions.length > 1 && (
+                  <MultiSelectChips label="Station" options={mixStationOptions} selected={mixStations} onChange={setMixStations} />
+                )}
+              </div>
+            }
             actions={
               <ReportExportButtons
                 report="product-mix-document" params={{ from: range.from, to: range.to, outlet_id: outletId }}
@@ -379,6 +411,84 @@ function SelectBox({ value, onChange, options, placeholder }: {
         <option key={o.value} value={o.value}>{o.label}</option>
       ))}
     </select>
+  );
+}
+
+/** Toggleable-chip multi-select (e.g. "filter to these categories/stations") — a popover of
+ *  checkboxes rather than a native <select multiple>, which is unusable on touch/mobile. */
+function MultiSelectChips({ label, options, selected, onChange }: {
+  label: string; options: string[]; selected: string[]; onChange: (v: string[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const toggle = (v: string) => onChange(selected.includes(v) ? selected.filter((x) => x !== v) : [...selected, v]);
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className={cn(
+          'flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-sm',
+          selected.length ? 'border-primary/50 bg-primary/5 text-primary font-medium' : 'border-border text-muted-foreground hover:text-foreground',
+        )}
+      >
+        {label}{selected.length > 0 && ` (${selected.length})`}
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 top-full mt-1 z-50 w-52 max-h-64 overflow-y-auto rounded-xl border border-border bg-card shadow-xl py-1.5">
+            {selected.length > 0 && (
+              <button type="button" onClick={() => onChange([])} className="w-full flex items-center gap-1.5 px-3 py-1.5 text-xs text-muted-foreground hover:bg-accent">
+                <X className="h-3 w-3" /> Clear all
+              </button>
+            )}
+            {options.map((o) => (
+              <label key={o} className="flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-accent cursor-pointer">
+                <input type="checkbox" checked={selected.includes(o)} onChange={() => toggle(o)} className="rounded border-border" />
+                {o}
+              </label>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+/** Single-hue magnitude bar chart (revenue by category/station) — one series, so no legend;
+ *  rounded bar ends, recessive grid, hover tooltip. */
+function MixBarChart({ title, icon: Icon, rows, loading }: {
+  title: string; icon: React.ElementType; rows: ProductMixAggRow[]; loading: boolean;
+}) {
+  const data = [...rows].sort((a, b) => b.revenue - a.revenue).slice(0, 10);
+  return (
+    <div className="bg-card border border-border rounded-2xl overflow-hidden">
+      <div className="flex items-center gap-2 px-5 py-3 border-b border-border">
+        <Icon className="h-4 w-4 text-primary" />
+        <h2 className="font-semibold text-sm">{title}</h2>
+      </div>
+      {loading ? (
+        <div className="p-6 text-center text-sm text-muted-foreground">Loading…</div>
+      ) : data.length === 0 ? (
+        <div className="p-6 text-center text-sm text-muted-foreground">No data for this range</div>
+      ) : (
+        <div className="p-4 h-64">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={data} layout="vertical" margin={{ left: 8, right: 16, top: 4, bottom: 4 }}>
+              <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="hsl(var(--border))" />
+              <XAxis type="number" tickFormatter={(v) => fmt(v)} tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} />
+              <YAxis type="category" dataKey="label" width={110} tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} />
+              <Tooltip
+                cursor={{ fill: 'hsl(var(--accent))' }}
+                contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8, fontSize: 12 }}
+                formatter={(value) => [fmt(Number(value ?? 0)), 'Revenue']}
+              />
+              <Bar dataKey="revenue" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} maxBarSize={22} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+    </div>
   );
 }
 
