@@ -99,9 +99,23 @@ export interface MenuItem {
   taxAmount?: number;       // tax portion of the unit price (informational)
 }
 
+/** A single chosen modifier, resolved to the exact catalog data at the moment it was
+ *  selected — this is what actually gets sent to pos-api (metadata.modifiers), not the
+ *  raw group→option-id map, since the server has no other way to know the option's
+ *  name/price/sku without a second round trip. */
+export interface SelectedModifierDetail {
+  group_id: string;
+  group_name: string;
+  option_id: string;
+  option_name: string;
+  price_adjustment: number;
+  sku?: string;
+}
+
 export interface CartItem extends MenuItem {
   quantity: number;
   selectedModifiers?: Record<string, string[]>;
+  selectedModifierDetails?: SelectedModifierDetail[];
   modifierTotal?: number;
   serialNumber?: string;
   notes?: string;
@@ -657,11 +671,22 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
   const addItemToCart = useCallback(
     (item: MenuItem, mods?: Record<string, string[]>, qty = 1, serialNumber?: string) => {
       let modTotal = 0;
+      const modifierDetails: SelectedModifierDetail[] = [];
       if (mods && item.modifierGroups) {
         for (const group of item.modifierGroups) {
           for (const optId of mods[group.id] ?? []) {
             const opt = group.options.find((o) => o.id === optId);
-            if (opt) modTotal += opt.price;
+            if (opt) {
+              modTotal += opt.price;
+              modifierDetails.push({
+                group_id: group.id,
+                group_name: group.name,
+                option_id: opt.id,
+                option_name: opt.name,
+                price_adjustment: opt.price,
+                sku: opt.sku,
+              });
+            }
           }
         }
       }
@@ -670,7 +695,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
       setCart((prev) => {
         const next = (() => {
           if (mods || serialNumber) {
-            return [...prev, { ...item, quantity: qty, selectedModifiers: mods, modifierTotal: modTotal, serialNumber }];
+            return [...prev, { ...item, quantity: qty, selectedModifiers: mods, selectedModifierDetails: modifierDetails, modifierTotal: modTotal, serialNumber }];
           }
           const existing = prev.find((c) => c.id === item.id && !c.selectedModifiers);
           if (existing) {
@@ -1038,7 +1063,9 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
     ...(typeof item.taxRate === 'number' ? { tax_rate: item.taxRate } : {}),
     metadata: {
       ...(item.seat ? { seat: item.seat } : {}),
-      ...(item.selectedModifiers ? { modifiers: item.selectedModifiers } : {}),
+      // Sent as the resolved {group,option,price} details, not the raw group→option-id map —
+      // pos-api persists these straight to POSLineModifier with no second catalog lookup.
+      ...(item.selectedModifierDetails?.length ? { modifiers: item.selectedModifierDetails } : {}),
       ...(item.notes ? { notes: item.notes } : {}),
       ...(item.serialNumber ? { serial_number: item.serialNumber } : {}),
       // Selling-price guardrails so the backend hard-blocks out-of-band prices (manager override).

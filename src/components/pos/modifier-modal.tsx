@@ -10,6 +10,10 @@ export interface ModifierOption {
   name: string;
   price: number;
   isDefault?: boolean;
+  /** Inventory SKU this option consumes stock from, when it has one — carried through from
+   *  the catalog untouched so the order-line payload can pass it straight to pos-api without
+   *  a second lookup. Absent for price-only options (e.g. "No Sauce"). */
+  sku?: string;
 }
 
 export interface ModifierGroup {
