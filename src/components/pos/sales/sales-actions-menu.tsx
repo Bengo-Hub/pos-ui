@@ -5,11 +5,12 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import {
   ChevronDown, Eye, Pencil, Trash2, Truck,
-  CreditCard, RotateCcw, Link2, Mail, Coins,
+  CreditCard, RotateCcw, Link2, Mail, Coins, CalendarClock,
 } from 'lucide-react';
 import { PrintReceiptButton } from '@/components/pos/print-receipt-button';
 import { useNotifySale } from '@/hooks/usePOS';
 import { usePermissions, P } from '@/hooks/usePermissions';
+import { useAuthStore } from '@/store/auth';
 
 interface SalesActionsMenuProps {
   order: any;
@@ -18,8 +19,16 @@ interface SalesActionsMenuProps {
   onEditShipping: (order: any) => void;
   onViewPayments: (order: any) => void;
   onEditLines: (order: any) => void;
+  onMoveDate: (order: any) => void;
   onDelete: (order: any) => void;
 }
+
+// Tenant admin/owner tier — deliberately narrower than P.ORDERS_MANAGE (which a plain
+// manager also holds). Mirrors pos-api's dateMoveAdminRoles (orders_date_move.go): moving a
+// sale's reporting date is scoped to admins/platform owners only, one notch above the
+// manager-level authority ORDERS_MANAGE grants for line-price edits/voids. This is UX only —
+// the backend enforces the real boundary.
+const DATE_MOVE_ADMIN_ROLES = new Set(['admin', 'owner', 'pos_admin', 'super_admin', 'superuser']);
 
 /**
  * SalesActionsMenu — the GoDigital "Actions" dropdown for an All-Sales / POS-only row. Each item
@@ -31,11 +40,12 @@ interface SalesActionsMenuProps {
  *  - Invoice URL → copy a shareable link to the sale
  *  - New Sale Notification → pos-api /notify → notifications-service (customer SMS receipt)
  */
-export function SalesActionsMenu({ order, orgSlug, onView, onEditShipping, onViewPayments, onEditLines, onDelete }: SalesActionsMenuProps) {
+export function SalesActionsMenu({ order, orgSlug, onView, onEditShipping, onViewPayments, onEditLines, onMoveDate, onDelete }: SalesActionsMenuProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const notify = useNotifySale();
+  const authUser = useAuthStore((s) => s.user);
 
   // Permission gating — items the user cannot act on are HIDDEN (not disabled). The
   // backend enforces the same permissions, so this is UX, not the security boundary.
@@ -47,6 +57,10 @@ export function SalesActionsMenu({ order, orgSlug, onView, onEditShipping, onVie
   const canReturn = canChange; // return initiation mirrors the backend change_own/change/manage gate
   const canNotify = can(P.ORDERS_MANAGE);
   const canEditLines = can(P.ORDERS_MANAGE);
+  const canMoveDate =
+    authUser?.isPlatformOwner === true ||
+    authUser?.isSuperUser === true ||
+    (authUser?.roles ?? []).some((r) => DATE_MOVE_ADMIN_ROLES.has(String(r).toLowerCase()));
 
   useEffect(() => {
     if (!open) return;
@@ -115,6 +129,7 @@ export function SalesActionsMenu({ order, orgSlug, onView, onEditShipping, onVie
 
           {canViewPayments && <button className={item} onClick={() => { onViewPayments(order); close(); }}><CreditCard className="h-4 w-4 text-muted-foreground" /> View Payments</button>}
           {canEditLines && !linesLocked && <button className={item} onClick={() => { onEditLines(order); close(); }}><Coins className="h-4 w-4 text-muted-foreground" /> Edit Line Prices</button>}
+          {canMoveDate && <button className={item} onClick={() => { onMoveDate(order); close(); }}><CalendarClock className="h-4 w-4 text-muted-foreground" /> Move Sale Date</button>}
           {isFinal && canReturn && (
             <button className={item} onClick={() => { router.push(`/${orgSlug}/returns?invoice=${encodeURIComponent(order.order_number)}`); close(); }}>
               <RotateCcw className="h-4 w-4 text-muted-foreground" /> Sell Return

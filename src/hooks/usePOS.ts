@@ -1346,6 +1346,26 @@ export function useEditOrderLine() {
   });
 }
 
+/** Admin/platform-owner-only corrective tool: move a settled sale's reporting date (e.g. a
+ * sale rung up and synced a day late) without touching amounts, payments, or created_at.
+ * Gated server-side to the tenant's admin/owner tier — a plain manager cannot call this even
+ * though pos.orders.manage is the outer route gate. */
+export function useMoveOrderDate() {
+  const tenantID = useTenantID();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ orderId, newDate, reason }: { orderId: string; newDate: string; reason: string }) =>
+      apiClient.patch(`${basePath(tenantID)}/orders/${orderId}/date`, {
+        new_date: newDate, reason,
+      }),
+    onSuccess: (_d, v) => {
+      qc.invalidateQueries({ queryKey: ['pos-orders'] });
+      qc.invalidateQueries({ queryKey: ['pos-order', tenantID, v.orderId] });
+      qc.invalidateQueries({ queryKey: ['pos-reports'] });
+    },
+  });
+}
+
 export function useMergeTables() {
   const tenantID = useTenantID();
   const qc = useQueryClient();
