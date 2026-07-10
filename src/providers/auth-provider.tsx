@@ -98,6 +98,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => apiClient.setOnServerError(null);
   }, []);
 
+  // Warn before a terminal PIN session's 4-hour JWT expires. Terminal sessions carry NO
+  // refresh token by design (setTerminalSession sets refreshToken: '') — a hard ceiling
+  // forcing periodic PIN re-entry rather than silent renewal. Without a warning, the
+  // token just dies mid-shift: every in-flight/background request 401s at once (visible
+  // as an unexplained cluster of errors in the sync-monitor log), the on401 handler force
+  // logs out, and the cashier is dumped onto the PIN screen with no notice. Firing a
+  // heads-up toast starting 10 minutes out lets them re-enter their PIN on their own
+  // terms instead. SSO sessions are excluded — they silently refresh via refreshToken.
+  useEffect(() => {
+    if (!isTerminalSession || !session?.expiresAt || !orgSlug) return;
+    let warned = false;
+    const check = () => {
+      if (warned) return;
+      const msLeft = new Date(session.expiresAt).getTime() - Date.now();
+      if (msLeft <= 0 || msLeft > 10 * 60_000) return;
+      warned = true;
+      toast.warning('Session expiring soon', {
+        description: 'Your PIN session will expire in a few minutes. Re-enter your PIN to avoid an interruption mid-sale.',
+        duration: 20_000,
+        action: { label: 'Re-enter PIN', onClick: () => router.push(`/${orgSlug}/pin-login`) },
+      });
+    };
+    check();
+    const interval = setInterval(check, 60_000);
+    return () => clearInterval(interval);
+  }, [isTerminalSession, session?.expiresAt, orgSlug, router]);
+
   // SSO redirect for unauthenticated users — skip for kiosk, terminal sessions, and auth callback paths.
   // Also skip until rehydration is complete to prevent spurious SSO redirects on page refresh
   // when persisted isTerminalSession/session haven't been restored from localStorage yet.

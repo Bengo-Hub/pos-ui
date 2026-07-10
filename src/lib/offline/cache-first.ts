@@ -24,6 +24,19 @@ export const COLD_START_TIMEOUT_MS = 8_000;
 
 const inflight = new Set<string>();
 
+/** Turns a raw axios/fetch error into a sync-log detail that explains itself on review,
+ *  instead of the generic "Request failed with status code 401" — which reads as an
+ *  unexplained backend failure when it is almost always the terminal's 4-hour PIN JWT
+ *  hitting its (deliberately non-refreshable) ceiling mid-cycle. apiClient already retries
+ *  once via refreshAccessToken before a 401 ever reaches here, so by the time this fires
+ *  either the session truly has no refresh token (terminal) or the refresh itself failed. */
+function describeRefreshError(err: unknown): string {
+  const status = (err as { response?: { status?: number } })?.response?.status;
+  if (status === 401) return 'Session expired (401) — background sync will resume once re-authenticated';
+  if (status === 403) return 'Forbidden (403) — caller lacks permission for this dataset';
+  return err instanceof Error ? err.message : 'refresh failed';
+}
+
 /**
  * Per-dataset cooldown — a hard backstop independent of WHY revalidateDataset was called
  * (opportunistic cache-first hit on a component mount, the 5-min background job, a
@@ -77,7 +90,7 @@ export async function revalidateDataset<T>(
     // Cache stays authoritative — never surface a failed refresh to the UI.
     void appendSyncLog({
       direction: 'pull', entity, status: 'error', tenant_id: tenantId,
-      error: err instanceof Error ? err.message : 'refresh failed',
+      error: describeRefreshError(err),
     });
     return null;
   } finally {
