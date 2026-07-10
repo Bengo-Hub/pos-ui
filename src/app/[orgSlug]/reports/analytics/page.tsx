@@ -209,7 +209,7 @@ export default function AnalyticsReportPage() {
       {tab === 'staff' && (
         <>
           <StatCards items={staffStats} />
-          <Section title="Sales by Staff" icon={Users} loading={staff.isLoading} empty={!staffRows.length}
+          <Section title="Sales by Staff" icon={Users} loading={staff.isLoading} error={staff.error} empty={!staffRows.length}
             head={['Staff', 'Orders', 'Revenue']}
             rows={staffRows.map((r) => [r.staff_name || `${r.user_id.slice(0, 8)}…`, String(r.order_count), fmt(r.revenue)])}
             filters={<SearchBox value={staffSearch} onChange={setStaffSearch} placeholder="Search staff…" />}
@@ -225,7 +225,7 @@ export default function AnalyticsReportPage() {
       {tab === 'hour' && (
         <>
           <StatCards items={hourStats} />
-          <Section title="Sales by Hour" icon={Clock} loading={hours.isLoading} empty={!hours.data?.length}
+          <Section title="Sales by Hour" icon={Clock} loading={hours.isLoading} error={hours.error} empty={!hours.data?.length}
             head={['Hour', 'Orders', 'Revenue']}
             rows={(hours.data ?? []).map((r) => [`${String(r.hour).padStart(2, '0')}:00`, String(r.order_count), fmt(r.revenue)])}
             filters={
@@ -247,7 +247,7 @@ export default function AnalyticsReportPage() {
       {tab === 'category' && (
         <>
           <StatCards items={categoryStats} />
-          <Section title="Sales by Category" icon={Tag} loading={cats.isLoading} empty={!categoryRows.length}
+          <Section title="Sales by Category" icon={Tag} loading={cats.isLoading} error={cats.error} empty={!categoryRows.length}
             head={['Category', 'Qty Sold', 'Revenue']}
             rows={categoryRows.map((r) => [r.category_name, String(r.quantity_sold), fmt(r.revenue)])}
             filters={<SearchBox value={categorySearch} onChange={setCategorySearch} placeholder="Search categories…" />}
@@ -263,7 +263,7 @@ export default function AnalyticsReportPage() {
       {tab === 'kds' && (
         <>
           <StatCards items={kdsStats} />
-          <Section title="Sales by KDS Station" icon={ChefHat} loading={kdsStations.isLoading} empty={!kdsRows.length}
+          <Section title="Sales by KDS Station" icon={ChefHat} loading={kdsStations.isLoading} error={kdsStations.error} empty={!kdsRows.length}
             head={['Station', 'Orders', 'Items', 'Revenue']}
             rows={kdsRows.map((r) => [
               r.station_type ? `${r.station_name} (${r.station_type})` : r.station_name,
@@ -287,7 +287,7 @@ export default function AnalyticsReportPage() {
       {tab === 'mix' && (
         <>
           <StatCards items={mixStats} />
-          <Section title="Product Mix" icon={Package} loading={mix.isLoading} empty={!mixRows.length}
+          <Section title="Product Mix" icon={Package} loading={mix.isLoading} error={mix.error} empty={!mixRows.length}
             head={['Product', 'Qty', 'Orders', 'Revenue']}
             rows={mixRows.map((r) => [r.label, String(r.quantity), String(r.order_count), fmt(r.revenue)])}
             filters={<SearchBox value={mixSearch} onChange={setMixSearch} placeholder="Search products…" />}
@@ -303,7 +303,7 @@ export default function AnalyticsReportPage() {
       {tab === 'voids' && (
         <>
           <StatCards items={voidStats} />
-          <Section title="Voids" icon={Ban} loading={voids.isLoading} empty={!voidRows.length}
+          <Section title="Voids" icon={Ban} loading={voids.isLoading} error={voids.error} empty={!voidRows.length}
             head={['Staff', 'Voids', 'Amount', 'Reasons']}
             rows={voidRows.map((r) => [
               r.staff_name || `${(r.voided_by || '').slice(0, 8)}…`, String(r.void_count), fmt(r.total_voided_amount),
@@ -382,8 +382,8 @@ function SelectBox({ value, onChange, options, placeholder }: {
   );
 }
 
-function Section({ title, icon: Icon, loading, empty, head, rows, actions, filters }: {
-  title: string; icon: React.ElementType; loading: boolean; empty: boolean; head: string[]; rows: string[][];
+function Section({ title, icon: Icon, loading, error, empty, head, rows, actions, filters }: {
+  title: string; icon: React.ElementType; loading: boolean; error?: unknown; empty: boolean; head: string[]; rows: string[][];
   actions?: React.ReactNode; filters?: React.ReactNode;
 }) {
   return (
@@ -396,6 +396,14 @@ function Section({ title, icon: Icon, loading, empty, head, rows, actions, filte
       </div>
       {loading ? (
         <div className="p-6 text-center text-sm text-muted-foreground">Loading…</div>
+      ) : error ? (
+        // A failed request must never render as "No data" — that reads as "the range is
+        // genuinely empty" when it's actually a 401/500/etc the report silently swallowed
+        // (this exact confusion already happened once with the Hour tab's stale range param).
+        <div className="p-6 text-center text-sm text-destructive">
+          Failed to load: {(error as { response?: { data?: { error?: string } }; message?: string })?.response?.data?.error
+            || (error as Error)?.message || 'unknown error'}
+        </div>
       ) : empty ? (
         <div className="p-6 text-center text-sm text-muted-foreground">No data for this range</div>
       ) : (
