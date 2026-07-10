@@ -112,6 +112,8 @@ export interface ExpenseAccount {
   name: string;
   type?: string;
   category?: string;
+  balance?: string; // treasury serializes the decimal as a quoted string
+  currency?: string;
 }
 
 /** Expense categories (from treasury, proxied by pos-api) for the Add-Expense form dropdown.
@@ -143,6 +145,44 @@ export function useExpenseAccounts() {
     enabled: !!tenantID,
     staleTime: 5 * 60_000,
     select: (res) => res.accounts ?? [],
+  });
+}
+
+export interface ExpenseSupplier {
+  id: string;
+  name: string;
+  code?: string;
+}
+
+/** Supplier/vendor search-select (from inventory-api, proxied by pos-api) for the Add-Expense
+ *  "Expense for" field. `search` is a free-text filter forwarded server-side; degrades to an
+ *  empty list (never blocks the field — it always allows free-typing a name too). */
+export function useExpenseSuppliers(search?: string) {
+  const tenantID = useTenantID();
+  return useQuery({
+    queryKey: ['pos-expense-suppliers', tenantID, search ?? ''],
+    queryFn: () =>
+      apiClient.get<{ data?: ExpenseSupplier[]; total?: number }>(
+        `${basePath(tenantID)}/expenses/suppliers`,
+        search ? { search } : undefined,
+      ),
+    enabled: !!tenantID,
+    staleTime: 60_000,
+    select: (res) => res.data ?? [],
+  });
+}
+
+/** Live "next number" preview from treasury's document-sequence service, for the Add-Expense
+ *  form's "Reference No" placeholder. Display-only — never sent as the actual reference_no. */
+export function useExpenseNumberPreview() {
+  const tenantID = useTenantID();
+  return useQuery({
+    queryKey: ['pos-expense-next-number', tenantID],
+    queryFn: () =>
+      apiClient.get<{ next_number?: string }>(`${basePath(tenantID)}/expenses/next-number`),
+    enabled: !!tenantID,
+    staleTime: 30_000,
+    select: (res) => res.next_number ?? '',
   });
 }
 

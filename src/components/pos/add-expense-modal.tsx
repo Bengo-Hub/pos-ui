@@ -1,7 +1,7 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-import { Receipt, Store, CreditCard, X } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { AlertTriangle, Receipt, Store, CreditCard, X } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { cn } from '@/lib/utils';
@@ -11,7 +11,10 @@ import {
   useAddExpense,
   useExpenseCategories,
   useExpenseAccounts,
+  useExpenseSuppliers,
+  useExpenseNumberPreview,
 } from '@/hooks/usePOS';
+import { TypeaheadInput } from '@/components/ui/typeahead-input';
 
 interface AddExpenseModalProps {
   open: boolean;
@@ -48,14 +51,41 @@ export function AddExpenseModal({ open, onClose }: AddExpenseModalProps) {
   const [paidOn, setPaidOn] = useState(todayISO());
   const [paymentMethod, setPaymentMethod] = useState('cash');
   const [accountId, setAccountId] = useState('');
+  const [accountTouched, setAccountTouched] = useState(false);
   const [paymentNote, setPaymentNote] = useState('');
 
   const addExpense = useAddExpense();
   const categories = useExpenseCategories();
   const accounts = useExpenseAccounts();
+  const suppliers = useExpenseSuppliers();
+  const nextNumberPreview = useExpenseNumberPreview();
+  const supplierOptions = useMemo(
+    () => (suppliers.data ?? []).map((s) => ({ value: s.id, label: s.name, hint: s.code })),
+    [suppliers.data],
+  );
+
+  // Default the payment account to "Cash and Cash Equivalents" (code 1000, the tenant's default
+  // payout/settlement account) once accounts load — never clobbers an explicit user pick.
+  useEffect(() => {
+    if (accountTouched || accountId || !accounts.data?.length) return;
+    const cashAccount = accounts.data.find((a) => a.code === '1000');
+    if (cashAccount) setAccountId(cashAccount.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accounts.data]);
 
   const totalNum = parseFloat(total) || 0;
   const taxRateNum = parseFloat(taxRate) || 0;
+
+  const selectedAccount = accounts.data?.find((a) => a.id === accountId);
+  const selectedAccountBalance = selectedAccount?.balance !== undefined ? parseFloat(selectedAccount.balance) : undefined;
+  const paymentAmountNum = parseFloat(paymentAmount) || 0;
+  // Warn (never hard-block — the cashier may still be entering figures, or the account genuinely
+  // runs negative) when the chosen account's balance won't cover what's being recorded as paid.
+  const insufficientBalance =
+    !!selectedAccount &&
+    selectedAccountBalance !== undefined &&
+    !Number.isNaN(selectedAccountBalance) &&
+    (paymentAmountNum || totalNum) > selectedAccountBalance;
   // Treasury treats `amount` as the net and computes total = amount + tax. The GoDigital
   // "Total amount" is the gross the cashier enters; derive the tax portion from the rate so
   // amount = total / (1 + rate) and the stored total matches what was typed.
@@ -79,6 +109,7 @@ export function AddExpenseModal({ open, onClose }: AddExpenseModalProps) {
     setPaidOn(todayISO());
     setPaymentMethod('cash');
     setAccountId('');
+    setAccountTouched(false);
     setPaymentNote('');
   }
 
@@ -178,7 +209,7 @@ export function AddExpenseModal({ open, onClose }: AddExpenseModalProps) {
               <label className={labelClass}>Reference No</label>
               <input
                 type="text"
-                placeholder="Leave empty to autogenerate"
+                placeholder={nextNumberPreview.data || 'Leave empty to autogenerate'}
                 value={referenceNo}
                 onChange={(e) => setReferenceNo(e.target.value)}
                 className={inputClass}
@@ -199,12 +230,12 @@ export function AddExpenseModal({ open, onClose }: AddExpenseModalProps) {
             </div>
             <div>
               <label className={labelClass}>Expense for (optional)</label>
-              <input
-                type="text"
-                placeholder="e.g. supplier / staff name"
+              <TypeaheadInput
                 value={expenseFor}
-                onChange={(e) => setExpenseFor(e.target.value)}
-                className={inputClass}
+                onChange={setExpenseFor}
+                options={supplierOptions}
+                placeholder="e.g. supplier / staff name"
+                className="mt-1"
               />
             </div>
           </div>
@@ -301,7 +332,7 @@ export function AddExpenseModal({ open, onClose }: AddExpenseModalProps) {
                 <label className={labelClass}>Payment Account</label>
                 <select
                   value={accountId}
-                  onChange={(e) => setAccountId(e.target.value)}
+                  onChange={(e) => { setAccountId(e.target.value); setAccountTouched(true); }}
                   className={cn(inputClass, 'appearance-none')}
                   disabled={accounts.isLoading}
                 >
@@ -315,9 +346,18 @@ export function AddExpenseModal({ open, onClose }: AddExpenseModalProps) {
                   {accounts.data?.map((a) => (
                     <option key={a.id} value={a.id}>
                       {a.code ? `${a.code} — ${a.name}` : a.name}
+                      {a.balance !== undefined ? ` (bal. ${Number(a.balance).toLocaleString('en-KE', { minimumFractionDigits: 2 })} ${a.currency ?? ''})` : ''}
                     </option>
                   ))}
                 </select>
+                {insufficientBalance && (
+                  <p className="mt-1.5 flex items-start gap-1.5 text-[11px] text-amber-600">
+                    <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                    <span>
+                      {selectedAccount?.name}&apos;s balance ({Number(selectedAccount?.balance).toLocaleString('en-KE', { minimumFractionDigits: 2 })} {selectedAccount?.currency}) doesn&apos;t fully cover this amount — consider a different account.
+                    </span>
+                  </p>
+                )}
               </div>
             </div>
             <div>
