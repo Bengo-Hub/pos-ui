@@ -32,6 +32,7 @@ import {
 import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { useKDSStations } from '@/hooks/useKDS';
 import { useLoyaltyPrograms } from '@/hooks/useLoyalty';
+import { useActiveHappyHours } from '@/hooks/useHotel';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useAuthStore } from '@/store/auth';
 import { apiClient } from '@/lib/api/client';
@@ -387,6 +388,18 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
   const [activeBrand, setActiveBrand] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [cart, setCart] = useState<CartItem[]>([]);
+  // Live happy-hour/BOGO promotions — used to alert the waiter/cashier at the moment a covered
+  // item is added, e.g. "Add 1 more Burger to unlock Buy 1 Get 1 Free" (see addItemToCart).
+  const { data: activeHappyHours = [] } = useActiveHappyHours();
+  const happyHourForSku = useCallback(
+    (sku: string) =>
+      activeHappyHours.find((p) => {
+        const r = p.rule;
+        if (!r) return false;
+        return r.scope_type === 'all' || (r.scope_type === 'item' && (r.scope_ids ?? []).includes(sku));
+      }),
+    [activeHappyHours],
+  );
   // Pricing profile (Retail/Wholesale) — switching it re-prices the cart via inventory tier prices.
   const [pricingProfile, setPricingProfile] = useState<string>('');
   const [repricing, setRepricing] = useState(false);
@@ -653,18 +666,48 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
         }
       }
 
+      let totalQtyForSku = 0;
       setCart((prev) => {
-        if (mods || serialNumber) {
-          return [...prev, { ...item, quantity: qty, selectedModifiers: mods, modifierTotal: modTotal, serialNumber }];
-        }
-        const existing = prev.find((c) => c.id === item.id && !c.selectedModifiers);
-        if (existing) {
-          return prev.map((c) =>
-            c.id === item.id && !c.selectedModifiers ? { ...c, quantity: c.quantity + qty } : c
-          );
-        }
-        return [...prev, { ...item, quantity: qty }];
+        const next = (() => {
+          if (mods || serialNumber) {
+            return [...prev, { ...item, quantity: qty, selectedModifiers: mods, modifierTotal: modTotal, serialNumber }];
+          }
+          const existing = prev.find((c) => c.id === item.id && !c.selectedModifiers);
+          if (existing) {
+            return prev.map((c) =>
+              c.id === item.id && !c.selectedModifiers ? { ...c, quantity: c.quantity + qty } : c
+            );
+          }
+          return [...prev, { ...item, quantity: qty }];
+        })();
+        totalQtyForSku = next.filter((c) => c.sku === item.sku).reduce((s, c) => s + c.quantity, 0);
+        return next;
       });
+
+      // Waiter/cashier alert: this item is covered by a live happy-hour/BOGO deal. For BOGO,
+      // give a concrete "add N more" nudge (or celebrate a completed cycle) instead of just
+      // naming the deal — e.g. "Add 1 more Burger to unlock Buy 1 Get 1 Free" then, once they
+      // do, "Buy 1 Get 1 Free applied on Burger!". Keyed by sku so re-adding the same item
+      // replaces the toast instead of stacking duplicates.
+      const promo = happyHourForSku(item.sku);
+      if (promo?.rule) {
+        const r = promo.rule;
+        if (r.discount_type === 'bogo' && r.scope_type === 'item') {
+          const cycle = (r.buy_quantity || 1) + (r.get_quantity || 1);
+          const intoCycle = totalQtyForSku % cycle;
+          if (intoCycle === 0) {
+            toast.success(`🎉 ${promo.name}: Buy ${r.buy_quantity} Get ${r.get_quantity} ${r.get_discount_percent >= 100 ? 'Free' : `${r.get_discount_percent}% off`} applied on ${item.name}!`, { id: `happy-hour-${item.sku}` });
+          } else {
+            const remaining = cycle - intoCycle;
+            toast.info(`${promo.name}: add ${remaining} more ${item.name} to unlock Buy ${r.buy_quantity} Get ${r.get_quantity} ${r.get_discount_percent >= 100 ? 'Free' : `${r.get_discount_percent}% off`}`, { id: `happy-hour-${item.sku}` });
+          }
+        } else if (r.discount_type !== 'bogo') {
+          const deal = r.discount_type === 'percentage' ? `${r.discount_value}% off`
+            : r.discount_type === 'fixed_price' ? `fixed price KES ${r.discount_value}`
+            : `KES ${r.discount_value} off`;
+          toast.info(`${promo.name}: ${item.name} is ${deal}`, { id: `happy-hour-${item.sku}` });
+        }
+      }
 
       // The grid price already reflects the selected profile (menuItems carries every tier's price).
       // Only when the profile price isn't in the local map do we resolve it from inventory-api —
@@ -690,7 +733,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
           });
       }
     },
-    [pricingProfile, pricingTiers, user],
+    [pricingProfile, pricingTiers, user, happyHourForSku],
   );
 
   const proceedWithItem = useCallback(

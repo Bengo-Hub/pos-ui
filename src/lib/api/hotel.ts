@@ -477,33 +477,67 @@ export interface InventoryServiceItem {
 
 // ─── Happy-hour promotions ────────────────────────────────────────────────────
 
+/** The discount rule attached to a promotion — scope (which items) + mechanism (how much off). */
+export interface PromotionRule {
+  id: string;
+  promotion_id: string;
+  scope_type: 'all' | 'category' | 'item';
+  scope_ids?: string[];
+  discount_type: 'percentage' | 'fixed_amount' | 'fixed_price' | 'bogo';
+  discount_value: number;
+  // BOGO ("buy X get Y [at N% off]") — only meaningful when discount_type === 'bogo'.
+  buy_quantity: number;
+  get_quantity: number;
+  get_discount_percent: number;
+  max_discount?: number | null;
+  meal_period?: 'breakfast' | 'am_break' | 'lunch' | 'pm_break' | 'dinner' | null;
+}
+
 export interface HappyHourPromotion {
   id: string;
   name: string;
   promo_kind: string;
+  outlet_id?: string | null;
+  /** Recurring schedule: which weekdays (0=Sun..6=Sat) this deal repeats on, e.g. every Friday. */
   days_of_week?: number[];
   window_start?: string;
   window_end?: string;
+  /** One-time schedule: an explicit start/end instant instead of a recurring weekly window.
+   *  A promotion is "one-time" when it has start_at/end_at but no days_of_week. */
+  start_at?: string | null;
+  end_at?: string | null;
   auto_apply: boolean;
   status: string;
+  rule?: PromotionRule | null;
 }
 
-export interface CreateHappyHourInput {
+export interface HappyHourInput {
   name: string;
   promo_kind: 'happy_hour';
   outlet_id?: string;
+  // Recurring (leave start_at/end_at unset) — repeats every listed weekday within the daily window.
   days_of_week: number[];
   window_start: string;
   window_end: string;
+  // One-time (leave days_of_week empty) — a single explicit occurrence.
+  start_at?: string | null;
+  end_at?: string | null;
   auto_apply: boolean;
   scope_type?: 'all' | 'category' | 'item';
+  /** Item SKUs (scope_type='item') or inventory category names (scope_type='category'). */
   scope_ids?: string[];
-  discount_type?: 'percentage' | 'fixed_amount' | 'fixed_price';
+  discount_type?: 'percentage' | 'fixed_amount' | 'fixed_price' | 'bogo';
   discount_value: number;
+  buy_quantity?: number;
+  get_quantity?: number;
+  get_discount_percent?: number;
   max_discount?: number;
   /** Optional meal-period target for negotiated lunch/dinner rates. */
-  meal_period?: 'breakfast' | 'am_break' | 'lunch' | 'pm_break' | 'dinner';
+  meal_period?: 'breakfast' | 'am_break' | 'lunch' | 'pm_break' | 'dinner' | '';
 }
+
+/** @deprecated use HappyHourInput (same shape, renamed to cover one-time + BOGO) */
+export type CreateHappyHourInput = HappyHourInput;
 
 export const happyHourApi = {
   listActive: (tenantSlug: string) =>
@@ -513,6 +547,15 @@ export const happyHourApi = {
     apiClient.get<{ data: HappyHourPromotion[]; total: number }>(`/api/v1/${tenantSlug}/pos/promotions`)
       .then((r) => r.data ?? []),
 
-  create: (tenantSlug: string, body: CreateHappyHourInput) =>
+  get: (tenantSlug: string, id: string) =>
+    apiClient.get<HappyHourPromotion>(`/api/v1/${tenantSlug}/pos/promotions/${id}`),
+
+  create: (tenantSlug: string, body: HappyHourInput) =>
     apiClient.post<HappyHourPromotion>(`/api/v1/${tenantSlug}/pos/promotions`, body),
+
+  update: (tenantSlug: string, id: string, body: HappyHourInput) =>
+    apiClient.patch<HappyHourPromotion>(`/api/v1/${tenantSlug}/pos/promotions/${id}`, body),
+
+  delete: (tenantSlug: string, id: string) =>
+    apiClient.delete(`/api/v1/${tenantSlug}/pos/promotions/${id}`),
 };

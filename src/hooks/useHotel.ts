@@ -11,7 +11,7 @@ import {
   type CreateRoomBookingInput,
   type UpdateRoomBookingInput,
   type CreateEventBookingInput,
-  type CreateHappyHourInput,
+  type HappyHourInput,
   type LateCheckoutInput,
   type CreateHousekeepingInput,
   type UpdateHousekeepingInput,
@@ -435,11 +435,45 @@ export function useHappyHours() {
   });
 }
 
+export function useHappyHour(id?: string) {
+  const slug = useTenantSlug();
+  return useQuery({
+    queryKey: ['happy-hour', slug, id],
+    queryFn: () => happyHourApi.get(slug, id as string),
+    enabled: !!slug && !!id,
+  });
+}
+
 export function useCreateHappyHour() {
   const slug = useTenantSlug();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: CreateHappyHourInput) => happyHourApi.create(slug, body),
+    mutationFn: (body: HappyHourInput) => happyHourApi.create(slug, body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['happy-hours', slug] });
+      qc.invalidateQueries({ queryKey: ['happy-hours-active', slug] });
+    },
+  });
+}
+
+export function useUpdateHappyHour() {
+  const slug = useTenantSlug();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, body }: { id: string; body: HappyHourInput }) => happyHourApi.update(slug, id, body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['happy-hours', slug] });
+      qc.invalidateQueries({ queryKey: ['happy-hours-active', slug] });
+      qc.invalidateQueries({ queryKey: ['happy-hour', slug] });
+    },
+  });
+}
+
+export function useDeleteHappyHour() {
+  const slug = useTenantSlug();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => happyHourApi.delete(slug, id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['happy-hours', slug] });
       qc.invalidateQueries({ queryKey: ['happy-hours-active', slug] });
