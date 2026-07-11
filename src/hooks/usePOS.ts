@@ -975,6 +975,8 @@ export interface OrderListFilters {
   source?: string;          // pos_terminal | back_office | all
   subscriptions?: boolean;
   orderNumber?: string;
+  kdsStationId?: string;    // orders with a line routed to this KDS station
+  category?: string;        // orders with a line in this catalog category
   limit?: number;
   page?: number;
 }
@@ -1011,6 +1013,8 @@ export function useOrders(filters?: OrderListFilters) {
           source: filters?.source,
           subscriptions: filters?.subscriptions ? 'true' : undefined,
           order_number: filters?.orderNumber,
+          kds_station_id: filters?.kdsStationId,
+          category: filters?.category,
           limit: filters?.limit ?? 20,
           page: filters?.page ?? 1,
           sort: 'created_at',

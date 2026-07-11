@@ -30,6 +30,39 @@ type Tab = 'current' | 'history' | 'planner' | 'leave' | 'rotations';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
+// Period filter for shift history. Ranges are computed in the browser's local time (the
+// till's wall clock) and sent as YYYY-MM-DD; pos-api interprets them in the tenant timezone.
+type ShiftPeriod = 'all' | 'today' | 'week' | 'month' | 'custom';
+
+const ymdLocal = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+function shiftPeriodRange(
+  period: ShiftPeriod,
+  customFrom: string,
+  customTo: string,
+): { from?: string; to?: string } {
+  const now = new Date();
+  const today = ymdLocal(now);
+  switch (period) {
+    case 'today':
+      return { from: today, to: today };
+    case 'week': {
+      const d = new Date(now);
+      const dow = (d.getDay() + 6) % 7; // 0 = Monday
+      d.setDate(now.getDate() - dow);
+      return { from: ymdLocal(d), to: today };
+    }
+    case 'month':
+      return { from: ymdLocal(new Date(now.getFullYear(), now.getMonth(), 1)), to: today };
+    case 'custom':
+      return { from: customFrom || undefined, to: customTo || undefined };
+    case 'all':
+    default:
+      return {};
+  }
+}
+
 function formatDuration(start: string, end?: string): string {
   const from = new Date(start).getTime();
   const to = end ? new Date(end).getTime() : Date.now();
@@ -166,10 +199,31 @@ function ShiftsPage() {
   const closeShift = useCloseShift();
   const isOpen = session?.session_status === 'open';
   const { data: summary, refetch: refetchSummary } = useSessionSummary(isOpen);
-  const { data: historyData, isLoading: historyLoading } = useShiftHistory();
+
+  // History filters + pagination (default: all time, page 1).
+  const HISTORY_PAGE_SIZE = 15;
+  const [historyPeriod, setHistoryPeriod] = useState<ShiftPeriod>('all');
+  const [historyStatus, setHistoryStatus] = useState<'all' | 'open' | 'closed'>('all');
+  const [historyCustomFrom, setHistoryCustomFrom] = useState('');
+  const [historyCustomTo, setHistoryCustomTo] = useState('');
+  const [historyPage, setHistoryPage] = useState(1);
+  const historyRange = useMemo(
+    () => shiftPeriodRange(historyPeriod, historyCustomFrom, historyCustomTo),
+    [historyPeriod, historyCustomFrom, historyCustomTo],
+  );
+  const { data: historyData, isLoading: historyLoading, isFetching: historyFetching } = useShiftHistory({
+    from: historyRange.from,
+    to: historyRange.to,
+    status: historyStatus === 'all' ? undefined : historyStatus,
+    page: historyPage,
+    limit: HISTORY_PAGE_SIZE,
+  });
 
   const busy = openShift.isPending || closeShift.isPending;
   const historyRows = useMemo(() => historyData?.data ?? [], [historyData]);
+  const historyTotal = historyData?.total ?? historyRows.length;
+  const historyTotalPages = Math.max(1, Math.ceil(historyTotal / HISTORY_PAGE_SIZE));
+  const resetHistoryPage = () => setHistoryPage(1);
 
   async function handleOpen() {
     try {
@@ -437,13 +491,102 @@ function ShiftsPage() {
 
       {/* ── History Tab ───────────────────────────────────────────────────── */}
       {tab === 'history' && (
-        <div>
+        <div className="space-y-4">
+          {/* Filters: period + status */}
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap gap-1">
+              {([
+                { key: 'all',   label: 'All' },
+                { key: 'today', label: 'Today' },
+                { key: 'week',  label: 'This Week' },
+                { key: 'month', label: 'This Month' },
+                { key: 'custom', label: 'Custom' },
+              ] as const).map(({ key, label }) => (
+                <button
+                  key={key}
+                  onClick={() => { setHistoryPeriod(key); resetHistoryPage(); }}
+                  className={`px-2.5 py-1 rounded-full text-xs font-semibold transition-colors ${
+                    historyPeriod === key
+                      ? 'bg-primary text-primary-foreground shadow-sm'
+                      : 'bg-card border border-border text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {historyPeriod === 'custom' && (
+              <div className="flex items-center gap-1">
+                <input
+                  type="date"
+                  value={historyCustomFrom}
+                  max={historyCustomTo || undefined}
+                  onChange={(e) => { setHistoryCustomFrom(e.target.value); resetHistoryPage(); }}
+                  className="rounded-lg border border-border bg-card px-2 py-1 text-xs font-medium"
+                  aria-label="From date"
+                />
+                <span className="text-xs text-muted-foreground">→</span>
+                <input
+                  type="date"
+                  value={historyCustomTo}
+                  min={historyCustomFrom || undefined}
+                  onChange={(e) => { setHistoryCustomTo(e.target.value); resetHistoryPage(); }}
+                  className="rounded-lg border border-border bg-card px-2 py-1 text-xs font-medium"
+                  aria-label="To date"
+                />
+              </div>
+            )}
+
+            <select
+              value={historyStatus}
+              onChange={(e) => { setHistoryStatus(e.target.value as 'all' | 'open' | 'closed'); resetHistoryPage(); }}
+              className="rounded-lg border border-border bg-card px-2 py-1 text-xs font-semibold text-foreground"
+              aria-label="Filter by status"
+            >
+              <option value="all">All statuses</option>
+              <option value="open">Open</option>
+              <option value="closed">Closed</option>
+            </select>
+
+            {historyFetching && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
+          </div>
+
           {historyLoading ? (
             <div className="flex items-center justify-center py-20">
               <Loader2 className="h-6 w-6 animate-spin text-primary" />
             </div>
           ) : (
-            <HistoryTable rows={historyRows} />
+            <>
+              <HistoryTable rows={historyRows} />
+
+              {/* Pagination */}
+              {historyTotalPages > 1 && (
+                <div className="flex items-center justify-between pt-1">
+                  <p className="text-xs text-muted-foreground">
+                    Page {historyPage} of {historyTotalPages} · {historyTotal} shift{historyTotal === 1 ? '' : 's'}
+                  </p>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={historyPage <= 1}
+                      onClick={() => setHistoryPage((p) => Math.max(1, p - 1))}
+                    >
+                      Prev
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={historyPage >= historyTotalPages}
+                      onClick={() => setHistoryPage((p) => Math.min(historyTotalPages, p + 1))}
+                    >
+                      Next
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
       )}

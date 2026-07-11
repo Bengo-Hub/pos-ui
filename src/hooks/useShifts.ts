@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '@/store/auth';
-import { shiftsApi, type SessionSummary } from '@/lib/api/shifts';
+import { shiftsApi, type SessionSummary, type ShiftHistoryParams } from '@/lib/api/shifts';
 import { getSnapshot, cacheSnapshot } from '@/lib/db/pos-db';
 import { isEffectivelyOnline, isNetworkShapedError } from '@/lib/connectivity';
 
@@ -53,13 +53,14 @@ export function useSessionSummary(enabled: boolean) {
   });
 }
 
-export function useShiftHistory() {
+export function useShiftHistory(params?: ShiftHistoryParams) {
   const tenantId = useTenantId();
   return useQuery({
-    queryKey: ['shift-history', tenantId],
-    queryFn: () => shiftsApi.getHistory(tenantId),
+    queryKey: ['shift-history', tenantId, params],
+    queryFn: () => shiftsApi.getHistory(tenantId, params),
     enabled: !!tenantId,
     staleTime: 60_000,
+    placeholderData: (prev) => prev, // keep the current page visible while the next loads
   });
 }
 

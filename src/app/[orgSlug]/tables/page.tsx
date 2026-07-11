@@ -10,7 +10,8 @@ import { PrintReceiptButton } from '@/components/pos/print-receipt-button';
 import { POSPaymentModal } from '@/components/pos/payment-modal';
 import { Badge, Button } from '@/components/ui/base';
 import { cn } from '@/lib/utils';
-import { useTables, useSections, useUpdateTableStatus, useReleaseTable, useMergeTables, useUnmergeTables, useOrders } from '@/hooks/usePOS';
+import { useTables, useSections, useUpdateTableStatus, useReleaseTable, useMergeTables, useUnmergeTables, useOrders, useCategories } from '@/hooks/usePOS';
+import { useKDSStations } from '@/hooks/useKDS';
 import { usePermissions, P } from '@/hooks/usePermissions';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { useAuthStore } from '@/store/auth';
@@ -411,8 +412,58 @@ function buildAddToBillUrl(orgSlug: string, order: any): string {
   return `/${orgSlug}/order?${params.toString()}`;
 }
 
+// Period options for the My Bills date filter. Ranges are computed in the browser's local
+// time (the till's wall clock) and sent as YYYY-MM-DD; pos-api interprets those bounds in the
+// tenant timezone, so the day matches the local calendar day regardless of server TZ.
+type BillsPeriod = 'today' | 'yesterday' | 'week' | 'month' | 'custom';
+
+const ymdLocal = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+function billsPeriodRange(
+  period: BillsPeriod,
+  customFrom: string,
+  customTo: string,
+): { from?: string; to?: string } {
+  const now = new Date();
+  const today = ymdLocal(now);
+  switch (period) {
+    case 'today':
+      return { from: today, to: today };
+    case 'yesterday': {
+      const y = new Date(now);
+      y.setDate(now.getDate() - 1);
+      const s = ymdLocal(y);
+      return { from: s, to: s };
+    }
+    case 'week': {
+      // Current calendar week, Monday → today.
+      const d = new Date(now);
+      const dow = (d.getDay() + 6) % 7; // 0 = Monday
+      d.setDate(now.getDate() - dow);
+      return { from: ymdLocal(d), to: today };
+    }
+    case 'month': {
+      const first = new Date(now.getFullYear(), now.getMonth(), 1);
+      return { from: ymdLocal(first), to: today };
+    }
+    case 'custom':
+      return { from: customFrom || undefined, to: customTo || undefined };
+    default:
+      return { from: today, to: today };
+  }
+}
+
 function MyBillsTab({ orgSlug }: { orgSlug: string }) {
   const [filter, setFilter] = useState<'active' | 'settled' | 'voided'>('active');
+  // Default the date filter to today; KDS station + category default to "all".
+  const [period, setPeriod] = useState<BillsPeriod>('today');
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo] = useState('');
+  const [kdsStationId, setKdsStationId] = useState('');
+  const [category, setCategory] = useState('');
+  const { data: kdsStations } = useKDSStations();
+  const { data: categories } = useCategories();
   const router = useRouter();
   const { can } = usePermissions();
   const user = useAuthStore((s) => s.user);
@@ -438,11 +489,30 @@ function MyBillsTab({ orgSlug }: { orgSlug: string }) {
   const [page, setPage] = useState(1);
   const selectFilter = (key: 'active' | 'settled' | 'voided') => { setFilter(key); setPage(1); };
 
-  const { data: activeData } = useOrders(useMemo(() => ({ status: 'open,pending_payment', staffId }), [staffId]));
-  const { data: settledData } = useOrders(useMemo(() => ({ status: 'completed', staffId }), [staffId]));
-  const { data: voidedData } = useOrders(useMemo(() => ({ status: 'voided,cancelled', staffId }), [staffId]));
+  // Shared filter set (date range + KDS station + category) applied to every status bucket so the
+  // tab counts and the visible list agree on the same scope. Recomputed when any filter changes.
+  const range = useMemo(
+    () => billsPeriodRange(period, customFrom, customTo),
+    [period, customFrom, customTo],
+  );
+  const sharedFilters = useMemo(
+    () => ({
+      staffId,
+      from: range.from,
+      to: range.to,
+      kdsStationId: kdsStationId || undefined,
+      category: category || undefined,
+    }),
+    [staffId, range.from, range.to, kdsStationId, category],
+  );
+  // Any filter change returns the list to page 1.
+  const resetPage = () => setPage(1);
+
+  const { data: activeData } = useOrders(useMemo(() => ({ ...sharedFilters, status: 'open,pending_payment' }), [sharedFilters]));
+  const { data: settledData } = useOrders(useMemo(() => ({ ...sharedFilters, status: 'completed' }), [sharedFilters]));
+  const { data: voidedData } = useOrders(useMemo(() => ({ ...sharedFilters, status: 'voided,cancelled' }), [sharedFilters]));
   const { data: currentData, isLoading } = useOrders(
-    useMemo(() => ({ status: statusMap[filter], staffId, page, limit: PAGE_SIZE }), [filter, staffId, page])
+    useMemo(() => ({ ...sharedFilters, status: statusMap[filter], page, limit: PAGE_SIZE }), [sharedFilters, filter, page])
   );
 
   const activeCnt = activeData?.total ?? 0;
@@ -494,6 +564,78 @@ function MyBillsTab({ orgSlug }: { orgSlug: string }) {
             </span>
           </button>
         ))}
+      </div>
+
+      {/* Filters: period + KDS station + category. Defaults to today. */}
+      <div className="shrink-0 px-6 pb-2 flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap gap-1">
+          {([
+            { key: 'today',     label: 'Today' },
+            { key: 'yesterday', label: 'Yesterday' },
+            { key: 'week',      label: 'This Week' },
+            { key: 'month',     label: 'This Month' },
+            { key: 'custom',    label: 'Custom' },
+          ] as const).map(({ key, label }) => (
+            <button
+              key={key}
+              onClick={() => { setPeriod(key); resetPage(); }}
+              className={cn(
+                'px-2.5 py-1 rounded-full text-xs font-semibold transition-all',
+                period === key
+                  ? 'bg-primary/90 text-primary-foreground shadow-sm'
+                  : 'bg-card border border-border text-muted-foreground hover:text-foreground'
+              )}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {period === 'custom' && (
+          <div className="flex items-center gap-1">
+            <input
+              type="date"
+              value={customFrom}
+              max={customTo || undefined}
+              onChange={(e) => { setCustomFrom(e.target.value); resetPage(); }}
+              className="rounded-lg border border-border bg-card px-2 py-1 text-xs font-medium"
+              aria-label="From date"
+            />
+            <span className="text-xs text-muted-foreground">→</span>
+            <input
+              type="date"
+              value={customTo}
+              min={customFrom || undefined}
+              onChange={(e) => { setCustomTo(e.target.value); resetPage(); }}
+              className="rounded-lg border border-border bg-card px-2 py-1 text-xs font-medium"
+              aria-label="To date"
+            />
+          </div>
+        )}
+
+        <select
+          value={kdsStationId}
+          onChange={(e) => { setKdsStationId(e.target.value); resetPage(); }}
+          className="rounded-lg border border-border bg-card px-2 py-1 text-xs font-semibold text-foreground max-w-40"
+          aria-label="Filter by KDS station"
+        >
+          <option value="">All stations</option>
+          {(kdsStations?.data ?? []).map((s) => (
+            <option key={s.id} value={s.id}>{s.name}</option>
+          ))}
+        </select>
+
+        <select
+          value={category}
+          onChange={(e) => { setCategory(e.target.value); resetPage(); }}
+          className="rounded-lg border border-border bg-card px-2 py-1 text-xs font-semibold text-foreground max-w-40"
+          aria-label="Filter by category"
+        >
+          <option value="">All categories</option>
+          {(categories ?? []).map((c) => (
+            <option key={c.name} value={c.name}>{c.name}</option>
+          ))}
+        </select>
       </div>
 
       {/* Orders list */}
