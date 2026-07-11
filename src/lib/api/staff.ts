@@ -26,11 +26,17 @@ export interface StaffProfile {
 }
 
 export interface CreateStaffInput {
-  /** Optional — omit to create a local PIN-only staff member (no SSO account). */
+  /**
+   * Required. Every staff member is provisioned in auth-service first (S2S) and linked
+   * to the real auth user id — no more local PIN-only accounts with invented ids.
+   */
+  email: string;
+  /** Optional override when the auth user id is already known; normally resolved by email. */
   user_id?: string;
   outlet_id: string;
   name: string;
   role: string;
+  phone?: string;
   employment_type?: string;
   /** Optional 4-6 digit terminal PIN; lets the new member clock in without an SSO login. */
   pin?: string;

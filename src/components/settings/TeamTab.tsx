@@ -49,7 +49,7 @@ export function TeamTab() {
   const [view, setView] = useState<'members' | 'roles'>('members');
   const [showAdd, setShowAdd] = useState(false);
   const [addForm, setAddForm] = useState({
-    name: '', role: 'cashier', employment_type: 'full_time', pin: '', mpesa_phone: '',
+    name: '', email: '', role: 'cashier', employment_type: 'full_time', pin: '', mpesa_phone: '',
   });
 
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -87,11 +87,15 @@ export function TeamTab() {
 
   async function handleAddMember() {
     if (!addForm.name.trim()) { toast.error('Name is required'); return; }
+    const email = addForm.email.trim().toLowerCase();
+    if (!email || !email.includes('@')) { toast.error('A valid email is required — the member is created in SSO'); return; }
     if (!outletId) { toast.error('Select an outlet before adding staff'); return; }
     if (addForm.pin && addForm.pin.length < 4) { toast.error('PIN must be at least 4 digits'); return; }
     try {
-      // No user_id → pos-api creates a local PIN-only staff member (terminal login only).
+      // pos-api provisions the user in auth-service by email (S2S) and links the real
+      // auth user id — no orphan ids.
       const input: CreateStaffInput = {
+        email,
         name: addForm.name.trim(),
         role: addForm.role,
         outlet_id: outletId,
@@ -102,7 +106,7 @@ export function TeamTab() {
       await create.mutateAsync(input);
       toast.success('Team member added');
       setShowAdd(false);
-      setAddForm({ name: '', role: 'cashier', employment_type: 'full_time', pin: '', mpesa_phone: '' });
+      setAddForm({ name: '', email: '', role: 'cashier', employment_type: 'full_time', pin: '', mpesa_phone: '' });
     } catch (err) {
       toast.error(await apiErrorMessage(err, 'Failed to add team member'));
     }
@@ -353,6 +357,17 @@ export function TeamTab() {
                   onChange={(e) => setAddForm((f) => ({ ...f, name: e.target.value }))}
                   placeholder="Full name"
                 />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground">Email *</label>
+                <input
+                  type="email"
+                  className={inputClass}
+                  value={addForm.email}
+                  onChange={(e) => setAddForm((f) => ({ ...f, email: e.target.value }))}
+                  placeholder="name@example.com"
+                />
+                <p className="mt-1 text-[10px] text-muted-foreground">Creates the member&apos;s SSO account and links their real user id.</p>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
