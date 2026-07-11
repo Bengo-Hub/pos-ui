@@ -24,6 +24,7 @@ import { TrackingIframeModal } from '@bengo-hub/shared-ui-lib';
 import { SplitPaymentModal } from '@/components/pos/split-payment-modal';
 import { PrintReceiptButton } from '@/components/pos/print-receipt-button';
 import { VoidBillButton } from '@/components/pos/void-bill-button';
+import { VoidLineButton } from '@/components/pos/void-line-button';
 import { GenerateVoidCodeButton } from '@/components/pos/generate-void-code-button';
 import { GenerateComplimentaryCodeButton } from '@/components/pos/generate-complimentary-code-button';
 import { useAuthStore } from '@/store/auth';
@@ -295,17 +296,54 @@ export default function OrdersPage() {
                   <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Items</p>
                   {selectedOrder.edges.lines.map((line: any, i: number) => {
                     const lineTotal = line.total_price ?? (line.unit_price != null && line.quantity != null ? line.unit_price * line.quantity : 0);
+                    const fullyVoided = line.voided_qty != null && line.voided_qty >= (line.quantity ?? 0);
+                    const partiallyVoided = line.voided_qty != null && line.voided_qty < (line.quantity ?? 0);
                     return (
                       <div key={line.id ?? i} className="space-y-0.5">
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="text-foreground font-medium">
+                        <div className="flex items-center justify-between text-xs gap-2">
+                          <span className={cn('font-medium', fullyVoided ? 'text-muted-foreground line-through' : 'text-foreground')}>
                             {line.quantity}x {line.name ?? line.item_name ?? 'Item'}
+                            {fullyVoided && <span className="ml-1.5 no-underline text-[10px] font-semibold text-destructive">Voided</span>}
+                            {partiallyVoided && <span className="ml-1.5 text-[10px] font-semibold text-amber-600">−{line.voided_qty} voided</span>}
                           </span>
-                          <span className="font-medium">KES {lineTotal.toLocaleString()}</span>
+                          <span className={cn('font-medium shrink-0', fullyVoided && 'text-muted-foreground line-through')}>KES {lineTotal.toLocaleString()}</span>
                         </div>
-                        {(line.unit_price ?? 0) > 0 && (
-                          <p className="text-[11px] text-muted-foreground pl-3">@ KES {line.unit_price.toLocaleString()} each</p>
-                        )}
+                        <div className="flex items-center justify-between gap-2 pl-3">
+                          {(line.unit_price ?? 0) > 0 ? (
+                            <p className="text-[11px] text-muted-foreground">@ KES {line.unit_price.toLocaleString()} each</p>
+                          ) : <span />}
+                          {/* Partial voiding: drop just this item (e.g. an ingredient ran out) without
+                              voiding the whole bill — same manager-approval flow as Void Bill. */}
+                          <VoidLineButton
+                            orderId={selectedOrder.id}
+                            orderNumber={selectedOrder.order_number}
+                            lineId={line.id}
+                            name={line.name ?? line.item_name ?? 'Item'}
+                            quantity={line.quantity ?? 1}
+                            status={selectedOrder.status}
+                            voidedQty={line.voided_qty}
+                            compact
+                            onVoided={({ lineId, voidedQty }) => {
+                              setSelectedOrder((prev: any) => {
+                                if (!prev) return prev;
+                                const lns = prev.edges?.lines ?? [];
+                                const target = lns.find((ln: any) => ln.id === lineId);
+                                if (!target) return prev;
+                                const unit = (target.quantity ?? 0) > 0
+                                  ? (target.total_price ?? (target.unit_price ?? 0) * target.quantity) / target.quantity
+                                  : 0;
+                                const voidedValue = unit * voidedQty;
+                                return {
+                                  ...prev,
+                                  subtotal: Math.max(0, (prev.subtotal ?? 0) - voidedValue),
+                                  total_amount: Math.max(0, (prev.total_amount ?? 0) - voidedValue),
+                                  edges: { ...prev.edges, lines: lns.map((ln: any) => ln.id === lineId ? { ...ln, voided_qty: voidedQty } : ln) },
+                                };
+                              });
+                              queryClient.invalidateQueries({ queryKey: ['pos-orders'] });
+                            }}
+                          />
+                        </div>
                       </div>
                     );
                   })}

@@ -1331,6 +1331,65 @@ export function useVoidOrder() {
 }
 
 /**
+ * useVoidOrderLine soft-voids a SINGLE line off an open bill (partial voiding) — e.g. one item
+ * became unavailable (an ingredient ran out) while the rest of the order stands. Mirrors
+ * useVoidOrder's online + offline-queue + idempotency shape, but keyed by line_id so the
+ * offline-sync worker replays it against POST …/lines/{lineID}/void. The line is kept for audit
+ * (voided_qty) rather than deleted, and pos-api reduces the order totals by the voided value.
+ * `qty` is optional; omit it to void the whole line, pass a smaller number for a partial-qty void.
+ */
+export function useVoidOrderLine() {
+  const tenantID = useTenantID();
+  const tenantSlug = useTenantSlug();
+  const isOnline = useEffectiveOnline();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ orderId, lineId, qty, reason, approvalToken, voidCode }: { orderId: string; lineId: string; qty?: number; reason: string; approvalToken?: string; voidCode?: string }) => {
+      const localId = uuidv4();
+      const queueOffline = async () => {
+        const { getOfflineOrderByLocalId, saveDraftVoid } = await import('@/lib/db/pos-db');
+        const localOrder = await getOfflineOrderByLocalId(orderId);
+        await saveDraftVoid({
+          local_id: localId,
+          server_order_id: localOrder ? undefined : orderId,
+          local_order_id: localOrder ? orderId : undefined,
+          line_id: lineId,
+          reason,
+          approval_token: approvalToken,
+          tenant_id: tenantID,
+          tenant_slug: tenantSlug,
+          created_at: new Date().toISOString(),
+          synced: false,
+        });
+        return { offline: true };
+      };
+      // A one-time void code is validated server-side and can expire before an offline queue drains,
+      // so a code-approved void must not queue — only token/self-approved voids write behind.
+      if (!isOnline && !voidCode) return queueOffline();
+      try {
+        return await apiClient.post(
+          `${basePath(tenantID)}/orders/${orderId}/lines/${lineId}/void`,
+          { qty, reason, approval_token: approvalToken, void_code: voidCode },
+          idemHeaders(localId),
+        );
+      } catch (err) {
+        // Write-behind on weak wifi — same localId, so a replay dedups server-side.
+        const { isNetworkShapedError } = await import('@/lib/connectivity');
+        if (!isNetworkShapedError(err) || voidCode) throw err;
+        toast.info('Network unreachable — item void saved offline and will sync automatically.');
+        return queueOffline();
+      }
+    },
+    networkMode: 'always',
+    onSuccess: (_d, v) => {
+      qc.invalidateQueries({ queryKey: ['pos-orders'] });
+      qc.invalidateQueries({ queryKey: ['pos-order', tenantID, v.orderId] });
+      qc.invalidateQueries({ queryKey: ['pos-tables'] });
+    },
+  });
+}
+
+/**
  * useGenerateVoidCode lets a manager generate a one-time, order-scoped code to SHARE with a
  * waiter/cashier so they can void a specific bill when the manager isn't at the terminal.
  */

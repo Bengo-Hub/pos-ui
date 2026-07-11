@@ -4,7 +4,9 @@ import { Badge } from '@/components/ui/base';
 import { useOrder } from '@/hooks/usePOS';
 import { PrintReceiptButton } from '@/components/pos/print-receipt-button';
 import { VoidBillButton } from '@/components/pos/void-bill-button';
+import { VoidLineButton } from '@/components/pos/void-line-button';
 import { GenerateVoidCodeButton } from '@/components/pos/generate-void-code-button';
+import { cn } from '@/lib/utils';
 import { GenerateComplimentaryCodeButton } from '@/components/pos/generate-complimentary-code-button';
 import { useSetAsideLine } from '@/hooks/useHeldItems';
 import { Loader2, Plus, PackageOpen } from 'lucide-react';
@@ -124,37 +126,60 @@ export default function OrderDetailPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
-                  {lines.map((line: any, i: number) => (
-                    <tr key={line.id ?? i}>
-                      <td className="px-4 py-3">{line.name ?? line.item_name ?? 'Item'}</td>
-                      <td className="px-4 py-3 text-center">{line.quantity}</td>
-                      <td className="px-4 py-3 text-right font-mono">
-                        KES {(line.unit_price ?? 0).toLocaleString()}
-                      </td>
-                      <td className="px-4 py-3 text-right font-mono font-semibold">
-                        KES {(
-                          line.total_price ??
-                          line.line_total ??
-                          line.total ??
-                          (line.unit_price ?? 0) * (line.quantity ?? 0)
-                        ).toLocaleString()}
-                      </td>
-                      {['open', 'pending_payment'].includes(order.status) && (
-                        <td className="px-4 py-3 text-right">
-                          {line.id && !line.voided_qty && (
-                            <button
-                              onClick={() => handleSetAside(line.id, line.name ?? line.item_name ?? 'Item')}
-                              disabled={setAside.isPending}
-                              title="Set aside for resale (wrong order, already made)"
-                              className="inline-flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400 hover:underline disabled:opacity-50"
-                            >
-                              <PackageOpen className="h-3.5 w-3.5" /> Set aside
-                            </button>
-                          )}
+                  {lines.map((line: any, i: number) => {
+                    const fullyVoided = line.voided_qty != null && line.voided_qty >= (line.quantity ?? 0);
+                    const partiallyVoided = line.voided_qty != null && line.voided_qty < (line.quantity ?? 0);
+                    return (
+                      <tr key={line.id ?? i} className={cn(fullyVoided && 'text-muted-foreground')}>
+                        <td className="px-4 py-3">
+                          <span className={cn(fullyVoided && 'line-through')}>{line.name ?? line.item_name ?? 'Item'}</span>
+                          {fullyVoided && <span className="ml-2 text-[10px] font-semibold text-destructive">Voided</span>}
+                          {partiallyVoided && <span className="ml-2 text-[10px] font-semibold text-amber-600">−{line.voided_qty} voided</span>}
                         </td>
-                      )}
-                    </tr>
-                  ))}
+                        <td className="px-4 py-3 text-center">{line.quantity}</td>
+                        <td className="px-4 py-3 text-right font-mono">
+                          KES {(line.unit_price ?? 0).toLocaleString()}
+                        </td>
+                        <td className={cn('px-4 py-3 text-right font-mono font-semibold', fullyVoided && 'line-through')}>
+                          KES {(
+                            line.total_price ??
+                            line.line_total ??
+                            line.total ??
+                            (line.unit_price ?? 0) * (line.quantity ?? 0)
+                          ).toLocaleString()}
+                        </td>
+                        {['open', 'pending_payment'].includes(order.status) && (
+                          <td className="px-4 py-3">
+                            {line.id && !line.voided_qty && (
+                              <div className="flex items-center justify-end gap-3">
+                                <button
+                                  onClick={() => handleSetAside(line.id, line.name ?? line.item_name ?? 'Item')}
+                                  disabled={setAside.isPending}
+                                  title="Set aside for resale (wrong order, already made)"
+                                  className="inline-flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400 hover:underline disabled:opacity-50"
+                                >
+                                  <PackageOpen className="h-3.5 w-3.5" /> Set aside
+                                </button>
+                                {/* Void just this item (e.g. an ingredient is out of stock) while the
+                                    rest of the bill stands — same manager-approval flow as Void Bill. */}
+                                <VoidLineButton
+                                  orderId={id}
+                                  orderNumber={order.order_number}
+                                  lineId={line.id}
+                                  name={line.name ?? line.item_name ?? 'Item'}
+                                  quantity={line.quantity ?? 1}
+                                  status={order.status}
+                                  voidedQty={line.voided_qty}
+                                  compact
+                                  onVoided={() => refetch()}
+                                />
+                              </div>
+                            )}
+                          </td>
+                        )}
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             ) : (
