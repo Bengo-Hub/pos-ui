@@ -40,7 +40,16 @@ export function ReceiptPrint({
 }: ReceiptPrintProps) {
   const currency = receipt.currency || 'KES';
   const fmt = (n: number) => `${currency} ${n.toFixed(2)}`;
-  const resolvedOutlet = outletName || receipt.outlet_name;
+  const norm = (s?: string) => (s ?? '').trim().toLowerCase();
+  const resolvedOutletRaw = outletName || receipt.outlet_name;
+  // De-duplicate the branding block: hide the outlet line when it repeats the tenant name, and the
+  // address when it repeats either (fixes the same name printing 2-3 times).
+  const resolvedOutlet = norm(resolvedOutletRaw) === norm(tenantName) ? undefined : resolvedOutletRaw;
+  const resolvedAddressRaw = tenantAddress || receipt.outlet_address;
+  const resolvedAddress =
+    norm(resolvedAddressRaw) === norm(resolvedOutletRaw) || norm(resolvedAddressRaw) === norm(tenantName)
+      ? undefined
+      : resolvedAddressRaw;
   const fmtDate = (s: string) =>
     new Date(s).toLocaleString('en-KE', {
       day: '2-digit',
@@ -67,8 +76,8 @@ export function ReceiptPrint({
           {resolvedOutlet}
         </p>
       )}
-      {(tenantAddress || receipt.outlet_address) && (
-        <p className="receipt-center receipt-small">{tenantAddress || receipt.outlet_address}</p>
+      {resolvedAddress && (
+        <p className="receipt-center receipt-small">{resolvedAddress}</p>
       )}
       {tenantPhone && (
         <p className="receipt-center receipt-small">Tel: {tenantPhone}</p>
@@ -170,11 +179,26 @@ export function ReceiptPrint({
             return <p key={i} className="receipt-center receipt-small">{row.text}</p>;
           case 'served-by':
             return <p key={i} className="receipt-center receipt-small">Served by: {row.name}</p>;
+          case 'customer':
+            return (
+              <div key={i} className="receipt-row">
+                <span className="receipt-row-name">{row.label}</span>
+                <span className="receipt-row-value">{row.name}</span>
+              </div>
+            );
           case 'footer':
             return (
               <p key={i} className="receipt-center" style={{ marginTop: 4, marginBottom: 2, fontSize: 10, whiteSpace: 'pre-wrap' }}>
                 {row.text}
               </p>
+            );
+          case 'provider':
+            return (
+              <div key={i}>
+                <hr className="receipt-divider" />
+                <p className="receipt-center receipt-bold" style={{ fontSize: 9.5, marginBottom: 1, whiteSpace: 'pre-wrap' }}>{row.lead}</p>
+                <p className="receipt-center receipt-small" style={{ fontSize: 8.5, whiteSpace: 'pre-wrap' }}>{row.contact}</p>
+              </div>
             );
           default:
             return null;

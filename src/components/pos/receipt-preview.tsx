@@ -42,8 +42,13 @@ export interface ReceiptData {
   change_due: number;
   /** Guest/payer name for identified payments (M-Pesa/card/online), or "Walk-in customer" for cash. */
   bill_to?: string;
+  /** Label for bill_to: "Customer" (keyed-in / walk-in) or "Paid by" (online-payment payer). */
+  bill_to_label?: string;
   /** Staff display name/email shown as "Served by" — from the pos-api receipt endpoint's `served_by`. */
   served_by?: string;
+  /** Platform-owner (Codevertex) advertisement lines from the pos-api receipt endpoint. */
+  provider_footer_lead?: string;
+  provider_footer_contact?: string;
   currency?: string;
   etims_invoice_number?: string;
   etims_qr_code_url?: string;
@@ -238,9 +243,12 @@ export function ReceiptPreview({
             {tenantName && (
               <p className="text-center font-semibold text-sm mb-1">{tenantName}</p>
             )}
-            {(outletName || receipt.outlet_name) && (
-              <p className="text-center text-muted-foreground mb-1">{outletName || receipt.outlet_name}</p>
-            )}
+            {(() => {
+              const outlet = outletName || receipt.outlet_name;
+              // Hide the outlet line when it just repeats the tenant name (avoids the duplicate).
+              if (!outlet || outlet.trim().toLowerCase() === (tenantName ?? '').trim().toLowerCase()) return null;
+              return <p className="text-center text-muted-foreground mb-1">{outlet}</p>;
+            })()}
             {receipt.receipt_header && (
               <p className="text-center text-muted-foreground text-[10px] whitespace-pre-wrap mb-1">{receipt.receipt_header}</p>
             )}
@@ -319,11 +327,25 @@ export function ReceiptPreview({
                   return <p key={i} className="text-center text-muted-foreground text-[10px]">{row.text}</p>;
                 case 'served-by':
                   return <p key={i} className="text-center text-muted-foreground mt-2">Served by: {row.name}</p>;
+                case 'customer':
+                  return (
+                    <div key={i} className="flex justify-between py-0.5">
+                      <span>{row.label}</span>
+                      <span className="font-semibold">{row.name}</span>
+                    </div>
+                  );
                 case 'footer':
                   return (
                     <p key={i} className="text-center text-muted-foreground mt-2 text-[10px] whitespace-pre-wrap">
                       {row.text}
                     </p>
+                  );
+                case 'provider':
+                  return (
+                    <div key={i} className="mt-2 border-t border-dashed border-border pt-2">
+                      <p className="text-center text-[10px] font-semibold whitespace-pre-wrap">{row.lead}</p>
+                      <p className="text-center text-muted-foreground text-[9px] whitespace-pre-wrap">{row.contact}</p>
+                    </div>
                   );
                 default:
                   return null;

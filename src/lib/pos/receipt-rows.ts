@@ -26,7 +26,9 @@ export interface ReceiptHowToPayTitleRow { kind: 'how-to-pay-title' }
 export interface ReceiptPaymentMethodRow { kind: 'payment-method'; label: string; value: string }
 export interface ReceiptPaymentAccountNameRow { kind: 'payment-account-name'; text: string }
 export interface ReceiptServedByRow { kind: 'served-by'; name: string }
+export interface ReceiptCustomerRow { kind: 'customer'; label: string; name: string }
 export interface ReceiptFooterRow { kind: 'footer'; text: string }
+export interface ReceiptProviderRow { kind: 'provider'; lead: string; contact: string }
 
 export type ReceiptRow =
   | ReceiptLineRow
@@ -40,13 +42,27 @@ export type ReceiptRow =
   | ReceiptPaymentMethodRow
   | ReceiptPaymentAccountNameRow
   | ReceiptServedByRow
-  | ReceiptFooterRow;
+  | ReceiptCustomerRow
+  | ReceiptFooterRow
+  | ReceiptProviderRow;
+
+/** Static fallback for the platform-owner advertisement, mirroring pos-api's DefaultProviderFooter. */
+const PROVIDER_FOOTER_FALLBACK = {
+  lead: 'Developed & maintained by Codevertex Africa Limited',
+  contact: 'www.codevertexitsolutions.com  ·  info@codevertexitsolutions.com  ·  +254 742 201 368',
+};
 
 /** Builds the ordered receipt body: items → totals → payment → eTIMS → HOW TO PAY → served-by →
  *  footer. Excludes the top branding block (logo/tenant/outlet name/address), which callers render
  *  directly from plain string props — those don't need derivation and carry no drift risk. */
 export function buildReceiptRows(receipt: ReceiptData): ReceiptRow[] {
   const rows: ReceiptRow[] = [];
+
+  // Customer / payer line (name keyed in at sale, online-payment payer, or Walk-in customer).
+  if (receipt.bill_to) {
+    rows.push({ kind: 'customer', label: receipt.bill_to_label || 'Customer', name: receipt.bill_to });
+    rows.push({ kind: 'divider' });
+  }
 
   for (const line of receipt.lines) {
     rows.push({
@@ -102,6 +118,13 @@ export function buildReceiptRows(receipt: ReceiptData): ReceiptRow[] {
   }
 
   rows.push({ kind: 'footer', text: receipt.receipt_footer || 'Thank you for your business!' });
+
+  // Platform-owner (Codevertex) advertisement — always shown, from the API or a static fallback.
+  rows.push({
+    kind: 'provider',
+    lead: receipt.provider_footer_lead || PROVIDER_FOOTER_FALLBACK.lead,
+    contact: receipt.provider_footer_contact || PROVIDER_FOOTER_FALLBACK.contact,
+  });
 
   return rows;
 }
