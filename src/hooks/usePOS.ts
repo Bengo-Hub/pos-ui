@@ -974,6 +974,8 @@ export interface OrderListFilters {
   shippingStatus?: string;
   source?: string;          // pos_terminal | back_office | all
   subscriptions?: boolean;
+  minTotal?: number;        // order-total range lower bound (payable)
+  maxTotal?: number;        // order-total range upper bound (payable)
   orderNumber?: string;
   kdsStationId?: string;    // orders with a line routed to this KDS station
   category?: string;        // orders with a line in this catalog category
@@ -1012,6 +1014,8 @@ export function useOrders(filters?: OrderListFilters) {
           shipping_status: filters?.shippingStatus,
           source: filters?.source,
           subscriptions: filters?.subscriptions ? 'true' : undefined,
+          min_total: filters?.minTotal != null ? String(filters.minTotal) : undefined,
+          max_total: filters?.maxTotal != null ? String(filters.maxTotal) : undefined,
           order_number: filters?.orderNumber,
           kds_station_id: filters?.kdsStationId,
           category: filters?.category,

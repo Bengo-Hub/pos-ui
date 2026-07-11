@@ -9,6 +9,17 @@ import { cn } from '@/lib/utils';
 export interface DateRange {
   from: string; // YYYY-MM-DD
   to: string;   // YYYY-MM-DD
+  /** Optional time-of-day (HH:mm) narrowing the from/to bounds. Combined with the date as
+   *  `YYYY-MM-DDTHH:mm` by consumers; the backend parses that in the outlet timezone. */
+  fromTime?: string;
+  toTime?: string;
+}
+
+/** Combine a DateRange bound into the string sent to the API: date-only, or `date'T'time`
+ *  when a time-of-day was set. Empty when no date is chosen. */
+export function rangeBound(date: string, time?: string): string {
+  if (!date) return '';
+  return time ? `${date}T${time}` : date;
 }
 
 const fmt = (d: Date) => format(d, 'yyyy-MM-dd');
@@ -41,7 +52,9 @@ export function DateRangePicker({
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
-  const label = value.from && value.to ? `${value.from} → ${value.to}` : 'All time';
+  const label = value.from && value.to
+    ? `${value.from}${value.fromTime ? ` ${value.fromTime}` : ''} → ${value.to}${value.toTime ? ` ${value.toTime}` : ''}`
+    : 'All time';
 
   const PANEL_W = 288; // w-72
 
@@ -119,6 +132,29 @@ export function DateRangePicker({
                   min={value.from || undefined}
                   onChange={(e) => onChange({ ...value, to: e.target.value })}
                   className="mt-0.5 w-full bg-background border border-border rounded-md py-1.5 px-2 text-xs"
+                />
+              </label>
+            </div>
+            {/* Optional time-of-day narrowing — enabled once a date is chosen on that side. */}
+            <div className="grid grid-cols-2 gap-2">
+              <label className="text-[11px] font-semibold text-muted-foreground">
+                From time
+                <input
+                  type="time"
+                  value={value.fromTime ?? ''}
+                  disabled={!value.from}
+                  onChange={(e) => onChange({ ...value, fromTime: e.target.value || undefined })}
+                  className="mt-0.5 w-full bg-background border border-border rounded-md py-1.5 px-2 text-xs disabled:opacity-40"
+                />
+              </label>
+              <label className="text-[11px] font-semibold text-muted-foreground">
+                To time
+                <input
+                  type="time"
+                  value={value.toTime ?? ''}
+                  disabled={!value.to}
+                  onChange={(e) => onChange({ ...value, toTime: e.target.value || undefined })}
+                  className="mt-0.5 w-full bg-background border border-border rounded-md py-1.5 px-2 text-xs disabled:opacity-40"
                 />
               </label>
             </div>

@@ -15,6 +15,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { SellDetailsModal } from '@/components/pos/sell-details-modal';
 import { SalesActionsMenu } from '@/components/pos/sales/sales-actions-menu';
 import { SalesFilters, type SalesFilterState } from './sales-filters';
+import { rangeBound } from '@/components/ui/date-range-picker';
 import { EditShippingModal } from './edit-shipping-modal';
 import { ViewPaymentsModal } from './view-payments-modal';
 import { EditOrderLinesModal } from './edit-order-lines-modal';
@@ -59,7 +60,7 @@ export function SalesListView({ orgSlug, fixedSource, title, subtitle }: {
   const [filterState, setFilterState] = useState<SalesFilterState>({
     outletId: '', customer: '', paymentStatus: '', paymentMethod: '',
     shippingStatus: '', userId: '', source: '', subscriptions: false,
-    range: { from: '', to: '' },
+    range: { from: '', to: '' }, minTotal: '', maxTotal: '',
   });
 
   // Modals + row expansion
@@ -82,8 +83,10 @@ export function SalesListView({ orgSlug, fixedSource, title, subtitle }: {
   const filters: OrderListFilters = useMemo(() => ({
     // This page shows every sale (no status filter); "all" outlets unless narrowed.
     outletId: filterState.outletId || 'all',
-    from: filterState.range.from || undefined,
-    to: filterState.range.to || undefined,
+    // Combine date + optional time-of-day into the bound sent to the API (backend parses the
+    // datetime-local value in the outlet timezone).
+    from: rangeBound(filterState.range.from, filterState.range.fromTime) || undefined,
+    to: rangeBound(filterState.range.to, filterState.range.toTime) || undefined,
     customer: filterState.customer.trim() || undefined,
     paymentStatus: filterState.paymentStatus || undefined,
     paymentMethod: filterState.paymentMethod || undefined,
@@ -91,6 +94,8 @@ export function SalesListView({ orgSlug, fixedSource, title, subtitle }: {
     userId: filterState.userId || undefined,
     source: fixedSource ?? (filterState.source || undefined),
     subscriptions: filterState.subscriptions || undefined,
+    minTotal: filterState.minTotal === '' ? undefined : filterState.minTotal,
+    maxTotal: filterState.maxTotal === '' ? undefined : filterState.maxTotal,
     orderNumber: search.trim() || undefined,
     page,
     limit: PAGE_SIZE,
@@ -138,7 +143,7 @@ export function SalesListView({ orgSlug, fixedSource, title, subtitle }: {
         <CardHeader className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between py-4">
           <div className="relative w-full max-w-sm">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <input placeholder="Search by invoice #..." className="w-full bg-accent/30 border-none rounded-lg py-2 pl-10 pr-4 text-sm"
+            <input placeholder="Search by invoice / receipt #..." className="w-full bg-accent/30 border-none rounded-lg py-2 pl-10 pr-4 text-sm"
               value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} />
           </div>
           <Button variant="outline" className="gap-2" disabled><Download className="h-4 w-4" /> Export</Button>
