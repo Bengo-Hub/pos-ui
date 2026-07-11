@@ -83,7 +83,11 @@ export function AuditTab() {
                 <tbody className="divide-y divide-border">
                   {exceptions.map((e: ExceptionAgg) => (
                     <tr key={e.actor_user_id} className="hover:bg-accent/5">
-                      <td className="px-4 py-3 font-mono text-xs">{e.actor_user_id.slice(0, 8)}</td>
+                      <td className="px-4 py-3">
+                        {e.actor_name
+                          ? <span className="font-medium">{e.actor_name}</span>
+                          : <span className="font-mono text-xs text-muted-foreground" title={e.actor_user_id}>{e.actor_user_id.slice(0, 8)}</span>}
+                      </td>
                       <td className="px-4 py-3 text-center font-bold">{e.total}</td>
                       <td className="px-4 py-3">
                         <div className="flex flex-wrap gap-1">
@@ -119,8 +123,9 @@ export function AuditTab() {
                 <thead>
                   <tr className="border-b bg-accent/5 text-xs text-muted-foreground uppercase tracking-wider">
                     <th className="text-left px-4 py-3">When</th>
+                    <th className="text-left px-4 py-3">User</th>
                     <th className="text-left px-4 py-3">Action</th>
-                    <th className="text-center px-4 py-3">Approved</th>
+                    <th className="text-left px-4 py-3">Approved by</th>
                     <th className="text-right px-4 py-3">Amount</th>
                     <th className="text-left px-4 py-3">Reason</th>
                   </tr>
@@ -131,8 +136,17 @@ export function AuditTab() {
                     return (
                       <tr key={e.id} className="hover:bg-accent/5">
                         <td className="px-4 py-3 whitespace-nowrap text-xs text-muted-foreground">{new Date(e.created_at).toLocaleString()}</td>
+                        <td className="px-4 py-3 whitespace-nowrap text-xs">
+                          {e.actor_name
+                            ? <span className="font-medium">{e.actor_name}</span>
+                            : <span className="font-mono text-muted-foreground" title={e.actor_user_id}>{e.actor_user_id?.slice(0, 8)}</span>}
+                        </td>
                         <td className="px-4 py-3"><span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${meta.cls}`}>{meta.label}</span></td>
-                        <td className="px-4 py-3 text-center">{e.approver_user_id ? <span className="text-green-600 text-xs">✓</span> : '—'}</td>
+                        <td className="px-4 py-3 text-xs whitespace-nowrap">
+                          {e.approver_user_id
+                            ? <span className="inline-flex items-center gap-1 text-green-600"><span>✓</span>{e.approver_name ? <span className="text-foreground font-medium">{e.approver_name}</span> : null}</span>
+                            : <span className="text-muted-foreground">—</span>}
+                        </td>
                         <td className="px-4 py-3 text-right tabular-nums">{e.amount != null ? e.amount.toLocaleString() : '—'}</td>
                         <td className="px-4 py-3 text-xs text-muted-foreground max-w-xs truncate">{e.reason || '—'}</td>
                       </tr>

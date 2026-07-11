@@ -4,7 +4,9 @@ export interface AuditLogEntry {
   id: string;
   outlet_id?: string;
   actor_user_id: string;
+  actor_name?: string;
   approver_user_id?: string;
+  approver_name?: string;
   action: string;
   entity_type?: string;
   entity_id?: string;
@@ -15,6 +17,7 @@ export interface AuditLogEntry {
 
 export interface ExceptionAgg {
   actor_user_id: string;
+  actor_name?: string;
   counts: Record<string, number>;
   amounts: Record<string, number>;
   total: number;
