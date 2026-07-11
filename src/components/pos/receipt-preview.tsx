@@ -340,22 +340,36 @@ export function ReceiptPreview({
                       {row.text}
                     </p>
                   );
-                case 'provider':
+                case 'provider': {
+                  // The contact string is "website · email · phone" joined; on the narrow card that
+                  // single line wraps unevenly. Split it and render each part on its own centered
+                  // line so the three pieces stay balanced regardless of width.
+                  const contactParts = row.contact
+                    .split('·')
+                    .map((s) => s.trim())
+                    .filter(Boolean);
                   return (
                     <div
                       key={i}
-                      className="mt-3 flex flex-col items-center gap-1 rounded-xl border border-primary/20 bg-gradient-to-b from-primary/5 to-transparent px-3 py-2.5"
+                      className="mt-3 flex flex-col items-center gap-1.5 rounded-xl border border-primary/20 bg-gradient-to-b from-primary/5 to-transparent px-3 py-3"
                     >
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center justify-center gap-1.5">
                         <Sparkles className="h-3 w-3 shrink-0 text-primary" />
-                        <p className="text-center text-[10px] font-bold tracking-wide text-foreground whitespace-pre-wrap">
+                        <p className="text-center text-[10px] font-bold leading-snug tracking-wide text-foreground whitespace-pre-wrap">
                           {row.lead}
                         </p>
                         <Sparkles className="h-3 w-3 shrink-0 text-primary" />
                       </div>
-                      <p className="text-center text-muted-foreground text-[9px] whitespace-pre-wrap">{row.contact}</p>
+                      <div className="flex flex-col items-center gap-0.5">
+                        {contactParts.map((part, pi) => (
+                          <p key={pi} className="text-center text-[9px] leading-tight text-muted-foreground">
+                            {part}
+                          </p>
+                        ))}
+                      </div>
                     </div>
                   );
+                }
                 default:
                   return null;
               }
