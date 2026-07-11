@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Calendar } from 'lucide-react';
 import { format, startOfMonth, startOfDay, startOfWeek, subDays, startOfYear } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -38,11 +39,39 @@ export function DateRangePicker({
   className?: string;
 }) {
   const [open, setOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const label = value.from && value.to ? `${value.from} → ${value.to}` : 'All time';
+
+  const PANEL_W = 288; // w-72
+
+  // Anchor the panel to the trigger with fixed positioning so it escapes the Filters card's
+  // `overflow-hidden` clipping, and keep it inside the viewport on narrow screens.
+  const reposition = () => {
+    const el = triggerRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const left = Math.max(8, Math.min(r.left, window.innerWidth - PANEL_W - 8));
+    setPos({ top: r.bottom + 4, left });
+  };
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    reposition();
+    const onScroll = () => reposition();
+    window.addEventListener('scroll', onScroll, true);
+    window.addEventListener('resize', onScroll);
+    return () => {
+      window.removeEventListener('scroll', onScroll, true);
+      window.removeEventListener('resize', onScroll);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   return (
     <div className={cn('relative', className)}>
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setOpen((o) => !o)}
         className="w-full flex items-center gap-2 bg-accent/30 border border-border rounded-lg py-2 px-3 text-sm text-left hover:bg-accent transition-colors"
@@ -51,10 +80,12 @@ export function DateRangePicker({
         <span className="truncate">{label}</span>
       </button>
 
-      {open && (
+      {open && pos && typeof document !== 'undefined' && createPortal(
         <>
-          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute z-50 mt-1 w-72 rounded-xl border border-border bg-card shadow-xl p-3 space-y-3">
+          <div className="fixed inset-0 z-[60]" onClick={() => setOpen(false)} />
+          <div
+            style={{ position: 'fixed', top: pos.top, left: pos.left, width: PANEL_W }}
+            className="z-[70] rounded-xl border border-border bg-card shadow-xl p-3 space-y-3">
             <div className="flex flex-wrap gap-1.5">
               {PRESETS.map((p) => (
                 <button
@@ -106,7 +137,8 @@ export function DateRangePicker({
               </button>
             </div>
           </div>
-        </>
+        </>,
+        document.body,
       )}
     </div>
   );
