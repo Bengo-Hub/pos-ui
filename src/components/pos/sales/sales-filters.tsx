@@ -1,11 +1,9 @@
 'use client';
 
-import { useMemo } from 'react';
 import { Filter } from 'lucide-react';
 import { Card, CardContent, CardHeader } from '@/components/ui/base';
 import { DateRangePicker, type DateRange } from '@/components/ui/date-range-picker';
-import { useTenders } from '@/hooks/usePOS';
-import { PAYMENT_STATUSES, SHIPPING_STATUSES, SOURCES, prettyMethod } from './sales-shared';
+import { PAYMENT_STATUSES, SHIPPING_STATUSES, SOURCES, PAYMENT_METHOD_OPTIONS } from './sales-shared';
 
 export interface SalesFilterState {
   outletId: string;
@@ -105,20 +103,9 @@ export function SalesFilters({ state, onChange, outlets, staff, fixedSource, hid
   /** Own-only users (cashiers/waiters on "My Sales") must not filter by other users (QA req 6). */
   hideUserFilter?: boolean;
 }) {
-  const tendersQ = useTenders();
-  // Distinct tender types configured for this tenant → the Payment Method options.
-  const methodOptions = useMemo(() => {
-    const tenders: any[] = (tendersQ.data as any)?.data ?? tendersQ.data ?? [];
-    const seen = new Set<string>();
-    const opts: { value: string; label: string }[] = [];
-    for (const t of tenders) {
-      const type = t?.type;
-      if (!type || seen.has(type)) continue;
-      seen.add(type);
-      opts.push({ value: type, label: prettyMethod(type) });
-    }
-    return opts;
-  }, [tendersQ.data]);
+  // Payment Method options are the real `payment_data.method` values the terminal records — the POS
+  // reuses one generic tender across every method, so tender rows can't drive this list.
+  const methodOptions = PAYMENT_METHOD_OPTIONS;
 
   const selectCls = 'w-full bg-accent/30 border border-border rounded-lg py-2 px-3 text-sm';
 

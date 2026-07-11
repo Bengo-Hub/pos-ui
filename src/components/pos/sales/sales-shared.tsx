@@ -11,11 +11,30 @@ export const money = (n: number) =>
 export const PAYMENT_METHOD_LABELS: Record<string, string> = {
   cash: 'Cash', card: 'Card', card_manual: 'Card / PDQ', pdq: 'Card / PDQ',
   card_terminal: 'Card / PDQ', cheque: 'Cheque', bank_transfer: 'Bank Transfer',
-  mpesa: 'M-Pesa', on_account: 'On Account', loyalty: 'Loyalty Points',
+  mpesa: 'M-Pesa', manual: 'M-Pesa (manual)', wallet: 'Wallet', cod: 'Cash on Delivery',
+  on_account: 'On Account', room_charge: 'Room Charge', complimentary: 'Complimentary',
+  loyalty: 'Loyalty Points',
 };
 
 export const prettyMethod = (m: string) =>
   PAYMENT_METHOD_LABELS[m] ?? (m === 'multiple' ? 'Multiple' : m ? m.replace(/_/g, ' ') : '—');
+
+// The Payment Method filter options — the real `payment_data.method` values the POS terminal
+// stamps (see terminal-actions.tenderMethodFor + payment-modal), NOT tender rows. The POS reuses one
+// generic tender across every method, so tender.type can't drive this list. "Multiple" matches
+// split-tender sales the list view labels the same way.
+export const PAYMENT_METHOD_OPTIONS: { value: string; label: string }[] = [
+  { value: 'cash', label: 'Cash' },
+  { value: 'mpesa', label: 'M-Pesa' },
+  { value: 'manual', label: 'M-Pesa (manual)' },
+  { value: 'card', label: 'Card' },
+  { value: 'card_manual', label: 'Card / PDQ' },
+  { value: 'wallet', label: 'Wallet' },
+  { value: 'cod', label: 'Cash on Delivery' },
+  { value: 'on_account', label: 'On Account' },
+  { value: 'room_charge', label: 'Room Charge' },
+  { value: 'complimentary', label: 'Complimentary' },
+];
 
 export const PAYMENT_STATUSES = [
   { value: '', label: 'All' }, { value: 'paid', label: 'Paid' },
