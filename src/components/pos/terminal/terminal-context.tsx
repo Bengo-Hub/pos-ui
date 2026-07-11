@@ -33,6 +33,7 @@ import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { useKDSStations } from '@/hooks/useKDS';
 import { useLoyaltyPrograms } from '@/hooks/useLoyalty';
 import { useActiveHappyHours } from '@/hooks/useHotel';
+import { computeHappyHour, type HHLine, type HappyHourResult } from '@/lib/pos/happy-hour';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useAuthStore } from '@/store/auth';
 import { apiClient } from '@/lib/api/client';
@@ -180,6 +181,10 @@ export interface TerminalContextValue {
   /** Tax embedded inside tax-inclusive lines (already part of subtotal/total) — for display only. */
   inclusiveTax: number;
   loyaltyDiscount: number;
+  /** Auto-applied happy-hour discount total (already subtracted from `total`). */
+  happyHourDiscount: number;
+  /** Full happy-hour breakdown incl. per-SKU deal labels, for per-line badges. */
+  happyHour: HappyHourResult;
   total: number;
   // Manual order-level discount
   manualDiscount: number;
@@ -1020,10 +1025,20 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
   }, [cart, taxRate]);
   const loyaltyDiscount = loyaltyState?.redeemDiscount ?? 0;
   const chargesTotal = Object.values(charges).reduce((s, v) => s + (v > 0 ? v : 0), 0);
+  // Live happy-hour auto-discount — mirrors pos-api's checkout evaluator so the cashier sees the
+  // deal (discount line + per-item badge) BEFORE placing. The server recomputes authoritatively.
+  const happyHour = useMemo(() => {
+    const lines: HHLine[] = cart.map((item) => {
+      const unit = item.price + (item.modifierTotal ?? 0);
+      return { sku: item.sku, category: item.category, unitPrice: unit, quantity: item.quantity, total: unit * item.quantity };
+    });
+    return computeHappyHour(lines, activeHappyHours);
+  }, [cart, activeHappyHours]);
+  const happyHourDiscount = happyHour.total;
   // Whole-number payable (QA req 5): ceiling round-off applied ONCE at the order level —
   // the same math pos-api's finalizeTotals runs, so till total == stored total.
   const { roundOff, total } = applyRoundOff(
-    subtotal + tax + orderTax + chargesTotal - loyaltyDiscount - manualDiscount
+    subtotal + tax + orderTax + chargesTotal - loyaltyDiscount - manualDiscount - happyHourDiscount
   );
   const cartItemCount = cart.reduce((s, c) => s + c.quantity, 0);
 
@@ -1428,6 +1443,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
     totalItems, totalPages, menuLoading, menuItems, filteredItems, categories,
     handleCategoryChange, handleSearchChange, handleSearchKeyDown,
     cart, cartItemCount, subtotal, tax, inclusiveTax, loyaltyDiscount, total,
+    happyHourDiscount, happyHour,
     manualDiscount, discountReason, discountOpen, setDiscountOpen, applyDiscount,
     orderTax, orderTaxOpen, setOrderTaxOpen, applyOrderTax,
     charges, chargesTotal, chargesOpen, setChargesOpen, applyCharges, roundOff,

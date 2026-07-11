@@ -79,13 +79,24 @@ export function SellDetailsModal({ orderId, orgSlug, onClose }: { orderId: strin
                 <tbody className="divide-y divide-border">
                   {lines.map((l: any, i: number) => {
                     const sub = l.total_price ?? (l.unit_price ?? 0) * (l.quantity ?? 0);
+                    // Per-line happy-hour discount is stamped into line metadata by pos-api
+                    // (discount_amount + a happy_hour {label} for the deal name).
+                    const hh = l.metadata?.happy_hour;
+                    const lineDiscount = l.discount_amount ?? l.metadata?.discount_amount ?? hh?.discount_amount ?? 0;
                     return (
                       <tr key={l.id ?? i}>
                         <td className="px-3 py-2 text-muted-foreground">{i + 1}</td>
-                        <td className="px-3 py-2">{l.name}{l.sku ? <span className="text-muted-foreground"> {l.sku}</span> : ''}</td>
+                        <td className="px-3 py-2">
+                          {l.name}{l.sku ? <span className="text-muted-foreground"> {l.sku}</span> : ''}
+                          {hh?.label && (
+                            <span className="ml-2 text-[10px] font-semibold text-emerald-700 bg-emerald-100 rounded px-1.5 py-0.5 whitespace-nowrap">
+                              {hh.label}
+                            </span>
+                          )}
+                        </td>
                         <td className="px-3 py-2 text-right tabular-nums">{Number(l.quantity ?? 0).toLocaleString()}</td>
                         <td className="px-3 py-2 text-right tabular-nums">{money(l.unit_price)}</td>
-                        <td className="px-3 py-2 text-right tabular-nums">{money(l.discount_amount)}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">{money(lineDiscount)}</td>
                         <td className="px-3 py-2 text-right tabular-nums">{money(l.tax_amount)}</td>
                         <td className="px-3 py-2 text-right tabular-nums">{money(sub)}</td>
                       </tr>

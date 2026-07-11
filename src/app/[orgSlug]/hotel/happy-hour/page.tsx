@@ -5,7 +5,7 @@ import { Card, CardContent } from '@/components/ui/base';
 import {
   useActiveHappyHours, useHappyHours, useCreateHappyHour, useUpdateHappyHour, useDeleteHappyHour,
 } from '@/hooks/useHotel';
-import { useMenuItems, type CatalogItem } from '@/hooks/usePOS';
+import { useMenuItems, useCategories, type CatalogItem } from '@/hooks/usePOS';
 import { usePermissions, P } from '@/hooks/usePermissions';
 import type { HappyHourInput, HappyHourPromotion } from '@/lib/api/hotel';
 import { Loader2, Plus, Wine, Pencil, Trash2, Search, X, CalendarClock, Repeat, CalendarDays } from 'lucide-react';
@@ -189,6 +189,53 @@ function ItemPicker({ selected, onChange }: { selected: CatalogItem[]; onChange:
   );
 }
 
+/** Pick a category and bulk-add ALL its items into the (editable) selected-items list.
+ *  Items land in the same list as ItemPicker's manual picks, so the user can remove any
+ *  preselected item afterward — the deal is still stored as an explicit item list. */
+function CategoryQuickAdd({ selected, onChange }: { selected: CatalogItem[]; onChange: (items: CatalogItem[]) => void }) {
+  const { data: categoriesResp } = useCategories();
+  const categories = (categoriesResp ?? []).map((c) => c.name).filter(Boolean);
+  const [pendingCategory, setPendingCategory] = useState('');
+  const { data: categoryItems, isFetching } = useMenuItems({ category: pendingCategory || undefined, limit: 200 });
+
+  function addCategory(category: string) {
+    setPendingCategory(category);
+  }
+
+  // Once the category's items land, merge any not already selected, then reset.
+  useEffect(() => {
+    if (!pendingCategory || isFetching || !categoryItems) return;
+    const incoming = categoryItems.data ?? [];
+    const existingSkus = new Set(selected.map((s) => s.sku));
+    const merged = [...selected, ...incoming.filter((i) => !existingSkus.has(i.sku))];
+    onChange(merged);
+    setPendingCategory('');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingCategory, isFetching, categoryItems]);
+
+  if (categories.length === 0) return null;
+
+  return (
+    <div className="space-y-1.5">
+      <span className="text-xs font-medium text-muted-foreground">Or add a whole category</span>
+      <div className="flex flex-wrap gap-1.5">
+        {categories.map((c) => (
+          <button
+            key={c}
+            type="button"
+            disabled={pendingCategory === c && isFetching}
+            onClick={() => addCategory(c)}
+            className="inline-flex items-center gap-1 rounded-full border border-input text-xs font-medium px-2.5 py-1 hover:bg-accent disabled:opacity-50"
+          >
+            {pendingCategory === c && isFetching ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
+            {c}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function PromoForm({ initial, onCancel, onSave, saving }: {
   initial: FormState; onCancel: () => void; onSave: (f: FormState) => void; saving: boolean;
 }) {
@@ -282,7 +329,12 @@ function PromoForm({ initial, onCancel, onSave, saving }: {
               Specific items
             </button>
           </div>
-          {!f.scopeAll && <ItemPicker selected={f.items} onChange={(items) => set('items', items)} />}
+          {!f.scopeAll && (
+            <div className="space-y-3">
+              <ItemPicker selected={f.items} onChange={(items) => set('items', items)} />
+              <CategoryQuickAdd selected={f.items} onChange={(items) => set('items', items)} />
+            </div>
+          )}
         </div>
 
         {/* Discount mechanism. */}

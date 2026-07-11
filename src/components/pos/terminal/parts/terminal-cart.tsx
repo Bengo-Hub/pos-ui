@@ -196,6 +196,11 @@ export function TerminalCart() {
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <p className="text-sm font-bold truncate leading-tight">{item.name}</p>
                         {cfg.showCourses && item.courseNumber ? <CourseBadge course={item.courseNumber} /> : null}
+                        {t.happyHour.bySku[item.sku] && (
+                          <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-100 rounded px-1.5 py-0.5 whitespace-nowrap">
+                            {t.happyHour.bySku[item.sku].label}
+                          </span>
+                        )}
                       </div>
                       {item.selectedModifiers && item.modifierGroups && (
                         <p className="text-xs text-primary mt-0.5 truncate">
@@ -330,6 +335,14 @@ export function TerminalCart() {
                 <div className="flex justify-between text-sm text-emerald-600">
                   <span>Loyalty redemption</span>
                   <span className="font-medium tabular-nums">- KES {t.loyaltyDiscount.toLocaleString()}</span>
+                </div>
+              )}
+              {t.happyHourDiscount > 0 && (
+                <div className="flex justify-between text-sm text-emerald-600">
+                  <span className="flex items-center gap-1">
+                    <Tag className="h-3.5 w-3.5" /> Happy Hour{t.happyHour.promoName ? ` (${t.happyHour.promoName})` : ''}
+                  </span>
+                  <span className="font-medium tabular-nums">- KES {t.happyHourDiscount.toLocaleString()}</span>
                 </div>
               )}
               {t.manualDiscount > 0 ? (
