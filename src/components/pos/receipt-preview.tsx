@@ -3,7 +3,7 @@
 import '@/styles/receipt.css';
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/base';
-import { Printer, Download, X } from 'lucide-react';
+import { Printer, Download, X, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import { ReceiptPrint } from './receipt-print';
 import { printHtmlToPrinter, printProfileHtml, fetchReceiptEscposHex } from '@/lib/pos/printer-discovery';
@@ -342,8 +342,17 @@ export function ReceiptPreview({
                   );
                 case 'provider':
                   return (
-                    <div key={i} className="mt-2 border-t border-dashed border-border pt-2">
-                      <p className="text-center text-[10px] font-semibold whitespace-pre-wrap">{row.lead}</p>
+                    <div
+                      key={i}
+                      className="mt-3 flex flex-col items-center gap-1 rounded-xl border border-primary/20 bg-gradient-to-b from-primary/5 to-transparent px-3 py-2.5"
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <Sparkles className="h-3 w-3 shrink-0 text-primary" />
+                        <p className="text-center text-[10px] font-bold tracking-wide text-foreground whitespace-pre-wrap">
+                          {row.lead}
+                        </p>
+                        <Sparkles className="h-3 w-3 shrink-0 text-primary" />
+                      </div>
                       <p className="text-center text-muted-foreground text-[9px] whitespace-pre-wrap">{row.contact}</p>
                     </div>
                   );

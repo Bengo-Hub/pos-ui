@@ -194,10 +194,16 @@ export function ReceiptPrint({
             );
           case 'provider':
             return (
-              <div key={i}>
+              <div key={i} style={{ marginTop: 2 }}>
                 <hr className="receipt-divider" />
-                <p className="receipt-center receipt-bold" style={{ fontSize: 9.5, marginBottom: 1, whiteSpace: 'pre-wrap' }}>{row.lead}</p>
+                <p
+                  className="receipt-center receipt-bold"
+                  style={{ fontSize: 10.5, letterSpacing: 0.3, marginTop: 2, marginBottom: 1, whiteSpace: 'pre-wrap' }}
+                >
+                  ★ {row.lead} ★
+                </p>
                 <p className="receipt-center receipt-small" style={{ fontSize: 8.5, whiteSpace: 'pre-wrap' }}>{row.contact}</p>
+                <hr className="receipt-divider" style={{ marginTop: 4 }} />
               </div>
             );
           default:
