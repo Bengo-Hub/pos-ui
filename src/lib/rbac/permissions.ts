@@ -6,12 +6,15 @@
 
 // ── Modules ───────────────────────────────────────────────────────────────────
 
+// Full module list — kept in sync with pos-api cmd/seed/main.go seedRBACPermissions.
 export const MODULES = [
   'orders', 'payments', 'catalog', 'outlets', 'devices',
   'sessions', 'cash_drawers', 'tables', 'gift_cards',
   'price_books', 'modifiers', 'channels', 'config', 'users',
   'reports', 'hotel', 'appointments', 'pharmacy',
-  'kds', 'commissions', 'queue', 'loyalty', 'staff',
+  'kds', 'retail', 'layaway', 'serial', 'loyalty', 'webhooks',
+  'integrations', 'fiscal', 'queue', 'staff', 'commissions',
+  'packages', 'clients', 'conference', 'promotions',
 ] as const;
 
 export const ACTIONS = [
@@ -207,6 +210,8 @@ export const ROLE_PERMISSIONS: Record<string, Permission[]> = {
     P.MODIFIERS_VIEW, P.GIFT_CARDS_VIEW,
     P.LOYALTY_VIEW, P.LOYALTY_ADD,
     P.CLIENTS_VIEW,
+    // Reports: cashiers can view sales reports (their own-sales scoping is applied server-side).
+    P.REPORTS_VIEW,
     // Hotel F&B: view rooms/events + redeem conference delegate meal cards at the till (mirror backend seed)
     P.HOTEL_VIEW, P.CONFERENCE_VIEW, P.CONFERENCE_CHANGE,
     P.PROMOTIONS_VIEW,

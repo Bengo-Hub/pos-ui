@@ -44,6 +44,23 @@ export function useCreateRole(tenantId: string) {
   });
 }
 
+export function useUpdateRole(tenantId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ roleId, name, description }: { roleId: string; name?: string; description?: string }) =>
+      rbacApi.updateRole(tenantId, roleId, { name, description }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: [ROLES_KEY, tenantId] }),
+  });
+}
+
+export function useDeleteRole(tenantId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (roleId: string) => rbacApi.deleteRole(tenantId, roleId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: [ROLES_KEY, tenantId] }),
+  });
+}
+
 export function useSetRolePermissions(tenantId: string) {
   const qc = useQueryClient();
   return useMutation({

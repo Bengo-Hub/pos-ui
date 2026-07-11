@@ -43,6 +43,12 @@ export const rbacApi = {
   createRole: (tenantId: string, input: CreatePOSRoleInput) =>
     apiClient.post<POSRole>(`${base(tenantId)}/rbac/roles`, input),
 
+  updateRole: (tenantId: string, roleId: string, input: { name?: string; description?: string }) =>
+    apiClient.patch<void>(`${base(tenantId)}/rbac/roles/${roleId}`, input),
+
+  deleteRole: (tenantId: string, roleId: string) =>
+    apiClient.delete<void>(`${base(tenantId)}/rbac/roles/${roleId}`),
+
   getRolePermissions: (tenantId: string, roleId: string) =>
     apiClient
       .get<{ data?: POSPermission[]; permissions?: POSPermission[] }>(`${base(tenantId)}/rbac/roles/${roleId}/permissions`)

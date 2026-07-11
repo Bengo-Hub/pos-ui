@@ -16,6 +16,7 @@ import { SubscriptionBanner } from '@/components/subscription/subscription-banne
 import { SyncStatusIndicator } from '@/components/pos/sync-status-indicator';
 import { PWARegistration } from '@/components/pwa-registration';
 import { StartShiftGate } from '@/components/pos/start-shift-gate';
+import { RouteGuard } from '@/components/auth/route-guard';
 import { TerminalIdleScreensaver } from '@/components/pos/terminal-idle-screensaver';
 import { triggerSyncNow } from '@/hooks/use-sync-offline-orders';
 import { useBackgroundSync } from '@/lib/sync/background-sync';
@@ -256,7 +257,10 @@ export function OrgShell({ children }: { children: ReactNode }) {
                 <main className="flex-1 overflow-y-auto bg-accent/5">
                   <StartShiftGate>
                     <div className="min-h-full flex flex-col">
-                      <div className="flex-1">{children}</div>
+                      {/* App-wide permission safety net: every classified route is gated by
+                          the caller's permissions, incl. direct-URL nav. Fail-open for
+                          unclassified routes; superusers bypass. */}
+                      <div className="flex-1"><RouteGuard>{children}</RouteGuard></div>
                       <Footer />
                     </div>
                   </StartShiftGate>

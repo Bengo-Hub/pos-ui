@@ -8,6 +8,7 @@ import {
   useStaffAdmin, useDeactivateStaff, useUpdateStaff, useSetStaffPIN, useCreateStaff,
 } from '@/hooks/useStaff';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useRbacRoles } from '@/hooks/useRbac';
 import { useAuthStore } from '@/store/auth';
 import type { StaffMember, UpdateStaffInput, CreateStaffInput } from '@/lib/api/staff';
 import { StaffShiftDrawer } from '@/components/pos/staff-shift-drawer';
@@ -17,11 +18,21 @@ import { toast } from 'sonner';
 import { inputClass } from './shared';
 import { apiErrorMessage } from '@/lib/api/error-message';
 
+// Fallback display labels for the built-in system roles. The authoritative role list now
+// comes from the backend (useRbacRoles) so CUSTOM roles created in the Roles & Permissions
+// panel are assignable here too; this map only prettifies the well-known codes.
 const ROLE_LABELS: Record<string, string> = {
   admin: 'Admin', manager: 'Manager', cashier: 'Cashier', waiter: 'Waiter',
   kitchen: 'Kitchen', bar: 'Bar', receptionist: 'Reception',
   pharmacist: 'Pharmacist', stylist: 'Stylist', therapist: 'Therapist', technician: 'Technician',
 };
+
+// Privileged roles a manager may not assign (mirrors the pos-api guardrail).
+const PROTECTED_ROLE_CODES = new Set(['admin', 'manager']);
+
+function roleLabel(code: string, name?: string): string {
+  return ROLE_LABELS[code] ?? name ?? code.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
 
 const EMP_TYPE_LABELS: Record<string, string> = {
   full_time: 'Full Time', part_time: 'Part Time', casual: 'Casual', contractor: 'Contractor',
@@ -30,7 +41,7 @@ const EMP_TYPE_LABELS: Record<string, string> = {
 export function TeamTab() {
   const user = useAuthStore((s) => s.user);
   const tenantId = user?.tenant_id ?? '';
-  const requesterRole = user?.roles?.[0] ?? '';
+  const roles = user?.roles ?? [];
 
   const { data, isLoading } = useStaffAdmin(tenantId);
   const members: StaffMember[] = data?.data ?? [];
@@ -40,8 +51,25 @@ export function TeamTab() {
   const setPin = useSetStaffPIN(tenantId);
   const create = useCreateStaff(tenantId);
 
-  const { canManageStaff } = usePermissions();
-  const isManager = requesterRole === 'manager';
+  const { canManageStaff, isSuperuser } = usePermissions();
+  // A manager is guardrailed: cannot manage admin/manager-level staff. Anyone who ALSO holds
+  // an admin-tier role (or is a platform owner/superuser) is not restricted.
+  const isAdminLevel = isSuperuser || roles.some((r) => ['admin', 'owner', 'superuser', 'super_admin'].includes(r));
+  const isManager = !isAdminLevel && roles.includes('manager');
+
+  // Authoritative role list from the backend so custom roles are assignable. Managers can't
+  // assign the privileged admin/manager roles (server-enforced too).
+  const { data: rbacRoles = [] } = useRbacRoles(tenantId);
+  const roleOptions = rbacRoles
+    .map((r) => ({ value: r.role_code, label: roleLabel(r.role_code, r.name), isSystem: r.is_system_role }))
+    .filter((o) => !(isManager && PROTECTED_ROLE_CODES.has(o.value)))
+    .sort((a, b) => a.label.localeCompare(b.label));
+  // Fallback to the built-in labels when the backend role list hasn't loaded yet.
+  const effectiveRoleOptions = roleOptions.length > 0
+    ? roleOptions
+    : Object.entries(ROLE_LABELS)
+        .filter(([v]) => !(isManager && PROTECTED_ROLE_CODES.has(v)))
+        .map(([value, label]) => ({ value, label, isSystem: true }));
   const selectedOutletId = useAuthStore((s) => s.selectedOutletId);
   const outlet = useAuthStore((s) => s.outlet);
   const outletId = selectedOutletId || outlet?.id || '';
@@ -183,8 +211,7 @@ export function TeamTab() {
                 <tbody className="divide-y divide-border">
                   {members.map((m) => {
                     const isEditing = editingId === m.id;
-                    const isProtected =
-                      (m.role === 'admin' || m.role === 'manager') && requesterRole === 'manager';
+                    const isProtected = PROTECTED_ROLE_CODES.has(m.role) && isManager;
                     return (
                       <tr key={m.id} className="hover:bg-accent/5 transition-colors">
                         <td className="px-4 py-3 font-medium">
@@ -204,12 +231,12 @@ export function TeamTab() {
                                 value={editForm.role ?? m.role}
                                 onChange={(e) => setEditForm((f) => ({ ...f, role: e.target.value }))}
                               >
-                                {Object.entries(ROLE_LABELS).map(([v, l]) => (
-                                  <option key={v} value={v}>{l}</option>
+                                {effectiveRoleOptions.map((o) => (
+                                  <option key={o.value} value={o.value}>{o.label}</option>
                                 ))}
                               </select>
                             )
-                            : <span className="text-xs">{ROLE_LABELS[m.role] ?? m.role}</span>
+                            : <span className="text-xs">{roleLabel(m.role)}</span>
                           }
                         </td>
                         <td className="px-4 py-3 text-xs text-muted-foreground">
@@ -377,12 +404,10 @@ export function TeamTab() {
                     value={addForm.role}
                     onChange={(e) => setAddForm((f) => ({ ...f, role: e.target.value }))}
                   >
-                    {Object.entries(ROLE_LABELS)
-                      // Managers cannot create admin/manager-level staff (also enforced server-side).
-                      .filter(([v]) => !(isManager && (v === 'admin' || v === 'manager')))
-                      .map(([v, l]) => (
-                        <option key={v} value={v}>{l}</option>
-                      ))}
+                    {/* Authoritative role list incl. custom roles; managers can't pick admin/manager. */}
+                    {effectiveRoleOptions.map((o) => (
+                      <option key={o.value} value={o.value}>{o.label}</option>
+                    ))}
                   </select>
                 </div>
                 <div>
