@@ -158,6 +158,27 @@ function NotificationListener() {
 }
 
 /**
+ * ServicePermissionsRefresher — periodically re-pulls pos-api's own /auth/me so a permission
+ * change a manager makes mid-shift (edits a role's matrix, assigns a different role) reaches an
+ * already-open session's sidebar/RouteGuard without forcing a full logout. Covers BOTH SSO and
+ * PIN/terminal sessions (pos-api's /auth/me accepts either token via RequireAnyAuth) — terminal
+ * sessions especially needed this, since their JWT previously never refreshed for its whole 4h
+ * life. 3-minute interval: frequent enough to feel responsive, far below any rate-limit concern
+ * for a single lightweight GET.
+ */
+function ServicePermissionsRefresher() {
+  const status = useAuthStore((s) => s.status);
+  const tenantID = useAuthStore((s) => s.user?.tenant_id);
+  useEffect(() => {
+    if (status !== 'authenticated' || !tenantID) return;
+    const tick = () => { void useAuthStore.getState().refreshServicePermissions(); };
+    const id = setInterval(tick, 3 * 60_000);
+    return () => clearInterval(id);
+  }, [status, tenantID]);
+  return null;
+}
+
+/**
  * Platform separation guard (see plan: platform-owner-self-tenant-separation).
  *
  * The agreed model is "Dedicated Platform section": the main app is the owner's OWN business
@@ -230,6 +251,7 @@ export function OrgShell({ children }: { children: ReactNode }) {
           <BackgroundSyncWorker />
           <CatalogPrewarm />
           <OutletContextHealer />
+          <ServicePermissionsRefresher />
           <NotificationListener />
           <PlatformDrillInConfinement />
           <PWARegistration />

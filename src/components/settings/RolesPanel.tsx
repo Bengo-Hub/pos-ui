@@ -119,9 +119,16 @@ export function RolesPanel() {
                     <button onClick={() => setSelected(r.id)}
                       className={`flex-1 flex items-center justify-between gap-2 text-left ${selected === r.id ? 'text-primary font-semibold' : ''}`}>
                       <span className="truncate">{r.name}</span>
-                      {r.is_system_role
-                        ? <span className="text-[10px] text-muted-foreground flex items-center gap-0.5"><Lock className="h-2.5 w-2.5" /> system</span>
-                        : null}
+                      <span className="flex items-center gap-1 shrink-0">
+                        {r.use_cases && r.use_cases.length > 0 && (
+                          <span className="text-[10px] text-primary/70" title={`Only shown for: ${r.use_cases.join(', ')}`}>
+                            {r.use_cases.join(', ')}
+                          </span>
+                        )}
+                        {r.is_system_role && (
+                          <span className="text-[10px] text-muted-foreground flex items-center gap-0.5"><Lock className="h-2.5 w-2.5" /> system</span>
+                        )}
+                      </span>
                     </button>
                     {/* Custom roles are editable/deletable; system roles are protected. */}
                     {canManageStaff && !r.is_system_role && (

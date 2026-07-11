@@ -87,6 +87,18 @@ interface AuthState {
   logout: () => Promise<void>;
   fetchUser: () => Promise<void>;
   setUser: (user: UserProfile | null) => void;
+  /**
+   * Re-pulls the POS SERVICE-level role + fine-grained pos.*.* permissions from pos-api's own
+   * /auth/me and merges them into the store, WITHOUT a full re-login. Fixes a real gap: the
+   * service profile was previously fetched only ONCE at SSO callback, and PIN/terminal
+   * sessions never called it again for the life of the 4h terminal JWT — so a permission a
+   * manager granted mid-shift (role edit, new role assignment) never reached an already-open
+   * session's sidebar/RouteGuard until the staff member fully logged out and back in. Called
+   * periodically by ServicePermissionsRefresher in org-shell.tsx for BOTH session kinds (pos-api
+   * /auth/me accepts SSO JWTs and terminal JWTs alike via RequireAnyAuth). Best-effort: a
+   * failed refresh silently leaves the current permissions in place for the next tick.
+   */
+  refreshServicePermissions: () => Promise<void>;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -323,6 +335,30 @@ export const useAuthStore = create<AuthState>()(
       },
 
       setUser: (user) => set({ user }),
+
+      refreshServicePermissions: async () => {
+        const { session, user, isTerminalSession } = get();
+        if (!session?.accessToken || !user?.tenant_id) return;
+        const svcProfile = await fetchPosServiceProfile(session.accessToken, user.tenant_id);
+        if (!svcProfile) return; // best-effort — pos-api unreachable or 401; try again next tick
+        const current = get().user;
+        if (!current) return; // logged out mid-flight
+        set({
+          user: {
+            ...current,
+            permissions: svcProfile.permissions,
+            // Terminal sessions carry only the POS role in `roles` (mirrors setTerminalSession /
+            // terminalToAuthClaims), so it's safe to fully replace it here. SSO sessions carry
+            // GLOBAL roles from auth-service too, which this pos-api-only call doesn't know
+            // about — leave `roles` untouched there; useMe()'s own periodic refetch keeps the
+            // global roles fresh, and `permissions` (checked first by usePermissions) is what
+            // actually drives gating.
+            roles: isTerminalSession
+              ? [svcProfile.posRole].filter(Boolean)
+              : current.roles,
+          },
+        });
+      },
     }),
     {
       name: 'pos-auth-storage',

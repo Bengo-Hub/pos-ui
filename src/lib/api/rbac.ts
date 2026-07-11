@@ -6,6 +6,8 @@ export interface POSRole {
   name: string;
   description?: string;
   is_system_role: boolean;
+  /** Outlet use case(s) this role applies to; empty/absent = common (every use case). */
+  use_cases?: string[];
 }
 
 export interface POSPermission {
@@ -32,12 +34,17 @@ export interface StepUpResult {
 const base = (tenantId: string) => `/api/v1/${tenantId}`;
 
 export const rbacApi = {
-  listRoles: (tenantId: string) =>
-    apiClient.get<{ roles: POSRole[] }>(`${base(tenantId)}/rbac/roles`).then((r) => r.roles ?? []),
-
-  listPermissions: (tenantId: string) =>
+  // useCase (outlet.use_case) scopes the result to roles/permissions relevant to that outlet
+  // type — a hospitality outlet doesn't need to see pharmacy/retail/services-exclusive roles
+  // and vice versa. Omit to get everything (used by e.g. platform-owner tooling).
+  listRoles: (tenantId: string, useCase?: string) =>
     apiClient
-      .get<{ permissions: POSPermission[] }>(`${base(tenantId)}/rbac/permissions`)
+      .get<{ roles: POSRole[] }>(`${base(tenantId)}/rbac/roles`, useCase ? { use_case: useCase } : undefined)
+      .then((r) => r.roles ?? []),
+
+  listPermissions: (tenantId: string, useCase?: string) =>
+    apiClient
+      .get<{ permissions: POSPermission[] }>(`${base(tenantId)}/rbac/permissions`, useCase ? { use_case: useCase } : undefined)
       .then((r) => r.permissions ?? []),
 
   createRole: (tenantId: string, input: CreatePOSRoleInput) =>

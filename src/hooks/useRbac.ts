@@ -2,25 +2,36 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { rbacApi, type CreatePOSRoleInput } from '@/lib/api/rbac';
+import { useAuthStore } from '@/store/auth';
 
 const ROLES_KEY = 'pos-rbac-roles';
 const PERMS_KEY = 'pos-rbac-permissions';
 const ROLE_PERMS_KEY = 'pos-rbac-role-permissions';
 
-export function useRbacRoles(tenantId: string) {
+/**
+ * useRbacRoles/useRbacPermissions scope results to the CURRENT outlet's use case by default
+ * (a hospitality outlet shouldn't see pharmacy/retail/services-exclusive roles & permissions,
+ * and vice versa — common/cross-cutting ones always show). Pass `useCase: null` explicitly to
+ * fetch the unscoped full catalogue (e.g. platform-owner tooling).
+ */
+export function useRbacRoles(tenantId: string, useCase?: string | null) {
+  const outletUseCase = useAuthStore((s) => s.outlet?.use_case);
+  const effectiveUseCase = useCase === null ? undefined : (useCase ?? outletUseCase ?? undefined);
   return useQuery({
-    queryKey: [ROLES_KEY, tenantId],
-    queryFn: () => rbacApi.listRoles(tenantId),
+    queryKey: [ROLES_KEY, tenantId, effectiveUseCase ?? 'all'],
+    queryFn: () => rbacApi.listRoles(tenantId, effectiveUseCase),
     enabled: !!tenantId,
     placeholderData: [],
     staleTime: 300_000,
   });
 }
 
-export function useRbacPermissions(tenantId: string) {
+export function useRbacPermissions(tenantId: string, useCase?: string | null) {
+  const outletUseCase = useAuthStore((s) => s.outlet?.use_case);
+  const effectiveUseCase = useCase === null ? undefined : (useCase ?? outletUseCase ?? undefined);
   return useQuery({
-    queryKey: [PERMS_KEY, tenantId],
-    queryFn: () => rbacApi.listPermissions(tenantId),
+    queryKey: [PERMS_KEY, tenantId, effectiveUseCase ?? 'all'],
+    queryFn: () => rbacApi.listPermissions(tenantId, effectiveUseCase),
     enabled: !!tenantId,
     placeholderData: [],
     staleTime: 300_000,
