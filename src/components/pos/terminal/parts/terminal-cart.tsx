@@ -198,7 +198,9 @@ export function TerminalCart() {
                         {cfg.showCourses && item.courseNumber ? <CourseBadge course={item.courseNumber} /> : null}
                         {t.happyHour.bySku[item.sku] && (
                           <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-100 rounded px-1.5 py-0.5 whitespace-nowrap">
-                            {t.happyHour.bySku[item.sku].label}
+                            {t.happyHour.bySku[item.sku].freeQty > 0
+                              ? `+${t.happyHour.bySku[item.sku].freeQty} free`
+                              : t.happyHour.bySku[item.sku].label}
                           </span>
                         )}
                       </div>

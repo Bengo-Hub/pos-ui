@@ -33,7 +33,7 @@ import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { useKDSStations } from '@/hooks/useKDS';
 import { useLoyaltyPrograms } from '@/hooks/useLoyalty';
 import { useActiveHappyHours } from '@/hooks/useHotel';
-import { computeHappyHour, type HHLine, type HappyHourResult } from '@/lib/pos/happy-hour';
+import { computeHappyHour, bogoFreeUnitsForSku, type HHLine, type HappyHourResult } from '@/lib/pos/happy-hour';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useAuthStore } from '@/store/auth';
 import { apiClient } from '@/lib/api/client';
@@ -1014,15 +1014,30 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
   // outlet rate over the whole cart — this eliminates the double-tax on tax-inclusive items and
   // honours each item's real rate. `taxRate` (posSettings.vat_rate) is now only the LEGACY fallback
   // for items with no treasury tax info. See src/lib/pos/cart-tax.ts.
+  // BOGO auto-add: `item.quantity` stays the PAID quantity (so +/- controls are unchanged); the
+  // free "get" units are DERIVED and folded into the EFFECTIVE quantity used for totals, stock,
+  // and the persisted order line. A 100%-off deal makes them free; a <100% deal charges the
+  // reduced rate — both via the standard BOGO discount, which keys off the effective quantity.
+  const bogoFreeFor = useCallback(
+    (item: CartItem) => bogoFreeUnitsForSku(item.sku, item.quantity, activeHappyHours),
+    [activeHappyHours],
+  );
+  const effectiveQtyFor = useCallback(
+    (item: CartItem) => item.quantity + bogoFreeFor(item),
+    [bogoFreeFor],
+  );
+
   const { subtotal, tax, inclusiveTax } = useMemo(() => {
     const lines = cart.map((item) => ({
-      gross: (item.price + (item.modifierTotal ?? 0)) * item.quantity,
+      // Gross over the effective quantity (paid + BOGO free units); the free units' value is
+      // then removed by the happy-hour discount below, mirroring pos-api's line/total math.
+      gross: (item.price + (item.modifierTotal ?? 0)) * effectiveQtyFor(item),
       taxRate: item.taxRate,
       taxInclusive: item.taxInclusive,
     }));
     const r = computeCartTax(lines, taxRate * 100);
     return { subtotal: r.subtotal, tax: r.tax, inclusiveTax: r.inclusiveTax };
-  }, [cart, taxRate]);
+  }, [cart, taxRate, effectiveQtyFor]);
   const loyaltyDiscount = loyaltyState?.redeemDiscount ?? 0;
   const chargesTotal = Object.values(charges).reduce((s, v) => s + (v > 0 ? v : 0), 0);
   // Live happy-hour auto-discount — mirrors pos-api's checkout evaluator so the cashier sees the
@@ -1030,7 +1045,8 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
   const happyHour = useMemo(() => {
     const lines: HHLine[] = cart.map((item) => {
       const unit = item.price + (item.modifierTotal ?? 0);
-      return { sku: item.sku, category: item.category, unitPrice: unit, quantity: item.quantity, total: unit * item.quantity };
+      const qty = item.quantity + bogoFreeUnitsForSku(item.sku, item.quantity, activeHappyHours);
+      return { sku: item.sku, category: item.category, unitPrice: unit, quantity: qty, total: unit * qty };
     });
     return computeHappyHour(lines, activeHappyHours);
   }, [cart, activeHappyHours]);
@@ -1060,16 +1076,22 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const orderLines = cart.map((item) => ({
+  const orderLines = cart.map((item) => {
+    const freeQty = bogoFreeUnitsForSku(item.sku, item.quantity, activeHappyHours);
+    const effQty = item.quantity + freeQty;
+    return ({
     catalog_item_id: item.id,
     sku: item.sku || '',
     name: item.name,
     // Drives server-side KDS station routing (kitchen vs bar) via category_filter — without
     // it the server falls back to fragile name-substring matching or the first station.
     category: item.category,
-    quantity: item.quantity,
+    // BOGO: send the EFFECTIVE quantity (paid + free) so stock deducts every physical unit and
+    // pos-api's calculateBOGODiscount prices the free/discounted "get" units. total_price is the
+    // gross over the effective quantity; the server subtracts the BOGO discount at checkout.
+    quantity: effQty,
     unit_price: item.price + (item.modifierTotal ?? 0),
-    total_price: (item.price + (item.modifierTotal ?? 0)) * item.quantity,
+    total_price: (item.price + (item.modifierTotal ?? 0)) * effQty,
     course_number: item.courseNumber ?? 0,
     // Per-line tax exactly as this till charged it (treasury-enriched catalog) — the server
     // uses these to make the recorded payable equal the amount rung up (no phantom flat VAT).
@@ -1093,8 +1115,10 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
       // Free-of-charge flag (ugali-type accompaniments / supplies) — the server zeroes the
       // line on this marker even if a price sneaks in.
       ...(item.nonBillable ? { non_billable: true } : {}),
+      // BOGO free-unit count folded into the quantity above (for the receipt "N + M free" note).
+      ...(freeQty > 0 ? { bogo_free_qty: freeQty } : {}),
     },
-  }));
+  }); });
 
   const handlePlaceOrder = () => {
     if (cart.length === 0) return;
@@ -1166,14 +1190,17 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
             // Prefer the SERVER lines from the create response (real POSOrderLine ids — required
             // by per-line set-aside/replace); the cart mapping is only an offline/legacy fallback.
             const serverLines: any[] = data.edges?.lines ?? data.lines ?? [];
-            setCurrentOrderLines(serverLines.length ? mapServerLines(serverLines) : cart.map((item) => ({
-              id: item.id,
-              name: item.name,
-              quantity: item.quantity,
-              unitPrice: item.price + (item.modifierTotal ?? 0),
-              totalPrice: (item.price + (item.modifierTotal ?? 0)) * item.quantity,
-              seat: item.seat,
-            })));
+            setCurrentOrderLines(serverLines.length ? mapServerLines(serverLines) : cart.map((item) => {
+              const eff = effectiveQtyFor(item);
+              return {
+                id: item.id,
+                name: item.name,
+                quantity: eff,
+                unitPrice: item.price + (item.modifierTotal ?? 0),
+                totalPrice: (item.price + (item.modifierTotal ?? 0)) * eff,
+                seat: item.seat,
+              };
+            }));
           }
 
           // Mark table occupied when a dine-in order is created with a table
@@ -1395,14 +1422,18 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
         void printKitchenBarTickets({
           orderNumber: ord.orderNumber || ord.orderId.slice(0, 8),
           tableRef: tableName ? `Table ${tableName}` : '',
-          lines: cart.map((c) => ({
-            name: c.name,
-            quantity: c.quantity,
-            category: c.category,
-            notes: c.notes,
-            unitPrice: c.price + (c.modifierTotal ?? 0),
-            totalPrice: (c.price + (c.modifierTotal ?? 0)) * c.quantity,
-          })),
+          lines: cart.map((c) => {
+            const eff = effectiveQtyFor(c);
+            return {
+              name: c.name,
+              // Kitchen/bar must prepare the free BOGO unit too → effective quantity.
+              quantity: eff,
+              category: c.category,
+              notes: c.notes,
+              unitPrice: c.price + (c.modifierTotal ?? 0),
+              totalPrice: (c.price + (c.modifierTotal ?? 0)) * eff,
+            };
+          }),
           kdsStations: kdsStationsData?.data ?? [],
           stations: (posSettings as any)?.printer_profiles ?? [],
           includeCustomerBill: false,

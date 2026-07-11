@@ -104,6 +104,29 @@ function round2(n: number): number {
   return Math.round((n + Number.EPSILON) * 100) / 100;
 }
 
+/**
+ * BOGO auto-add: for a "Buy B Get G" item, how many FREE (or discounted-"get") units to add
+ * to the cart for a given PAID quantity. Returns 0 for non-BOGO promos or unscoped items.
+ * The added units are then priced by the standard BOGO discount (get_discount_percent) so a
+ * 100%-off deal makes them free and a <100% deal charges the reduced rate — and because the
+ * cart line quantity now includes them, stock deducts paid+free automatically.
+ */
+export function bogoFreeUnitsForSku(sku: string, paidQty: number, promos: HappyHourPromotion[]): number {
+  if (paidQty <= 0) return 0;
+  const s = norm(sku);
+  let best = 0;
+  for (const p of promos) {
+    const r = p.rule;
+    if (!r || r.discount_type !== 'bogo' || r.scope_type !== 'item') continue;
+    if (!(r.scope_ids ?? []).map(norm).includes(s)) continue;
+    const buy = Math.max(1, r.buy_quantity ?? 1);
+    const get = Math.max(1, r.get_quantity ?? 1);
+    const free = Math.floor(paidQty / buy) * get;
+    if (free > best) best = free;
+  }
+  return best;
+}
+
 /** Best auto-apply happy-hour discount for the cart (highest total across active promos). */
 export function computeHappyHour(lines: HHLine[], promos: HappyHourPromotion[]): HappyHourResult {
   let best: HappyHourResult = { total: 0, promoName: '', bySku: {} };
