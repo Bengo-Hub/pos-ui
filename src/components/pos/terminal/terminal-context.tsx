@@ -415,7 +415,12 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
       activeHappyHours.find((p) => {
         const r = p.rule;
         if (!r) return false;
-        return r.scope_type === 'all' || (r.scope_type === 'item' && (r.scope_ids ?? []).includes(sku));
+        if (r.scope_type === 'all') return true;
+        if (r.scope_type !== 'item') return false;
+        // For cross-item BOGO (get_scope_ids set), a SKU on EITHER side of the pairing
+        // qualifies — a Small pizza (the "get" item) must also find its promo, not just the
+        // Large pizza (the "buy" item), so the terminal can nudge/celebrate on either add.
+        return (r.scope_ids ?? []).includes(sku) || (r.get_scope_ids ?? []).includes(sku);
       }),
     [activeHappyHours],
   );
@@ -697,6 +702,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
       }
 
       let totalQtyForSku = 0;
+      let updatedCart: CartItem[] = [];
       setCart((prev) => {
         const next = (() => {
           if (mods || serialNumber) {
@@ -711,6 +717,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
           return [...prev, { ...item, quantity: qty }];
         })();
         totalQtyForSku = next.filter((c) => c.sku === item.sku).reduce((s, c) => s + c.quantity, 0);
+        updatedCart = next;
         return next;
       });
 
@@ -722,7 +729,35 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
       const promo = happyHourForSku(item.sku);
       if (promo?.rule) {
         const r = promo.rule;
-        if (r.discount_type === 'bogo' && r.scope_type === 'item') {
+        const crossItem = r.discount_type === 'bogo' && (r.get_scope_ids ?? []).length > 0;
+        if (crossItem) {
+          // Cross-item: "buy Large, get Small free" — the buy_quantity/get_quantity pairing
+          // spans TWO DIFFERENT scopes, not one SKU's own quantity, so tally each scope
+          // separately from the just-updated cart rather than reusing the same-SKU cycle math.
+          const buyIds = new Set((r.scope_ids ?? []).map((s) => s.toLowerCase()));
+          const getIds = new Set((r.get_scope_ids ?? []).map((s) => s.toLowerCase()));
+          const buyQtyInCart = updatedCart.filter((c) => buyIds.has(c.sku.toLowerCase())).reduce((s, c) => s + c.quantity, 0);
+          const getQtyInCart = updatedCart.filter((c) => getIds.has(c.sku.toLowerCase())).reduce((s, c) => s + c.quantity, 0);
+          const buy = r.buy_quantity || 1;
+          const get = r.get_quantity || 1;
+          const freeEarned = Math.floor(buyQtyInCart / buy) * get;
+          const dealLabel = r.get_discount_percent >= 100 ? 'Free' : `${r.get_discount_percent}% off`;
+          if (buyIds.has(item.sku.toLowerCase())) {
+            // Just added a "buy" item.
+            if (getQtyInCart > 0 && freeEarned > 0) {
+              toast.success(`🎉 ${promo.name}: ${dealLabel} item applied!`, { id: `happy-hour-${item.sku}` });
+            } else {
+              toast.info(`${promo.name}: add a qualifying item to get one ${dealLabel.toLowerCase()}`, { id: `happy-hour-${item.sku}` });
+            }
+          } else if (getIds.has(item.sku.toLowerCase())) {
+            // Just added a "get" item.
+            if (freeEarned >= getQtyInCart) {
+              toast.success(`🎉 ${promo.name}: ${item.name} is ${dealLabel.toLowerCase()}!`, { id: `happy-hour-${item.sku}` });
+            } else {
+              toast.info(`${promo.name}: buy a qualifying item to unlock ${dealLabel.toLowerCase()} on ${item.name}`, { id: `happy-hour-${item.sku}` });
+            }
+          }
+        } else if (r.discount_type === 'bogo' && r.scope_type === 'item') {
           const cycle = (r.buy_quantity || 1) + (r.get_quantity || 1);
           const intoCycle = totalQtyForSku % cycle;
           if (intoCycle === 0) {

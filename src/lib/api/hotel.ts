@@ -482,6 +482,7 @@ export interface PromotionRule {
   id: string;
   promotion_id: string;
   scope_type: 'all' | 'category' | 'item';
+  /** For BOGO this is the "buy" scope (what must be purchased to trigger the deal). */
   scope_ids?: string[];
   discount_type: 'percentage' | 'fixed_amount' | 'fixed_price' | 'bogo';
   discount_value: number;
@@ -489,6 +490,11 @@ export interface PromotionRule {
   buy_quantity: number;
   get_quantity: number;
   get_discount_percent: number;
+  /** BOGO cross-item pairing: SKUs eligible for the free/discounted "get" unit when they are a
+   *  DIFFERENT item from scope_ids — e.g. scope_ids=Large pizzas, get_scope_ids=Small pizzas
+   *  ("buy one large, get one small free"). Empty/absent = same-SKU BOGO (the free unit is
+   *  another unit of the same item already bought). */
+  get_scope_ids?: string[];
   max_discount?: number | null;
   meal_period?: 'breakfast' | 'am_break' | 'lunch' | 'pm_break' | 'dinner' | null;
 }
@@ -524,13 +530,16 @@ export interface HappyHourInput {
   end_at?: string | null;
   auto_apply: boolean;
   scope_type?: 'all' | 'category' | 'item';
-  /** Item SKUs (scope_type='item') or inventory category names (scope_type='category'). */
+  /** Item SKUs (scope_type='item') or inventory category names (scope_type='category'). For
+   *  BOGO this is the "buy" scope. */
   scope_ids?: string[];
   discount_type?: 'percentage' | 'fixed_amount' | 'fixed_price' | 'bogo';
   discount_value: number;
   buy_quantity?: number;
   get_quantity?: number;
   get_discount_percent?: number;
+  /** BOGO cross-item pairing — see PromotionRule.get_scope_ids. Omit/empty for same-SKU BOGO. */
+  get_scope_ids?: string[];
   max_discount?: number;
   /** Optional meal-period target for negotiated lunch/dinner rates. */
   meal_period?: 'breakfast' | 'am_break' | 'lunch' | 'pm_break' | 'dinner' | '';

@@ -33,12 +33,17 @@ interface FormState {
   startAt: string; // datetime-local
   endAt: string;   // datetime-local
   scopeAll: boolean;
-  items: CatalogItem[]; // selected items when scopeAll is false
+  items: CatalogItem[]; // selected items when scopeAll is false — the BOGO "buy" scope
   discountType: DiscountType;
   discountValue: string;
   buyQuantity: string;
   getQuantity: string;
   getDiscountPercent: string;
+  // Cross-item BOGO ("buy one Large pizza, get one Small pizza free"): when true, the free
+  // "get" unit is a DIFFERENT item from `items` — getItems is that separate scope. When false
+  // (default), the free unit is another unit of the same item being bought (get_scope_ids empty).
+  crossItemGet: boolean;
+  getItems: CatalogItem[];
   maxDiscount: string;
   mealPeriod: string;
 }
@@ -59,6 +64,8 @@ function blankForm(): FormState {
     buyQuantity: '1',
     getQuantity: '1',
     getDiscountPercent: '100',
+    crossItemGet: false,
+    getItems: [],
     maxDiscount: '',
     mealPeriod: '',
   };
@@ -83,6 +90,8 @@ function formFromPromotion(p: HappyHourPromotion, itemsBySku: Map<string, Catalo
     buyQuantity: String(r?.buy_quantity ?? 1),
     getQuantity: String(r?.get_quantity ?? 1),
     getDiscountPercent: String(r?.get_discount_percent ?? 100),
+    crossItemGet: !!(r?.get_scope_ids ?? []).length,
+    getItems: (r?.get_scope_ids ?? []).map((sku) => itemsBySku.get(sku)).filter((x): x is CatalogItem => !!x),
     maxDiscount: r?.max_discount ? String(r.max_discount) : '',
     mealPeriod: r?.meal_period ?? '',
   };
@@ -93,6 +102,11 @@ function toPayload(f: FormState): HappyHourInput | null {
   if (f.scheduleMode === 'recurring' && f.days.length === 0) { toast.error('Pick at least one day'); return null; }
   if (f.scheduleMode === 'one_time' && (!f.startAt || !f.endAt)) { toast.error('Pick a start and end date/time'); return null; }
   if (!f.scopeAll && f.items.length === 0) { toast.error('Pick at least one item, or switch to "All items"'); return null; }
+  const crossItem = f.discountType === 'bogo' && f.crossItemGet;
+  if (crossItem && f.getItems.length === 0) {
+    toast.error('Pick at least one "get free" item, or turn off "Different free item"');
+    return null;
+  }
 
   const body: HappyHourInput = {
     name: f.name.trim(),
@@ -111,6 +125,7 @@ function toPayload(f: FormState): HappyHourInput | null {
       buy_quantity: parseInt(f.buyQuantity, 10) || 1,
       get_quantity: parseInt(f.getQuantity, 10) || 1,
       get_discount_percent: parseFloat(f.getDiscountPercent) || 100,
+      get_scope_ids: crossItem ? f.getItems.map((i) => i.sku) : [],
     } : {}),
     ...(f.maxDiscount ? { max_discount: parseFloat(f.maxDiscount) } : {}),
     ...(f.mealPeriod ? { meal_period: f.mealPeriod as HappyHourInput['meal_period'] } : {}),
@@ -118,7 +133,7 @@ function toPayload(f: FormState): HappyHourInput | null {
   return body;
 }
 
-function describeDeal(f: Pick<FormState, 'discountType' | 'discountValue' | 'buyQuantity' | 'getQuantity' | 'getDiscountPercent'>): string {
+function describeDeal(f: Pick<FormState, 'discountType' | 'discountValue' | 'buyQuantity' | 'getQuantity' | 'getDiscountPercent' | 'crossItemGet'>): string {
   switch (f.discountType) {
     case 'percentage': return `${f.discountValue || 0}% off`;
     case 'fixed_amount': return `KES ${f.discountValue || 0} off`;
@@ -128,7 +143,8 @@ function describeDeal(f: Pick<FormState, 'discountType' | 'discountValue' | 'buy
       const get = parseInt(f.getQuantity, 10) || 1;
       const pct = parseFloat(f.getDiscountPercent) || 100;
       const dealLabel = pct >= 100 ? 'free' : `${pct}% off`;
-      return `Buy ${buy} get ${get} ${dealLabel}`;
+      const getNoun = f.crossItemGet ? 'a different item' : 'the same item';
+      return `Buy ${buy} get ${get} ${dealLabel} (${getNoun})`;
     }
     default: return '';
   }
@@ -314,9 +330,9 @@ function PromoForm({ initial, onCancel, onSave, saving }: {
           </div>
         )}
 
-        {/* Which menu items the deal covers. */}
+        {/* Which menu items the deal covers — the BOGO "buy" scope when cross-item pairing is on. */}
         <div>
-          <span className="text-sm font-medium">Applies to</span>
+          <span className="text-sm font-medium">{f.discountType === 'bogo' && f.crossItemGet ? 'Buy' : 'Applies to'}</span>
           <div className="mt-1 flex gap-2 mb-2">
             <button type="button" onClick={() => set('scopeAll', true)}
               className={cn('flex-1 py-2 rounded-xl border text-sm font-medium transition-colors',
@@ -371,6 +387,29 @@ function PromoForm({ initial, onCancel, onSave, saving }: {
                 Buy X Get Y needs specific items selected above — "All items" has no well-defined pairing unit.
               </p>
             )}
+
+            {/* Cross-item pairing: "buy one Large pizza, get one Small pizza free" — the free
+                unit is a DIFFERENT catalog item from what's being bought, not another unit of
+                the same item. The cashier adds both as real order lines; nothing is auto-added. */}
+            <div className="col-span-3 space-y-2 pt-1">
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={f.crossItemGet}
+                  onChange={(e) => set('crossItemGet', e.target.checked)}
+                  className="h-4 w-4 rounded border-input" />
+                Free item is different from what's bought (e.g. buy a Large pizza, get a Small free)
+              </label>
+              {f.crossItemGet && (
+                <div className="rounded-xl border border-border p-3 space-y-2 bg-accent/5">
+                  <span className="text-sm font-medium">Free item(s)</span>
+                  <ItemPicker selected={f.getItems} onChange={(items) => set('getItems', items)} />
+                  <CategoryQuickAdd selected={f.getItems} onChange={(items) => set('getItems', items)} />
+                  <p className="text-xs text-muted-foreground">
+                    The cashier must add both the bought item AND one of these as its own line — the free
+                    item is priced automatically once both are in the cart. Nothing is added for them.
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
         ) : (
           <label className="block">
@@ -549,8 +588,10 @@ function HappyHourPageInner() {
                           discountType: p.rule.discount_type, discountValue: String(p.rule.discount_value),
                           buyQuantity: String(p.rule.buy_quantity), getQuantity: String(p.rule.get_quantity),
                           getDiscountPercent: String(p.rule.get_discount_percent),
+                          crossItemGet: !!(p.rule.get_scope_ids ?? []).length,
                         })}</>}
                         {p.rule?.scope_ids?.length ? ` on ${p.rule.scope_ids.length} item(s)` : ''}
+                        {p.rule?.get_scope_ids?.length ? ` → ${p.rule.get_scope_ids.length} free item(s)` : ''}
                       </p>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
