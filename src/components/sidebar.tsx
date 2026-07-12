@@ -5,7 +5,6 @@ import { normalizeUseCase } from '@/lib/use-case-config';
 import { useSubscription } from '@/hooks/use-subscription';
 import { usePermissions } from '@/hooks/usePermissions';
 import { isPlatformOwner as checkPlatformOwner } from '@/lib/auth/permissions';
-import { isKnownFeature, requiredPlanLabel } from '@/lib/subscription/feature-catalog';
 import { cn } from '@/lib/utils';
 import { useTenantBranding } from '@/providers/tenant-branding-provider';
 import { useAuthStore } from '@/store/auth';
@@ -129,8 +128,9 @@ function NavGroupSection({
         <div className="space-y-0.5">
           {group.items.map((item) => {
             const locked = !!item.subFeature && lockedFeatures.has(item.subFeature);
-            // Prefer the catalog's required tier (accurate) over the hand-typed subPlan.
-            const planLabel = requiredPlanLabel(item.subFeature) ?? item.subPlan;
+            // Badge shows the nav item's hand-typed tier (short, e.g. "Pro"); the shared upgrade
+            // dialog (opened on click) names the exact unlocking plan from the remote catalog.
+            const planLabel = item.subPlan;
             return (
               <NavLink
                 key={item.href + item.label}
@@ -198,18 +198,20 @@ export function Sidebar({ open = false, onClose, collapsed = false }: SidebarPro
 
   // ── Filter by module + permission; subscription features shown but locked ───
 
-  // Collect which subFeature codes are locked (recognised feature, not in the current plan).
+  // Collect which subFeature codes are locked (not unlocked by the current plan/tier).
   // Rules:
   //  - Platform owners / superusers bypass all gates (hasFeature already returns true for them).
   //  - Gate only once entitlements have loaded (subInfo resolved & not loading), so nothing is
   //    locked during the initial fetch.
-  //  - Only gate codes present in FEATURE_CATALOG; unknown codes fail-open (visible) so a typo or
-  //    an un-seeded feature can never permanently hide a real capability.
+  //  - hasFeature() delegates to the shared tier-aware isFeatureUnlocked: it unlocks a code that is
+  //    granted OR at/below the tenant's tier (same family), AND fail-opens any code the remote
+  //    feature catalog doesn't define — so a typo/un-seeded feature can never permanently hide a
+  //    real capability. This replaced the old local FEATURE_CATALOG whitelist.
   const lockedFeatures = new Set<string>();
   if (!isPlatformOwner && !subLoading && subInfo !== undefined && subInfo !== null) {
     navGroups.forEach((g) =>
       g.items.forEach((item) => {
-        if (isKnownFeature(item.subFeature) && !hasFeature(item.subFeature)) {
+        if (item.subFeature && !hasFeature(item.subFeature)) {
           lockedFeatures.add(item.subFeature);
         }
       })
