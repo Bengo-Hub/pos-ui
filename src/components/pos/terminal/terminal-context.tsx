@@ -222,6 +222,10 @@ export interface TerminalContextValue {
   updateQuantity: (index: number, delta: number) => void;
   removeFromCart: (index: number) => void;
   clearCart: () => void;
+  /** Same-SKU BOGO free units earned for a cart line at its current PAID quantity (0 for
+   *  non-BOGO items and cross-item deals). The cart shows the effective qty (paid + this) with a
+   *  "N free" tag so the free unit is visible, not just implied. */
+  bogoFreeFor: (item: CartItem) => number;
   updateCourse: (index: number, course: CourseValue) => void;
   setItemSeat: (index: number, seat: number) => void;
 
@@ -1629,7 +1633,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
     pendingApprovalAction, setPendingApprovalAction, confirmApproval,
     priceEditIndex, setPriceEditIndex, setLinePrice,
     addItemToCart, handleItemTap, proceedWithItem, handleScaleAddToCart,
-    updateQuantity, removeFromCart, clearCart, updateCourse, setItemSeat,
+    updateQuantity, removeFromCart, clearCart, bogoFreeFor, updateCourse, setItemSeat,
     pricingProfile, pricingTiers, repricing, repriceCart,
     loyaltyState, setLoyaltyState, scaleDeviceId,
     orderSubtype, setOrderSubtype, deliveryInfo, setDeliveryInfo, tableId, tableName,

@@ -196,13 +196,24 @@ export function TerminalCart() {
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <p className="text-sm font-bold truncate leading-tight">{item.name}</p>
                         {cfg.showCourses && item.courseNumber ? <CourseBadge course={item.courseNumber} /> : null}
-                        {t.happyHour.bySku[item.sku] && (
-                          <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-100 rounded px-1.5 py-0.5 whitespace-nowrap">
-                            {t.happyHour.bySku[item.sku].freeQty > 0
-                              ? `+${t.happyHour.bySku[item.sku].freeQty} free`
-                              : t.happyHour.bySku[item.sku].label}
-                          </span>
-                        )}
+                        {/* Happy-hour tag. Same-SKU BOGO folds free units into this line, so the
+                            displayed qty (below) already includes them — the tag says how many of
+                            them are free. A cross-item auto-added line (promoFree) is wholly free.
+                            A non-BOGO discount (percentage/fixed) just shows its label. */}
+                        {(() => {
+                          const lineFree = t.bogoFreeFor(item);
+                          if (item.promoFree) {
+                            return <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-100 rounded px-1.5 py-0.5 whitespace-nowrap">Free</span>;
+                          }
+                          if (lineFree > 0) {
+                            return <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-100 rounded px-1.5 py-0.5 whitespace-nowrap">{lineFree} free</span>;
+                          }
+                          const hh = t.happyHour.bySku[item.sku];
+                          if (hh) {
+                            return <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-100 rounded px-1.5 py-0.5 whitespace-nowrap">{hh.freeQty > 0 ? `+${hh.freeQty} free` : hh.label}</span>;
+                          }
+                          return null;
+                        })()}
                       </div>
                       {item.selectedModifiers && item.modifierGroups && (
                         <p className="text-xs text-primary mt-0.5 truncate">
@@ -226,11 +237,11 @@ export function TerminalCart() {
                           title="Override unit price"
                           className="text-xs font-bold font-mono text-primary hover:underline underline-offset-2"
                         >
-                          KES {((item.price + (item.modifierTotal ?? 0)) * item.quantity).toLocaleString()}
+                          KES {((item.price + (item.modifierTotal ?? 0)) * (item.quantity + t.bogoFreeFor(item))).toLocaleString()}
                         </button>
                         {item.originalPrice != null && item.price < item.originalPrice && (
                           <span className="text-[10px] text-muted-foreground line-through font-mono">
-                            KES {(item.originalPrice * item.quantity).toLocaleString()}
+                            KES {(item.originalPrice * (item.quantity + t.bogoFreeFor(item))).toLocaleString()}
                           </span>
                         )}
                         {cfg.showCourses && (
@@ -244,7 +255,8 @@ export function TerminalCart() {
                       {/* REQ-001: projected on-hand stock if this cart is completed — preview
                           only, nothing deducts until the sale finalizes. */}
                       {typeof item.stockQuantity === 'number' && (() => {
-                        const projected = item.stockQuantity - item.quantity;
+                        // Free BOGO units deduct stock too, so project against the effective qty.
+                        const projected = item.stockQuantity - (item.quantity + t.bogoFreeFor(item));
                         return (
                           <div className={cn('text-[10px] font-mono mt-0.5', projected < 0 ? 'text-destructive font-semibold' : 'text-muted-foreground')}>
                             Stock after sale: {projected}{projected < 0 ? ' — exceeds on-hand' : ''}
@@ -287,7 +299,9 @@ export function TerminalCart() {
                       >
                         <Minus className="h-4 w-4" />
                       </button>
-                      <span className="w-8 text-center text-sm font-bold tabular-nums">{item.quantity}</span>
+                      {/* Effective qty (paid + same-SKU BOGO free units) so the free drink shows on
+                          the line; the ± buttons still adjust the PAID quantity. */}
+                      <span className="w-8 text-center text-sm font-bold tabular-nums">{item.quantity + t.bogoFreeFor(item)}</span>
                       <button
                         onClick={() => t.updateQuantity(idx, 1)}
                         className="h-11 w-11 rounded-xl border border-border bg-background flex items-center justify-center hover:bg-accent transition touch-manipulation active:scale-95"
