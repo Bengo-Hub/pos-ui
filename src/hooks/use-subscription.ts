@@ -4,6 +4,7 @@ import { useAuthStore } from "@/store/auth";
 import type { SubscriptionInfo } from "@/lib/auth/subscription";
 import { fetchSubscriptionInfo } from "@/lib/auth/subscription";
 import { useSubscriptionStore } from "@/store/subscription";
+import { isFeatureUnlocked, type SubscriptionEntitlements } from "@bengo-hub/shared-ui-lib/subscription";
 import { useEffect } from "react";
 
 export function useSubscription() {
@@ -61,6 +62,7 @@ export function useSubscription() {
         status: (tenant.subscription_status as string).toLowerCase(),
         planCode: (tenant.subscription_plan as string) ?? '',
         planName: (tenant.subscription_plan as string) ?? '',
+        tierOrder: (tenant.tier_order as number) ?? (tenant.subscription_tier_order as number) ?? undefined,
         features: (tenant.subscription_features as string[]) ?? [],
         limits: (tenant.tier_limits as Record<string, number>) ?? {},
         trialEndsAt: tenant.subscription_expires_at as string | undefined,
@@ -71,6 +73,7 @@ export function useSubscription() {
         {
           plan: quickInfo.planCode || null,
           status: quickInfo.status || null,
+          tierOrder: quickInfo.tierOrder ?? null,
           expiresAt: (tenant.subscription_grace_ends_at as string) ?? quickInfo.currentPeriodEnd ?? null,
           features: quickInfo.features,
           limits: quickInfo.limits,
@@ -84,7 +87,7 @@ export function useSubscription() {
           setSubscriptionInfo(info as any);
           useSubscriptionStore.getState().setFromRaw(
             {
-              plan: info.planCode, status: info.status,
+              plan: info.planCode, status: info.status, tierOrder: info.tierOrder ?? null,
               expiresAt: info.currentPeriodEnd ?? info.trialEndsAt ?? null,
               features: info.features, limits: info.limits,
             },
@@ -102,6 +105,7 @@ export function useSubscription() {
         useSubscriptionStore.getState().setFromRaw(
           {
             plan: resolved.planCode || null, status: resolved.status || null,
+            tierOrder: (resolved as any).tierOrder ?? null,
             expiresAt: (resolved as any).currentPeriodEnd ?? (resolved as any).trialEndsAt ?? null,
             features: resolved.features, limits: resolved.limits,
           },
@@ -114,10 +118,22 @@ export function useSubscription() {
   const info = subscriptionInfo as SubscriptionInfo | null | undefined;
   const subStatus = info?.status ?? null;
 
+  // Entitlement snapshot for the SHARED tier-aware gate. Falls back to the offline store so
+  // hasFeature/getLimit resolve identically offline (info comes from IDB via setFromRaw/loadFromIDB).
+  const entitlements: SubscriptionEntitlements = {
+    features: info?.features ?? subStore.features ?? [],
+    limits: (info?.limits ?? subStore.limits ?? {}) as Record<string, number>,
+    isExempt,
+    planCode: info?.planCode ?? subStore.plan ?? null,
+    tierOrder: info?.tierOrder ?? subStore.tierOrder ?? null,
+    catalog: subStore.catalog ?? {},
+  };
+
   return {
     info,
     status: subStatus,
-    plan: info?.planCode ?? null,
+    plan: info?.planCode ?? subStore.plan ?? null,
+    tierOrder: info?.tierOrder ?? subStore.tierOrder ?? null,
     isActive: subStatus === 'active' || subStatus === 'trial' || isExempt,
     isPastDue: subStatus === 'past_due' || subStatus === 'suspended',
     isExpired: subStatus === 'expired' || subStatus === 'cancelled',
@@ -126,8 +142,10 @@ export function useSubscription() {
     isPlatformOwner,
     isServiceCharge,
     isDemo,
-    hasFeature: (code: string) => isExempt || (info?.features?.includes(code) ?? false),
-    getLimit: (key: string) => (isExempt ? Infinity : ((info?.limits?.[key] ?? Infinity) as number)),
+    // Tier-aware: unlocked when granted OR at/below the tenant's tier (same family) OR uncatalogued.
+    hasFeature: (code: string) => isFeatureUnlocked(entitlements, code),
+    getLimit: (key: string) =>
+      isExempt ? Infinity : ((info?.limits?.[key] ?? subStore.limits?.[key] ?? Infinity) as number),
     daysUntilExpiry: subStore.daysUntilExpiry,
     isInGracePeriod: subStore.isInGracePeriod,
     gracePeriodEndsAt: subStore.gracePeriodEndsAt,
