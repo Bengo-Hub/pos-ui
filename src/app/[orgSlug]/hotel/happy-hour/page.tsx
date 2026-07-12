@@ -5,7 +5,7 @@ import { Card, CardContent } from '@/components/ui/base';
 import {
   useActiveHappyHours, useHappyHours, useCreateHappyHour, useUpdateHappyHour, useDeleteHappyHour,
 } from '@/hooks/useHotel';
-import { useMenuItems, useCategories, type CatalogItem } from '@/hooks/usePOS';
+import { useMenuItems, useCategories, useFullCatalog, type CatalogItem } from '@/hooks/usePOS';
 import { usePermissions, P } from '@/hooks/usePermissions';
 import type { HappyHourInput, HappyHourPromotion } from '@/lib/api/hotel';
 import { Loader2, Plus, Wine, Pencil, Trash2, Search, X, CalendarClock, Repeat, CalendarDays, ArrowRight } from 'lucide-react';
@@ -622,15 +622,17 @@ function HappyHourPageInner() {
   const [editing, setEditing] = useState<HappyHourPromotion | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<HappyHourPromotion | null>(null);
 
-  // Resolve selected items' names for the edit form's ItemPicker prefill (rule.scope_ids only
-  // carries SKUs) — search each sku individually is wasteful, so instead resolve lazily: fetch
-  // a wide catalog page once and index by sku (happy-hour item lists are typically small).
-  const { data: catalogPage } = useMenuItems({ limit: 100 });
+  // Resolve selected items' names for the edit form prefill (rule.scope_ids / get_pair_map carry
+  // only SKUs). Must index the FULL catalog, not a single page — the pizza SKUs (PIZ0xx) live past
+  // the first page, so a 100-row page silently dropped them and their chips/pairs rendered blank
+  // while first-page items (e.g. cocktails) resolved fine. useFullCatalog is cached + shared with
+  // the terminal, so this is cheap.
+  const { data: fullCatalog } = useFullCatalog();
   const itemsBySku = useMemo(() => {
     const m = new Map<string, CatalogItem>();
-    for (const i of catalogPage?.data ?? []) m.set(i.sku, i);
+    for (const i of fullCatalog ?? []) if (i.sku) m.set(i.sku, i);
     return m;
-  }, [catalogPage]);
+  }, [fullCatalog]);
 
   const happyHours = all.filter((p) => p.promo_kind === 'happy_hour');
 
