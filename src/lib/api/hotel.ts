@@ -495,6 +495,11 @@ export interface PromotionRule {
    *  ("buy one large, get one small free"). Empty/absent = same-SKU BOGO (the free unit is
    *  another unit of the same item already bought). */
   get_scope_ids?: string[];
+  /** BOGO CORRESPONDING cross-item pairing: each "buy" SKU → its one specific free "get" SKU
+   *  (e.g. "PIZ003" Margherita-Large → "PIZ001" Margherita-Small — "buy a Large, get the matching
+   *  Small free"). When set, scope_ids = the keys and get_scope_ids = the values; the terminal
+   *  auto-adds the mapped item and the evaluator frees exactly it (not the cheapest get item). */
+  get_pair_map?: Record<string, string>;
   max_discount?: number | null;
   meal_period?: 'breakfast' | 'am_break' | 'lunch' | 'pm_break' | 'dinner' | null;
 }
@@ -540,6 +545,9 @@ export interface HappyHourInput {
   get_discount_percent?: number;
   /** BOGO cross-item pairing — see PromotionRule.get_scope_ids. Omit/empty for same-SKU BOGO. */
   get_scope_ids?: string[];
+  /** BOGO corresponding pairing — see PromotionRule.get_pair_map. When set, scope_ids/get_scope_ids
+   *  are derived server-side from its keys/values. */
+  get_pair_map?: Record<string, string>;
   max_discount?: number;
   /** Optional meal-period target for negotiated lunch/dinner rates. */
   meal_period?: 'breakfast' | 'am_break' | 'lunch' | 'pm_break' | 'dinner' | '';

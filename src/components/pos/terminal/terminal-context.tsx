@@ -126,6 +126,10 @@ export interface CartItem extends MenuItem {
   /** Catalog price before a manual price override (markdown). */
   originalPrice?: number;
   overrideReason?: string;
+  /** True for a line auto-added by a corresponding-pair BOGO deal (the free "get" item, e.g. the
+   *  Small pizza paired to a bought Large). Its quantity is kept in lockstep with the triggering
+   *  buy line and it's priced to free by the happy-hour discount — the cashier never adds it. */
+  promoFree?: boolean;
 }
 
 export type DisplayMode = 'card' | 'list' | 'image_grid';
@@ -611,6 +615,109 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
     });
   }, [catalogItems, pricingProfile]);
 
+  // Catalog indexed by lowercase SKU — used to build the auto-added free "get" line for a
+  // corresponding-pair BOGO deal (the matching item's real price/recipe/tax).
+  const menuBySku = useMemo(() => {
+    const m = new Map<string, MenuItem>();
+    for (const it of menuItems) if (it.sku) m.set(it.sku.toLowerCase(), it);
+    return m;
+  }, [menuItems]);
+
+  // Corresponding-pair BOGO auto-add + sync: when a "buy" item (e.g. a Large pizza) is in the cart
+  // during an active pair deal, its mapped free item (the matching Small) is auto-added as its own
+  // line and its quantity kept in lockstep with the buy line — add/increase/remove the buy item and
+  // the free line follows; remove it and the free line goes too. The free line is a REAL order line
+  // (own SKU/recipe), so stock deducts and COGS posts normally; the happy-hour discount (mirrored in
+  // `happyHour` below, recomputed authoritatively server-side) prices it to free. A manually-added
+  // "get" item counts toward the earned free units so we never double it. Managed centrally here so
+  // no manual step is needed and a free line can't be stranded.
+  useEffect(() => {
+    const pairRules = activeHappyHours
+      .map((p) => p.rule)
+      .filter((r): r is NonNullable<typeof r> =>
+        !!r && r.discount_type === 'bogo' && r.scope_type === 'item'
+        && !!r.get_pair_map && Object.keys(r.get_pair_map).length > 0);
+
+    if (pairRules.length === 0) {
+      if (cart.some((c) => c.promoFree)) setCart((prev) => prev.filter((c) => !c.promoFree));
+      return;
+    }
+
+    // lower(buySku) -> { getSku, buy, get }; first active rule wins on a conflicting key.
+    const pair = new Map<string, { getSku: string; buy: number; get: number }>();
+    for (const r of pairRules) {
+      const buy = Math.max(1, r.buy_quantity ?? 1);
+      const get = Math.max(1, r.get_quantity ?? 1);
+      for (const [bk, gk] of Object.entries(r.get_pair_map ?? {})) {
+        const key = bk.toLowerCase();
+        if (!pair.has(key)) pair.set(key, { getSku: gk, buy, get });
+      }
+    }
+
+    // Earned free units per get SKU, from buy-line quantities (real lines only, not free lines).
+    const buyQtyBySku = new Map<string, number>();
+    for (const c of cart) {
+      if (c.promoFree) continue;
+      const k = (c.sku ?? '').toLowerCase();
+      if (pair.has(k)) buyQtyBySku.set(k, (buyQtyBySku.get(k) ?? 0) + c.quantity);
+    }
+    const earnedByGetSku = new Map<string, number>();
+    for (const [bk, q] of buyQtyBySku) {
+      const info = pair.get(bk)!;
+      const earned = Math.floor(q / info.buy) * info.get;
+      if (earned <= 0) continue;
+      const gk = info.getSku.toLowerCase();
+      earnedByGetSku.set(gk, (earnedByGetSku.get(gk) ?? 0) + earned);
+    }
+    // Manually-present (non-free) quantity of each earned get SKU — don't auto-add on top of it.
+    const manualByGetSku = new Map<string, number>();
+    for (const c of cart) {
+      if (c.promoFree) continue;
+      const k = (c.sku ?? '').toLowerCase();
+      if (earnedByGetSku.has(k)) manualByGetSku.set(k, (manualByGetSku.get(k) ?? 0) + c.quantity);
+    }
+    const targetAuto = new Map<string, number>();
+    for (const [gk, earned] of earnedByGetSku) {
+      targetAuto.set(gk, Math.max(0, earned - (manualByGetSku.get(gk) ?? 0)));
+    }
+
+    // Rebuild: keep real lines; set each free line to its target (drop at 0); add missing free lines.
+    const next: CartItem[] = [];
+    const seen = new Set<string>();
+    const announce: { sku: string; name: string; qty: number }[] = [];
+    let changed = false;
+    for (const c of cart) {
+      if (!c.promoFree) { next.push(c); continue; }
+      const gk = (c.sku ?? '').toLowerCase();
+      const want = targetAuto.get(gk) ?? 0;
+      seen.add(gk);
+      if (want <= 0) { changed = true; continue; }
+      if (c.quantity !== want) {
+        if (want > c.quantity) announce.push({ sku: gk, name: c.name, qty: want });
+        next.push({ ...c, quantity: want });
+        changed = true;
+      } else {
+        next.push(c);
+      }
+    }
+    for (const [gk, want] of targetAuto) {
+      if (want <= 0 || seen.has(gk)) continue;
+      const mi = menuBySku.get(gk);
+      if (!mi) continue; // not in catalog — can't auto-add
+      next.push({ ...mi, quantity: want, promoFree: true });
+      announce.push({ sku: gk, name: mi.name, qty: want });
+      changed = true;
+    }
+
+    if (changed) {
+      setCart(next);
+      for (const a of announce) {
+        toast.success(`🎉 Free ${a.name}${a.qty > 1 ? ` ×${a.qty}` : ''} added`, { id: `hh-free-${a.sku}` });
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cart, activeHappyHours, menuBySku]);
+
   // Pricing tiers (Retail/Wholesale/custom) from inventory via pos-api — drives the price selector.
   const { data: tiersResp } = usePricingTiers();
   const pricingTiers = useMemo(() => tiersResp?.data ?? [], [tiersResp]);
@@ -708,10 +815,10 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
           if (mods || serialNumber) {
             return [...prev, { ...item, quantity: qty, selectedModifiers: mods, selectedModifierDetails: modifierDetails, modifierTotal: modTotal, serialNumber }];
           }
-          const existing = prev.find((c) => c.id === item.id && !c.selectedModifiers);
+          const existing = prev.find((c) => c.id === item.id && !c.selectedModifiers && !c.promoFree);
           if (existing) {
             return prev.map((c) =>
-              c.id === item.id && !c.selectedModifiers ? { ...c, quantity: c.quantity + qty } : c
+              c.id === item.id && !c.selectedModifiers && !c.promoFree ? { ...c, quantity: c.quantity + qty } : c
             );
           }
           return [...prev, { ...item, quantity: qty }];
@@ -729,8 +836,14 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
       const promo = happyHourForSku(item.sku);
       if (promo?.rule) {
         const r = promo.rule;
-        const crossItem = r.discount_type === 'bogo' && (r.get_scope_ids ?? []).length > 0;
-        if (crossItem) {
+        // Corresponding-pair BOGO (get_pair_map set) auto-adds the matching free item and toasts
+        // from the reconcile effect, so suppress the manual "add N more / add a qualifying item"
+        // nudges here — they'd contradict the auto-add.
+        const hasPairMap = r.discount_type === 'bogo' && !!r.get_pair_map && Object.keys(r.get_pair_map).length > 0;
+        const crossItem = !hasPairMap && r.discount_type === 'bogo' && (r.get_scope_ids ?? []).length > 0;
+        if (hasPairMap) {
+          // no-op: the reconcile effect announces the auto-added free item.
+        } else if (crossItem) {
           // Cross-item: "buy Large, get Small free" — the buy_quantity/get_quantity pairing
           // spans TWO DIFFERENT scopes, not one SKU's own quantity, so tally each scope
           // separately from the just-updated cart rather than reusing the same-SKU cycle math.

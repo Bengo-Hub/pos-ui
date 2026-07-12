@@ -76,6 +76,9 @@ function calcBogo(rule: PromotionRule, lines: HHLine[]): { total: number; bySku:
   const pct = (rule.get_discount_percent ?? 100) <= 0 ? 100 : (rule.get_discount_percent ?? 100);
   const label = `Buy ${buy} Get ${get} ${pct < 100 ? `${trimNum(pct)}% off` : 'Free'}`;
 
+  if (rule.get_pair_map && Object.keys(rule.get_pair_map).length > 0) {
+    return calcCorrespondingPairBogo(rule, lines, buy, get, pct, label);
+  }
   if ((rule.get_scope_ids ?? []).length > 0) {
     return calcCrossItemBogo(rule, lines, buy, get, pct, label);
   }
@@ -148,8 +151,94 @@ function calcCrossItemBogo(
   return { total: round2(total), bySku };
 }
 
+/**
+ * Corresponding-pair cross-item BOGO — "buy a Large pizza, get the SAME-FLAVOR Small free". Uses
+ * rule.get_pair_map (buy SKU → its one specific get SKU) so the freed item is the one that matches
+ * what was bought, never an arbitrary/cheapest flavor. For each buy SKU in the cart, every `buy`
+ * units earns `get` free units of ITS mapped SKU, capped by how many of that mapped SKU are in the
+ * cart (the terminal auto-adds it). Mirrors pos-api's calculateCorrespondingPairBOGO exactly.
+ */
+function calcCorrespondingPairBogo(
+  rule: PromotionRule, lines: HHLine[], buy: number, get: number, pct: number, label: string,
+): { total: number; bySku: Record<string, HHLineResult> } {
+  const pairMap = rule.get_pair_map ?? {};
+  const pair: Record<string, string> = {}; // lower(buySku) -> getSku (original case)
+  for (const [k, v] of Object.entries(pairMap)) pair[norm(k)] = v;
+  if (Object.keys(pair).length === 0) return { total: 0, bySku: {} };
+
+  const buyQtyBySku: Record<string, number> = {};
+  for (const l of lines) {
+    const lk = norm(l.sku);
+    if (pair[lk] !== undefined) buyQtyBySku[lk] = (buyQtyBySku[lk] ?? 0) + l.quantity;
+  }
+
+  const getUnits: Record<string, number[]> = {};   // lower(getSku) -> remaining unit prices
+  const getDisplaySku: Record<string, string> = {}; // lower(getSku) -> original-case sku
+  for (const l of lines) {
+    const gk = norm(l.sku);
+    for (let i = 0; i < l.quantity; i++) (getUnits[gk] ??= []).push(l.unitPrice);
+    getDisplaySku[gk] = l.sku;
+  }
+
+  let total = 0;
+  const freeQtyBySku: Record<string, number> = {};
+  const amtBySku: Record<string, number> = {};
+  for (const [buyLk, qty] of Object.entries(buyQtyBySku)) {
+    const pairs = Math.floor(qty / buy);
+    if (pairs <= 0) continue;
+    const earned = pairs * get;
+    const gk = norm(pair[buyLk]);
+    const avail = (getUnits[gk] ?? []).slice().sort((a, b) => a - b);
+    const n = Math.min(earned, avail.length);
+    for (let i = 0; i < n; i++) {
+      const amt = round2(avail[i] * (pct / 100));
+      total += amt;
+      freeQtyBySku[gk] = (freeQtyBySku[gk] ?? 0) + 1;
+      amtBySku[gk] = round2((amtBySku[gk] ?? 0) + amt);
+    }
+    getUnits[gk] = avail.slice(n); // consume freed units
+  }
+
+  const bySku: Record<string, HHLineResult> = {};
+  for (const gk of Object.keys(freeQtyBySku)) {
+    bySku[getDisplaySku[gk]] = { amount: amtBySku[gk], freeQty: freeQtyBySku[gk], type: 'bogo', label };
+  }
+  if (rule.max_discount && rule.max_discount > 0 && total > rule.max_discount) total = rule.max_discount;
+  return { total: round2(total), bySku };
+}
+
 function round2(n: number): number {
   return Math.round((n + Number.EPSILON) * 100) / 100;
+}
+
+/**
+ * Corresponding-pair auto-add: for a buy SKU (e.g. a Large pizza), return the mapped free "get" SKU
+ * (the matching Small) and how many units to auto-add for a given bought quantity, across all active
+ * pair-map BOGO promos. Returns null when the SKU isn't the "buy" side of any active corresponding
+ * pair deal. The terminal uses this to auto-add the free Small as its own line and keep its quantity
+ * synced to the Large (see terminal-context reconcileCrossItemFreebies).
+ */
+export function correspondingFreeForSku(
+  sku: string, boughtQty: number, promos: HappyHourPromotion[],
+): { getSku: string; freeQty: number; promoName: string } | null {
+  if (boughtQty <= 0) return null;
+  const s = norm(sku);
+  let best: { getSku: string; freeQty: number; promoName: string } | null = null;
+  for (const p of promos) {
+    const r = p.rule;
+    if (!r || r.discount_type !== 'bogo' || r.scope_type !== 'item') continue;
+    const map = r.get_pair_map ?? {};
+    // Match case-insensitively but return the map's stored get SKU verbatim.
+    const key = Object.keys(map).find((k) => norm(k) === s);
+    if (!key) continue;
+    const buy = Math.max(1, r.buy_quantity ?? 1);
+    const get = Math.max(1, r.get_quantity ?? 1);
+    const freeQty = Math.floor(boughtQty / buy) * get;
+    if (freeQty > 0 && (!best || freeQty > best.freeQty)) {
+      best = { getSku: map[key], freeQty, promoName: p.name };
+    }
+  }
+  return best;
 }
 
 /**

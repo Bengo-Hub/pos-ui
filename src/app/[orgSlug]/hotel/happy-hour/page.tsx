@@ -8,7 +8,7 @@ import {
 import { useMenuItems, useCategories, type CatalogItem } from '@/hooks/usePOS';
 import { usePermissions, P } from '@/hooks/usePermissions';
 import type { HappyHourInput, HappyHourPromotion } from '@/lib/api/hotel';
-import { Loader2, Plus, Wine, Pencil, Trash2, Search, X, CalendarClock, Repeat, CalendarDays } from 'lucide-react';
+import { Loader2, Plus, Wine, Pencil, Trash2, Search, X, CalendarClock, Repeat, CalendarDays, ArrowRight } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { ModuleGate } from '@/components/auth/module-gate';
@@ -23,6 +23,16 @@ const DAYS = [
 
 type DiscountType = 'percentage' | 'fixed_amount' | 'fixed_price' | 'bogo';
 type ScheduleMode = 'recurring' | 'one_time';
+
+/** One "buy X → get Y free" correspondence row for the cross-item pairing editor (e.g. Margherita
+ *  Large → Margherita Small). SKUs are stored directly so a pair survives edit even when the item
+ *  isn't in the small catalog page used for name resolution; the name is only for display. */
+interface PairRow {
+  buySku: string;
+  buyName: string;
+  getSku: string;
+  getName: string;
+}
 
 interface FormState {
   name: string;
@@ -39,11 +49,12 @@ interface FormState {
   buyQuantity: string;
   getQuantity: string;
   getDiscountPercent: string;
-  // Cross-item BOGO ("buy one Large pizza, get one Small pizza free"): when true, the free
-  // "get" unit is a DIFFERENT item from `items` — getItems is that separate scope. When false
-  // (default), the free unit is another unit of the same item being bought (get_scope_ids empty).
+  // Cross-item BOGO ("buy one Large pizza, get the CORRESPONDING Small pizza free"): when true,
+  // the free "get" unit is a DIFFERENT item mapped one-to-one from what's bought. `pairs` is that
+  // explicit correspondence (buy SKU → get SKU); the terminal auto-adds the mapped free item.
+  // When false (default), the free unit is another unit of the same item being bought.
   crossItemGet: boolean;
-  getItems: CatalogItem[];
+  pairs: PairRow[];
   maxDiscount: string;
   mealPeriod: string;
 }
@@ -65,7 +76,7 @@ function blankForm(): FormState {
     getQuantity: '1',
     getDiscountPercent: '100',
     crossItemGet: false,
-    getItems: [],
+    pairs: [],
     maxDiscount: '',
     mealPeriod: '',
   };
@@ -75,6 +86,11 @@ function blankForm(): FormState {
 function formFromPromotion(p: HappyHourPromotion, itemsBySku: Map<string, CatalogItem>): FormState {
   const r = p.rule;
   const isOneTime = !!(p.start_at && !p.days_of_week?.length);
+  const pairMap = r?.get_pair_map ?? {};
+  const nameFor = (sku: string) => itemsBySku.get(sku)?.name ?? sku;
+  const pairs: PairRow[] = Object.entries(pairMap).map(([buySku, getSku]) => ({
+    buySku, buyName: nameFor(buySku), getSku, getName: nameFor(getSku),
+  }));
   return {
     name: p.name,
     scheduleMode: isOneTime ? 'one_time' : 'recurring',
@@ -90,8 +106,8 @@ function formFromPromotion(p: HappyHourPromotion, itemsBySku: Map<string, Catalo
     buyQuantity: String(r?.buy_quantity ?? 1),
     getQuantity: String(r?.get_quantity ?? 1),
     getDiscountPercent: String(r?.get_discount_percent ?? 100),
-    crossItemGet: !!(r?.get_scope_ids ?? []).length,
-    getItems: (r?.get_scope_ids ?? []).map((sku) => itemsBySku.get(sku)).filter((x): x is CatalogItem => !!x),
+    crossItemGet: pairs.length > 0,
+    pairs,
     maxDiscount: r?.max_discount ? String(r.max_discount) : '',
     mealPeriod: r?.meal_period ?? '',
   };
@@ -101,12 +117,25 @@ function toPayload(f: FormState): HappyHourInput | null {
   if (!f.name.trim()) { toast.error('Name is required'); return null; }
   if (f.scheduleMode === 'recurring' && f.days.length === 0) { toast.error('Pick at least one day'); return null; }
   if (f.scheduleMode === 'one_time' && (!f.startAt || !f.endAt)) { toast.error('Pick a start and end date/time'); return null; }
-  if (!f.scopeAll && f.items.length === 0) { toast.error('Pick at least one item, or switch to "All items"'); return null; }
   const crossItem = f.discountType === 'bogo' && f.crossItemGet;
-  if (crossItem && f.getItems.length === 0) {
-    toast.error('Pick at least one "get free" item, or turn off "Different free item"');
+  // Cross-item deals are scoped entirely by the pairing rows; the plain All/Specific scope only
+  // applies to the non-paired cases.
+  if (!crossItem && !f.scopeAll && f.items.length === 0) {
+    toast.error('Pick at least one item, or switch to "All items"'); return null;
+  }
+  const completePairs = f.pairs.filter((p) => p.buySku && p.getSku);
+  if (crossItem && completePairs.length === 0) {
+    toast.error('Add at least one "buy → get free" pair, or turn off "Corresponding free item"');
     return null;
   }
+  if (crossItem && completePairs.length !== f.pairs.length) {
+    toast.error('Every pair needs both a bought item and its free item');
+    return null;
+  }
+  // Explicit correspondence map (buy SKU → free get SKU). Server derives scope_ids/get_scope_ids
+  // from it, but we send them too so an older backend still applies the deal.
+  const pairMap: Record<string, string> = {};
+  for (const p of completePairs) pairMap[p.buySku] = p.getSku;
 
   const body: HappyHourInput = {
     name: f.name.trim(),
@@ -117,15 +146,16 @@ function toPayload(f: FormState): HappyHourInput | null {
     start_at: f.scheduleMode === 'one_time' ? new Date(f.startAt).toISOString() : null,
     end_at: f.scheduleMode === 'one_time' ? new Date(f.endAt).toISOString() : null,
     auto_apply: true,
-    scope_type: f.scopeAll ? 'all' : 'item',
-    scope_ids: f.scopeAll ? [] : f.items.map((i) => i.sku),
+    scope_type: crossItem ? 'item' : (f.scopeAll ? 'all' : 'item'),
+    scope_ids: crossItem ? completePairs.map((p) => p.buySku) : (f.scopeAll ? [] : f.items.map((i) => i.sku)),
     discount_type: f.discountType,
     discount_value: f.discountType === 'bogo' ? 0 : parseFloat(f.discountValue) || 0,
     ...(f.discountType === 'bogo' ? {
       buy_quantity: parseInt(f.buyQuantity, 10) || 1,
       get_quantity: parseInt(f.getQuantity, 10) || 1,
       get_discount_percent: parseFloat(f.getDiscountPercent) || 100,
-      get_scope_ids: crossItem ? f.getItems.map((i) => i.sku) : [],
+      get_scope_ids: crossItem ? completePairs.map((p) => p.getSku) : [],
+      get_pair_map: crossItem ? pairMap : {},
     } : {}),
     ...(f.maxDiscount ? { max_discount: parseFloat(f.maxDiscount) } : {}),
     ...(f.mealPeriod ? { meal_period: f.mealPeriod as HappyHourInput['meal_period'] } : {}),
@@ -143,7 +173,7 @@ function describeDeal(f: Pick<FormState, 'discountType' | 'discountValue' | 'buy
       const get = parseInt(f.getQuantity, 10) || 1;
       const pct = parseFloat(f.getDiscountPercent) || 100;
       const dealLabel = pct >= 100 ? 'free' : `${pct}% off`;
-      const getNoun = f.crossItemGet ? 'a different item' : 'the same item';
+      const getNoun = f.crossItemGet ? 'a corresponding item' : 'the same item';
       return `Buy ${buy} get ${get} ${dealLabel} (${getNoun})`;
     }
     default: return '';
@@ -252,6 +282,110 @@ function CategoryQuickAdd({ selected, onChange }: { selected: CatalogItem[]; onC
   );
 }
 
+/** Single-item search+pick (one selection, not a multi-select chip list) — used by each side of a
+ *  cross-item pairing row. Stores only sku+name so the caller keeps the SKU even if the item can't
+ *  be re-resolved from the catalog later. */
+function SingleItemSelect({ value, placeholder, onChange }: {
+  value: { sku: string; name: string } | null;
+  placeholder: string;
+  onChange: (item: { sku: string; name: string } | null) => void;
+}) {
+  const [search, setSearch] = useState('');
+  const [debounced, setDebounced] = useState('');
+  const [open, setOpen] = useState(false);
+  useEffect(() => { const t = setTimeout(() => setDebounced(search), 250); return () => clearTimeout(t); }, [search]);
+  const { data, isFetching } = useMenuItems({ search: debounced, limit: 25 });
+  const results = data?.data ?? [];
+
+  if (value) {
+    return (
+      <div className="flex items-center justify-between gap-2 rounded-xl border border-input bg-background px-3 py-2 text-sm">
+        <span className="truncate">{value.name} <span className="text-xs text-muted-foreground">({value.sku})</span></span>
+        <button type="button" onClick={() => onChange(null)} aria-label="Change item">
+          <X className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+        </button>
+      </div>
+    );
+  }
+  return (
+    <div className="relative">
+      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+      <input
+        value={search}
+        onChange={(e) => { setSearch(e.target.value); setOpen(true); }}
+        onFocus={() => setOpen(true)}
+        placeholder={placeholder}
+        className="w-full pl-8 pr-3 py-2 rounded-xl border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+      />
+      {open && debounced && (
+        <div className="absolute z-20 mt-1 w-full max-h-48 overflow-y-auto rounded-xl border border-border bg-popover shadow-md divide-y divide-border">
+          {isFetching ? (
+            <div className="p-3 text-center text-xs text-muted-foreground">Searching…</div>
+          ) : results.length === 0 ? (
+            <div className="p-3 text-center text-xs text-muted-foreground">No matching items</div>
+          ) : (
+            results.map((i) => (
+              <button
+                key={i.sku}
+                type="button"
+                onClick={() => { onChange({ sku: i.sku, name: i.name }); setSearch(''); setOpen(false); }}
+                className="w-full flex items-center justify-between px-3 py-2 text-sm text-left hover:bg-accent"
+              >
+                <span>{i.name} <span className="text-xs text-muted-foreground">({i.sku})</span></span>
+                <Plus className="h-3.5 w-3.5 text-muted-foreground" />
+              </button>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Cross-item BOGO pairing editor: an explicit list of "buy this → get this free" rows (e.g.
+ *  Margherita Large → Margherita Small). This is what makes the free item CORRESPOND to what was
+ *  bought and drives the terminal's auto-add — replacing the old two-disconnected-lists UI. */
+function PairEditor({ pairs, onChange }: { pairs: PairRow[]; onChange: (pairs: PairRow[]) => void }) {
+  const setRow = (idx: number, patch: Partial<PairRow>) =>
+    onChange(pairs.map((p, i) => (i === idx ? { ...p, ...patch } : p)));
+  const addRow = () => onChange([...pairs, { buySku: '', buyName: '', getSku: '', getName: '' }]);
+  const removeRow = (idx: number) => onChange(pairs.filter((_, i) => i !== idx));
+
+  return (
+    <div className="space-y-2">
+      <div className="hidden sm:grid grid-cols-[1fr_auto_1fr_auto] items-center gap-2 px-1 text-xs font-medium text-muted-foreground">
+        <span>Buy this…</span><span /><span>…get this free</span><span />
+      </div>
+      {pairs.length === 0 && (
+        <p className="text-xs text-muted-foreground">No pairs yet — add a “buy → get free” row below.</p>
+      )}
+      {pairs.map((p, idx) => (
+        <div key={idx} className="grid grid-cols-1 sm:grid-cols-[1fr_auto_1fr_auto] items-center gap-2">
+          <SingleItemSelect
+            value={p.buySku ? { sku: p.buySku, name: p.buyName } : null}
+            placeholder="Bought item (e.g. Margherita Large)…"
+            onChange={(it) => setRow(idx, { buySku: it?.sku ?? '', buyName: it?.name ?? '' })}
+          />
+          <span className="hidden sm:flex items-center justify-center text-muted-foreground"><ArrowRight className="h-4 w-4" /></span>
+          <SingleItemSelect
+            value={p.getSku ? { sku: p.getSku, name: p.getName } : null}
+            placeholder="Free item (e.g. Margherita Small)…"
+            onChange={(it) => setRow(idx, { getSku: it?.sku ?? '', getName: it?.name ?? '' })}
+          />
+          <button type="button" onClick={() => removeRow(idx)} aria-label="Remove pair"
+            className="h-8 w-8 rounded-md flex items-center justify-center hover:bg-accent justify-self-end">
+            <Trash2 className="h-3.5 w-3.5 text-destructive" />
+          </button>
+        </div>
+      ))}
+      <button type="button" onClick={addRow}
+        className="inline-flex items-center gap-1 rounded-full border border-input text-xs font-medium px-2.5 py-1 hover:bg-accent">
+        <Plus className="h-3 w-3" /> Add pair
+      </button>
+    </div>
+  );
+}
+
 function PromoForm({ initial, onCancel, onSave, saving }: {
   initial: FormState; onCancel: () => void; onSave: (f: FormState) => void; saving: boolean;
 }) {
@@ -330,28 +464,32 @@ function PromoForm({ initial, onCancel, onSave, saving }: {
           </div>
         )}
 
-        {/* Which menu items the deal covers — the BOGO "buy" scope when cross-item pairing is on. */}
-        <div>
-          <span className="text-sm font-medium">{f.discountType === 'bogo' && f.crossItemGet ? 'Buy' : 'Applies to'}</span>
-          <div className="mt-1 flex gap-2 mb-2">
-            <button type="button" onClick={() => set('scopeAll', true)}
-              className={cn('flex-1 py-2 rounded-xl border text-sm font-medium transition-colors',
-                f.scopeAll ? 'bg-primary text-primary-foreground border-primary' : 'border-input hover:bg-muted')}>
-              All items
-            </button>
-            <button type="button" onClick={() => set('scopeAll', false)}
-              className={cn('flex-1 py-2 rounded-xl border text-sm font-medium transition-colors',
-                !f.scopeAll ? 'bg-primary text-primary-foreground border-primary' : 'border-input hover:bg-muted')}>
-              Specific items
-            </button>
-          </div>
-          {!f.scopeAll && (
-            <div className="space-y-3">
-              <ItemPicker selected={f.items} onChange={(items) => set('items', items)} />
-              <CategoryQuickAdd selected={f.items} onChange={(items) => set('items', items)} />
+        {/* Which menu items the deal covers. Hidden for a corresponding cross-item BOGO — there the
+            "buy" scope is defined by the pairing rows below, so a separate scope picker would be
+            redundant and could drift from the pairs. */}
+        {!(f.discountType === 'bogo' && f.crossItemGet) && (
+          <div>
+            <span className="text-sm font-medium">Applies to</span>
+            <div className="mt-1 flex gap-2 mb-2">
+              <button type="button" onClick={() => set('scopeAll', true)}
+                className={cn('flex-1 py-2 rounded-xl border text-sm font-medium transition-colors',
+                  f.scopeAll ? 'bg-primary text-primary-foreground border-primary' : 'border-input hover:bg-muted')}>
+                All items
+              </button>
+              <button type="button" onClick={() => set('scopeAll', false)}
+                className={cn('flex-1 py-2 rounded-xl border text-sm font-medium transition-colors',
+                  !f.scopeAll ? 'bg-primary text-primary-foreground border-primary' : 'border-input hover:bg-muted')}>
+                Specific items
+              </button>
             </div>
-          )}
-        </div>
+            {!f.scopeAll && (
+              <div className="space-y-3">
+                <ItemPicker selected={f.items} onChange={(items) => set('items', items)} />
+                <CategoryQuickAdd selected={f.items} onChange={(items) => set('items', items)} />
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Discount mechanism. */}
         <div>
@@ -388,24 +526,24 @@ function PromoForm({ initial, onCancel, onSave, saving }: {
               </p>
             )}
 
-            {/* Cross-item pairing: "buy one Large pizza, get one Small pizza free" — the free
-                unit is a DIFFERENT catalog item from what's being bought, not another unit of
-                the same item. The cashier adds both as real order lines; nothing is auto-added. */}
+            {/* Corresponding cross-item pairing: "buy a Large pizza, get the MATCHING Small free".
+                The free unit is a specific DIFFERENT catalog item mapped one-to-one from what's
+                bought. The terminal auto-adds the mapped free item when the bought one is added. */}
             <div className="col-span-3 space-y-2 pt-1">
               <label className="flex items-center gap-2 text-sm">
                 <input type="checkbox" checked={f.crossItemGet}
                   onChange={(e) => set('crossItemGet', e.target.checked)}
                   className="h-4 w-4 rounded border-input" />
-                Free item is different from what's bought (e.g. buy a Large pizza, get a Small free)
+                Free item is a corresponding different item (e.g. buy a Large pizza, get the matching Small free)
               </label>
               {f.crossItemGet && (
-                <div className="rounded-xl border border-border p-3 space-y-2 bg-accent/5">
-                  <span className="text-sm font-medium">Free item(s)</span>
-                  <ItemPicker selected={f.getItems} onChange={(items) => set('getItems', items)} />
-                  <CategoryQuickAdd selected={f.getItems} onChange={(items) => set('getItems', items)} />
+                <div className="rounded-xl border border-border p-3 space-y-3 bg-accent/5">
+                  <span className="text-sm font-medium">Pairings — buy → get free</span>
+                  <PairEditor pairs={f.pairs} onChange={(pairs) => set('pairs', pairs)} />
                   <p className="text-xs text-muted-foreground">
-                    The cashier must add both the bought item AND one of these as its own line — the free
-                    item is priced automatically once both are in the cart. Nothing is added for them.
+                    Each row maps a bought item to the exact free item the customer gets. When the bought
+                    item is rung up during the window, the terminal auto-adds its matching free item and
+                    prices it per the deal — the cashier doesn’t add it manually.
                   </p>
                 </div>
               )}
@@ -443,9 +581,20 @@ function PromoForm({ initial, onCancel, onSave, saving }: {
 
         <p className="text-xs text-muted-foreground bg-muted/50 rounded-lg px-3 py-2">
           Preview: <span className="font-medium text-foreground">{describeDeal(f)}</span>
-          {!f.scopeAll && f.items.length > 0 && <> on {f.items.map((i) => i.name).join(', ')}</>}
-          {f.scopeAll && <> storewide</>}.
-          The terminal will alert the waiter/cashier when a covered item is added to the cart.
+          {f.discountType === 'bogo' && f.crossItemGet ? (
+            (() => {
+              const done = f.pairs.filter((p) => p.buySku && p.getSku);
+              return done.length > 0
+                ? <> — {done.map((p) => `${p.buyName || p.buySku} → ${p.getName || p.getSku}`).join('; ')}</>
+                : <> — add your buy → get free pairs</>;
+            })()
+          ) : (
+            <>
+              {!f.scopeAll && f.items.length > 0 && <> on {f.items.map((i) => i.name).join(', ')}</>}
+              {f.scopeAll && <> storewide</>}
+            </>
+          )}.
+          The terminal auto-adds the matching free item when a covered item is added to the cart.
         </p>
 
         <div className="flex gap-3 pt-1">
@@ -584,14 +733,24 @@ function HappyHourPageInner() {
                         {isOneTime
                           ? `${p.start_at ? new Date(p.start_at).toLocaleString() : ''} → ${p.end_at ? new Date(p.end_at).toLocaleString() : ''}`
                           : `${(p.days_of_week ?? []).map((d) => DAYS.find((x) => x.v === d)?.l).join(', ')} · ${p.window_start}–${p.window_end}`}
-                        {p.rule && <> · {describeDeal({
-                          discountType: p.rule.discount_type, discountValue: String(p.rule.discount_value),
-                          buyQuantity: String(p.rule.buy_quantity), getQuantity: String(p.rule.get_quantity),
-                          getDiscountPercent: String(p.rule.get_discount_percent),
-                          crossItemGet: !!(p.rule.get_scope_ids ?? []).length,
-                        })}</>}
-                        {p.rule?.scope_ids?.length ? ` on ${p.rule.scope_ids.length} item(s)` : ''}
-                        {p.rule?.get_scope_ids?.length ? ` → ${p.rule.get_scope_ids.length} free item(s)` : ''}
+                        {(() => {
+                          if (!p.rule) return null;
+                          const pairCount = Object.keys(p.rule.get_pair_map ?? {}).length;
+                          return (
+                            <>
+                              {' · '}
+                              {describeDeal({
+                                discountType: p.rule.discount_type, discountValue: String(p.rule.discount_value),
+                                buyQuantity: String(p.rule.buy_quantity), getQuantity: String(p.rule.get_quantity),
+                                getDiscountPercent: String(p.rule.get_discount_percent),
+                                crossItemGet: pairCount > 0 || !!(p.rule.get_scope_ids ?? []).length,
+                              })}
+                              {pairCount > 0
+                                ? ` · ${pairCount} pairing${pairCount === 1 ? '' : 's'}`
+                                : p.rule.scope_ids?.length ? ` on ${p.rule.scope_ids.length} item(s)` : ''}
+                            </>
+                          );
+                        })()}
                       </p>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
