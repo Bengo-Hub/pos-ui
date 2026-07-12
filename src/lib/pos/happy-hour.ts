@@ -270,13 +270,42 @@ export function bogoFreeUnitsForSku(sku: string, paidQty: number, promos: HappyH
   return best;
 }
 
-/** Best auto-apply happy-hour discount for the cart (highest total across active promos). */
+/**
+ * Combined happy-hour discount for the cart. ALL active promos STACK — each discounts its own
+ * scoped items, summed — mirroring pos-api's combineTimedDiscounts. A SKU covered by two promos
+ * takes only the better one (no double-dip); storewide/unattributed discounts add on top. This
+ * replaces the old "single best promo wins" behaviour that dropped every deal but the largest on an
+ * order carrying items from two promotions (e.g. a cocktail deal + a pizza deal on one docket).
+ */
 export function computeHappyHour(lines: HHLine[], promos: HappyHourPromotion[]): HappyHourResult {
-  let best: HappyHourResult = { total: 0, promoName: '', bySku: {} };
+  const combined: Record<string, HHLineResult> = {};
+  const names: string[] = [];
+  let storewide = 0;
   for (const p of promos) {
     if (!p.rule) continue;
     const r = evalRule(p.rule, lines);
-    if (r.total > best.total) best = { total: r.total, promoName: p.name, bySku: r.bySku };
+    if (r.total <= 0) continue;
+    const skus = Object.keys(r.bySku);
+    let contributed = false;
+    if (skus.length > 0) {
+      for (const sku of skus) {
+        const ld = r.bySku[sku];
+        const existing = combined[sku];
+        if (!existing || ld.amount > existing.amount) {
+          combined[sku] = ld; // better promo claims this SKU; no double-dip
+          contributed = true;
+        }
+      }
+    } else {
+      storewide += r.total; // storewide/unattributed — adds additively
+      contributed = true;
+    }
+    if (contributed && !names.includes(p.name)) names.push(p.name);
   }
-  return best;
+  let total = storewide;
+  for (const sku of Object.keys(combined)) total += combined[sku].amount;
+  total = round2(total);
+  const subtotal = lines.reduce((s, l) => s + l.total, 0);
+  if (total > subtotal) total = subtotal;
+  return { total, promoName: names.join(' + '), bySku: combined };
 }

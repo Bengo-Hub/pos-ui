@@ -3,11 +3,12 @@
 import { useState } from 'react';
 import { Loader2, X } from 'lucide-react';
 import { toast } from 'sonner';
-import { useCreateFacility, useUpdateFacility } from '@/hooks/useHotel';
+import { useCreateFacility, useUpdateFacility, useInventoryServiceItems } from '@/hooks/useHotel';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import type { Facility, CreateFacilityInput } from '@/lib/api/hotel';
 
 export const FACILITY_TYPES = [
+  { value: 'coworking', label: 'Co-working Space' },
   { value: 'conference', label: 'Conference Hall' },
   { value: 'pool', label: 'Swimming Pool' },
   { value: 'gym', label: 'Gym' },
@@ -15,6 +16,10 @@ export const FACILITY_TYPES = [
   { value: 'kids_area', label: 'Kids Area' },
   { value: 'other', label: 'Other' },
 ];
+
+// Facility types that default to shared (co-working style) capacity rather than an
+// exclusive whole-space hold — the admin can still flip the toggle either way.
+const SHARED_BY_DEFAULT = new Set(['coworking']);
 
 const STATUS_OPTIONS = ['available', 'occupied', 'maintenance', 'closed'];
 const inputCls = 'mt-1.5 w-full px-3 py-2.5 rounded-xl border border-input bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring';
@@ -36,6 +41,12 @@ export function FacilityFormModal({
   const isEdit = !!facility;
   const create = useCreateFacility();
   const update = useUpdateFacility(facility?.id ?? '');
+  // Bookable-space rate masters: HOSPITALITY_FACILITY (co-working desks) + CONFERENCE
+  // (meeting/conference rooms) — either can be linked as this facility's authoritative
+  // inventory package, so the terminal price and this booking flow never drift apart.
+  const { data: facilityItems = [] } = useInventoryServiceItems('HOSPITALITY_FACILITY');
+  const { data: conferenceItems = [] } = useInventoryServiceItems('CONFERENCE');
+  const inventoryOptions = [...facilityItems, ...conferenceItems];
 
   const [form, setForm] = useState<CreateFacilityInput & { status?: string }>({
     name: facility?.name ?? '',
@@ -46,6 +57,8 @@ export function FacilityFormModal({
     opening_time: facility?.opening_time ?? '08:00',
     closing_time: facility?.closing_time ?? '18:00',
     status: facility?.status ?? 'available',
+    booking_mode: facility?.booking_mode ?? 'exclusive',
+    inventory_item_id: facility?.inventory_item_id ?? undefined,
   });
 
   function set<K extends keyof typeof form>(k: K, v: (typeof form)[K]) {
@@ -86,15 +99,65 @@ export function FacilityFormModal({
           <div className="grid grid-cols-2 gap-4">
             <label className="block">
               <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Type</span>
-              <select value={form.facility_type} onChange={(e) => set('facility_type', e.target.value)} className={inputCls}>
+              <select
+                value={form.facility_type}
+                onChange={(e) => {
+                  const type = e.target.value;
+                  set('facility_type', type);
+                  // Only auto-default booking_mode when creating — never clobber an admin's
+                  // explicit choice on an existing facility.
+                  if (!isEdit) set('booking_mode', SHARED_BY_DEFAULT.has(type) ? 'shared' : 'exclusive');
+                }}
+                className={inputCls}
+              >
                 {FACILITY_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
               </select>
             </label>
             <label className="block">
-              <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Capacity</span>
+              <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Capacity {form.booking_mode === 'shared' ? '(seats)' : '(guests)'}</span>
               <input type="number" min={1} value={form.capacity} onChange={(e) => set('capacity', parseInt(e.target.value) || 0)} className={inputCls} />
             </label>
           </div>
+
+          <label className="block rounded-xl border border-border p-3">
+            <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Booking Mode</span>
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => set('booking_mode', 'exclusive')}
+                className={`rounded-lg border px-3 py-2 text-left text-xs ${form.booking_mode === 'exclusive' ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:bg-muted'}`}
+              >
+                <span className="block font-semibold">Exclusive</span>
+                <span className="block">One booking holds the whole space</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => set('booking_mode', 'shared')}
+                className={`rounded-lg border px-3 py-2 text-left text-xs ${form.booking_mode === 'shared' ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:bg-muted'}`}
+              >
+                <span className="block font-semibold">Shared (co-working)</span>
+                <span className="block">Many bookings share the {form.capacity || 0} seats</span>
+              </button>
+            </div>
+          </label>
+
+          {/* Inventory rate-master link — authoritative price comes from inventory when set */}
+          <label className="block">
+            <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Inventory Package (rate master)</span>
+            <select
+              value={form.inventory_item_id ?? ''}
+              onChange={(e) => set('inventory_item_id', e.target.value || undefined)}
+              className={inputCls}
+            >
+              <option value="">— Not linked (use manual rate) —</option>
+              {inventoryOptions.map((it) => (
+                <option key={it.id} value={it.id}>{it.name} ({it.sku})</option>
+              ))}
+            </select>
+            {form.inventory_item_id && (
+              <span className="mt-1 block text-[11px] text-muted-foreground">Session rate will be resolved from inventory pricing at booking time.</span>
+            )}
+          </label>
 
           <div className="grid grid-cols-2 gap-4">
             <label className="block">

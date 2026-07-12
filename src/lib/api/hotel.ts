@@ -239,6 +239,23 @@ export interface Facility {
   divisible?: boolean;
   parent_facility_id?: string | null;
   status: 'available' | 'occupied' | 'maintenance' | 'closed';
+  /**
+   * exclusive = one booking holds the whole space for its time window (private meeting room).
+   * shared = co-working desks — many independent bookings up to `capacity` seats can overlap.
+   */
+  booking_mode: 'exclusive' | 'shared';
+}
+
+export interface FacilityAvailability {
+  facility_id: string;
+  booking_mode: 'exclusive' | 'shared';
+  capacity: number;
+  booked_seats: number;
+  available_seats: number;
+  is_bookable: boolean;
+  date: string;
+  start_time?: string;
+  end_time?: string;
 }
 
 export interface CreateRoomInput {
@@ -261,6 +278,8 @@ export interface CreateFacilityInput {
   opening_time?: string;
   closing_time?: string;
   status?: string;
+  booking_mode?: 'exclusive' | 'shared';
+  inventory_item_id?: string;
 }
 
 /** Inventory package/bundle option for the conference package picker. */
@@ -281,6 +300,9 @@ export interface FacilityBooking {
   start_time: string;
   end_time: string;
   guests_count: number;
+  /** Seats consumed from a shared (co-working) facility's capacity; 1 for exclusive spaces. */
+  seats?: number;
+  pos_order_id?: string | null;
   status: string;
 }
 
@@ -419,12 +441,16 @@ export const hotelApi = {
   listInventoryBundles: (tenantSlug: string) =>
     apiClient.get<InventoryBundle[]>(`${hotelBase(tenantSlug)}/inventory-bundles`).then((r) => r ?? []),
 
-  bookFacility: (tenantSlug: string, facilityId: string, body: { guest_name: string; phone: string; session_date: string; start_time: string; end_time: string; guests_count: number }) =>
+  bookFacility: (tenantSlug: string, facilityId: string, body: { guest_name: string; phone: string; session_date: string; start_time: string; end_time: string; guests_count: number; seats?: number }) =>
     apiClient.post<FacilityBooking>(`${hotelBase(tenantSlug)}/facilities/${facilityId}/book`, body),
 
   listFacilityBookings: (tenantSlug: string) =>
     apiClient.get<{ data: FacilityBooking[]; total: number }>(`${hotelBase(tenantSlug)}/facilities/bookings`)
       .then((r) => r.data ?? []),
+
+  /** Live seat availability for a facility on a given date (+ optional time window). */
+  getFacilityAvailability: (tenantSlug: string, facilityId: string, params: { date: string; start?: string; end?: string }) =>
+    apiClient.get<FacilityAvailability>(`${hotelBase(tenantSlug)}/facilities/${facilityId}/availability`, params),
 
   // ─── Multi-room (group) bookings ──────────────────────────────────────────
 

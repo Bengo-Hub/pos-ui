@@ -281,9 +281,12 @@ export function useBookFacility(facilityId: string) {
   const slug = useTenantSlug();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: { guest_name: string; phone: string; session_date: string; start_time: string; end_time: string; guests_count: number }) =>
+    mutationFn: (body: { guest_name: string; phone: string; session_date: string; start_time: string; end_time: string; guests_count: number; seats?: number }) =>
       hotelApi.bookFacility(slug, facilityId, body),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['facilities', slug] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['facilities', slug] });
+      qc.invalidateQueries({ queryKey: ['facility-availability', slug] });
+    },
   });
 }
 
@@ -294,6 +297,17 @@ export function useFacilityBookings() {
     queryFn: () => hotelApi.listFacilityBookings(slug),
     enabled: !!slug,
     staleTime: 30_000,
+  });
+}
+
+/** Live seat availability for a facility on a given date. Only meaningful for `shared` (co-working) facilities. */
+export function useFacilityAvailability(facilityId: string, date: string, enabled = true) {
+  const slug = useTenantSlug();
+  return useQuery({
+    queryKey: ['facility-availability', slug, facilityId, date],
+    queryFn: () => hotelApi.getFacilityAvailability(slug, facilityId, { date }),
+    enabled: !!slug && !!facilityId && !!date && enabled,
+    staleTime: 15_000,
   });
 }
 
@@ -420,8 +434,14 @@ export function useActiveHappyHours() {
     queryKey: ['happy-hours-active', slug],
     queryFn: () => happyHourApi.listActive(slug),
     enabled: !!slug,
-    staleTime: 60_000,
-    refetchInterval: 5 * 60_000,
+    // Poll every 60s (and on window focus) so a terminal left open across a happy-hour boundary
+    // detects the window OPENING/CLOSING promptly — otherwise a long-open till would keep showing
+    // the pre-window state (no auto-add, no live discount) until the next stale refetch. The server
+    // re-evaluates authoritatively at add-to-bill/checkout regardless; this keeps the preview honest.
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+    refetchIntervalInBackground: true,
+    refetchOnWindowFocus: true,
   });
 }
 
