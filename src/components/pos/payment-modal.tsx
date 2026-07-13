@@ -44,8 +44,9 @@ export interface POSPaymentModalProps {
   customerEmail?: string;
   isHospitality?: boolean;
   allowedMethods?: string;
-  /** Called on a successful payment. `method` is the tender used (cash | manual | mpesa | card |
-   *  card_manual | wallet | on_account | room_charge) so a split portion can record how it was paid. */
+  /** Called on a successful payment. `method` is the tender used (cash | mpesa_manual | mpesa |
+   *  card | card_manual | wallet | on_account | room_charge) so a split portion can record how it
+   *  was paid. */
   onPaymentConfirmed: (method?: string) => void;
 }
 
@@ -220,13 +221,17 @@ export function POSPaymentModal({
     );
   }, [cashTendered, roundedTotal, orderId, tenderId, tenantSlug, isOnline, createIntent, onPaymentConfirmed, queueOfflinePayment]);
 
+  // "M-Pesa Code" tender: the customer paid via Paybill/Till and the cashier sights + enters the
+  // M-Pesa confirmation code. Recorded as 'mpesa_manual' (NOT the old bare 'manual', which every
+  // method breakdown rendered as an unexplained "manual" bucket — pos-api still accepts the legacy
+  // string from queued offline payments and canonicalizes it).
   const handleManualConfirm = useCallback(async () => {
-    methodRef.current = 'manual';
+    methodRef.current = 'mpesa_manual';
     if (!manualRef.trim()) return;
 
     if (!isOnline) {
       try {
-        await queueOfflinePayment('manual', manualRef.trim());
+        await queueOfflinePayment('mpesa_manual', manualRef.trim());
         setStep('offline_queued');
         onPaymentConfirmed(methodRef.current);
       } catch {
@@ -237,7 +242,7 @@ export function POSPaymentModal({
     }
 
     createIntent.mutate(
-      { orderId, tenderMethod: 'manual', amount: roundedTotal, externalRef: manualRef.trim(), tenderId },
+      { orderId, tenderMethod: 'mpesa_manual', amount: roundedTotal, externalRef: manualRef.trim(), tenderId },
       {
         onSuccess: () => { setStep('confirmed'); onPaymentConfirmed(methodRef.current); },
         onError: async (err: any) => {
@@ -246,7 +251,7 @@ export function POSPaymentModal({
           const { isNetworkShapedError } = await import('@/lib/connectivity');
           if (isNetworkShapedError(err)) {
             try {
-              await queueOfflinePayment('manual', manualRef.trim());
+              await queueOfflinePayment('mpesa_manual', manualRef.trim());
               setStep('offline_queued');
               onPaymentConfirmed(methodRef.current);
               return;

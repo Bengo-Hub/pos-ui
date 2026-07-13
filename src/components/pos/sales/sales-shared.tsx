@@ -11,7 +11,11 @@ export const money = (n: number) =>
 export const PAYMENT_METHOD_LABELS: Record<string, string> = {
   cash: 'Cash', card: 'Card', card_manual: 'Card / PDQ', pdq: 'Card / PDQ',
   card_terminal: 'Card / PDQ', cheque: 'Cheque', bank_transfer: 'Bank Transfer',
-  mpesa: 'M-Pesa', manual: 'M-Pesa (manual)', wallet: 'Wallet', cod: 'Cash on Delivery',
+  mpesa: 'M-Pesa', mpesa_manual: 'M-Pesa (Code)',
+  // Legacy alias: rows captured before 2026-07-13 stored the M-Pesa-Code tender as bare
+  // "manual" (backfilled server-side, but keep the label so any straggler still reads right).
+  manual: 'M-Pesa (Code)',
+  wallet: 'Wallet', cod: 'Cash on Delivery',
   on_account: 'On Account', room_charge: 'Room Charge', complimentary: 'Complimentary',
   loyalty: 'Loyalty Points',
 };
@@ -26,7 +30,7 @@ export const prettyMethod = (m: string) =>
 export const PAYMENT_METHOD_OPTIONS: { value: string; label: string }[] = [
   { value: 'cash', label: 'Cash' },
   { value: 'mpesa', label: 'M-Pesa' },
-  { value: 'manual', label: 'M-Pesa (manual)' },
+  { value: 'mpesa_manual', label: 'M-Pesa (Code)' },
   { value: 'card', label: 'Card' },
   { value: 'card_manual', label: 'Card / PDQ' },
   { value: 'wallet', label: 'Wallet' },
