@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Search, Loader2, Download, Plus, Minus } from 'lucide-react';
+import { Search, Loader2, Plus, Minus } from 'lucide-react';
 import { Button, Card, CardContent, CardHeader } from '@/components/ui/base';
 import { useOrders, useVoidOrder, type OrderListFilters } from '@/hooks/usePOS';
 import { useStaffList } from '@/hooks/useStaff';
@@ -21,6 +21,7 @@ import { ViewPaymentsModal } from './view-payments-modal';
 import { EditOrderLinesModal } from './edit-order-lines-modal';
 import { MoveOrderDateModal } from './move-order-date-modal';
 import { money, payStatusBadge, prettyMethod } from './sales-shared';
+import { ReportExportButtons } from '@/components/reports/report-document-button';
 import { toast } from 'sonner';
 
 const PAGE_SIZE = 25;
@@ -106,6 +107,25 @@ export function SalesListView({ orgSlug, fixedSource, title, subtitle }: {
   const total = data?.meta?.total ?? (data as any)?.total ?? rows.length;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
+  // Export params — the SAME query keys the list request sends (pos-api builds both from one
+  // shared filter helper), so the PDF/CSV always contains exactly the rows on screen.
+  const exportParams = useMemo(() => ({
+    outlet_id: filters.outletId,
+    from: filters.from,
+    to: filters.to,
+    customer: filters.customer,
+    payment_status: filters.paymentStatus,
+    payment_method: filters.paymentMethod,
+    shipping_status: filters.shippingStatus,
+    user_id: filters.userId,
+    source: filters.source,
+    subscriptions: filters.subscriptions ? 'true' : undefined,
+    min_total: filters.minTotal != null ? String(filters.minTotal) : undefined,
+    max_total: filters.maxTotal != null ? String(filters.maxTotal) : undefined,
+    order_number: filters.orderNumber,
+  }), [filters]);
+  const exportStamp = new Date().toISOString().slice(0, 10);
+
   const patchFilters = (patch: Partial<SalesFilterState>) => { setFilterState((s) => ({ ...s, ...patch })); setPage(1); };
 
   const toggleExpand = (id: string) =>
@@ -146,7 +166,15 @@ export function SalesListView({ orgSlug, fixedSource, title, subtitle }: {
             <input placeholder="Search by invoice / receipt #..." className="w-full bg-accent/30 border-none rounded-lg py-2 pl-10 pr-4 text-sm"
               value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} />
           </div>
-          <Button variant="outline" className="gap-2" disabled><Download className="h-4 w-4" /> Export</Button>
+          {/* PDF opens the branded preview modal (download/print); CSV downloads directly.
+              Both stream from /pos/reports/all-sales-document with the current filters. */}
+          <ReportExportButtons
+            report="all-sales-document"
+            params={exportParams}
+            fileNameBase={`all-sales-${exportStamp}`}
+            title="All Sales — Export"
+            orientation="landscape"
+          />
         </CardHeader>
         <CardContent className="p-0">
           {isLoading ? (
