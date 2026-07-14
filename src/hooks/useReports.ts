@@ -430,6 +430,16 @@ export function useRegisterDetails(from: string, to: string, outletId?: string, 
       apiClient.get<RegisterDetails>(`${basePath(tenantID)}/register-details`, { from, to, outlet_id: outletId }),
     enabled: !!tenantID && !!from && !!to && enabled,
     staleTime: 30_000,
+    // Go serializes empty/nil slices as JSON null — a register window with no payments/
+    // refunds/products arrives with null arrays and `.map` crashes the modal. Normalize
+    // every list field to [] at the data boundary so the declared types actually hold.
+    select: (d): RegisterDetails => ({
+      ...d,
+      payment_methods: d.payment_methods ?? [],
+      refund_by_method: d.refund_by_method ?? [],
+      products_sold: d.products_sold ?? [],
+      products_by_brand: d.products_by_brand ?? [],
+    }),
   });
 }
 

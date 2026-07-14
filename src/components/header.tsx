@@ -49,8 +49,14 @@ function HeaderOutletChip() {
   const { selectedOutlet, outlets, setOutlets, selectOutlet } = useOutletFilterStore();
   const [open, setOpen] = useState(false);
 
-  const canSwitch = !isTerminalSession && !!user?.roles?.some((r) =>
-    ['admin', 'superuser', 'manager', 'pos_admin', 'super_admin'].includes(r)
+  // THE outlet switcher — the sidebar duplicate was removed; this chip is the single place
+  // admins/managers load and switch outlets (visible on every breakpoint).
+  const canSwitch = !isTerminalSession && !!(
+    user?.isPlatformOwner ||
+    user?.isSuperUser ||
+    user?.roles?.some((r) =>
+      ['admin', 'superuser', 'manager', 'store_manager', 'owner', 'pos_admin', 'super_admin'].includes(r)
+    )
   );
 
   const tenantId = user?.tenant_id ?? '';
@@ -77,12 +83,16 @@ function HeaderOutletChip() {
   }, [fetchedOutlets]);
 
   const activeOutlet = selectedOutlet ?? (authOutlet ? { id: authOutlet.id, code: authOutlet.code, name: authOutlet.name, useCase: authOutlet.use_case } : null);
-  const activeName = activeOutlet?.name ?? 'Select Outlet';
+  const activeName = activeOutlet?.name ?? (canSwitch ? 'All Outlets' : 'Select Outlet');
   const activeUseCase = activeOutlet?.useCase ?? authOutlet?.use_case ?? '';
 
-  if (!authOutlet && !selectedOutlet) return null;
+  // Admins/managers always get the switcher (even with no home outlet of their own — e.g. a
+  // superuser); staff without any outlet context show nothing.
+  if (!authOutlet && !selectedOutlet && !canSwitch) return null;
 
-  const chipClass = 'hidden lg:flex items-center gap-2 rounded-xl border border-border bg-muted/50 px-3 py-1.5 text-sm font-medium text-muted-foreground shrink-0';
+  // Visible on ALL breakpoints — with the sidebar duplicate gone this is the only switcher,
+  // so hiding it below lg would leave mobile admins unable to change outlet.
+  const chipClass = 'flex items-center gap-2 rounded-xl border border-border bg-muted/50 px-2.5 lg:px-3 py-1.5 text-sm font-medium text-muted-foreground shrink-0 min-w-0';
 
   if (!canSwitch) {
     return (
@@ -99,7 +109,7 @@ function HeaderOutletChip() {
   }
 
   return (
-    <div className="relative hidden lg:block shrink-0">
+    <div className="relative block shrink-0 min-w-0">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}

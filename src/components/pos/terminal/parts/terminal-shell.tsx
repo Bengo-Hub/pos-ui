@@ -105,20 +105,9 @@ export function TerminalShell() {
               (hospitality/quick_service use Dine-In/Takeaway/Delivery as the equivalent, so showing
               both would duplicate). */}
           <div className="shrink-0 p-3 space-y-2 border-b border-border bg-card/40">
-            <div className="flex flex-col sm:flex-row gap-2">
-              {/* Customer — LoyaltyPanel is the customer/loyalty link where pricing/loyalty applies */}
-              {cfg.showPricingProfile ? (
-                <div className="sm:flex-1 min-w-0">
-                  {/* key: remounts after each sale so the customer resets to the Walk-in default */}
-                  <LoyaltyPanel key={t.customerResetSeq} onStateChange={t.setLoyaltyState} />
-                </div>
-              ) : !cfg.showOrderType ? (
-                <div className="sm:flex-1 min-w-0 flex items-center gap-2 px-3 py-2.5 rounded-xl border border-border bg-card text-sm font-medium text-muted-foreground">
-                  <User className="h-4 w-4 shrink-0" /> Walk-In Customer
-                </div>
-              ) : null}
-              {/* Product search / scan */}
-              <div className="relative group sm:flex-1 min-w-0">
+            {/* Row 1: product search (flexes) + pricing profile (right, same line). */}
+            <div className="flex items-center gap-2">
+              <div className="relative group flex-1 min-w-0">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary" />
                 <input
                   ref={t.scanInputRef}
@@ -138,18 +127,14 @@ export function TerminalShell() {
                   </button>
                 )}
               </div>
-            </div>
-
-            {/* Price profile + order type */}
-            <div className="flex flex-wrap items-center gap-2">
               {cfg.showPricingProfile && (
-                <div className="flex items-center gap-1.5">
-                  <span className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Price</span>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <span className="hidden sm:inline text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Price</span>
                   <select
                     value={t.pricingProfile}
                     onChange={(e) => t.repriceCart(e.target.value)}
                     disabled={t.repricing || t.pricingTiers.length === 0}
-                    className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-card border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:opacity-50"
+                    className="px-2.5 py-2.5 rounded-xl text-xs font-semibold bg-card border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:opacity-50 max-w-36"
                   >
                     {t.pricingTiers.length === 0 && <option value="">Default Selling Price</option>}
                     {t.pricingTiers.map((tier) => (
@@ -159,18 +144,29 @@ export function TerminalShell() {
                   {t.repricing && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
                 </div>
               )}
-              {cfg.showOrderType && (
-                <div className="flex-1 min-w-50">
-                  <OrderTypeSelector
-                    value={t.orderSubtype}
-                    onChange={t.setOrderSubtype}
-                    tableName={t.tableName || undefined}
-                    onSelectTable={() => router.push(`/${t.orgSlug}/tables`)}
-                    useCase={t.outlet?.use_case}
-                  />
-                </div>
-              )}
             </div>
+
+            {/* Row 2: customer/loyalty card spanning the FULL row (its picker lays out
+                horizontally on wider screens to use the width). */}
+            {cfg.showPricingProfile ? (
+              // key: remounts after each sale so the customer resets to the Walk-in default
+              <LoyaltyPanel key={t.customerResetSeq} onStateChange={t.setLoyaltyState} layout="row" />
+            ) : !cfg.showOrderType ? (
+              <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl border border-border bg-card text-sm font-medium text-muted-foreground">
+                <User className="h-4 w-4 shrink-0" /> Walk-In Customer
+              </div>
+            ) : null}
+
+            {/* Order type (hospitality/quick-service) keeps its own row. */}
+            {cfg.showOrderType && (
+              <OrderTypeSelector
+                value={t.orderSubtype}
+                onChange={t.setOrderSubtype}
+                tableName={t.tableName || undefined}
+                onSelectTable={() => router.push(`/${t.orgSlug}/tables`)}
+                useCase={t.outlet?.use_case}
+              />
+            )}
 
             {/* Hardware scale (retail/pharmacy) */}
             {cfg.showScale && t.scaleDeviceId && (

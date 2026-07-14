@@ -28,6 +28,7 @@ import { VoidLineButton } from '@/components/pos/void-line-button';
 import { GenerateVoidCodeButton } from '@/components/pos/generate-void-code-button';
 import { GenerateComplimentaryCodeButton } from '@/components/pos/generate-complimentary-code-button';
 import { useAuthStore } from '@/store/auth';
+import { orderSubtypeBadge } from '@/lib/pos/order-subtype-label';
 
 const PAGE_SIZE = 20;
 
@@ -459,9 +460,10 @@ export default function OrdersPage() {
 
               <div className="space-y-1 text-xs text-muted-foreground">
                 <p>Created: {formatTime(selectedOrder.created_at)}</p>
-                {selectedOrder.order_subtype && (
-                  <p>Type: <span className="capitalize">{selectedOrder.order_subtype.replace('_', ' ')}</span></p>
-                )}
+                {(() => {
+                  const badge = orderSubtypeBadge(selectedOrder as any, outlet?.use_case);
+                  return badge ? <p>Type: <span className="capitalize">{badge}</span></p> : null;
+                })()}
                 {selectedOrder.table_reference && <p>Table: {selectedOrder.table_reference}</p>}
                 {selectedOrder.currency && <p>Currency: {selectedOrder.currency}</p>}
               </div>

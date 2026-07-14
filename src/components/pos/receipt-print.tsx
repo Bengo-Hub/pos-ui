@@ -92,7 +92,10 @@ export function ReceiptPrint({
       {resolvedAddress && (
         <p className="receipt-center receipt-small">{resolvedAddress}</p>
       )}
-      {tenantPhone && (
+      {receipt.outlet_phones && (
+        <p className="receipt-center receipt-small"><b>Mobile:</b> {receipt.outlet_phones}</p>
+      )}
+      {!receipt.outlet_phones && tenantPhone && (
         <p className="receipt-center receipt-small">Tel: {tenantPhone}</p>
       )}
       {tenantPin && (

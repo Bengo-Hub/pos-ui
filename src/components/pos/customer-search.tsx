@@ -50,9 +50,12 @@ interface CustomerSearchProps {
    * Called with null when the selection reverts to walk-in / is cleared.
    */
   onSelectAccount?: (account: LoyaltyAccount | null) => void;
+  /** 'row' places the walk-in chip and the search input side-by-side on md+ (full-width
+   *  terminal card); default 'stack' keeps the vertical layout for narrow panels/forms. */
+  layout?: 'stack' | 'row';
 }
 
-export function CustomerSearch({ value, onChange, requireRealCustomer = false, requiredForLabel = 'a credit sale', onSelectAccount }: CustomerSearchProps) {
+export function CustomerSearch({ value, onChange, requireRealCustomer = false, requiredForLabel = 'a credit sale', onSelectAccount, layout = 'stack' }: CustomerSearchProps) {
   const [query, setQuery] = useState('');
   const [debounced, setDebounced] = useState('');
   const [showAdd, setShowAdd] = useState(false);
@@ -194,26 +197,29 @@ export function CustomerSearch({ value, onChange, requireRealCustomer = false, r
 
   return (
     <div className="space-y-2">
-      {/* Current default: Walk-in (shown so the cashier sees who the sale is attributed to). */}
-      {value?.isWalkIn && !requireRealCustomer && (
-        <div className="flex items-center gap-2 rounded-xl border border-border bg-muted/40 px-3 py-2">
-          <UserRound className="h-4 w-4 text-muted-foreground shrink-0" />
-          <p className="text-sm font-medium">Walk-in Customer</p>
-          <span className="text-xs text-muted-foreground ml-auto">default — search to change</span>
-        </div>
-      )}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <input
-          type="text"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search by name, phone or email"
-          className="w-full bg-background border border-border rounded-xl py-2.5 pl-10 pr-9 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
-        />
-        {isLoading && searchActive && (
-          <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
+      {/* Walk-in default chip + search input: stacked by default, side-by-side in 'row' layout. */}
+      <div className={layout === 'row' ? 'flex flex-col md:flex-row gap-2' : 'space-y-2'}>
+        {/* Current default: Walk-in (shown so the cashier sees who the sale is attributed to). */}
+        {value?.isWalkIn && !requireRealCustomer && (
+          <div className={`flex items-center gap-2 rounded-xl border border-border bg-muted/40 px-3 py-2 min-w-0 ${layout === 'row' ? 'md:flex-1' : ''}`}>
+            <UserRound className="h-4 w-4 text-muted-foreground shrink-0" />
+            <p className="text-sm font-medium whitespace-nowrap">Walk-in Customer</p>
+            <span className="text-xs text-muted-foreground ml-auto truncate">default — search to change</span>
+          </div>
         )}
+        <div className={`relative min-w-0 ${layout === 'row' ? 'md:flex-1' : ''}`}>
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search by name, phone or email"
+            className="w-full bg-background border border-border rounded-xl py-2.5 pl-10 pr-9 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+          />
+          {isLoading && searchActive && (
+            <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
+          )}
+        </div>
       </div>
 
       {/* Matches */}

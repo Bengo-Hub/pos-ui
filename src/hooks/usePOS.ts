@@ -1159,7 +1159,9 @@ export function useNotifyOrderPayment() {
   });
 }
 
-export type OrderSubtype = 'dine_in' | 'takeaway' | 'room_service' | 'delivery' | 'bar_tab';
+// 'retail' = a plain walk-in counter sale (retail/pharmacy/services terminals) — the server
+// enum's non-hospitality subtype; dine_in/takeaway/… are hospitality/quick-service concepts.
+export type OrderSubtype = 'dine_in' | 'takeaway' | 'room_service' | 'delivery' | 'bar_tab' | 'retail';
 
 interface CreateOrderInput {
   outletId: string;

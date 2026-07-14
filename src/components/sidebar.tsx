@@ -12,7 +12,6 @@ import { ChevronDown, Lock, LogOut, Monitor, X } from 'lucide-react';
 import Link from 'next/link';
 import { useParams, usePathname } from 'next/navigation';
 import { useState } from 'react';
-import { OutletSwitcher } from './outlet-switcher';
 import { buildNavGroups, type NavItem, type NavGroup } from '@/lib/pos/nav-config';
 import { P } from '@/lib/rbac/permissions';
 
@@ -320,12 +319,8 @@ export function Sidebar({ open = false, onClose, collapsed = false }: SidebarPro
         )}
       </div>
 
-      {/* Outlet switcher — visible to admin/manager only */}
-      {isHQUser && (
-        <div className="pt-3">
-          <OutletSwitcher />
-        </div>
-      )}
+      {/* Outlet switching lives ONLY in the top-nav header chip (HeaderOutletChip) — the
+          sidebar duplicate was removed so there is one switcher, one source of truth. */}
 
       {/* Nav groups */}
       <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-5 scrollbar-hide">

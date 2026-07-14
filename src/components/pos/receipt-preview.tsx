@@ -68,6 +68,8 @@ export interface ReceiptData {
   // outlet + configurable receipt settings (populated by the pos-api receipt endpoint from OutletSetting)
   outlet_name?: string;
   outlet_address?: string;
+  /** Formatted labeled phones ("AIRTEL +2547… · MTN +2567…") — printed as "Mobile: …". */
+  outlet_phones?: string;
   receipt_header?: string;
   receipt_footer?: string;
   vat_enabled?: boolean;

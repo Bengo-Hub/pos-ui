@@ -34,9 +34,12 @@ export interface LoyaltyState {
 interface LoyaltyPanelProps {
   onStateChange: (state: LoyaltyState | null) => void;
   orderId?: string;
+  /** 'row' spreads the picker horizontally (full-width card under the terminal search bar);
+   *  default 'stack' keeps the compact vertical layout (side panels, Add Sale). */
+  layout?: 'stack' | 'row';
 }
 
-export function LoyaltyPanel({ onStateChange, orderId }: LoyaltyPanelProps) {
+export function LoyaltyPanel({ onStateChange, orderId, layout = 'stack' }: LoyaltyPanelProps) {
   const { can } = usePermissions();
   const canLoyalty = can(P.LOYALTY_VIEW);
   const canAdd = can(P.LOYALTY_ADD);
@@ -119,25 +122,31 @@ export function LoyaltyPanel({ onStateChange, orderId }: LoyaltyPanelProps) {
   const hasLoyaltyAccount = !!account?.id && account.source !== 'crm';
   const canRedeem = !redeemed && hasLoyaltyAccount && (account?.points_balance ?? 0) >= minRedeem;
 
+  const row = layout === 'row';
   return (
-    <div className="bg-card border border-border rounded-2xl p-3 space-y-2">
-      <div className="flex items-center gap-2">
-        <Gift className="h-4 w-4 text-primary shrink-0" />
-        <span className="text-sm font-bold">Customer</span>
-        {canLoyalty && hasLoyaltyAccount && (
-          <span className="ml-auto text-xs text-muted-foreground">
-            {(account?.points_balance ?? 0).toLocaleString()} pts
-          </span>
-        )}
-      </div>
+    <div className="bg-card border border-border rounded-2xl p-3 space-y-2 min-w-0">
+      <div className={row ? 'flex flex-col md:flex-row md:items-start gap-2' : 'space-y-2'}>
+        <div className={row ? 'flex items-center gap-2 shrink-0 md:pt-2.5' : 'flex items-center gap-2'}>
+          <Gift className="h-4 w-4 text-primary shrink-0" />
+          <span className="text-sm font-bold">Customer</span>
+          {canLoyalty && hasLoyaltyAccount && (
+            <span className="ml-auto md:ml-1 text-xs text-muted-foreground whitespace-nowrap">
+              {(account?.points_balance ?? 0).toLocaleString()} pts
+            </span>
+          )}
+        </div>
 
-      {/* Same picker as Add Sale: walk-in default chip, match list, selected chip w/ X to replace. */}
-      <CustomerSearch
-        value={selected}
-        onChange={handleChange}
-        // Fires right before onChange with the raw match row; handleChange reads it via the ref.
-        onSelectAccount={(acc) => { accountRef.current = acc; }}
-      />
+        {/* Same picker as Add Sale: walk-in default chip, match list, selected chip w/ X to replace. */}
+        <div className="flex-1 min-w-0">
+          <CustomerSearch
+            value={selected}
+            onChange={handleChange}
+            layout={layout}
+            // Fires right before onChange with the raw match row; handleChange reads it via the ref.
+            onSelectAccount={(acc) => { accountRef.current = acc; }}
+          />
+        </div>
+      </div>
 
       {/* Loyalty layer for the attached customer (self-gated on loyalty permissions). */}
       {canLoyalty && !selected.isWalkIn && selected.name && (

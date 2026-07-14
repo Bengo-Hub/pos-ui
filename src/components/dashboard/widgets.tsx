@@ -2,6 +2,8 @@
 
 import { apiClient } from '@/lib/api/client';
 import { useAuthStore } from '@/store/auth';
+import { useOutletFilterStore } from '@/store/outlet-filter';
+import { orderSubtypeBadge } from '@/lib/pos/order-subtype-label';
 import { cn } from '@/lib/utils';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -137,14 +139,8 @@ function timeAgo(dateStr: string): string {
   return `${Math.floor(diff / 60)}h ago`;
 }
 
-const subtypeLabels: Record<string, string> = {
-  dine_in: 'Dine-in',
-  takeaway: 'Takeaway',
-  delivery: 'Delivery',
-  room_service: 'Room Svc',
-  bar_tab: 'Bar Tab',
-  walk_in: 'Walk-in',
-};
+// Subtype badges are use-case aware (orderSubtypeBadge): retail/pharmacy/services show
+// Walk-in / Online / Shipping; Dine-in etc. are hospitality/quick-service only.
 
 function statusVariantClass(status: string) {
   if (status === 'pending_payment') return 'bg-amber-100 text-amber-700';
@@ -162,6 +158,10 @@ function statusLabel(status: string) {
 
 export function RecentOrdersCard({ orgSlug }: { orgSlug: string }) {
   const tenantID = useTenantID();
+  // Active use case (drill-down outlet wins over the session's home outlet) — drives the
+  // Walk-in/Online/Shipping vs Dine-in/Takeaway badge vocabulary.
+  const homeUseCase = useAuthStore((s) => s.outlet?.use_case);
+  const activeUseCase = useOutletFilterStore((s) => s.selectedOutlet?.useCase) ?? homeUseCase;
   const { data, isLoading } = useQuery({
     queryKey: ['dashboard-recent-orders', tenantID],
     queryFn: () =>
@@ -197,7 +197,7 @@ export function RecentOrdersCard({ orgSlug }: { orgSlug: string }) {
       ) : (
         <div className="divide-y divide-border">
           {orders.map((order: any) => {
-            const subtype = order.order_subtype ?? order.order_type;
+            const badge = orderSubtypeBadge(order, activeUseCase);
             const lineCount = order.edges?.lines?.length ?? order.items_count ?? 0;
             const tableRef = order.table_reference ?? order.table_name ?? order.edges?.table?.name;
             return (
@@ -217,9 +217,9 @@ export function RecentOrdersCard({ orgSlug }: { orgSlug: string }) {
                     <span className="text-xs font-bold font-mono text-foreground">
                       #{order.order_number ?? order.id?.slice(-6)}
                     </span>
-                    {subtype && (
+                    {badge && (
                       <span className="text-[10px] font-semibold bg-secondary/60 text-secondary-foreground px-1.5 py-0.5 rounded">
-                        {subtypeLabels[subtype] ?? subtype}
+                        {badge}
                       </span>
                     )}
                     {tableRef && (

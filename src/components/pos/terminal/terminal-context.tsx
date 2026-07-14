@@ -519,6 +519,9 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
 
   // Course management (hospitality only)
   const isHospitality = ['hospitality', 'quick_service', 'hotel'].includes((outlet?.use_case ?? '').toLowerCase());
+  // Retail/pharmacy/services tills book plain counter sales as 'retail' (displayed "Walk-in") —
+  // never the server's 'dine_in' default, which is a hospitality/quick-service concept.
+  const defaultOrderSubtype = isHospitality ? undefined : ('retail' as const);
   const [currentOrderCourses, setCurrentOrderCourses] = useState<CourseValue[]>([]);
   const [firedCourses, setFiredCourses] = useState(0);
   const [firingCourse, setFiringCourse] = useState<number | null>(null);
@@ -1332,7 +1335,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
     const place = (approval?: { approvalToken?: string; code?: string }) => createOrder.mutate(
       {
         outletId: orderOutletID,
-        orderSubtype: orderSubtype ?? undefined,
+        orderSubtype: orderSubtype ?? defaultOrderSubtype,
         tableId: tableId || undefined,
         coversCount: coversParam > 1 ? coversParam : undefined,
         discountAmount: (loyaltyDiscount + manualDiscount) || undefined,
@@ -1447,7 +1450,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
     createOrder.mutate(
       {
         outletId: orderOutletID,
-        orderSubtype: orderSubtype ?? undefined,
+        orderSubtype: orderSubtype ?? defaultOrderSubtype,
         tableId: tableId || undefined,
         coversCount: coversParam > 1 ? coversParam : undefined,
         ageVerified: ageVerifiedRef.current || undefined,
@@ -1553,7 +1556,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
     try {
       const data: any = await createOrder.mutateAsync({
         outletId: orderOutletID,
-        orderSubtype: orderSubtype ?? undefined,
+        orderSubtype: orderSubtype ?? defaultOrderSubtype,
         tableId: tableId || undefined,
         coversCount: coversParam > 1 ? coversParam : undefined,
         discountAmount: loyaltyDiscount || undefined,
