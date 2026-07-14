@@ -79,4 +79,20 @@ export const rbacApi = {
       card_token: cardToken,
       outlet_id: outletId,
     }),
+
+  // Manager generates a one-time, non-order-scoped approval CODE for a pre-order action
+  // (over-limit discount / price override / order adjustment / out-of-stock override) — the same
+  // OTP mechanism as void/complimentary codes, shared with a cashier who enters it in the Code tab.
+  generateApprovalCode: (tenantId: string, action: string, outletId: string, ttlMinutes?: number) =>
+    apiClient.post<{ code: string; action: string; expires_at: string; expires_in: number; approver_name?: string }>(
+      `${base(tenantId)}/pos/approval-codes`,
+      { action, outlet_id: outletId, ...(ttlMinutes ? { ttl_minutes: ttlMinutes } : {}) },
+    ),
+
+  // Redeem (consume) a manager approval code for a client-side gate (out-of-stock override).
+  verifyApprovalCode: (tenantId: string, action: string, code: string, outletId: string) =>
+    apiClient.post<{ approved: boolean; approver_user_id: string }>(
+      `${base(tenantId)}/pos/approval-codes/verify`,
+      { action, code, outlet_id: outletId },
+    ),
 };

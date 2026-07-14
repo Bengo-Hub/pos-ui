@@ -30,6 +30,7 @@ import { RegisterDetailsModal, RecentTransactionsModal, SellReturnModal } from '
 import { resolveBillProfile } from '@/lib/pos/printer-stations';
 import { VOID_SELF_ROLES } from '@/lib/pos/rbac-constants';
 import { useTerminal } from '@/components/pos/terminal/terminal-context';
+import { rbacApi } from '@/lib/api/rbac';
 import { AlertTriangle, Calculator } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
@@ -253,8 +254,19 @@ export function TerminalModals() {
           description={`A manager must approve to override out-of-stock for ${t.pendingOverride.name}.`}
           confirmLabel="Approve override"
           onClose={() => t.setPendingOverride(null)}
-          onApproved={() => {
+          onApproved={async (approval) => {
             const item = t.pendingOverride!;
+            // scan/PIN already did a live step-up (verified). The one-time CODE path is not yet
+            // verified — redeem it server-side before allowing the out-of-stock add.
+            if (approval.code && !approval.approvalToken) {
+              try {
+                const res = await rbacApi.verifyApprovalCode(
+                  t.user?.tenant_id ?? '', 'catalog.oos_override', approval.code,
+                  t.outlet?.id ?? '',
+                );
+                if (!res?.approved) { toast.error('Invalid or expired approval code'); return; }
+              } catch { toast.error('Invalid or expired approval code'); return; }
+            }
             t.setPendingOverride(null);
             // Override approved — continue the normal add flow (serial/modifier/age still apply).
             if (item.requiresAgeVerification || item.trackSerialNumber || item.modifierGroups?.length) {
