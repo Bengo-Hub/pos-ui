@@ -27,7 +27,8 @@ import { TerminalProductGrid } from '@/components/pos/terminal/parts/terminal-pr
 import { TerminalModals } from '@/components/pos/terminal/parts/terminal-modals';
 import { InlinePaymentBar } from '@/components/pos/terminal/inline-payment-bar';
 import { useTerminal } from '@/components/pos/terminal/terminal-context';
-import { CostHeaderToggle, MaskedCost, MaskedMargin } from '@/components/pos/cost-price';
+import { CostHeaderToggle, MaskedCost } from '@/components/pos/cost-price';
+import { InlineDiscountCell, InlineMarginCell, InlinePriceCell } from '@/components/pos/inline-line-cells';
 import { searchPlaceholderFor } from '@/lib/use-case-config';
 import { cn } from '@/lib/utils';
 import {
@@ -48,11 +49,19 @@ export function TerminalShell() {
   // services terminals never show the columns, whatever the role.
   const canViewCost = cfg.showCostMargin && (t.can('pos.catalog.view_cost') || t.can('pos.orders.manage'));
   const [costRevealed, setCostRevealed] = useState(false);
+  // Price/margin/discount editing policy: managers/admins (pos.orders.manage) edit any of the
+  // three freely (markdown = inline discount); everyone else may only RAISE the price (sell
+  // above the preset — higher margin), never below it. setLinePrice re-clamps and the server
+  // gates markdowns (price.override), so this is display+UX gating, not the enforcement.
+  const canManagePrices = t.can('pos.orders.manage');
+  const showDiscountCol = canManagePrices && cfg.showCostMargin;
   // Explicit column tracks (shared by header + rows) so the cart never cramps: the product
   // name flexes, the numeric columns get fixed, comfortably-spaced widths. Cost + Margin
-  // only exist for management roles.
+  // only exist for management roles; Discount only for managers on retail/pharmacy.
   const cartGridCols = canViewCost
-    ? 'grid-cols-[minmax(0,1fr)_6.5rem_4.5rem_3.5rem_5rem_5.5rem]'
+    ? (showDiscountCol
+        ? 'grid-cols-[minmax(0,1fr)_6.5rem_4.5rem_3.5rem_4rem_5rem_5.5rem]'
+        : 'grid-cols-[minmax(0,1fr)_6.5rem_4.5rem_3.5rem_5rem_5.5rem]')
     : 'grid-cols-[minmax(0,1fr)_6.5rem_5rem_5.5rem]';
 
   return (
@@ -100,7 +109,8 @@ export function TerminalShell() {
               {/* Customer — LoyaltyPanel is the customer/loyalty link where pricing/loyalty applies */}
               {cfg.showPricingProfile ? (
                 <div className="sm:flex-1 min-w-0">
-                  <LoyaltyPanel onStateChange={t.setLoyaltyState} />
+                  {/* key: remounts after each sale so the customer resets to the Walk-in default */}
+                  <LoyaltyPanel key={t.customerResetSeq} onStateChange={t.setLoyaltyState} />
                 </div>
               ) : !cfg.showOrderType ? (
                 <div className="sm:flex-1 min-w-0 flex items-center gap-2 px-3 py-2.5 rounded-xl border border-border bg-card text-sm font-medium text-muted-foreground">
@@ -202,6 +212,7 @@ export function TerminalShell() {
                 <span className="text-right">Margin</span>
               </>
             )}
+            {showDiscountCol && <span className="text-right">Discount</span>}
             <span className="text-right">Price inc. tax</span>
             <span className="text-right">Subtotal</span>
           </div>
@@ -268,11 +279,36 @@ export function TerminalShell() {
                           <MaskedCost cost={item.costPrice} sell={item.price} revealed={costRevealed} showMargin={false} />
                         </span>
                         <span className="text-right text-xs">
-                          <MaskedMargin cost={item.costPrice} sell={item.price} revealed={costRevealed} />
+                          <InlineMarginCell
+                            cost={item.costPrice}
+                            sell={item.price}
+                            revealed={costRevealed}
+                            editable={canManagePrices && !item.nonBillable && !item.promoFree}
+                            onCommitPrice={(p) => t.setLinePrice(idx, p, 'margin edit')}
+                          />
                         </span>
                       </>
                     )}
-                    <span className="text-right text-xs font-mono text-muted-foreground">{item.price.toLocaleString()}</span>
+                    {showDiscountCol && (
+                      <span className="text-right text-xs">
+                        <InlineDiscountCell
+                          price={item.price}
+                          preset={item.originalPrice ?? item.price}
+                          quantity={item.quantity}
+                          editable={!item.nonBillable && !item.promoFree}
+                          onCommitPrice={(p) => t.setLinePrice(idx, p, 'line discount')}
+                        />
+                      </span>
+                    )}
+                    <span className="text-right">
+                      <InlinePriceCell
+                        price={item.price}
+                        preset={item.originalPrice ?? item.price}
+                        canDiscount={canManagePrices}
+                        disabled={item.nonBillable || item.promoFree}
+                        onCommit={(p) => t.setLinePrice(idx, p, canManagePrices ? 'price edit' : 'sold above preset')}
+                      />
+                    </span>
                     <div className="flex items-center justify-end gap-1.5">
                       <span className="text-sm font-bold font-mono tabular-nums">{lineTotal.toLocaleString()}</span>
                       <button onClick={() => t.removeFromCart(idx)} className="h-6 w-6 rounded-md flex items-center justify-center text-muted-foreground hover:bg-destructive/10 hover:text-destructive" aria-label="Remove"><Trash2 className="h-3.5 w-3.5" /></button>
@@ -385,7 +421,7 @@ export function TerminalShell() {
             isHospitality={t.isHospitality}
             // COD is delivery-only (paid to the rider on delivery) — never for takeaway/counter/dine-in.
             allowCOD={t.orderSubtype === 'delivery'}
-            customerEmail={(t.loyaltyState as any)?.customerEmail}
+            customerEmail={t.loyaltyState?.customerEmail}
             hasCustomer={!!t.loyaltyState?.customerPhone}
             disabled={cart.length === 0}
             mode={t.isHospitality && t.orderSubtype === 'dine_in' ? 'send_to_kitchen' : 'pay'}

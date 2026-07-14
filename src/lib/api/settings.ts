@@ -38,6 +38,8 @@ export interface POSSettings {
   default_view: string;
   receipt_header?: string | null;
   receipt_footer?: string | null;
+  /** Include the tenant/outlet logo on generated receipts (Receipt & Printing; default true). */
+  show_logo_on_receipt?: boolean;
   currency: string;
   vat_enabled: boolean;
   vat_rate: number;
@@ -100,6 +102,7 @@ export interface UpdatePOSSettingsInput {
   show_barcode_scanner?: boolean;
   receipt_header?: string | null;
   receipt_footer?: string | null;
+  show_logo_on_receipt?: boolean;
   currency?: string;
   vat_enabled?: boolean;
   vat_rate?: number;

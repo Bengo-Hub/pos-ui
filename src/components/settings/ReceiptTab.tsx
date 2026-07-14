@@ -86,6 +86,7 @@ export function ReceiptTab() {
   const [form, setForm] = useState({
     receiptHeader: '',
     receiptFooter: '',
+    showLogoOnReceipt: true,
     autoPrintOrder: false,
     autoPrintKitchen: false,
     cashDrawerEnabled: false,
@@ -215,6 +216,7 @@ export function ReceiptTab() {
       setForm({
         receiptHeader: settings.receipt_header ?? defaultHeader,
         receiptFooter: settings.receipt_footer ?? DEFAULT_RECEIPT_FOOTER,
+        showLogoOnReceipt: settings.show_logo_on_receipt ?? true,
         autoPrintOrder: settings.auto_print_order ?? false,
         autoPrintKitchen: settings.auto_print_kitchen ?? false,
         cashDrawerEnabled: settings.cash_drawer_enabled ?? false,
@@ -272,6 +274,7 @@ export function ReceiptTab() {
     updateSettings.mutate({
       receipt_header: form.receiptHeader || null,
       receipt_footer: form.receiptFooter || null,
+      show_logo_on_receipt: form.showLogoOnReceipt,
       auto_print_order: form.autoPrintOrder,
       auto_print_kitchen: form.autoPrintKitchen,
       cash_drawer_enabled: form.cashDrawerEnabled,
@@ -325,10 +328,23 @@ export function ReceiptTab() {
                 value={form.receiptFooter}
                 onChange={(e) => set('receiptFooter', e.target.value)}
                 disabled={!canEdit}
-                placeholder="Thank you message, social handles…"
+                placeholder="Thank you message, motto (e.g. IN GOD WE TRUST)…"
                 className={`${inputClass} resize-none`}
               />
+              <p className="text-[11px] text-muted-foreground">
+                Printed near the bottom of every customer receipt, just above the fine print.
+              </p>
             </div>
+          </div>
+          <div className="flex items-center justify-between p-4 rounded-xl bg-accent/10 border border-border gap-4">
+            <div className="min-w-0">
+              <h4 className="text-sm font-bold">Show Business Logo</h4>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Include your logo at the top of generated receipts (on-screen, HTML and PDF). Turn
+                off for a text-only header.
+              </p>
+            </div>
+            <Toggle checked={form.showLogoOnReceipt} onChange={(v) => set('showLogoOnReceipt', v)} disabled={!canEdit} />
           </div>
         </CardContent>
       </Card>

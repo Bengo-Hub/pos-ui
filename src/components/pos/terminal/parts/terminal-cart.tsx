@@ -423,7 +423,8 @@ export function TerminalCart() {
               sale with no number entered is an anonymous walk-in and earns nothing. */}
           {cart.length > 0 && !t.isAddToBill && (
             <div className="px-5 pt-2">
-              <LoyaltyPanel onStateChange={t.setLoyaltyState} />
+              {/* key: remounts after each sale so the customer resets to the Walk-in default */}
+              <LoyaltyPanel key={t.customerResetSeq} onStateChange={t.setLoyaltyState} />
             </div>
           )}
           {/* Add-to-bill keeps its single append button; everything else uses the GoDigital-style
@@ -452,7 +453,7 @@ export function TerminalCart() {
               // delivery. It must NOT appear for takeaway/dine-in/counter sales (that money is just
               // "Cash" at the till). Gate strictly on the delivery subtype, not the outlet profile.
               allowCOD={t.orderSubtype === 'delivery'}
-              customerEmail={(t.loyaltyState as any)?.customerEmail || tenant?.contactEmail || undefined}
+              customerEmail={t.loyaltyState?.customerEmail || tenant?.contactEmail || undefined}
               hasCustomer={!!t.loyaltyState?.customerPhone}
               disabled={cart.length === 0}
               mode={t.isHospitality && t.orderSubtype === 'dine_in' ? 'send_to_kitchen' : 'pay'}

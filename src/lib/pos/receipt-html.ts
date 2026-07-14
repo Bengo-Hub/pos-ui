@@ -68,13 +68,21 @@ export async function renderReceiptHtml(receipt: ReceiptData, branding: ReceiptB
   }
 }
 
+// A4 page rules for the retail boxed template (its own styles are inline on the markup —
+// only the page geometry and ink handling need to come from the document shell).
+export const RECEIPT_PRINT_CSS_A4 = `
+  @page { size: A4 portrait; margin: 12mm; }
+  html, body { margin: 0; padding: 0; background: #fff; color: #000; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+`;
+
 /** Wraps a receipt HTML fragment (from renderReceiptHtml, or an already-mounted node's innerHTML)
- *  in the standalone print-window document shell. */
-export function buildReceiptDocument(title: string, bodyHtml: string): string {
+ *  in the standalone print-window document shell. `paper` picks the page geometry: the default
+ *  80mm thermal styles, or A4 for the retail boxed template (whose look is inline-styled). */
+export function buildReceiptDocument(title: string, bodyHtml: string, paper: 'thermal' | 'a4' = 'thermal'): string {
   return (
     `<!doctype html><html><head><meta charset="utf-8"/>` +
     `<title>${title}</title>` +
-    `<style>${RECEIPT_PRINT_CSS}</style></head>` +
+    `<style>${paper === 'a4' ? RECEIPT_PRINT_CSS_A4 : RECEIPT_PRINT_CSS}</style></head>` +
     `<body>${bodyHtml}</body></html>`
   );
 }

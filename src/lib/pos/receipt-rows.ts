@@ -29,6 +29,8 @@ export interface ReceiptServedByRow { kind: 'served-by'; name: string }
 export interface ReceiptCustomerRow { kind: 'customer'; label: string; name: string }
 export interface ReceiptFooterRow { kind: 'footer'; text: string }
 export interface ReceiptProviderRow { kind: 'provider'; lead: string; contact: string }
+/** Code 128 of the order number (retail receipts) — src is a data: URI from pos-api. */
+export interface ReceiptBarcodeRow { kind: 'barcode'; src: string; text: string }
 
 export type ReceiptRow =
   | ReceiptLineRow
@@ -44,7 +46,8 @@ export type ReceiptRow =
   | ReceiptServedByRow
   | ReceiptCustomerRow
   | ReceiptFooterRow
-  | ReceiptProviderRow;
+  | ReceiptProviderRow
+  | ReceiptBarcodeRow;
 
 /** Static fallback for the platform-owner advertisement, mirroring pos-api's DefaultProviderFooter. */
 const PROVIDER_FOOTER_FALLBACK = {
@@ -84,16 +87,33 @@ export function buildReceiptRows(receipt: ReceiptData): ReceiptRow[] {
   if (receipt.discount_amount > 0) {
     rows.push({ kind: 'money', label: 'Discount', amount: receipt.discount_amount, negative: true });
   }
-  if ((receipt.charges_total ?? 0) > 0) {
+  // Itemised charges (Shipping(+)/Packaging(+)/…) when the named breakdown is available;
+  // one aggregate row otherwise.
+  const chargeEntries = Object.entries(receipt.charges ?? {}).filter(([, v]) => v > 0);
+  if (chargeEntries.length > 0) {
+    for (const [key, amount] of chargeEntries.sort(([a], [b]) => a.localeCompare(b))) {
+      rows.push({ kind: 'money', label: `${key.charAt(0).toUpperCase()}${key.slice(1)}(+)`, amount });
+    }
+  } else if ((receipt.charges_total ?? 0) > 0) {
     rows.push({ kind: 'money', label: 'Charges', amount: receipt.charges_total ?? 0 });
   }
   if ((receipt.round_off ?? 0) > 0) {
     rows.push({ kind: 'money', label: 'Round Off', amount: receipt.round_off ?? 0 });
   }
   rows.push({ kind: 'total', label: 'TOTAL', amount: receipt.total_amount });
-  rows.push({ kind: 'payment', label: (receipt.payment_method ?? 'cash').replace(/_/g, ' '), amount: receipt.amount_tendered });
+  // Payment method — with the settle date beside it ("cash (14-07-2026)") when known.
+  const methodLabel = (receipt.payment_method ?? 'cash').replace(/_/g, ' ');
+  const paymentDate = receipt.payment_date
+    ? ` (${new Date(receipt.payment_date).toLocaleDateString('en-GB').replace(/\//g, '-')})`
+    : '';
+  rows.push({ kind: 'payment', label: `${methodLabel}${paymentDate}`, amount: receipt.amount_tendered });
   if (receipt.change_due > 0) {
     rows.push({ kind: 'change', amount: receipt.change_due });
+  }
+  // Outstanding balance (on-account/credit sale) or customer credit (negative) — states what is
+  // still owed after this payment, like the "Total Due with Current" line on the retail design.
+  if (Math.abs(receipt.balance_due ?? 0) >= 0.005) {
+    rows.push({ kind: 'money', label: 'Balance Due', amount: receipt.balance_due ?? 0 });
   }
 
   if (receipt.etims_invoice_number) {
@@ -115,6 +135,11 @@ export function buildReceiptRows(receipt: ReceiptData): ReceiptRow[] {
 
   if (receipt.served_by) {
     rows.push({ kind: 'served-by', name: receipt.served_by });
+  }
+
+  // Retail: Code 128 of the order number, right above the configurable footer text.
+  if (receipt.barcode_png) {
+    rows.push({ kind: 'barcode', src: receipt.barcode_png, text: receipt.order_number });
   }
 
   rows.push({ kind: 'footer', text: receipt.receipt_footer || 'Thank you for your business!' });

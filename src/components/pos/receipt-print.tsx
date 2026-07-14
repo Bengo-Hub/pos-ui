@@ -2,6 +2,7 @@
 
 import '@/styles/receipt.css';
 import type { ReceiptData } from './receipt-preview';
+import { RetailReceiptPrint } from './receipt-retail-print';
 import { buildReceiptRows } from '@/lib/pos/receipt-rows';
 
 interface ReceiptPrintProps {
@@ -38,6 +39,18 @@ export function ReceiptPrint({
   logoUrl,
   paymentMethods,
 }: ReceiptPrintProps) {
+  // Retail outlets print the boxed invoice-style template (BOI/GoDigital design) — one branch
+  // here covers every client print path (preview root, print window, OrderPlacedDialog, splits).
+  if (receipt.use_case === 'retail') {
+    return (
+      <RetailReceiptPrint
+        receipt={{ ...receipt, payment_methods: paymentMethods ?? receipt.payment_methods }}
+        tenantName={tenantName}
+        outletName={outletName}
+        logoUrl={logoUrl}
+      />
+    );
+  }
   const currency = receipt.currency || 'KES';
   const fmt = (n: number) => `${currency} ${n.toFixed(2)}`;
   const norm = (s?: string) => (s ?? '').trim().toLowerCase();
@@ -61,8 +74,8 @@ export function ReceiptPrint({
 
   return (
     <div className="receipt-root">
-      {/* Header / branding — logo only, no brand colours (thermal-safe) */}
-      {logoUrl && (
+      {/* Header / branding — logo only (and only when the receipt "show logo" setting allows) */}
+      {logoUrl && receipt.show_logo !== false && (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={logoUrl} alt="logo" className="receipt-logo" />
       )}
@@ -184,6 +197,14 @@ export function ReceiptPrint({
               <div key={i} className="receipt-row">
                 <span className="receipt-row-name">{row.label}</span>
                 <span className="receipt-row-value">{row.name}</span>
+              </div>
+            );
+          case 'barcode':
+            return (
+              <div key={i} className="receipt-center" style={{ marginTop: 4 }}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={row.src} alt="barcode" style={{ display: 'block', margin: '0 auto', height: '10mm', maxWidth: '90%' }} />
+                <p className="receipt-small" style={{ letterSpacing: 2 }}>{row.text}</p>
               </div>
             );
           case 'footer':

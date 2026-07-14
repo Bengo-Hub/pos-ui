@@ -34,12 +34,25 @@ export interface ReceiptData {
   discount_amount: number;
   /** Additional order costs (packaging/service/shipping) included in total_amount. */
   charges_total?: number;
+  /** Named breakdown behind charges_total (packaging/service/shipping…) for itemised rows. */
+  charges?: Record<string, number>;
   /** Ceiling round-off added so total_amount is a whole number. */
   round_off?: number;
   total_amount: number;
   payment_method: string;
+  /** When the shown payment settled (ISO) — retail prints it beside the method. */
+  payment_date?: string;
+  amount_paid?: number;
+  /** total − paid: positive = still owed (on account), negative = customer credit. */
+  balance_due?: number;
   amount_tendered: number;
   change_due: number;
+  /** Outlet use case — "retail" switches every surface to the boxed invoice-style template. */
+  use_case?: string;
+  /** Receipt & Printing "show logo" setting (default true). */
+  show_logo?: boolean;
+  /** Code 128 of the order number (data: URI) from pos-api — retail receipts only. */
+  barcode_png?: string;
   /** Guest/payer name for identified payments (M-Pesa/card/online), or "Walk-in customer" for cash. */
   bill_to?: string;
   /** Label for bill_to: "Customer" (keyed-in / walk-in) or "Paid by" (online-payment payer). */
@@ -173,7 +186,13 @@ export function ReceiptPreview({
       window.print();
       return;
     }
-    printReceiptDocument(buildReceiptDocument(`Receipt ${receipt.order_number}`, node.innerHTML));
+    // Retail's boxed template is an A4 document (barcode + bordered tables); everything else
+    // keeps the 80mm thermal page.
+    printReceiptDocument(buildReceiptDocument(
+      `Receipt ${receipt.order_number}`,
+      node.innerHTML,
+      receipt.use_case === 'retail' ? 'a4' : 'thermal',
+    ));
   };
 
   const handlePrint = () => {
@@ -236,7 +255,7 @@ export function ReceiptPreview({
 
           {/* Receipt content */}
           <div className="px-4 py-3 font-mono text-xs overflow-y-auto max-h-[60vh]">
-            {logoUrl && (
+            {logoUrl && receipt.show_logo !== false && (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={logoUrl} alt="logo" className="mx-auto mb-2 max-h-16 object-contain grayscale" />
             )}
@@ -332,6 +351,14 @@ export function ReceiptPreview({
                     <div key={i} className="flex justify-between py-0.5">
                       <span>{row.label}</span>
                       <span className="font-semibold">{row.name}</span>
+                    </div>
+                  );
+                case 'barcode':
+                  return (
+                    <div key={i} className="mt-2 text-center">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={row.src} alt="barcode" className="mx-auto h-10 object-contain" />
+                      <p className="text-[10px] tracking-widest">{row.text}</p>
                     </div>
                   );
                 case 'footer':

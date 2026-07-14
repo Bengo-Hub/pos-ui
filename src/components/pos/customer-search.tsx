@@ -17,8 +17,8 @@
 import { useEffect, useState } from 'react';
 import { Loader2, UserPlus, UserRound, X, Search } from 'lucide-react';
 import { toast } from 'sonner';
-import { useClientSearch, useCreateLoyaltyAccount } from '@/hooks/useClients';
-import { classifySearchQuery } from '@/lib/api/clients';
+import { useClientSearch, useClientCredit, useCreateLoyaltyAccount } from '@/hooks/useClients';
+import { classifySearchQuery, type LoyaltyAccount } from '@/lib/api/clients';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { normalizeKePhone, nationalSubscriberDigits } from '@/lib/phone';
 
@@ -44,9 +44,15 @@ interface CustomerSearchProps {
   requireRealCustomer?: boolean;
   /** Context shown when a real customer is required (default "a credit sale"). */
   requiredForLabel?: string;
+  /**
+   * Surfaces the FULL matched account row (points balance, CRM source, …) alongside onChange —
+   * the terminal LoyaltyPanel needs it to offer points/redeem without a second lookup.
+   * Called with null when the selection reverts to walk-in / is cleared.
+   */
+  onSelectAccount?: (account: LoyaltyAccount | null) => void;
 }
 
-export function CustomerSearch({ value, onChange, requireRealCustomer = false, requiredForLabel = 'a credit sale' }: CustomerSearchProps) {
+export function CustomerSearch({ value, onChange, requireRealCustomer = false, requiredForLabel = 'a credit sale', onSelectAccount }: CustomerSearchProps) {
   const [query, setQuery] = useState('');
   const [debounced, setDebounced] = useState('');
   const [showAdd, setShowAdd] = useState(false);
@@ -72,6 +78,11 @@ export function CustomerSearch({ value, onChange, requireRealCustomer = false, r
   const createAccount = useCreateLoyaltyAccount();
 
   const selected = value && !value.isWalkIn ? value : null;
+
+  // Account balances for the attached customer (treasury AR via the pos proxy): outstanding
+  // balance (debit), credit limit and payment period. Loyalty-account-keyed — CRM-only picks
+  // (no account yet) simply show no balance row.
+  const { data: credit } = useClientCredit(selected?.accountId);
 
   const select = (c: SelectedCustomer) => {
     setQuery('');
@@ -104,6 +115,17 @@ export function CustomerSearch({ value, onChange, requireRealCustomer = false, r
       {
         onSuccess: (res) => {
           toast.success(`${newName.trim()} added`);
+          onSelectAccount?.({
+            id: res?.id ?? '',
+            tenant_id: '',
+            customer_phone: p,
+            customer_name: newName.trim(),
+            customer_email: newEmail.trim() || undefined,
+            points_balance: 0,
+            lifetime_points: 0,
+            created_at: '',
+            updated_at: '',
+          });
           select({
             phone: p,
             name: newName.trim(),
@@ -130,11 +152,35 @@ export function CustomerSearch({ value, onChange, requireRealCustomer = false, r
                 {[selected.phone, selected.email].filter(Boolean).join(' · ')}
               </p>
             )}
+            {credit && (() => {
+              const due = parseFloat(credit.balance_due || '0');
+              const limit = parseFloat(credit.credit_limit || '0');
+              return (
+                <p className="text-xs truncate">
+                  <span className={due > 0 ? 'text-amber-600 font-semibold' : due < 0 ? 'text-emerald-600 font-semibold' : 'text-muted-foreground'}>
+                    {due > 0
+                      ? `Owes ${credit.currency || 'KES'} ${due.toLocaleString()}`
+                      : due < 0
+                        ? `Credit ${credit.currency || 'KES'} ${Math.abs(due).toLocaleString()}`
+                        : 'No balance due'}
+                  </span>
+                  {limit > 0 && (
+                    <span className="text-muted-foreground"> · limit {(credit.currency || 'KES')} {limit.toLocaleString()}</span>
+                  )}
+                  {typeof credit.credit_period_days === 'number' && credit.credit_period_days > 0 && (
+                    <span className="text-muted-foreground"> · {credit.credit_period_days}d terms</span>
+                  )}
+                </p>
+              );
+            })()}
           </div>
         </div>
         <button
           type="button"
-          onClick={() => select(requireRealCustomer ? { phone: '', name: '', isWalkIn: false } : WALK_IN_CUSTOMER)}
+          onClick={() => {
+            onSelectAccount?.(null);
+            select(requireRealCustomer ? { phone: '', name: '', isWalkIn: false } : WALK_IN_CUSTOMER);
+          }}
           className="p-1 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors shrink-0"
           aria-label="Change customer"
         >
@@ -178,15 +224,16 @@ export function CustomerSearch({ value, onChange, requireRealCustomer = false, r
               // CRM-only rows (source 'crm') have no loyalty account id — key on the CRM id/phone.
               key={c.id || c.crm_contact_id || c.customer_phone}
               type="button"
-              onClick={() =>
+              onClick={() => {
+                onSelectAccount?.(c);
                 select({
                   phone: c.customer_phone,
                   name: c.customer_name,
                   isWalkIn: false,
                   accountId: c.id || undefined,
                   email: c.customer_email || undefined,
-                })
-              }
+                });
+              }}
               className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-accent transition-colors"
             >
               <UserRound className="h-3.5 w-3.5 text-muted-foreground shrink-0" />

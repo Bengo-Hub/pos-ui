@@ -27,7 +27,7 @@ import { applyRoundOff, computeCartTax } from '@/lib/pos/cart-tax';
 import { terminalConfigFor, type TerminalConfig } from '@/lib/use-case-config';
 import {
   useFullCatalog, useCategories, useCreateOrder, useAddOrderLines, useVoidOrder,
-  useAssignTable, useReleaseTable, usePricingTiers, type OrderSubtype,
+  useAssignTable, useReleaseTable, usePricingTiers, useEffectiveOutletID, type OrderSubtype,
 } from '@/hooks/usePOS';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { useKDSStations } from '@/hooks/useKDS';
@@ -238,6 +238,8 @@ export interface TerminalContextValue {
   // ── loyalty / scale ──
   loyaltyState: LoyaltyState | null;
   setLoyaltyState: (s: LoyaltyState | null) => void;
+  /** Remount key for the customer/loyalty panel — bumps on clearCart so the customer resets to Walk-in. */
+  customerResetSeq: number;
   scaleDeviceId: string;
 
   // ── order type / table ──
@@ -372,6 +374,12 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
   const orgSlug = (params?.orgSlug as string) || '';
   const user = useAuthStore((s) => s.user);
   const outlet = useAuthStore((s) => s.outlet);
+  // The outlet ORDERS post against — follows the HQ drill-down switcher (selectedOutletId),
+  // falling back to the session's home outlet. Must match the outlet the catalog is scoped
+  // to, or an HQ admin ringing up for another branch would book the sale (and deduct stock)
+  // against their own home outlet.
+  const effectiveOutletID = useEffectiveOutletID();
+  const orderOutletID = effectiveOutletID || outlet?.id || '';
   // Terminal adapts to the outlet use_case (display mode, scan-first, pricing profile, courses…).
   const cfg = terminalConfigFor(outlet?.use_case);
   const scanInputRef = useRef<HTMLInputElement>(null);
@@ -388,6 +396,9 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
   // Retail loyalty panel (customer lookup + points redemption) — absorbed from /retail into the
   // adaptive terminal; its redeemDiscount applies as an order discount and posts the customer.
   const [loyaltyState, setLoyaltyState] = useState<LoyaltyState | null>(null);
+  // Bumped by clearCart to remount the LoyaltyPanel (whose picker selection is component-local),
+  // resetting the attached customer back to the Walk-in default after every completed sale.
+  const [customerResetSeq, setCustomerResetSeq] = useState(0);
   // Retail/pharmacy hardware scale (gated on cfg.showScale + a configured pos_scale_device_id).
   const [scaleDeviceId, setScaleDeviceId] = useState('');
   // Out-of-stock add interception → manager PIN override (retail/pharmacy, gated on cfg.managerOverride).
@@ -1090,6 +1101,11 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
     setDiscountReason('');
     setOrderTax(0);
     setCharges({});
+    // Every cart reset (sale placed, parked, voided, or Clear all) detaches the customer and
+    // falls back to the Walk-in default — the last customer served must never silently stick
+    // to the NEXT sale. customerResetSeq remounts the LoyaltyPanel (its picker state is local).
+    setLoyaltyState(null);
+    setCustomerResetSeq((s) => s + 1);
   };
 
   // Apply or clear a manual order-level discount (KES amount).
@@ -1263,9 +1279,12 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
       // Selling-price guardrails so the backend hard-blocks out-of-band prices (manager override).
       ...(item.minSellingPrice != null ? { min_price: item.minSellingPrice } : {}),
       ...(item.maxSellingPrice != null ? { max_price: item.maxSellingPrice } : {}),
-      // Price-override markers so the backend can gate large markdowns.
+      // The preset catalog price travels on EVERY edited line (markdown or markup) so the
+      // backend audits against it — the price_override flag additionally marks markdowns
+      // (the server gates those via price.override regardless of the flag).
+      ...(item.originalPrice != null ? { original_price: item.originalPrice } : {}),
       ...(item.originalPrice != null && item.price < item.originalPrice
-        ? { price_override: true, original_price: item.originalPrice, override_reason: item.overrideReason ?? '' }
+        ? { price_override: true, override_reason: item.overrideReason ?? '' }
         : {}),
       // Free-of-charge flag (ugali-type accompaniments / supplies) — the server zeroes the
       // line on this marker even if a price sneaks in.
@@ -1312,7 +1331,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
     // the outlet's limit (backend returns 422).
     const place = (approval?: { approvalToken?: string; code?: string }) => createOrder.mutate(
       {
-        outletId: outlet?.id ?? '',
+        outletId: orderOutletID,
         orderSubtype: orderSubtype ?? undefined,
         tableId: tableId || undefined,
         coversCount: coversParam > 1 ? coversParam : undefined,
@@ -1400,14 +1419,24 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
     placeWithDiscountApprovalRef.current?.(approval);
   };
 
-  // Override a cart line's unit price (markdown only). Records the catalog price
-  // as original so the backend can gate large markdowns.
+  // Override a cart line's unit price. Role-aware bounds (BOI retail requirement):
+  // managers/admins (pos.orders.manage) may set ANY price — a markdown below the preset
+  // (inline discount) or a markup above it; everyone else may only sell AT or ABOVE the
+  // preset catalog price (raise margin, never discount). The preset is recorded as
+  // originalPrice so the backend can audit/gate markdowns (price.override).
+  const canPriceBelowPreset = can('pos.orders.manage');
   const setLinePrice = (index: number, newPrice: number, reason: string) => {
     setCart((prev) => prev.map((it, i) => {
       if (i !== index) return it;
       const original = it.originalPrice ?? it.price;
-      const capped = Math.max(0, Math.min(newPrice, original));
-      return { ...it, price: capped, originalPrice: original, overrideReason: reason };
+      let next = Math.max(0, newPrice);
+      if (!canPriceBelowPreset) next = Math.max(next, original);
+      // Catalog hard ceiling applies to everyone (server band-gates it anyway).
+      if (typeof it.maxSellingPrice === 'number' && it.maxSellingPrice > 0) {
+        next = Math.min(next, it.maxSellingPrice);
+      }
+      next = Math.round(next * 100) / 100;
+      return { ...it, price: next, originalPrice: original, overrideReason: reason };
     }));
     setPriceEditIndex(null);
   };
@@ -1417,7 +1446,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
     if (cart.length === 0) return;
     createOrder.mutate(
       {
-        outletId: outlet?.id ?? '',
+        outletId: orderOutletID,
         orderSubtype: orderSubtype ?? undefined,
         tableId: tableId || undefined,
         coversCount: coversParam > 1 ? coversParam : undefined,
@@ -1523,7 +1552,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
     const courses = [...new Set(cart.map((i) => (i.courseNumber ?? 0) as CourseValue).filter((c) => c > 0))].sort() as CourseValue[];
     try {
       const data: any = await createOrder.mutateAsync({
-        outletId: outlet?.id ?? '',
+        outletId: orderOutletID,
         orderSubtype: orderSubtype ?? undefined,
         tableId: tableId || undefined,
         coversCount: coversParam > 1 ? coversParam : undefined,
@@ -1640,7 +1669,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
     addItemToCart, handleItemTap, proceedWithItem, handleScaleAddToCart,
     updateQuantity, removeFromCart, clearCart, bogoFreeFor, updateCourse, setItemSeat,
     pricingProfile, pricingTiers, repricing, repriceCart,
-    loyaltyState, setLoyaltyState, scaleDeviceId,
+    loyaltyState, setLoyaltyState, customerResetSeq, scaleDeviceId,
     orderSubtype, setOrderSubtype, deliveryInfo, setDeliveryInfo, tableId, tableName,
     billOrderTotal,
     handlePlaceOrder, handlePark, handleResumeParked, createOrderAsync,

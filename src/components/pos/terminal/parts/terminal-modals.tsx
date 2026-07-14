@@ -205,6 +205,7 @@ export function TerminalModals() {
       <LinePriceModal
         open={t.priceEditIndex !== null}
         item={t.priceEditIndex !== null ? t.cart[t.priceEditIndex] : null}
+        canDiscount={t.can('pos.orders.manage')}
         onApply={(price, reason) => t.priceEditIndex !== null && t.setLinePrice(t.priceEditIndex, price, reason)}
         onClose={() => t.setPriceEditIndex(null)}
       />

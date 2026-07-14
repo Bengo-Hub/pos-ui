@@ -7,25 +7,30 @@ import type { CartItem } from '@/components/pos/terminal/terminal-context';
 interface LinePriceModalProps {
   open: boolean;
   item: CartItem | null;
+  /** Managers/admins (pos.orders.manage): any price — markdown (discount) or markup.
+   *  Everyone else: at/above the preset catalog price only (sell higher, never discount). */
+  canDiscount?: boolean;
   onApply: (newPrice: number, reason: string) => void;
   onClose: () => void;
 }
 
 /**
- * LinePriceModal — override a single cart line's unit price (markdown only).
- * The original catalog price is the ceiling; a large markdown triggers a manager
- * step-up at checkout (enforced + audited server-side as price.override).
+ * LinePriceModal — override a single cart line's unit price.
+ * The preset catalog price is recorded as the original; markdowns are audited/gated
+ * server-side as price.override (manager step-up for non-managers).
  */
-export function LinePriceModal({ open, item, onApply, onClose }: LinePriceModalProps) {
+export function LinePriceModal({ open, item, canDiscount = false, onApply, onClose }: LinePriceModalProps) {
   const original = item?.originalPrice ?? item?.price ?? 0;
   const [value, setValue] = useState<string>(item ? String(item.price) : '');
   const [reason, setReason] = useState(item?.overrideReason ?? '');
 
   if (!open || !item) return null;
 
+  const maxPrice = typeof item.maxSellingPrice === 'number' && item.maxSellingPrice > 0 ? item.maxSellingPrice : undefined;
   const newPrice = parseFloat(value);
-  const valid = !isNaN(newPrice) && newPrice >= 0 && newPrice <= original;
-  const markdownPct = original > 0 && !isNaN(newPrice) ? ((original - newPrice) / original) * 100 : 0;
+  const floor = canDiscount ? 0 : original;
+  const valid = !isNaN(newPrice) && newPrice >= floor && (maxPrice == null || newPrice <= maxPrice);
+  const deltaPct = original > 0 && !isNaN(newPrice) ? ((newPrice - original) / original) * 100 : 0;
 
   return (
     <div className="fixed inset-0 z-[55] flex items-center justify-center">
@@ -37,17 +42,23 @@ export function LinePriceModal({ open, item, onApply, onClose }: LinePriceModalP
         </div>
 
         <div className="text-xs text-muted-foreground">
-          {item.name} — catalog price <span className="font-semibold text-foreground">KES {original.toLocaleString()}</span>
+          {item.name} — preset price <span className="font-semibold text-foreground">KES {original.toLocaleString()}</span>
+          {maxPrice != null && <span> · ceiling KES {maxPrice.toLocaleString()}</span>}
         </div>
 
         <input
-          type="number" min={0} max={original} autoFocus inputMode="decimal"
+          type="number" min={floor} max={maxPrice} autoFocus inputMode="decimal"
           value={value} onChange={(e) => setValue(e.target.value)}
           placeholder="New unit price (KES)"
           className="w-full bg-accent/10 border border-border rounded-lg py-2.5 px-3 text-lg font-bold text-center focus:ring-1 focus:ring-primary outline-none"
         />
-        {!isNaN(newPrice) && newPrice > original && (
-          <p className="text-xs text-destructive text-center">Price can&apos;t exceed the catalog price.</p>
+        {!canDiscount && !isNaN(newPrice) && newPrice < original && (
+          <p className="text-xs text-destructive text-center">
+            Only a manager can sell below the preset price — you can only sell at or above it.
+          </p>
+        )}
+        {maxPrice != null && !isNaN(newPrice) && newPrice > maxPrice && (
+          <p className="text-xs text-destructive text-center">Price can&apos;t exceed the catalog ceiling.</p>
         )}
 
         <input
@@ -56,9 +67,13 @@ export function LinePriceModal({ open, item, onApply, onClose }: LinePriceModalP
           className="w-full bg-accent/10 border border-border rounded-lg py-2 px-3 text-sm focus:ring-1 focus:ring-primary outline-none"
         />
 
-        {valid && (
+        {valid && Math.abs(deltaPct) > 0.04 && (
           <div className="text-xs text-muted-foreground text-center">
-            Markdown: <span className="font-bold text-amber-600">{markdownPct.toFixed(1)}%</span>
+            {deltaPct < 0 ? (
+              <>Markdown: <span className="font-bold text-amber-600">{Math.abs(deltaPct).toFixed(1)}%</span></>
+            ) : (
+              <>Markup: <span className="font-bold text-emerald-600">+{deltaPct.toFixed(1)}%</span></>
+            )}
           </div>
         )}
 
