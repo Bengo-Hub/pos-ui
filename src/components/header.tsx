@@ -175,7 +175,12 @@ interface HeaderProps {
 
 export function Header({ onMenuClick, onToggleSidebar, sidebarCollapsed }: HeaderProps) {
   const params = useParams();
-  const orgSlug = (params?.orgSlug as string) || 'codevertex';
+  // Never fall back to a hardcoded tenant: a lost route param must not strand
+  // the user on codevertex's pin-login after logout/end-shift. The URL path is
+  // the working-org source of truth.
+  const orgSlug =
+    (params?.orgSlug as string) ||
+    (typeof window !== 'undefined' ? window.location.pathname.split('/')[1] ?? '' : '');
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);

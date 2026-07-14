@@ -1,9 +1,28 @@
 'use client';
 
-import { useAuthStore } from '@/store/auth';
+import { consumeState } from '@/lib/auth/pkce';
 import { resolveActiveOutlet } from '@/lib/auth/outlet-resolver';
+import { useAuthStore } from '@/store/auth';
+import { SSOCallbackError } from '@bengo-hub/shared-ui-lib/auth';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { Suspense, useEffect, useRef } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
+
+// The stored return URL was captured BEFORE the SSO hop. If the user switched
+// organisation mid-login (accounts org picker), its slug is stale — re-point the
+// first path segment at the org the token was actually issued for. Cross-origin
+// values are dropped entirely.
+function sanitizedReturnTo(raw: string | null, orgSlug: string): string | null {
+  if (!raw) return null;
+  try {
+    const url = raw.startsWith('http') ? new URL(raw) : new URL(raw, window.location.origin);
+    if (url.origin !== window.location.origin) return null;
+    const segments = url.pathname.split('/');
+    if (segments[1] && segments[1] !== orgSlug) segments[1] = orgSlug;
+    return segments.join('/') + url.search + url.hash;
+  } catch {
+    return null;
+  }
+}
 
 function AuthCallbackContent() {
   const router = useRouter();
@@ -12,20 +31,31 @@ function AuthCallbackContent() {
   const orgSlug = params?.orgSlug as string;
   const code = searchParams?.get('code');
   const error = searchParams?.get('error');
+  const errorDescription = searchParams?.get('error_description');
   const { handleSSOCallback, status, error: authError } = useAuthStore();
   const hasStarted = useRef(false);
+  const [stateError, setStateError] = useState<string | null>(null);
 
   useEffect(() => {
     if (code && orgSlug && !hasStarted.current) {
       hasStarted.current = true;
+      // CSRF binding: the state we sent with the authorize request must come
+      // back unchanged. Only enforced when we still hold the stored value —
+      // a missing verifier is already handled by the exchange itself.
+      const returnedState = searchParams?.get('state');
+      const expectedState = consumeState();
+      if (expectedState && returnedState !== expectedState) {
+        setStateError('Sign-in session mismatch. Please try again.');
+        return;
+      }
       const callbackUrl = `${window.location.origin}/${orgSlug}/auth/callback`;
       handleSSOCallback(orgSlug, code, callbackUrl);
     }
-  }, [code, orgSlug, handleSSOCallback]);
+  }, [code, orgSlug, handleSSOCallback, searchParams]);
 
   useEffect(() => {
     if (status === 'authenticated') {
-      const returnTo = sessionStorage.getItem('sso_return_to');
+      const returnTo = sanitizedReturnTo(sessionStorage.getItem('sso_return_to'), orgSlug);
       sessionStorage.removeItem('sso_return_to');
 
       const storedOutlet = typeof window !== 'undefined'
@@ -71,20 +101,19 @@ function AuthCallbackContent() {
     }
   }, [status, orgSlug, router]);
 
-  if (error || authError) {
+  if (error || authError || stateError) {
+    const lastKnownTenant = typeof window !== 'undefined' ? localStorage.getItem('tenantSlug') : null;
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="text-center p-8 border border-destructive/20 rounded-xl bg-destructive/5 max-w-md">
-          <h1 className="text-xl font-bold text-destructive mb-2">Authentication Failed</h1>
-          <p className="text-muted-foreground">{error || authError}</p>
-          <button
-            onClick={() => router.replace(`/${orgSlug}/auth`)}
-            className="mt-6 px-4 py-2 bg-primary text-primary-foreground rounded-lg"
-          >
-            Try Again
-          </button>
-        </div>
-      </div>
+      <SSOCallbackError
+        error={error || 'auth_error'}
+        errorDescription={errorDescription || authError || stateError}
+        orgSlug={orgSlug}
+        lastKnownTenant={lastKnownTenant}
+        onRetry={() => {
+          useAuthStore.getState().redirectToSSO(orgSlug, `${window.location.origin}/${orgSlug}`);
+        }}
+        onSwitchTenant={(slug) => router.replace(`/${slug}`)}
+      />
     );
   }
 

@@ -303,7 +303,15 @@ export const useAuthStore = create<AuthState>()(
 
       logout: async () => {
         const { user, session } = get();
-        const orgSlug = user?.tenant_slug ?? '';
+        // The URL path is the source of truth for the org the user is working
+        // in — the token's tenant_slug can differ (e.g. a platform owner whose
+        // token was minted for codevertex while working inside another tenant).
+        // Falling back to the token slug used to strand users on the WRONG
+        // tenant's pin-login after logout.
+        const pathSlug = typeof window !== 'undefined'
+          ? (window.location.pathname.split('/')[1] ?? '')
+          : '';
+        const orgSlug = pathSlug || user?.tenant_slug || '';
         // Revoke the backend SSO session (Redis session_token keys + DB sessions)
         // before clearing local state, so refresh tokens can't be reused.
         await revokeServerSession(session?.accessToken);
