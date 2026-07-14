@@ -9,8 +9,8 @@
 
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { Loader2, Minus, Plus, Search, ShoppingCart, Trash2, User, Users } from 'lucide-react';
-import { useMenuItems, useCreateOrder, useCreatePaymentIntent, usePricingTiers, useOrder, useVoidOrder, type CatalogItem } from '@/hooks/usePOS';
+import { Check, Loader2, Minus, Plus, Search, ShoppingCart, Trash2, User, Users, X } from 'lucide-react';
+import { useMenuItems, useCreateOrder, useCreatePaymentIntent, usePricingTiers, useOrder, useVoidOrder, useEditOrderLine, type CatalogItem } from '@/hooks/usePOS';
 import { Tag } from 'lucide-react';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { SplitPaymentModal } from '@/components/pos/split-payment-modal';
@@ -38,6 +38,13 @@ interface SaleLine {
   unitPrice: number;
   /** True once the user manually edited this line's price — switching profile won't overwrite it. */
   priceEdited?: boolean;
+  /** Persisted order-line id when this sale was resumed from All Sales / Drafts — enables
+   *  the per-line ✓ save (PATCH the line directly, no Save & Pay round-trip). */
+  lineId?: string;
+  /** The line's values as last persisted on the server; a mismatch with unitPrice/quantity
+   *  marks the line dirty and surfaces the per-line ✓ save / ✕ revert actions. */
+  savedPrice?: number;
+  savedQty?: number;
 }
 
 // Resolve an item's price for the selected pricing profile (tier). Falls back to the item's default
@@ -59,7 +66,11 @@ export default function AddSalePage() {
   const outletId = outlet?.id ?? '';
   const tenantId = useAuthStore((s) => s.user?.tenant_id ?? '');
   const { data: posSettings } = usePOSSettings();
-  const taxRate = (posSettings?.vat_rate ?? 16) / 100;
+  // Legacy-fallback VAT for lines with NO inventory/treasury tax info. Mirrors pos-api's
+  // outletFallbackTaxRate exactly: VAT disabled in POS settings → 0 (the server charges nothing,
+  // so the preview must not show VAT either); otherwise the configured rate. Items that DO carry
+  // treasury tax info (tax_rate/tax_inclusive) always use their own per-line values instead.
+  const taxRate = (posSettings?.vat_enabled === false ? 0 : (posSettings?.vat_rate ?? 16)) / 100;
 
   // ── Customer ── (rich phone search; defaults to the seeded Walk-in Customer)
   const [customer, setCustomer] = useState<SelectedCustomer | null>(WALK_IN_CUSTOMER);
@@ -155,8 +166,11 @@ export default function AddSalePage() {
   // voided as superseded.
   const resumeId = searchParams.get('order_id') || searchParams.get('draft_id') || '';
   const resumeQ = useOrder(resumeId);
-  const [resume, setResume] = useState<{ id: string; number: string } | null>(null);
-  const [linesDirty, setLinesDirty] = useState(false);
+  const [resume, setResume] = useState<{ id: string; number: string; total?: number } | null>(null);
+  // Structural changes (lines added/removed) force the replacement-order path on save;
+  // price/qty edits on persisted lines are tracked per line (savedPrice/savedQty) so a
+  // per-line ✓ save can clear them without touching the rest of the sale.
+  const [structuralDirty, setStructuralDirty] = useState(false);
   useEffect(() => {
     const o: any = resumeQ.data;
     if (!o || !resumeId || resume?.id === o.id) return;
@@ -164,24 +178,30 @@ export default function AddSalePage() {
       toast.error(`${o.order_number} is ${o.status} — it can no longer be resumed.`);
       return;
     }
-    setResume({ id: o.id, number: o.order_number });
+    // Carry the SERVER total: the client preview re-derives tax from the fallback VAT rate
+    // (resumed lines carry no tax info), which can differ from what the order actually
+    // stores — settling an unmodified resume must charge the stored total, not the preview.
+    setResume({ id: o.id, number: o.order_number, total: Number(o.total_amount) || undefined });
     setLines((o.edges?.lines ?? []).map((l: any) => ({
       item: { id: l.catalog_item_id, sku: l.sku, name: l.name, price: l.unit_price, category: '' } as CatalogItem,
       quantity: l.quantity,
       unitPrice: l.unit_price,
       priceEdited: true, // keep the draft's prices — don't let profile switching overwrite them
+      lineId: l.id,
+      savedPrice: l.unit_price,
+      savedQty: l.quantity,
     })));
     setDiscount(Number(o.discount_total) || 0);
     if (o.customer_name || o.customer_phone) {
       setCustomer({ name: o.customer_name ?? '', phone: o.customer_phone ?? '', isWalkIn: !o.customer_phone } as SelectedCustomer);
     }
-    setLinesDirty(false);
+    setStructuralDirty(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resumeQ.data, resumeId]);
 
   const addLine = useCallback((item: CatalogItem) => {
     let newQty = 1;
-    setLinesDirty(true);
+    setStructuralDirty(true);
     setLines((prev) => {
       const idx = prev.findIndex((l) => l.item.id === item.id);
       if (idx >= 0) {
@@ -202,12 +222,51 @@ export default function AddSalePage() {
     }
   }, [pricingProfile, resolvePrice]);
   const setQty = (i: number, q: number) => {
-    setLinesDirty(true);
-    return q <= 0 ? setLines((p) => p.filter((_, x) => x !== i)) : setLines((p) => p.map((l, x) => (x === i ? { ...l, quantity: q } : l)));
+    if (q <= 0) {
+      // Removing a line is structural — it can only persist via the replacement-order path.
+      setStructuralDirty(true);
+      return setLines((p) => p.filter((_, x) => x !== i));
+    }
+    return setLines((p) => p.map((l, x) => (x === i ? { ...l, quantity: q } : l)));
   };
   const setPrice = (i: number, v: number) => {
-    setLinesDirty(true);
     setLines((p) => p.map((l, x) => (x === i ? { ...l, unitPrice: Math.max(0, v), priceEdited: true } : l)));
+  };
+
+  // A resumed line whose price/qty differs from what the server holds. These can be saved
+  // one at a time (✓) via the audited line-edit endpoint — no Save & Pay required.
+  const lineDirty = (l: SaleLine) => !!l.lineId && (l.unitPrice !== l.savedPrice || l.quantity !== l.savedQty);
+  // Anything the per-line save can't express (adds/removes/non-persisted lines) keeps the
+  // legacy behavior: Save & Pay creates a replacement order and voids the stale draft.
+  const linesDirty = structuralDirty || lines.some((l) => (resume ? !l.lineId : false) || lineDirty(l));
+
+  const editLine = useEditOrderLine();
+  const [savingLineIdx, setSavingLineIdx] = useState<number | null>(null);
+  const revertLine = (i: number) =>
+    setLines((p) => p.map((l, x) => (x === i && l.lineId ? { ...l, unitPrice: l.savedPrice ?? l.unitPrice, quantity: l.savedQty ?? l.quantity } : l)));
+  const confirmSaveLine = (i: number, reason: string, updateCatalog: boolean) => {
+    const l = lines[i];
+    if (!resume || !l?.lineId) return;
+    editLine.mutate(
+      {
+        orderId: resume.id,
+        lineId: l.lineId,
+        unitPrice: l.unitPrice,
+        quantity: l.quantity,
+        reason,
+        updateCatalogPrice: updateCatalog && l.unitPrice !== l.savedPrice,
+      },
+      {
+        onSuccess: (d: any) => {
+          const newTotal = Number(d?.order?.total_amount);
+          setResume((r) => (r ? { ...r, total: Number.isFinite(newTotal) && newTotal > 0 ? newTotal : r.total } : r));
+          setLines((p) => p.map((x, j) => (j === i ? { ...x, savedPrice: x.unitPrice, savedQty: x.quantity } : x)));
+          setSavingLineIdx(null);
+          toast.success(d?.catalog_price_updated ? `${l.item.name} saved · inventory price updated` : `${l.item.name} saved to ${resume.number}`);
+        },
+        onError: async (e) => toast.error(await apiErrorMessage(e, 'Failed to save the line change.')),
+      },
+    );
   };
 
   // Per-line inclusive-aware tax + a single order-level ceiling round-off — the SAME model the
@@ -299,19 +358,22 @@ export default function AddSalePage() {
       ? { paymentDueDate: creditDetails.dueDate, creditNotes: creditDetails.notes || undefined }
       : {};
     // Resuming an UNMODIFIED draft → settle the SAME order (REQ-003: the draft is
-    // reclassified to completed by the payment, never duplicated).
+    // reclassified to completed by the payment, never duplicated). Charge the SERVER's
+    // stored total — the client preview re-derives tax from the fallback VAT rate and can
+    // overshoot an order that stored no/inclusive tax (a real over-collection source).
     if (resume && !linesDirty) {
+      const settleTotal = resume.total ?? total;
       if (mode === 'draft') { toast.info('Draft unchanged.'); return; }
       if (creditSale) {
         createIntent.mutate(
-          { orderId: resume.id, tenderMethod: 'on_account', amount: total, ...creditExtras },
+          { orderId: resume.id, tenderMethod: 'on_account', amount: settleTotal, ...creditExtras },
           {
-            onSuccess: () => { setCreditModalOpen(false); toast.success(`Sale posted on account · ${fmt(total)}`); reset(); },
+            onSuccess: () => { setCreditModalOpen(false); toast.success(`Sale posted on account · ${fmt(settleTotal)}`); reset(); },
             onError: async (e) => { setCreditModalOpen(false); toast.error(await apiErrorMessage(e, 'Failed to post credit sale to AR.')); },
           },
         );
       } else {
-        setPayOrder({ id: resume.id, number: resume.number, total });
+        setPayOrder({ id: resume.id, number: resume.number, total: settleTotal });
       }
       return;
     }
@@ -352,7 +414,7 @@ export default function AddSalePage() {
   function reset() {
     setLines([]); setDiscount(0); setNotes(''); setCustomer(WALK_IN_CUSTOMER); setCreditSale(false);
     setPartyType('customer'); setStaffId(''); setFundFromSalary(false); setMonths(1);
-    setLinesDirty(false);
+    setStructuralDirty(false); setSavingLineIdx(null);
     if (resume) {
       setResume(null);
       // Drop ?order_id= so the resume effect can't re-prefill the finished draft.
@@ -594,7 +656,32 @@ export default function AddSalePage() {
                         <input value={l.unitPrice} onChange={(e) => setPrice(i, parseFloat(e.target.value) || 0)} className="w-24 text-right bg-background border border-border rounded py-1 px-2 text-sm tabular-nums" />
                       </td>
                       <td className="px-4 py-3 text-right font-semibold tabular-nums">{fmt(l.unitPrice * l.quantity)}</td>
-                      <td className="px-2"><button onClick={() => setQty(i, 0)} className="text-muted-foreground hover:text-destructive"><Trash2 className="h-4 w-4" /></button></td>
+                      <td className="px-2 whitespace-nowrap">
+                        <div className="flex items-center gap-1.5">
+                          {/* Per-line ✓ save / ✕ revert — resumed lines only, once price/qty diverge
+                              from the server. ✓ PATCHes just this line (audited, recomputes order
+                              totals) so the correction lands without Save & Pay. */}
+                          {resume && canPrivileged && lineDirty(l) && (
+                            <>
+                              <button
+                                onClick={() => setSavingLineIdx(i)}
+                                title="Save this line's change to the order now (no payment needed)"
+                                className="h-6 w-6 rounded-md flex items-center justify-center bg-green-600/10 text-green-600 hover:bg-green-600/20"
+                              >
+                                <Check className="h-4 w-4" />
+                              </button>
+                              <button
+                                onClick={() => revertLine(i)}
+                                title="Discard this line's unsaved change"
+                                className="h-6 w-6 rounded-md flex items-center justify-center bg-accent/40 text-muted-foreground hover:text-foreground"
+                              >
+                                <X className="h-4 w-4" />
+                              </button>
+                            </>
+                          )}
+                          <button onClick={() => setQty(i, 0)} className="text-muted-foreground hover:text-destructive"><Trash2 className="h-4 w-4" /></button>
+                        </div>
+                      </td>
                     </tr>
                   );
                 })}
@@ -651,6 +738,99 @@ export default function AddSalePage() {
         onCancel={() => setCreditModalOpen(false)}
         onConfirm={(details) => save('pay', details)}
       />
+
+      {/* Per-line save confirm — captures the audit reason and the optional inventory
+          catalog price propagation before PATCHing the single line. */}
+      {savingLineIdx != null && lines[savingLineIdx] && resume && (
+        <SaveLineModal
+          line={lines[savingLineIdx]}
+          orderNumber={resume.number}
+          saving={editLine.isPending}
+          onClose={() => setSavingLineIdx(null)}
+          onConfirm={(reason, updateCatalog) => confirmSaveLine(savingLineIdx, reason, updateCatalog)}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * SaveLineModal — confirm a single resumed-order line edit: shows the before → after
+ * change, captures the (required) audit reason, and offers to propagate a price change
+ * to the inventory catalog so future sales pick it up too.
+ */
+function SaveLineModal({ line, orderNumber, saving, onConfirm, onClose }: {
+  line: SaleLine;
+  orderNumber: string;
+  saving: boolean;
+  onConfirm: (reason: string, updateCatalog: boolean) => void;
+  onClose: () => void;
+}) {
+  const priceChanged = line.unitPrice !== line.savedPrice;
+  const qtyChanged = line.quantity !== line.savedQty;
+  const [reason, setReason] = useState('Price correction at order edit');
+  const [updateCatalog, setUpdateCatalog] = useState(priceChanged);
+
+  return (
+    <div className="fixed inset-0 z-[55] flex items-center justify-center">
+      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative z-[56] w-full max-w-sm mx-4 bg-card border border-border rounded-2xl shadow-xl p-5 space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="font-bold text-sm flex items-center gap-2"><Check className="h-4 w-4 text-green-600" /> Save line to {orderNumber}</h3>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground"><X className="h-4 w-4" /></button>
+        </div>
+
+        <div className="text-sm space-y-1">
+          <div className="font-semibold">{line.item.name}</div>
+          {priceChanged && (
+            <div className="text-xs text-muted-foreground">
+              Unit price: <span className="line-through">{fmt(line.savedPrice ?? 0)}</span>{' '}
+              → <span className="font-bold text-foreground">{fmt(line.unitPrice)}</span>
+            </div>
+          )}
+          {qtyChanged && (
+            <div className="text-xs text-muted-foreground">
+              Quantity: <span className="line-through">{line.savedQty}</span>{' '}
+              → <span className="font-bold text-foreground">{line.quantity}</span>
+            </div>
+          )}
+          <div className="text-xs text-muted-foreground">
+            The order's totals are recomputed immediately — no payment or re-save needed.
+          </div>
+        </div>
+
+        <label className="block text-xs font-semibold text-muted-foreground">
+          Reason (audited)
+          <input
+            type="text" value={reason} onChange={(e) => setReason(e.target.value)}
+            placeholder="e.g. stale cached price, price match"
+            className="mt-1 w-full bg-accent/10 border border-border rounded-lg py-2 px-3 text-sm font-normal text-foreground focus:ring-1 focus:ring-primary outline-none"
+          />
+        </label>
+
+        {priceChanged && (
+          <label className="flex items-start gap-2 text-xs cursor-pointer">
+            <input type="checkbox" checked={updateCatalog} onChange={(e) => setUpdateCatalog(e.target.checked)} className="rounded mt-0.5" />
+            <span>
+              Also update the item&apos;s price in inventory to <strong>{fmt(line.unitPrice)}</strong>{' '}
+              <span className="text-muted-foreground">(applies to future sales; updates the catalog/recipe price)</span>
+            </span>
+          </label>
+        )}
+
+        <div className="flex gap-2">
+          <button onClick={onClose} className="flex-1 px-3 py-2 rounded-lg border border-border text-sm font-semibold hover:bg-accent/10">
+            Cancel
+          </button>
+          <button
+            onClick={() => onConfirm(reason.trim(), updateCatalog)}
+            disabled={saving || !reason.trim()}
+            className="flex-1 px-3 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-50 hover:bg-primary/90 flex items-center justify-center gap-1.5"
+          >
+            {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />} Save Line
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

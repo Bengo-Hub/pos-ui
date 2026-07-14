@@ -61,6 +61,14 @@ interface CatalogItem {
   image_url?: string;
   barcode?: string;
   metadata?: Record<string, any>;
+  // Per-item tax + manager cost — preserved through the offline cache (see OfflineCatalogItem).
+  tax_rate?: number;
+  tax_inclusive?: boolean;
+  net_price?: number;
+  tax_amount?: number;
+  tax_code_id?: string;
+  cost_price?: number;
+  non_billable?: boolean;
 }
 
 interface ListResponse<T> {
@@ -127,6 +135,14 @@ export function useMenuItemsOffline(filters?: { category?: string; search?: stri
         image_url: item.image_url,
         barcode: item.barcode,
         metadata: item.metadata,
+        // Preserve per-item tax + manager cost through the offline cache (matches usePOS mapper).
+        tax_rate: item.tax_rate,
+        tax_inclusive: item.tax_inclusive,
+        net_price: item.net_price,
+        tax_amount: item.tax_amount,
+        tax_code_id: item.tax_code_id,
+        cost_price: item.cost_price,
+        non_billable: item.non_billable,
         cached_at: now,
       }));
       await cacheCatalogItems(toCache).catch(() => { /* non-fatal */ });

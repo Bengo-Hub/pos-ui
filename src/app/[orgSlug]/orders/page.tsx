@@ -18,7 +18,7 @@ import {
   ChevronRight,
   Search,
 } from 'lucide-react';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { TrackingIframeModal } from '@bengo-hub/shared-ui-lib';
 import { SplitPaymentModal } from '@/components/pos/split-payment-modal';
@@ -54,11 +54,32 @@ export default function OrdersPage() {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  // Advanced filters (all server-side via useOrders — reuses the existing /orders query params).
+  const [showFilters, setShowFilters] = useState(false);
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState('all');
+  const [source, setSource] = useState('all');
+  const [customer, setCustomer] = useState('');
+  const [debouncedCustomer, setDebouncedCustomer] = useState('');
   const [page, setPage] = useState(1);
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
   const [trackingOpen, setTrackingOpen] = useState(false);
   const [paymentOpen, setPaymentOpen] = useState(false);
   const releaseTable = useReleaseTable();
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedCustomer(customer.trim()), 350);
+    return () => clearTimeout(t);
+  }, [customer]);
+
+  // Any change to a server-side filter → back to page 1.
+  useEffect(() => {
+    setPage(1);
+  }, [statusFilter, dateFrom, dateTo, paymentMethod, source, debouncedCustomer]);
+
+  const activeFilterCount =
+    (dateFrom ? 1 : 0) + (dateTo ? 1 : 0) + (paymentMethod !== 'all' ? 1 : 0) + (source !== 'all' ? 1 : 0) + (debouncedCustomer ? 1 : 0);
 
   // Roles with only view_own should see their own orders; full view sees all.
   const viewOwnOnly = can(P.ORDERS_VIEW_OWN) && !can(P.ORDERS_VIEW);
@@ -68,15 +89,25 @@ export default function OrdersPage() {
     useMemo(() => ({
       status: statusFilter !== 'all' ? statusFilter : undefined,
       staffId,
+      from: dateFrom || undefined,
+      to: dateTo || undefined,
+      paymentMethod: paymentMethod !== 'all' ? paymentMethod : undefined,
+      source: source !== 'all' ? source : undefined,
+      customer: debouncedCustomer || undefined,
       page,
       limit: PAGE_SIZE,
-    }), [statusFilter, staffId, page])
+    }), [statusFilter, staffId, dateFrom, dateTo, paymentMethod, source, debouncedCustomer, page])
   );
 
   const orders = ordersData?.data ?? [];
   const total = ordersData?.meta?.total ?? ordersData?.total ?? orders.length;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
+  const clearFilters = () => {
+    setDateFrom(''); setDateTo(''); setPaymentMethod('all'); setSource('all'); setCustomer('');
+  };
+
+  // Order-# search stays client-side over the current page (server already applies the filters).
   const filtered = orders.filter((order: any) => {
     if (!searchQuery) return true;
     return (order.order_number || '').toLowerCase().includes(searchQuery.toLowerCase());
@@ -131,7 +162,6 @@ export default function OrdersPage() {
               />
             </div>
             <div className="flex items-center gap-2 flex-wrap">
-              <Filter className="h-3.5 w-3.5 text-muted-foreground" />
               {STATUS_FILTERS.map(({ value, label }) => (
                 <button
                   key={value}
@@ -143,8 +173,65 @@ export default function OrdersPage() {
                   {label}
                 </button>
               ))}
+              <button
+                onClick={() => setShowFilters((v) => !v)}
+                className={cn("inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold transition-all",
+                  showFilters || activeFilterCount > 0 ? "bg-primary/10 text-primary" : "bg-accent/30 text-muted-foreground hover:text-foreground")}
+              >
+                <Filter className="h-3.5 w-3.5" /> Filters
+                {activeFilterCount > 0 && (
+                  <span className="ml-0.5 rounded-full bg-primary text-primary-foreground text-[10px] px-1.5 leading-4">{activeFilterCount}</span>
+                )}
+              </button>
             </div>
           </CardHeader>
+
+          {/* Advanced filters — date range, payment method, source, customer. All server-side. */}
+          {showFilters && (
+            <div className="px-6 pb-4 -mt-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 border-b border-border">
+              <label className="flex flex-col gap-1 text-xs">
+                <span className="font-semibold text-muted-foreground">From</span>
+                <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)}
+                  className="bg-accent/30 border border-border rounded-lg py-1.5 px-2 text-sm focus:ring-1 focus:ring-primary outline-none" />
+              </label>
+              <label className="flex flex-col gap-1 text-xs">
+                <span className="font-semibold text-muted-foreground">To</span>
+                <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)}
+                  className="bg-accent/30 border border-border rounded-lg py-1.5 px-2 text-sm focus:ring-1 focus:ring-primary outline-none" />
+              </label>
+              <label className="flex flex-col gap-1 text-xs">
+                <span className="font-semibold text-muted-foreground">Payment</span>
+                <select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)}
+                  className="bg-accent/30 border border-border rounded-lg py-1.5 px-2 text-sm focus:ring-1 focus:ring-primary outline-none">
+                  <option value="all">Any method</option>
+                  <option value="cash">Cash</option>
+                  <option value="mpesa">M-Pesa</option>
+                  <option value="card">Card</option>
+                  <option value="bank_transfer">Bank transfer</option>
+                  <option value="on_account">On account (credit)</option>
+                </select>
+              </label>
+              <label className="flex flex-col gap-1 text-xs">
+                <span className="font-semibold text-muted-foreground">Source</span>
+                <select value={source} onChange={(e) => setSource(e.target.value)}
+                  className="bg-accent/30 border border-border rounded-lg py-1.5 px-2 text-sm focus:ring-1 focus:ring-primary outline-none">
+                  <option value="all">Any source</option>
+                  <option value="pos_terminal">POS terminal</option>
+                  <option value="back_office">Back office</option>
+                </select>
+              </label>
+              <label className="flex flex-col gap-1 text-xs">
+                <span className="font-semibold text-muted-foreground">Customer</span>
+                <input type="text" value={customer} onChange={(e) => setCustomer(e.target.value)} placeholder="Name or phone"
+                  className="bg-accent/30 border border-border rounded-lg py-1.5 px-2 text-sm focus:ring-1 focus:ring-primary outline-none" />
+              </label>
+              {activeFilterCount > 0 && (
+                <button onClick={clearFilters} className="sm:col-span-2 lg:col-span-5 justify-self-start text-xs font-semibold text-muted-foreground hover:text-destructive">
+                  Clear all filters
+                </button>
+              )}
+            </div>
+          )}
           <CardContent className="p-0">
             {isLoading ? (
               <div className="flex justify-center py-16">

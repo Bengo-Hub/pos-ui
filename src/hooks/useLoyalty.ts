@@ -28,15 +28,19 @@ export interface LoyaltyProgram {
 }
 
 export interface LoyaltyAccount {
+  /** Empty string for CRM-only rows merged into search results (source === 'crm'). */
   id: string;
   tenant_id: string;
   customer_phone: string;
   customer_name: string;
   customer_email?: string;
+  crm_contact_id?: string;
   points_balance: number;
   lifetime_points: number;
   program_id?: string;
   created_at: string;
+  /** 'crm' — a CRM contact with no loyalty account yet (search merge); undefined — real loyalty account. */
+  source?: string;
 }
 
 export interface LoyaltyTransaction {

@@ -21,11 +21,11 @@ export function EditOrderLinesModal({ order: initialOrder, onClose }: { order: a
   const lines: any[] = order.edges?.lines ?? [];
   const locked = LOCKED_STATUSES.has(order.status);
 
-  const [editing, setEditing] = useState<{ lineId: string; unitPrice: string; quantity: string; reason: string } | null>(null);
+  const [editing, setEditing] = useState<{ lineId: string; unitPrice: string; quantity: string; reason: string; updateCatalog: boolean } | null>(null);
   const editLine = useEditOrderLine();
 
   const startEdit = (l: any) =>
-    setEditing({ lineId: l.id, unitPrice: String(l.unit_price), quantity: String(l.quantity), reason: '' });
+    setEditing({ lineId: l.id, unitPrice: String(l.unit_price), quantity: String(l.quantity), reason: '', updateCatalog: false });
 
   const save = () => {
     if (!editing) return;
@@ -34,10 +34,11 @@ export function EditOrderLinesModal({ order: initialOrder, onClose }: { order: a
     if (!Number.isFinite(unitPrice) || unitPrice < 0) { toast.error('Unit price must be a non-negative number'); return; }
     if (!Number.isFinite(quantity) || quantity <= 0) { toast.error('Quantity must be a positive number'); return; }
     if (!editing.reason.trim()) { toast.error('A reason is required'); return; }
+    const priceChanged = unitPrice !== Number(lines.find((l) => l.id === editing.lineId)?.unit_price);
     editLine.mutate(
-      { orderId: order.id, lineId: editing.lineId, unitPrice, quantity, reason: editing.reason.trim() },
+      { orderId: order.id, lineId: editing.lineId, unitPrice, quantity, reason: editing.reason.trim(), updateCatalogPrice: editing.updateCatalog && priceChanged },
       {
-        onSuccess: () => { toast.success('Line updated'); setEditing(null); },
+        onSuccess: (d: any) => { toast.success(d?.catalog_price_updated ? 'Line updated · inventory price updated' : 'Line updated'); setEditing(null); },
         onError: (e: any) => toast.error(e?.response?.data?.error || 'Update failed'),
       },
     );
@@ -101,6 +102,11 @@ export function EditOrderLinesModal({ order: initialOrder, onClose }: { order: a
                 <input className="w-full bg-background border border-border rounded-md py-1.5 px-2 text-xs"
                   placeholder="e.g. stale cached price at time of sale"
                   value={editing.reason} onChange={(e) => setEditing({ ...editing, reason: e.target.value })} />
+              </label>
+              <label className="flex items-start gap-2 text-[11px] cursor-pointer">
+                <input type="checkbox" checked={editing.updateCatalog}
+                  onChange={(e) => setEditing({ ...editing, updateCatalog: e.target.checked })} className="rounded mt-0.5" />
+                <span>Also update the item&apos;s price in inventory <span className="text-muted-foreground">(applies to future sales; only when the unit price changed)</span></span>
               </label>
               <div className="flex justify-end gap-2">
                 <Button variant="outline" size="sm" className="gap-1" onClick={() => setEditing(null)}><XIcon className="h-3.5 w-3.5" /> Cancel</Button>

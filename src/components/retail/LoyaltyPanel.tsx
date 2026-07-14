@@ -90,7 +90,9 @@ function LoyaltyPanelInner({ onStateChange, orderId }: LoyaltyPanelProps) {
         redeemDiscount: 0,
       });
     }
-  }, [account?.id]);
+    // CRM-only rows all share id '' — key the effect on phone too so switching between two
+    // CRM matches still re-attaches the right customer.
+  }, [account?.id, account?.customer_phone]);
 
   const handleRegister = () => {
     const p = normalizeKePhone(registerPhone || phone);
@@ -177,14 +179,34 @@ function LoyaltyPanelInner({ onStateChange, orderId }: LoyaltyPanelProps) {
         )}
       </div>
 
-      {/* Matched customer — compact one-liner (name · points) with inline redeem when eligible. */}
+      {/* Matched customer — compact one-liner (name · points) with inline redeem when eligible.
+          CRM-only matches (customer exists in the CRM but has no loyalty account yet) attach to
+          the sale the same way and offer one-tap loyalty registration instead of points. */}
       {account && (
         <div className="flex items-center justify-between gap-2 px-1 text-xs">
           <span className="min-w-0 truncate">
             <span className="font-semibold text-foreground">{account.customer_name}</span>
-            <span className="text-muted-foreground"> · {(account.points_balance ?? 0).toLocaleString()} pts</span>
+            {account.source === 'crm' || !account.id ? (
+              <span className="text-muted-foreground"> · customer (no loyalty)</span>
+            ) : (
+              <span className="text-muted-foreground"> · {(account.points_balance ?? 0).toLocaleString()} pts</span>
+            )}
           </span>
-          {redeemed ? (
+          {(account.source === 'crm' || !account.id) && canAdd ? (
+            <button
+              type="button"
+              onClick={() => {
+                setRegisterName(account.customer_name);
+                setRegisterPhone(normalizeKePhone(account.customer_phone));
+                setShowRegister(true);
+                setLinkedAccount(null);
+              }}
+              className="shrink-0 inline-flex items-center gap-1 rounded-lg border border-primary/40 px-2 py-1 font-semibold text-primary hover:bg-primary/10"
+            >
+              <UserPlus className="h-3 w-3" />
+              Register
+            </button>
+          ) : redeemed ? (
             <span className="shrink-0 font-semibold text-green-600">✓ redeemed</span>
           ) : canRedeem && can(P.LOYALTY_ADD) ? (
             <button
@@ -203,59 +225,58 @@ function LoyaltyPanelInner({ onStateChange, orderId }: LoyaltyPanelProps) {
       )}
 
       {/* No match — quick register (part of the loyalty + ordering workflow). */}
-      {!account && !lookupLoading && searchActive && accounts !== undefined && accounts.length === 0 && canAdd && (
-        <>
-          {!showRegister ? (
+      {!showRegister && !account && !lookupLoading && searchActive && accounts !== undefined && accounts.length === 0 && canAdd && (
+        <button
+          type="button"
+          onClick={() => {
+            // Seed the form from the query: a phone query prefills the phone field.
+            if (/^[\d\s+\-()]+$/.test(searchQuery)) setRegisterPhone(normalizeKePhone(searchQuery));
+            else setRegisterName(searchQuery);
+            setShowRegister(true);
+          }}
+          className="w-full py-2 rounded-xl border border-dashed border-border text-sm text-muted-foreground hover:border-primary hover:text-primary transition-colors flex items-center justify-center gap-2"
+        >
+          <UserPlus className="h-3.5 w-3.5" />
+          Register for loyalty
+        </button>
+      )}
+
+      {/* Register form — reachable from "no match" AND from a CRM-only match (prefilled). */}
+      {showRegister && canAdd && (
+        <div className="space-y-2">
+          <input
+            type="text"
+            value={registerName}
+            onChange={(e) => setRegisterName(e.target.value)}
+            placeholder="Customer name"
+            className="w-full bg-accent/10 border border-border rounded-xl py-2 px-3 text-sm focus:ring-1 focus:ring-primary outline-none"
+          />
+          <input
+            type="tel"
+            value={registerPhone}
+            onChange={(e) => setRegisterPhone(e.target.value)}
+            placeholder="Phone (e.g. 0712 345 678)"
+            className="w-full bg-accent/10 border border-border rounded-xl py-2 px-3 text-sm focus:ring-1 focus:ring-primary outline-none"
+          />
+          <div className="flex gap-2">
             <button
               type="button"
-              onClick={() => {
-                // Seed the form from the query: a phone query prefills the phone field.
-                if (/^[\d\s+\-()]+$/.test(searchQuery)) setRegisterPhone(normalizeKePhone(searchQuery));
-                else setRegisterName(searchQuery);
-                setShowRegister(true);
-              }}
-              className="w-full py-2 rounded-xl border border-dashed border-border text-sm text-muted-foreground hover:border-primary hover:text-primary transition-colors flex items-center justify-center gap-2"
+              onClick={() => setShowRegister(false)}
+              className="flex-1 py-2 rounded-xl border border-border text-sm text-muted-foreground hover:bg-accent transition-colors"
             >
-              <UserPlus className="h-3.5 w-3.5" />
-              Register for loyalty
+              Cancel
             </button>
-          ) : (
-            <div className="space-y-2">
-              <input
-                type="text"
-                value={registerName}
-                onChange={(e) => setRegisterName(e.target.value)}
-                placeholder="Customer name"
-                className="w-full bg-accent/10 border border-border rounded-xl py-2 px-3 text-sm focus:ring-1 focus:ring-primary outline-none"
-              />
-              <input
-                type="tel"
-                value={registerPhone}
-                onChange={(e) => setRegisterPhone(e.target.value)}
-                placeholder="Phone (e.g. 0712 345 678)"
-                className="w-full bg-accent/10 border border-border rounded-xl py-2 px-3 text-sm focus:ring-1 focus:ring-primary outline-none"
-              />
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => setShowRegister(false)}
-                  className="flex-1 py-2 rounded-xl border border-border text-sm text-muted-foreground hover:bg-accent transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  disabled={!registerName.trim() || !isValidPhone(normalizeKePhone(registerPhone || phone)) || createAccount.isPending}
-                  onClick={handleRegister}
-                  className="flex-1 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-                >
-                  {createAccount.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                  Register
-                </button>
-              </div>
-            </div>
-          )}
-        </>
+            <button
+              type="button"
+              disabled={!registerName.trim() || !isValidPhone(normalizeKePhone(registerPhone || phone)) || createAccount.isPending}
+              onClick={handleRegister}
+              className="flex-1 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {createAccount.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+              Register
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );

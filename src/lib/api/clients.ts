@@ -1,6 +1,7 @@
 import { apiClient } from './client';
 
 export interface LoyaltyAccount {
+  /** Empty string for CRM-only rows merged into search results (source === 'crm'). */
   id: string;
   tenant_id: string;
   customer_id?: string;
@@ -13,6 +14,8 @@ export interface LoyaltyAccount {
   program_id?: string;
   created_at: string;
   updated_at: string;
+  /** 'crm' — a CRM contact with no loyalty account yet (search merge); undefined — real loyalty account. */
+  source?: string;
 }
 
 /** Search params for the customer picker — the backend matches each as a substring. */
@@ -77,6 +80,22 @@ export const clientsApi = {
 
   getAccount: (tenantID: string, accountID: string) =>
     apiClient.get<LoyaltyAccount>(`${base(tenantID)}/loyalty/accounts/${accountID}`),
+
+  // Customer DIRECTORY — CRM-backed (every known customer, loyalty member or not), paginated.
+  // q filters by name/phone/email substring; empty q lists everyone newest-first.
+  listCustomers: (tenantID: string, q: string | undefined, page = 1, limit = 24) =>
+    apiClient.get<{ data: LoyaltyAccount[]; total: number; page: number; limit: number }>(
+      `${base(tenantID)}/customers`,
+      { ...(q ? { q } : {}), page, limit },
+    ),
+
+  // Loyalty MEMBERS listing (paginated) — the same /loyalty/accounts endpoint the picker uses,
+  // without search params it lists every account.
+  listLoyaltyMembers: (tenantID: string, params: CustomerSearchParams | undefined, page = 1, limit = 24) =>
+    apiClient.get<{ data: LoyaltyAccount[]; total: number; page: number; limit: number }>(
+      `${base(tenantID)}/loyalty/accounts`,
+      { ...(params?.phone ? { phone: params.phone } : {}), ...(params?.name ? { name: params.name } : {}), ...(params?.email ? { email: params.email } : {}), page, limit },
+    ),
 
   getClientOrders: (tenantID: string, phone: string, page = 1, limit = 20) =>
     apiClient.get<{ data: ClientOrder[]; total: number; page: number; limit: number }>(

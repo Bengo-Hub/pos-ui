@@ -18,6 +18,19 @@ export interface OfflineCatalogItem {
   image_url?: string;
   barcode?: string;
   metadata?: Record<string, any>;
+  // Per-item tax (from treasury via inventory) — REQUIRED so the offline/seed terminal computes
+  // the SAME per-line VAT as the online cart (see cart-tax.ts). Stripping these silently fell back
+  // to the flat outlet rate for every line — double-taxing inclusive items.
+  tax_rate?: number;
+  tax_inclusive?: boolean;
+  net_price?: number;
+  tax_amount?: number;
+  tax_code_id?: string;
+  // Manager-only supplier cost — carried so the cost/margin columns work offline and on the
+  // cache-seed paint (pos-api only serialises it to permitted callers, so a cashier's cache
+  // never holds it). undefined for non-managers / items with no cost.
+  cost_price?: number;
+  non_billable?: boolean;
   cached_at: string;
 }
 

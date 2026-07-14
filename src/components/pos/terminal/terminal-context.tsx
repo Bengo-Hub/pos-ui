@@ -210,7 +210,7 @@ export interface TerminalContextValue {
   roundOff: number;
   pendingApprovalAction: string | null;
   setPendingApprovalAction: (v: string | null) => void;
-  confirmApproval: (approvalToken: string) => void;
+  confirmApproval: (approval: { approvalToken?: string; code?: string }) => void;
   // Per-line price override
   priceEditIndex: number | null;
   setPriceEditIndex: (i: number | null) => void;
@@ -394,7 +394,10 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
   const [pendingOverride, setPendingOverride] = useState<MenuItem | null>(null);
   const { can, isSuperuser } = usePermissions();
   const { data: posSettings } = usePOSSettings();
-  const taxRate = (posSettings?.vat_rate ?? 16) / 100;
+  // Legacy-fallback VAT for lines with NO inventory/treasury tax info. Mirrors pos-api's
+  // outletFallbackTaxRate: VAT disabled in POS settings → 0 (server charges nothing, so the till
+  // preview must match); otherwise the configured rate. Per-item treasury tax always wins.
+  const taxRate = (posSettings?.vat_enabled === false ? 0 : (posSettings?.vat_rate ?? 16)) / 100;
   // Live KDS stations — drive per-station ticket routing/printing (same category_filter routing the
   // kitchen displays use), so a ticket prints on the printer of the station it was routed to.
   const { data: kdsStationsData } = useKDSStations();
@@ -550,7 +553,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
   const [pendingApprovalAction, setPendingApprovalAction] = useState<string | null>(null);
   const [priceEditIndex, setPriceEditIndex] = useState<number | null>(null);
   // Holds the latest retryable place(token) so the approval dialog can resubmit.
-  const placeWithDiscountApprovalRef = useRef<((token: string) => void) | null>(null);
+  const placeWithDiscountApprovalRef = useRef<((approval?: { approvalToken?: string; code?: string }) => void) | null>(null);
   const addOrderLines = useAddOrderLines();
 
   const menuItems: MenuItem[] = useMemo(() => {
@@ -1307,7 +1310,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
     const courses = [...new Set(cart.map((i) => (i.courseNumber ?? 0) as CourseValue).filter((c) => c > 0))].sort() as CourseValue[];
     // place() is retryable with a manager approval_token when the discount exceeds
     // the outlet's limit (backend returns 422).
-    const place = (approvalToken?: string) => createOrder.mutate(
+    const place = (approval?: { approvalToken?: string; code?: string }) => createOrder.mutate(
       {
         outletId: outlet?.id ?? '',
         orderSubtype: orderSubtype ?? undefined,
@@ -1317,7 +1320,8 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
         discountReason: discountReason || undefined,
         orderTaxAmount: orderTax || undefined,
         charges: chargesTotal > 0 ? charges : undefined,
-        approvalToken,
+        approvalToken: approval?.approvalToken,
+        approvalCode: approval?.code,
         customerPhone: loyaltyState?.customerPhone || undefined,
         customerName: loyaltyState?.customerName || undefined,
         ageVerified: ageVerifiedRef.current || undefined,
@@ -1389,10 +1393,11 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
     place();
   };
 
-  // Confirm a manager approval (discount or price override) and retry the order.
-  const confirmApproval = (approvalToken: string) => {
+  // Confirm a manager approval (discount / price override / adjustment) and retry the order.
+  // Accepts either a live step-up token or a manager-generated one-time code (ApprovalResult).
+  const confirmApproval = (approval: { approvalToken?: string; code?: string }) => {
     setPendingApprovalAction(null);
-    placeWithDiscountApprovalRef.current?.(approvalToken);
+    placeWithDiscountApprovalRef.current?.(approval);
   };
 
   // Override a cart line's unit price (markdown only). Records the catalog price

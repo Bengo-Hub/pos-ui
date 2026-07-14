@@ -175,14 +175,15 @@ export function CustomerSearch({ value, onChange, requireRealCustomer = false, r
         <div className="rounded-xl border border-border bg-card divide-y divide-border max-h-44 overflow-y-auto">
           {matches.map((c) => (
             <button
-              key={c.id}
+              // CRM-only rows (source 'crm') have no loyalty account id — key on the CRM id/phone.
+              key={c.id || c.crm_contact_id || c.customer_phone}
               type="button"
               onClick={() =>
                 select({
                   phone: c.customer_phone,
                   name: c.customer_name,
                   isWalkIn: false,
-                  accountId: c.id,
+                  accountId: c.id || undefined,
                   email: c.customer_email || undefined,
                 })
               }

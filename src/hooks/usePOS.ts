@@ -296,6 +296,9 @@ export interface CatalogItem {
   tax_rate?: number;   // VAT % applied to this item (resolved from treasury)
   net_price?: number;  // selling price excluding tax
   tax_amount?: number; // tax portion of the selling price
+  /** Manager-only supplier cost — pos-api serialises it only to callers with pos.catalog.view_cost
+   *  / pos.orders.manage. Drives the cart Cost + Margin columns. */
+  cost_price?: number;
   requires_age_verification?: boolean;
   track_serial_numbers?: boolean;
   requires_prescription?: boolean;
@@ -330,6 +333,15 @@ export function toOfflineCatalogRows(tenantID: string, outletID: string, items: 
     image_url: i.image_url,
     barcode: i.barcode,
     metadata: i.metadata,
+    // Preserve per-item tax + manager cost through the cache so the offline/seed terminal
+    // computes identical VAT and shows cost/margin (see OfflineCatalogItem doc).
+    tax_rate: i.tax_rate,
+    tax_inclusive: i.tax_inclusive,
+    net_price: i.net_price,
+    tax_amount: i.tax_amount,
+    tax_code_id: i.tax_code_id,
+    cost_price: i.cost_price,
+    non_billable: i.non_billable,
     cached_at: now,
   }));
 }
@@ -386,6 +398,14 @@ export function offlineToCatalogItem(c: OfflineCatalogItem): CatalogItem {
     image_url: c.image_url,
     barcode: c.barcode,
     metadata: c.metadata,
+    // Restore per-item tax + manager cost so the terminal's cart tax/cost/margin match online.
+    tax_rate: c.tax_rate,
+    tax_inclusive: c.tax_inclusive,
+    net_price: c.net_price,
+    tax_amount: c.tax_amount,
+    tax_code_id: c.tax_code_id,
+    cost_price: c.cost_price,
+    non_billable: c.non_billable,
   };
 }
 
@@ -1154,6 +1174,9 @@ interface CreateOrderInput {
   ageVerified?: boolean;
   discountReason?: string;
   approvalToken?: string;
+  /** One-time approval CODE a manager generated remotely (alternative to a live step-up token),
+   *  for the over-limit discount / price-override / order-adjustment approval. Verified server-side. */
+  approvalCode?: string;
   /** Manager quick-edit: order-level tax added on top of per-line tax. */
   orderTaxAmount?: number;
   /** Manager quick-edit: additional costs {packaging, service, shipping} included in the total. */
@@ -1245,6 +1268,7 @@ export function useCreateOrder() {
             order_tax_amount: data.orderTaxAmount,
             charges: data.charges,
             approval_token: data.approvalToken,
+            approval_code: data.approvalCode,
             metadata: data.metadata,
             lines: data.lines,
             client_reference: localId,
@@ -1439,11 +1463,14 @@ export function useEditOrderLine() {
   const tenantID = useTenantID();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ orderId, lineId, unitPrice, quantity, reason }: {
+    mutationFn: ({ orderId, lineId, unitPrice, quantity, reason, updateCatalogPrice }: {
       orderId: string; lineId: string; unitPrice?: number; quantity?: number; reason: string;
+      /** Also propagate the new price to the inventory catalog (item/recipe price + any
+       *  local POS override) so the correction applies to future sales, not just this order. */
+      updateCatalogPrice?: boolean;
     }) =>
       apiClient.patch(`${basePath(tenantID)}/orders/${orderId}/lines/${lineId}`, {
-        unit_price: unitPrice, quantity, reason,
+        unit_price: unitPrice, quantity, reason, update_catalog_price: updateCatalogPrice || undefined,
       }),
     onSuccess: (_d, v) => {
       qc.invalidateQueries({ queryKey: ['pos-orders'] });

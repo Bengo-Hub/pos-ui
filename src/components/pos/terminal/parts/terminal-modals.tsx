@@ -19,7 +19,7 @@ import { ParkedSalesModal } from '@/components/pos/parked-sales-modal';
 import { HeldItemsPanel } from '@/components/pos/held-items-panel';
 import { ReceiptPreview } from '@/components/pos/receipt-preview';
 import { CalculatorOverlay } from '@/components/pos/calculator-overlay';
-import { ManagerPinDialog } from '@/components/pos/manager-pin-dialog';
+import { ApprovalDialog } from '@/components/pos/approval-dialog';
 import { VoidApprovalDialog } from '@/components/pos/void-approval-dialog';
 import { ChargesModal } from '@/components/pos/charges-modal';
 import { DiscountModal } from '@/components/pos/discount-modal';
@@ -181,19 +181,25 @@ export function TerminalModals() {
         onClose={() => t.setChargesOpen(false)}
       />
 
-      <ManagerPinDialog
-        open={!!t.pendingApprovalAction}
-        action={t.pendingApprovalAction ?? ''}
-        label={
-          t.pendingApprovalAction === 'price.override'
-            ? 'approve this price override'
-            : t.pendingApprovalAction === 'order.adjustment'
-              ? 'approve this order adjustment'
-              : 'approve this discount'
-        }
-        onClose={() => t.setPendingApprovalAction(null)}
-        onApproved={t.confirmApproval}
-      />
+      {/* Manager approval for over-limit discount / price override / order adjustment. Reuses the
+          SAME 3-mode dialog as hospitality voids (scan card · PIN · one-time code the manager
+          generated remotely) — retail managers get the OTP/code path too, not just live PIN. */}
+      {t.pendingApprovalAction && (
+        <ApprovalDialog
+          open
+          action={t.pendingApprovalAction}
+          description={
+            t.pendingApprovalAction === 'price.override'
+              ? 'A manager must approve this price override.'
+              : t.pendingApprovalAction === 'order.adjustment'
+                ? 'A manager must approve this order adjustment.'
+                : 'A manager must approve this discount.'
+          }
+          confirmLabel="Approve"
+          onClose={() => t.setPendingApprovalAction(null)}
+          onApproved={t.confirmApproval}
+        />
+      )}
 
       <LinePriceModal
         open={t.priceEditIndex !== null}
@@ -237,13 +243,15 @@ export function TerminalModals() {
         onClose={() => t.setOrderPlacedOpen(false)}
       />
 
-      {/* Manager override — out-of-stock add interception (retail/pharmacy).
-          Uses the audited step-up so each override is recorded (who approved, when). */}
+      {/* Manager override — out-of-stock add interception (retail/pharmacy). Same 3-mode dialog as
+          hospitality (scan · PIN · one-time code): scan/PIN do a live audited step-up; the code
+          path lets an off-site manager authorise by sharing a one-time code. */}
       {t.pendingOverride && (
-        <ManagerPinDialog
+        <ApprovalDialog
           open
           action="catalog.oos_override"
-          label={`override out-of-stock for ${t.pendingOverride.name}`}
+          description={`A manager must approve to override out-of-stock for ${t.pendingOverride.name}.`}
+          confirmLabel="Approve override"
           onClose={() => t.setPendingOverride(null)}
           onApproved={() => {
             const item = t.pendingOverride!;

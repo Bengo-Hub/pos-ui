@@ -46,12 +46,15 @@ export function MaskedMargin({ cost, sell, revealed, className }: {
     return <span className={cn('font-mono text-muted-foreground tracking-widest', className)}>••</span>;
   }
   const margin = ((sell - cost) / sell) * 100;
+  const profit = sell - cost; // absolute profit per unit (KES)
+  const tone = margin < 0 ? 'text-destructive' : margin < 15 ? 'text-amber-600' : 'text-emerald-600';
   return (
     <span
-      title="Margin %"
-      className={cn('font-mono tabular-nums font-semibold', margin < 0 ? 'text-destructive' : margin < 15 ? 'text-amber-600' : 'text-emerald-600', className)}
+      title={`Margin ${margin.toFixed(0)}% · Profit KES ${profit.toLocaleString(undefined, { maximumFractionDigits: 2 })}/unit`}
+      className={cn('font-mono tabular-nums font-semibold inline-flex flex-col leading-tight', tone, className)}
     >
-      {margin.toFixed(0)}%
+      <span>{margin.toFixed(0)}%</span>
+      <span className="text-[9px] font-normal opacity-80">+{profit.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
     </span>
   );
 }

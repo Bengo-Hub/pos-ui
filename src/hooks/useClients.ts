@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { clientsApi } from '@/lib/api/clients';
+import { clientsApi, classifySearchQuery } from '@/lib/api/clients';
 export type { ClientOrder } from '@/lib/api/clients';
 import { apiClient } from '@/lib/api/client';
 import { useAuthStore } from '@/store/auth';
@@ -17,6 +17,30 @@ export function useClientSearch(phone?: string, name?: string, email?: string) {
     queryFn: () => clientsApi.searchAccounts(tenantID, phone || undefined, name || undefined, email || undefined),
     enabled: !!tenantID && !!(phone || name || email),
     staleTime: 30_000,
+  });
+}
+
+/**
+ * useCustomersDirectory — paginated customer directory for the Clients page.
+ * filter 'all' lists every known customer from the CRM master (loyalty-enriched);
+ * filter 'loyalty' lists only loyalty members via the existing loyalty-accounts endpoint.
+ * q (optional) narrows either listing by name/phone/email.
+ */
+export function useCustomersDirectory(q: string, page: number, filter: 'all' | 'loyalty', limit = 24) {
+  const tenantID = useTenantID();
+  return useQuery({
+    queryKey: ['pos-customers-directory', tenantID, q, page, filter, limit],
+    queryFn: async () => {
+      if (filter === 'loyalty') {
+        const res = await clientsApi.listLoyaltyMembers(tenantID, q ? classifySearchQuery(q) : undefined, page, limit);
+        return { rows: res.data ?? [], total: res.total ?? 0 };
+      }
+      const res = await clientsApi.listCustomers(tenantID, q || undefined, page, limit);
+      return { rows: res.data ?? [], total: res.total ?? 0 };
+    },
+    enabled: !!tenantID,
+    staleTime: 30_000,
+    placeholderData: (prev) => prev,
   });
 }
 
