@@ -32,6 +32,10 @@ export function StartShiftGate({ children }: StartShiftGateProps) {
   const role = user?.roles?.[0] ?? '';
   const outletUseCase = (outlet?.use_case ?? (user as any)?.outlet_use_case ?? '').toLowerCase();
   const isCashierHospOrQSR = role === 'cashier' && ['hospitality', 'quick_service'].includes(outletUseCase);
+  // Retail cashiers manage a physical cash drawer whichever way they signed in (PIN terminal
+  // OR web SSO): they always get the start-shift gate with the opening-float field, and land
+  // on the POS terminal once the drawer is counted.
+  const isRetailCashier = role === 'cashier' && ['retail', 'pharmacy', 'services'].includes(outletUseCase);
 
   const needsShiftGate = SHIFT_ROLES.includes(role);
   const needsFloat = FLOAT_ROLES.includes(role);
@@ -45,7 +49,7 @@ export function StartShiftGate({ children }: StartShiftGateProps) {
 
   // noShift = query settled with no active session (404 = no open session exists)
   const noShift = !isLoading && !currentShift && (error as any)?.response?.status === 404;
-  const showGate = isTerminalSession && needsShiftGate && noShift && !submitted;
+  const showGate = (isTerminalSession || isRetailCashier) && needsShiftGate && noShift && !submitted;
 
   // Auto-open shift for kitchen/bar without showing the gate UI
   useEffect(() => {
@@ -65,6 +69,9 @@ export function StartShiftGate({ children }: StartShiftGateProps) {
       // (their only workflow is clearing bills, not taking new orders).
       if (isCashierHospOrQSR && orgSlug) {
         router.push(`/${orgSlug}/orders`);
+      } else if (isRetailCashier && orgSlug) {
+        // Retail/pharmacy/services cashiers ring sales — drop them on the POS terminal.
+        router.push(`/${orgSlug}/order`);
       }
     } catch (e) {
       toast.error(await apiErrorMessage(e, 'Failed to open shift'));
