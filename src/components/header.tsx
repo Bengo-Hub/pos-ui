@@ -10,7 +10,7 @@ import { useTenantBranding } from '@/providers/tenant-branding-provider';
 import { useAuthStore } from '@/store/auth';
 import { useOutletFilterStore } from '@/store/outlet-filter';
 import { useQuery } from '@tanstack/react-query';
-import { BookOpen, Building2, Check, ChevronDown, ExternalLink, Globe, LogOut, MapPin, Menu, Package, PanelLeft, Search, Settings, ShoppingCart, Square, Tag, User, Users } from 'lucide-react';
+import { BookOpen, Building2, Check, ChevronDown, ExternalLink, Globe, Loader2, LogOut, MapPin, Menu, Package, PanelLeft, Search, Settings, ShoppingCart, Square, Tag, User, Users } from 'lucide-react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
@@ -42,8 +42,60 @@ const USE_CASE_LABELS: Record<string, string> = {
   services: 'Services',
 };
 
+// Auth-api host — outlets are OWNED by auth-api; mirrors can lag/miss rows, so the switcher
+// lists from the owner exactly like treasury-ui/inventory-ui do (their proven pattern).
+const AUTH_API_URL =
+  process.env.NEXT_PUBLIC_AUTH_API_URL ||
+  process.env.NEXT_PUBLIC_SSO_URL ||
+  'https://sso.codevertexitsolutions.com';
+
+// Outlet use cases pos-ui can actually open (mirrors pos-api's posAcceptedUseCases) —
+// logistics/warehouse/weighbridge outlets belong to other services.
+const POS_USE_CASES = new Set(['hospitality', 'quick_service', 'retail', 'pharmacy', 'services', 'hotel', '']);
+
+interface OutletListItem {
+  id: string;
+  code: string;
+  name: string;
+  use_case?: string;
+  is_hq?: boolean;
+  status?: string;
+}
+
+/** Primary: auth-api by tenant slug (bearer token). Fallback: pos-api's public outlets mirror. */
+async function fetchTenantOutlets(accessToken: string, tenantSlug: string, tenantId: string): Promise<OutletListItem[]> {
+  const normalize = (data: any): OutletListItem[] => {
+    const list: OutletListItem[] = Array.isArray(data) ? data : data?.outlets ?? data?.data ?? [];
+    return list.filter(
+      (o) => o?.id && o.status !== 'archived' && POS_USE_CASES.has((o.use_case ?? '').toLowerCase()),
+    );
+  };
+  // 1) auth-api (owner) — same call treasury-ui/inventory-ui use.
+  try {
+    if (accessToken && tenantSlug) {
+      const res = await fetch(`${AUTH_API_URL}/api/v1/tenants/${tenantSlug}/outlets`, {
+        headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' },
+      });
+      if (res.ok) {
+        const outlets = normalize(await res.json());
+        if (outlets.length > 0) return outlets;
+      }
+    }
+  } catch {
+    /* fall through to the pos mirror */
+  }
+  // 2) pos-api public mirror (kiosk endpoint) — no auth required.
+  try {
+    const data = await apiClient.get<any>(`/api/v1/${tenantId}/pos/outlets`);
+    return normalize(data);
+  } catch {
+    return [];
+  }
+}
+
 function HeaderOutletChip() {
   const user = useAuthStore((s) => s.user);
+  const session = useAuthStore((s) => s.session);
   const authOutlet = useAuthStore((s) => s.outlet);
   const isTerminalSession = useAuthStore((s) => s.isTerminalSession);
   const { selectedOutlet, outlets, setOutlets, selectOutlet } = useOutletFilterStore();
@@ -60,21 +112,18 @@ function HeaderOutletChip() {
   );
 
   const tenantId = user?.tenant_id ?? '';
+  const tenantSlug = user?.tenant_slug ?? '';
 
-  const { data: fetchedOutlets = [] } = useQuery<any[]>({
-    queryKey: ['outlet_list', tenantId],
-    queryFn: async () => {
-      const data = await apiClient.get<any>(`/api/v1/${tenantId}/pos/outlets`);
-      const list: any[] = Array.isArray(data) ? data : (data as any).data ?? (data as any).outlets ?? [];
-      return list.filter((o: any) => o.status !== 'archived');
-    },
+  const { data: fetchedOutlets = [], isLoading: outletsLoading } = useQuery<OutletListItem[]>({
+    queryKey: ['header-outlet-list', tenantId, tenantSlug],
+    queryFn: () => fetchTenantOutlets(session?.accessToken ?? '', tenantSlug, tenantId),
     enabled: canSwitch && !!tenantId,
     staleTime: 5 * 60_000,
   });
 
   useEffect(() => {
     if (fetchedOutlets.length === 0) return;
-    const mapped = fetchedOutlets.map((o: any) => ({
+    const mapped = fetchedOutlets.map((o) => ({
       id: o.id, code: o.code, name: o.name, useCase: o.use_case, isHq: o.is_hq,
     }));
     setOutlets(mapped);
@@ -126,13 +175,25 @@ function HeaderOutletChip() {
         <ChevronDown className={cn('h-3.5 w-3.5 transition-transform shrink-0', open && 'rotate-180')} />
       </button>
 
-      {open && outlets.length > 0 && (
+      {open && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} aria-hidden />
           <div className="absolute left-0 top-full mt-1 z-50 w-64 rounded-xl border border-border bg-popover shadow-xl overflow-hidden">
             <div className="px-3 py-2 border-b border-border">
               <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Switch Outlet</p>
             </div>
+            {/* The panel always renders when open — a fetch in flight shows a spinner and a
+                failed/empty fetch says so, instead of the click appearing to do nothing. */}
+            {outletsLoading && outlets.length === 0 && (
+              <div className="flex items-center justify-center py-6">
+                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+              </div>
+            )}
+            {!outletsLoading && outlets.length === 0 && (
+              <p className="px-3 py-4 text-xs text-muted-foreground text-center">
+                No outlets found for this organisation.
+              </p>
+            )}
             <div className="max-h-56 overflow-y-auto py-1">
               <button
                 type="button"
