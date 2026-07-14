@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { CalendarClock, HandCoins, Loader2, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -52,7 +53,7 @@ export function CreditSaleDetailsModal({
     }
   }, [open]);
 
-  if (!open) return null;
+  if (!open || typeof document === 'undefined') return null;
 
   const today = new Date().toISOString().slice(0, 10);
   const dateValid = !!dueDate && dueDate >= today;
@@ -60,7 +61,10 @@ export function CreditSaleDetailsModal({
   const quickPick = (days: number) => setDueDate(plusDays(days));
   const activeQuick = (days: number) => dueDate === plusDays(days);
 
-  return (
+  // Portalled to <body>: callers mount this inside positioned/transformed containers (the
+  // inline payment bar, the mobile cart sheet), where a `fixed` overlay anchors to the
+  // TRANSFORMED ancestor instead of the viewport and the dialog renders off-centre.
+  return createPortal(
     <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onCancel}>
       <div
         className="bg-card rounded-2xl border border-border shadow-2xl w-full max-w-md overflow-hidden"
@@ -151,6 +155,7 @@ export function CreditSaleDetailsModal({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

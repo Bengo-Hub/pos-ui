@@ -4,19 +4,30 @@
  * Inline cart-line edit cells (retail/pharmacy terminal + reusable in back-office sale forms).
  *
  * Pricing policy (BOI retail requirement):
- *  - admin/manager (`canDiscount`): edit price/margin/discount freely — below or above the
- *    preset price ("give discount as they see fit"); price recalculates from a margin edit
- *    and vice versa. Server still audits/gates via price.override.
+ *  - admin/manager (`canDiscount`): edit price/margin/discount/line-total freely — below or
+ *    above the preset price ("give discount as they see fit"). Server audits via price.override.
  *  - cashier & everyone else: may only raise the price (sell ABOVE the preset — increasing
- *    margin), never below it. Edits below the preset clamp back to the preset.
+ *    margin), never below it.
  *
- * All cells are display-by-default and switch to a small input on click; Enter/blur commits,
- * Escape cancels.
+ * Value model (why edits don't clobber each other):
+ *  - `unitDiscount` (KES/unit) is stored on the cart line and is STICKY.
+ *  - base price  = effective price + unitDiscount   (what the margin describes)
+ *  - margin edit → recomputes the BASE from cost, then re-applies the stored discount.
+ *  - discount edit → keeps the base, changes the discount.
+ *  - price / line-total edit → sets the effective price directly, discount value retained.
+ *  So setting a margin then a discount keeps both: margin display recomputes from the
+ *  effective price, the discount stays at what was entered.
+ *
+ * All cells show a small pencil when editable (only the permitted roles see it), switch to an
+ * input on click; Enter/blur commits, Escape cancels.
  */
 
 import { useEffect, useRef, useState } from 'react';
+import { Pencil } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { MaskedMargin } from '@/components/pos/cost-price';
+
+const round2 = (v: number) => Math.round(v * 100) / 100;
 
 /** Base editable numeric cell: shows children (formatted value) until clicked, then an input. */
 function InlineEditCell({ display, initial, onCommit, disabled, title, className, inputClassName, parse }: {
@@ -50,11 +61,13 @@ function InlineEditCell({ display, initial, onCommit, disabled, title, className
         title={title}
         onClick={() => { setRaw(initial); setEditing(true); }}
         className={cn(
-          'inline-block text-right rounded px-1 -mx-1 hover:bg-primary/10 hover:ring-1 hover:ring-primary/30 cursor-text transition-colors',
+          'group inline-flex items-center justify-end gap-1 text-right rounded px-1 -mx-1 hover:bg-primary/10 hover:ring-1 hover:ring-primary/30 cursor-text transition-colors',
           className,
         )}
       >
         {display}
+        {/* Discoverability: editable cells wear a small pencil (permitted roles only reach here). */}
+        <Pencil className="h-2.5 w-2.5 shrink-0 text-muted-foreground/50 group-hover:text-primary" aria-hidden />
       </button>
     );
   }
@@ -87,8 +100,8 @@ function InlineEditCell({ display, initial, onCommit, disabled, title, className
 
 /**
  * Unit-price cell. `preset` is the catalog price at add time (the floor for non-managers).
- * Emits the clamped new unit price; the caller (terminal-context setLinePrice) re-clamps
- * authoritatively and the server gates markdowns via price.override.
+ * Emits the clamped new EFFECTIVE unit price; the stored line discount is retained by the
+ * caller (terminal-context setLinePrice), and the server gates markdowns via price.override.
  */
 export function InlinePriceCell({ price, preset, canDiscount, onCommit, disabled, className }: {
   price: number;
@@ -125,12 +138,16 @@ export function InlinePriceCell({ price, preset, canDiscount, onCommit, disabled
 }
 
 /**
- * Margin%-cell — editing recalculates the unit price from cost: price = cost / (1 − margin%).
- * Only rendered for cost-visible roles; edits additionally require `editable` (manager/admin).
+ * Margin%-cell — editing recalculates the BASE price from cost (base = cost / (1 − margin%)),
+ * then re-applies the line's stored discount so a margin edit never wipes a discount:
+ * effective price = base − unitDiscount. The displayed margin derives from the EFFECTIVE
+ * price, so it recomputes (rather than "resets") when a discount is layered on.
  */
-export function InlineMarginCell({ cost, sell, revealed, editable, onCommitPrice, className }: {
+export function InlineMarginCell({ cost, sell, unitDiscount = 0, revealed, editable, onCommitPrice, className }: {
   cost?: number;
   sell?: number;
+  /** The line's stored discount (KES/unit) — re-applied after the margin sets the base. */
+  unitDiscount?: number;
   revealed: boolean;
   editable: boolean;
   onCommitPrice: (newPrice: number) => void;
@@ -141,14 +158,15 @@ export function InlineMarginCell({ cost, sell, revealed, editable, onCommitPrice
   return (
     <InlineEditCell
       disabled={!editable || !hasData}
-      title="Edit margin % — price recalculates"
+      title="Edit margin % — recalculates the price, keeping any line discount"
       display={<MaskedMargin cost={cost} sell={sell} revealed={revealed} />}
       initial={margin.toFixed(1)}
       parse={(rawStr) => {
         const m = parseFloat(rawStr.replace('%', ''));
-        // ≥100% margin is a division by zero (price = cost/(1−m)); cap just below.
+        // ≥100% margin is a division by zero (base = cost/(1−m)); cap just below.
         if (isNaN(m) || m >= 99.9) return null;
-        return Math.round((cost! / (1 - m / 100)) * 100) / 100;
+        const base = cost! / (1 - m / 100);
+        return Math.max(0, round2(base - unitDiscount));
       }}
       onCommit={onCommitPrice}
       className={className}
@@ -157,20 +175,23 @@ export function InlineMarginCell({ cost, sell, revealed, editable, onCommitPrice
 }
 
 /**
- * Per-line discount cell (admin/manager only). Shows the line's current markdown
- * ((preset − price) × qty) and accepts either an absolute KES amount off the LINE total
- * or a percentage (e.g. "5%") off the preset price. Commits by lowering the unit price —
- * the same mechanism the server audits as a price override.
+ * Per-line discount cell (admin/manager only). Shows the line's STORED discount
+ * (unitDiscount × qty) and accepts either an absolute KES amount off the LINE total or a
+ * percentage (e.g. "5%") of the base price. Commits the new per-unit discount — the caller
+ * (terminal-context setLineDiscount) keeps the base and lowers the effective price, so the
+ * value survives later margin/price edits. Clear the input to remove the discount.
  */
-export function InlineDiscountCell({ price, preset, quantity, editable, onCommitPrice, className }: {
+export function InlineDiscountCell({ price, unitDiscount = 0, quantity, editable, onCommitDiscount, className }: {
+  /** Current EFFECTIVE unit price (after discount). */
   price: number;
-  preset: number;
+  unitDiscount?: number;
   quantity: number;
   editable: boolean;
-  onCommitPrice: (newPrice: number) => void;
+  onCommitDiscount: (newUnitDiscount: number) => void;
   className?: string;
 }) {
-  const lineDiscount = Math.max(0, (preset - price) * quantity);
+  const lineDiscount = unitDiscount * quantity;
+  const base = price + unitDiscount;
   return (
     <InlineEditCell
       disabled={!editable}
@@ -184,15 +205,44 @@ export function InlineDiscountCell({ price, preset, quantity, editable, onCommit
           <span className="text-xs text-muted-foreground">—</span>
         )
       }
-      initial={lineDiscount > 0.004 ? String(Math.round(lineDiscount * 100) / 100) : ''}
+      initial={lineDiscount > 0.004 ? String(round2(lineDiscount)) : ''}
       parse={(rawStr) => {
         const s = rawStr.trim();
-        if (!s) return preset; // cleared → back to preset price
+        if (!s) return 0; // cleared → discount removed, price returns to the base
         const isPct = s.endsWith('%');
         const v = parseFloat(s.replace('%', ''));
         if (isNaN(v) || v < 0) return null;
-        const perUnit = isPct ? (preset * v) / 100 : v / Math.max(1, quantity);
-        return Math.max(0, Math.round((preset - perUnit) * 100) / 100);
+        return round2(isPct ? (base * v) / 100 : v / Math.max(1, quantity));
+      }}
+      onCommit={onCommitDiscount}
+      className={className}
+    />
+  );
+}
+
+/**
+ * Line-total (subtotal) cell — editing sets the line's EFFECTIVE total; the unit price becomes
+ * total ÷ qty (role-clamped by the caller) and any stored discount value is retained.
+ */
+export function InlineTotalCell({ price, quantity, canDiscount, onCommitPrice, disabled, className }: {
+  price: number;
+  quantity: number;
+  canDiscount: boolean;
+  onCommitPrice: (newUnitPrice: number) => void;
+  disabled?: boolean;
+  className?: string;
+}) {
+  const total = price * quantity;
+  return (
+    <InlineEditCell
+      disabled={disabled}
+      title={canDiscount ? 'Edit line total (unit price = total ÷ qty)' : 'Edit line total (cannot go below the preset price)'}
+      display={<span className="text-sm font-bold font-mono tabular-nums">{total.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>}
+      initial={String(round2(total))}
+      parse={(rawStr) => {
+        const v = parseFloat(rawStr);
+        if (isNaN(v) || v < 0) return null;
+        return round2(v / Math.max(1, quantity));
       }}
       onCommit={onCommitPrice}
       className={className}

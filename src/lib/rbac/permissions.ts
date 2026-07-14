@@ -40,6 +40,8 @@ export const P = {
   PAYMENTS_VIEW:     'pos.payments.view',
   PAYMENTS_VIEW_OWN: 'pos.payments.view_own',
   PAYMENTS_MANAGE:   'pos.payments.manage',
+  /** Ring a credit (on-account) sale — hidden from cashiers unless explicitly granted. */
+  PAYMENTS_CREDIT:   'pos.payments.credit',
 
   // Catalog
   CATALOG_ADD:       'pos.catalog.add',

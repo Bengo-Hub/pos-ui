@@ -136,12 +136,16 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
   // Room charge.
   const [roomSearch, setRoomSearch] = useState('');
 
-  // Credit Sale (on_account) is available to cashiers too (product decision 2026-07-07):
-  // the real guardrails are a required customer + the treasury credit limit, both enforced
-  // server-side; terms (due date default +30d, notes) are captured via CreditSaleDetailsModal.
+  // Credit Sale (on_account) is HIDDEN from cashiers by default (decision 2026-07-15, reversing
+  // 2026-07-07): booking a sale onto a customer's account needs pos.payments.credit — granted
+  // implicitly to managers/admins (pos.payments.* / pos.orders.manage / "*"), and grantable to a
+  // cashier role explicitly via Roles & Permissions. Customer + treasury credit limit remain the
+  // server-side guardrails; terms are captured via CreditSaleDetailsModal.
+  const canCreditSale = can('pos.payments.credit') || canPrivileged;
   const actions = useMemo(
-    () => paymentActionsFor(profile, gateways, { isHospitality, isOnline, allowCOD }),
-    [profile, gateways, isHospitality, isOnline, allowCOD],
+    () => paymentActionsFor(profile, gateways, { isHospitality, isOnline, allowCOD })
+      .filter((a) => a.key !== 'on_account' || canCreditSale),
+    [profile, gateways, isHospitality, isOnline, allowCOD, canCreditSale],
   );
   // Back-office profiles (retail/pharmacy/services) get Draft + Quotation; hospitality/QSR do not.
   // Quotation is additionally manager-gated (canPrivileged).

@@ -28,7 +28,7 @@ import { TerminalModals } from '@/components/pos/terminal/parts/terminal-modals'
 import { InlinePaymentBar } from '@/components/pos/terminal/inline-payment-bar';
 import { useTerminal } from '@/components/pos/terminal/terminal-context';
 import { CostHeaderToggle, MaskedCost } from '@/components/pos/cost-price';
-import { InlineDiscountCell, InlineMarginCell, InlinePriceCell } from '@/components/pos/inline-line-cells';
+import { InlineDiscountCell, InlineMarginCell, InlinePriceCell, InlineTotalCell } from '@/components/pos/inline-line-cells';
 import { searchPlaceholderFor } from '@/lib/use-case-config';
 import { cn } from '@/lib/utils';
 import {
@@ -278,6 +278,7 @@ export function TerminalShell() {
                           <InlineMarginCell
                             cost={item.costPrice}
                             sell={item.price}
+                            unitDiscount={item.unitDiscount ?? 0}
                             revealed={costRevealed}
                             editable={canManagePrices && !item.nonBillable && !item.promoFree}
                             onCommitPrice={(p) => t.setLinePrice(idx, p, 'margin edit')}
@@ -289,10 +290,10 @@ export function TerminalShell() {
                       <span className="text-right text-xs">
                         <InlineDiscountCell
                           price={item.price}
-                          preset={item.originalPrice ?? item.price}
+                          unitDiscount={item.unitDiscount ?? 0}
                           quantity={item.quantity}
                           editable={!item.nonBillable && !item.promoFree}
-                          onCommitPrice={(p) => t.setLinePrice(idx, p, 'line discount')}
+                          onCommitDiscount={(ud) => t.setLineDiscount(idx, ud)}
                         />
                       </span>
                     )}
@@ -306,7 +307,13 @@ export function TerminalShell() {
                       />
                     </span>
                     <div className="flex items-center justify-end gap-1.5">
-                      <span className="text-sm font-bold font-mono tabular-nums">{lineTotal.toLocaleString()}</span>
+                      <InlineTotalCell
+                        price={item.price}
+                        quantity={item.quantity}
+                        canDiscount={canManagePrices}
+                        disabled={item.nonBillable || item.promoFree}
+                        onCommitPrice={(p) => t.setLinePrice(idx, p, canManagePrices ? 'line total edit' : 'sold above preset')}
+                      />
                       <button onClick={() => t.removeFromCart(idx)} className="h-6 w-6 rounded-md flex items-center justify-center text-muted-foreground hover:bg-destructive/10 hover:text-destructive" aria-label="Remove"><Trash2 className="h-3.5 w-3.5" /></button>
                     </div>
                   </div>

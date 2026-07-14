@@ -126,6 +126,9 @@ export interface CartItem extends MenuItem {
   /** Catalog price before a manual price override (markdown). */
   originalPrice?: number;
   overrideReason?: string;
+  /** Sticky per-unit line discount (KES) — base price = price + unitDiscount. Margin edits
+   *  recompute the base and re-apply this; price/total edits keep it. Manager-set only. */
+  unitDiscount?: number;
   /** True for a line auto-added by a corresponding-pair BOGO deal (the free "get" item, e.g. the
    *  Small pizza paired to a bought Large). Its quantity is kept in lockstep with the triggering
    *  buy line and it's priced to free by the happy-hour discount — the cashier never adds it. */
@@ -215,6 +218,8 @@ export interface TerminalContextValue {
   priceEditIndex: number | null;
   setPriceEditIndex: (i: number | null) => void;
   setLinePrice: (index: number, newPrice: number, reason: string) => void;
+  /** Set/replace the line's sticky per-unit discount (KES); 0 clears it. Keeps the base price. */
+  setLineDiscount: (index: number, unitDiscount: number) => void;
   addItemToCart: (item: MenuItem, mods?: Record<string, string[]>, qty?: number, serialNumber?: string) => void;
   handleItemTap: (item: MenuItem) => void;
   proceedWithItem: (item: MenuItem) => void;
@@ -1439,9 +1444,36 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
         next = Math.min(next, it.maxSellingPrice);
       }
       next = Math.round(next * 100) / 100;
+      // The stored unitDiscount is deliberately KEPT: a direct price/line-total edit re-bases
+      // the price around the same discount value instead of clearing it.
       return { ...it, price: next, originalPrice: original, overrideReason: reason };
     }));
     setPriceEditIndex(null);
+  };
+
+  // Set/replace a line's sticky per-unit discount (managers only — the UI gates the cell and
+  // the server gates the resulting markdown). Keeps the BASE price (price + old discount) and
+  // lowers the effective price by the new discount; 0 clears it and returns to the base.
+  const setLineDiscount = (index: number, unitDiscount: number) => {
+    setCart((prev) => prev.map((it, i) => {
+      if (i !== index) return it;
+      const original = it.originalPrice ?? it.price;
+      const base = it.price + (it.unitDiscount ?? 0);
+      let next = base - Math.max(0, unitDiscount);
+      if (!canPriceBelowPreset) next = Math.max(next, original);
+      if (typeof it.maxSellingPrice === 'number' && it.maxSellingPrice > 0) {
+        next = Math.min(next, it.maxSellingPrice);
+      }
+      next = Math.max(0, Math.round(next * 100) / 100);
+      const applied = Math.round((base - next) * 100) / 100;
+      return {
+        ...it,
+        price: next,
+        unitDiscount: applied > 0.004 ? applied : undefined,
+        originalPrice: original,
+        overrideReason: applied > 0.004 ? 'line discount' : it.overrideReason,
+      };
+    }));
   };
 
   // Park the current cart as a draft order (retail orders persist as "draft") and clear the register.
@@ -1668,7 +1700,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
     orderTax, orderTaxOpen, setOrderTaxOpen, applyOrderTax,
     charges, chargesTotal, chargesOpen, setChargesOpen, applyCharges, roundOff,
     pendingApprovalAction, setPendingApprovalAction, confirmApproval,
-    priceEditIndex, setPriceEditIndex, setLinePrice,
+    priceEditIndex, setPriceEditIndex, setLinePrice, setLineDiscount,
     addItemToCart, handleItemTap, proceedWithItem, handleScaleAddToCart,
     updateQuantity, removeFromCart, clearCart, bogoFreeFor, updateCourse, setItemSeat,
     pricingProfile, pricingTiers, repricing, repriceCart,
