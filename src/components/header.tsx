@@ -107,7 +107,7 @@ function HeaderOutletChip() {
     user?.isPlatformOwner ||
     user?.isSuperUser ||
     user?.roles?.some((r) =>
-      ['admin', 'superuser', 'manager', 'store_manager', 'owner', 'pos_admin', 'super_admin'].includes(r)
+      ['admin', 'superuser', 'manager', 'store_manager', 'owner', 'tenant_admin', 'pos_admin', 'super_admin'].includes(r)
     )
   );
 

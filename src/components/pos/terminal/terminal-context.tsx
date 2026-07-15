@@ -649,6 +649,36 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
     return m;
   }, [menuItems]);
 
+  // Self-heal cart lines added from a STALE cached catalog row. The terminal paints
+  // cache-first, so an item tapped before the background revalidation lands snapshots
+  // whatever the old IndexedDB slice had — historically missing cost_price / per-item tax
+  // (pre-2026-07-14 offline rows never carried them → permanent "—" cost/margin on the
+  // line). Once fresh catalog data arrives, backfill ONLY the missing insight fields;
+  // price, overrides and discounts are never touched.
+  useEffect(() => {
+    if (menuItems.length === 0) return;
+    setCart((prev) => {
+      let changed = false;
+      const next = prev.map((line) => {
+        const fresh = menuItems.find((m) => m.id === line.id);
+        if (!fresh) return line;
+        const patch: Partial<CartItem> = {};
+        if (line.costPrice == null && typeof fresh.costPrice === 'number') patch.costPrice = fresh.costPrice;
+        if (line.taxRate == null && typeof fresh.taxRate === 'number') {
+          patch.taxRate = fresh.taxRate;
+          patch.taxInclusive = fresh.taxInclusive;
+          patch.taxCodeId = fresh.taxCodeId;
+        }
+        if (line.stockQuantity == null && typeof fresh.stockQuantity === 'number') patch.stockQuantity = fresh.stockQuantity;
+        if (Object.keys(patch).length === 0) return line;
+        changed = true;
+        return { ...line, ...patch };
+      });
+      return changed ? next : prev;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [menuItems]);
+
   // Corresponding-pair BOGO auto-add + sync: when a "buy" item (e.g. a Large pizza) is in the cart
   // during an active pair deal, its mapped free item (the matching Small) is auto-added as its own
   // line and its quantity kept in lockstep with the buy line — add/increase/remove the buy item and

@@ -359,6 +359,8 @@ export function useMenuItems(filters?: {
   itemType?: string;
   page?: number;
   limit?: number;
+  /** Gate the server fetch (e.g. skip it entirely once the cached full catalog can answer). */
+  enabled?: boolean;
 }) {
   const tenantID = useTenantID();
   const outletID = useEffectiveOutletID();
@@ -379,7 +381,7 @@ export function useMenuItems(filters?: {
       cacheCatalogPage(tenantID, outletID, res?.data);
       return res;
     },
-    enabled: !!tenantID,
+    enabled: !!tenantID && (filters?.enabled ?? true),
     staleTime: 5 * 60_000,
     placeholderData: (prev) => prev,
   });

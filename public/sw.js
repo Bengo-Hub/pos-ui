@@ -17,7 +17,9 @@
 //     API responses or auth redirects).
 //   - sync / periodicsync 'sync-pos-data': wake open clients to drain the offline queue.
 
-const VERSION = 'pos-sw-v2';
+// v3 (2026-07-15): force stale document caches out — terminals holding pre-cost-fix bundles
+// kept serving old JS (missing offline cost/tax mappers + old outlet switcher) on weak wifi.
+const VERSION = 'pos-sw-v3';
 const DOC_CACHE = `${VERSION}-documents`;
 const ASSET_CACHE = `${VERSION}-assets`;
 

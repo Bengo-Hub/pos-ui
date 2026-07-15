@@ -10,7 +10,7 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { Check, Loader2, Minus, Plus, Search, ShoppingCart, Trash2, User, Users, X } from 'lucide-react';
-import { useMenuItems, useCreateOrder, useCreatePaymentIntent, usePricingTiers, useOrder, useVoidOrder, useEditOrderLine, useSetOrderDiscount, type CatalogItem } from '@/hooks/usePOS';
+import { useMenuItems, useFullCatalog, useCreateOrder, useCreatePaymentIntent, usePricingTiers, useOrder, useVoidOrder, useEditOrderLine, useSetOrderDiscount, type CatalogItem } from '@/hooks/usePOS';
 import { Tag } from 'lucide-react';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { SplitPaymentModal } from '@/components/pos/split-payment-modal';
@@ -99,9 +99,40 @@ export default function AddSalePage() {
 
   // ── Line items ──
   const [search, setSearch] = useState('');
-  const { data: catalog, isFetching } = useMenuItems({ search: search || undefined, limit: 25 });
-  const results: CatalogItem[] = catalog?.data ?? [];
   const [lines, setLines] = useState<SaleLine[]>([]);
+  // Lightning search: filter the FULL catalog client-side — IndexedDB answers instantly and
+  // the background revalidation keeps it fresh (same cache-first source the terminal uses).
+  // The per-keystroke SERVER search only runs as a cold-start fallback until the cached
+  // catalog is available. Items already on the sale are dropped from the dropdown.
+  const { data: fullCatalog } = useFullCatalog();
+  const catalogReady = (fullCatalog?.length ?? 0) > 0;
+  const { data: catalog, isFetching: serverSearching } = useMenuItems({
+    search: search || undefined,
+    limit: 25,
+    enabled: !catalogReady && !!search,
+  });
+  const results: CatalogItem[] = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return [];
+    const inSale = new Set(lines.map((l) => l.item.id));
+    if (catalogReady) {
+      const out: CatalogItem[] = [];
+      for (const it of fullCatalog ?? []) {
+        if (inSale.has(it.id)) continue;
+        if (
+          (it.name ?? '').toLowerCase().includes(q) ||
+          (it.sku ?? '').toLowerCase().includes(q) ||
+          ((it as any).barcode ?? '').toLowerCase().includes(q)
+        ) {
+          out.push(it);
+          if (out.length >= 25) break;
+        }
+      }
+      return out;
+    }
+    return (catalog?.data ?? []).filter((it) => !inSale.has(it.id));
+  }, [search, fullCatalog, catalogReady, catalog, lines]);
+  const isFetching = !catalogReady && serverSearching;
 
   // Authoritative tier price from inventory-api (same endpoint the POS terminal uses). Returns the
   // resolved unit price for a profile, or null to fall back to the local/default price.
