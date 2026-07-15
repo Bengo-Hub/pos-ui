@@ -10,7 +10,7 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { Check, Loader2, Minus, Plus, Search, ShoppingCart, Trash2, User, Users, X } from 'lucide-react';
-import { useMenuItems, useCreateOrder, useCreatePaymentIntent, usePricingTiers, useOrder, useVoidOrder, useEditOrderLine, type CatalogItem } from '@/hooks/usePOS';
+import { useMenuItems, useCreateOrder, useCreatePaymentIntent, usePricingTiers, useOrder, useVoidOrder, useEditOrderLine, useSetOrderDiscount, type CatalogItem } from '@/hooks/usePOS';
 import { Tag } from 'lucide-react';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { SplitPaymentModal } from '@/components/pos/split-payment-modal';
@@ -135,6 +135,12 @@ export default function AddSalePage() {
 
   // ── Order-level ──
   const [discount, setDiscount] = useState(0);
+  // The discount as last persisted on the SERVER for a resumed sale (null = not a resume).
+  // A mismatch with `discount` marks it dirty and surfaces the ✓ save / ✕ cancel actions —
+  // the typed discount must be PATCHed onto the order BEFORE settling, because completing
+  // an unmodified resume charges the server's stored total (2026-07-14: an unsaved 1,000
+  // discount settled at the stale 10,180 and the retry double-posted the sale).
+  const [savedDiscount, setSavedDiscount] = useState<number | null>(null);
   // Credit Sale entry point (sidebar /sell/add?credit=1) pre-selects on-account. When checked, Save
   // posts the total straight to the customer's AR (on_account tender) and completes the order with no
   // payment collected now — treasury enforces the credit limit. No payment modal.
@@ -192,6 +198,7 @@ export default function AddSalePage() {
       savedQty: l.quantity,
     })));
     setDiscount(Number(o.discount_total) || 0);
+    setSavedDiscount(Number(o.discount_total) || 0);
     if (o.customer_name || o.customer_phone) {
       setCustomer({ name: o.customer_name ?? '', phone: o.customer_phone ?? '', isWalkIn: !o.customer_phone } as SelectedCustomer);
     }
@@ -242,6 +249,27 @@ export default function AddSalePage() {
 
   const editLine = useEditOrderLine();
   const [savingLineIdx, setSavingLineIdx] = useState<number | null>(null);
+
+  // Order-discount ✓ save / ✕ cancel (resumed sales): PATCH the discount onto the SAME
+  // order — the server recomputes totals — so settling charges the discounted amount.
+  const setOrderDiscount = useSetOrderDiscount();
+  const discountDirty = !!resume && savedDiscount != null && discount !== savedDiscount;
+  const saveDiscount = () => {
+    if (!resume) return;
+    setOrderDiscount.mutate(
+      { orderId: resume.id, discountAmount: discount, reason: 'Order discount edit on resumed sale' },
+      {
+        onSuccess: (d: any) => {
+          const newTotal = Number(d?.order?.total_amount);
+          setResume((r) => (r ? { ...r, total: Number.isFinite(newTotal) && newTotal > 0 ? newTotal : r.total } : r));
+          setSavedDiscount(discount);
+          toast.success(`Discount ${fmt(discount)} saved to ${resume.number}`);
+        },
+        onError: async (e) => toast.error(await apiErrorMessage(e, 'Failed to save the discount.')),
+      },
+    );
+  };
+  const cancelDiscount = () => setDiscount(savedDiscount ?? 0);
   const revertLine = (i: number) =>
     setLines((p) => p.map((l, x) => (x === i && l.lineId ? { ...l, unitPrice: l.savedPrice ?? l.unitPrice, quantity: l.savedQty ?? l.quantity } : l)));
   const confirmSaveLine = (i: number, reason: string, updateCatalog: boolean) => {
@@ -362,6 +390,13 @@ export default function AddSalePage() {
     // stored total — the client preview re-derives tax from the fallback VAT rate and can
     // overshoot an order that stored no/inclusive tax (a real over-collection source).
     if (resume && !linesDirty) {
+      // An UNSAVED discount change must never reach settlement: completing an unmodified
+      // resume charges the SERVER's stored total, so the typed discount would be silently
+      // ignored (the 2026-07-14 over-collection) and a retry would duplicate the sale.
+      if (discountDirty) {
+        toast.error('The discount change is not saved — press ✓ next to the discount to apply it (or ✕ to discard) before completing the sale.');
+        return;
+      }
       const settleTotal = resume.total ?? total;
       if (mode === 'draft') { toast.info('Draft unchanged.'); return; }
       if (creditSale) {
@@ -412,7 +447,7 @@ export default function AddSalePage() {
     });
   }
   function reset() {
-    setLines([]); setDiscount(0); setNotes(''); setCustomer(WALK_IN_CUSTOMER); setCreditSale(false);
+    setLines([]); setDiscount(0); setSavedDiscount(null); setNotes(''); setCustomer(WALK_IN_CUSTOMER); setCreditSale(false);
     setPartyType('customer'); setStaffId(''); setFundFromSalary(false); setMonths(1);
     setStructuralDirty(false); setSavingLineIdx(null);
     if (resume) {
@@ -696,7 +731,33 @@ export default function AddSalePage() {
             <div className="flex justify-between text-sm"><span className="text-muted-foreground">Subtotal</span><span className="tabular-nums font-medium">{fmt(subtotal)}</span></div>
             <div className="flex justify-between items-center text-sm">
               <span className="text-muted-foreground">Order discount</span>
-              <input value={discount} onChange={(e) => setDiscount(Math.max(0, parseFloat(e.target.value) || 0))} className="w-24 text-right bg-background border border-border rounded py-1 px-2 text-sm tabular-nums" />
+              <div className="flex items-center gap-1.5">
+                {/* ✓ save / ✕ cancel — resumed sales only, once the discount diverges from the
+                    server. ✓ PATCHes the discount onto the SAME order (audited, recomputes
+                    totals) so settling charges the discounted total — no Save & Pay round-trip,
+                    no replacement order. */}
+                {discountDirty && (
+                  <>
+                    <button
+                      onClick={saveDiscount}
+                      disabled={setOrderDiscount.isPending}
+                      title="Save this discount to the sale now (no payment needed)"
+                      className="h-6 w-6 rounded-md flex items-center justify-center bg-green-600/10 text-green-600 hover:bg-green-600/20 disabled:opacity-50"
+                    >
+                      {setOrderDiscount.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-4 w-4" />}
+                    </button>
+                    <button
+                      onClick={cancelDiscount}
+                      disabled={setOrderDiscount.isPending}
+                      title="Discard the unsaved discount change"
+                      className="h-6 w-6 rounded-md flex items-center justify-center bg-accent/40 text-muted-foreground hover:text-foreground disabled:opacity-50"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </>
+                )}
+                <input value={discount} onChange={(e) => setDiscount(Math.max(0, parseFloat(e.target.value) || 0))} className="w-24 text-right bg-background border border-border rounded py-1 px-2 text-sm tabular-nums" />
+              </div>
             </div>
             <div className="flex justify-between text-sm"><span className="text-muted-foreground">VAT ({Math.round(taxRate * 100)}%)</span><span className="tabular-nums font-medium">{fmt(tax)}</span></div>
             {roundOff > 0 && (

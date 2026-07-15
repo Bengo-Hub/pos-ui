@@ -1482,6 +1482,26 @@ export function useEditOrderLine() {
   });
 }
 
+/** Manager/admin corrective tool: set an UNSETTLED order's order-level discount in place —
+ * the server recomputes the headline totals, so the discount lands on the SAME order before
+ * payment (no replacement order, no settling at a stale pre-discount total). Gated
+ * server-side on pos.orders.manage, mirroring useEditOrderLine. */
+export function useSetOrderDiscount() {
+  const tenantID = useTenantID();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ orderId, discountAmount, reason }: { orderId: string; discountAmount: number; reason: string }) =>
+      apiClient.patch<{ order?: { total_amount?: number; discount_total?: number } }>(
+        `${basePath(tenantID)}/orders/${orderId}/discount`,
+        { discount_amount: discountAmount, reason },
+      ),
+    onSuccess: (_d, v) => {
+      qc.invalidateQueries({ queryKey: ['pos-orders'] });
+      qc.invalidateQueries({ queryKey: ['pos-order', tenantID, v.orderId] });
+    },
+  });
+}
+
 /** Admin/platform-owner-only corrective tool: move a settled sale's reporting date (e.g. a
  * sale rung up and synced a day late) without touching amounts, payments, or created_at.
  * Gated server-side to the tenant's admin/owner tier — a plain manager cannot call this even
