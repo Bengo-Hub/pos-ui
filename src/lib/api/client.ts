@@ -46,6 +46,18 @@ class ApiClient {
         }
         if (this.outletId) {
             config.headers['X-Outlet-ID'] = this.outletId;
+            // Outlet scope ALSO travels as a query param on reads: several list/report handlers
+            // filter on ?outlet_id= (not the header), so the selected outlet must reach every
+            // outlet-scoped endpoint. Explicit params always win (e.g. an "all" outlets filter
+            // or a page passing its own outlet) — we only fill the gap when absent.
+            const method = (config.method ?? 'get').toLowerCase();
+            if (method === 'get') {
+                const params = (config.params ?? {}) as Record<string, unknown>;
+                if (params.outlet_id === undefined) {
+                    params.outlet_id = this.outletId;
+                    config.params = params;
+                }
+            }
         }
         return config;
     };

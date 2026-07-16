@@ -14,6 +14,7 @@ import { BookOpen, Building2, Check, ChevronDown, ExternalLink, Globe, Loader2, 
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
 import { NotificationBell } from './notifications/NotificationBell';
 import { ThemeToggle } from './theme-toggle';
@@ -100,6 +101,24 @@ function HeaderOutletChip() {
   const isTerminalSession = useAuthStore((s) => s.isTerminalSession);
   const { selectedOutlet, outlets, setOutlets, selectOutlet } = useOutletFilterStore();
   const [open, setOpen] = useState(false);
+  const [outletSearch, setOutletSearch] = useState('');
+  // The dropdown portals to <body> anchored off this button — the header's overflow/stacking
+  // context CLIPPED the absolutely-positioned panel (the chevron flipped "open" but nothing
+  // showed; same class of bug treasury-ui fixed with a portal), so it must escape the header.
+  const chipBtnRef = useRef<HTMLButtonElement>(null);
+  const [panelPos, setPanelPos] = useState<{ top: number; left: number } | null>(null);
+  const toggleOpen = () => {
+    if (!open && chipBtnRef.current) {
+      const r = chipBtnRef.current.getBoundingClientRect();
+      const width = 272;
+      setPanelPos({
+        top: r.bottom + 6,
+        left: Math.max(8, Math.min(r.left, window.innerWidth - width - 8)),
+      });
+    }
+    setOutletSearch('');
+    setOpen((v) => !v);
+  };
 
   // THE outlet switcher — the sidebar duplicate was removed; this chip is the single place
   // admins/managers load and switch outlets (visible on every breakpoint).
@@ -160,8 +179,9 @@ function HeaderOutletChip() {
   return (
     <div className="relative block shrink-0 min-w-0">
       <button
+        ref={chipBtnRef}
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={toggleOpen}
         className={cn(chipClass, 'hover:bg-muted hover:text-foreground transition-colors cursor-pointer')}
         title="Switch outlet"
       >
@@ -175,13 +195,29 @@ function HeaderOutletChip() {
         <ChevronDown className={cn('h-3.5 w-3.5 transition-transform shrink-0', open && 'rotate-180')} />
       </button>
 
-      {open && (
+      {open && panelPos && typeof document !== 'undefined' && createPortal(
         <>
-          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} aria-hidden />
-          <div className="absolute left-0 top-full mt-1 z-50 w-64 rounded-xl border border-border bg-popover shadow-xl overflow-hidden">
+          <div className="fixed inset-0 z-[90]" onClick={() => setOpen(false)} aria-hidden />
+          {/* Portalled + fixed: the header's overflow/stacking context clipped an absolutely-
+              positioned panel (open chevron, invisible dropdown). Anchored off the chip rect. */}
+          <div
+            className="fixed z-[91] w-68 rounded-xl border border-border bg-popover shadow-xl overflow-hidden"
+            style={{ top: panelPos.top, left: panelPos.left }}
+          >
             <div className="px-3 py-2 border-b border-border">
               <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Switch Outlet</p>
             </div>
+            {outlets.length > 5 && (
+              <div className="p-2 border-b border-border">
+                <input
+                  autoFocus
+                  value={outletSearch}
+                  onChange={(e) => setOutletSearch(e.target.value)}
+                  placeholder="Search outlets…"
+                  className="w-full bg-accent/30 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+              </div>
+            )}
             {/* The panel always renders when open — a fetch in flight shows a spinner and a
                 failed/empty fetch says so, instead of the click appearing to do nothing. */}
             {outletsLoading && outlets.length === 0 && (
@@ -194,7 +230,7 @@ function HeaderOutletChip() {
                 No outlets found for this organisation.
               </p>
             )}
-            <div className="max-h-56 overflow-y-auto py-1">
+            <div className="max-h-64 overflow-y-auto py-1">
               <button
                 type="button"
                 onClick={() => { selectOutlet(null); apiClient.setOutletID(authOutlet?.id ?? null); setOpen(false); }}
@@ -204,7 +240,12 @@ function HeaderOutletChip() {
                 <span className="flex-1">All Outlets</span>
                 {!selectedOutlet && <Check className="h-3.5 w-3.5 shrink-0" />}
               </button>
-              {outlets.map((o) => {
+              {outlets
+                .filter((o) =>
+                  !outletSearch ||
+                  o.name.toLowerCase().includes(outletSearch.toLowerCase()) ||
+                  (o.code ?? '').toLowerCase().includes(outletSearch.toLowerCase()))
+                .map((o) => {
                 const isActive = selectedOutlet?.id === o.id;
                 return (
                   <button
@@ -226,7 +267,8 @@ function HeaderOutletChip() {
               })}
             </div>
           </div>
-        </>
+        </>,
+        document.body,
       )}
     </div>
   );
