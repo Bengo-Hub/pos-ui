@@ -34,7 +34,7 @@ const MODULE_LABELS: Record<string, string> = {
   tables: 'Tables', reservations: 'Reservations', appointments: 'Appointments', packages: 'Service Packages',
   queue: 'Walk-in Queue', repairs: 'Repairs', staff_schedule: 'Staff Schedule', resources: 'Resources',
   kds: 'Kitchen Display (KDS)', hotel: 'Hotel / Rooms', online_orders: 'Online Orders',
-  pharmacy: 'Pharmacy', patients: 'Patients', purchase_orders: 'Purchase Orders', inventory: 'Inventory',
+  pharmacy: 'Pharmacy', patients: 'Patients', inventory: 'Inventory',
   accounting: 'Accounting', crm: 'CRM & Marketing', reports: 'Reports & Analytics',
   loyalty: 'Loyalty', commissions: 'Commissions', settings: 'Settings',
 };

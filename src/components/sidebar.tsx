@@ -8,7 +8,7 @@ import { isPlatformOwner as checkPlatformOwner } from '@/lib/auth/permissions';
 import { cn } from '@/lib/utils';
 import { useTenantBranding } from '@/providers/tenant-branding-provider';
 import { useAuthStore } from '@/store/auth';
-import { ChevronDown, Lock, LogOut, Monitor, X } from 'lucide-react';
+import { ChevronDown, Lock, LogOut, Monitor, RefreshCw, X } from 'lucide-react';
 import Link from 'next/link';
 import { useParams, usePathname } from 'next/navigation';
 import { useState } from 'react';
@@ -351,6 +351,9 @@ export function Sidebar({ open = false, onClose, collapsed = false }: SidebarPro
             </p>
             <div className="space-y-0.5">
               <NavLink item={{ label: 'Platform', icon: Monitor, href: '/platform', moduleKey: 'platform' }} orgSlug={orgSlug} onClose={onClose} />
+              {/* Sync Monitor is a platform diagnostics surface (moved out of tenant Management
+                  per the use-case PowerSuite specs); the page itself also guards on platform owner. */}
+              <NavLink item={{ label: 'Sync Monitor', icon: RefreshCw, href: '/sync-monitor', moduleKey: 'platform' }} orgSlug={orgSlug} onClose={onClose} />
             </div>
           </div>
         )}

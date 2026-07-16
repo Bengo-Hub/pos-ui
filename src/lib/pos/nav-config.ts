@@ -11,7 +11,7 @@
 
 import {
   BarChart3, BedDouble, Calendar, ChefHat, ClipboardList, Clock, Cpu, FilePlus, FileText,
-  Gift, Grid3x3, HandCoins, LayoutDashboard, Package, Pill, Plus, Presentation, RefreshCw,
+  Gift, Grid3x3, HandCoins, LayoutDashboard, Package, Pill, Plus, Presentation,
   RotateCcw, Settings, ShoppingBag, Sofa, TrendingUp, Truck, UserSquare, Users, Wallet, Wine, Wrench,
 } from 'lucide-react';
 import type { Permission } from '@/lib/rbac/permissions';
@@ -22,6 +22,7 @@ import { P } from '@/lib/rbac/permissions';
 const INVENTORY_URL = process.env.NEXT_PUBLIC_INVENTORY_UI_URL || 'https://inventory.codevertexitsolutions.com';
 const TREASURY_URL = process.env.NEXT_PUBLIC_TREASURY_UI_URL || 'https://books.codevertexitsolutions.com';
 const MARKETFLOW_URL = process.env.NEXT_PUBLIC_MARKETFLOW_UI_URL || 'https://marketflow.codevertexitsolutions.com';
+const ERP_URL = process.env.NEXT_PUBLIC_ERP_UI_URL || 'https://erp.codevertexitsolutions.com';
 
 export interface NavItem {
   label: string;
@@ -136,7 +137,8 @@ export function buildNavGroups(orgSlug: string): NavGroup[] {
       label: 'Inventory',
       defaultCollapsed: true,
       items: [
-        { label: 'Purchase Orders', icon: Truck, href: '/purchase-orders', moduleKey: 'purchase_orders', permission: [P.CATALOG_MANAGE, P.CATALOG_CHANGE], waiterHidden: true },
+        // Purchase Orders duplicate removed per the use-case PowerSuite specs — the module is
+        // owned by inventory-service; POS links to Manage Inventory instead.
         { label: 'Manage Inventory', icon: Truck, href: `${INVENTORY_URL}/${orgSlug}`, moduleKey: 'inventory', permission: [P.CATALOG_MANAGE, P.CATALOG_CHANGE], waiterHidden: true },
       ],
     },
@@ -144,19 +146,27 @@ export function buildNavGroups(orgSlug: string): NavGroup[] {
       label: 'Accounting',
       defaultCollapsed: true,
       items: [
-        { label: 'Invoices', icon: FileText, href: `${TREASURY_URL}/${orgSlug}/invoices`, moduleKey: 'accounting', permission: [P.REPORTS_VIEW, P.REPORTS_MANAGE, P.CONFIG_MANAGE], waiterHidden: true },
-        { label: 'Expenses', icon: Wallet, href: `${TREASURY_URL}/${orgSlug}/expenses`, moduleKey: 'accounting', permission: [P.REPORTS_VIEW, P.REPORTS_MANAGE, P.CONFIG_MANAGE], waiterHidden: true },
-        { label: 'Credit Notes', icon: RotateCcw, href: `${TREASURY_URL}/${orgSlug}/credit-notes`, moduleKey: 'accounting', permission: [P.REPORTS_VIEW, P.REPORTS_MANAGE, P.CONFIG_MANAGE], waiterHidden: true },
-        { label: 'Finance Reports', icon: BarChart3, href: `${TREASURY_URL}/${orgSlug}/reports`, moduleKey: 'accounting', permission: [P.REPORTS_VIEW, P.REPORTS_MANAGE, P.CONFIG_MANAGE], waiterHidden: true },
+        // Single link to treasury-ui (the owner) — the old Invoices/Expenses/Credit Notes/
+        // Finance Reports duplicates were removed per the use-case PowerSuite specs.
+        { label: 'Treasury', icon: Wallet, href: `${TREASURY_URL}/${orgSlug}`, moduleKey: 'accounting', permission: [P.REPORTS_VIEW, P.REPORTS_MANAGE, P.CONFIG_MANAGE], waiterHidden: true },
       ],
     },
     {
       label: 'CRM & Marketing',
       defaultCollapsed: true,
       items: [
-        { label: 'Campaigns & SMS', icon: Gift, href: `${MARKETFLOW_URL}/${orgSlug}/campaigns`, moduleKey: 'crm', permission: [P.CLIENTS_VIEW, P.CLIENTS_MANAGE, P.REPORTS_VIEW], waiterHidden: true },
-        { label: 'Contacts', icon: UserSquare, href: `${MARKETFLOW_URL}/${orgSlug}/contacts`, moduleKey: 'crm', permission: [P.CLIENTS_VIEW, P.CLIENTS_MANAGE], waiterHidden: true },
-        { label: 'Segments', icon: Users, href: `${MARKETFLOW_URL}/${orgSlug}/crm/segments`, moduleKey: 'crm', permission: [P.CLIENTS_VIEW, P.CLIENTS_MANAGE], waiterHidden: true },
+        // Single link to marketflow-ui (the owner) — Campaigns/Contacts/Segments duplicates
+        // removed per the use-case PowerSuite specs.
+        { label: 'CRM', icon: UserSquare, href: `${MARKETFLOW_URL}/${orgSlug}`, moduleKey: 'crm', permission: [P.CLIENTS_VIEW, P.CLIENTS_MANAGE], waiterHidden: true },
+      ],
+    },
+    {
+      label: 'ERP',
+      defaultCollapsed: true,
+      items: [
+        // Cross-service link, shown but locked below tier 2 (no ERP access at Basic per the
+        // use-case PowerSuite matrix — hr_management unlocks at Professional).
+        { label: 'ERP', icon: Users, href: `${ERP_URL}/${orgSlug}`, moduleKey: 'erp', permission: [P.CONFIG_MANAGE, P.REPORTS_MANAGE], subFeature: 'hr_management', subPlan: 'Pro', waiterHidden: true },
       ],
     },
     {
@@ -167,7 +177,8 @@ export function buildNavGroups(orgSlug: string): NavGroup[] {
         { label: 'Most Profitable', icon: TrendingUp, href: '/reports/most-profitable', moduleKey: 'reports', permission: [P.REPORTS_VIEW, P.REPORTS_MANAGE], subFeature: 'shift_reports', subPlan: 'Pro', waiterHidden: true },
         { label: 'Loyalty', icon: Gift, href: '/loyalty', moduleKey: 'loyalty', permission: [P.LOYALTY_VIEW, P.LOYALTY_ADD, P.LOYALTY_MANAGE], subFeature: 'loyalty_program', subPlan: 'Growth', waiterHidden: true, cashierHospHidden: true },
         { label: 'Commissions', icon: TrendingUp, href: '/commissions', moduleKey: 'commissions', permission: [P.COMMISSIONS_VIEW, P.COMMISSIONS_VIEW_OWN, P.COMMISSIONS_MANAGE], subFeature: 'commissions', subPlan: 'Pro', waiterHidden: true },
-        { label: 'Sync Monitor', icon: RefreshCw, href: '/sync-monitor', moduleKey: 'settings', permission: [P.CONFIG_VIEW, P.CONFIG_CHANGE, P.CONFIG_MANAGE], waiterHidden: true },
+        // Sync Monitor moved to the platform-owner-only section in sidebar.tsx (per the
+        // use-case PowerSuite specs it is a platform diagnostics surface, not tenant nav).
         { label: 'Settings', icon: Settings, href: '/settings', moduleKey: 'settings', permission: [P.CONFIG_VIEW, P.CONFIG_CHANGE, P.CONFIG_MANAGE], waiterHidden: true, coreLocked: true },
       ],
     },

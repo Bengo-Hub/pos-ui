@@ -41,7 +41,6 @@ export type ModuleKey =
   | 'pharmacy'
   | 'patients'
   | 'drug_inventory'
-  | 'purchase_orders'
   | 'inventory'
   | 'returns'
   | 'clients'
@@ -52,7 +51,8 @@ export type ModuleKey =
   | 'reservations'
   | 'packages'
   | 'accounting'
-  | 'crm';
+  | 'crm'
+  | 'erp';
 
 // ─── Use-case types ─────────────────────────────────────────────────────────
 export type UseCaseType =
@@ -71,23 +71,24 @@ const COMMON_MODULES: ModuleKey[] = [
   'settings',
   'platform',
   'inventory',
-  // Cross-service link groups (Accounting→treasury-ui, CRM→marketflow-ui) — available to every
-  // use case but gated by a manager permission on each item; the target service enforces its own RBAC.
+  // Cross-service link groups (Accounting→treasury-ui, CRM→marketflow-ui, ERP→erp-ui) — available
+  // to every use case but gated by a manager permission on each item (ERP additionally carries the
+  // hr_management subscription lock); the target service enforces its own RBAC.
   'accounting',
   'crm',
+  'erp',
 ];
 
 const USE_CASE_MODULES: Record<UseCaseType, ModuleKey[]> = {
   // Hospitality (hotel/restaurant/bar/cafe) does NOT include loyalty or commissions — those are
   // retail/services concepts. Bills are settled per table/room, not via customer loyalty balances
   // or per-staff sales commissions. (Removed per QA: no need for Loyalty/Commissions here.)
-  // purchase_orders IS included — every bar/restaurant/QSR reorders stock from suppliers,
-  // same "procurement is universal" principle inventory-ui's sidebar already encodes (its
-  // UNIVERSAL_MODULES set never hides purchase_orders/suppliers/rfqs by use_case).
-  hospitality:   [...COMMON_MODULES, 'bar', 'tables', 'reservations', 'kds', 'appointments', 'packages', 'hotel', 'shifts', 'reports', 'online_orders', 'purchase_orders'],
-  retail:        [...COMMON_MODULES, 'retail', 'shifts', 'reports', 'layaway', 'loyalty', 'commissions', 'online_orders', 'purchase_orders', 'returns', 'clients', 'repairs'],
+  // purchase_orders was removed platform-wide: the POS duplicate page is gone — purchase
+  // orders are owned by inventory-service (linked via the Inventory group).
+  hospitality:   [...COMMON_MODULES, 'bar', 'tables', 'reservations', 'kds', 'appointments', 'packages', 'hotel', 'shifts', 'reports', 'online_orders'],
+  retail:        [...COMMON_MODULES, 'retail', 'shifts', 'reports', 'layaway', 'loyalty', 'commissions', 'online_orders', 'returns', 'clients', 'repairs'],
   services:      [...COMMON_MODULES, 'appointments', 'packages', 'shifts', 'reports', 'loyalty', 'commissions', 'clients', 'staff_schedule', 'resources', 'queue', 'repairs'],
-  quick_service: [...COMMON_MODULES, 'kds', 'shifts', 'reports', 'online_orders', 'purchase_orders'],
+  quick_service: [...COMMON_MODULES, 'kds', 'shifts', 'reports', 'online_orders'],
   pharmacy:      [...COMMON_MODULES, 'shifts', 'reports', 'pharmacy', 'patients', 'drug_inventory'],
 };
 
