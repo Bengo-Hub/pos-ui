@@ -24,8 +24,13 @@ function LayawayListPage() {
   const searchParams = useSearchParams();
 
   // Branch filter (QA req 7a): filter plans by outlet; "" = all branches.
+  // Preselects + follows the globally selected outlet (top-nav switcher).
   const outlets = useOutletFilterStore((s) => s.outlets);
-  const [outletFilter, setOutletFilter] = useState('');
+  const selectedOutlet = useOutletFilterStore((s) => s.selectedOutlet);
+  const [outletFilter, setOutletFilter] = useState(selectedOutlet?.id ?? '');
+  useEffect(() => {
+    setOutletFilter(selectedOutlet?.id ?? '');
+  }, [selectedOutlet?.id]);
   const outletNameById = useMemo(() => Object.fromEntries(outlets.map((o) => [o.id, o.name])), [outlets]);
 
   const { data: plans = [], isLoading, isError } = useLayawayPlans('active', outletFilter || undefined);

@@ -46,6 +46,7 @@ export function SalesListView({ orgSlug, fixedSource, title, subtitle }: {
   const user = useAuthStore((s) => s.user);
   const tenantId = user?.tenant_id ?? '';
   const outlets = useOutletFilterStore((s) => s.outlets);
+  const selectedOutlet = useOutletFilterStore((s) => s.selectedOutlet);
   const outletNameById = useMemo(() => Object.fromEntries(outlets.map((o) => [o.id, o.name])), [outlets]);
 
   const { can, canAny } = usePermissions();
@@ -59,10 +60,21 @@ export function SalesListView({ orgSlug, fixedSource, title, subtitle }: {
   const searchParams = useSearchParams();
   const [search, setSearch] = useState(searchParams.get('invoice') ?? '');
   const [filterState, setFilterState] = useState<SalesFilterState>({
-    outletId: '', customer: '', paymentStatus: '', paymentMethod: '',
+    // The page's Outlets filter PRESELECTS the globally selected outlet (top-nav switcher)
+    // so every outlet-scoped page opens showing the branch the admin drilled into.
+    outletId: selectedOutlet?.id ?? '', customer: '', paymentStatus: '', paymentMethod: '',
     shippingStatus: '', userId: '', source: '', subscriptions: false,
     range: { from: '', to: '' }, minTotal: '', maxTotal: '',
   });
+
+  // Follow the global switcher: changing the drilled-in outlet re-scopes this page too (and
+  // clearing it returns to All). The user can still narrow to a different outlet locally after.
+  useEffect(() => {
+    const globalOutlet = selectedOutlet?.id ?? '';
+    setFilterState((f) => (f.outletId === globalOutlet ? f : { ...f, outletId: globalOutlet }));
+    setPage(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedOutlet?.id]);
 
   // Modals + row expansion
   const [detailId, setDetailId] = useState<string | null>(null);
