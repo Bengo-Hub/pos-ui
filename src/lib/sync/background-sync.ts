@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '@/store/auth';
+import { useOutletFilterStore } from '@/store/outlet-filter';
 import { useSyncOfflineOrders } from '@/hooks/use-sync-offline-orders';
 import { useEffectiveOnline, isEffectivelyOnline } from '@/lib/connectivity';
 import { refreshAllDatasets } from '@/lib/offline/datasets';
@@ -35,7 +36,11 @@ export function useBackgroundSync(): void {
   const qc = useQueryClient();
   const tenantID = useAuthStore((s) => s.user?.tenant_id ?? '');
   const outletID = useEffectiveOutletID();
-  const useCase = useAuthStore((s) => s.outlet?.use_case);
+  // Use case of the EFFECTIVE outlet (drill-down wins over the home outlet) — the dataset
+  // use-case gates must follow the outlet actually being synced, not where the user logged in.
+  const homeUseCase = useAuthStore((s) => s.outlet?.use_case);
+  const drillUseCase = useOutletFilterStore((s) => s.selectedOutlet?.useCase);
+  const useCase = drillUseCase ?? homeUseCase;
   const isOnline = useEffectiveOnline();
   const runningRef = useRef(false);
 

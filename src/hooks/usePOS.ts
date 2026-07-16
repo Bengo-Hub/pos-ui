@@ -466,7 +466,10 @@ export async function revalidateFullCatalog(
   catalogRevalidateInflight.add(flightKey);
   lastCatalogRevalidateAt.set(flightKey, Date.now());
   try {
-    const all = await fetchAllCatalogItems(tenantID);
+    // Generous per-page timeout: large retail catalogs (BOI: ~3.8k items over ~20 pages) can
+    // exceed the axios 15s default on a heavy page — the background sync then logged
+    // "timeout of 15000ms exceeded" every cycle and the cache never refreshed.
+    const all = await fetchAllCatalogItems(tenantID, { timeout: 30_000 });
     if (all.length) {
       // Replace (not union) this outlet's cached slice — best-effort, non-blocking.
       void replaceCachedCatalog(tenantID, outletID, toOfflineCatalogRows(tenantID, outletID, all))

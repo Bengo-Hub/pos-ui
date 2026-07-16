@@ -43,7 +43,13 @@ export function PriceReconcileTab({ tenantID, outletID }: { tenantID: string; ou
   const [syncingSku, setSyncingSku] = useState<string | null>(null);
   const [syncingAll, setSyncingAll] = useState(false);
 
-  const { data, isLoading, isFetching, refetch } = useMenuItems({ search: debouncedSearch, limit: 100 });
+  // Fetch only once a search is typed — an eager 100-item pull left the tab stuck on
+  // "Loading…" for large catalogs; the empty state already tells the user to search.
+  const { data, isLoading, isFetching, refetch } = useMenuItems({
+    search: debouncedSearch,
+    limit: 100,
+    enabled: !!debouncedSearch.trim(),
+  });
 
   const loadCached = async () => {
     if (!tenantID) return;
@@ -59,7 +65,13 @@ export function PriceReconcileTab({ tenantID, outletID }: { tenantID: string; ou
       const cached = item.sku ? cachedBySku.get(item.sku) : undefined;
       let status: ReconcileStatus = 'not-cached';
       if (cached) {
-        status = cached.unit_price === (item.price ?? 0) ? 'in-sync' : 'mismatched';
+        // A row is only "in sync" when price AND the manager-insight fields agree — a stale
+        // cached row missing cost_price/tax made the terminal show "—" for cost/margin while
+        // this tab claimed everything was fine (it only compared unit_price).
+        const priceOk = cached.unit_price === (item.price ?? 0);
+        const costOk = item.cost_price == null || cached.cost_price === item.cost_price;
+        const taxOk = item.tax_rate == null || cached.tax_rate === item.tax_rate;
+        status = priceOk && costOk && taxOk ? 'in-sync' : 'mismatched';
       }
       return { item, cached, status };
     });
@@ -113,7 +125,7 @@ export function PriceReconcileTab({ tenantID, outletID }: { tenantID: string; ou
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search menu items by name or SKU…"
+            placeholder="Search catalog items by name or SKU…"
             className="w-full rounded-xl border border-border bg-background pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
           />
         </div>
@@ -137,14 +149,16 @@ export function PriceReconcileTab({ tenantID, outletID }: { tenantID: string; ou
 
       <section className="rounded-2xl border border-border bg-card overflow-hidden">
         <h2 className="px-4 py-3 border-b border-border text-sm font-bold">
-          Menu item prices — inventory vs. POS DB vs. device cache
+          Catalog item prices — inventory vs. POS DB vs. device cache
         </h2>
-        {isLoading ? (
+        {!debouncedSearch.trim() ? (
+          <p className="px-4 py-6 text-sm text-muted-foreground">
+            Search for an item to compare its server price/cost against this device&apos;s cache.
+          </p>
+        ) : isLoading || isFetching ? (
           <p className="px-4 py-6 text-sm text-muted-foreground">Loading…</p>
         ) : rows.length === 0 ? (
-          <p className="px-4 py-6 text-sm text-muted-foreground">
-            {debouncedSearch ? 'No menu items match that search.' : 'Search for a menu item to compare its prices.'}
-          </p>
+          <p className="px-4 py-6 text-sm text-muted-foreground">No items match that search.</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -173,6 +187,13 @@ export function PriceReconcileTab({ tenantID, outletID }: { tenantID: string; ou
                     </td>
                     <td className={cn('px-4 py-2 text-right tabular-nums', row.status === 'mismatched' && 'font-bold text-amber-600')}>
                       {row.cached ? row.cached.unit_price.toFixed(2) : '—'}
+                      {/* Cost drift is invisible on the price figure alone — call it out so the
+                          terminal's "—" cost/margin has a visible explanation + fix here. */}
+                      {row.cached && row.item.cost_price != null && row.cached.cost_price !== row.item.cost_price && (
+                        <p className="text-[10px] font-normal text-amber-600">
+                          cost {row.cached.cost_price != null ? row.cached.cost_price.toFixed(2) : 'missing'} → {row.item.cost_price.toFixed(2)}
+                        </p>
+                      )}
                     </td>
                     <td className="px-4 py-2">
                       {row.status === 'in-sync' && (

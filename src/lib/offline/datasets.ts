@@ -28,6 +28,9 @@ export interface OfflineDataset {
 }
 
 const LOYALTY_USE_CASES = new Set(['retail', 'services']);
+// Floor plans (sections + tables) are table-service concepts — pos-api's routes 403 every
+// other use case, so retail/pharmacy/services outlets must never even request them.
+const TABLE_SERVICE_USE_CASES = new Set(['hospitality', 'quick_service', 'hotel']);
 
 const pos = (tenantID: string) => `/api/v1/${tenantID}/pos`;
 const quiet = { suppressErrorToast: true };
@@ -86,6 +89,8 @@ export const OFFLINE_DATASETS: OfflineDataset[] = [
     queryKey: (t, o) => ['pos-sections', t, o ?? ''] as const,
     fetch: (t) => apiClient.get(`${pos(t)}/sections`, undefined, quiet),
     logDetail: listLen,
+    // Table-service only — retail/pharmacy/services outlets 403 this by design.
+    appliesTo: (useCase) => !!useCase && TABLE_SERVICE_USE_CASES.has(useCase),
   },
   {
     name: 'pos-tables',
@@ -93,6 +98,8 @@ export const OFFLINE_DATASETS: OfflineDataset[] = [
     queryKey: (t, o) => ['pos-tables', t, o ?? ''] as const,
     fetch: (t) => apiClient.get(`${pos(t)}/tables`, undefined, quiet),
     logDetail: listLen,
+    // Table-service only — retail/pharmacy/services outlets 403 this by design.
+    appliesTo: (useCase) => !!useCase && TABLE_SERVICE_USE_CASES.has(useCase),
   },
 ];
 

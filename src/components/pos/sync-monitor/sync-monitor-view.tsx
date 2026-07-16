@@ -160,7 +160,7 @@ export function SyncMonitorView() {
               : 'border-transparent text-muted-foreground hover:text-foreground',
           )}
         >
-          <Tag className="h-4 w-4" /> Menu item prices
+          <Tag className="h-4 w-4" /> Catalog prices
         </button>
       </div>
 
