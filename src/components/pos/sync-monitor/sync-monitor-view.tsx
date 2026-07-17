@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import {
-  Activity, AlertTriangle, CloudUpload, Database, Pause, Play, RefreshCw, Tag, Wifi, WifiOff,
+  Activity, AlertTriangle, ArrowLeftRight, CloudUpload, Database, Pause, Play, RefreshCw, Tag, Wifi, WifiOff,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/store/auth';
@@ -21,9 +21,10 @@ import type { KVCacheRow, SyncLogEntry } from '@/lib/db/pos-db';
 import { useEffectiveOutletID } from '@/hooks/usePOS';
 import { SyncLogTable } from './sync-log-table';
 import { PriceReconcileTab } from './price-reconcile-tab';
+import { TxnReversalTab } from './txn-reversal-tab';
 
 const POLL_MS = 2_000;
-type SyncMonitorTab = 'overview' | 'prices';
+type SyncMonitorTab = 'overview' | 'prices' | 'reversals';
 
 function timeAgo(iso?: string | number | null): string {
   if (!iso) return '—';
@@ -51,6 +52,9 @@ const DATASET_LABELS: Record<string, string> = {
 
 export function SyncMonitorView() {
   const tenantID = useAuthStore((s) => s.user?.tenant_id ?? '');
+  // Txn Reversals is a platform-owner data-repair tool (initiated on tenant request) —
+  // the tab is hidden for everyone else, and the API is platform-owner-gated server-side.
+  const isPlatformOwner = useAuthStore((s) => s.user?.isPlatformOwner === true);
   const outletID = useEffectiveOutletID();
   const conn = useConnectivityStore();
 
@@ -162,9 +166,23 @@ export function SyncMonitorView() {
         >
           <Tag className="h-4 w-4" /> Catalog prices
         </button>
+        {isPlatformOwner && (
+          <button
+            onClick={() => setTab('reversals')}
+            className={cn(
+              'flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 transition-colors',
+              tab === 'reversals'
+                ? 'border-primary text-primary'
+                : 'border-transparent text-muted-foreground hover:text-foreground',
+            )}
+          >
+            <ArrowLeftRight className="h-4 w-4" /> Txn Reversals
+          </button>
+        )}
       </div>
 
       {tab === 'prices' && <PriceReconcileTab tenantID={tenantID} outletID={outletID} />}
+      {tab === 'reversals' && isPlatformOwner && <TxnReversalTab tenantID={tenantID} />}
 
       {tab === 'overview' && (
       <>
