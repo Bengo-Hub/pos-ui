@@ -11,7 +11,7 @@
 
 import {
   BarChart3, BedDouble, Calendar, ChefHat, ClipboardList, Clock, Cpu, FilePlus, FileText,
-  Gift, Grid3x3, HandCoins, LayoutDashboard, Package, Pill, Plus, Presentation,
+  Gift, Grid3x3, HandCoins, LayoutDashboard, Package, Percent, Pill, Plus, Presentation,
   RotateCcw, Settings, ShoppingBag, Sofa, TrendingUp, Truck, UserSquare, Users, Wallet, Wine, Wrench,
 } from 'lucide-react';
 import type { Permission } from '@/lib/rbac/permissions';
@@ -23,6 +23,7 @@ const INVENTORY_URL = process.env.NEXT_PUBLIC_INVENTORY_UI_URL || 'https://inven
 const TREASURY_URL = process.env.NEXT_PUBLIC_TREASURY_UI_URL || 'https://books.codevertexitsolutions.com';
 const MARKETFLOW_URL = process.env.NEXT_PUBLIC_MARKETFLOW_UI_URL || 'https://marketflow.codevertexitsolutions.com';
 const ERP_URL = process.env.NEXT_PUBLIC_ERP_UI_URL || 'https://erp.codevertexitsolutions.com';
+const LOGISTICS_URL = process.env.NEXT_PUBLIC_LOGISTICS_UI_URL || 'https://logistics.codevertexitsolutions.com';
 
 export interface NavItem {
   label: string;
@@ -77,6 +78,13 @@ export function buildNavGroups(orgSlug: string): NavGroup[] {
         { label: 'Layaway', icon: Package, href: '/layaway', moduleKey: 'layaway', permission: [P.ORDERS_ADD, P.ORDERS_CHANGE_OWN, P.ORDERS_CHANGE, P.ORDERS_MANAGE], subFeature: 'layaway', subPlan: 'Growth', waiterHidden: true },
         { label: 'Staff Credit', icon: Package, href: '/staff-credit', moduleKey: 'layaway', permission: [P.ORDERS_CHANGE, P.ORDERS_MANAGE], subFeature: 'staff_fund_from_salary', subPlan: 'Professional', waiterHidden: true },
         { label: 'Sell Returns', icon: RotateCcw, href: '/returns', moduleKey: 'returns', permission: [P.ORDERS_CHANGE_OWN, P.ORDERS_CHANGE, P.ORDERS_MANAGE], waiterHidden: true },
+        { label: 'Shipments', icon: Truck, href: '/sell/shipments', moduleKey: 'orders', permission: [P.ORDERS_VIEW, P.ORDERS_CHANGE, P.ORDERS_MANAGE, P.ORDERS_VIEW_OWN], waiterHidden: true, cashierHospHidden: true },
+        // Management surface for the platform discount source of truth (pos-api promotions) —
+        // promo codes, automatic and time-windowed discounts across ALL use cases (the
+        // hotel/happy-hour page remains the hospitality-flavored BOGO editor of the same rows).
+        { label: 'Discounts', icon: Percent, href: '/sell/discounts', moduleKey: 'orders', permission: [P.PROMOTIONS_VIEW, P.PROMOTIONS_ADD, P.PROMOTIONS_CHANGE, P.PROMOTIONS_MANAGE], waiterHidden: true, cashierHospHidden: true },
+        // Historical sales migration (CSV) — manager/admin only, idempotent on invoice no.
+        { label: 'Import Sales', icon: FilePlus, href: '/sell/import', moduleKey: 'orders', permission: P.ORDERS_MANAGE, waiterHidden: true, cashierHospHidden: true, hideForProfiles: ['hospitality', 'quick_service'] },
       ],
     },
     {
@@ -167,6 +175,15 @@ export function buildNavGroups(orgSlug: string): NavGroup[] {
         // Cross-service link, shown but locked below tier 2 (no ERP access at Basic per the
         // use-case PowerSuite matrix — hr_management unlocks at Professional).
         { label: 'ERP', icon: Users, href: `${ERP_URL}/${orgSlug}`, moduleKey: 'erp', permission: [P.CONFIG_MANAGE, P.REPORTS_MANAGE], subFeature: 'hr_management', subPlan: 'Pro', waiterHidden: true },
+      ],
+    },
+    {
+      label: 'Logistics',
+      defaultCollapsed: true,
+      items: [
+        // Cross-service link to logistics-ui (delivery-execution owner: dispatch board, riders,
+        // tracking). Shipments dispatched from Sell → Shipments are assigned/tracked there.
+        { label: 'Dispatch & Riders', icon: Truck, href: `${LOGISTICS_URL}/${orgSlug}`, moduleKey: 'logistics', permission: [P.ORDERS_MANAGE, P.CONFIG_MANAGE], waiterHidden: true },
       ],
     },
     {

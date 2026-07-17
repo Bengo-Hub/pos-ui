@@ -52,7 +52,8 @@ export type ModuleKey =
   | 'packages'
   | 'accounting'
   | 'crm'
-  | 'erp';
+  | 'erp'
+  | 'logistics';
 
 // ─── Use-case types ─────────────────────────────────────────────────────────
 export type UseCaseType =
@@ -71,12 +72,14 @@ const COMMON_MODULES: ModuleKey[] = [
   'settings',
   'platform',
   'inventory',
-  // Cross-service link groups (Accounting→treasury-ui, CRM→marketflow-ui, ERP→erp-ui) — available
-  // to every use case but gated by a manager permission on each item (ERP additionally carries the
-  // hr_management subscription lock); the target service enforces its own RBAC.
+  // Cross-service link groups (Accounting→treasury-ui, CRM→marketflow-ui, ERP→erp-ui,
+  // Logistics→logistics-ui) — available to every use case but gated by a manager permission on
+  // each item (ERP additionally carries the hr_management subscription lock); the target service
+  // enforces its own RBAC + subscription gating on arrival.
   'accounting',
   'crm',
   'erp',
+  'logistics',
 ];
 
 const USE_CASE_MODULES: Record<UseCaseType, ModuleKey[]> = {

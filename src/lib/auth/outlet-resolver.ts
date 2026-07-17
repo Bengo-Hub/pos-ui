@@ -1,5 +1,6 @@
 import { apiClient } from '@/lib/api/client';
-import { POS_SELECTED_OUTLET_KEY, type OutletInfo } from '@/store/auth';
+import { getStoredOutletId } from '@/lib/auth/outlet-storage';
+import { type OutletInfo } from '@/store/auth';
 
 /**
  * resolveActiveOutlet — fetch the tenant's outlets and pick the one this session should
@@ -23,12 +24,8 @@ export async function resolveActiveOutlet(
   const active = list.filter((o) => (o as any).status !== 'archived');
   if (active.length === 0) return null;
 
-  let storedId: string | null = null;
-  try {
-    storedId = localStorage.getItem(POS_SELECTED_OUTLET_KEY);
-  } catch {
-    /* SSR / storage disabled */
-  }
+  // Slug-scoped (URL path slug): a stale outlet persisted under another tenant is ignored.
+  const storedId = getStoredOutletId() || null;
 
   return (
     (preferredId && active.find((o) => o.id === preferredId)) ||

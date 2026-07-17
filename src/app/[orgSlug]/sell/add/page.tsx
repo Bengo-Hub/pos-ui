@@ -9,7 +9,7 @@
 
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { Check, Loader2, Minus, Plus, Search, ShoppingCart, Trash2, User, Users, X } from 'lucide-react';
+import { Check, Loader2, Minus, Plus, Search, ShoppingCart, Trash2, Truck, User, Users, X } from 'lucide-react';
 import { useMenuItems, useFullCatalog, useCreateOrder, useCreatePaymentIntent, usePricingTiers, useOrder, useVoidOrder, useEditOrderLine, useSetOrderDiscount, type CatalogItem } from '@/hooks/usePOS';
 import { Tag } from 'lucide-react';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
@@ -24,6 +24,7 @@ import { apiClient } from '@/lib/api/client';
 import { applyRoundOff, computeCartTax } from '@/lib/pos/cart-tax';
 import { CustomerCreditHint } from '@/components/pos/clients/credit-terms';
 import { CreditSaleDetailsModal, type CreditSaleDetails } from '@/components/pos/credit-sale-details-modal';
+import { ShippingDetailsFields, emptyShippingForm, shippingFormFromMetadata, type ShippingFormValue } from '@/components/pos/shipping/shipping-details-fields';
 import { Button } from '@/components/ui/base';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -178,6 +179,15 @@ export default function AddSalePage() {
   const [creditSale, setCreditSale] = useState(searchParams.get('credit') === '1');
   const [creditModalOpen, setCreditModalOpen] = useState(false);
   const [notes, setNotes] = useState('');
+  // ── Shipping (optional) ── the shared ShippingDetailsFields form writes the same
+  // metadata keys the Edit Shipping action manages, so the All-Sales Shipping column/
+  // filter, the Shipments page, and the details modal all read create-time shipping too.
+  // The charge itself goes through the real `charges.shipping` order-level cost (manager
+  // adjustment — non-managers get the same approval_required the terminal shows), so
+  // total_amount = subtotal + tax − discount + charges holds server-side.
+  const [shippingOpen, setShippingOpen] = useState(false);
+  const [shipping, setShipping] = useState<ShippingFormValue>(emptyShippingForm());
+  const shippingAmount = shippingOpen ? Math.max(0, Number(shipping.amount) || 0) : 0;
   // Credit Sale is available to CASHIERS too (product decision 2026-07-07 — terms captured via
   // the shared CreditSaleDetailsModal; treasury enforces the credit limit). Quotations remain a
   // manager/back-office action (same permission that approves sale returns).
@@ -232,6 +242,12 @@ export default function AddSalePage() {
     setSavedDiscount(Number(o.discount_total) || 0);
     if (o.customer_name || o.customer_phone) {
       setCustomer({ name: o.customer_name ?? '', phone: o.customer_phone ?? '', isWalkIn: !o.customer_phone } as SelectedCustomer);
+    }
+    // Prefill shipping from the draft's metadata (same keys the Edit Shipping action writes).
+    const md = o.metadata ?? {};
+    if (md.shipping_status || md.shipping_address || md.shipping_details) {
+      setShippingOpen(true);
+      setShipping(shippingFormFromMetadata(md));
     }
     setStructuralDirty(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -342,7 +358,7 @@ export default function AddSalePage() {
     );
     return { subtotal: r.subtotal, tax: r.tax };
   }, [lines, taxRate]);
-  const { roundOff, total } = applyRoundOff(subtotal + tax - discount);
+  const { roundOff, total } = applyRoundOff(subtotal + tax - discount + shippingAmount);
 
   function buildPayload() {
     return {
@@ -357,9 +373,20 @@ export default function AddSalePage() {
       discountAmount: discount || undefined,
       customerPhone: custPhone || undefined,
       customerName: custName || undefined,
+      // Shipping charge rides the real order-level charges cost so the server total includes it.
+      ...(shippingAmount > 0 ? { charges: { shipping: shippingAmount } } : {}),
       metadata: (() => {
         const md: Record<string, any> = {};
         if (pricingProfile) md.pricing_profile = pricingProfile;
+        if (shippingOpen && (shipping.address || shipping.details || shipping.deliveredTo || shipping.deliveryPerson || shippingAmount > 0)) {
+          md.shipping_status = shipping.status || 'ordered';
+          if (shipping.address) md.shipping_address = shipping.address;
+          if (shipping.details) md.shipping_details = shipping.details;
+          if (shipping.deliveredTo) md.delivered_to = shipping.deliveredTo;
+          if (shipping.deliveryPerson) md.delivery_person = shipping.deliveryPerson;
+          if (shipping.trackingNumber) md.tracking_number = shipping.trackingNumber;
+          if (shippingAmount > 0) md.shipping_amount = shippingAmount;
+        }
         if (creditSale && staffParty && staffId) {
           md.party_type = 'staff';
           md.staff_member_id = staffId;
@@ -480,6 +507,7 @@ export default function AddSalePage() {
   function reset() {
     setLines([]); setDiscount(0); setSavedDiscount(null); setNotes(''); setCustomer(WALK_IN_CUSTOMER); setCreditSale(false);
     setPartyType('customer'); setStaffId(''); setFundFromSalary(false); setMonths(1);
+    setShippingOpen(false); setShipping(emptyShippingForm());
     setStructuralDirty(false); setSavingLineIdx(null);
     if (resume) {
       setResume(null);
@@ -531,8 +559,8 @@ export default function AddSalePage() {
   }
 
   return (
-    <div className="p-6 max-w-6xl mx-auto space-y-6">
-      <div className="flex items-center gap-3">
+    <div className="p-6 max-w-400 mx-auto space-y-6">
+      <div className="flex flex-wrap items-center gap-3">
         <ShoppingCart className="h-6 w-6 text-primary" />
         <h1 className="text-2xl font-bold tracking-tight">
           {resume ? `Resume Sale — ${resume.number}` : creditSale ? 'Credit Sale' : 'Add Sale'}
@@ -540,12 +568,17 @@ export default function AddSalePage() {
         <span className="text-sm text-muted-foreground">
           {resume ? 'Draft prefilled — collect payment to complete it' : creditSale ? 'Sell on account — posts to customer AR' : 'Back-office sale entry'}
         </span>
+        <span className="ml-auto text-xs text-muted-foreground">
+          Sale date: <b className="text-foreground">{new Date().toLocaleString('en-KE')}</b> · Invoice No. auto-generated
+        </span>
       </div>
 
-      {/* Customer — rich phone search; defaults to Walk-in (credit sales require a real customer).
-          Credit sales can instead be billed to a STAFF member, optionally funded from salary
-          (premium — shown + upgrade-gated, never hidden). */}
-      <div className="bg-card border border-border rounded-2xl p-5 space-y-4">
+      {/* Sale header — customer/bill-to on the left, pricing profile on the right, so the
+          product table below gets the FULL page width. Credit sales can instead be billed to
+          a STAFF member, optionally funded from salary (premium — shown + upgrade-gated). */}
+      <div className="bg-card border border-border rounded-2xl p-5">
+        <div className="grid gap-x-8 gap-y-4 lg:grid-cols-2">
+        <div className="space-y-4">
         {creditSale && (
           <div className="grid grid-cols-2 gap-2">
             {([['customer', 'Customer', User], ['staff', 'Staff', Users]] as const).map(([val, label, Icon]) => (
@@ -616,7 +649,9 @@ export default function AddSalePage() {
             {creditSale && realCustomer && <CustomerCreditHint accountId={customer?.accountId} saleTotal={total} />}
           </div>
         )}
+        </div>
 
+        <div className="space-y-4">
         {/* Pricing profile (tier) — switch to bill this sale at Retail / Wholesale / a custom profile. */}
         {pricingTiers.length > 0 && (
           <div className="space-y-2">
@@ -645,11 +680,12 @@ export default function AddSalePage() {
             <p className="text-[11px] text-muted-foreground">Switching re-prices lines you haven&apos;t manually edited.</p>
           </div>
         )}
+        </div>
+        </div>
       </div>
 
-      <div className="grid lg:grid-cols-3 gap-6">
-        {/* Item search + lines */}
-        <div className="lg:col-span-2 space-y-4">
+      {/* Item search + lines — FULL page width so the product table has room to breathe. */}
+      <div className="space-y-4">
           <div className="relative">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search product name / SKU to add…"
@@ -671,7 +707,7 @@ export default function AddSalePage() {
             </div>
           )}
 
-          <div className="bg-card border border-border rounded-2xl overflow-hidden">
+          <div className="bg-card border border-border rounded-2xl overflow-hidden overflow-x-auto">
             <table className="w-full text-sm">
               <thead><tr className="border-b border-border bg-muted/30 text-muted-foreground">
                 <th className="text-left px-4 py-2.5 font-medium">Product</th>
@@ -754,6 +790,35 @@ export default function AddSalePage() {
               </tbody>
             </table>
           </div>
+      </div>
+
+      <div className="grid lg:grid-cols-3 gap-6">
+        {/* Shipping + note (left 2/3) */}
+        <div className="lg:col-span-2 space-y-4">
+          {/* Shipping details — optional; writes the SAME metadata keys the Edit Shipping
+              action manages, plus a real charges.shipping cost so the payable includes it. */}
+          <div className="bg-card border border-border rounded-2xl">
+            <button type="button" onClick={() => setShippingOpen((v) => !v)}
+              className="w-full flex items-center justify-between px-5 py-3.5 text-sm font-semibold">
+              <span className="flex items-center gap-2"><Truck className="h-4 w-4 text-primary" /> Shipping Details <span className="text-xs font-normal text-muted-foreground">(optional)</span></span>
+              <span className="text-xs text-muted-foreground">{shippingOpen ? 'Hide' : shippingAmount > 0 ? fmt(shippingAmount) : 'Add'}</span>
+            </button>
+            {shippingOpen && (
+              <div className="px-5 pb-5 space-y-3">
+                <ShippingDetailsFields value={shipping} onChange={setShipping} showTracking={false} />
+                {shippingAmount > 0 && (
+                  <p className="text-[11px] text-muted-foreground">
+                    Shipping charges are a manager order adjustment — non-manager users will be asked for manager approval on save.
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+
+          <label className="block text-xs font-semibold text-muted-foreground">Sell note
+            <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Sale note (optional)" rows={3}
+              className="mt-1 w-full bg-card border border-border rounded-xl py-2 px-3 text-sm font-normal focus:outline-none focus:ring-2 focus:ring-primary/40" />
+          </label>
         </div>
 
         {/* Summary + save */}
@@ -791,6 +856,9 @@ export default function AddSalePage() {
               </div>
             </div>
             <div className="flex justify-between text-sm"><span className="text-muted-foreground">VAT ({Math.round(taxRate * 100)}%)</span><span className="tabular-nums font-medium">{fmt(tax)}</span></div>
+            {shippingAmount > 0 && (
+              <div className="flex justify-between text-sm"><span className="text-muted-foreground">Shipping (+)</span><span className="tabular-nums font-medium">{fmt(shippingAmount)}</span></div>
+            )}
             {roundOff > 0 && (
               <div className="flex justify-between text-xs text-muted-foreground"><span>Round Off</span><span className="tabular-nums">{fmt(roundOff)}</span></div>
             )}
@@ -801,8 +869,6 @@ export default function AddSalePage() {
             <input type="checkbox" checked={creditSale} onChange={(e) => setCreditSale(e.target.checked)} className="rounded" />
             <span>Credit sale (on account → AR)</span>
           </label>
-          <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Sale note (optional)" rows={2}
-            className="w-full bg-card border border-border rounded-xl py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" />
 
           <div className="space-y-2">
             <Button onClick={() => save('pay')} disabled={lines.length === 0 || createOrder.isPending} className="w-full min-h-12 font-bold rounded-xl gap-2">

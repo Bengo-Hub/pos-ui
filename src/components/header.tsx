@@ -10,7 +10,7 @@ import { useTenantBranding } from '@/providers/tenant-branding-provider';
 import { useAuthStore } from '@/store/auth';
 import { useOutletFilterStore } from '@/store/outlet-filter';
 import { useQuery } from '@tanstack/react-query';
-import { BookOpen, Building2, Check, ChevronDown, ExternalLink, Globe, Loader2, LogOut, MapPin, Menu, Package, PanelLeft, Search, Settings, ShoppingCart, Square, Tag, User, Users } from 'lucide-react';
+import { BookOpen, Building2, Check, ChevronDown, ExternalLink, Globe, Loader2, LogOut, MapPin, Menu, Package, PanelLeft, Search, Settings, ShoppingCart, Square, Tag, Truck, User, Users } from 'lucide-react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
@@ -25,11 +25,17 @@ const PRICING_URL = process.env.NEXT_PUBLIC_SUBSCRIPTIONS_UI_URL ?? 'https://pri
 const ORDERING_URL = process.env.NEXT_PUBLIC_ORDERING_UI_URL ?? 'https://ordersapp.codevertexitsolutions.com';
 const AUTH_URL = process.env.NEXT_PUBLIC_AUTH_UI_URL ?? 'https://accounts.codevertexitsolutions.com';
 const CRM_URL = process.env.NEXT_PUBLIC_CRM_UI_URL ?? 'https://marketflow.codevertexitsolutions.com';
+const LOGISTICS_URL = process.env.NEXT_PUBLIC_LOGISTICS_UI_URL ?? 'https://logistics.codevertexitsolutions.com';
+const ERP_URL = process.env.NEXT_PUBLIC_ERP_UI_URL ?? 'https://erp.codevertexitsolutions.com';
 
 const SERVICES = [
   { label: 'Inventory', href: (slug: string) => `${INVENTORY_URL}/${slug}`, Icon: Package },
   { label: 'CRM', href: (slug: string) => `${CRM_URL}/${slug}`, Icon: Users },
   { label: 'Treasury', href: (slug: string) => `${TREASURY_URL}/${slug}`, Icon: BookOpen },
+  // Delivery-execution owner (dispatch board, riders, tracking) — shipments dispatched
+  // from Sell → Shipments are assigned/tracked there. Target enforces its own RBAC.
+  { label: 'Logistics', href: (slug: string) => `${LOGISTICS_URL}/${slug}`, Icon: Truck },
+  { label: 'ERP', href: (slug: string) => `${ERP_URL}/${slug}`, Icon: Users },
   { label: 'Online Store', href: (slug: string) => `${ORDERING_URL}/${slug}`, Icon: ShoppingCart },
   { label: 'Subscriptions', href: (slug: string) => `${PRICING_URL}/${slug}`, Icon: Tag },
   { label: 'Client Portal', href: (slug: string) => `${AUTH_URL}/${slug}`, Icon: Globe },
@@ -453,7 +459,7 @@ export function Header({ onMenuClick, onToggleSidebar, sidebarCollapsed }: Heade
                 {isHQUser && (
                   <>
                     <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 px-3 mb-1.5">Services</p>
-                    <div className="grid gap-1">
+                    <div className="grid gap-1 max-h-72 overflow-y-auto">
                       {SERVICES.map(({ label, href, Icon }) => (
                         <a
                           key={label}

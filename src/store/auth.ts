@@ -1,5 +1,6 @@
 import { apiClient } from '@/lib/api/client';
 import { buildAuthorizeUrl, buildLogoutUrl, exchangeCodeForTokens, fetchProfile, fetchPosServiceProfile, revokeServerSession } from '@/lib/auth/api';
+import { setStoredOutletId } from '@/lib/auth/outlet-storage';
 import {
     consumeVerifier,
     generateCodeChallenge,
@@ -38,8 +39,8 @@ export interface OutletInfo {
   status?: string;
 }
 
-/** localStorage key for the last-selected outlet (read by PIN login page and outlet selector). */
-export const POS_SELECTED_OUTLET_KEY = 'pos-selected-outlet-id';
+/** Slug-scoped last-selected-outlet persistence (read by PIN login page and outlet selector). */
+export { POS_SELECTED_OUTLET_KEY } from '@/lib/auth/outlet-storage';
 
 interface AuthState {
   status: 'idle' | 'loading' | 'authenticated' | 'error' | 'syncing';
@@ -118,13 +119,8 @@ export const useAuthStore = create<AuthState>()(
 
       setOutlet: (outlet) => {
         set({ outlet });
-        if (typeof window !== 'undefined') {
-          if (outlet?.id) {
-            localStorage.setItem(POS_SELECTED_OUTLET_KEY, outlet.id);
-          } else {
-            localStorage.removeItem(POS_SELECTED_OUTLET_KEY);
-          }
-        }
+        // Slug-scoped: the stored outlet only auto-selects again on the SAME tenant.
+        setStoredOutletId(outlet?.id ?? null);
         // Always use the home outlet ID as the base X-Outlet-ID (unless a drill-down override is active)
         const { selectedOutletId } = get();
         if (!selectedOutletId) {
@@ -323,7 +319,8 @@ export const useAuthStore = create<AuthState>()(
           try { localStorage.removeItem('tenantId'); } catch { /* no-op */ }
           try { localStorage.removeItem('tenantSlug'); } catch { /* no-op */ }
           try { localStorage.removeItem('pos-auth-storage'); } catch { /* no-op */ }
-          // Intentionally retain POS_SELECTED_OUTLET_KEY so pin-login auto-selects the last outlet.
+          // POS_SELECTED_OUTLET_KEY is retained so pin-login auto-selects the last outlet —
+          // safe now that it's slug-scoped: another tenant's slug never resolves this value.
           try { sessionStorage.clear(); } catch { /* no-op */ }
           // Always redirect to PIN login so staff re-authenticate locally.
           // No need to invalidate SSO sessions — pos-api HMAC and SSO tokens are both short-lived.

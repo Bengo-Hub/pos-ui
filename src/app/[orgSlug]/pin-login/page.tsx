@@ -20,6 +20,7 @@ import {
 } from '@/components/pos/pin-login-ui';
 import { QwertyKeyboard } from '@/components/pos/pin-login-keyboards';
 import { useTenantBranding } from '@/providers/tenant-branding-provider';
+import { getStoredOutletId, setStoredOutletId } from '@/lib/auth/outlet-storage';
 import { cn } from '@/lib/utils';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -188,9 +189,9 @@ export default function PINLoginPage() {
 
   // ── Outlet info ──────────────────────────────────────────────────────────────
 
-  const storedOutletId = typeof window !== 'undefined'
-    ? (localStorage.getItem('pos-selected-outlet-id') ?? '')
-    : '';
+  // Slug-scoped: never resolves an outlet persisted while working in ANOTHER tenant
+  // (that leak used to send the old tenant's outlet_id to /auth/pin/identify → login failed).
+  const [storedOutletId, setStoredOutletIdState] = useState<string>(() => getStoredOutletId(orgSlug));
 
   // Both outlet queries are IndexedDB-first (kvCache): the PIN page must render its outlet
   // context (name, use case, screensaver, timeout) on an offline/weak-wifi cold start too.
@@ -255,19 +256,29 @@ export default function PINLoginPage() {
     (o) => !o.use_case || POS_OUTLET_USE_CASES.includes(o.use_case)
   );
 
-  // Show outlet selector when multiple outlets and none previously selected.
+  // Show outlet selector when multiple outlets and none previously selected for THIS tenant.
   useEffect(() => {
     if (tenantLoading || !effectiveTenantID) return;
-    const hasStoredOutlet = typeof window !== 'undefined' && !!localStorage.getItem('pos-selected-outlet-id');
-    if (!hasStoredOutlet && posOutlets.length > 1) {
+    if (!storedOutletId && posOutlets.length > 1) {
       setStep('outlet');
     }
-  }, [posOutlets.length, effectiveTenantID, tenantLoading]);
+  }, [posOutlets.length, effectiveTenantID, tenantLoading, storedOutletId]);
+
+  // Validate the stored outlet against this tenant's actual outlet list (mirrors the SSO
+  // callback's resolveActiveOutlet guard): a deleted/archived outlet — or one left over
+  // from before slug-scoping — must never be sent to /auth/pin/identify.
+  useEffect(() => {
+    if (!storedOutletId || outletsLoading || allOutlets.length === 0) return;
+    if (!allOutlets.some((o) => o.id === storedOutletId)) {
+      setStoredOutletId(null, orgSlug);
+      setStoredOutletIdState('');
+      if (posOutlets.length > 1) setStep('outlet');
+    }
+  }, [storedOutletId, allOutlets, outletsLoading, posOutlets.length, orgSlug]);
 
   function selectOutlet(outlet: OutletInfo) {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('pos-selected-outlet-id', outlet.id);
-    }
+    setStoredOutletId(outlet.id, orgSlug);
+    setStoredOutletIdState(outlet.id);
     apiClient.setOutletID(outlet.id);
     setStep('pin');
   }

@@ -55,6 +55,7 @@ export const SHIPPING_STATUSES = [
 export const SOURCES = [
   { value: '', label: 'All' }, { value: 'pos_terminal', label: 'POS' },
   { value: 'back_office', label: 'Back Office (Add Sale)' },
+  { value: 'import', label: 'Imported (migration)' },
 ];
 
 export function payStatusBadge(s: string) {

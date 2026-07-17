@@ -14,7 +14,8 @@
  */
 
 import { apiClient } from '@/lib/api/client';
-import { POS_SELECTED_OUTLET_KEY, useAuthStore, type OutletInfo } from '@/store/auth';
+import { getStoredOutletId, setStoredOutletId } from '@/lib/auth/outlet-storage';
+import { useAuthStore, type OutletInfo } from '@/store/auth';
 import { Building2, CheckCircle2, ChevronRight, Crown, MapPin } from 'lucide-react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
@@ -36,8 +37,8 @@ const USE_CASE_COLORS: Record<string, string> = {
 };
 
 function getLastSelectedOutletId(): string | null {
-  if (typeof window === 'undefined') return null;
-  try { return localStorage.getItem(POS_SELECTED_OUTLET_KEY); } catch { return null; }
+  // Slug-scoped (URL path slug): never surfaces an outlet persisted under another tenant.
+  return getStoredOutletId() || null;
 }
 
 function SelectOutletContent() {
@@ -77,12 +78,12 @@ function SelectOutletContent() {
     (outlet: OutletInfo) => {
       setSelecting(outlet.id);
       setOutlet(outlet);
-      // setOutlet already writes to localStorage and apiClient, but be explicit here
-      localStorage.setItem(POS_SELECTED_OUTLET_KEY, outlet.id);
+      // setOutlet already persists slug-scoped and sets apiClient, but be explicit here
+      setStoredOutletId(outlet.id, orgSlug);
       apiClient.setOutletID(outlet.id);
       redirect(returnTo);
     },
-    [setOutlet, redirect, returnTo]
+    [setOutlet, redirect, returnTo, orgSlug]
   );
 
   useEffect(() => {

@@ -1,9 +1,9 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Search, Loader2, Plus, Minus } from 'lucide-react';
+import { Search, Loader2, Plus, Minus, Undo2 } from 'lucide-react';
 import { Button, Card, CardContent, CardHeader } from '@/components/ui/base';
 import { useOrders, useVoidOrder, type OrderListFilters } from '@/hooks/usePOS';
 import { useStaffList } from '@/hooks/useStaff';
@@ -158,7 +158,7 @@ export function SalesListView({ orgSlug, fixedSource, title, subtitle }: {
     );
   };
 
-  const colCount = 15;
+  const colCount = 16;
 
   return (
     <div className="p-6 space-y-6">
@@ -210,6 +210,7 @@ export function SalesListView({ orgSlug, fixedSource, title, subtitle }: {
                       <th className={`${th} text-right`}>Total</th>
                       <th className={`${th} text-right`}>Paid</th>
                       <th className={`${th} text-right`}>Sell Due</th>
+                      <th className={`${th} text-right`}>Sell Return</th>
                       <th className={`${th} text-left`}>Shipping</th>
                       <th className={`${th} text-center`}>Items</th>
                     </tr>
@@ -274,7 +275,19 @@ function SaleRow({ order: o, orgSlug, expanded, onToggleExpand, onOpenDetail, ca
             onMoveDate={onMoveDate} onDelete={onDelete} />
         </td>
         <td className={`${td} text-xs text-muted-foreground`}>{new Date(o.created_at).toLocaleString('en-KE')}</td>
-        <td className={`${td} font-mono text-xs font-bold text-primary`}>{o.order_number}</td>
+        <td className={`${td} font-mono text-xs font-bold text-primary`}>
+          <span className="inline-flex items-center gap-1.5">
+            {o.order_number}
+            {(o.return_count ?? 0) > 0 && (
+              <Link href={`/${orgSlug}/returns`} onClick={(e) => e.stopPropagation()}
+                title={`${o.return_count} sell return${o.return_count > 1 ? 's' : ''} (${o.return_status}) — ${money(o.return_total)}`}
+                aria-label="View sell returns for this sale"
+                className="inline-flex h-4.5 w-4.5 items-center justify-center rounded-full bg-red-500/15 text-red-600 hover:bg-red-500/25">
+                <Undo2 className="h-3 w-3" />
+              </Link>
+            )}
+          </span>
+        </td>
         <td className={td} onClick={(e) => e.stopPropagation()}>
           {o.customer_phone ? (
             <Link href={`/${orgSlug}/clients?q=${encodeURIComponent(o.customer_phone)}`}
@@ -305,6 +318,9 @@ function SaleRow({ order: o, orgSlug, expanded, onToggleExpand, onOpenDetail, ca
         <td className={`${td} text-right font-semibold tabular-nums`}>{money(o.total_amount)}</td>
         <td className={`${td} text-right tabular-nums`}>{money(o.total_paid)}</td>
         <td className={`${td} text-right tabular-nums`}>{o.amount_due > 0.01 ? money(o.amount_due) : '—'}</td>
+        <td className={`${td} text-right tabular-nums`}>
+          {(o.return_count ?? 0) > 0 ? <span className="text-red-600 font-medium">{money(o.return_total)}</span> : '—'}
+        </td>
         <td className={`${td} text-xs capitalize`}>{o.metadata?.shipping_status || '—'}</td>
         <td className={`${td} text-center text-xs`}>{o.item_count ?? lines.length}</td>
       </tr>

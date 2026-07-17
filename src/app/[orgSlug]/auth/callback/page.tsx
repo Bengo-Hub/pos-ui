@@ -2,6 +2,7 @@
 
 import { consumeState } from '@/lib/auth/pkce';
 import { resolveActiveOutlet } from '@/lib/auth/outlet-resolver';
+import { getStoredOutletId } from '@/lib/auth/outlet-storage';
 import { useAuthStore } from '@/store/auth';
 import { SSOCallbackError } from '@bengo-hub/shared-ui-lib/auth';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
@@ -58,9 +59,8 @@ function AuthCallbackContent() {
       const returnTo = sanitizedReturnTo(sessionStorage.getItem('sso_return_to'), orgSlug);
       sessionStorage.removeItem('sso_return_to');
 
-      const storedOutlet = typeof window !== 'undefined'
-        ? localStorage.getItem('pos-selected-outlet-id')
-        : null;
+      // Slug-scoped read — another tenant's leftover outlet never short-circuits the selector.
+      const storedOutlet = getStoredOutletId(orgSlug) || null;
 
       const { user: authUser, setOutlet, outlet: storeOutlet } = useAuthStore.getState();
 

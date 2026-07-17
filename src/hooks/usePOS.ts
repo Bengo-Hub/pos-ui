@@ -1095,7 +1095,7 @@ export function useUpdateShipping() {
   const tenantID = useTenantID();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: { orderId: string; shipping_status?: string; shipping_address?: string; shipping_amount?: number; tracking_number?: string; delivery_person?: string; delivery_phone?: string }) =>
+    mutationFn: (data: { orderId: string; shipping_status?: string; shipping_address?: string; shipping_details?: string; shipping_amount?: number; tracking_number?: string; delivered_to?: string; delivery_person?: string; delivery_phone?: string }) =>
       apiClient.patch(`${basePath(tenantID)}/orders/${data.orderId}/shipping`, data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['pos-orders'] }),
   });
