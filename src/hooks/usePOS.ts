@@ -1090,6 +1090,31 @@ export function useQuotations(params?: { page?: number; limit?: number; status?:
   });
 }
 
+/** Quotation lifecycle action (send | accept | decline | cancel) — proxied to treasury's
+ *  S2S routes, the SAME handlers treasury-ui's action menu calls (accept → invoice).
+ *  Manager-gated server-side (pos.orders.manage). */
+export function useQuotationAction() {
+  const tenantID = useTenantID();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ quotationId, action }: { quotationId: string; action: 'send' | 'accept' | 'decline' | 'cancel' }) =>
+      apiClient.post(`${basePath(tenantID)}/quotations/${quotationId}/${action}`, {}),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['pos-quotations'] }),
+  });
+}
+
+/** Update a quotation in place (PUT/PATCH passthrough to treasury's UpdateQuotation —
+ *  draft-only, same validation treasury-ui edits run through). */
+export function useUpdateQuotation() {
+  const tenantID = useTenantID();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ quotationId, body }: { quotationId: string; body: Record<string, unknown> }) =>
+      apiClient.patch(`${basePath(tenantID)}/quotations/${quotationId}`, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['pos-quotations'] }),
+  });
+}
+
 /** Edit Shipping (All-Sales action) — updates shipping status/address/charges. */
 export function useUpdateShipping() {
   const tenantID = useTenantID();

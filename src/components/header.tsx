@@ -429,7 +429,9 @@ export function Header({ onMenuClick, onToggleSidebar, sidebarCollapsed }: Heade
           {isAuthenticated && profileOpen && (
             <>
               <div className="fixed inset-0 z-40" aria-hidden="true" onClick={() => setProfileOpen(false)} />
-              <div className="absolute right-0 top-full mt-2 z-50 w-72 rounded-[1.5rem] p-3 shadow-2xl border border-border bg-popover overflow-hidden">
+              {/* Wide enough for full service titles; panel scrolls internally only when
+                  taller than the viewport, so all items stay reachable. */}
+              <div className="absolute right-0 top-full mt-2 z-50 w-80 max-w-[calc(100vw-1.5rem)] max-h-[calc(100vh-5rem)] overflow-y-auto rounded-[1.5rem] p-3 shadow-2xl border border-border bg-popover">
                 <div className="mb-2 px-3 py-2">
                   <p className="text-sm font-black text-foreground">{name}</p>
                   <p className="text-[10px] text-slate-400 truncate font-bold uppercase tracking-widest mt-0.5">{role || 'Member'}</p>
@@ -459,7 +461,9 @@ export function Header({ onMenuClick, onToggleSidebar, sidebarCollapsed }: Heade
                 {isHQUser && (
                   <>
                     <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 px-3 mb-1.5">Services</p>
-                    <div className="grid gap-1 max-h-72 overflow-y-auto">
+                    {/* No inner scroll cap — full titles, all items visible; the panel itself
+                        scrolls only when taller than the viewport. */}
+                    <div className="grid gap-1">
                       {SERVICES.map(({ label, href, Icon }) => (
                         <a
                           key={label}

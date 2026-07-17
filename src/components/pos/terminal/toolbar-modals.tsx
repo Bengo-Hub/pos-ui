@@ -9,7 +9,8 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Loader2, X, RotateCcw, ClipboardList, Wallet, Pencil, Trash2 } from 'lucide-react';
-import { useOrders, useQuotations, useVoidOrder } from '@/hooks/usePOS';
+import { useOrders, useQuotationAction, useQuotations, useVoidOrder } from '@/hooks/usePOS';
+import { usePermissions } from '@/hooks/usePermissions';
 import { useCurrentShift } from '@/hooks/useShifts';
 import { useRegisterDetails } from '@/hooks/useReports';
 import { format, startOfDay } from 'date-fns';
@@ -235,6 +236,11 @@ export function RecentTransactionsModal({ open, onClose, orgSlug }: { open: bool
   // treasury list payload — no extra fetch).
   const [expandedQuote, setExpandedQuote] = useState<string | null>(null);
   const voidOrder = useVoidOrder();
+  // Quotation lifecycle (send/accept/decline/cancel) — treasury S2S via the pos-api proxy,
+  // manager-gated on both sides (pos.orders.manage).
+  const quotationAction = useQuotationAction();
+  const { can } = usePermissions();
+  const canManageQuotes = can('pos.orders.manage');
 
   const activeTab = RECENT_TABS.find((t) => t.key === tab)!;
   const isQuotation = tab === 'quotation';
@@ -313,7 +319,40 @@ export function RecentTransactionsModal({ open, onClose, orgSlug }: { open: bool
                   <span className="font-bold text-sm tabular-nums shrink-0">{fmt(Number(q.total ?? q.total_amount ?? 0))}</span>
                 </button>
                 {expanded && (
-                  <div className="mt-2 rounded-lg border border-border bg-accent/10 p-2">
+                  <div className="mt-2 rounded-lg border border-border bg-accent/10 p-2 space-y-2">
+                    {/* Lifecycle actions — the SAME treasury handlers treasury-ui's menu calls
+                        (accept converts to an invoice). Manager-gated on both sides. */}
+                    {canManageQuotes && (
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        {(q.status ?? 'draft') !== 'accepted' && (q.status ?? '') !== 'cancelled' && (q.status ?? '') !== 'converted' && (
+                          <>
+                            {(q.status === 'draft' || q.status === 'sent' || !q.status) && (
+                              <button
+                                onClick={() => quotationAction.mutate({ quotationId: qid, action: 'send' }, { onSuccess: () => toast.success('Quotation sent to customer'), onError: (e: any) => toast.error(e?.response?.data?.error || 'Send failed') })}
+                                disabled={quotationAction.isPending}
+                                className="px-2.5 py-1 rounded-lg border border-border text-xs font-semibold hover:bg-accent disabled:opacity-50"
+                              >Send</button>
+                            )}
+                            <button
+                              onClick={() => quotationAction.mutate({ quotationId: qid, action: 'accept' }, { onSuccess: () => toast.success('Quotation accepted → invoice created in Treasury'), onError: (e: any) => toast.error(e?.response?.data?.error || 'Accept failed') })}
+                              disabled={quotationAction.isPending}
+                              className="px-2.5 py-1 rounded-lg bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 disabled:opacity-50"
+                            >Accept → Invoice</button>
+                            <button
+                              onClick={() => quotationAction.mutate({ quotationId: qid, action: 'decline' }, { onSuccess: () => toast.success('Quotation declined'), onError: (e: any) => toast.error(e?.response?.data?.error || 'Decline failed') })}
+                              disabled={quotationAction.isPending}
+                              className="px-2.5 py-1 rounded-lg border border-border text-xs font-semibold text-muted-foreground hover:bg-accent disabled:opacity-50"
+                            >Decline</button>
+                            <button
+                              onClick={() => quotationAction.mutate({ quotationId: qid, action: 'cancel' }, { onSuccess: () => toast.success('Quotation cancelled'), onError: (e: any) => toast.error(e?.response?.data?.error || 'Cancel failed') })}
+                              disabled={quotationAction.isPending}
+                              className="px-2.5 py-1 rounded-lg border border-destructive/40 text-xs font-semibold text-destructive hover:bg-destructive/10 disabled:opacity-50"
+                            >Cancel</button>
+                          </>
+                        )}
+                        {q.status && <span className="ml-auto text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{q.status}</span>}
+                      </div>
+                    )}
                     {qLines.length === 0 ? (
                       <p className="text-xs text-muted-foreground px-1 py-1">No line items on this quotation.</p>
                     ) : (
