@@ -22,7 +22,7 @@ import { CalculatorOverlay } from '@/components/pos/calculator-overlay';
 import { ApprovalDialog } from '@/components/pos/approval-dialog';
 import { VoidApprovalDialog } from '@/components/pos/void-approval-dialog';
 import { ChargesModal } from '@/components/pos/charges-modal';
-import { DiscountModal } from '@/components/pos/discount-modal';
+import { ApplyDiscountModal } from '@/components/pos/discounts/apply-discount-modal';
 import { OrderTaxModal } from '@/components/pos/order-tax-modal';
 import { LinePriceModal } from '@/components/pos/line-price-modal';
 import { OrderPlacedDialog } from '@/components/pos/order-placed-dialog';
@@ -158,7 +158,7 @@ export function TerminalModals() {
         }}
       />
 
-      <DiscountModal
+      <ApplyDiscountModal
         open={t.discountOpen}
         subtotal={t.subtotal}
         currentAmount={t.manualDiscount}

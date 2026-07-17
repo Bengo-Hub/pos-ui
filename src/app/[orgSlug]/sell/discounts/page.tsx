@@ -12,7 +12,8 @@ import { useDiscounts, useCreateDiscount, useUpdateDiscount, useDeleteDiscount }
 import { useFullCatalog } from '@/hooks/usePOS';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import type { Discount, DiscountInput } from '@/lib/api/discounts';
-import { DiscountFormModal, describeDiscount, type DiscountItemRef } from '@/components/pos/discounts/discount-form-modal';
+import { DiscountFormModal, describeDiscount } from '@/components/pos/discounts/discount-form-modal';
+import { searchCatalogItemsAdapter } from '@/components/pos/discounts/apply-discount-modal';
 import { cn } from '@/lib/utils';
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -66,16 +67,9 @@ export default function DiscountsPage() {
     return m;
   }, [fullCatalog]);
 
-  // Item-search adapter for the shared modal — pos-ui hosts it against its own catalog.
-  const searchItems = async (query: string): Promise<DiscountItemRef[]> => {
-    const { apiClient } = await import('@/lib/api/client');
-    const { useAuthStore } = await import('@/store/auth');
-    const tenantID = useAuthStore.getState().user?.tenant_id ?? '';
-    const res = await apiClient.get<{ data: Array<{ sku: string; name: string }> }>(
-      `/api/v1/${tenantID}/pos/catalog/items?search=${encodeURIComponent(query)}&limit=25`,
-    );
-    return ((res as any)?.data ?? []).map((i: any) => ({ sku: i.sku, name: i.name }));
-  };
+  // Item-search adapter for the shared modal — ONE pos-ui adapter, shared with the
+  // apply-discount modal (components/pos/discounts/apply-discount-modal.tsx).
+  const searchItems = searchCatalogItemsAdapter;
 
   async function handleSubmit(payload: DiscountInput) {
     try {

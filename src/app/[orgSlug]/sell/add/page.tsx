@@ -15,6 +15,9 @@ import { Tag } from 'lucide-react';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { SplitPaymentModal } from '@/components/pos/split-payment-modal';
 import { CostHeaderToggle, MaskedCost } from '@/components/pos/cost-price';
+import { ApplyDiscountModal } from '@/components/pos/discounts/apply-discount-modal';
+import { ApprovalDialog, type ApprovalResult } from '@/components/pos/approval-dialog';
+import { InlineDiscountCell, InlineMarginCell, InlinePriceCell, InlineTotalCell } from '@/components/pos/inline-line-cells';
 import { CustomerSearch, WALK_IN_CUSTOMER, type SelectedCustomer } from '@/components/pos/customer-search';
 import { useAuthStore } from '@/store/auth';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -37,6 +40,12 @@ interface SaleLine {
   item: CatalogItem;
   quantity: number;
   unitPrice: number;
+  /** Catalog/tier price at add time — the FLOOR for non-managers (terminal pricing policy:
+   *  cashiers may only sell AT or ABOVE the preset; only pos.orders.manage may mark down). */
+  preset: number;
+  /** Sticky per-unit line discount (KES) — same value model as the terminal's inline cells:
+   *  base = unitPrice + unitDiscount, so margin/price edits never clobber the discount. */
+  unitDiscount?: number;
   /** True once the user manually edited this line's price — switching profile won't overwrite it. */
   priceEdited?: boolean;
   /** Persisted order-line id when this sale was resumed from All Sales / Drafts — enables
@@ -153,12 +162,17 @@ export default function AddSalePage() {
   // local tier price, then confirm each from inventory-api's resolve endpoint (quantity-break aware).
   const changeProfile = useCallback((profile: string) => {
     setPricingProfile(profile);
-    setLines((prev) => prev.map((l) => (l.priceEdited ? l : { ...l, unitPrice: tierPrice(l.item, profile) })));
+    // The preset (non-manager floor) follows the profile price; manually-edited lines keep
+    // their price but still get the new floor reference.
+    setLines((prev) => prev.map((l) => {
+      const p = tierPrice(l.item, profile);
+      return l.priceEdited ? { ...l, preset: p } : { ...l, unitPrice: p, preset: p, unitDiscount: 0 };
+    }));
     setLines((prev) => {
       prev.forEach((l) => {
         if (l.priceEdited) return;
         resolvePrice(l.item.id, l.quantity, profile).then((p) => {
-          if (p != null) setLines((cur) => cur.map((x) => (x.item.id === l.item.id && !x.priceEdited ? { ...x, unitPrice: p } : x)));
+          if (p != null) setLines((cur) => cur.map((x) => (x.item.id === l.item.id && !x.priceEdited ? { ...x, unitPrice: p, preset: p } : x)));
         });
       });
       return prev;
@@ -166,7 +180,11 @@ export default function AddSalePage() {
   }, [resolvePrice]);
 
   // ── Order-level ──
+  // Discount is set through the shared ApplyDiscountModal (predefined / new standard /
+  // quick one-time) — same entry point and server-side over-limit step-up as the terminal.
   const [discount, setDiscount] = useState(0);
+  const [discountReason, setDiscountReason] = useState('');
+  const [discountOpen, setDiscountOpen] = useState(false);
   // The discount as last persisted on the SERVER for a resumed sale (null = not a resume).
   // A mismatch with `discount` marks it dirty and surfaces the ✓ save / ✕ cancel actions —
   // the typed discount must be PATCHed onto the order BEFORE settling, because completing
@@ -205,6 +223,11 @@ export default function AddSalePage() {
   const createIntent = useCreatePaymentIntent();
   const voidOrder = useVoidOrder();
   const [payOrder, setPayOrder] = useState<{ id: string; number: string; total: number } | null>(null);
+  // Manager step-up required by the server (422 approval_required): an over-limit discount
+  // (order.discount_override) or a non-manager shipping charge (order.adjustment). The
+  // ApprovalDialog resolves a token/one-time code and the save is retried with it — the
+  // exact flow the POS terminal runs.
+  const [pendingApproval, setPendingApproval] = useState<{ action: string; mode: 'pay' | 'draft'; creditDetails?: CreditSaleDetails } | null>(null);
 
   // ── Resume / edit an existing draft (REQ-003) ── ?order_id= comes from the Drafts page
   // "Resume Sale" action and the All-Sales "Edit" action. The draft's lines, customer and
@@ -233,6 +256,7 @@ export default function AddSalePage() {
       item: { id: l.catalog_item_id, sku: l.sku, name: l.name, price: l.unit_price, category: '' } as CatalogItem,
       quantity: l.quantity,
       unitPrice: l.unit_price,
+      preset: l.unit_price, // the persisted price is the floor reference for non-managers
       priceEdited: true, // keep the draft's prices — don't let profile switching overwrite them
       lineId: l.id,
       savedPrice: l.unit_price,
@@ -265,13 +289,14 @@ export default function AddSalePage() {
       // Non-billable items (free accompaniments / supplies) are never charged — force 0
       // regardless of tier pricing (the server zeroes the line as a belt anyway).
       const free = item.non_billable === true || item.is_complimentary === true;
-      return [...prev, { item, quantity: 1, unitPrice: free ? 0 : tierPrice(item, pricingProfile) }];
+      const preset = free ? 0 : tierPrice(item, pricingProfile);
+      return [...prev, { item, quantity: 1, unitPrice: preset, preset }];
     });
     // Confirm the profile price from inventory-api (mirrors the terminal). Skips if the user already
     // hand-edited this line's price.
     if (pricingProfile && !(item.non_billable === true || item.is_complimentary === true)) {
       resolvePrice(item.id, newQty, pricingProfile).then((p) => {
-        if (p != null) setLines((cur) => cur.map((l) => (l.item.id === item.id && !l.priceEdited ? { ...l, unitPrice: p } : l)));
+        if (p != null) setLines((cur) => cur.map((l) => (l.item.id === item.id && !l.priceEdited ? { ...l, unitPrice: p, preset: p } : l)));
       });
     }
   }, [pricingProfile, resolvePrice]);
@@ -283,8 +308,27 @@ export default function AddSalePage() {
     }
     return setLines((p) => p.map((l, x) => (x === i ? { ...l, quantity: q } : l)));
   };
+  // Terminal pricing policy (same gates as the POS terminal's inline cells): managers/admins
+  // (pos.orders.manage) may set ANY price — markdown or markup; everyone else may only sell
+  // AT or ABOVE the preset. The stored unitDiscount is deliberately KEPT on a price edit so
+  // a margin/total edit never wipes a layered line discount.
   const setPrice = (i: number, v: number) => {
-    setLines((p) => p.map((l, x) => (x === i ? { ...l, unitPrice: Math.max(0, v), priceEdited: true } : l)));
+    setLines((p) => p.map((l, x) => {
+      if (x !== i) return l;
+      let next = Math.max(0, v);
+      if (!canPrivileged) next = Math.max(next, l.preset);
+      return { ...l, unitPrice: Math.round(next * 100) / 100, priceEdited: true };
+    }));
+  };
+  // Per-line discount (managers only — the cell is not editable otherwise): keeps the BASE
+  // (current price + stored discount) and lowers the effective price by the new discount.
+  const setLineDiscount = (i: number, ud: number) => {
+    setLines((p) => p.map((l, x) => {
+      if (x !== i) return l;
+      const base = l.unitPrice + (l.unitDiscount ?? 0);
+      const next = Math.max(0, Math.round((base - ud) * 100) / 100);
+      return { ...l, unitPrice: next, unitDiscount: ud, priceEdited: true };
+    }));
   };
 
   // A resumed line whose price/qty differs from what the server holds. These can be saved
@@ -304,7 +348,7 @@ export default function AddSalePage() {
   const saveDiscount = () => {
     if (!resume) return;
     setOrderDiscount.mutate(
-      { orderId: resume.id, discountAmount: discount, reason: 'Order discount edit on resumed sale' },
+      { orderId: resume.id, discountAmount: discount, reason: discountReason || 'Order discount edit on resumed sale' },
       {
         onSuccess: (d: any) => {
           const newTotal = Number(d?.order?.total_amount);
@@ -360,7 +404,7 @@ export default function AddSalePage() {
   }, [lines, taxRate]);
   const { roundOff, total } = applyRoundOff(subtotal + tax - discount + shippingAmount);
 
-  function buildPayload() {
+  function buildPayload(approval?: ApprovalResult) {
     return {
       outletId,
       // Tag sales entered here as back-office so the All-Sales "Sources" filter and the
@@ -371,6 +415,11 @@ export default function AddSalePage() {
       // backend now normalizes it, but send the correct value in the first place.
       orderSubtype: 'retail' as const,
       discountAmount: discount || undefined,
+      discountReason: (discount > 0 && discountReason) || undefined,
+      // Manager step-up outcome (over-limit discount / order adjustment) — token from a live
+      // PIN/card step-up, or the one-time code a manager generated remotely.
+      approvalToken: approval?.approvalToken,
+      approvalCode: approval?.code,
       customerPhone: custPhone || undefined,
       customerName: custName || undefined,
       // Shipping charge rides the real order-level charges cost so the server total includes it.
@@ -405,6 +454,15 @@ export default function AddSalePage() {
         if (notes) lineMeta.notes = notes;
         // Free-of-charge marker — the server zeroes the line on this flag (belt & braces).
         if (free) lineMeta.non_billable = true;
+        // Price-override audit trail — the SAME metadata contract the terminal sends:
+        // metadata.original_price is what pos-api's markdown gate (price.override step-up +
+        // audit) keys off, so back-office markdowns get identical enforcement.
+        if ((l.unitDiscount ?? 0) > 0) lineMeta.unit_discount = l.unitDiscount;
+        if (!free && l.preset > 0 && Math.abs(l.unitPrice - l.preset) > 0.004) {
+          lineMeta.original_price = l.preset;
+          lineMeta.price_override = true;
+          lineMeta.override_reason = (l.unitDiscount ?? 0) > 0 ? 'line discount' : 'price edit';
+        }
         return {
           catalog_item_id: l.item.id,
           sku: l.item.sku,
@@ -423,7 +481,7 @@ export default function AddSalePage() {
     };
   }
 
-  function save(mode: 'pay' | 'draft', creditDetails?: CreditSaleDetails) {
+  function save(mode: 'pay' | 'draft', creditDetails?: CreditSaleDetails, approval?: ApprovalResult) {
     if (lines.length === 0) return;
     if (creditSale && staffParty && !staffId) {
       toast.error('Please select a staff member.');
@@ -471,7 +529,7 @@ export default function AddSalePage() {
       return;
     }
 
-    createOrder.mutate(buildPayload(), {
+    createOrder.mutate(buildPayload(approval), {
       onSuccess: (o: any) => {
         const id = o.id || o.order_id || '';
         // A MODIFIED resumed draft becomes a fresh order; the stale draft is voided as
@@ -501,11 +559,22 @@ export default function AddSalePage() {
           setPayOrder({ id, number: o.order_number || id, total });
         }
       },
-      onError: async (e) => toast.error(await apiErrorMessage(e, 'Failed to create sale. Please try again.')),
+      onError: async (e: any) => {
+        // Over-limit discount / non-manager order adjustment → manager step-up, then retry
+        // this same save with the token/code (mirrors the terminal's 422 handling).
+        const status = e?.response?.status;
+        const data = e?.response?.data ?? {};
+        if (status === 422 && data.approval_required) {
+          setPendingApproval({ action: data.action || 'order.discount_override', mode, creditDetails });
+          return;
+        }
+        toast.error(await apiErrorMessage(e, 'Failed to create sale. Please try again.'));
+      },
     });
   }
   function reset() {
-    setLines([]); setDiscount(0); setSavedDiscount(null); setNotes(''); setCustomer(WALK_IN_CUSTOMER); setCreditSale(false);
+    setLines([]); setDiscount(0); setDiscountReason(''); setSavedDiscount(null); setNotes(''); setCustomer(WALK_IN_CUSTOMER); setCreditSale(false);
+    setPendingApproval(null);
     setPartyType('customer'); setStaffId(''); setFundFromSalary(false); setMonths(1);
     setShippingOpen(false); setShipping(emptyShippingForm());
     setStructuralDirty(false); setSavingLineIdx(null);
@@ -717,12 +786,14 @@ export default function AddSalePage() {
                     <CostHeaderToggle revealed={costRevealed} onToggle={() => setCostRevealed((v) => !v)} label="Cost price" className="normal-case" />
                   </th>
                 )}
+                {canViewCost && <th className="text-right px-3 py-2.5 font-medium">Margin</th>}
                 <th className="text-right px-3 py-2.5 font-medium">Unit price</th>
+                {canPrivileged && <th className="text-right px-3 py-2.5 font-medium">Discount</th>}
                 <th className="text-right px-4 py-2.5 font-medium">Total</th>
                 <th></th>
               </tr></thead>
               <tbody className="divide-y divide-border">
-                {lines.length === 0 && <tr><td colSpan={canViewCost ? 6 : 5} className="px-4 py-8 text-center text-muted-foreground">Search and add products to the sale</td></tr>}
+                {lines.length === 0 && <tr><td colSpan={5 + (canViewCost ? 2 : 0) + (canPrivileged ? 1 : 0)} className="px-4 py-8 text-center text-muted-foreground">Search and add products to the sale</td></tr>}
                 {lines.map((l, i) => {
                   // REQ-001: projected on-hand stock if this sale/quotation is completed —
                   // client-side preview only; nothing is deducted until the sale finalizes.
@@ -751,13 +822,52 @@ export default function AddSalePage() {
                       </td>
                       {canViewCost && (
                         <td className="px-3 py-3 text-right text-xs">
-                          <MaskedCost cost={cost} sell={l.unitPrice} revealed={costRevealed} />
+                          <MaskedCost cost={cost} sell={l.unitPrice} revealed={costRevealed} showMargin={false} />
+                        </td>
+                      )}
+                      {canViewCost && (
+                        <td className="px-3 py-3 text-right text-xs">
+                          {/* Margin edit recalculates the price from cost, keeping any line
+                              discount — managers only (same gate as the terminal). */}
+                          <InlineMarginCell
+                            cost={cost}
+                            sell={l.unitPrice}
+                            unitDiscount={l.unitDiscount ?? 0}
+                            revealed={costRevealed}
+                            editable={canPrivileged}
+                            onCommitPrice={(p) => setPrice(i, p)}
+                          />
                         </td>
                       )}
                       <td className="px-3 py-3 text-right">
-                        <input value={l.unitPrice} onChange={(e) => setPrice(i, parseFloat(e.target.value) || 0)} className="w-24 text-right bg-background border border-border rounded py-1 px-2 text-sm tabular-nums" />
+                        {/* Terminal pricing policy: managers may mark down (inline discount);
+                            everyone else may only sell at/above the preset catalog price. */}
+                        <InlinePriceCell
+                          price={l.unitPrice}
+                          preset={l.preset}
+                          canDiscount={canPrivileged}
+                          onCommit={(p) => setPrice(i, p)}
+                        />
                       </td>
-                      <td className="px-4 py-3 text-right font-semibold tabular-nums">{fmt(l.unitPrice * l.quantity)}</td>
+                      {canPrivileged && (
+                        <td className="px-3 py-3 text-right">
+                          <InlineDiscountCell
+                            price={l.unitPrice}
+                            unitDiscount={l.unitDiscount ?? 0}
+                            quantity={l.quantity}
+                            editable={canPrivileged}
+                            onCommitDiscount={(ud) => setLineDiscount(i, ud)}
+                          />
+                        </td>
+                      )}
+                      <td className="px-4 py-3 text-right">
+                        <InlineTotalCell
+                          price={l.unitPrice}
+                          quantity={l.quantity}
+                          canDiscount={canPrivileged}
+                          onCommitPrice={(p) => setPrice(i, p)}
+                        />
+                      </td>
                       <td className="px-2 whitespace-nowrap">
                         <div className="flex items-center gap-1.5">
                           {/* Per-line ✓ save / ✕ revert — resumed lines only, once price/qty diverge
@@ -828,6 +938,11 @@ export default function AddSalePage() {
             <div className="flex justify-between items-center text-sm">
               <span className="text-muted-foreground">Order discount</span>
               <div className="flex items-center gap-1.5">
+                {/* Discount is entered through the shared ApplyDiscountModal (predefined /
+                    new standard / quick one-time) — never a free-typed field. Editing the
+                    discount of a RESUMED sale PATCHes a manager-only route, so that path is
+                    manager-gated here too; a fresh sale lets any cashier request one and the
+                    server demands the manager step-up when it exceeds the outlet limit. */}
                 {/* ✓ save / ✕ cancel — resumed sales only, once the discount diverges from the
                     server. ✓ PATCHes the discount onto the SAME order (audited, recomputes
                     totals) so settling charges the discounted total — no Save & Pay round-trip,
@@ -852,9 +967,24 @@ export default function AddSalePage() {
                     </button>
                   </>
                 )}
-                <input value={discount} onChange={(e) => setDiscount(Math.max(0, parseFloat(e.target.value) || 0))} className="w-24 text-right bg-background border border-border rounded py-1 px-2 text-sm tabular-nums" />
+                <button
+                  type="button"
+                  onClick={() => setDiscountOpen(true)}
+                  disabled={!!resume && !canPrivileged}
+                  title={resume && !canPrivileged ? 'Editing a saved sale’s discount needs a manager (pos.orders.manage)' : 'Apply a defined discount or a one-time discount'}
+                  className={cn(
+                    'flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1 text-sm font-semibold hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed',
+                    discount > 0 ? 'text-amber-600' : 'text-muted-foreground',
+                  )}
+                >
+                  <Tag className="h-3.5 w-3.5" />
+                  {discount > 0 ? `− ${fmt(discount)}` : 'Add discount'}
+                </button>
               </div>
             </div>
+            {discount > 0 && discountReason && (
+              <p className="text-[11px] text-muted-foreground text-right -mt-1.5">{discountReason}</p>
+            )}
             <div className="flex justify-between text-sm"><span className="text-muted-foreground">VAT ({Math.round(taxRate * 100)}%)</span><span className="tabular-nums font-medium">{fmt(tax)}</span></div>
             {shippingAmount > 0 && (
               <div className="flex justify-between text-sm"><span className="text-muted-foreground">Shipping (+)</span><span className="tabular-nums font-medium">{fmt(shippingAmount)}</span></div>
@@ -886,6 +1016,38 @@ export default function AddSalePage() {
           </div>
         </div>
       </div>
+
+      {/* Order discount — the ONE shared entry point (predefined by use case / new standard
+          discount / quick one-time), same modal the POS terminal cart opens. */}
+      <ApplyDiscountModal
+        open={discountOpen}
+        subtotal={subtotal}
+        currentAmount={discount}
+        currentReason={discountReason}
+        onApply={(amount, reason) => { setDiscount(amount); setDiscountReason(reason); setDiscountOpen(false); }}
+        onClose={() => setDiscountOpen(false)}
+      />
+
+      {/* Manager step-up for an over-limit discount / non-manager order adjustment — the
+          server's 422 approval_required is resolved here and the save retried with the
+          token/one-time code (same three-tab dialog Void/Complimentary use). */}
+      {pendingApproval && (
+        <ApprovalDialog
+          open
+          action={pendingApproval.action}
+          description={
+            pendingApproval.action === 'order.discount_override'
+              ? `The ${fmt(discount)} discount exceeds your allowed limit — a manager must authorize it.`
+              : 'This order change requires manager authorization.'
+          }
+          onApproved={(approval) => {
+            const { mode, creditDetails } = pendingApproval;
+            setPendingApproval(null);
+            save(mode, creditDetails, approval);
+          }}
+          onClose={() => setPendingApproval(null)}
+        />
+      )}
 
       {/* Credit-sale terms capture (due date default +30d, notes) — shared component. */}
       <CreditSaleDetailsModal
