@@ -1594,6 +1594,40 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
         setReceiptData({ ...data, served_by: data.served_by || user?.fullName || user?.email });
         setReceiptOrderId(settledOrderId);
         setReceiptOpen(true);
+        // eTIMS fiscalisation is ASYNC (treasury worker, ~30s): the receipt is fetched right
+        // after payment, before the KRA fiscal identity lands. The pos-api backfills the order's
+        // eTIMS fields from treasury on each receipt fetch, so poll a few times until the CU inv
+        // no / signature / QR appear, then merge them into the open receipt (no manual reprint).
+        if (!data.etims_cu_inv_no && !data.etims_invoice_number) {
+          void (async () => {
+            for (let attempt = 0; attempt < 10; attempt++) {
+              await new Promise((r) => setTimeout(r, 5000));
+              try {
+                const fresh = await apiClient.get<ReceiptData>(
+                  `/api/v1/${tenantId}/pos/orders/${settledOrderId}/receipt`
+                );
+                if (fresh.etims_cu_inv_no || fresh.etims_invoice_number) {
+                  setReceiptData((prev) =>
+                    prev && prev.order_number === data.order_number
+                      ? {
+                          ...prev,
+                          etims_invoice_number: fresh.etims_invoice_number,
+                          etims_qr_code_url: fresh.etims_qr_code_url,
+                          etims_scu_id: fresh.etims_scu_id,
+                          etims_cu_inv_no: fresh.etims_cu_inv_no,
+                          etims_rcpt_sign: fresh.etims_rcpt_sign,
+                          etims_kra_pin: fresh.etims_kra_pin,
+                        }
+                      : prev,
+                  );
+                  break;
+                }
+              } catch {
+                // keep polling — transient
+              }
+            }
+          })();
+        }
       } catch {
         // Receipt fetch failed — not critical, payment already confirmed
       }

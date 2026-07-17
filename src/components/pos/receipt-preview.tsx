@@ -65,6 +65,13 @@ export interface ReceiptData {
   currency?: string;
   etims_invoice_number?: string;
   etims_qr_code_url?: string;
+  // Full KRA eTIMS fiscal identity (populated by the pos-api receipt endpoint from the order's
+  // treasury-backfilled fiscal fields) — a compliant ETR receipt needs the CU invoice no + SCU
+  // id + receipt signature + KRA PIN, not just the invoice number + QR.
+  etims_scu_id?: string;
+  etims_cu_inv_no?: string;
+  etims_rcpt_sign?: string;
+  etims_kra_pin?: string;
   // outlet + configurable receipt settings (populated by the pos-api receipt endpoint from OutletSetting)
   outlet_name?: string;
   outlet_address?: string;
@@ -327,8 +334,12 @@ export function ReceiptPreview({
                   );
                 case 'etims':
                   return (
-                    <div key={i}>
-                      <p className="text-center text-muted-foreground text-[10px]">eTIMS: {row.invoiceNumber}</p>
+                    <div key={i} className="text-center text-muted-foreground text-[10px] leading-tight">
+                      <p className="font-semibold text-foreground">KRA eTIMS</p>
+                      {row.kraPin && <p>PIN: {row.kraPin}</p>}
+                      {row.scuId && <p>SCU ID: {row.scuId}</p>}
+                      {(row.cuInvNo || row.invoiceNumber) && <p>CU Inv No: {row.cuInvNo || row.invoiceNumber}</p>}
+                      {row.rcptSign && <p className="break-all">Receipt Signature: {row.rcptSign}</p>}
                       {row.qrUrl && (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img src={row.qrUrl} alt="eTIMS QR" className="mx-auto mt-1 h-16 w-16" />

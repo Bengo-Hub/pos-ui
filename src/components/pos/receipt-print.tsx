@@ -170,8 +170,13 @@ export function ReceiptPrint({
           case 'etims':
             return (
               <div key={i}>
-                <p className="receipt-center receipt-small" style={{ marginBottom: 2 }}>KRA eTIMS Invoice</p>
-                <p className="receipt-center receipt-small">CU#: {row.invoiceNumber}</p>
+                <p className="receipt-center receipt-small" style={{ marginBottom: 2 }}>KRA eTIMS</p>
+                {row.kraPin && <p className="receipt-center receipt-small">PIN: {row.kraPin}</p>}
+                {row.scuId && <p className="receipt-center receipt-small">SCU ID: {row.scuId}</p>}
+                <p className="receipt-center receipt-small">CU Inv No: {row.cuInvNo || row.invoiceNumber}</p>
+                {row.rcptSign && (
+                  <p className="receipt-center receipt-small" style={{ wordBreak: 'break-all' }}>Receipt Signature: {row.rcptSign}</p>
+                )}
                 {row.qrUrl && (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={row.qrUrl} alt="eTIMS QR Code" className="receipt-qr" />

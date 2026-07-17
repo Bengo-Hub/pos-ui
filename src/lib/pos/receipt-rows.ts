@@ -21,7 +21,15 @@ export interface ReceiptMoneyRow { kind: 'money'; label: string; amount: number;
 export interface ReceiptTotalRow { kind: 'total'; label: string; amount: number }
 export interface ReceiptPaymentRow { kind: 'payment'; label: string; amount: number }
 export interface ReceiptChangeRow { kind: 'change'; amount: number }
-export interface ReceiptEtimsRow { kind: 'etims'; invoiceNumber: string; qrUrl?: string }
+export interface ReceiptEtimsRow {
+  kind: 'etims';
+  invoiceNumber: string;
+  qrUrl?: string;
+  cuInvNo?: string;
+  scuId?: string;
+  rcptSign?: string;
+  kraPin?: string;
+}
 export interface ReceiptHowToPayTitleRow { kind: 'how-to-pay-title' }
 export interface ReceiptPaymentMethodRow { kind: 'payment-method'; label: string; value: string }
 export interface ReceiptPaymentAccountNameRow { kind: 'payment-account-name'; text: string }
@@ -116,9 +124,19 @@ export function buildReceiptRows(receipt: ReceiptData): ReceiptRow[] {
     rows.push({ kind: 'money', label: 'Balance Due', amount: receipt.balance_due ?? 0 });
   }
 
-  if (receipt.etims_invoice_number) {
+  // Show the KRA eTIMS fiscal block when ANY fiscal identity has landed (CU inv no / invoice
+  // number), so a compliant ETR strip renders even before the legacy invoice_number populates.
+  if (receipt.etims_invoice_number || receipt.etims_cu_inv_no) {
     rows.push({ kind: 'divider' });
-    rows.push({ kind: 'etims', invoiceNumber: receipt.etims_invoice_number, qrUrl: receipt.etims_qr_code_url });
+    rows.push({
+      kind: 'etims',
+      invoiceNumber: receipt.etims_invoice_number ?? '',
+      qrUrl: receipt.etims_qr_code_url,
+      cuInvNo: receipt.etims_cu_inv_no,
+      scuId: receipt.etims_scu_id,
+      rcptSign: receipt.etims_rcpt_sign,
+      kraPin: receipt.etims_kra_pin,
+    });
   }
 
   const pm = receipt.payment_methods;
