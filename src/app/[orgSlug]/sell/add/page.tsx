@@ -211,6 +211,10 @@ export default function AddSalePage() {
   // manager/back-office action (same permission that approves sale returns).
   const { can, canAny } = usePermissions();
   const canPrivileged = can('pos.orders.manage');
+  // Discounting is permission-gated (2026-07-17): manager/admin + platform owner by default
+  // (pos.discounts.add / pos.orders.manage); hidden from cashiers unless the tenant admin
+  // grants the code. Mirrors the terminal cart's "Add discount" gate.
+  const canApplyDiscount = canAny(['pos.discounts.add', 'pos.orders.manage']);
   // REQ-006: cost price + margin visibility for management roles at the point of sale.
   // Values render MASKED by default (customers can see the screen); the header eye toggle
   // reveals/hides the whole column. Same gate as pos-api's cost serialization
@@ -788,12 +792,12 @@ export default function AddSalePage() {
                 )}
                 {canViewCost && <th className="text-right px-3 py-2.5 font-medium">Margin</th>}
                 <th className="text-right px-3 py-2.5 font-medium">Unit price</th>
-                {canPrivileged && <th className="text-right px-3 py-2.5 font-medium">Discount</th>}
+                {canApplyDiscount && <th className="text-right px-3 py-2.5 font-medium">Discount</th>}
                 <th className="text-right px-4 py-2.5 font-medium">Total</th>
                 <th></th>
               </tr></thead>
               <tbody className="divide-y divide-border">
-                {lines.length === 0 && <tr><td colSpan={5 + (canViewCost ? 2 : 0) + (canPrivileged ? 1 : 0)} className="px-4 py-8 text-center text-muted-foreground">Search and add products to the sale</td></tr>}
+                {lines.length === 0 && <tr><td colSpan={5 + (canViewCost ? 2 : 0) + (canApplyDiscount ? 1 : 0)} className="px-4 py-8 text-center text-muted-foreground">Search and add products to the sale</td></tr>}
                 {lines.map((l, i) => {
                   // REQ-001: projected on-hand stock if this sale/quotation is completed —
                   // client-side preview only; nothing is deducted until the sale finalizes.
@@ -840,22 +844,23 @@ export default function AddSalePage() {
                         </td>
                       )}
                       <td className="px-3 py-3 text-right">
-                        {/* Terminal pricing policy: managers may mark down (inline discount);
-                            everyone else may only sell at/above the preset catalog price. */}
+                        {/* Terminal pricing policy (2026-07-17): price edits are manager-only;
+                            cashiers sell at the preset price — read-only cell. */}
                         <InlinePriceCell
                           price={l.unitPrice}
                           preset={l.preset}
                           canDiscount={canPrivileged}
+                          disabled={!canPrivileged}
                           onCommit={(p) => setPrice(i, p)}
                         />
                       </td>
-                      {canPrivileged && (
+                      {canApplyDiscount && (
                         <td className="px-3 py-3 text-right">
                           <InlineDiscountCell
                             price={l.unitPrice}
                             unitDiscount={l.unitDiscount ?? 0}
                             quantity={l.quantity}
-                            editable={canPrivileged}
+                            editable={canApplyDiscount}
                             onCommitDiscount={(ud) => setLineDiscount(i, ud)}
                           />
                         </td>
@@ -970,19 +975,25 @@ export default function AddSalePage() {
                     </button>
                   </>
                 )}
-                <button
-                  type="button"
-                  onClick={() => setDiscountOpen(true)}
-                  disabled={!!resume && !canPrivileged}
-                  title={resume && !canPrivileged ? 'Editing a saved sale’s discount needs a manager (pos.orders.manage)' : 'Apply a defined discount or a one-time discount'}
-                  className={cn(
-                    'flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1 text-sm font-semibold hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed',
-                    discount > 0 ? 'text-amber-600' : 'text-muted-foreground',
-                  )}
-                >
-                  <Tag className="h-3.5 w-3.5" />
-                  {discount > 0 ? `− ${fmt(discount)}` : 'Add discount'}
-                </button>
+                {canApplyDiscount ? (
+                  <button
+                    type="button"
+                    onClick={() => setDiscountOpen(true)}
+                    disabled={!!resume && !canPrivileged}
+                    title={resume && !canPrivileged ? 'Editing a saved sale’s discount needs a manager (pos.orders.manage)' : 'Apply a defined discount or a one-time discount'}
+                    className={cn(
+                      'flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1 text-sm font-semibold hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed',
+                      discount > 0 ? 'text-amber-600' : 'text-muted-foreground',
+                    )}
+                  >
+                    <Tag className="h-3.5 w-3.5" />
+                    {discount > 0 ? `− ${fmt(discount)}` : 'Add discount'}
+                  </button>
+                ) : (
+                  <span className={cn('text-sm font-semibold tabular-nums', discount > 0 ? 'text-amber-600' : 'text-muted-foreground')}>
+                    {discount > 0 ? `− ${fmt(discount)}` : '—'}
+                  </span>
+                )}
               </div>
             </div>
             {discount > 0 && discountReason && (

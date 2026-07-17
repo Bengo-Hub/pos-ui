@@ -491,6 +491,32 @@ export default function PINLoginPage() {
     setPinError(null);
   }
 
+  // ── Physical-keyboard support ── non-touch devices type the PIN/passcode directly:
+  // digits go through handleDigit (keeps the 4-digit auto-submit) while the entry is
+  // all-numeric; once any letter is present it's a passcode, so digits stop auto-submitting
+  // (handleKey). Backspace deletes, Enter submits, Escape clears. Real inputs (settings
+  // fields, modals) keep their own typing — we skip when focus is in one.
+  useEffect(() => {
+    if (step !== 'pin') return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key === 'Enter') { e.preventDefault(); void submitPasscode(); return; }
+      if (e.key === 'Backspace') { e.preventDefault(); handleBackspace(); return; }
+      if (e.key === 'Escape') { handleClear(); return; }
+      if (/^[0-9]$/.test(e.key)) {
+        e.preventDefault();
+        const numericSoFar = pinDigits.every((c) => /^[0-9]$/.test(c));
+        if (numericSoFar) handleDigit(e.key); else handleKey(e.key);
+        return;
+      }
+      if (e.key.length === 1) { e.preventDefault(); handleKey(e.key); }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  });
+
   const tenantDisplayName = tenant?.orgName ?? tenant?.name ?? orgSlug;
   const outletName = outletInfo?.name ?? tenantDisplayName;
   const useCase = outletInfo?.use_case;

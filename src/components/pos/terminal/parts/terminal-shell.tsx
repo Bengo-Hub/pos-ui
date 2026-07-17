@@ -54,7 +54,11 @@ export function TerminalShell() {
   // above the preset — higher margin), never below it. setLinePrice re-clamps and the server
   // gates markdowns (price.override), so this is display+UX gating, not the enforcement.
   const canManagePrices = t.can('pos.orders.manage');
-  const showDiscountCol = canManagePrices && cfg.showCostMargin;
+  // Discounting can additionally be granted to a non-manager role via pos.discounts.add
+  // (tenant admin's permission matrix) — the server still demands the manager step-up for
+  // over-limit/below-preset amounts, so the grant only surfaces the controls.
+  const canApplyDiscount = canManagePrices || t.can('pos.discounts.add');
+  const showDiscountCol = canApplyDiscount && cfg.showCostMargin;
   // Explicit column tracks (shared by header + rows) so the cart never cramps: the product
   // name flexes, the numeric columns get fixed, comfortably-spaced widths. Cost + Margin
   // only exist for management roles; Discount only for managers on retail/pharmacy.
@@ -298,12 +302,15 @@ export function TerminalShell() {
                       </span>
                     )}
                     <span className="text-right">
+                      {/* Price edits are MANAGER-ONLY (2026-07-17 decision): cashiers ring
+                          items at the preset price, full stop — no markdown AND no markup.
+                          Managers may set any price (audited via price.override). */}
                       <InlinePriceCell
                         price={item.price}
                         preset={item.originalPrice ?? item.price}
                         canDiscount={canManagePrices}
-                        disabled={item.nonBillable || item.promoFree}
-                        onCommit={(p) => t.setLinePrice(idx, p, canManagePrices ? 'price edit' : 'sold above preset')}
+                        disabled={!canManagePrices || item.nonBillable || item.promoFree}
+                        onCommit={(p) => t.setLinePrice(idx, p, 'price edit')}
                       />
                     </span>
                     <div className="flex items-center justify-end gap-1.5">

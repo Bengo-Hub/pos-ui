@@ -231,14 +231,22 @@ export function TerminalCart() {
                         <p className="text-xs text-muted-foreground font-mono mt-0.5">S/N: {item.serialNumber}</p>
                       )}
                       <div className="flex items-center gap-2 mt-1 flex-wrap">
-                        <button
-                          type="button"
-                          onClick={() => t.setPriceEditIndex(idx)}
-                          title="Override unit price"
-                          className="text-xs font-bold font-mono text-primary hover:underline underline-offset-2"
-                        >
-                          KES {((item.price + (item.modifierTotal ?? 0)) * (item.quantity + t.bogoFreeFor(item))).toLocaleString()}
-                        </button>
+                        {/* Price override is MANAGER-ONLY (2026-07-17): cashiers ring items at
+                            the preset price — the amount renders as plain text for them. */}
+                        {t.can('pos.orders.manage') ? (
+                          <button
+                            type="button"
+                            onClick={() => t.setPriceEditIndex(idx)}
+                            title="Override unit price"
+                            className="text-xs font-bold font-mono text-primary hover:underline underline-offset-2"
+                          >
+                            KES {((item.price + (item.modifierTotal ?? 0)) * (item.quantity + t.bogoFreeFor(item))).toLocaleString()}
+                          </button>
+                        ) : (
+                          <span className="text-xs font-bold font-mono">
+                            KES {((item.price + (item.modifierTotal ?? 0)) * (item.quantity + t.bogoFreeFor(item))).toLocaleString()}
+                          </span>
+                        )}
                         {item.originalPrice != null && item.price < item.originalPrice && (
                           <span className="text-[10px] text-muted-foreground line-through font-mono">
                             KES {(item.originalPrice * (item.quantity + t.bogoFreeFor(item))).toLocaleString()}
@@ -361,19 +369,27 @@ export function TerminalCart() {
                   <span className="font-medium tabular-nums">- KES {t.happyHourDiscount.toLocaleString()}</span>
                 </div>
               )}
+              {/* Discounting is PERMISSION-GATED (2026-07-17): manager/admin (or platform
+                  owner) by default via pos.discounts.add / pos.orders.manage — hidden from
+                  cashiers unless the tenant admin grants the code in the permission matrix.
+                  An applied discount still renders read-only for everyone. */}
               {t.manualDiscount > 0 ? (
                 <div className="flex justify-between items-center text-sm text-amber-600">
-                  <button onClick={() => t.setDiscountOpen(true)} className="underline underline-offset-2">
-                    Discount{t.discountReason ? ` (${t.discountReason})` : ''}
-                  </button>
+                  {(t.can('pos.discounts.add') || t.can('pos.orders.manage')) ? (
+                    <button onClick={() => t.setDiscountOpen(true)} className="underline underline-offset-2">
+                      Discount{t.discountReason ? ` (${t.discountReason})` : ''}
+                    </button>
+                  ) : (
+                    <span>Discount{t.discountReason ? ` (${t.discountReason})` : ''}</span>
+                  )}
                   <span className="font-medium tabular-nums">- KES {t.manualDiscount.toLocaleString()}</span>
                 </div>
-              ) : (
+              ) : (t.can('pos.discounts.add') || t.can('pos.orders.manage')) ? (
                 <button onClick={() => t.setDiscountOpen(true)}
                   className="flex items-center gap-1 text-xs text-muted-foreground hover:text-primary">
                   <Tag className="h-3.5 w-3.5" /> Add discount
                 </button>
-              )}
+              ) : null}
               {/* Manager quick-edit adjustments (QA req 4): Order Tax(+) and Charges(+) rows with
                   pencil edits for managers/admins; non-managers see values but the server gates
                   edits behind a manager step-up (order.adjustment) anyway. */}

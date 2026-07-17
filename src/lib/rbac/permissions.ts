@@ -43,6 +43,11 @@ export const P = {
   /** Ring a credit (on-account) sale — hidden from cashiers unless explicitly granted. */
   PAYMENTS_CREDIT:   'pos.payments.credit',
 
+  /** Apply a discount to a sale (order-level modal + per-line cells). Manager/admin by
+   *  default — hidden from cashiers unless the tenant admin grants this code explicitly
+   *  (permission matrix). Platform owner / superuser bypass via the '*' wildcard. */
+  DISCOUNTS_APPLY:   'pos.discounts.add',
+
   // Catalog
   CATALOG_ADD:       'pos.catalog.add',
   CATALOG_VIEW:      'pos.catalog.view',
@@ -176,6 +181,7 @@ export const ROLE_PERMISSIONS: Record<string, Permission[]> = {
   manager: [
     P.ORDERS_ADD, P.ORDERS_VIEW, P.ORDERS_CHANGE, P.ORDERS_DELETE, P.ORDERS_MANAGE, P.ORDERS_VOID,
     P.PAYMENTS_ADD, P.PAYMENTS_VIEW, P.PAYMENTS_MANAGE,
+    P.DISCOUNTS_APPLY,
     P.CATALOG_ADD, P.CATALOG_VIEW, P.CATALOG_CHANGE, P.CATALOG_DELETE, P.CATALOG_MANAGE, P.CATALOG_VIEW_COST,
     P.TABLES_VIEW, P.TABLES_CHANGE, P.TABLES_MANAGE,
     P.DRAWERS_ADD, P.DRAWERS_VIEW, P.DRAWERS_MANAGE,
