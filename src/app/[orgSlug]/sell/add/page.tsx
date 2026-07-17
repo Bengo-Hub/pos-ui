@@ -861,10 +861,13 @@ export default function AddSalePage() {
                         </td>
                       )}
                       <td className="px-4 py-3 text-right">
+                        {/* Line total edit is manager-only (derived figure — unit price =
+                            total ÷ qty); cashiers see it read-only, same as the terminal. */}
                         <InlineTotalCell
                           price={l.unitPrice}
                           quantity={l.quantity}
                           canDiscount={canPrivileged}
+                          disabled={!canPrivileged}
                           onCommitPrice={(p) => setPrice(i, p)}
                         />
                       </td>

@@ -307,12 +307,15 @@ export function TerminalShell() {
                       />
                     </span>
                     <div className="flex items-center justify-end gap-1.5">
+                      {/* Line subtotal is a DERIVED figure — editing it is a manager-only
+                          shortcut (unit price = total ÷ qty). Cashiers see it read-only;
+                          their only lever is the unit-price cell (at/above preset). */}
                       <InlineTotalCell
                         price={item.price}
                         quantity={item.quantity}
                         canDiscount={canManagePrices}
-                        disabled={item.nonBillable || item.promoFree}
-                        onCommitPrice={(p) => t.setLinePrice(idx, p, canManagePrices ? 'line total edit' : 'sold above preset')}
+                        disabled={!canManagePrices || item.nonBillable || item.promoFree}
+                        onCommitPrice={(p) => t.setLinePrice(idx, p, 'line total edit')}
                       />
                       <button onClick={() => t.removeFromCart(idx)} className="h-6 w-6 rounded-md flex items-center justify-center text-muted-foreground hover:bg-destructive/10 hover:text-destructive" aria-label="Remove"><Trash2 className="h-3.5 w-3.5" /></button>
                     </div>
