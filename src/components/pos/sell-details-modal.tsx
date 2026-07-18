@@ -1,14 +1,16 @@
 'use client';
 
 import Link from 'next/link';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { X, Loader2, RotateCcw, Undo2 } from 'lucide-react';
+import { X, Loader2, RotateCcw, Undo2, Banknote } from 'lucide-react';
 import { useOrder } from '@/hooks/usePOS';
 import { apiClient } from '@/lib/api/client';
 import { useAuthStore } from '@/store/auth';
 import { usePermissions, P } from '@/hooks/usePermissions';
 import { PrintReceiptButton } from '@/components/pos/print-receipt-button';
+import { RecordPaymentModal } from '@/components/pos/sales/record-payment-modal';
 import { prettyMethod } from '@/components/pos/sales/sales-shared';
 
 const money = (n: number | undefined | null) =>
@@ -74,6 +76,17 @@ export function SellDetailsModal({ orderId, orgSlug, onClose }: { orderId: strin
   const totalPaid = payments.filter((p: any) => p.status === 'completed').reduce((s: number, p: any) => s + (p.amount ?? 0), 0);
   const remaining = Math.max(0, ((order as any)?.total_amount ?? 0) - totalPaid);
   const isFinal = (order as any)?.status === 'completed';
+  // On-account (credit) sale settlement: money ACTUALLY collected excludes the on_account
+  // tender row, so a credit sale shows its real outstanding balance here + a Record Payment
+  // action (settle-credit endpoint) until it's collected.
+  const [recordPayOpen, setRecordPayOpen] = useState(false);
+  const collected = payments
+    .filter((p: any) => p.status === 'completed' && p.payment_data?.method !== 'on_account')
+    .reduce((s: number, p: any) => s + (p.amount ?? 0), 0);
+  const creditOutstanding = meta.on_account === true
+    ? Math.max(0, ((order as any)?.total_amount ?? 0) - collected)
+    : 0;
+  const canTakePayment = canAny([P.PAYMENTS_ADD, P.PAYMENTS_MANAGE]);
 
   // Activity timeline assembled from what the order already carries (no extra endpoint):
   // creation, settled payments, and each linked return stage.
@@ -304,6 +317,13 @@ export function SellDetailsModal({ orderId, orgSlug, onClose }: { orderId: strin
         {/* Footer action bar — mirrors the per-row Actions dropdown's core actions. */}
         {order && (
           <div className="flex flex-wrap items-center justify-end gap-2 px-6 py-4 border-t border-border sticky bottom-0 bg-card rounded-b-2xl">
+            {canTakePayment && creditOutstanding > 0.01 && (
+              <button
+                onClick={() => setRecordPayOpen(true)}
+                className="inline-flex items-center gap-2 h-9 px-3 rounded-md bg-primary text-primary-foreground text-sm font-bold hover:opacity-90">
+                <Banknote className="h-4 w-4" /> Record Payment ({money(creditOutstanding)})
+              </button>
+            )}
             <PrintReceiptButton orderId={orderId} label="Packing Slip" variant="outline"
               className="h-9 gap-2 text-sm" />
             <PrintReceiptButton orderId={orderId} label="Print Invoice" variant="outline"
@@ -322,6 +342,20 @@ export function SellDetailsModal({ orderId, orgSlug, onClose }: { orderId: strin
           </div>
         )}
       </div>
+
+      {recordPayOpen && order && (
+        <RecordPaymentModal
+          order={{
+            id: (order as any).id,
+            order_number: (order as any).order_number,
+            customer_name: (order as any).customer_name,
+            total_amount: (order as any).total_amount,
+            total_paid: collected,
+            amount_due: creditOutstanding,
+          }}
+          onClose={() => setRecordPayOpen(false)}
+        />
+      )}
     </div>
   );
 }

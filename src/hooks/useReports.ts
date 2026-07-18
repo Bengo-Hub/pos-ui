@@ -340,7 +340,7 @@ export function useSalesByCategory(from: string, to: string, outletId?: string) 
 
 /** Sales grouped by KDS station (kitchen vs bar, etc.) — the same grouping the kitchen/bar
  *  displays use, so this always matches what actually printed/showed at each station. */
-export function useSalesByKDSStation(from: string, to: string, outletId?: string) {
+export function useSalesByKDSStation(from: string, to: string, outletId?: string, enabled = true) {
   const tenantID = useTenantID();
   return useQuery({
     queryKey: reportKeys.salesByKDSStation(tenantID, from, to, outletId),
@@ -352,7 +352,7 @@ export function useSalesByKDSStation(from: string, to: string, outletId?: string
       );
       return Array.isArray(res) ? res : res?.data ?? [];
     },
-    enabled: !!tenantID && !!from && !!to,
+    enabled: !!tenantID && !!from && !!to && enabled,
     staleTime: 2 * 60_000,
   });
 }

@@ -11,6 +11,7 @@ import { cn } from '@/lib/utils';
 import { apiClient } from '@/lib/api/client';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { reversalsApi, type Reversal, type ReversalStep } from '@/lib/api/reversals';
+import { usePlatformTenants } from '@/hooks/use-platform-tenants';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 
 const REFUND_CHANNELS = [
@@ -77,9 +78,28 @@ function StepsTimeline({ steps }: { steps: ReversalStep[] }) {
  * Txn Reversals — platform-owner data-repair tool. Reverses a FINALIZED sale (whole order
  * or selected items) across pos totals, inventory consumption, treasury GL and the eTIMS
  * credit note, showing the per-service step ledger. Replaces manual SQL repairs.
+ *
+ * The platform owner picks the TENANT (and optionally outlet) whose sale needs repair —
+ * reversals are almost always on a tenant's data, not the owner's own org. The chosen
+ * tenant drives every /api/v1/{tenant}/… call (order search, create, history); the server
+ * enforces the platform-owner gate.
  */
 export function TxnReversalTab({ tenantID }: { tenantID: string }) {
   const qc = useQueryClient();
+
+  // ── Tenant / outlet scope ──
+  const { data: tenants = [] } = usePlatformTenants();
+  const [scopeTenantID, setScopeTenantID] = useState(tenantID);
+  const [outletID, setOutletID] = useState('');
+  const activeTenantID = scopeTenantID || tenantID;
+
+  const { data: outletsData } = useQuery({
+    queryKey: ['reversal-outlets', activeTenantID],
+    queryFn: () => apiClient.get<{ data: any[] } | any[]>(`/api/v1/${activeTenantID}/pos/outlets`),
+    enabled: !!activeTenantID,
+    staleTime: 5 * 60_000,
+  });
+  const outlets: any[] = Array.isArray(outletsData) ? outletsData : ((outletsData as any)?.data ?? []);
 
   // ── Order picker ──
   const [searchQuery, setSearchQuery] = useState('');
@@ -98,15 +118,27 @@ export function TxnReversalTab({ tenantID }: { tenantID: string }) {
     return () => clearTimeout(t);
   }, [searchQuery]);
 
+  // Switching tenant/outlet invalidates any in-progress selection.
+  function changeScope(nextTenant: string, nextOutlet: string) {
+    setScopeTenantID(nextTenant);
+    setOutletID(nextOutlet);
+    setSelectedOrder(null);
+    setSelectedLines({});
+    setSearchQuery('');
+    setDebouncedQuery('');
+    setResult(null);
+  }
+
   const { data: searchData, isFetching: searching } = useQuery({
-    queryKey: ['reversal-order-search', tenantID, debouncedQuery, statusFilter],
+    queryKey: ['reversal-order-search', activeTenantID, outletID, debouncedQuery, statusFilter],
     queryFn: () =>
-      apiClient.get<{ data: any[] }>(`/api/v1/${tenantID}/pos/orders`, {
+      apiClient.get<{ data: any[] }>(`/api/v1/${activeTenantID}/pos/orders`, {
         order_number: debouncedQuery,
         status: statusFilter || undefined,
+        outlet_id: outletID || undefined,
         limit: 8,
       }),
-    enabled: !!tenantID && debouncedQuery.length >= 2 && !selectedOrder,
+    enabled: !!activeTenantID && debouncedQuery.length >= 2 && !selectedOrder,
     staleTime: 30_000,
   });
   const searchResults: any[] = (searchData as any)?.data ?? [];
@@ -148,7 +180,7 @@ export function TxnReversalTab({ tenantID }: { tenantID: string }) {
 
   const createMutation = useMutation({
     mutationFn: () =>
-      reversalsApi.create(tenantID, {
+      reversalsApi.create(activeTenantID, {
         order_id: selectedOrder.id,
         scope,
         lines: scope === 'partial'
@@ -165,7 +197,7 @@ export function TxnReversalTab({ tenantID }: { tenantID: string }) {
           ? `Reversal ${rev.reversal_number} completed across all services`
           : `Reversal ${rev.reversal_number} finished with issues — check the step ledger`,
       );
-      void qc.invalidateQueries({ queryKey: ['reversals', tenantID] });
+      void qc.invalidateQueries({ queryKey: ['reversals', activeTenantID] });
     },
     onError: async (e) => toast.error(await apiErrorMessage(e, 'Reversal failed')),
   });
@@ -174,18 +206,18 @@ export function TxnReversalTab({ tenantID }: { tenantID: string }) {
   const [historyStatus, setHistoryStatus] = useState('');
   const [expanded, setExpanded] = useState<string | null>(null);
   const { data: historyData, isFetching: loadingHistory, refetch: refetchHistory } = useQuery({
-    queryKey: ['reversals', tenantID, historyStatus],
-    queryFn: () => reversalsApi.list(tenantID, { status: historyStatus || undefined, limit: 25 }),
-    enabled: !!tenantID,
+    queryKey: ['reversals', activeTenantID, historyStatus],
+    queryFn: () => reversalsApi.list(activeTenantID, { status: historyStatus || undefined, limit: 25 }),
+    enabled: !!activeTenantID,
     refetchInterval: 15_000,
   });
   const history: Reversal[] = (historyData as any)?.data ?? [];
 
   const retryMutation = useMutation({
-    mutationFn: (reversalId: string) => reversalsApi.retry(tenantID, reversalId),
+    mutationFn: (reversalId: string) => reversalsApi.retry(activeTenantID, reversalId),
     onSuccess: (rev) => {
       toast[rev.status === 'completed' ? 'success' : 'warning'](`Retry finished: ${rev.status.replace('_', ' ')}`);
-      void qc.invalidateQueries({ queryKey: ['reversals', tenantID] });
+      void qc.invalidateQueries({ queryKey: ['reversals', activeTenantID] });
       if (result?.id === rev.id) setResult(rev);
     },
     onError: async (e) => toast.error(await apiErrorMessage(e, 'Retry failed')),
@@ -200,6 +232,30 @@ export function TxnReversalTab({ tenantID }: { tenantID: string }) {
           POS totals, inventory consumption, treasury GL and (when fiscalised) the KRA eTIMS credit note —
           with every step tracked below. Customer-initiated returns should use the normal Returns flow instead.
         </p>
+      </div>
+
+      {/* Tenant + outlet scope — the reversal operates on the SELECTED tenant's data. */}
+      <div className="flex flex-wrap items-center gap-3">
+        <label className="text-sm font-semibold text-muted-foreground">Tenant</label>
+        <select
+          value={activeTenantID}
+          onChange={(e) => changeScope(e.target.value, '')}
+          className="rounded-xl border border-border bg-background px-3 py-2 text-sm min-w-56"
+        >
+          <option value={tenantID}>My org (default)</option>
+          {tenants
+            .filter((t) => t.id !== tenantID)
+            .map((t) => <option key={t.id} value={t.id}>{t.name} ({t.slug})</option>)}
+        </select>
+        <label className="text-sm font-semibold text-muted-foreground">Outlet</label>
+        <select
+          value={outletID}
+          onChange={(e) => changeScope(activeTenantID, e.target.value)}
+          className="rounded-xl border border-border bg-background px-3 py-2 text-sm min-w-44"
+        >
+          <option value="">All outlets</option>
+          {outlets.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+        </select>
       </div>
 
       <div className="grid lg:grid-cols-2 gap-6 items-start">

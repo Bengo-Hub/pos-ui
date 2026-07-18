@@ -74,6 +74,8 @@ export interface POSSettings {
   return_window_days: number;
   /** Max order discount % a cashier may apply without manager approval (100 = no limit). */
   max_discount_percent: number;
+  /** Max order discount AMOUNT (currency) without approval (0 = no amount limit). Exceeding EITHER limit triggers the step-up. */
+  max_discount_amount: number;
   // Pricing policy — cashier price-edit rules (retail/pharmacy up-sell model):
   /** Cashiers may RAISE a line price above the catalog/base price without approval (default true). */
   allow_price_above_base: boolean;
@@ -124,6 +126,7 @@ export interface UpdatePOSSettingsInput {
   printer_profiles?: PrinterProfile[];
   return_window_days?: number;
   max_discount_percent?: number;
+  max_discount_amount?: number;
   // pricing policy
   allow_price_above_base?: boolean;
   require_approval_below_base?: boolean;

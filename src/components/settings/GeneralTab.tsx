@@ -24,6 +24,7 @@ export function GeneralTab() {
   const [currency, setCurrency] = useState('KES');
   const [returnWindowDays, setReturnWindowDays] = useState('30');
   const [maxDiscountPercent, setMaxDiscountPercent] = useState('100');
+  const [maxDiscountAmount, setMaxDiscountAmount] = useState('0');
   const [allowPriceAboveBase, setAllowPriceAboveBase] = useState(true);
   const [requireApprovalBelowBase, setRequireApprovalBelowBase] = useState(true);
 
@@ -32,6 +33,7 @@ export function GeneralTab() {
       setCurrency(settings.currency || 'KES');
       setReturnWindowDays(String(settings.return_window_days ?? 30));
       setMaxDiscountPercent(String(settings.max_discount_percent ?? 100));
+      setMaxDiscountAmount(String(settings.max_discount_amount ?? 0));
       setAllowPriceAboveBase(settings.allow_price_above_base ?? true);
       setRequireApprovalBelowBase(settings.require_approval_below_base ?? true);
     }
@@ -44,6 +46,7 @@ export function GeneralTab() {
       currency,
       return_window_days: parseInt(returnWindowDays, 10) || 30,
       max_discount_percent: parseFloat(maxDiscountPercent) || 100,
+      max_discount_amount: parseFloat(maxDiscountAmount) || 0,
       allow_price_above_base: allowPriceAboveBase,
       require_approval_below_base: requireApprovalBelowBase,
     });
@@ -154,20 +157,40 @@ export function GeneralTab() {
                   </div>
                 )}
                 <div className="space-y-2">
-                  <label className={labelClass}>Max discount without approval (%)</label>
-                  <input
-                    type="number"
-                    min={0}
-                    max={100}
-                    step={1}
-                    value={maxDiscountPercent}
-                    onChange={(e) => setMaxDiscountPercent(e.target.value)}
-                    disabled={!canEdit}
-                    placeholder="100"
-                    className={`${inputClass} font-mono`}
-                  />
+                  <label className={labelClass}>Max discount without approval</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <input
+                        type="number"
+                        min={0}
+                        max={100}
+                        step={1}
+                        value={maxDiscountPercent}
+                        onChange={(e) => setMaxDiscountPercent(e.target.value)}
+                        disabled={!canEdit}
+                        placeholder="100"
+                        className={`${inputClass} font-mono`}
+                      />
+                      <p className="text-[10px] text-muted-foreground text-center">% of order (100 = no limit)</p>
+                    </div>
+                    <div className="space-y-1">
+                      <input
+                        type="number"
+                        min={0}
+                        step={1}
+                        value={maxDiscountAmount}
+                        onChange={(e) => setMaxDiscountAmount(e.target.value)}
+                        disabled={!canEdit}
+                        placeholder="0"
+                        className={`${inputClass} font-mono`}
+                      />
+                      <p className="text-[10px] text-muted-foreground text-center">amount in {currency} (0 = no limit)</p>
+                    </div>
+                  </div>
                   <p className="text-xs text-muted-foreground">
-                    A cashier discount above this % of the order requires a manager approval (PIN or QR card). Set 100 for no limit.
+                    A cashier discount above the % of the order <span className="font-medium text-foreground">or</span> above the
+                    fixed amount requires a manager approval (PIN or QR card). Exceeding either limit triggers the approval dialog
+                    on the terminal and in back-office Add Sale.
                   </p>
                 </div>
                 {/* Pricing policy — cashier line-price rules (server-enforced on order create). */}

@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import {
-  ChevronDown, Eye, Pencil, Trash2, Truck,
+  Banknote, ChevronDown, Eye, Pencil, Trash2, Truck,
   CreditCard, RotateCcw, Link2, Mail, Coins, CalendarClock,
 } from 'lucide-react';
 import { PrintReceiptButton } from '@/components/pos/print-receipt-button';
@@ -21,6 +21,8 @@ interface SalesActionsMenuProps {
   onEditLines: (order: any) => void;
   onMoveDate: (order: any) => void;
   onDelete: (order: any) => void;
+  /** Settle an on-account (credit) sale — shown only while money is still owed. */
+  onRecordPayment?: (order: any) => void;
 }
 
 // Tenant admin/owner tier — deliberately narrower than P.ORDERS_MANAGE (which a plain
@@ -40,7 +42,7 @@ const DATE_MOVE_ADMIN_ROLES = new Set(['admin', 'owner', 'pos_admin', 'super_adm
  *  - Invoice URL → copy a shareable link to the sale
  *  - New Sale Notification → pos-api /notify → notifications-service (customer SMS receipt)
  */
-export function SalesActionsMenu({ order, orgSlug, onView, onEditShipping, onViewPayments, onEditLines, onMoveDate, onDelete }: SalesActionsMenuProps) {
+export function SalesActionsMenu({ order, orgSlug, onView, onEditShipping, onViewPayments, onEditLines, onMoveDate, onDelete, onRecordPayment }: SalesActionsMenuProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -54,6 +56,7 @@ export function SalesActionsMenu({ order, orgSlug, onView, onEditShipping, onVie
   const canChange = canAny([P.ORDERS_CHANGE_OWN, P.ORDERS_CHANGE, P.ORDERS_MANAGE]);
   const canDelete = canAny([P.ORDERS_VOID, P.ORDERS_MANAGE]);
   const canViewPayments = canAny([P.PAYMENTS_VIEW, P.PAYMENTS_VIEW_OWN, P.PAYMENTS_MANAGE]);
+  const canTakePayment = canAny([P.PAYMENTS_ADD, P.PAYMENTS_MANAGE]);
   const canReturn = canChange; // return initiation mirrors the backend change_own/change/manage gate
   const canNotify = can(P.ORDERS_MANAGE);
   const canEditLines = can(P.ORDERS_MANAGE);
@@ -128,6 +131,13 @@ export function SalesActionsMenu({ order, orgSlug, onView, onEditShipping, onVie
           <div className="my-1 border-t border-border" />
 
           {canViewPayments && <button className={item} onClick={() => { onViewPayments(order); close(); }}><CreditCard className="h-4 w-4 text-muted-foreground" /> View Payments</button>}
+          {/* Settle an on-account (credit) sale — money still owed on it. */}
+          {onRecordPayment && canTakePayment &&
+            ['due', 'partial', 'overdue'].includes(order.payment_status) && (order.amount_due ?? 0) > 0.01 && (
+            <button className={item} onClick={() => { onRecordPayment(order); close(); }}>
+              <Banknote className="h-4 w-4 text-emerald-600" /> Record Payment
+            </button>
+          )}
           {canEditLines && !linesLocked && <button className={item} onClick={() => { onEditLines(order); close(); }}><Coins className="h-4 w-4 text-muted-foreground" /> Edit Line Prices</button>}
           {canMoveDate && <button className={item} onClick={() => { onMoveDate(order); close(); }}><CalendarClock className="h-4 w-4 text-muted-foreground" /> Move Sale Date</button>}
           {isFinal && canReturn && (

@@ -19,6 +19,7 @@ import {
 import { listKVRows, getSyncLog } from '@/lib/db/kv-cache';
 import type { KVCacheRow, SyncLogEntry } from '@/lib/db/pos-db';
 import { useEffectiveOutletID } from '@/hooks/usePOS';
+import { isPlatformOwner as checkPlatformOwner } from '@/lib/auth/permissions';
 import { SyncLogTable } from './sync-log-table';
 import { PriceReconcileTab } from './price-reconcile-tab';
 import { TxnReversalTab } from './txn-reversal-tab';
@@ -54,7 +55,11 @@ export function SyncMonitorView() {
   const tenantID = useAuthStore((s) => s.user?.tenant_id ?? '');
   // Txn Reversals is a platform-owner data-repair tool (initiated on tenant request) —
   // the tab is hidden for everyone else, and the API is platform-owner-gated server-side.
-  const isPlatformOwner = useAuthStore((s) => s.user?.isPlatformOwner === true);
+  // Uses the CANONICAL isPlatformOwner() helper (claim OR superuser role OR codevertex slug)
+  // — the old strict `user.isPlatformOwner === true` check missed login paths that only set
+  // roles/slug, hiding the tab on some outlets/use cases.
+  const user = useAuthStore((s) => s.user);
+  const isPlatformOwner = checkPlatformOwner(user);
   const outletID = useEffectiveOutletID();
   const conn = useConnectivityStore();
 

@@ -4,6 +4,7 @@ import { ModuleGate } from '@/components/auth/module-gate';
 import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
 import { Card, CardContent } from '@/components/ui/base';
 import { useEODList, useSalesByKDSStation } from '@/hooks/useReports';
+import { useModuleAccess } from '@/hooks/use-module-access';
 import { ReportDocumentButton } from '@/components/reports/report-document-button';
 import { useAuthStore } from '@/store/auth';
 import { cn } from '@/lib/utils';
@@ -19,7 +20,10 @@ function EODDetailContent() {
   const eod = closings[0] as any;
   // "How much did bar vs kitchen do today" — grouped by KDS station, same as the kitchen/bar
   // displays, so a manager closing the day can see each station's contribution at a glance.
-  const stationBreakdown = useSalesByKDSStation(date, date, outletId);
+  // KDS stations are a kitchen concept — the query is skipped entirely for retail/services/
+  // pharmacy outlets (the section also self-hides on empty data).
+  const { isHospitality, isQuickService, isResolved } = useModuleAccess();
+  const stationBreakdown = useSalesByKDSStation(date, date, outletId, !isResolved || isHospitality || isQuickService);
 
   const STATUS_STYLES: Record<string, string> = {
     reconciled: 'bg-green-500/10 text-green-700',

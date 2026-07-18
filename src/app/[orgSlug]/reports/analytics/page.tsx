@@ -7,16 +7,18 @@
  * and PER-TAB filters (search/dropdown) that refine the already-fetched rows for that report.
  */
 
-import { useMemo, useState } from 'react';
-import { BarChart3, Users, Clock, Tag, Package, Ban, ChefHat, Search, X } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { BarChart3, Users, Clock, Tag, Package, Ban, ChefHat, Monitor, Search, Wallet, X } from 'lucide-react';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import {
   useSalesByStaff, useSalesByHour, useSalesByCategory, useSalesByKDSStation, useProductMix, useVoidSummary,
+  useRegisterDetails,
   type ProductMixAggRow,
 } from '@/hooks/useReports';
 import { ReportExportButtons } from '@/components/reports/report-document-button';
 import { OutletFilter } from '@/components/outlet-filter';
 import { useOutletFilterStore } from '@/store/outlet-filter';
+import { useModuleAccess } from '@/hooks/use-module-access';
 import { DateRangePicker, type DateRange } from '@/components/ui/date-range-picker';
 import { Card, CardContent } from '@/components/ui/base';
 import { cn } from '@/lib/utils';
@@ -29,15 +31,26 @@ function isoDaysAgo(days: number): string {
 const todayISO = () => new Date().toISOString().slice(0, 10);
 const fmt = (n: number) => `KES ${(n ?? 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
 
-type TabId = 'staff' | 'hour' | 'category' | 'kds' | 'mix' | 'voids';
+type TabId = 'staff' | 'hour' | 'category' | 'kds' | 'register' | 'products' | 'payments' | 'mix' | 'voids';
 
-const TABS: { id: TabId; label: string; icon: React.ElementType }[] = [
+interface TabDef { id: TabId; label: string; icon: React.ElementType }
+const COMMON_TABS_HEAD: TabDef[] = [
   { id: 'staff', label: 'Staff', icon: Users },
   { id: 'hour', label: 'Hour', icon: Clock },
   { id: 'category', label: 'Category', icon: Tag },
-  { id: 'kds', label: 'KDS Station', icon: ChefHat },
+];
+const COMMON_TABS_TAIL: TabDef[] = [
   { id: 'mix', label: 'Product Mix', icon: Package },
   { id: 'voids', label: 'Voids', icon: Ban },
+];
+// KDS Station is a kitchen concept — hospitality/quick_service only. Every other use case
+// (retail/services/pharmacy) gets the register-oriented reports instead (all powered by the
+// existing register-details endpoint — no KDS language on a duka/pharmacy screen).
+const KDS_TAB: TabDef = { id: 'kds', label: 'KDS Station', icon: ChefHat };
+const REGISTER_TABS: TabDef[] = [
+  { id: 'register', label: 'Register', icon: Monitor },
+  { id: 'products', label: 'Products & Brands', icon: Package },
+  { id: 'payments', label: 'Payment Methods', icon: Wallet },
 ];
 
 export default function AnalyticsReportPage() {
@@ -48,6 +61,18 @@ export default function AnalyticsReportPage() {
   const selectedOutlet = useOutletFilterStore((s) => s.selectedOutlet);
   const outletId = selectedOutlet?.id;
 
+  // Tab list follows the outlet's use case: kitchen use cases get KDS Station, everything
+  // else gets Register / Products & Brands / Payment Methods.
+  const { isHospitality, isQuickService, isResolved } = useModuleAccess();
+  const isKitchen = isHospitality || isQuickService;
+  const tabs = useMemo<TabDef[]>(
+    () => [...COMMON_TABS_HEAD, ...(!isResolved || isKitchen ? [KDS_TAB] : REGISTER_TABS), ...COMMON_TABS_TAIL],
+    [isKitchen, isResolved],
+  );
+  useEffect(() => {
+    if (isResolved && !tabs.some((t) => t.id === tab)) setTab('staff');
+  }, [isResolved, tabs, tab]);
+
   // Sales by Hour is a single-day breakdown server-side; it gets its own date control,
   // seeded from the shared range's "to" date but independently adjustable.
   const [hourDate, setHourDate] = useState(range.to);
@@ -55,7 +80,8 @@ export default function AnalyticsReportPage() {
   const staff = useSalesByStaff(range.from, range.to, outletId);
   const hours = useSalesByHour(hourDate, outletId);
   const cats = useSalesByCategory(range.from, range.to, outletId);
-  const kdsStations = useSalesByKDSStation(range.from, range.to, outletId);
+  const kdsStations = useSalesByKDSStation(range.from, range.to, outletId, isKitchen || !isResolved);
+  const register = useRegisterDetails(range.from, range.to, outletId, isResolved && !isKitchen);
   const mix = useProductMix(range.from, range.to, outletId);
   const voids = useVoidSummary(range.from, range.to, outletId);
 
@@ -206,7 +232,7 @@ export default function AnalyticsReportPage() {
 
       {/* Tab bar — mirrors the Settings page top-nav style */}
       <div className="flex flex-wrap gap-1 p-1 rounded-lg bg-accent/30 border border-border w-fit">
-        {TABS.map((t) => {
+        {tabs.map((t) => {
           const Icon = t.icon;
           const active = tab === t.id;
           return (
@@ -307,23 +333,92 @@ export default function AnalyticsReportPage() {
         </>
       )}
 
+      {tab === 'register' && (
+        <>
+          <StatCards items={[
+            { label: 'Total Sales', value: fmt(register.data?.total_sales ?? 0) },
+            { label: 'Payments Received', value: fmt(register.data?.total_payment ?? 0) },
+            { label: 'Credit Sales', value: fmt(register.data?.credit_sales ?? 0) },
+            { label: 'Refunds', value: fmt(register.data?.total_refund ?? 0) },
+            { label: 'Orders', value: (register.data?.order_count ?? 0).toLocaleString() },
+          ]} />
+          <Section title="Register Performance" icon={Monitor} loading={register.isLoading} error={register.error}
+            empty={!register.data?.payment_methods?.length}
+            head={['Payment Method', 'Amount Collected']}
+            rows={(register.data?.payment_methods ?? []).map((m) => [m.method.replace(/_/g, ' '), fmt(m.sell_amount)])}
+            actions={
+              <ReportExportButtons
+                report="reset-summary" params={{ from: range.from, to: range.to, outlet_id: outletId }}
+                fileNameBase={`register-${range.from}-to-${range.to}`} title="Register Report"
+              />
+            } />
+        </>
+      )}
+
+      {tab === 'products' && (
+        <>
+          <StatCards items={[
+            { label: 'Products Sold', value: (register.data?.products_sold?.length ?? 0).toLocaleString() },
+            { label: 'Brands', value: (register.data?.products_by_brand?.length ?? 0).toLocaleString() },
+            { label: 'Revenue', value: fmt((register.data?.products_sold ?? []).reduce((s, p) => s + p.total_amount, 0)) },
+          ]} />
+          <Section title="Sales by Product" icon={Package} loading={register.isLoading} error={register.error}
+            empty={!register.data?.products_sold?.length}
+            head={['Product', 'SKU', 'Qty', 'Revenue']}
+            rows={(register.data?.products_sold ?? []).map((p) => [p.name, p.sku || '—', String(p.quantity), fmt(p.total_amount)])}
+            actions={
+              <ReportExportButtons
+                report="sales-by-item-type" params={{ from: range.from, to: range.to, outlet_id: outletId }}
+                fileNameBase={`sales-by-item-type-${range.from}-to-${range.to}`} title="Sales by Item Type"
+              />
+            } />
+          <Section title="Sales by Brand" icon={Tag} loading={register.isLoading} error={register.error}
+            empty={!register.data?.products_by_brand?.length}
+            head={['Brand', 'Qty', 'Revenue']}
+            rows={(register.data?.products_by_brand ?? []).map((b) => [b.brand, String(b.quantity), fmt(b.total_amount)])} />
+        </>
+      )}
+
+      {tab === 'payments' && (
+        <>
+          <StatCards items={[
+            { label: 'Payments Received', value: fmt(register.data?.total_payment ?? 0) },
+            { label: 'Credit (on account)', value: fmt(register.data?.credit_sales ?? 0) },
+            { label: 'Refunded', value: fmt(register.data?.total_refund ?? 0) },
+          ]} />
+          <Section title="Sales by Payment Method" icon={Wallet} loading={register.isLoading} error={register.error}
+            empty={!register.data?.payment_methods?.length}
+            head={['Method', 'Amount Collected']}
+            rows={(register.data?.payment_methods ?? []).map((m) => [m.method.replace(/_/g, ' '), fmt(m.sell_amount)])} />
+          <Section title="Refunds by Payment Method" icon={Ban} loading={register.isLoading} error={register.error}
+            empty={!register.data?.refund_by_method?.length}
+            head={['Method', 'Amount Refunded']}
+            rows={(register.data?.refund_by_method ?? []).map((m) => [m.method.replace(/_/g, ' '), fmt(m.sell_amount)])} />
+        </>
+      )}
+
       {tab === 'mix' && (
         <>
           <StatCards items={mixStats} />
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className={cn('grid grid-cols-1 gap-4', isKitchen && 'lg:grid-cols-2')}>
             <MixBarChart title="Revenue by Category" icon={Tag} rows={mix.data?.byCategory ?? []} loading={mix.isLoading} />
-            <MixBarChart title="Revenue by KDS Station" icon={ChefHat} rows={mix.data?.byStation ?? []} loading={mix.isLoading} />
+            {/* KDS-station chart/column/filter are kitchen concepts — hidden for retail/services/pharmacy. */}
+            {isKitchen && (
+              <MixBarChart title="Revenue by KDS Station" icon={ChefHat} rows={mix.data?.byStation ?? []} loading={mix.isLoading} />
+            )}
           </div>
           <Section title="Product Mix" icon={Package} loading={mix.isLoading} error={mix.error} empty={!mixRows.length}
-            head={['Product', 'Category', 'Station', 'Qty', 'Orders', 'Revenue']}
-            rows={mixRows.map((r) => [r.label, r.category || '—', r.station_name || 'Unassigned', String(r.quantity), String(r.order_count), fmt(r.revenue)])}
+            head={isKitchen ? ['Product', 'Category', 'Station', 'Qty', 'Orders', 'Revenue'] : ['Product', 'Category', 'Qty', 'Orders', 'Revenue']}
+            rows={mixRows.map((r) => (isKitchen
+              ? [r.label, r.category || '—', r.station_name || 'Unassigned', String(r.quantity), String(r.order_count), fmt(r.revenue)]
+              : [r.label, r.category || '—', String(r.quantity), String(r.order_count), fmt(r.revenue)]))}
             filters={
               <div className="flex flex-wrap items-center gap-2">
                 <SearchBox value={mixSearch} onChange={setMixSearch} placeholder="Search products…" />
                 {mixCategoryOptions.length > 1 && (
                   <MultiSelectChips label="Category" options={mixCategoryOptions} selected={mixCategories} onChange={setMixCategories} />
                 )}
-                {mixStationOptions.length > 1 && (
+                {isKitchen && mixStationOptions.length > 1 && (
                   <MultiSelectChips label="Station" options={mixStationOptions} selected={mixStations} onChange={setMixStations} />
                 )}
               </div>

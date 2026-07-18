@@ -17,6 +17,8 @@ import { SalesActionsMenu } from '@/components/pos/sales/sales-actions-menu';
 import { SalesFilters, type SalesFilterState } from './sales-filters';
 import { rangeBound } from '@/components/ui/date-range-picker';
 import { EditShippingModal } from './edit-shipping-modal';
+import { RecordPaymentModal } from './record-payment-modal';
+import { CustomerDetailsModal } from '@/components/pos/customers/customer-details-modal';
 import { ViewPaymentsModal } from './view-payments-modal';
 import { EditOrderLinesModal } from './edit-order-lines-modal';
 import { MoveOrderDateModal } from './move-order-date-modal';
@@ -83,6 +85,8 @@ export function SalesListView({ orgSlug, fixedSource, title, subtitle }: {
   const [editLinesOrder, setEditLinesOrder] = useState<any>(null);
   const [moveDateOrder, setMoveDateOrder] = useState<any>(null);
   const [deleteOrder, setDeleteOrder] = useState<any>(null);
+  const [recordPayOrder, setRecordPayOrder] = useState<any>(null);
+  const [customerModal, setCustomerModal] = useState<{ name?: string | null; phone: string } | null>(null);
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
 
   const staffQ = useStaffList(tenantId, filterState.outletId || undefined);
@@ -224,9 +228,10 @@ export function SalesListView({ orgSlug, fixedSource, title, subtitle }: {
                         outletName={outletNameById[o.outlet_id]}
                         // Own-only users can't pivot the list to another cashier (QA req 6).
                         onCashierClick={ownOnly ? undefined : (userId) => patchFilters({ userId })}
+                        onCustomerClick={(o) => setCustomerModal({ name: o.customer_name, phone: o.customer_phone })}
                         onEditShipping={setShippingOrder} onViewPayments={setPaymentsOrder}
                         onEditLines={setEditLinesOrder} onMoveDate={setMoveDateOrder}
-                        onDelete={setDeleteOrder} colCount={colCount} />
+                        onDelete={setDeleteOrder} onRecordPayment={setRecordPayOrder} colCount={colCount} />
                     ))}
                   </tbody>
                 </table>
@@ -239,6 +244,14 @@ export function SalesListView({ orgSlug, fixedSource, title, subtitle }: {
       </Card>
 
       {detailId && <SellDetailsModal orderId={detailId} orgSlug={orgSlug} onClose={() => setDetailId(null)} />}
+      {recordPayOrder && <RecordPaymentModal order={recordPayOrder} onClose={() => setRecordPayOrder(null)} />}
+      {customerModal && (
+        <CustomerDetailsModal
+          customerName={customerModal.name}
+          customerPhone={customerModal.phone}
+          onClose={() => setCustomerModal(null)}
+        />
+      )}
       {shippingOrder && <EditShippingModal order={shippingOrder} onClose={() => setShippingOrder(null)} />}
       {paymentsOrder && <ViewPaymentsModal order={paymentsOrder} onClose={() => setPaymentsOrder(null)} />}
       {editLinesOrder && <EditOrderLinesModal order={editLinesOrder} onClose={() => setEditLinesOrder(null)} />}
@@ -251,12 +264,14 @@ export function SalesListView({ orgSlug, fixedSource, title, subtitle }: {
 }
 
 /** One sale row + its optional expanded line-items panel (treasury-style sibling <tr>). */
-function SaleRow({ order: o, orgSlug, expanded, onToggleExpand, onOpenDetail, cashierName, outletName, onCashierClick, onEditShipping, onViewPayments, onEditLines, onMoveDate, onDelete, colCount }: {
+function SaleRow({ order: o, orgSlug, expanded, onToggleExpand, onOpenDetail, cashierName, outletName, onCashierClick, onCustomerClick, onEditShipping, onViewPayments, onEditLines, onMoveDate, onDelete, onRecordPayment, colCount }: {
   order: any; orgSlug: string; expanded: boolean;
   onToggleExpand: () => void; onOpenDetail: () => void;
   cashierName?: string; outletName?: string;
   onCashierClick?: (userId: string) => void;
+  onCustomerClick: (o: any) => void;
   onEditShipping: (o: any) => void; onViewPayments: (o: any) => void; onEditLines: (o: any) => void; onMoveDate: (o: any) => void; onDelete: (o: any) => void;
+  onRecordPayment: (o: any) => void;
   colCount: number;
 }) {
   const lines: any[] = o.edges?.lines ?? [];
@@ -272,7 +287,7 @@ function SaleRow({ order: o, orgSlug, expanded, onToggleExpand, onOpenDetail, ca
         <td className={td} onClick={(e) => e.stopPropagation()}>
           <SalesActionsMenu order={o} orgSlug={orgSlug} onView={onOpenDetail}
             onEditShipping={onEditShipping} onViewPayments={onViewPayments} onEditLines={onEditLines}
-            onMoveDate={onMoveDate} onDelete={onDelete} />
+            onMoveDate={onMoveDate} onDelete={onDelete} onRecordPayment={onRecordPayment} />
         </td>
         <td className={`${td} text-xs text-muted-foreground`}>{new Date(o.created_at).toLocaleString('en-KE')}</td>
         <td className={`${td} font-mono text-xs font-bold text-primary`}>
@@ -288,20 +303,22 @@ function SaleRow({ order: o, orgSlug, expanded, onToggleExpand, onOpenDetail, ca
             )}
           </span>
         </td>
+        {/* Customer opens the reusable profile modal (details, credit position, order
+            history, record-payment) — the old /clients link pointed at a route that
+            doesn't exist in pos-ui. */}
         <td className={td} onClick={(e) => e.stopPropagation()}>
           {o.customer_phone ? (
-            <Link href={`/${orgSlug}/clients?q=${encodeURIComponent(o.customer_phone)}`}
-              className="text-primary hover:underline" title="Open customer profile">
+            <button type="button" onClick={() => onCustomerClick(o)}
+              className="text-primary hover:underline text-left" title="Open customer profile">
               {o.customer_name || 'Walk-In Customer'}
-            </Link>
+            </button>
           ) : (o.customer_name || 'Walk-In Customer')}
         </td>
-        <td className={`${td} text-xs`}>
+        <td className={`${td} text-xs`} onClick={(e) => e.stopPropagation()}>
           {o.customer_phone ? (
-            <Link href={`/${orgSlug}/clients?q=${encodeURIComponent(o.customer_phone)}`}
-              className="hover:underline" onClick={(e) => e.stopPropagation()}>
+            <button type="button" className="hover:underline" onClick={() => onCustomerClick(o)}>
               {o.customer_phone}
-            </Link>
+            </button>
           ) : '—'}
         </td>
         <td className={`${td} text-xs`} onClick={(e) => e.stopPropagation()}>
