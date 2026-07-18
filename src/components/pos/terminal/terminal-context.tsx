@@ -1457,18 +1457,19 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
     placeWithDiscountApprovalRef.current?.(approval);
   };
 
-  // Override a cart line's unit price. Role-aware bounds (BOI retail requirement):
-  // managers/admins (pos.orders.manage) may set ANY price — a markdown below the preset
-  // (inline discount) or a markup above it; everyone else may only sell AT or ABOVE the
-  // preset catalog price (raise margin, never discount). The preset is recorded as
-  // originalPrice so the backend can audit/gate markdowns (price.override).
-  const canPriceBelowPreset = can('pos.orders.manage');
+  // Override a cart line's unit price (2026-07-18 policy revision): managers/admins
+  // (pos.orders.manage) set any price silently. Everyone else may sell AT or ABOVE the
+  // preset freely (allow_price_above_base), and may now ENTER a below-preset price too —
+  // the outlet policy decides what happens at placement: require_approval_below_base ON
+  // (default) → the server 422s and the manager-approval dialog (price.override) collects
+  // a step-up; OFF → free markdowns. So the till no longer clamps below-preset entries;
+  // enforcement is fully server-side. The preset is recorded as originalPrice so the
+  // backend can audit/gate markdowns (price.override).
   const setLinePrice = (index: number, newPrice: number, reason: string) => {
     setCart((prev) => prev.map((it, i) => {
       if (i !== index) return it;
       const original = it.originalPrice ?? it.price;
       let next = Math.max(0, newPrice);
-      if (!canPriceBelowPreset) next = Math.max(next, original);
       // Catalog hard ceiling applies to everyone (server band-gates it anyway).
       if (typeof it.maxSellingPrice === 'number' && it.maxSellingPrice > 0) {
         next = Math.min(next, it.maxSellingPrice);
@@ -1481,16 +1482,16 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
     setPriceEditIndex(null);
   };
 
-  // Set/replace a line's sticky per-unit discount (managers only — the UI gates the cell and
-  // the server gates the resulting markdown). Keeps the BASE price (price + old discount) and
-  // lowers the effective price by the new discount; 0 clears it and returns to the base.
+  // Set/replace a line's sticky per-unit discount. Keeps the BASE price (price + old
+  // discount) and lowers the effective price by the new discount; 0 clears it and returns
+  // to the base. A discount that lands below the preset follows the same server-side
+  // pricing policy as setLinePrice (approval dialog at placement / free when policy off).
   const setLineDiscount = (index: number, unitDiscount: number) => {
     setCart((prev) => prev.map((it, i) => {
       if (i !== index) return it;
       const original = it.originalPrice ?? it.price;
       const base = it.price + (it.unitDiscount ?? 0);
       let next = base - Math.max(0, unitDiscount);
-      if (!canPriceBelowPreset) next = Math.max(next, original);
       if (typeof it.maxSellingPrice === 'number' && it.maxSellingPrice > 0) {
         next = Math.min(next, it.maxSellingPrice);
       }

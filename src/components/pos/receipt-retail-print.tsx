@@ -37,10 +37,14 @@ const ddmmyyyy = (iso: string, withTime = false) => {
   return `${date} ${d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`;
 };
 
-const cellBorder = '1.5px solid #000';
-const th: CSSProperties = { border: cellBorder, padding: '3px 7px', fontWeight: 700, textAlign: 'left', fontSize: 12 };
-const td: CSSProperties = { border: cellBorder, padding: '3px 7px', fontSize: 12 };
-const trowStyle: CSSProperties = { display: 'flex', justifyContent: 'space-between', padding: '1px 2px', fontSize: 12 };
+// Typography mirrors pos-api generateRetailReceiptHTML: Helvetica Neue sans stack, >=13px,
+// medium (500) baseline — thin 12px Times strokes printed almost invisibly on low-quality
+// office printers (the "barely visible receipt" complaint).
+const RETAIL_FONT_STACK = "'Helvetica Neue', Helvetica, Arial, 'Segoe UI', sans-serif";
+const cellBorder = '2px solid #000';
+const th: CSSProperties = { border: cellBorder, padding: '3px 7px', fontWeight: 700, textAlign: 'left', fontSize: 13 };
+const td: CSSProperties = { border: cellBorder, padding: '3px 7px', fontSize: 13, fontWeight: 500 };
+const trowStyle: CSSProperties = { display: 'flex', justifyContent: 'space-between', padding: '1px 2px', fontSize: 13 };
 
 export function RetailReceiptPrint({ receipt, tenantName, outletName, logoUrl }: RetailReceiptPrintProps) {
   const currency = receipt.currency || 'KES';
@@ -56,26 +60,26 @@ export function RetailReceiptPrint({ receipt, tenantName, outletName, logoUrl }:
   const chargeEntries = Object.entries(receipt.charges ?? {}).filter(([, v]) => v > 0).sort(([a], [b]) => a.localeCompare(b));
 
   const trow = (label: string, value: string, bold = false, key?: string) => (
-    <div key={key ?? label} style={{ ...trowStyle, fontWeight: bold ? 700 : 400 }}>
+    <div key={key ?? label} style={{ ...trowStyle, fontWeight: bold ? 700 : 500 }}>
       <span>{label}</span>
       <span>{value}</span>
     </div>
   );
 
   return (
-    <div style={{ fontFamily: "'Times New Roman', Georgia, serif", color: '#000', background: '#fff', fontSize: 12, maxWidth: '186mm', margin: '0 auto' }}>
+    <div style={{ fontFamily: RETAIL_FONT_STACK, color: '#000', background: '#fff', fontSize: 13, fontWeight: 500, maxWidth: '186mm', margin: '0 auto' }}>
       {/* Boxed business header */}
       <div style={{ border: cellBorder, padding: '5px 10px', textAlign: 'center' }}>
         {logoUrl && receipt.show_logo !== false && (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={logoUrl} alt="logo" style={{ display: 'block', margin: '2px auto', maxHeight: '20mm', maxWidth: '55mm', objectFit: 'contain' }} />
         )}
-        <div style={{ fontSize: 21, fontWeight: 700, letterSpacing: 0.5 }}>{bizName}</div>
-        {receipt.outlet_address && <div style={{ fontSize: 11, whiteSpace: 'pre-wrap' }}>{receipt.outlet_address.toUpperCase()}</div>}
+        <div style={{ fontSize: 22, fontWeight: 700, letterSpacing: 0.5 }}>{bizName}</div>
+        {receipt.outlet_address && <div style={{ fontSize: 12, whiteSpace: 'pre-wrap' }}>{receipt.outlet_address.toUpperCase()}</div>}
         {receipt.outlet_phones && (
-          <div style={{ fontSize: 11 }}><b>Mobile:</b> {receipt.outlet_phones}</div>
+          <div style={{ fontSize: 12 }}><b>Mobile:</b> {receipt.outlet_phones}</div>
         )}
-        {receipt.receipt_header && <div style={{ fontSize: 11, fontWeight: 700, whiteSpace: 'pre-wrap' }}>{receipt.receipt_header}</div>}
+        {receipt.receipt_header && <div style={{ fontSize: 12, fontWeight: 700, whiteSpace: 'pre-wrap' }}>{receipt.receipt_header}</div>}
       </div>
 
       {/* Customer | INVOICE.NO | DATE */}
@@ -96,7 +100,7 @@ export function RetailReceiptPrint({ receipt, tenantName, outletName, logoUrl }:
 
       {/* SERVED BY */}
       {receipt.served_by && (
-        <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #000', padding: '4px 2px', fontSize: 11, marginTop: 3 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1.5px solid #000', padding: '4px 2px', fontSize: 12, marginTop: 3 }}>
           <b>SERVED BY</b>
           <span>{receipt.served_by}</span>
         </div>
@@ -146,17 +150,18 @@ export function RetailReceiptPrint({ receipt, tenantName, outletName, logoUrl }:
         <div style={{ textAlign: 'center', margin: '12px 0 4px' }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={receipt.barcode_png} alt="barcode" style={{ height: '13mm' }} />
-          <div style={{ fontSize: 11, letterSpacing: 2, marginTop: 1 }}>{receipt.order_number}</div>
+          <div style={{ fontSize: 12, letterSpacing: 2, marginTop: 1 }}>{receipt.order_number}</div>
         </div>
       )}
 
       {/* Configurable footer text — flows below the barcode ("IN GOD WE TRUST" position). */}
-      <div style={{ fontSize: 12, margin: '10px 0 4px', whiteSpace: 'pre-wrap' }}>
+      <div style={{ fontSize: 13, margin: '10px 0 4px', whiteSpace: 'pre-wrap' }}>
         {(receipt.receipt_footer || 'Thank you for your business!').toUpperCase()}
       </div>
 
-      {/* Provider advertisement — deliberately smaller than everything above. */}
-      <div style={{ fontSize: 8, textAlign: 'center', marginTop: 8, lineHeight: 1.4 }}>
+      {/* Provider advertisement — smaller than everything above, but never sub-9px
+          (that vanishes on low-quality printers). */}
+      <div style={{ fontSize: 10, textAlign: 'center', marginTop: 8, lineHeight: 1.4 }}>
         <b>{receipt.provider_footer_lead || 'Developed & maintained by Codevertex Africa Limited'}</b>
         <br />
         {receipt.provider_footer_contact || 'www.codevertexitsolutions.com · info@codevertexitsolutions.com · +254 742 201 368'}

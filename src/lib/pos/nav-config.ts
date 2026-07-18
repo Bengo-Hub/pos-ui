@@ -61,7 +61,10 @@ export function buildNavGroups(orgSlug: string): NavGroup[] {
       items: [
         { label: 'Dashboard', icon: LayoutDashboard, href: '/dashboard', moduleKey: 'dashboard', waiterHidden: true },
         { label: 'Cash Drawer', icon: Wallet, href: '/drawer', moduleKey: 'cash_drawer', permission: [P.DRAWERS_ADD, P.DRAWERS_MANAGE, P.DRAWERS_VIEW_OWN] },
-        { label: 'Clients', icon: Users, href: '/clients', moduleKey: 'clients', permission: [P.CLIENTS_VIEW, P.CLIENTS_MANAGE], waiterHidden: true },
+        // Clients directory is CENTRALIZED on the treasury Customers page (balances, credit
+        // terms, owe-me/I-owe + payment-mode filters) — the duplicate POS /clients pages were
+        // removed; the terminal keeps only its inline customer picker + credit hint.
+        { label: 'Clients', icon: Users, href: `${TREASURY_URL}/${orgSlug}/customers`, moduleKey: 'clients', permission: [P.CLIENTS_VIEW, P.CLIENTS_MANAGE], waiterHidden: true },
         { label: 'Shifts', icon: Clock, href: '/shifts', moduleKey: 'shifts', permission: [P.SESSIONS_ADD, P.SESSIONS_VIEW, P.SESSIONS_VIEW_OWN], subFeature: 'shift_reports', subPlan: 'Pro', cashierHospHidden: true },
       ],
     },

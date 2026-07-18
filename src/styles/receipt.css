@@ -49,7 +49,7 @@
 /* Receipt typography */
 .receipt-root {
   font-family: 'Courier New', Courier, 'DejaVu Sans Mono', monospace;
-  font-size: 12px;
+  font-size: 13px; /* match pos-api generateReceiptHTML — 12px prints faint on low-DPI heads */
   font-weight: bold;
   line-height: 1.45;
   color: #000;
@@ -105,14 +105,14 @@
 
 .receipt-total-row {
   font-weight: bold;
-  font-size: 13px;
+  font-size: 15px;
   border-top: 1px solid #000;
   margin-top: 2px;
   padding-top: 2px;
 }
 
 .receipt-small {
-  font-size: 10px;
+  font-size: 11px;
   color: #000;
 }
 

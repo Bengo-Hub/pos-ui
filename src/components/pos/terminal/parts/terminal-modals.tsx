@@ -206,6 +206,7 @@ export function TerminalModals() {
         open={t.priceEditIndex !== null}
         item={t.priceEditIndex !== null ? t.cart[t.priceEditIndex] : null}
         canDiscount={t.can('pos.orders.manage')}
+        requireApprovalBelowBase={t.posSettings?.require_approval_below_base ?? true}
         onApply={(price, reason) => t.priceEditIndex !== null && t.setLinePrice(t.priceEditIndex, price, reason)}
         onClose={() => t.setPriceEditIndex(null)}
       />

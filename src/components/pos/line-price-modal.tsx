@@ -7,9 +7,13 @@ import type { CartItem } from '@/components/pos/terminal/terminal-context';
 interface LinePriceModalProps {
   open: boolean;
   item: CartItem | null;
-  /** Managers/admins (pos.orders.manage): any price — markdown (discount) or markup.
-   *  Everyone else: at/above the preset catalog price only (sell higher, never discount). */
+  /** Managers/admins (pos.orders.manage): any price silently — markdown or markup.
+   *  Everyone else: at/above the preset freely; BELOW the preset is accepted too but the
+   *  server demands a manager approval (price.override) at placement when the outlet's
+   *  require_approval_below_base policy is on. */
   canDiscount?: boolean;
+  /** Outlet policy: below-base sales prompt the manager-approval dialog at payment (default true). */
+  requireApprovalBelowBase?: boolean;
   onApply: (newPrice: number, reason: string) => void;
   onClose: () => void;
 }
@@ -19,7 +23,7 @@ interface LinePriceModalProps {
  * The preset catalog price is recorded as the original; markdowns are audited/gated
  * server-side as price.override (manager step-up for non-managers).
  */
-export function LinePriceModal({ open, item, canDiscount = false, onApply, onClose }: LinePriceModalProps) {
+export function LinePriceModal({ open, item, canDiscount = false, requireApprovalBelowBase = true, onApply, onClose }: LinePriceModalProps) {
   const original = item?.originalPrice ?? item?.price ?? 0;
   const [value, setValue] = useState<string>(item ? String(item.price) : '');
   const [reason, setReason] = useState(item?.overrideReason ?? '');
@@ -28,8 +32,10 @@ export function LinePriceModal({ open, item, canDiscount = false, onApply, onClo
 
   const maxPrice = typeof item.maxSellingPrice === 'number' && item.maxSellingPrice > 0 ? item.maxSellingPrice : undefined;
   const newPrice = parseFloat(value);
-  const floor = canDiscount ? 0 : original;
-  const valid = !isNaN(newPrice) && newPrice >= floor && (maxPrice == null || newPrice <= maxPrice);
+  // Below-preset entries are always accepted here — the pricing policy is enforced at
+  // placement (server 422 → manager-approval dialog) — so the only hard bound is the ceiling.
+  const belowPreset = !isNaN(newPrice) && newPrice < original - 0.004;
+  const valid = !isNaN(newPrice) && newPrice >= 0 && (maxPrice == null || newPrice <= maxPrice);
   const deltaPct = original > 0 && !isNaN(newPrice) ? ((newPrice - original) / original) * 100 : 0;
 
   return (
@@ -47,14 +53,14 @@ export function LinePriceModal({ open, item, canDiscount = false, onApply, onClo
         </div>
 
         <input
-          type="number" min={floor} max={maxPrice} autoFocus inputMode="decimal"
+          type="number" min={0} max={maxPrice} autoFocus inputMode="decimal"
           value={value} onChange={(e) => setValue(e.target.value)}
           placeholder="New unit price (KES)"
           className="w-full bg-accent/10 border border-border rounded-lg py-2.5 px-3 text-lg font-bold text-center focus:ring-1 focus:ring-primary outline-none"
         />
-        {!canDiscount && !isNaN(newPrice) && newPrice < original && (
-          <p className="text-xs text-destructive text-center">
-            Only a manager can sell below the preset price — you can only sell at or above it.
+        {!canDiscount && belowPreset && requireApprovalBelowBase && (
+          <p className="text-xs text-amber-600 text-center">
+            Selling below the preset price needs a manager — the approval prompt will appear at payment.
           </p>
         )}
         {maxPrice != null && !isNaN(newPrice) && newPrice > maxPrice && (

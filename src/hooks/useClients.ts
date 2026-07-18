@@ -1,10 +1,13 @@
 'use client';
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { clientsApi, classifySearchQuery } from '@/lib/api/clients';
-export type { ClientOrder } from '@/lib/api/clients';
+import { clientsApi } from '@/lib/api/clients';
 import { apiClient } from '@/lib/api/client';
 import { useAuthStore } from '@/store/auth';
+
+// NOTE: the Clients DIRECTORY lives in treasury-ui (/customers — the central customers page
+// with balances, credit terms and account filters); the POS nav links out to it. These hooks
+// only serve in-terminal flows: the checkout customer picker and the credit-sale hint.
 
 function useTenantID() {
   return useAuthStore((s) => s.user?.tenant_id ?? '');
@@ -20,40 +23,6 @@ export function useClientSearch(phone?: string, name?: string, email?: string) {
   });
 }
 
-/**
- * useCustomersDirectory — paginated customer directory for the Clients page.
- * filter 'all' lists every known customer from the CRM master (loyalty-enriched);
- * filter 'loyalty' lists only loyalty members via the existing loyalty-accounts endpoint.
- * q (optional) narrows either listing by name/phone/email.
- */
-export function useCustomersDirectory(q: string, page: number, filter: 'all' | 'loyalty', limit = 24) {
-  const tenantID = useTenantID();
-  return useQuery({
-    queryKey: ['pos-customers-directory', tenantID, q, page, filter, limit],
-    queryFn: async () => {
-      if (filter === 'loyalty') {
-        const res = await clientsApi.listLoyaltyMembers(tenantID, q ? classifySearchQuery(q) : undefined, page, limit);
-        return { rows: res.data ?? [], total: res.total ?? 0 };
-      }
-      const res = await clientsApi.listCustomers(tenantID, q || undefined, page, limit);
-      return { rows: res.data ?? [], total: res.total ?? 0 };
-    },
-    enabled: !!tenantID,
-    staleTime: 30_000,
-    placeholderData: (prev) => prev,
-  });
-}
-
-export function useClient(accountID: string) {
-  const tenantID = useTenantID();
-  return useQuery({
-    queryKey: ['pos-client', tenantID, accountID],
-    queryFn: () => clientsApi.getAccount(tenantID, accountID),
-    enabled: !!tenantID && !!accountID,
-    staleTime: 60_000,
-  });
-}
-
 export function useCreateLoyaltyAccount() {
   const tenantID = useTenantID();
   const qc = useQueryClient();
@@ -64,7 +33,8 @@ export function useCreateLoyaltyAccount() {
   });
 }
 
-/** Customer AR credit info (treasury via pos-api proxy): balance due + credit limit/period. */
+/** Customer AR credit info (treasury via pos-api proxy): balance due + credit limit/period.
+ *  Credit terms are EDITED centrally on the treasury Customers page, not in POS. */
 export interface ClientCredit {
   crm_contact_id?: string;
   customer_name?: string;
@@ -81,52 +51,5 @@ export function useClientCredit(accountID?: string) {
     queryFn: () => apiClient.get<ClientCredit>(`/api/v1/${tenantID}/pos/clients/${accountID}/credit`),
     enabled: !!tenantID && !!accountID,
     staleTime: 30_000,
-  });
-}
-
-/** Manager sets the customer's credit limit / payment period (pos.orders.manage gated). */
-export function useSetClientCredit(accountID: string) {
-  const tenantID = useTenantID();
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (data: { credit_limit?: number; credit_period_days?: number }) =>
-      apiClient.put<ClientCredit>(`/api/v1/${tenantID}/pos/clients/${accountID}/credit`, data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['pos-client-credit', tenantID, accountID] }),
-  });
-}
-
-export function useAddLoyaltyPoints() {
-  const tenantID = useTenantID();
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ accountID, points, orderId }: { accountID: string; points: number; orderId?: string }) =>
-      apiClient.post(`/api/v1/${tenantID}/pos/loyalty/accounts/${accountID}/earn`, { points, order_id: orderId }),
-    onSuccess: (_, vars) => {
-      qc.invalidateQueries({ queryKey: ['pos-client', tenantID, vars.accountID] });
-      qc.invalidateQueries({ queryKey: ['pos-clients', tenantID] });
-    },
-  });
-}
-
-export function useClientOrders(phone?: string, page = 1) {
-  const tenantID = useTenantID();
-  return useQuery({
-    queryKey: ['client-orders', tenantID, phone, page],
-    queryFn: () => clientsApi.getClientOrders(tenantID, phone!, page),
-    enabled: !!tenantID && !!phone,
-    staleTime: 30_000,
-  });
-}
-
-export function useRedeemLoyaltyPoints() {
-  const tenantID = useTenantID();
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ accountID, points, orderId }: { accountID: string; points: number; orderId?: string }) =>
-      apiClient.post(`/api/v1/${tenantID}/pos/loyalty/accounts/${accountID}/redeem`, { points, order_id: orderId }),
-    onSuccess: (_, vars) => {
-      qc.invalidateQueries({ queryKey: ['pos-client', tenantID, vars.accountID] });
-      qc.invalidateQueries({ queryKey: ['pos-clients', tenantID] });
-    },
   });
 }

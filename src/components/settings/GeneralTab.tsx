@@ -24,12 +24,16 @@ export function GeneralTab() {
   const [currency, setCurrency] = useState('KES');
   const [returnWindowDays, setReturnWindowDays] = useState('30');
   const [maxDiscountPercent, setMaxDiscountPercent] = useState('100');
+  const [allowPriceAboveBase, setAllowPriceAboveBase] = useState(true);
+  const [requireApprovalBelowBase, setRequireApprovalBelowBase] = useState(true);
 
   useEffect(() => {
     if (settings) {
       setCurrency(settings.currency || 'KES');
       setReturnWindowDays(String(settings.return_window_days ?? 30));
-      setMaxDiscountPercent(String((settings as any).max_discount_percent ?? 100));
+      setMaxDiscountPercent(String(settings.max_discount_percent ?? 100));
+      setAllowPriceAboveBase(settings.allow_price_above_base ?? true);
+      setRequireApprovalBelowBase(settings.require_approval_below_base ?? true);
     }
   }, [settings]);
 
@@ -40,7 +44,9 @@ export function GeneralTab() {
       currency,
       return_window_days: parseInt(returnWindowDays, 10) || 30,
       max_discount_percent: parseFloat(maxDiscountPercent) || 100,
-    } as any);
+      allow_price_above_base: allowPriceAboveBase,
+      require_approval_below_base: requireApprovalBelowBase,
+    });
   };
 
   return (
@@ -163,6 +169,36 @@ export function GeneralTab() {
                   <p className="text-xs text-muted-foreground">
                     A cashier discount above this % of the order requires a manager approval (PIN or QR card). Set 100 for no limit.
                   </p>
+                </div>
+                {/* Pricing policy — cashier line-price rules (server-enforced on order create). */}
+                <div className="space-y-3 pt-2 border-t border-border">
+                  <label className={labelClass}>Cashier price edits</label>
+                  <label className="flex items-start gap-2.5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={allowPriceAboveBase}
+                      onChange={(e) => setAllowPriceAboveBase(e.target.checked)}
+                      disabled={!canEdit}
+                      className="mt-0.5 h-4 w-4 rounded border-border accent-primary"
+                    />
+                    <span className="text-xs">
+                      <span className="font-medium text-foreground">Allow selling above the catalog price.</span>{' '}
+                      <span className="text-muted-foreground">Cashiers may raise a line&apos;s price above the base (negotiated up-sell) without approval.</span>
+                    </span>
+                  </label>
+                  <label className="flex items-start gap-2.5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={requireApprovalBelowBase}
+                      onChange={(e) => setRequireApprovalBelowBase(e.target.checked)}
+                      disabled={!canEdit}
+                      className="mt-0.5 h-4 w-4 rounded border-border accent-primary"
+                    />
+                    <span className="text-xs">
+                      <span className="font-medium text-foreground">Require manager approval below the catalog price.</span>{' '}
+                      <span className="text-muted-foreground">Selling under the base price (markdown or price-lowering discount) prompts the manager approval dialog at checkout.</span>
+                    </span>
+                  </label>
                 </div>
               </CardContent>
             </Card>

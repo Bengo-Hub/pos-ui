@@ -231,9 +231,11 @@ export function TerminalCart() {
                         <p className="text-xs text-muted-foreground font-mono mt-0.5">S/N: {item.serialNumber}</p>
                       )}
                       <div className="flex items-center gap-2 mt-1 flex-wrap">
-                        {/* Price override is MANAGER-ONLY (2026-07-17): cashiers ring items at
-                            the preset price — the amount renders as plain text for them. */}
-                        {t.can('pos.orders.manage') ? (
+                        {/* Price edit policy (2026-07-18): managers always; cashiers too when the
+                            outlet allows selling above base (allow_price_above_base, retail/pharmacy
+                            up-sell default) — LinePriceModal floors them at the preset, and a
+                            below-base entry triggers the manager-approval dialog at payment. */}
+                        {(t.can('pos.orders.manage') || (t.posSettings?.allow_price_above_base ?? true)) ? (
                           <button
                             type="button"
                             onClick={() => t.setPriceEditIndex(idx)}

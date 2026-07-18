@@ -35,7 +35,7 @@ const EXTRA_ROUTES: Record<string, RouteAccess> = {
   // pos.reports.view (own-sales scoped server-side) so they can open these too.
   '/reports':                { moduleKey: 'reports',  permission: [P.REPORTS_VIEW, P.REPORTS_MANAGE] },
   // Detail/child routes inherit their parent by prefix: /orders/[id], /reports/eod/[date],
-  // /clients/[id], /hotel/rooms/[roomId], /patients/[id], /layaway/[id], /loyalty/[id],
+  // /hotel/rooms/[roomId], /patients/[id], /layaway/[id], /loyalty/[id],
   // /returns/[id], /staff/[staffId]/schedule, /hotel/conference/[eventId] — no extra entries needed.
 };
 

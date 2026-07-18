@@ -312,15 +312,17 @@ export default function AddSalePage() {
     }
     return setLines((p) => p.map((l, x) => (x === i ? { ...l, quantity: q } : l)));
   };
-  // Terminal pricing policy (same gates as the POS terminal's inline cells): managers/admins
-  // (pos.orders.manage) may set ANY price — markdown or markup; everyone else may only sell
-  // AT or ABOVE the preset. The stored unitDiscount is deliberately KEPT on a price edit so
-  // a margin/total edit never wipes a layered line discount.
+  // Terminal pricing policy (2026-07-18 revision, same as the POS terminal): managers/admins
+  // (pos.orders.manage) set any price silently; everyone else sells AT or ABOVE the preset
+  // freely, and a BELOW-preset entry is now ACCEPTED locally too — the server's outlet policy
+  // decides at save time (require_approval_below_base ON → 422 approval_required →
+  // ApprovalDialog collects the manager step-up and the save retries; OFF → free markdown).
+  // The stored unitDiscount is deliberately KEPT on a price edit so a margin/total edit
+  // never wipes a layered line discount.
   const setPrice = (i: number, v: number) => {
     setLines((p) => p.map((l, x) => {
       if (x !== i) return l;
-      let next = Math.max(0, v);
-      if (!canPrivileged) next = Math.max(next, l.preset);
+      const next = Math.max(0, v);
       return { ...l, unitPrice: Math.round(next * 100) / 100, priceEdited: true };
     }));
   };
@@ -844,13 +846,15 @@ export default function AddSalePage() {
                         </td>
                       )}
                       <td className="px-3 py-3 text-right">
-                        {/* Terminal pricing policy (2026-07-17): price edits are manager-only;
-                            cashiers sell at the preset price — read-only cell. */}
+                        {/* Pricing policy (2026-07-18): cashiers may edit the price too when the
+                            outlet allows selling above base (retail/pharmacy up-sell default) —
+                            a below-preset entry triggers the manager ApprovalDialog at save via
+                            the server's 422 approval_required (price.override). */}
                         <InlinePriceCell
                           price={l.unitPrice}
                           preset={l.preset}
                           canDiscount={canPrivileged}
-                          disabled={!canPrivileged}
+                          disabled={!canPrivileged && !(posSettings?.allow_price_above_base ?? true)}
                           onCommit={(p) => setPrice(i, p)}
                         />
                       </td>

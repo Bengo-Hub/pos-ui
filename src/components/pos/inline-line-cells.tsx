@@ -3,11 +3,13 @@
 /**
  * Inline cart-line edit cells (retail/pharmacy terminal + reusable in back-office sale forms).
  *
- * Pricing policy (BOI retail requirement):
+ * Pricing policy (BOI retail requirement; 2026-07-18 revision):
  *  - admin/manager (`canDiscount`): edit price/margin/discount/line-total freely — below or
  *    above the preset price ("give discount as they see fit"). Server audits via price.override.
- *  - cashier & everyone else: may only raise the price (sell ABOVE the preset — increasing
- *    margin), never below it.
+ *  - cashier & everyone else: raise the price freely (sell ABOVE the preset — increasing
+ *    margin). A BELOW-preset entry is ACCEPTED locally too — the outlet's pricing policy is
+ *    enforced server-side at save (require_approval_below_base ON → 422 approval_required →
+ *    manager ApprovalDialog; OFF → free markdown).
  *
  * Value model (why edits don't clobber each other):
  *  - `unitDiscount` (KES/unit) is stored on the cart line and is STICKY.
@@ -116,7 +118,7 @@ export function InlinePriceCell({ price, preset, canDiscount, onCommit, disabled
     <span className={cn('inline-flex flex-col items-end leading-tight', className)}>
       <InlineEditCell
         disabled={disabled}
-        title={canDiscount ? 'Edit unit price (any value — markdown or markup)' : `Edit unit price (minimum KES ${preset.toLocaleString()})`}
+        title={canDiscount ? 'Edit unit price (any value — markdown or markup)' : `Edit unit price (below KES ${preset.toLocaleString()} needs manager approval at save)`}
         display={
           <span className={cn('text-xs font-mono', overridden ? (price < preset ? 'text-amber-600 font-semibold' : 'text-emerald-600 font-semibold') : 'text-muted-foreground')}>
             {price.toLocaleString(undefined, { maximumFractionDigits: 2 })}
@@ -126,7 +128,9 @@ export function InlinePriceCell({ price, preset, canDiscount, onCommit, disabled
         parse={(rawStr) => {
           const v = parseFloat(rawStr);
           if (isNaN(v) || v < 0) return null;
-          return canDiscount ? v : Math.max(v, preset);
+          // Below-preset values pass through for everyone — the server's pricing policy
+          // gates them (manager approval / free markdown) at save time.
+          return v;
         }}
         onCommit={onCommit}
       />

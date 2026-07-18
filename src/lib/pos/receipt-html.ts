@@ -19,7 +19,7 @@ export const RECEIPT_PRINT_CSS = `
   /* Thermal/non-colour printers render gray & brand colours faint — force pure-black bold ink on
      white for every node, keep colours exact, and only the logo image keeps its pixels (dithered). */
   .receipt-root, .receipt-root * { color: #000 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .receipt-root { font-family: 'Courier New', Courier, 'DejaVu Sans Mono', monospace; font-size: 12px; font-weight: bold; line-height: 1.45; color: #000; background: #fff; width: 72mm; padding: 4mm 0; margin: 0 auto; }
+  .receipt-root { font-family: 'Courier New', Courier, 'DejaVu Sans Mono', monospace; font-size: 13px; font-weight: bold; line-height: 1.45; color: #000; background: #fff; width: 72mm; padding: 4mm 0; margin: 0 auto; }
   .receipt-logo { display: block; margin: 0 auto 4px; max-width: 48mm; max-height: 20mm; object-fit: contain; filter: grayscale(1) contrast(1.2); }
   .receipt-center { text-align: center; }
   .receipt-bold { font-weight: bold; }
@@ -27,8 +27,8 @@ export const RECEIPT_PRINT_CSS = `
   .receipt-row { display: flex; justify-content: space-between; align-items: baseline; padding: 1px 0; }
   .receipt-row-name { flex: 1; padding-right: 6px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
   .receipt-row-value { flex-shrink: 0; white-space: nowrap; }
-  .receipt-total-row { font-weight: bold; font-size: 13px; border-top: 1px solid #000; margin-top: 2px; padding-top: 2px; }
-  .receipt-small { font-size: 10px; color: #000; }
+  .receipt-total-row { font-weight: bold; font-size: 15px; border-top: 1px solid #000; margin-top: 2px; padding-top: 2px; }
+  .receipt-small { font-size: 11px; color: #000; }
   .receipt-qr { display: block; margin: 4px auto; width: 20mm; height: 20mm; object-fit: contain; }
 `;
 

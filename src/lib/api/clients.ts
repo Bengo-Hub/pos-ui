@@ -1,5 +1,9 @@
 import { apiClient } from './client';
 
+// NOTE: the customer DIRECTORY (list/manage/balances/credit terms) is centralized on the
+// treasury Customers page — POS links out to it from the nav. This module only backs the
+// in-terminal customer picker (search + quick-create via loyalty accounts).
+
 export interface LoyaltyAccount {
   /** Empty string for CRM-only rows merged into search results (source === 'crm'). */
   id: string;
@@ -39,24 +43,6 @@ export function classifySearchQuery(q: string): CustomerSearchParams {
   return { name: query };
 }
 
-export interface LoyaltyTransaction {
-  id: string;
-  account_id: string;
-  type: string;
-  points: number;
-  order_id?: string;
-  created_at: string;
-}
-
-export interface ClientOrder {
-  id: string;
-  order_number?: number;
-  total_amount: string;
-  status: string;
-  order_subtype?: string;
-  created_at: string;
-}
-
 function base(tenantID: string) {
   return `/api/v1/${tenantID}/pos`;
 }
@@ -77,29 +63,4 @@ export const clientsApi = {
         const total = Array.isArray(res) ? res.length : res.total ?? accounts.length;
         return { accounts, total };
       }),
-
-  getAccount: (tenantID: string, accountID: string) =>
-    apiClient.get<LoyaltyAccount>(`${base(tenantID)}/loyalty/accounts/${accountID}`),
-
-  // Customer DIRECTORY — CRM-backed (every known customer, loyalty member or not), paginated.
-  // q filters by name/phone/email substring; empty q lists everyone newest-first.
-  listCustomers: (tenantID: string, q: string | undefined, page = 1, limit = 24) =>
-    apiClient.get<{ data: LoyaltyAccount[]; total: number; page: number; limit: number }>(
-      `${base(tenantID)}/customers`,
-      { ...(q ? { q } : {}), page, limit },
-    ),
-
-  // Loyalty MEMBERS listing (paginated) — the same /loyalty/accounts endpoint the picker uses,
-  // without search params it lists every account.
-  listLoyaltyMembers: (tenantID: string, params: CustomerSearchParams | undefined, page = 1, limit = 24) =>
-    apiClient.get<{ data: LoyaltyAccount[]; total: number; page: number; limit: number }>(
-      `${base(tenantID)}/loyalty/accounts`,
-      { ...(params?.phone ? { phone: params.phone } : {}), ...(params?.name ? { name: params.name } : {}), ...(params?.email ? { email: params.email } : {}), page, limit },
-    ),
-
-  getClientOrders: (tenantID: string, phone: string, page = 1, limit = 20) =>
-    apiClient.get<{ data: ClientOrder[]; total: number; page: number; limit: number }>(
-      `${base(tenantID)}/clients/${encodeURIComponent(phone)}/orders`,
-      { page, limit }
-    ),
 };

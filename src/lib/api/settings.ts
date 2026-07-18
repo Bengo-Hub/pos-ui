@@ -72,6 +72,13 @@ export interface POSSettings {
   shift_max_hours: number;
   table_max_occupation_minutes: number;
   return_window_days: number;
+  /** Max order discount % a cashier may apply without manager approval (100 = no limit). */
+  max_discount_percent: number;
+  // Pricing policy — cashier price-edit rules (retail/pharmacy up-sell model):
+  /** Cashiers may RAISE a line price above the catalog/base price without approval (default true). */
+  allow_price_above_base: boolean;
+  /** Selling below base (markdown / price-lowering discount) requires a manager price.override step-up (default true). */
+  require_approval_below_base: boolean;
   // payment display — shown on printed receipts
   mpesa_paybill?: string | null;
   mpesa_account_reference?: string | null;
@@ -116,6 +123,10 @@ export interface UpdatePOSSettingsInput {
   screensaver_urls?: string[];
   printer_profiles?: PrinterProfile[];
   return_window_days?: number;
+  max_discount_percent?: number;
+  // pricing policy
+  allow_price_above_base?: boolean;
+  require_approval_below_base?: boolean;
   // cash drawer
   cash_drawer_enabled?: boolean;
   cash_drawer_printer?: string | null;
