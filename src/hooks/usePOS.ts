@@ -412,24 +412,40 @@ export function offlineToCatalogItem(c: OfflineCatalogItem): CatalogItem {
 }
 
 /** Pull the ENTIRE catalog (loop every page) so client-side filter/search/pagination
- *  operate on the complete set — never a single page. Capped to avoid a runaway loop. */
-async function fetchAllCatalogItems(tenantID: string, opts?: { timeout?: number }): Promise<CatalogItem[]> {
+ *  operate on the complete set — never a single page. Capped to avoid a runaway loop.
+ *
+ *  Progressive: `onPage` fires with the accumulated set after EVERY page so callers can
+ *  paint the grid as items sync instead of blanking until the last page lands (a 3.8k-item
+ *  retail catalog is ~8 pages — waiting for all of them read as "the system is slow").
+ *  Resilient: a mid-sweep failure returns what was already fetched (marked partial) rather
+ *  than throwing the whole set away — the background revalidate/version poll completes it. */
+async function fetchAllCatalogItems(
+  tenantID: string,
+  opts?: { timeout?: number; onPage?: (accumulated: CatalogItem[]) => void },
+): Promise<{ items: CatalogItem[]; partial: boolean }> {
   // 500 = pos-api's ListCatalogItems max — fewer round trips matter for big retail
   // catalogs (boi: 3.8k items → 8 pages instead of 20).
   const limit = 500;
   const all: CatalogItem[] = [];
   for (let page = 1; page <= 100; page++) {
-    const res = await apiClient.get<PaginatedResponse<CatalogItem>>(
-      `${basePath(tenantID)}/catalog/items`,
-      { page, limit },
-      { suppressErrorToast: true, timeout: opts?.timeout },
-    );
+    let res: PaginatedResponse<CatalogItem> | undefined;
+    try {
+      res = await apiClient.get<PaginatedResponse<CatalogItem>>(
+        `${basePath(tenantID)}/catalog/items`,
+        { page, limit },
+        { suppressErrorToast: true, timeout: opts?.timeout },
+      );
+    } catch (err) {
+      if (all.length === 0) throw err; // nothing usable — let the caller handle the failure
+      return { items: all, partial: true };
+    }
     const batch = res?.data ?? [];
     all.push(...batch);
+    if (batch.length > 0) opts?.onPage?.([...all]);
     const total = res?.total ?? all.length;
     if (batch.length < limit || all.length >= total) break;
   }
-  return all;
+  return { items: all, partial: false };
 }
 
 export const FULL_CATALOG_QUERY_KEY = 'pos-catalog-full';
@@ -471,15 +487,30 @@ export async function revalidateFullCatalog(
     // Generous per-page timeout: large retail catalogs (BOI: ~3.8k items over ~20 pages) can
     // exceed the axios 15s default on a heavy page — the background sync then logged
     // "timeout of 15000ms exceeded" every cycle and the cache never refreshed.
-    const all = await fetchAllCatalogItems(tenantID, { timeout: 30_000 });
+    //
+    // Stream pages into the live query ONLY while the grid has nothing to show — an empty
+    // terminal fills as items sync. When a full set is already painted, swapping in a
+    // partial one would visibly SHRINK the grid and regrow it, so the replace stays atomic.
+    const existing = qc.getQueryData<CatalogItem[]>([FULL_CATALOG_QUERY_KEY, tenantID, outletID]);
+    const streamIntoQuery = !existing || existing.length === 0;
+    const { items: all, partial } = await fetchAllCatalogItems(tenantID, {
+      timeout: 30_000,
+      onPage: streamIntoQuery
+        ? (acc) => qc.setQueryData([FULL_CATALOG_QUERY_KEY, tenantID, outletID], acc)
+        : undefined,
+    });
     if (all.length) {
       // Replace (not union) this outlet's cached slice — best-effort, non-blocking.
-      void replaceCachedCatalog(tenantID, outletID, toOfflineCatalogRows(tenantID, outletID, all))
-        .catch(() => { /* offline cache is best-effort */ });
+      // A PARTIAL sweep must never replace the offline cache (it would delete every item
+      // the failed pages carried); it only feeds the on-screen grid until a full sweep lands.
+      if (!partial) {
+        void replaceCachedCatalog(tenantID, outletID, toOfflineCatalogRows(tenantID, outletID, all))
+          .catch(() => { /* offline cache is best-effort */ });
+      }
       qc.setQueryData([FULL_CATALOG_QUERY_KEY, tenantID, outletID], all);
     }
     void import('@/lib/db/kv-cache').then(({ appendSyncLog }) =>
-      appendSyncLog({ direction: 'pull', entity: 'catalog', status: 'ok', tenant_id: tenantID, detail: `${all.length} items` }));
+      appendSyncLog({ direction: 'pull', entity: 'catalog', status: 'ok', tenant_id: tenantID, detail: `${all.length} items${partial ? ' (partial sweep)' : ''}` }));
     return all;
   } catch (err) {
     void import('@/lib/db/kv-cache').then(({ appendSyncLog }) =>
@@ -517,11 +548,24 @@ export async function loadFullCatalog(
     return cached.map(offlineToCatalogItem);
   }
   // Cold start: nothing cached yet for this outlet, so the network is the only source.
-  // Bounded per-page timeout: on weak wifi the terminal degrades to an empty grid that the
-  // background revalidate/version-poll fills in, instead of hanging on the axios 15s default.
-  const all = await fetchAllCatalogItems(tenantID, { timeout: 10_000 });
-  void replaceCachedCatalog(tenantID, outletID, toOfflineCatalogRows(tenantID, outletID, all))
-    .catch(() => { /* offline cache is best-effort */ });
+  // PROGRESSIVE: every fetched page streams straight into the live query, so the grid
+  // starts filling after page one (~500 items) instead of blanking on "Loading menu…"
+  // until a 3.8k-item sweep completes. Bounded per-page timeout: on weak wifi the terminal
+  // degrades to whatever pages landed (the background revalidate/version-poll completes
+  // the set) instead of hanging on the axios 15s default.
+  const { items: all, partial } = await fetchAllCatalogItems(tenantID, {
+    timeout: 10_000,
+    onPage: qc ? (acc) => qc.setQueryData([FULL_CATALOG_QUERY_KEY, tenantID, outletID], acc) : undefined,
+  });
+  // Only a COMPLETE sweep may seed the offline cache — persisting a partial one would make
+  // the next load serve (and trust) a truncated menu.
+  if (!partial) {
+    void replaceCachedCatalog(tenantID, outletID, toOfflineCatalogRows(tenantID, outletID, all))
+      .catch(() => { /* offline cache is best-effort */ });
+  } else if (qc) {
+    // Finish the job in the background as soon as the sweep breaks — no user action needed.
+    void revalidateFullCatalog(qc, tenantID, outletID, { force: true });
+  }
   return all;
 }
 
