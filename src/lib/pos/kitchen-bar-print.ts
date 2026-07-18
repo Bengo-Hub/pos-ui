@@ -112,14 +112,18 @@ function escapeHtml(s: string): string {
   return s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] as string));
 }
 
-function stationSectionHtml(title: string, orderNumber: string, tableRef: string, lines: TicketLine[]): string {
+function stationSectionHtml(title: string, orderNumber: string, tableRef: string, lines: TicketLine[], banner?: string): string {
   if (lines.length === 0) return '';
   const rows = lines.map((l) => {
     const note = l.notes ? `<div class="t-note">↳ ${escapeHtml(l.notes)}</div>` : '';
     return `<div class="t-line"><span class="t-qty">${l.quantity}×</span><span style="flex:1">${escapeHtml(l.name)}</span></div>${note}`;
   }).join('');
+  // Attention banner (e.g. "*** ADDITIONAL ITEMS ***") so a delta chit fired on add-to-bill
+  // is never mistaken for a brand-new order — mirrors the server ESC/POS Banner field.
+  const bannerHtml = banner ? `<div class="t-title">*** ${escapeHtml(banner)} ***</div>` : '';
   return `<div class="t-section">
     <div class="t-title">${escapeHtml(title)}</div>
+    ${bannerHtml}
     <div class="t-sub">Order ${escapeHtml(orderNumber)}${tableRef ? ` · ${escapeHtml(tableRef)}` : ''}</div>
     <hr class="t-div"/>
     ${rows}
@@ -177,6 +181,9 @@ export interface PrintTicketsOptions {
   /** Background/auto-print mode: NEVER open a browser print dialog — skip jobs with no real
    *  printer and report them in the result instead. */
   silent?: boolean;
+  /** Attention banner printed under each station title (e.g. 'ADDITIONAL ITEMS' for the
+   *  delta chit fired when a waiter adds items to an open bill). */
+  bannerLabel?: string;
 }
 
 export interface PrintTicketsResult {
@@ -197,7 +204,7 @@ export async function printKitchenBarTickets(opts: PrintTicketsOptions): Promise
   const {
     orderNumber, tableRef = '', lines, kdsStations = [], stations = [],
     includeCustomerBill = true, currency = 'KES', autoPrintKitchen = false, autoPrintBill = false,
-    silent = false,
+    silent = false, bannerLabel,
   } = opts;
   const result: PrintTicketsResult = { printed: 0, skipped: [] };
   if (lines.length === 0) return result;
@@ -234,7 +241,7 @@ export async function printKitchenBarTickets(opts: PrintTicketsOptions): Promise
       for (const [stationId, stationLines] of buckets) {
         const station = stationById.get(stationId);
         const title = station?.name ?? 'Kitchen';
-        const html = stationSectionHtml(`${title} Order`, orderNumber, tableRef, stationLines);
+        const html = stationSectionHtml(`${title} Order`, orderNumber, tableRef, stationLines, bannerLabel);
         if (!html) continue;
         const profile = configFor(stations, stationId, title);
         if (profile.auto_print === false) continue; // station auto-print disabled
@@ -260,7 +267,7 @@ export async function printKitchenBarTickets(opts: PrintTicketsOptions): Promise
   if (printStations) {
     for (const [stationId, stationLines] of buckets) {
       const title = stationById.get(stationId)?.name ?? 'Kitchen';
-      combined += stationSectionHtml(`${title} Order`, orderNumber, tableRef, stationLines);
+      combined += stationSectionHtml(`${title} Order`, orderNumber, tableRef, stationLines, bannerLabel);
     }
   }
   if (!combined) return result;

@@ -1332,15 +1332,61 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
     },
   }); });
 
+  // Silent kitchen/bar STATION chit print for a set of cart lines, honoring the outlet's
+  // printer setup — shared by send-to-kitchen (all lines, no banner) and add-to-bill
+  // (delta lines + "ADDITIONAL ITEMS" banner). Only fires when NO Local Print Agent is
+  // online (the server queue owns printing then — printing here too would double-print)
+  // and the outlet enabled auto_print_kitchen. Never opens a browser dialog.
+  const printStationTicketsForLines = useCallback((ticketLines: CartItem[], banner: string | undefined, orderNumber: string) => {
+    if (!isHospitality || ticketLines.length === 0) return;
+    if ((posSettings as any)?.print_agent_online) return;
+    if (!((posSettings as any)?.auto_print_kitchen ?? false)) return;
+    void printKitchenBarTickets({
+      orderNumber,
+      tableRef: tableName ? `Table ${tableName}` : '',
+      bannerLabel: banner,
+      lines: ticketLines.map((c) => {
+        const eff = effectiveQtyFor(c);
+        return {
+          name: c.name,
+          // Kitchen/bar must prepare the free BOGO unit too → effective quantity.
+          quantity: eff,
+          category: c.category,
+          notes: c.notes,
+          unitPrice: c.price + (c.modifierTotal ?? 0),
+          totalPrice: (c.price + (c.modifierTotal ?? 0)) * eff,
+        };
+      }),
+      kdsStations: kdsStationsData?.data ?? [],
+      stations: (posSettings as any)?.printer_profiles ?? [],
+      includeCustomerBill: false,
+      currency: (posSettings as any)?.currency ?? 'KES',
+      autoPrintKitchen: true,
+      autoPrintBill: false,
+      silent: true,
+    }).then((res) => {
+      if (res.skipped.length > 0) {
+        toast.info(`Ticket print skipped (no printer): ${[...new Set(res.skipped)].join(', ')} — check Settings → Receipt.`);
+      }
+    });
+  }, [isHospitality, posSettings, tableName, kdsStationsData, effectiveQtyFor]);
+
   const handlePlaceOrder = () => {
     if (cart.length === 0) return;
 
     // Add-to-bill mode: append lines to existing order
     if (isAddToBill && billOrderId) {
+      // Snapshot the just-added lines BEFORE clearCart() — they are the delta chit's content.
+      const addedLines = [...cart];
       addOrderLines.mutate(
         { orderId: billOrderId, lines: orderLines },
         {
           onSuccess: () => {
+            // Delta kitchen/bar chit for ONLY the added items. When a Local Print Agent is
+            // online the SERVER queue prints it (enqueueStationTicketsForLines); this client
+            // silent path covers agent-less outlets so stations never miss an add-to-bill —
+            // the gap behind the "chef re-fired the whole bill" incident.
+            printStationTicketsForLines(addedLines, 'ADDITIONAL ITEMS', billOrderId.slice(0, 8));
             clearCart();
             setCartOpen(false);
             setOrderPlacedId(billOrderId);
@@ -1699,42 +1745,9 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
     if (opts?.unpaid) {
       // Send-to-Kitchen (dine-in) / COD: print kitchen + bar STATION tickets per the outlet's
       // printer setup. The customer bill is NOT printed here — OrderPlacedDialog owns the bill
-      // (server-rendered receipt) so it never prints twice. This is a background job: silent mode
-      // means skipped stations toast instead of ever opening a browser print dialog.
-      //
-      // When a Local Print Agent is online, the SERVER print queue already enqueued the station
-      // tickets at order create (AccuPOS model) — printing again here would double-print.
-      if (isHospitality && cart.length > 0 && !(posSettings as any)?.print_agent_online) {
-        void printKitchenBarTickets({
-          orderNumber: ord.orderNumber || ord.orderId.slice(0, 8),
-          tableRef: tableName ? `Table ${tableName}` : '',
-          lines: cart.map((c) => {
-            const eff = effectiveQtyFor(c);
-            return {
-              name: c.name,
-              // Kitchen/bar must prepare the free BOGO unit too → effective quantity.
-              quantity: eff,
-              category: c.category,
-              notes: c.notes,
-              unitPrice: c.price + (c.modifierTotal ?? 0),
-              totalPrice: (c.price + (c.modifierTotal ?? 0)) * eff,
-            };
-          }),
-          kdsStations: kdsStationsData?.data ?? [],
-          stations: (posSettings as any)?.printer_profiles ?? [],
-          includeCustomerBill: false,
-          currency: (posSettings as any)?.currency ?? 'KES',
-          // Only auto-print when the outlet enabled it — otherwise the kitchen gets the order via
-          // the KDS and the cashier prints manually (no surprise browser print dialog).
-          autoPrintKitchen: (posSettings as any)?.auto_print_kitchen ?? false,
-          autoPrintBill: (posSettings as any)?.auto_print_order ?? false,
-          silent: true,
-        }).then((res) => {
-          if (res.skipped.length > 0) {
-            toast.info(`Ticket print skipped (no printer): ${[...new Set(res.skipped)].join(', ')} — check Settings → Receipt.`);
-          }
-        });
-      }
+      // (server-rendered receipt) so it never prints twice. Shared silent path with add-to-bill's
+      // delta chit; skips entirely when a Local Print Agent is online (server queue owns it).
+      printStationTicketsForLines(cart, undefined, ord.orderNumber || ord.orderId.slice(0, 8));
       clearCart();
       setCartOpen(false);
       setOrderPlacedId(ord.orderId);
@@ -1744,7 +1757,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
     }
     // Pass the just-settled order through so the receipt fetch uses its id directly (no state race).
     handlePaymentConfirmed(ord);
-  }, [handlePaymentConfirmed, isHospitality, cart, tableName, posSettings]);
+  }, [handlePaymentConfirmed, cart, printStationTicketsForLines]);
 
   // Multiple Pay → the order already exists (created by the bar); open the split modal against it.
   const handleInlineSplit = useCallback((_ord: CreatedOrder) => {

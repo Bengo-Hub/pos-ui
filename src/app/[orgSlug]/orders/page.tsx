@@ -54,6 +54,7 @@ export default function OrdersPage() {
   const isRetail = outletUseCase === 'retail';
 
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   // Advanced filters (all server-side via useOrders — reuses the existing /orders query params).
   const [showFilters, setShowFilters] = useState(false);
@@ -73,11 +74,15 @@ export default function OrdersPage() {
     const t = setTimeout(() => setDebouncedCustomer(customer.trim()), 350);
     return () => clearTimeout(t);
   }, [customer]);
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(searchQuery.trim()), 350);
+    return () => clearTimeout(t);
+  }, [searchQuery]);
 
   // Any change to a server-side filter → back to page 1.
   useEffect(() => {
     setPage(1);
-  }, [statusFilter, dateFrom, dateTo, paymentMethod, source, debouncedCustomer]);
+  }, [statusFilter, dateFrom, dateTo, paymentMethod, source, debouncedCustomer, debouncedSearch]);
 
   const activeFilterCount =
     (dateFrom ? 1 : 0) + (dateTo ? 1 : 0) + (paymentMethod !== 'all' ? 1 : 0) + (source !== 'all' ? 1 : 0) + (debouncedCustomer ? 1 : 0);
@@ -95,9 +100,10 @@ export default function OrdersPage() {
       paymentMethod: paymentMethod !== 'all' ? paymentMethod : undefined,
       source: source !== 'all' ? source : undefined,
       customer: debouncedCustomer || undefined,
+      orderNumber: debouncedSearch || undefined,
       page,
       limit: PAGE_SIZE,
-    }), [statusFilter, staffId, dateFrom, dateTo, paymentMethod, source, debouncedCustomer, page])
+    }), [statusFilter, staffId, dateFrom, dateTo, paymentMethod, source, debouncedCustomer, debouncedSearch, page])
   );
 
   const orders = ordersData?.data ?? [];
@@ -108,11 +114,9 @@ export default function OrdersPage() {
     setDateFrom(''); setDateTo(''); setPaymentMethod('all'); setSource('all'); setCustomer('');
   };
 
-  // Order-# search stays client-side over the current page (server already applies the filters).
-  const filtered = orders.filter((order: any) => {
-    if (!searchQuery) return true;
-    return (order.order_number || '').toLowerCase().includes(searchQuery.toLowerCase());
-  });
+  // Order-# search is SERVER-side (order_number param) with a page reset — a client-side
+  // filter over the current page silently hid matches living on other pages.
+  const filtered = orders;
 
   const formatTime = (dateStr: string) => {
     if (!dateStr) return '';
