@@ -1,22 +1,24 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-import Link from 'next/link';
-import { useParams } from 'next/navigation';
-import { Loader2, Percent, Plus, Pencil, Trash2, Ticket, Zap, Clock3, Wine } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Loader2, Percent, Plus, Pencil, Trash2, Ticket, Zap, Clock3, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { Card, CardContent } from '@/components/ui/base';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { Pagination } from '@/components/ui/pagination';
 import { usePermissions, P } from '@/hooks/usePermissions';
 import { useDiscounts, useCreateDiscount, useUpdateDiscount, useDeleteDiscount } from '@/hooks/useDiscounts';
-import { useFullCatalog } from '@/hooks/usePOS';
+import { useFullCatalog, useCategories } from '@/hooks/usePOS';
+import { useSubscription } from '@/hooks/use-subscription';
+import { UpgradeDialog } from '@bengo-hub/shared-ui-lib/subscription';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import type { Discount, DiscountInput } from '@/lib/api/discounts';
-import { DiscountFormModal, describeDiscount } from '@/components/pos/discounts/discount-form-modal';
-import { searchCatalogItemsAdapter } from '@/components/pos/discounts/apply-discount-modal';
+import { DiscountFormModal, describeDiscount, describeScope } from '@/components/pos/discounts/discount-form-modal';
+import { searchCatalogItemsAdapter, fetchCategoryItemsAdapter } from '@/components/pos/discounts/apply-discount-modal';
 import { cn } from '@/lib/utils';
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const PAGE_SIZE = 20;
 
 const KIND_META: Record<string, { label: string; icon: typeof Ticket; cls: string }> = {
   code: { label: 'Promo Code', icon: Ticket, cls: 'bg-blue-500/10 text-blue-600' },
@@ -26,6 +28,12 @@ const KIND_META: Record<string, { label: string; icon: typeof Ticket; cls: strin
 
 function scheduleText(d: Discount): string {
   if (d.promo_kind === 'happy_hour') {
+    if (d.start_at && !d.days_of_week?.length) {
+      // One-time window: an explicit start → end occurrence.
+      const from = new Date(d.start_at).toLocaleString('en-KE');
+      const to = d.end_at ? new Date(d.end_at).toLocaleString('en-KE') : '—';
+      return `${from} → ${to}`;
+    }
     const days = (d.days_of_week ?? []).map((v) => DAY_LABELS[v]).join(', ') || 'Daily';
     return `${days} · ${d.window_start || '—'}–${d.window_end || '—'}`;
   }
@@ -38,18 +46,29 @@ function scheduleText(d: Discount): string {
 
 /**
  * Sell → Discounts — management surface for the platform's discount source of truth
- * (pos-api promotions). Lists ALL discounts (promo codes, automatic, time-windowed) and
- * creates/edits them through the shared DiscountFormModal; the same rows drive the POS
- * terminal, Add Sale, and every service integrated via the S2S discount endpoints.
+ * (pos-api promotions). Lists ALL discounts (promo codes, automatic, time-windowed
+ * happy hours incl. BOGO/pairing deals) and creates/edits them through the shared
+ * DiscountFormModal; the same rows drive the POS terminal, Add Sale, and every service
+ * integrated via the S2S discount endpoints. The old hotel Happy Hour editor is retired —
+ * this page owns every deal kind.
  */
 export default function DiscountsPage() {
-  const { orgSlug } = useParams<{ orgSlug: string }>();
   const { can, canAny } = usePermissions();
   const canView = canAny([P.PROMOTIONS_VIEW, P.PROMOTIONS_ADD, P.PROMOTIONS_CHANGE, P.PROMOTIONS_MANAGE]);
   const canManage = canAny([P.PROMOTIONS_ADD, P.PROMOTIONS_MANAGE]);
 
-  const { data, isLoading, isError, refetch } = useDiscounts('all');
+  // Search-first pagination: typing resets to page 1 and the query is applied SERVER-side
+  // (promotions ?q= name filter), so matches surface from the full set — never just the
+  // currently fetched page.
+  const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [page, setPage] = useState(1);
+  useEffect(() => { const t = setTimeout(() => setDebouncedSearch(search), 300); return () => clearTimeout(t); }, [search]);
+
+  const { data, isLoading, isError, refetch } = useDiscounts('all', { q: debouncedSearch, page, limit: PAGE_SIZE });
   const discounts: Discount[] = (data as any)?.data ?? [];
+  const total: number = (data as any)?.total ?? (data as any)?.meta?.total ?? discounts.length;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   const createMut = useCreateDiscount();
   const updateMut = useUpdateDiscount();
@@ -59,7 +78,13 @@ export default function DiscountsPage() {
   const [editing, setEditing] = useState<Discount | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Discount | null>(null);
 
-  // SKU → name resolution for edit-prefill chips (rule.scope_ids carry only SKUs).
+  // happy_hour kind is a Pro sub-feature: creating NEW time-window deals is gated (editing
+  // existing ones stays allowed — grandfathered urban-loft deals must remain manageable).
+  const { hasFeature } = useSubscription();
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
+
+  // SKU → name resolution for edit-prefill chips + pairing rows (rule.scope_ids /
+  // get_pair_map carry only SKUs). Full catalog, not one page — deep SKUs must resolve.
   const { data: fullCatalog } = useFullCatalog();
   const nameBySku = useMemo(() => {
     const m = new Map<string, string>();
@@ -67,9 +92,12 @@ export default function DiscountsPage() {
     return m;
   }, [fullCatalog]);
 
-  // Item-search adapter for the shared modal — ONE pos-ui adapter, shared with the
-  // apply-discount modal (components/pos/discounts/apply-discount-modal.tsx).
-  const searchItems = searchCatalogItemsAdapter;
+  // Category names for the modal's category scope + bulk-add (outlet-scoped catalog tree).
+  const { data: catalogCategories } = useCategories();
+  const categoryNames = useMemo(
+    () => (catalogCategories ?? []).map((c: { name?: string }) => c.name ?? '').filter(Boolean),
+    [catalogCategories],
+  );
 
   async function handleSubmit(payload: DiscountInput) {
     try {
@@ -113,22 +141,27 @@ export default function DiscountsPage() {
           <div>
             <h1 className="text-xl font-bold">Discounts</h1>
             <p className="text-sm text-muted-foreground">
-              One source of truth — applies on the terminal, Add Sale, and every integrated service.
+              One source of truth — promo codes, automatic deals, happy hours &amp; BOGO. Applies on the
+              terminal, Add Sale, and every integrated service.
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Link href={`/${orgSlug}/hotel/happy-hour`}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-input text-sm font-medium hover:bg-muted">
-            <Wine className="h-4 w-4" /> BOGO &amp; Happy Hour editor
-          </Link>
-          {canManage && (
-            <button onClick={() => { setEditing(null); setModalOpen(true); }}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-primary-foreground font-semibold hover:bg-primary/90">
-              <Plus className="h-4 w-4" /> New Discount
-            </button>
-          )}
-        </div>
+        {canManage && (
+          <button onClick={() => { setEditing(null); setModalOpen(true); }}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-primary-foreground font-semibold hover:bg-primary/90">
+            <Plus className="h-4 w-4" /> New Discount
+          </button>
+        )}
+      </div>
+
+      <div className="relative max-w-sm">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <input
+          value={search}
+          onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+          placeholder="Search discounts by name…"
+          className="w-full pl-9 pr-3 py-2 rounded-xl border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+        />
       </div>
 
       <Card>
@@ -142,7 +175,9 @@ export default function DiscountsPage() {
             </div>
           ) : discounts.length === 0 ? (
             <div className="py-16 text-center text-sm text-muted-foreground">
-              No discounts yet. Create one to start discounting sales across all channels.
+              {debouncedSearch
+                ? <>No discounts match &ldquo;{debouncedSearch}&rdquo;.</>
+                : <>No discounts yet. Create one to start discounting sales across all channels.</>}
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -163,7 +198,6 @@ export default function DiscountsPage() {
                   {discounts.map((d) => {
                     const meta = KIND_META[d.promo_kind] ?? KIND_META.code;
                     const KindIcon = meta.icon;
-                    const scopeCount = d.rule?.scope_ids?.length ?? 0;
                     return (
                       <tr key={d.id} className="hover:bg-accent/5">
                         <td className="px-4 py-3 font-medium">{d.name}</td>
@@ -174,9 +208,7 @@ export default function DiscountsPage() {
                         </td>
                         <td className="px-4 py-3 font-mono text-xs">{d.promo_kind === 'code' ? (d.promo_code || '—') : '—'}</td>
                         <td className="px-4 py-3">{describeDiscount(d)}</td>
-                        <td className="px-4 py-3 text-xs text-muted-foreground">
-                          {d.rule?.scope_type === 'all' || scopeCount === 0 ? 'All items' : `${scopeCount} item${scopeCount === 1 ? '' : 's'}`}
-                        </td>
+                        <td className="px-4 py-3 text-xs text-muted-foreground">{describeScope(d)}</td>
                         <td className="px-4 py-3 text-xs text-muted-foreground">{scheduleText(d)}</td>
                         <td className="px-4 py-3 text-center">
                           <span className={cn('text-xs px-2 py-1 rounded-full font-medium',
@@ -210,15 +242,24 @@ export default function DiscountsPage() {
         </CardContent>
       </Card>
 
+      {totalPages > 1 && (
+        <Pagination page={page} totalPages={totalPages} total={total} onPageChange={setPage} itemLabel="discounts" />
+      )}
+
       <DiscountFormModal
         open={modalOpen}
         initial={editing}
         saving={createMut.isPending || updateMut.isPending}
         onClose={() => { setModalOpen(false); setEditing(null); }}
         onSubmit={handleSubmit}
-        searchItems={searchItems}
+        searchItems={searchCatalogItemsAdapter}
         resolveItemName={(sku) => nameBySku.get(sku)}
+        categories={categoryNames}
+        fetchCategoryItems={fetchCategoryItemsAdapter}
+        happyHourLocked={!hasFeature('happy_hour')}
+        onLockedKindClick={() => setUpgradeOpen(true)}
       />
+      <UpgradeDialog feature="happy_hour" open={upgradeOpen} onClose={() => setUpgradeOpen(false)} />
 
       <ConfirmDialog
         open={!!deleteTarget}

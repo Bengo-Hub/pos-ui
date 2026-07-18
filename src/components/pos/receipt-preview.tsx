@@ -11,6 +11,8 @@ import { enqueuePrintJob } from '@/lib/pos/print-jobs';
 import { hasRealPrinter } from '@/lib/pos/printer-stations';
 import { buildReceiptRows } from '@/lib/pos/receipt-rows';
 import { buildReceiptDocument, printReceiptDocument } from '@/lib/pos/receipt-html';
+import { paperForFormat, resolveReceiptFormat } from '@/lib/pos/receipt-format';
+import { apiClient } from '@/lib/api/client';
 import type { PrinterProfile } from '@/lib/api/settings';
 import { useTenantBranding } from '@/providers/tenant-branding-provider';
 
@@ -47,8 +49,12 @@ export interface ReceiptData {
   balance_due?: number;
   amount_tendered: number;
   change_due: number;
-  /** Outlet use case — "retail" switches every surface to the boxed invoice-style template. */
+  /** Outlet use case ("retail", "hospitality", …) — content hints only; layout is `layout`. */
   use_case?: string;
+  /** Server-resolved receipt layout id (outlet receipt_format setting via pos-api's
+   *  printing/layouts registry): thermal_classic | thermal_modern | a4_invoice. Old
+   *  offline-cached payloads may lack it — resolveReceiptFormat falls back safely. */
+  layout?: string;
   /** Receipt & Printing "show logo" setting (default true). */
   show_logo?: boolean;
   /** Code 128 of the order number (data: URI) from pos-api — retail receipts only. */
@@ -195,12 +201,12 @@ export function ReceiptPreview({
       window.print();
       return;
     }
-    // Retail's boxed template is an A4 document (barcode + bordered tables); everything else
-    // keeps the 80mm thermal page.
+    // Paper follows the outlet's resolved receipt layout (server `layout`, safe thermal
+    // fallback) — thermal by default; the A4 sheet only when a4_invoice is configured.
     printReceiptDocument(buildReceiptDocument(
       `Receipt ${receipt.order_number}`,
       node.innerHTML,
-      receipt.use_case === 'retail' ? 'a4' : 'thermal',
+      paperForFormat(resolveReceiptFormat(receipt)),
     ));
   };
 
@@ -210,10 +216,27 @@ export function ReceiptPreview({
     setTimeout(() => setPrinting(false), 1000);
   };
 
-  // Real PDF: ALWAYS the browser window — its "Save as PDF" destination produces a proper PDF with
-  // the 80mm thermal layout, regardless of any configured hardware printer. (The pos-api endpoint
-  // GET /{tenant}/pos/orders/{orderID}/receipt?format=pdf also returns a real application/pdf.)
+  // Real PDF: when online, download the server-rendered application/pdf (same layouts
+  // registry as the printed receipt — fpdf output, not a print-to-PDF approximation).
+  // Offline (or on any failure) fall back to the browser print window, whose Save-as-PDF
+  // destination still yields a usable PDF — the offline-first path keeps working.
   const handleDownloadPDF = () => {
+    if (tenantId && orderId && (typeof navigator === 'undefined' || navigator.onLine)) {
+      void apiClient
+        .getBlob(`/api/v1/${tenantId}/pos/orders/${orderId}/receipt`, { format: 'pdf' })
+        .then((blob) => {
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `receipt-${receipt.order_number}.pdf`;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          setTimeout(() => URL.revokeObjectURL(url), 5000);
+        })
+        .catch(() => openBrowserReceiptWindow());
+      return;
+    }
     openBrowserReceiptWindow();
   };
 

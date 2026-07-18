@@ -14,12 +14,16 @@ import type { ReceiptData } from '@/components/pos/receipt-preview';
 // Thermal-receipt styles for the dedicated print window (mirrors src/styles/receipt.css, which
 // covers the in-app hidden #receipt-print-root instead).
 export const RECEIPT_PRINT_CSS = `
-  @page { size: 80mm auto; margin: 3mm 4mm; }
+  /* Zero @page margin suppresses the browser's own header/footer chrome (the about:blank +
+     date/URL lines that ruined printed receipts); the margin is inner padding instead. */
+  @page { size: 80mm auto; margin: 0; }
   html, body { margin: 0; padding: 0; background: #fff; }
   /* Thermal/non-colour printers render gray & brand colours faint — force pure-black bold ink on
      white for every node, keep colours exact, and only the logo image keeps its pixels (dithered). */
   .receipt-root, .receipt-root * { color: #000 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .receipt-root { font-family: 'Courier New', Courier, 'DejaVu Sans Mono', monospace; font-size: 13px; font-weight: bold; line-height: 1.45; color: #000; background: #fff; width: 72mm; padding: 4mm 0; margin: 0 auto; }
+  .receipt-root { font-family: 'Courier New', Courier, 'DejaVu Sans Mono', monospace; font-size: 13px; font-weight: bold; line-height: 1.45; color: #000; background: #fff; width: 72mm; padding: 4mm 3mm; margin: 0 auto; }
+  /* thermal_modern variant — bold sans (mirrors pos-api layouts.ThermalModern). */
+  .receipt-root.receipt-modern { font-family: 'Helvetica Neue', Helvetica, Arial, 'Segoe UI', sans-serif; font-weight: 700; }
   .receipt-logo { display: block; margin: 0 auto 4px; max-width: 48mm; max-height: 20mm; object-fit: contain; filter: grayscale(1) contrast(1.2); }
   .receipt-center { text-align: center; }
   .receipt-bold { font-weight: bold; }
@@ -68,11 +72,13 @@ export async function renderReceiptHtml(receipt: ReceiptData, branding: ReceiptB
   }
 }
 
-// A4 page rules for the retail boxed template (its own styles are inline on the markup —
-// only the page geometry and ink handling need to come from the document shell).
+// A4 page rules for the boxed invoice template (its own styles are inline on the markup —
+// only the page geometry and ink handling need to come from the document shell). Zero @page
+// margin (suppresses browser print headers) with the sheet margin as body padding instead.
 export const RECEIPT_PRINT_CSS_A4 = `
-  @page { size: A4 portrait; margin: 12mm; }
+  @page { size: A4 portrait; margin: 0; }
   html, body { margin: 0; padding: 0; background: #fff; color: #000; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { padding: 12mm; }
 `;
 
 /** Wraps a receipt HTML fragment (from renderReceiptHtml, or an already-mounted node's innerHTML)

@@ -8,6 +8,7 @@ import { resolveBillProfile, hasRealPrinter, BILL_PROFILE_ID } from '@/lib/pos/p
 import { printProfileHtml, fetchReceiptEscposHex } from '@/lib/pos/printer-discovery';
 import { enqueuePrintJob } from '@/lib/pos/print-jobs';
 import { renderReceiptHtml, buildReceiptDocument, printReceiptDocument } from '@/lib/pos/receipt-html';
+import { paperForFormat, resolveReceiptFormat } from '@/lib/pos/receipt-format';
 import type { ReceiptData } from '@/components/pos/receipt-preview';
 import { useTenantBranding } from '@/providers/tenant-branding-provider';
 import { CheckCircle2, Loader2, Printer, AlertTriangle } from 'lucide-react';
@@ -31,9 +32,11 @@ export function OrderPlacedDialog({ open, orderNumber, orderId, tenantId, orgSlu
   const servedBy = useAuthStore((s) => s.user?.fullName || s.user?.email || '');
   const { tenant } = useTenantBranding();
   const [printing, setPrinting] = useState(false);
-  // Holds the rendered receipt HTML fragment when NO configured printer was found — drives the
-  // "print on browser?" confirmation modal instead of silently opening the browser print window.
-  const [browserPrompt, setBrowserPrompt] = useState<string | null>(null);
+  // Holds the rendered receipt HTML fragment + its resolved paper geometry when NO configured
+  // printer was found — drives the "print on browser?" confirmation modal instead of silently
+  // opening the browser print window. Paper follows the outlet's receipt layout (thermal by
+  // default; A4 only when the a4_invoice format is configured) — same rule as ReceiptPreview.
+  const [browserPrompt, setBrowserPrompt] = useState<{ html: string; paper: 'thermal' | 'a4' } | null>(null);
   // Guards the one-shot auto-print so it fires once per dialog open, not on every re-render.
   const autoFiredRef = useRef(false);
 
@@ -62,7 +65,8 @@ export function OrderPlacedDialog({ open, orderNumber, orderId, tenantId, orgSlu
   const fetchReceiptFragment = useCallback(async () => {
     const q = servedBy ? `?served_by=${encodeURIComponent(servedBy)}` : '';
     const data = await apiClient.get<ReceiptData>(`/api/v1/${tenantId}/pos/orders/${orderId}/receipt${q}`);
-    return renderReceiptHtml(data, { tenantName: tenant?.orgName || tenant?.name, logoUrl: tenant?.logoUrl ?? undefined });
+    const html = await renderReceiptHtml(data, { tenantName: tenant?.orgName || tenant?.name, logoUrl: tenant?.logoUrl ?? undefined });
+    return { html, paper: paperForFormat(resolveReceiptFormat(data)) };
   }, [tenantId, orderId, servedBy, tenant]);
 
   /**
@@ -95,7 +99,7 @@ export function OrderPlacedDialog({ open, orderNumber, orderId, tenantId, orgSlu
       // this promise running; failures surface as a toast on the pin-login screen.
       void (async () => {
         try {
-          const html = await fetchReceiptFragment();
+          const { html } = await fetchReceiptFragment();
           const escposHex = await fetchReceiptEscposHex(tenantId, orderId, 'customer', billProfile?.id ?? BILL_PROFILE_ID);
           const ok = await printProfileHtml(billProfile, `Receipt ${orderNumber}`, html, escposHex ?? undefined, { silent: true });
           if (!ok) toast.error('Receipt did not print — check the printer connection (print agent / QZ Tray).');
@@ -119,17 +123,17 @@ export function OrderPlacedDialog({ open, orderNumber, orderId, tenantId, orgSlu
         }
         // Agent dropped offline between checks — fall through to the client transports.
       }
-      const html = await fetchReceiptFragment();
+      const fragment = await fetchReceiptFragment();
       if (printerConfigured) {
         // Configured printer → push the job straight to it (agent relay incl. USB-by-name, QZ
         // Tray incl. raw network by IP). No browser print window at all.
         const escposHex = await fetchReceiptEscposHex(tenantId, orderId, 'customer', billProfile?.id ?? BILL_PROFILE_ID);
-        const ok = await printProfileHtml(billProfile, `Receipt ${orderNumber}`, html, escposHex ?? undefined, { silent: true });
+        const ok = await printProfileHtml(billProfile, `Receipt ${orderNumber}`, fragment.html, escposHex ?? undefined, { silent: true });
         if (!ok) toast.error('Receipt did not print — check the printer connection (print agent / QZ Tray).');
         handleLogout();
       } else {
         // Manual print with no configured printer → DO NOT auto-open the browser print window. Ask first.
-        setBrowserPrompt(html);
+        setBrowserPrompt(fragment);
       }
     } catch {
       // Print failed silently — still log out.
@@ -178,9 +182,9 @@ export function OrderPlacedDialog({ open, orderNumber, orderId, tenantId, orgSlu
             </button>
             <button
               onClick={() => {
-                const h = browserPrompt;
+                const p = browserPrompt;
                 setBrowserPrompt(null);
-                printReceiptDocument(buildReceiptDocument(`Receipt ${orderNumber}`, h ?? ''));
+                printReceiptDocument(buildReceiptDocument(`Receipt ${orderNumber}`, p?.html ?? '', p?.paper ?? 'thermal'));
                 handleLogout();
               }}
               className="flex-1 py-3 rounded-2xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors"

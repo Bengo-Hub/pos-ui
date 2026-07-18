@@ -4,6 +4,7 @@ import '@/styles/receipt.css';
 import type { ReceiptData } from './receipt-preview';
 import { RetailReceiptPrint } from './receipt-retail-print';
 import { buildReceiptRows } from '@/lib/pos/receipt-rows';
+import { resolveReceiptFormat } from '@/lib/pos/receipt-format';
 
 interface ReceiptPrintProps {
   receipt: ReceiptData;
@@ -39,9 +40,13 @@ export function ReceiptPrint({
   logoUrl,
   paymentMethods,
 }: ReceiptPrintProps) {
-  // Retail outlets print the boxed invoice-style template (BOI/GoDigital design) — one branch
-  // here covers every client print path (preview root, print window, OrderPlacedDialog, splits).
-  if (receipt.use_case === 'retail') {
+  // Layout comes from the outlet's receipt_format setting (server-resolved `layout`,
+  // thermal fallback for old cached payloads) — one branch here covers every client print
+  // path (preview root, print window, OrderPlacedDialog, splits). The boxed A4 invoice
+  // template is strictly opt-in; both thermal variants share the row-driven layout below,
+  // differing only in font (classic monospace vs modern bold sans via .receipt-modern).
+  const layout = resolveReceiptFormat(receipt);
+  if (layout === 'a4_invoice') {
     return (
       <RetailReceiptPrint
         receipt={{ ...receipt, payment_methods: paymentMethods ?? receipt.payment_methods }}
@@ -51,6 +56,7 @@ export function ReceiptPrint({
       />
     );
   }
+  const rootClass = layout === 'thermal_modern' ? 'receipt-root receipt-modern' : 'receipt-root';
   const currency = receipt.currency || 'KES';
   const fmt = (n: number) => `${currency} ${n.toFixed(2)}`;
   const norm = (s?: string) => (s ?? '').trim().toLowerCase();
@@ -73,7 +79,7 @@ export function ReceiptPrint({
     });
 
   return (
-    <div className="receipt-root">
+    <div className={rootClass}>
       {/* Header / branding — logo only (and only when the receipt "show logo" setting allows) */}
       {logoUrl && receipt.show_logo !== false && (
         // eslint-disable-next-line @next/next/no-img-element

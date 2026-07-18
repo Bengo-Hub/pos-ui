@@ -40,23 +40,33 @@
     width: 50mm;
   }
 
+  /* Zero page margin: this is what suppresses the browser's own header/footer chrome
+     (about:blank + date/URL lines) on the printout; the visual margin comes from the
+     receipt root's inner padding instead. */
   @page {
     size: 80mm auto;
-    margin: 3mm 4mm;
+    margin: 0;
   }
 }
 
 /* Receipt typography */
 .receipt-root {
   font-family: 'Courier New', Courier, 'DejaVu Sans Mono', monospace;
-  font-size: 13px; /* match pos-api generateReceiptHTML — 12px prints faint on low-DPI heads */
+  font-size: 13px; /* match pos-api thermal layout — 12px prints faint on low-DPI heads */
   font-weight: bold;
   line-height: 1.45;
   color: #000;
   background: #fff;
   width: 72mm;
-  padding: 4mm 0;
+  padding: 4mm 3mm; /* inner padding replaces the old @page margin (now 0) */
   margin: 0 auto;
+}
+
+/* thermal_modern layout variant — bold sans-serif (crisper glyphs on browser/PDF prints,
+   the ETR-style retail look). Mirrors pos-api layouts.ThermalModern. */
+.receipt-root.receipt-modern {
+  font-family: 'Helvetica Neue', Helvetica, Arial, 'Segoe UI', sans-serif;
+  font-weight: 700;
 }
 
 /* Tenant logo on the receipt — grayscaled so colour logos print crisp on thermal heads. */

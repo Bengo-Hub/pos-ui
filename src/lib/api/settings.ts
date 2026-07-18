@@ -28,6 +28,15 @@ export interface PrinterProfile {
   station_type?: string;
 }
 
+/** A selectable receipt layout from pos-api's printing/layouts registry. */
+export interface ReceiptFormatOption {
+  id: string;
+  label: string;
+  description: string;
+  /** 'thermal' (58/80mm roll) | 'a4' (portrait sheet). */
+  paper: string;
+}
+
 export interface POSSettings {
   tenant_id: string;
   outlet_id?: string | null;
@@ -46,6 +55,11 @@ export interface POSSettings {
   printer_type: string;
   printer_ip?: string | null;
   paper_width: string;
+  /** Receipt layout setting: 'auto' (best per use case — thermal) | 'thermal_classic' |
+   *  'thermal_modern' | 'a4_invoice'. Resolved server-side onto each receipt's `layout`. */
+  receipt_format?: string;
+  /** Selectable layouts from pos-api's printing/layouts registry — drives the settings picker. */
+  available_receipt_formats?: ReceiptFormatOption[];
   auto_print_order: boolean;
   auto_print_kitchen: boolean;
   pin_login_message?: string | null;
@@ -118,6 +132,7 @@ export interface UpdatePOSSettingsInput {
   printer_type?: string;
   printer_ip?: string | null;
   paper_width?: string;
+  receipt_format?: string;
   auto_print_order?: boolean;
   auto_print_kitchen?: boolean;
   pin_login_message?: string | null;

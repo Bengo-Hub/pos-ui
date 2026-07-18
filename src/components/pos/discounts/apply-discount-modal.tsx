@@ -7,7 +7,9 @@ import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/store/auth';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useCreateDiscount, useDiscounts } from '@/hooks/useDiscounts';
-import { normalizeUseCase } from '@/lib/use-case-config';
+import { useCategories } from '@/hooks/usePOS';
+import { useSubscription } from '@/hooks/use-subscription';
+import { UpgradeDialog } from '@bengo-hub/shared-ui-lib/subscription';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import type { Discount, DiscountInput } from '@/lib/api/discounts';
 import { DiscountFormModal, describeDiscount, type DiscountItemRef } from './discount-form-modal';
@@ -33,6 +35,19 @@ export async function searchCatalogItemsAdapter(query: string): Promise<Discount
   const tenantID = useAuthStore.getState().user?.tenant_id ?? '';
   const res = await apiClient.get<{ data: Array<{ sku: string; name: string }> }>(
     `/api/v1/${tenantID}/pos/catalog/items?search=${encodeURIComponent(query)}&limit=25`,
+  );
+  return ((res as any)?.data ?? []).map((i: any) => ({ sku: i.sku, name: i.name }));
+}
+
+/**
+ * Category-items adapter for DiscountFormModal's category bulk-add — fetches every item
+ * in a catalog category (same endpoint family as searchCatalogItemsAdapter).
+ */
+export async function fetchCategoryItemsAdapter(category: string): Promise<DiscountItemRef[]> {
+  const { apiClient } = await import('@/lib/api/client');
+  const tenantID = useAuthStore.getState().user?.tenant_id ?? '';
+  const res = await apiClient.get<{ data: Array<{ sku: string; name: string }> }>(
+    `/api/v1/${tenantID}/pos/catalog/items?category=${encodeURIComponent(category)}&limit=200`,
   );
   return ((res as any)?.data ?? []).map((i: any) => ({ sku: i.sku, name: i.name }));
 }
@@ -78,27 +93,33 @@ export function ApplyDiscountModal({ open, subtotal, currentAmount, currentReaso
   const [reason, setReason] = useState(currentReason);
   const [createOpen, setCreateOpen] = useState(false);
 
-  // Use-case mapping: hospitality → happy_hour kinds only; everything else → code/auto
-  // standard discounts. Quick one-time + inline per-line discounts stay available everywhere.
-  const useCase = useAuthStore((s) => s.outlet?.use_case);
-  const profile = normalizeUseCase(useCase);
-  const wantedKinds = useMemo(
-    () => (profile === 'hospitality' ? ['happy_hour'] : ['code', 'auto']),
-    [profile],
-  );
+  // FULL centralization: every use case sees ALL active discount kinds (code, automatic,
+  // time-window) with kind badges — the old hospitality→happy_hour-only / retail→code+auto
+  // split hid legitimately applicable discounts. BOGO/fixed_price rows still don't surface
+  // here (definedDiscountAmount → null: they apply per-line via the promo engine), and
+  // happy-hour kinds still auto-apply only within their time windows.
 
   // Creating a reusable standard discount is a catalog mutation — gate like the Discounts page.
   const { canAny } = usePermissions();
   const canDefine = canAny(['pos.discounts.add', 'pos.discounts.manage', 'pos.orders.manage']);
   const createMut = useCreateDiscount();
 
+  // Inline-create parity with the Discounts page: category bulk-add + happy_hour sub-plan gate.
+  const { data: catalogCategories } = useCategories();
+  const categoryNames = useMemo(
+    () => (catalogCategories ?? []).map((c: { name?: string }) => c.name ?? '').filter(Boolean),
+    [catalogCategories],
+  );
+  const { hasFeature } = useSubscription();
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
+
   const { data: discountsResp, isLoading } = useDiscounts('active');
   const defined = useMemo(() => {
     const rows: Discount[] = (discountsResp as any)?.data ?? [];
     return rows
-      .map((d) => ({ d, amount: wantedKinds.includes(String(d.promo_kind)) ? definedDiscountAmount(d, subtotal) : null }))
+      .map((d) => ({ d, amount: definedDiscountAmount(d, subtotal) }))
       .filter((x): x is { d: Discount; amount: number } => x.amount != null && x.amount > 0);
-  }, [discountsResp, subtotal, wantedKinds]);
+  }, [discountsResp, subtotal]);
 
   const [tab, setTab] = useState<'defined' | 'quick'>('defined');
   const activeTab = defined.length > 0 || canDefine ? tab : 'quick';
@@ -139,7 +160,7 @@ export function ApplyDiscountModal({ open, subtotal, currentAmount, currentReaso
             <button onClick={() => setTab('defined')}
               className={cn('flex-1 flex items-center justify-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-md',
                 activeTab === 'defined' ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground')}>
-              <BadgePercent className="h-3.5 w-3.5" /> {profile === 'hospitality' ? 'Happy Hour' : 'Defined'}
+              <BadgePercent className="h-3.5 w-3.5" /> Defined
             </button>
             <button onClick={() => setTab('quick')}
               className={cn('flex-1 px-3 py-1.5 text-xs font-semibold rounded-md',
@@ -161,7 +182,15 @@ export function ApplyDiscountModal({ open, subtotal, currentAmount, currentReaso
                     className="w-full flex items-center justify-between gap-3 px-3 py-2.5 text-left hover:bg-accent/50"
                   >
                     <span className="min-w-0">
-                      <span className="block text-sm font-semibold truncate">{d.name}</span>
+                      <span className="flex items-center gap-1.5 text-sm font-semibold">
+                        <span className="truncate">{d.name}</span>
+                        <span className={cn('shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide',
+                          d.promo_kind === 'happy_hour' ? 'bg-purple-500/10 text-purple-600'
+                            : d.promo_kind === 'auto' ? 'bg-amber-500/10 text-amber-600'
+                              : 'bg-blue-500/10 text-blue-600')}>
+                          {d.promo_kind === 'happy_hour' ? 'Time' : d.promo_kind === 'auto' ? 'Auto' : 'Code'}
+                        </span>
+                      </span>
                       <span className="block text-[11px] text-muted-foreground">
                         {describeDiscount(d)}{d.promo_code ? ` · code ${d.promo_code}` : ''}
                       </span>
@@ -173,7 +202,7 @@ export function ApplyDiscountModal({ open, subtotal, currentAmount, currentReaso
             ) : (
               !isLoading && (
                 <p className="text-xs text-muted-foreground text-center py-2">
-                  No {profile === 'hospitality' ? 'happy-hour' : 'standard'} discounts apply to this sale yet.
+                  No defined discounts apply to this sale yet.
                 </p>
               )
             )}
@@ -241,8 +270,13 @@ export function ApplyDiscountModal({ open, subtotal, currentAmount, currentReaso
           onClose={() => setCreateOpen(false)}
           onSubmit={handleCreate}
           searchItems={searchCatalogItemsAdapter}
+          fetchCategoryItems={fetchCategoryItemsAdapter}
+          categories={categoryNames}
+          happyHourLocked={!hasFeature('happy_hour')}
+          onLockedKindClick={() => setUpgradeOpen(true)}
         />
       )}
+      <UpgradeDialog feature="happy_hour" open={upgradeOpen} onClose={() => setUpgradeOpen(false)} />
     </div>
   );
 }

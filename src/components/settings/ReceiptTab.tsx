@@ -7,6 +7,7 @@ import { Bluetooth, Download, HelpCircle, Inbox, Loader2, Lock, Network, Printer
 const POS_API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'https://posapi.codevertexitsolutions.com';
 import { Button, Card, CardContent, CardHeader } from '@/components/ui/base';
 import { usePOSSettings, useUpdatePOSSettings } from '@/hooks/usePOSSettings';
+import { ReceiptFormatPicker } from './receipt-format-picker';
 import { useAllKDSStations, type KDSStation } from '@/hooks/useKDS';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useModuleAccess } from '@/hooks/use-module-access';
@@ -86,6 +87,7 @@ export function ReceiptTab() {
   const [form, setForm] = useState({
     receiptHeader: '',
     receiptFooter: '',
+    receiptFormat: 'auto',
     showLogoOnReceipt: true,
     autoPrintOrder: false,
     autoPrintKitchen: false,
@@ -216,6 +218,7 @@ export function ReceiptTab() {
       setForm({
         receiptHeader: settings.receipt_header ?? defaultHeader,
         receiptFooter: settings.receipt_footer ?? DEFAULT_RECEIPT_FOOTER,
+        receiptFormat: settings.receipt_format || 'auto',
         showLogoOnReceipt: settings.show_logo_on_receipt ?? true,
         autoPrintOrder: settings.auto_print_order ?? false,
         autoPrintKitchen: settings.auto_print_kitchen ?? false,
@@ -274,6 +277,7 @@ export function ReceiptTab() {
     updateSettings.mutate({
       receipt_header: form.receiptHeader || null,
       receipt_footer: form.receiptFooter || null,
+      receipt_format: form.receiptFormat || 'auto',
       show_logo_on_receipt: form.showLogoOnReceipt,
       auto_print_order: form.autoPrintOrder,
       auto_print_kitchen: form.autoPrintKitchen,
@@ -309,6 +313,12 @@ export function ReceiptTab() {
           </div>
         </CardHeader>
         <CardContent className="space-y-6">
+          <ReceiptFormatPicker
+            value={form.receiptFormat}
+            options={settings?.available_receipt_formats}
+            disabled={!canEdit}
+            onChange={(id) => set('receiptFormat', id)}
+          />
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-2">
               <label className={labelClass}>Header Text</label>
