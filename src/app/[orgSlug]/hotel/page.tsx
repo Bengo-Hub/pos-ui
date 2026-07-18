@@ -135,15 +135,15 @@ function HotelPage() {
         </Link>
 
         <Link
-          href={`/${orgSlug}/hotel/happy-hour`}
+          href={`/${orgSlug}/sell/discounts`}
           className="group flex items-center gap-4 p-5 rounded-2xl border border-border bg-card hover:border-primary/40 hover:shadow-md transition-all"
         >
           <div className="size-12 rounded-xl bg-primary/10 flex items-center justify-center group-hover:bg-primary/20 transition-colors">
             <Wine className="h-6 w-6 text-primary" />
           </div>
           <div>
-            <p className="font-semibold text-foreground">Happy Hour</p>
-            <p className="text-sm text-muted-foreground">Time-windowed bar/lounge discounts</p>
+            <p className="font-semibold text-foreground">Happy Hour &amp; Discounts</p>
+            <p className="text-sm text-muted-foreground">Time-windowed deals, BOGO &amp; promos — Sell → Discounts</p>
           </div>
         </Link>
 

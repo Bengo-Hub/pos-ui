@@ -21,6 +21,26 @@ export function useDiscounts(status: string = 'all', opts: DiscountListOpts = {}
   });
 }
 
+/** Currently-in-window auto-apply promotions — the TERMINAL's poll (moved unchanged from
+ *  useHotel when the happy-hour surface was folded into discounts; query key and polling
+ *  cadence are load-bearing — the terminal subscribes to exactly this). */
+export function useActiveHappyHours() {
+  const slug = useTenantSlug();
+  return useQuery({
+    queryKey: ['happy-hours-active', slug],
+    queryFn: () => discountsApi.listActive(slug),
+    enabled: !!slug,
+    // Poll every 60s (and on window focus) so a terminal left open across a happy-hour boundary
+    // detects the window OPENING/CLOSING promptly — otherwise a long-open till would keep showing
+    // the pre-window state (no auto-add, no live discount) until the next stale refetch. The server
+    // re-evaluates authoritatively at add-to-bill/checkout regardless; this keeps the preview honest.
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+    refetchIntervalInBackground: true,
+    refetchOnWindowFocus: true,
+  });
+}
+
 export function useCreateDiscount() {
   const slug = useTenantSlug();
   const qc = useQueryClient();
@@ -28,8 +48,7 @@ export function useCreateDiscount() {
     mutationFn: (body: DiscountInput) => discountsApi.create(slug, body),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['discounts', slug] });
-      // Happy-hour pages share the same promotion rows.
-      qc.invalidateQueries({ queryKey: ['happy-hours', slug] });
+      // The terminal's active-window poll shares these promotion rows.
       qc.invalidateQueries({ queryKey: ['happy-hours-active', slug] });
     },
   });
@@ -42,7 +61,6 @@ export function useUpdateDiscount() {
     mutationFn: ({ id, body }: { id: string; body: DiscountInput }) => discountsApi.update(slug, id, body),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['discounts', slug] });
-      qc.invalidateQueries({ queryKey: ['happy-hours', slug] });
       qc.invalidateQueries({ queryKey: ['happy-hours-active', slug] });
     },
   });
@@ -55,7 +73,6 @@ export function useDeleteDiscount() {
     mutationFn: (id: string) => discountsApi.remove(slug, id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['discounts', slug] });
-      qc.invalidateQueries({ queryKey: ['happy-hours', slug] });
       qc.invalidateQueries({ queryKey: ['happy-hours-active', slug] });
     },
   });

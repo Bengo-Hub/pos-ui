@@ -4,7 +4,7 @@
  * can show the auto-applied deal LIVE (discount line + per-item badge) before the order is
  * placed. The server recomputes authoritatively at checkout, so the two must agree.
  */
-import type { HappyHourPromotion, PromotionRule } from '@/lib/api/hotel';
+import type { Discount as HappyHourPromotion, PromotionRule } from '@/lib/api/discounts';
 
 export interface HHLine {
   sku: string;

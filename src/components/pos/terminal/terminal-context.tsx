@@ -32,7 +32,7 @@ import {
 import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { useKDSStations } from '@/hooks/useKDS';
 import { useLoyaltyPrograms } from '@/hooks/useLoyalty';
-import { useActiveHappyHours } from '@/hooks/useHotel';
+import { useActiveHappyHours } from '@/hooks/useDiscounts';
 import { computeHappyHour, bogoFreeUnitsForSku, type HHLine, type HappyHourResult } from '@/lib/pos/happy-hour';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useAuthStore } from '@/store/auth';

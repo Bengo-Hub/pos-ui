@@ -4,14 +4,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '@/store/auth';
 import {
   hotelApi,
-  happyHourApi,
   type CreateRoomInput,
   type CreateFacilityInput,
   type CheckInInput,
   type CreateRoomBookingInput,
   type UpdateRoomBookingInput,
   type CreateEventBookingInput,
-  type HappyHourInput,
   type LateCheckoutInput,
   type CreateHousekeepingInput,
   type UpdateHousekeepingInput,
@@ -426,77 +424,3 @@ export function useInventoryServiceItems(useCase: string, enabled = true) {
   });
 }
 
-// ─── Happy hour ────────────────────────────────────────────────────────────────
-
-export function useActiveHappyHours() {
-  const slug = useTenantSlug();
-  return useQuery({
-    queryKey: ['happy-hours-active', slug],
-    queryFn: () => happyHourApi.listActive(slug),
-    enabled: !!slug,
-    // Poll every 60s (and on window focus) so a terminal left open across a happy-hour boundary
-    // detects the window OPENING/CLOSING promptly — otherwise a long-open till would keep showing
-    // the pre-window state (no auto-add, no live discount) until the next stale refetch. The server
-    // re-evaluates authoritatively at add-to-bill/checkout regardless; this keeps the preview honest.
-    staleTime: 30_000,
-    refetchInterval: 60_000,
-    refetchIntervalInBackground: true,
-    refetchOnWindowFocus: true,
-  });
-}
-
-export function useHappyHours() {
-  const slug = useTenantSlug();
-  return useQuery({
-    queryKey: ['happy-hours', slug],
-    queryFn: () => happyHourApi.list(slug),
-    enabled: !!slug,
-    staleTime: 60_000,
-  });
-}
-
-export function useHappyHour(id?: string) {
-  const slug = useTenantSlug();
-  return useQuery({
-    queryKey: ['happy-hour', slug, id],
-    queryFn: () => happyHourApi.get(slug, id as string),
-    enabled: !!slug && !!id,
-  });
-}
-
-export function useCreateHappyHour() {
-  const slug = useTenantSlug();
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (body: HappyHourInput) => happyHourApi.create(slug, body),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['happy-hours', slug] });
-      qc.invalidateQueries({ queryKey: ['happy-hours-active', slug] });
-    },
-  });
-}
-
-export function useUpdateHappyHour() {
-  const slug = useTenantSlug();
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ id, body }: { id: string; body: HappyHourInput }) => happyHourApi.update(slug, id, body),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['happy-hours', slug] });
-      qc.invalidateQueries({ queryKey: ['happy-hours-active', slug] });
-      qc.invalidateQueries({ queryKey: ['happy-hour', slug] });
-    },
-  });
-}
-
-export function useDeleteHappyHour() {
-  const slug = useTenantSlug();
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (id: string) => happyHourApi.delete(slug, id),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['happy-hours', slug] });
-      qc.invalidateQueries({ queryKey: ['happy-hours-active', slug] });
-    },
-  });
-}

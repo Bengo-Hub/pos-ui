@@ -126,7 +126,9 @@ export function buildNavGroups(orgSlug: string): NavGroup[] {
         // POS_HOSP_PRO ("Growth") and up; see pos-api internal/platform/subscriptions/features.go.
         { label: 'Facilities', icon: Cpu, href: '/hotel/facilities', moduleKey: 'hotel', permission: [P.HOTEL_VIEW, P.HOTEL_MANAGE], subFeature: 'facility_booking', subPlan: 'Growth', waiterHidden: true },
         { label: 'Conferences', icon: Presentation, href: '/hotel/conference', moduleKey: 'hotel', permission: [P.CONFERENCE_VIEW, P.CONFERENCE_MANAGE, P.HOTEL_MANAGE], subFeature: 'conference_events', subPlan: 'Pro', waiterHidden: true },
-        { label: 'Happy Hour', icon: Wine, href: '/hotel/happy-hour', moduleKey: 'hotel', permission: [P.PROMOTIONS_VIEW, P.PROMOTIONS_MANAGE, P.HOTEL_MANAGE], subFeature: 'happy_hour', subPlan: 'Pro', waiterHidden: true },
+        // Happy Hour retired as a separate page — time-window/BOGO deals live in
+        // Sell → Discounts (shared DiscountFormModal); the happy_hour subFeature gate
+        // moved into the modal's kind selector.
       ],
     },
     {
