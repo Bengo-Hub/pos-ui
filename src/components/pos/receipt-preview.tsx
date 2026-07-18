@@ -270,9 +270,14 @@ export function ReceiptPreview({
         />
       </div>
 
-      {/* Modal overlay */}
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-        <div className="bg-card rounded-2xl border border-border w-full max-w-sm shadow-xl flex flex-col overflow-hidden">
+      {/* Modal overlay — ABOVE any hosting modal (SellDetailsModal & friends sit at z-50):
+          the preview is always the top-most layer, with its own blurred backdrop so it reads
+          as a distinct sheet instead of colliding with the host modal's header. */}
+      <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onClose}>
+        <div
+          className="bg-card rounded-2xl border border-border w-full max-w-sm max-h-[92vh] shadow-2xl flex flex-col overflow-hidden"
+          onClick={(e) => e.stopPropagation()}
+        >
           {/* Header */}
           <div className="px-4 pt-4 pb-3 border-b border-border flex items-center justify-between">
             <h3 className="text-base font-semibold">Receipt</h3>

@@ -11,6 +11,7 @@ import { useAuthStore } from '@/store/auth';
 import { usePermissions, P } from '@/hooks/usePermissions';
 import { PrintReceiptButton } from '@/components/pos/print-receipt-button';
 import { RecordPaymentModal } from '@/components/pos/sales/record-payment-modal';
+import { CustomerDetailsModal } from '@/components/pos/customers/customer-details-modal';
 import { prettyMethod } from '@/components/pos/sales/sales-shared';
 
 const money = (n: number | undefined | null) =>
@@ -80,6 +81,7 @@ export function SellDetailsModal({ orderId, orgSlug, onClose }: { orderId: strin
   // tender row, so a credit sale shows its real outstanding balance here + a Record Payment
   // action (settle-credit endpoint) until it's collected.
   const [recordPayOpen, setRecordPayOpen] = useState(false);
+  const [customerOpen, setCustomerOpen] = useState(false);
   const collected = payments
     .filter((p: any) => p.status === 'completed' && p.payment_data?.method !== 'on_account')
     .reduce((s: number, p: any) => s + (p.amount ?? 0), 0);
@@ -141,10 +143,10 @@ export function SellDetailsModal({ orderId, orgSlug, onClose }: { orderId: strin
               <div>
                 <p><b>Customer:</b>{' '}
                   {(order as any).customer_phone ? (
-                    <a href={`/${orgSlug}/clients?q=${encodeURIComponent((order as any).customer_phone)}`}
+                    <button type="button" onClick={() => setCustomerOpen(true)}
                       className="text-primary hover:underline" title="Open customer profile">
                       {(order as any).customer_name || 'Walk-In Customer'}
-                    </a>
+                    </button>
                   ) : ((order as any).customer_name || 'Walk-In Customer')}
                 </p>
                 {(order as any).customer_phone && <p><b>Phone:</b> {(order as any).customer_phone}</p>}
@@ -354,6 +356,13 @@ export function SellDetailsModal({ orderId, orgSlug, onClose }: { orderId: strin
             amount_due: creditOutstanding,
           }}
           onClose={() => setRecordPayOpen(false)}
+        />
+      )}
+      {customerOpen && order && (order as any).customer_phone && (
+        <CustomerDetailsModal
+          customerName={(order as any).customer_name}
+          customerPhone={(order as any).customer_phone}
+          onClose={() => setCustomerOpen(false)}
         />
       )}
     </div>

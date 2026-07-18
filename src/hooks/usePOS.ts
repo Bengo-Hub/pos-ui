@@ -414,7 +414,9 @@ export function offlineToCatalogItem(c: OfflineCatalogItem): CatalogItem {
 /** Pull the ENTIRE catalog (loop every page) so client-side filter/search/pagination
  *  operate on the complete set — never a single page. Capped to avoid a runaway loop. */
 async function fetchAllCatalogItems(tenantID: string, opts?: { timeout?: number }): Promise<CatalogItem[]> {
-  const limit = 200;
+  // 500 = pos-api's ListCatalogItems max — fewer round trips matter for big retail
+  // catalogs (boi: 3.8k items → 8 pages instead of 20).
+  const limit = 500;
   const all: CatalogItem[] = [];
   for (let page = 1; page <= 100; page++) {
     const res = await apiClient.get<PaginatedResponse<CatalogItem>>(

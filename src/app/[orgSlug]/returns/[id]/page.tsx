@@ -13,6 +13,7 @@ import { usePermissions, P } from '@/hooks/usePermissions';
 import { allowedRefundChannels, defaultRefundChannel, refundChannelAdvisory, REFUND_CHANNELS } from '@/lib/returns-policy';
 import { ExchangeLinesPicker, exchangeTotal, type ExchangeLine } from '@/components/pos/returns/exchange-lines-picker';
 import { SplitPaymentModal } from '@/components/pos/split-payment-modal';
+import { CustomerDetailsModal } from '@/components/pos/customers/customer-details-modal';
 
 interface ReturnLine {
   id: string;
@@ -134,6 +135,7 @@ export default function ReturnDetailPage() {
   // Completion-time notes + optional refund-channel confirm (till step).
   const [completeNotes, setCompleteNotes] = useState('');
   const [completeChannel, setCompleteChannel] = useState('');
+  const [customerOpen, setCustomerOpen] = useState(false);
   // Exchange completion: replacement items + the top-up payment flow for a dearer swap.
   const [exchangeLines, setExchangeLines] = useState<ExchangeLine[]>([]);
   const [topUpOrder, setTopUpOrder] = useState<{ id: string; number: string; total: number } | null>(null);
@@ -243,11 +245,11 @@ export default function ReturnDetailPage() {
         <div>
           <p className="text-xs text-muted-foreground">Customer</p>
           {ret.customer_phone ? (
-            <a href={`/${orgSlug}/clients?q=${encodeURIComponent(ret.customer_phone)}`}
-              className="text-sm font-semibold mt-0.5 text-primary hover:underline block truncate"
+            <button type="button" onClick={() => setCustomerOpen(true)}
+              className="text-sm font-semibold mt-0.5 text-primary hover:underline block truncate text-left"
               title="Open customer profile">
               {ret.customer_name || ret.customer_phone}
-            </a>
+            </button>
           ) : <p className="text-sm font-semibold mt-0.5">{ret.customer_name || '—'}</p>}
         </div>
         {ret.treasury_refund_ref && (
@@ -500,6 +502,13 @@ export default function ReturnDetailPage() {
             </table>
           </div>
         </div>
+      )}
+      {customerOpen && ret.customer_phone && (
+        <CustomerDetailsModal
+          customerName={ret.customer_name}
+          customerPhone={ret.customer_phone}
+          onClose={() => setCustomerOpen(false)}
+        />
       )}
     </div>
   );

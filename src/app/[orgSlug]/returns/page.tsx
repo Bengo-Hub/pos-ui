@@ -1,6 +1,7 @@
 'use client';
 
 import { ModuleGate } from '@/components/auth/module-gate';
+import { CustomerDetailsModal } from '@/components/pos/customers/customer-details-modal';
 import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
 import { useAuthStore } from '@/store/auth';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -768,6 +769,7 @@ function ReturnsPage() {
   const [showModal, setShowModal] = useState(false);
   const [showInvoice, setShowInvoice] = useState(false);
   const [invoicePrefill, setInvoicePrefill] = useState('');
+  const [customerModal, setCustomerModal] = useState<{ name?: string | null; phone: string } | null>(null);
   const { data, isLoading } = useReturns(statusFilter);
   const returns = data?.data ?? [];
   const params = useParams<{ orgSlug: string }>();
@@ -879,10 +881,11 @@ function ReturnsPage() {
                     <td className="px-4 py-3.5 font-mono text-xs font-semibold text-primary underline-offset-2 hover:underline">{ret.return_number}</td>
                     <td className="px-4 py-3.5" onClick={(e) => e.stopPropagation()}>
                       {ret.customer_phone ? (
-                        <a href={`/${orgSlug}/clients?q=${encodeURIComponent(ret.customer_phone)}`}
+                        <button type="button"
+                          onClick={() => setCustomerModal({ name: ret.customer_name, phone: ret.customer_phone })}
                           className="text-primary hover:underline" title="Open customer profile">
                           {ret.customer_name || ret.customer_phone}
-                        </a>
+                        </button>
                       ) : (ret.customer_name ?? '—')}
                     </td>
                     <td className="px-4 py-3.5 text-muted-foreground max-w-[180px] truncate">{ret.reason}</td>
@@ -908,6 +911,13 @@ function ReturnsPage() {
             </tbody>
           </table>
         </div>
+      )}
+      {customerModal && (
+        <CustomerDetailsModal
+          customerName={customerModal.name}
+          customerPhone={customerModal.phone}
+          onClose={() => setCustomerModal(null)}
+        />
       )}
     </div>
   );
