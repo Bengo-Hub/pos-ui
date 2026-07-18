@@ -24,11 +24,14 @@ export interface ReceiptChangeRow { kind: 'change'; amount: number }
 export interface ReceiptEtimsRow {
   kind: 'etims';
   invoiceNumber: string;
+  /** Data: URI of the server-rendered QR — NEVER the raw verification link (that's not an image). */
   qrUrl?: string;
   cuInvNo?: string;
   scuId?: string;
-  rcptSign?: string;
-  kraPin?: string;
+  // Deliberately no signature field: the receipt signature is already encoded in the QR;
+  // printing it in the clear is an avoidable exposure of KRA-issued fiscal proof. The KRA
+  // PIN is shown in the receipt HEADER (top), not this bottom fiscal block — mirrors the
+  // KRA-issued paper ETR receipt layout.
 }
 export interface ReceiptHowToPayTitleRow { kind: 'how-to-pay-title' }
 export interface ReceiptPaymentMethodRow { kind: 'payment-method'; label: string; value: string }
@@ -124,21 +127,6 @@ export function buildReceiptRows(receipt: ReceiptData): ReceiptRow[] {
     rows.push({ kind: 'money', label: 'Balance Due', amount: receipt.balance_due ?? 0 });
   }
 
-  // Show the KRA eTIMS fiscal block when ANY fiscal identity has landed (CU inv no / invoice
-  // number), so a compliant ETR strip renders even before the legacy invoice_number populates.
-  if (receipt.etims_invoice_number || receipt.etims_cu_inv_no) {
-    rows.push({ kind: 'divider' });
-    rows.push({
-      kind: 'etims',
-      invoiceNumber: receipt.etims_invoice_number ?? '',
-      qrUrl: receipt.etims_qr_code_url,
-      cuInvNo: receipt.etims_cu_inv_no,
-      scuId: receipt.etims_scu_id,
-      rcptSign: receipt.etims_rcpt_sign,
-      kraPin: receipt.etims_kra_pin,
-    });
-  }
-
   const pm = receipt.payment_methods;
   if (pm && Object.values(pm).some(Boolean)) {
     rows.push({ kind: 'divider' });
@@ -155,9 +143,28 @@ export function buildReceiptRows(receipt: ReceiptData): ReceiptRow[] {
     rows.push({ kind: 'served-by', name: receipt.served_by });
   }
 
-  // Retail: Code 128 of the order number, right above the configurable footer text.
+  // KRA eTIMS fiscal block — adapted from the KRA-issued paper ETR receipt (see the Jazaribu
+  // Retail reference): SCU ID + CU Inv No, then the verification QR, then — right after, no
+  // other content between — the fiscal barcode (same adjacency as a genuine ETR receipt).
+  // Shown when ANY fiscal identity has landed (CU inv no / invoice number), so a compliant
+  // strip renders even before the legacy invoice_number populates.
+  if (receipt.etims_invoice_number || receipt.etims_cu_inv_no) {
+    rows.push({ kind: 'divider' });
+    rows.push({
+      kind: 'etims',
+      invoiceNumber: receipt.etims_invoice_number ?? '',
+      // The QR is ALWAYS the server-rendered image (etims_qr_png) — the verification LINK
+      // (etims_qr_code_url) is never a valid <img src> and must not be used as one.
+      qrUrl: receipt.etims_qr_png,
+      cuInvNo: receipt.etims_cu_inv_no,
+      scuId: receipt.etims_scu_id,
+    });
+  }
+
+  // Fiscal barcode: the eTIMS CU Invoice Number once fiscalised, else the order number for
+  // non-fiscalised retail sales (server-computed barcode_value — one decision, every surface).
   if (receipt.barcode_png) {
-    rows.push({ kind: 'barcode', src: receipt.barcode_png, text: receipt.order_number });
+    rows.push({ kind: 'barcode', src: receipt.barcode_png, text: receipt.barcode_value || receipt.order_number });
   }
 
   rows.push({ kind: 'footer', text: receipt.receipt_footer || 'Thank you for your business!' });

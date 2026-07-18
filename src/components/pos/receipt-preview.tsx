@@ -57,8 +57,12 @@ export interface ReceiptData {
   layout?: string;
   /** Receipt & Printing "show logo" setting (default true). */
   show_logo?: boolean;
-  /** Code 128 of the order number (data: URI) from pos-api — retail receipts only. */
+  /** Code 128 barcode (data: URI) from pos-api — the eTIMS CU Invoice Number once
+   *  fiscalised, else the order number for non-fiscalised retail sales (server
+   *  ReceiptView.FiscalBarcodeValue — one decision, every surface). */
   barcode_png?: string;
+  /** The human-readable text under the barcode (and the value it encodes) — mirrors barcode_png. */
+  barcode_value?: string;
   /** Guest/payer name for identified payments (M-Pesa/card/online), or "Walk-in customer" for cash. */
   bill_to?: string;
   /** Label for bill_to: "Customer" (keyed-in / walk-in) or "Paid by" (online-payment payer). */
@@ -70,10 +74,15 @@ export interface ReceiptData {
   provider_footer_contact?: string;
   currency?: string;
   etims_invoice_number?: string;
+  /** KRA verification LINK — never usable as an <img src>; the QR IMAGE is etims_qr_png. */
   etims_qr_code_url?: string;
+  /** Server-rendered eTIMS verification QR as a data: URI — the only field renderers should
+   *  use as the QR <img src>. Populated whenever etims_qr_code_url is set. */
+  etims_qr_png?: string;
   // Full KRA eTIMS fiscal identity (populated by the pos-api receipt endpoint from the order's
   // treasury-backfilled fiscal fields) — a compliant ETR receipt needs the CU invoice no + SCU
-  // id + receipt signature + KRA PIN, not just the invoice number + QR.
+  // id + KRA PIN (shown in the header), not just the invoice number + QR. etims_rcpt_sign is
+  // deliberately NEVER rendered in plain text (it's already encoded in the QR).
   etims_scu_id?: string;
   etims_cu_inv_no?: string;
   etims_rcpt_sign?: string;
@@ -305,6 +314,10 @@ export function ReceiptPreview({
               if (!outlet || outlet.trim().toLowerCase() === (tenantName ?? '').trim().toLowerCase()) return null;
               return <p className="text-center text-muted-foreground mb-1">{outlet}</p>;
             })()}
+            {/* KRA PIN — always in the header (top), mirroring the KRA-issued paper ETR receipt. */}
+            {receipt.etims_kra_pin && (
+              <p className="text-center text-muted-foreground mb-1">KRA PIN: {receipt.etims_kra_pin}</p>
+            )}
             {receipt.receipt_header && (
               <p className="text-center text-muted-foreground text-[10px] whitespace-pre-wrap mb-1">{receipt.receipt_header}</p>
             )}
@@ -361,13 +374,14 @@ export function ReceiptPreview({
                     </div>
                   );
                 case 'etims':
+                  // KRA TIMS Details — adapted from the KRA-issued paper ETR receipt: SCU ID
+                  // + CU Inv No, then the QR. PIN is in the header (top); the signature is
+                  // never shown in plain text (it's already encoded in the QR).
                   return (
                     <div key={i} className="text-center text-muted-foreground text-[10px] leading-tight">
-                      <p className="font-semibold text-foreground">KRA eTIMS</p>
-                      {row.kraPin && <p>PIN: {row.kraPin}</p>}
+                      <p className="font-semibold text-foreground">KRA TIMS Details</p>
                       {row.scuId && <p>SCU ID: {row.scuId}</p>}
                       {(row.cuInvNo || row.invoiceNumber) && <p>CU Inv No: {row.cuInvNo || row.invoiceNumber}</p>}
-                      {row.rcptSign && <p className="break-all">Receipt Signature: {row.rcptSign}</p>}
                       {row.qrUrl && (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img src={row.qrUrl} alt="eTIMS QR" className="mx-auto mt-1 h-16 w-16" />

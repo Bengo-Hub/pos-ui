@@ -104,8 +104,10 @@ export function ReceiptPrint({
       {!receipt.outlet_phones && tenantPhone && (
         <p className="receipt-center receipt-small">Tel: {tenantPhone}</p>
       )}
-      {tenantPin && (
-        <p className="receipt-center receipt-small">PIN: {tenantPin}</p>
+      {/* KRA PIN — always in the header (top), mirroring the KRA-issued paper ETR receipt;
+          the receipt's own fiscal PIN wins over the legacy tenantPin prop. */}
+      {(receipt.etims_kra_pin || tenantPin) && (
+        <p className="receipt-center receipt-small">KRA PIN: {receipt.etims_kra_pin || tenantPin}</p>
       )}
       {/* Configurable header text from POS settings (slogan, extra address lines…) */}
       {receipt.receipt_header && (
@@ -174,15 +176,20 @@ export function ReceiptPrint({
               </div>
             );
           case 'etims':
+            // KRA TIMS Details — adapted from the KRA-issued paper ETR receipt (SCU ID + CU
+            // Inv No, then the verification QR). The KRA PIN lives in the header (top); the
+            // receipt signature is never shown in plain text (already encoded in the QR).
             return (
               <div key={i}>
-                <p className="receipt-center receipt-small" style={{ marginBottom: 2 }}>KRA eTIMS</p>
-                {row.kraPin && <p className="receipt-center receipt-small">PIN: {row.kraPin}</p>}
-                {row.scuId && <p className="receipt-center receipt-small">SCU ID: {row.scuId}</p>}
-                <p className="receipt-center receipt-small">CU Inv No: {row.cuInvNo || row.invoiceNumber}</p>
-                {row.rcptSign && (
-                  <p className="receipt-center receipt-small" style={{ wordBreak: 'break-all' }}>Receipt Signature: {row.rcptSign}</p>
-                )}
+                <p className="receipt-center receipt-bold" style={{ fontSize: 10, marginBottom: 3 }}>KRA TIMS Details</p>
+                <div className="receipt-row">
+                  <span className="receipt-row-name">SCU ID:</span>
+                  <span className="receipt-row-value">{row.scuId}</span>
+                </div>
+                <div className="receipt-row">
+                  <span className="receipt-row-name">CU Inv No.:</span>
+                  <span className="receipt-row-value">{row.cuInvNo || row.invoiceNumber}</span>
+                </div>
                 {row.qrUrl && (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={row.qrUrl} alt="eTIMS QR Code" className="receipt-qr" />

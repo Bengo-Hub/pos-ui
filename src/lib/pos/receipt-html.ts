@@ -33,7 +33,7 @@ export const RECEIPT_PRINT_CSS = `
   .receipt-row-value { flex-shrink: 0; white-space: nowrap; }
   .receipt-total-row { font-weight: bold; font-size: 15px; border-top: 1px solid #000; margin-top: 2px; padding-top: 2px; }
   .receipt-small { font-size: 11px; color: #000; }
-  .receipt-qr { display: block; margin: 4px auto; width: 20mm; height: 20mm; object-fit: contain; }
+  .receipt-qr { display: block; margin: 5px auto; width: 25mm; height: 25mm; object-fit: contain; }
 `;
 
 export interface ReceiptBranding {

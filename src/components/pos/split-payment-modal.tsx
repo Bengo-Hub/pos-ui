@@ -8,6 +8,7 @@ import { ReplaceItemDialog, type ReplaceableLine } from './replace-item-dialog';
 import { createSplits, settleSplit, splitReceiptDataUrl, type CreateSplitInput } from '@/lib/api/bill-splits';
 import { apiClient } from '@/lib/api/client';
 import { renderReceiptHtml, buildReceiptDocument, printReceiptDocument } from '@/lib/pos/receipt-html';
+import { paperForFormat, resolveReceiptFormat } from '@/lib/pos/receipt-format';
 import type { ReceiptData } from '@/components/pos/receipt-preview';
 import { useTenantBranding } from '@/providers/tenant-branding-provider';
 
@@ -250,7 +251,7 @@ export function SplitPaymentModal({
     try {
       const receipt = await apiClient.get<ReceiptData>(splitReceiptDataUrl(tenantId, orderId, id));
       const html = await renderReceiptHtml(receipt, { tenantName: tenant?.orgName || tenant?.name, logoUrl: tenant?.logoUrl ?? undefined });
-      printReceiptDocument(buildReceiptDocument(`Guest ${guest} Receipt`, html));
+      printReceiptDocument(buildReceiptDocument(`Guest ${guest} Receipt`, html, paperForFormat(resolveReceiptFormat(receipt))));
     } catch { /* ignore */ }
   }
 

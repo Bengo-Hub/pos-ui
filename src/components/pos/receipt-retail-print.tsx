@@ -14,6 +14,7 @@
 
 import type { CSSProperties } from 'react';
 import type { ReceiptData } from './receipt-preview';
+import { buildReceiptRows } from '@/lib/pos/receipt-rows';
 
 interface RetailReceiptPrintProps {
   receipt: ReceiptData;
@@ -78,6 +79,10 @@ export function RetailReceiptPrint({ receipt, tenantName, outletName, logoUrl }:
         {receipt.outlet_address && <div style={{ fontSize: 12, whiteSpace: 'pre-wrap' }}>{receipt.outlet_address.toUpperCase()}</div>}
         {receipt.outlet_phones && (
           <div style={{ fontSize: 12 }}><b>Mobile:</b> {receipt.outlet_phones}</div>
+        )}
+        {/* KRA PIN — always in the header (top), mirroring the KRA-issued paper ETR receipt. */}
+        {receipt.etims_kra_pin && (
+          <div style={{ fontSize: 12, fontWeight: 700 }}>KRA PIN: {receipt.etims_kra_pin}</div>
         )}
         {receipt.receipt_header && <div style={{ fontSize: 12, fontWeight: 700, whiteSpace: 'pre-wrap' }}>{receipt.receipt_header}</div>}
       </div>
@@ -145,14 +150,55 @@ export function RetailReceiptPrint({ receipt, tenantName, outletName, logoUrl }:
         {Math.abs(receipt.balance_due ?? 0) >= 0.005 && trow('Total Due with Current', money(currency, receipt.balance_due ?? 0))}
       </div>
 
-      {/* Barcode */}
-      {receipt.barcode_png && (
-        <div style={{ textAlign: 'center', margin: '12px 0 4px' }}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={receipt.barcode_png} alt="barcode" style={{ height: '13mm' }} />
-          <div style={{ fontSize: 12, letterSpacing: 2, marginTop: 1 }}>{receipt.order_number}</div>
-        </div>
-      )}
+      {/* HOW TO PAY + KRA TIMS Details + fiscal barcode — driven by the SAME shared row
+          builder every other layout uses (buildReceiptRows), so this A4 template can never
+          drift out of sync on content: it previously carried NO eTIMS/HOW-TO-PAY section at
+          all. Only these three row kinds are handled here — items/totals/payment above are
+          already rendered by this template's own boxed tables. */}
+      {buildReceiptRows(receipt).map((row, i) => {
+        switch (row.kind) {
+          case 'how-to-pay-title':
+            return (
+              <p key={i} style={{ textAlign: 'center', fontWeight: 700, fontSize: 13, margin: '10px 0 3px' }}>
+                HOW TO PAY
+              </p>
+            );
+          case 'payment-method':
+            return (
+              <div key={i} style={{ ...trowStyle, fontWeight: 500 }}>
+                <span>{row.label}</span>
+                <span style={{ fontWeight: 700 }}>{row.value}</span>
+              </div>
+            );
+          case 'payment-account-name':
+            return <p key={i} style={{ textAlign: 'center', fontSize: 12 }}>{row.text}</p>;
+          case 'etims':
+            // KRA TIMS Details — adapted from the KRA-issued paper ETR receipt (see the
+            // Jazaribu Retail reference): SCU ID + CU Inv No, then the QR. The KRA PIN is in
+            // the header (above); the signature is never shown in plain text.
+            return (
+              <div key={i} style={{ textAlign: 'center', marginTop: 10 }}>
+                <div style={{ fontWeight: 700, fontSize: 14 }}>KRA TIMS Details</div>
+                {row.scuId && <div style={{ fontSize: 12 }}><b>SCU ID:</b> {row.scuId}</div>}
+                <div style={{ fontSize: 12 }}><b>CU_Inv No.:</b> {row.cuInvNo || row.invoiceNumber}</div>
+                {row.qrUrl && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={row.qrUrl} alt="eTIMS QR" style={{ height: '32mm', marginTop: 4 }} />
+                )}
+              </div>
+            );
+          case 'barcode':
+            return (
+              <div key={i} style={{ textAlign: 'center', margin: '12px 0 4px' }}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={row.src} alt="barcode" style={{ height: '13mm' }} />
+                <div style={{ fontSize: 12, letterSpacing: 2, marginTop: 1 }}>{row.text}</div>
+              </div>
+            );
+          default:
+            return null;
+        }
+      })}
 
       {/* Configurable footer text — flows below the barcode ("IN GOD WE TRUST" position). */}
       <div style={{ fontSize: 13, margin: '10px 0 4px', whiteSpace: 'pre-wrap' }}>

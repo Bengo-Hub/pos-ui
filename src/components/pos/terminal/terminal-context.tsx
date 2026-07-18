@@ -1660,10 +1660,15 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
                           ...prev,
                           etims_invoice_number: fresh.etims_invoice_number,
                           etims_qr_code_url: fresh.etims_qr_code_url,
+                          etims_qr_png: fresh.etims_qr_png,
                           etims_scu_id: fresh.etims_scu_id,
                           etims_cu_inv_no: fresh.etims_cu_inv_no,
                           etims_rcpt_sign: fresh.etims_rcpt_sign,
                           etims_kra_pin: fresh.etims_kra_pin,
+                          // Fiscalisation just landed — the barcode switches from the plain order
+                          // number to the eTIMS CU invoice number (FiscalBarcodeValue on the server).
+                          barcode_png: fresh.barcode_png,
+                          barcode_value: fresh.barcode_value,
                         }
                       : prev,
                   );

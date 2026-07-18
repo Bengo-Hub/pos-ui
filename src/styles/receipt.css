@@ -128,8 +128,8 @@
 
 .receipt-qr {
   display: block;
-  margin: 4px auto;
-  width: 20mm;
-  height: 20mm;
+  margin: 5px auto;
+  width: 25mm;
+  height: 25mm;
   object-fit: contain;
 }
