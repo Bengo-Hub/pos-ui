@@ -88,7 +88,7 @@ export function DiscountFormModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto" onClick={onClose}>
-      <div className="bg-card rounded-2xl border border-border shadow-2xl w-full max-w-2xl my-8" onClick={(e) => e.stopPropagation()}>
+      <div className="bg-card rounded-2xl border border-border shadow-2xl w-full max-w-3xl my-8" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-border">
           <h2 className="font-bold text-lg flex items-center gap-2">
             <Percent className="h-5 w-5 text-primary" />
