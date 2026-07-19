@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -34,12 +34,33 @@ export function CalculatorOverlay({ onClose }: { onClose: () => void }) {
     return String(Math.round(total * 100) / 100);
   }, []);
 
-  const press = (k: string) => {
+  const press = useCallback((k: string) => {
     if (k === 'C') { setExpr(''); setResult(''); return; }
     if (k === '=') { setResult(compute(expr)); return; }
     if (k === '⌫') { setExpr((s) => s.slice(0, -1)); return; }
     setExpr((s) => s + k);
-  };
+  }, [compute, expr]);
+
+  // Physical-keyboard input: digits/operators type, Enter/= evaluates, Backspace deletes, Esc closes.
+  // The overlay is a floating panel (not a focus-trapping modal), so we listen on the document and
+  // only intercept calculator keys — never keystrokes meant for the barcode field or cart inputs.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement | null;
+      if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return;
+      const k = e.key;
+      if (k === 'Escape') { onClose(); return; }
+      if (k === 'Enter' || k === '=') { e.preventDefault(); press('='); return; }
+      if (k === 'Backspace') { e.preventDefault(); press('⌫'); return; }
+      if (k === 'Delete' || k === 'c' || k === 'C') { e.preventDefault(); press('C'); return; }
+      if (/^[0-9.]$/.test(k) || k === '+' || k === '-' || k === '*' || k === '/') {
+        e.preventDefault();
+        press(k);
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [press, onClose]);
 
   const keys = ['C', '⌫', '/', '*', '7', '8', '9', '-', '4', '5', '6', '+', '1', '2', '3', '=', '0', '.'];
 

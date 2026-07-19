@@ -505,11 +505,19 @@ export async function revalidateFullCatalog(
         : undefined,
     });
     if (all.length) {
-      // Replace (not union) this outlet's cached slice — best-effort, non-blocking.
-      // A PARTIAL sweep must never replace the offline cache (it would delete every item
-      // the failed pages carried); it only feeds the on-screen grid until a full sweep lands.
+      const rows = toOfflineCatalogRows(tenantID, outletID, all);
       if (!partial) {
-        void replaceCachedCatalog(tenantID, outletID, toOfflineCatalogRows(tenantID, outletID, all))
+        // Full sweep → replace (not union) this outlet's cached slice, so items that vanished
+        // server-side are dropped. Best-effort, non-blocking.
+        void replaceCachedCatalog(tenantID, outletID, rows)
+          .catch(() => { /* offline cache is best-effort */ });
+      } else {
+        // Partial sweep → we must NOT replace (that would delete every item the failed pages
+        // carried), but we MUST still upsert the rows we DID fetch so their volatile stock_quantity
+        // is corrected. Otherwise a stale out-of-stock (0) row survives in IndexedDB indefinitely
+        // whenever full sweeps keep failing — the "terminal shows out of stock but there is none"
+        // bug. cacheCatalogItems is a bulkPut (merge/upsert), so un-fetched items are preserved.
+        void cacheCatalogItems(rows)
           .catch(() => { /* offline cache is best-effort */ });
       }
       qc.setQueryData([FULL_CATALOG_QUERY_KEY, tenantID, outletID], all);

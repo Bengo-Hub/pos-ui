@@ -2,7 +2,7 @@
 
 /**
  * Terminal modal host — every dialog/overlay the order terminal can raise:
- * Add Expense, Register Details, Recent Transactions, Sell Return, Calculator (+ FAB),
+ * Add Expense, Register Details, Recent Transactions, Sell Return, Calculator (toolbar-opened),
  * Parked Sales, Modifier, Split Payment, Void Order, Receipt preview, Order Placed,
  * Manager PIN override (out-of-stock), Age Verification and Serial Number prompts.
  *
@@ -31,7 +31,7 @@ import { resolveBillProfile } from '@/lib/pos/printer-stations';
 import { VOID_SELF_ROLES } from '@/lib/pos/rbac-constants';
 import { useTerminal } from '@/components/pos/terminal/terminal-context';
 import { rbacApi } from '@/lib/api/rbac';
-import { AlertTriangle, Calculator } from 'lucide-react';
+import { AlertTriangle } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
@@ -58,19 +58,9 @@ export function TerminalModals() {
       <RegisterDetailsModal open={t.registerOpen} onClose={() => t.setRegisterOpen(false)} />
       <RecentTransactionsModal open={t.recentOpen} onClose={() => t.setRecentOpen(false)} orgSlug={t.orgSlug} />
       <SellReturnModal open={t.sellReturnOpen} onClose={() => t.setSellReturnOpen(false)} orgSlug={t.orgSlug} />
-      {cfg.showCalculator && (
-        <>
-          <button
-            type="button"
-            onClick={() => t.setCalcOpen((v) => !v)}
-            className="fixed bottom-6 right-6 z-40 h-12 w-12 rounded-full bg-card border border-border shadow-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-            title="Calculator"
-          >
-            <Calculator className="h-5 w-5" />
-          </button>
-          {t.calcOpen && <CalculatorOverlay onClose={() => t.setCalcOpen(false)} />}
-        </>
-      )}
+      {/* Calculator is opened from the toolbar action (pos-toolbar "Calculator"); the previous
+          floating FAB was a duplicate entry point and has been removed. */}
+      {cfg.showCalculator && t.calcOpen && <CalculatorOverlay onClose={() => t.setCalcOpen(false)} />}
 
       {t.parkedOpen && <ParkedSalesModal onClose={() => t.setParkedOpen(false)} onResume={t.handleResumeParked} />}
 
