@@ -370,6 +370,9 @@ export const useAuthStore = create<AuthState>()(
         if (!svcProfile) return; // best-effort — pos-api unreachable or 401; try again next tick
         const current = get().user;
         if (!current) return; // logged out mid-flight
+        const nextRoles = isTerminalSession
+          ? [svcProfile.posRole].filter(Boolean)
+          : current.roles;
         set({
           user: {
             ...current,
@@ -380,11 +383,34 @@ export const useAuthStore = create<AuthState>()(
             // about — leave `roles` untouched there; useMe()'s own periodic refetch keeps the
             // global roles fresh, and `permissions` (checked first by usePermissions) is what
             // actually drives gating.
-            roles: isTerminalSession
-              ? [svcProfile.posRole].filter(Boolean)
-              : current.roles,
+            roles: nextRoles,
           },
         });
+        // Keep the OFFLINE staff-profile cache (the weak-wifi/offline PIN bcrypt fallback in
+        // pin-login/page.tsx) in step with the live permissions we just confirmed. Without this,
+        // that cache's `permissions` field is frozen at whatever was cached on the staff member's
+        // very first-ever successful ONLINE login (refreshStaffProfiles's periodic sync never
+        // touches `permissions` — the public pre-auth profile-list endpoint it reads deliberately
+        // doesn't expose them) — so a role edit could silently never reach a device that keeps
+        // falling into the offline branch (a 5s network timeout is enough to trigger it even while
+        // nominally "online" on weak wifi), no matter how many times that staff member logs out and
+        // back in. Best-effort; never let a cache-write failure break the live session.
+        try {
+          const { cacheStaffProfile, getCachedStaffProfile } = await import('@/lib/db/pos-db');
+          const existing = await getCachedStaffProfile(current.id);
+          await cacheStaffProfile({
+            user_id: current.id,
+            tenant_id: current.tenant_id,
+            name: current.fullName ?? existing?.name ?? '',
+            email: current.email ?? existing?.email ?? '',
+            roles: nextRoles,
+            permissions: svcProfile.permissions,
+            pin_hash: existing?.pin_hash,
+            cached_at: new Date().toISOString(),
+          });
+        } catch {
+          // best-effort — offline cache write failures never break the live session
+        }
       },
     }),
     {
