@@ -1134,6 +1134,55 @@ export function useOrders(filters?: OrderListFilters) {
   });
 }
 
+/** Aggregate footer for the All-Sales / POS-Sales list — sums the WHOLE filtered set
+ *  (every page), computed server-side from the same filters the list uses. */
+export interface OrdersSummary {
+  count: number;            // rows aggregated (== total_matching unless capped)
+  total_matching: number;   // full count of rows matching the filters
+  truncated: boolean;       // total_matching exceeded the server aggregation cap
+  item_count: number;
+  sum_total: number;
+  sum_paid: number;
+  sum_due: number;
+  sum_return: number;
+  status_counts: Record<string, number>; // paid|partial|due|overdue|refunded|voided|cancelled
+  method_counts: Record<string, number>; // cash|card|mpesa|...|multiple
+}
+
+/** Totals for the sales list footer. Deliberately page-INDEPENDENT: the query key drops
+ *  page/limit so paging through the list never refetches (or changes) the grand totals. */
+export function useOrdersSummary(filters?: OrderListFilters) {
+  const tenantID = useTenantID();
+  // Strip pagination from the cache key — the summary spans all pages of a given filter set.
+  const { page: _page, limit: _limit, ...scope } = filters ?? {};
+  return useQuery({
+    queryKey: ['pos-orders-summary', tenantID, scope],
+    queryFn: () =>
+      apiClient.get<OrdersSummary>(`${basePath(tenantID)}/orders/summary`, {
+        status: filters?.status,
+        staff_id: filters?.staffId,
+        user_id: filters?.userId,
+        outlet_id: filters?.outletId,
+        from: filters?.from,
+        to: filters?.to,
+        customer: filters?.customer,
+        payment_status: filters?.paymentStatus,
+        payment_method: filters?.paymentMethod,
+        shipping_status: filters?.shippingStatus,
+        source: filters?.source,
+        subscriptions: filters?.subscriptions ? 'true' : undefined,
+        min_total: filters?.minTotal != null ? String(filters.minTotal) : undefined,
+        max_total: filters?.maxTotal != null ? String(filters.maxTotal) : undefined,
+        order_number: filters?.orderNumber,
+        kds_station_id: filters?.kdsStationId,
+        category: filters?.category,
+      }),
+    enabled: !!tenantID,
+    staleTime: 15_000,
+    networkMode: 'always',
+  });
+}
+
 /** Quotations for the Recent-Transactions "Quotation" tab (proxied from treasury). */
 export function useQuotations(params?: { page?: number; limit?: number; status?: string }, enabled = true) {
   const tenantID = useTenantID();

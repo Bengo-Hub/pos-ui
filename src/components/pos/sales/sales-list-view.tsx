@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Search, Loader2, Plus, Minus, Undo2 } from 'lucide-react';
 import { Button, Card, CardContent, CardHeader } from '@/components/ui/base';
-import { useOrders, useVoidOrder, type OrderListFilters } from '@/hooks/usePOS';
+import { useOrders, useOrdersSummary, useVoidOrder, type OrderListFilters } from '@/hooks/usePOS';
 import { useStaffList } from '@/hooks/useStaff';
 import { useAuthStore } from '@/store/auth';
 import { useOutletFilterStore } from '@/store/outlet-filter';
@@ -30,6 +30,14 @@ const PAGE_SIZE = 25;
 
 const th = 'px-4 py-3 font-bold border border-border/60';
 const td = 'px-4 py-3 border border-border/40';
+
+// Human labels + display order for the footer's payment-status breakdown (matches the
+// per-row status badge vocabulary in sales-shared).
+const STATUS_LABELS: Record<string, string> = {
+  paid: 'Paid', partial: 'Partial', due: 'Due', overdue: 'Overdue',
+  refunded: 'Refunded', voided: 'Voided', cancelled: 'Cancelled',
+};
+const STATUS_ORDER = ['paid', 'partial', 'due', 'overdue', 'refunded', 'voided', 'cancelled'];
 
 /**
  * SalesListView — the All-Sales list: advanced filter bar, a rich sales table with
@@ -121,6 +129,9 @@ export function SalesListView({ orgSlug, fixedSource, title, subtitle }: {
   }), [filterState, fixedSource, search, page]);
 
   const { data, isLoading } = useOrders(filters);
+  // Grand totals across the whole filtered set (all pages), fetched independently of the
+  // paginated list so the footer stays put while the user pages through rows.
+  const { data: summary } = useOrdersSummary(filters);
   const rows: any[] = data?.data ?? [];
   const total = data?.meta?.total ?? (data as any)?.total ?? rows.length;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -236,6 +247,49 @@ export function SalesListView({ orgSlug, fixedSource, title, subtitle }: {
                         onDelete={setDeleteOrder} onRecordPayment={setRecordPayOrder} colCount={colCount} />
                     ))}
                   </tbody>
+                  {summary && rows.length > 0 && (
+                    <tfoot>
+                      <tr className="border-t-2 border-border bg-accent/30 font-semibold">
+                        {/* Left block: label + how many sales the totals cover (all pages). */}
+                        <td className={`${td} text-left`} colSpan={8}>
+                          <span className="text-muted-foreground">Total:</span>{' '}
+                          <span>{summary.total_matching.toLocaleString()} sale{summary.total_matching === 1 ? '' : 's'}</span>
+                          {summary.truncated && (
+                            <span className="ml-2 text-xs font-normal text-amber-600"
+                              title={`Amounts cover the ${summary.count.toLocaleString()} most recent of ${summary.total_matching.toLocaleString()} matching sales. Narrow the date range for an exact figure.`}>
+                              (amounts: top {summary.count.toLocaleString()})
+                            </span>
+                          )}
+                        </td>
+                        {/* Payment-status breakdown (aligned under the Payment Status column). */}
+                        <td className={`${td} text-center`}>
+                          <div className="flex flex-wrap justify-center gap-x-2 gap-y-0.5 text-xs font-normal">
+                            {STATUS_ORDER.filter((s) => summary.status_counts?.[s]).map((s) => (
+                              <span key={s} className="whitespace-nowrap">{STATUS_LABELS[s]} - {summary.status_counts[s]}</span>
+                            ))}
+                          </div>
+                        </td>
+                        {/* Payment-method breakdown (aligned under the Payment Method column). */}
+                        <td className={`${td} text-left`}>
+                          <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-xs font-normal">
+                            {Object.entries(summary.method_counts ?? {})
+                              .sort((a, b) => b[1] - a[1])
+                              .map(([m, n]) => (
+                                <span key={m} className="whitespace-nowrap">{prettyMethod(m)} - {n}</span>
+                              ))}
+                          </div>
+                        </td>
+                        <td className={`${td} text-right tabular-nums`}>{money(summary.sum_total)}</td>
+                        <td className={`${td} text-right tabular-nums`}>{money(summary.sum_paid)}</td>
+                        <td className={`${td} text-right tabular-nums`}>{money(summary.sum_due)}</td>
+                        <td className={`${td} text-right tabular-nums`}>
+                          {summary.sum_return > 0.01 ? <span className="text-red-600">{money(summary.sum_return)}</span> : money(0)}
+                        </td>
+                        <td className={td} />
+                        <td className={`${td} text-center`}>{summary.item_count.toLocaleString()}</td>
+                      </tr>
+                    </tfoot>
+                  )}
                 </table>
                 {rows.length === 0 && <div className="p-12 text-center text-muted-foreground">No sales match your filters.</div>}
               </div>
