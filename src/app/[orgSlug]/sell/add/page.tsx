@@ -17,7 +17,7 @@ import { SplitPaymentModal } from '@/components/pos/split-payment-modal';
 import { CostHeaderToggle, MaskedCost } from '@/components/pos/cost-price';
 import { ApplyDiscountModal } from '@/components/pos/discounts/apply-discount-modal';
 import { ApprovalDialog, type ApprovalResult } from '@/components/pos/approval-dialog';
-import { StockCell } from '@/components/pos/stock-cell';
+import { StockCell, isStockTracked } from '@/components/pos/stock-cell';
 import { rbacApi } from '@/lib/api/rbac';
 import { InlineDiscountCell, InlineMarginCell, InlinePriceCell, InlineTotalCell } from '@/components/pos/inline-line-cells';
 import { CustomerSearch, WALK_IN_CUSTOMER, type SelectedCustomer } from '@/components/pos/customer-search';
@@ -323,7 +323,7 @@ export default function AddSalePage() {
     const line = lines[i];
     const stockQty = line ? (line.item as CatalogItem).stock_quantity : undefined;
     const itemType = line ? (line.item as CatalogItem).item_type : undefined;
-    if (line && q > line.quantity && itemType !== 'SERVICE' && typeof stockQty === 'number' && q > stockQty) {
+    if (line && q > line.quantity && isStockTracked(itemType) && typeof stockQty === 'number' && q > stockQty) {
       setPendingOversell({ index: i, qty: q });
       return;
     }

@@ -2,6 +2,18 @@
 
 import { cn } from '@/lib/utils';
 
+// Item types whose on-hand stock is NOT meaningful, so the In-Stock column + oversell guard skip
+// them: RECIPE (made-to-order menu items assembled from ingredients via BOM — e.g. an Americano),
+// SERVICE (labour, no inventory) and VOUCHER (intangible). Only physically-stocked GOODS show a
+// balance. Unknown/absent type defaults to tracked so a retail good is never wrongly hidden.
+const NON_STOCK_ITEM_TYPES = new Set(['RECIPE', 'SERVICE', 'VOUCHER']);
+
+/** Whether an item's on-hand stock balance is meaningful (drives the In-Stock cell + oversell). */
+export function isStockTracked(itemType?: string | null): boolean {
+  if (!itemType) return true;
+  return !NON_STOCK_ITEM_TYPES.has(itemType.toUpperCase());
+}
+
 /**
  * StockCell renders the EXPECTED stock balance for a cart/sale line — the on-hand quantity minus
  * the quantity being sold, i.e. what stock will be once this sale is finalized. It re-renders live
@@ -29,7 +41,7 @@ export function StockCell({
   itemType?: string;
   className?: string;
 }) {
-  const tracked = itemType !== 'SERVICE' && stockQuantity !== undefined && stockQuantity !== null;
+  const tracked = isStockTracked(itemType) && stockQuantity !== undefined && stockQuantity !== null;
   if (!tracked) {
     return <span className={cn('text-muted-foreground/40 tabular-nums', className)} title="Not stock-tracked">—</span>;
   }

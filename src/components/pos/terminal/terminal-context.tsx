@@ -30,6 +30,7 @@ import {
   useAssignTable, useReleaseTable, usePricingTiers, useEffectiveOutletID, type OrderSubtype,
 } from '@/hooks/usePOS';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
+import { isStockTracked } from '@/components/pos/stock-cell';
 import { useKDSStations } from '@/hooks/useKDS';
 import { useLoyaltyPrograms } from '@/hooks/useLoyalty';
 import { useActiveHappyHours } from '@/hooks/useDiscounts';
@@ -1059,7 +1060,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
     // Oversell guard (ALL use-cases/roles now): if the item is stock-tracked and adding this unit
     // would push the balance below zero, intercept for the manager out-of-stock override. Uses the
     // TOTAL in-cart qty for the item so topping up a partly-allocated line also trips it.
-    if (item.item_type !== 'SERVICE' && item.stockQuantity !== undefined) {
+    if (isStockTracked(item.item_type) && item.stockQuantity !== undefined) {
       const inCartQty = cart
         .filter((c) => c.id === item.id && !c.selectedModifiers && !c.promoFree)
         .reduce((s, c) => s + c.quantity, 0);
@@ -1166,7 +1167,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
   const incrementCartLine = (index: number) => {
     const item = cart[index];
     if (!item) return;
-    if (!item.selectedModifiers && !item.promoFree && item.item_type !== 'SERVICE' && item.stockQuantity !== undefined) {
+    if (!item.selectedModifiers && !item.promoFree && isStockTracked(item.item_type) && item.stockQuantity !== undefined) {
       const inCartQty = cart
         .filter((c) => c.id === item.id && !c.selectedModifiers && !c.promoFree)
         .reduce((s, c) => s + c.quantity, 0);
