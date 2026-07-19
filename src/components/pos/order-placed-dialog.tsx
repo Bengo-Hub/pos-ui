@@ -6,7 +6,7 @@ import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { useAuthStore } from '@/store/auth';
 import { resolveBillProfile, hasRealPrinter, BILL_PROFILE_ID } from '@/lib/pos/printer-stations';
 import { printProfileHtml, fetchReceiptEscposHex } from '@/lib/pos/printer-discovery';
-import { enqueuePrintJob } from '@/lib/pos/print-jobs';
+import { enqueuePrintJob, waitForPrintJobs } from '@/lib/pos/print-jobs';
 import { renderReceiptHtml, buildReceiptDocument, printReceiptDocument } from '@/lib/pos/receipt-html';
 import { paperForFormat, resolveReceiptFormat } from '@/lib/pos/receipt-format';
 import type { ReceiptData } from '@/components/pos/receipt-preview';
@@ -121,11 +121,19 @@ export function OrderPlacedDialog({ open, orderNumber, orderId, tenantId, orgSlu
       if (agentOnline) {
         const res = await enqueuePrintJob(tenantId, { job_type: 'bill', order_id: orderId });
         if (res.agent_online && res.jobs.length > 0) {
-          // Enqueued only — the on-site agent still has to actually reach the printer (bad
-          // printer name/IP or an offline agent are the real, common failure modes). Don't
-          // over-claim "printed" for a job we haven't confirmed left the queue.
-          toast.success('Bill queued for printing.');
-          handleLogout();
+          // Enqueued only — confirm the on-site agent actually reached the printer before
+          // claiming success (queue acceptance is NOT proof of printing; bad printer name/IP or
+          // an offline agent are the real, common failure modes downstream of "accepted").
+          const outcome = await waitForPrintJobs(tenantId, res.jobs.map((j) => j.id));
+          if (outcome.printed.length === res.jobs.length) {
+            toast.success('Bill sent to the printer.');
+            handleLogout();
+            return;
+          }
+          // Not confirmed — manual click, cashier still on screen: offer the browser fallback
+          // instead of a false "sent" toast or a dead end.
+          const unconfirmedFragment = await fetchReceiptFragment();
+          setBrowserPrompt({ ...unconfirmedFragment, reason: 'The printer did not confirm printing.' });
           return;
         }
         // Agent dropped offline between checks — fall through to the client transports.

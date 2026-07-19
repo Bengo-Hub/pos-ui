@@ -7,7 +7,7 @@ import { Printer, Download, X, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import { ReceiptPrint } from './receipt-print';
 import { printHtmlToPrinter, printProfileHtml, fetchReceiptEscposHex } from '@/lib/pos/printer-discovery';
-import { enqueuePrintJob } from '@/lib/pos/print-jobs';
+import { enqueuePrintJob, waitForPrintJobs } from '@/lib/pos/print-jobs';
 import { hasRealPrinter } from '@/lib/pos/printer-stations';
 import { buildReceiptRows } from '@/lib/pos/receipt-rows';
 import { buildReceiptDocument, printReceiptDocument } from '@/lib/pos/receipt-html';
@@ -184,10 +184,16 @@ export function ReceiptPreview({
         if (tenantId && orderId) {
           const res = await enqueuePrintJob(tenantId, { job_type: 'receipt', order_id: orderId, profile_id: realProfile.id });
           if (res.agent_online && res.jobs.length > 0) {
-            // Enqueued only — the on-site agent still has to actually reach the printer, which
-            // is where the real failures happen (bad printer name/IP, offline agent). Don't
-            // over-claim "printed" for a job we haven't confirmed left the queue.
-            toast.success('Receipt queued for printing.');
+            // Enqueued only — confirm the on-site agent actually reached the printer before
+            // claiming success (queue acceptance is NOT proof of printing; bad printer name/IP
+            // or an offline agent are the real, common failure modes downstream of "accepted").
+            const outcome = await waitForPrintJobs(tenantId, res.jobs.map((j) => j.id));
+            if (outcome.printed.length === res.jobs.length) {
+              toast.success('Receipt sent to the printer.');
+              return;
+            }
+            toast.error('Printer did not confirm printing — opening browser print instead.');
+            openBrowserReceiptWindow(node);
             return;
           }
         }

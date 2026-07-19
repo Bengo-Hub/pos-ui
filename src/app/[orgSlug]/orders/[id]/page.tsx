@@ -3,6 +3,7 @@
 import { Badge } from '@/components/ui/base';
 import { useOrder } from '@/hooks/usePOS';
 import { PrintReceiptButton } from '@/components/pos/print-receipt-button';
+import { ReprintStationTicketsButton } from '@/components/pos/reprint-station-tickets-button';
 import { VoidBillButton } from '@/components/pos/void-bill-button';
 import { VoidLineButton } from '@/components/pos/void-line-button';
 import { GenerateVoidCodeButton } from '@/components/pos/generate-void-code-button';
@@ -87,6 +88,13 @@ export default function OrderDetailPage() {
           )}
           {order.status !== 'cancelled' && (
             <PrintReceiptButton orderId={id} label={order.status === 'completed' ? 'Print Receipt' : 'Print Bill'} />
+          )}
+          {order.status !== 'cancelled' && (
+            <ReprintStationTicketsButton
+              orderNumber={order.order_number}
+              tableRef={order.table_reference ? `Table ${order.table_reference}` : ''}
+              lines={lines}
+            />
           )}
           {/* Manager: generate a one-time code to authorize a remote void (shown to managers only). */}
           <GenerateVoidCodeButton orderId={id} orderNumber={order.order_number} status={order.status} />

@@ -39,6 +39,54 @@ export async function enqueuePrintJob(tenantId: string, input: EnqueueJobInput):
   }
 }
 
+export interface PrintJobStatus {
+  id: string;
+  job_type: string;
+  status: string; // queued | claimed | printed | failed | expired
+  last_error?: string;
+}
+
+/**
+ * Poll job status after enqueue so the till can tell "accepted into the queue" apart from
+ * "actually printed" — the on-site agent still has to reach the physical printer, which is where
+ * the real, common failures happen (bad printer name/driver, unreachable IP, offline agent).
+ * Resolves once every job reaches a terminal state (printed/failed/expired) or `timeoutMs` elapses
+ * (whichever first); jobs still queued/claimed at timeout are reported as `pending` — the caller
+ * should treat pending same as failed (no confirmed proof of printing) and fall back accordingly.
+ * Never throws — a lookup error is treated as pending, not as failure.
+ */
+export async function waitForPrintJobs(
+  tenantId: string,
+  jobIds: string[],
+  opts: { timeoutMs?: number; intervalMs?: number } = {},
+): Promise<{ printed: string[]; failed: string[]; pending: string[] }> {
+  const { timeoutMs = 7000, intervalMs = 1200 } = opts;
+  const ids = jobIds.filter(Boolean);
+  const pending = new Set(ids);
+  const printed = new Set<string>();
+  const failed = new Set<string>();
+  if (ids.length === 0) return { printed: [], failed: [], pending: [] };
+
+  const deadline = Date.now() + timeoutMs;
+  while (pending.size > 0 && Date.now() < deadline) {
+    try {
+      const res = await apiClient.get<{ jobs?: PrintJobStatus[] }>(
+        `/api/v1/${tenantId}/pos/printing/jobs/status?ids=${Array.from(pending).join(',')}`,
+      );
+      for (const j of res?.jobs ?? []) {
+        if (j.status === 'printed') { printed.add(j.id); pending.delete(j.id); }
+        else if (j.status === 'failed' || j.status === 'expired') { failed.add(j.id); pending.delete(j.id); }
+        // queued/claimed → stays pending, poll again
+      }
+    } catch {
+      // Lookup failed — leave the ids pending and retry on the next tick.
+    }
+    if (pending.size === 0) break;
+    await new Promise((r) => setTimeout(r, intervalMs));
+  }
+  return { printed: Array.from(printed), failed: Array.from(failed), pending: Array.from(pending) };
+}
+
 export interface PrintAgentInfo {
   id: string;
   name: string;
