@@ -158,13 +158,16 @@ function NotificationListener() {
 }
 
 /**
- * ServicePermissionsRefresher — periodically re-pulls pos-api's own /auth/me so a permission
- * change a manager makes mid-shift (edits a role's matrix, assigns a different role) reaches an
- * already-open session's sidebar/RouteGuard without forcing a full logout. Covers BOTH SSO and
+ * ServicePermissionsRefresher — re-pulls pos-api's own /auth/me so a permission change a manager
+ * makes mid-shift (edits a role's matrix, assigns/removes an extra role) reaches an already-open
+ * session's sidebar/RouteGuard/action gating without forcing a full logout. Covers BOTH SSO and
  * PIN/terminal sessions (pos-api's /auth/me accepts either token via RequireAnyAuth) — terminal
  * sessions especially needed this, since their JWT previously never refreshed for its whole 4h
- * life. 3-minute interval: frequent enough to feel responsive, far below any rate-limit concern
- * for a single lightweight GET.
+ * life. Fires ONCE immediately on mount (a page reload previously relied on the persisted-user
+ * fast-path hydrate and could go a full interval — or longer, if the tab kept reloading and
+ * resetting the timer — before ever re-checking the server) and then every 60s: frequent enough
+ * that a security-sensitive permission edit (e.g. revoking Settle Bill from a waiter) reaches an
+ * open terminal within about a minute, far below any rate-limit concern for a single lightweight GET.
  */
 function ServicePermissionsRefresher() {
   const status = useAuthStore((s) => s.status);
@@ -172,7 +175,8 @@ function ServicePermissionsRefresher() {
   useEffect(() => {
     if (status !== 'authenticated' || !tenantID) return;
     const tick = () => { void useAuthStore.getState().refreshServicePermissions(); };
-    const id = setInterval(tick, 3 * 60_000);
+    tick();
+    const id = setInterval(tick, 60_000);
     return () => clearInterval(id);
   }, [status, tenantID]);
   return null;

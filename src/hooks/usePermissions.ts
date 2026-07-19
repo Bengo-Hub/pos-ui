@@ -4,14 +4,27 @@
  * usePermissions — single source of truth for permission checks in pos-ui.
  *
  * Permission resolution order:
- *   1. If JWT/session carries `permissions[]` → use those directly (server-authoritative)
- *   2. Otherwise, derive from role via ROLE_PERMISSIONS client-side map
- *   3. superuser / admin roles always pass every check
+ *   1. If the session has EVER received a permissions array from the server (PIN JWT / SSO+pos
+ *      /auth/me merge / offline-cached last-known-good) → that array is AUTHORITATIVE, including
+ *      when it is empty or has shrunk. A tenant admin unchecking a permission in the matrix MUST
+ *      take effect the moment the client re-syncs — the array is trusted exactly as received,
+ *      never silently topped back up.
+ *   2. ONLY when no server permissions payload has ever been received at all (permissions is
+ *      literally absent — the brief pre-first-fetch bootstrap window) → derive a default set from
+ *      role via the client-side ROLE_PERMISSIONS map, purely so a fresh session isn't a hard
+ *      dashboard-only wall for the second or two before the real sync lands. This must NEVER be
+ *      reached for a session that already has real data, however sparse.
+ *   3. superuser / admin / platform-owner roles always pass every check.
  *
  * Usage:
  *   const { can, canAny, canAll } = usePermissions();
  *   if (can('pos.orders.add')) { ... }
  *   if (canAny(['pos.orders.manage', 'pos.orders.delete'])) { ... }
+ *
+ * For gating a whole UI element (button, table-row action, nav item), prefer the <Can> component
+ * (@/components/auth/can) over inline `{can(...) && <Button/>}` — it's the same resolver, just a
+ * single reusable place so "hide this action" is a configuration/permission-matrix change, not a
+ * new code site.
  */
 
 import { useMemo } from 'react';
@@ -50,13 +63,15 @@ export function usePermissions() {
       return new Set(['*']);
     }
 
-    // Use server-provided permissions if present (PIN JWT or SSO /me)
+    // Any server-provided permissions ARRAY (even empty) is authoritative — an admin reducing a
+    // role's grants toward zero must be respected, not silently topped up by the fallback below.
+    // Only a genuinely-absent (never-fetched) payload falls through to the client map.
     const serverPerms = (user as any).permissions as string[] | undefined;
-    if (serverPerms && serverPerms.length > 0) {
+    if (Array.isArray(serverPerms)) {
       return new Set(serverPerms);
     }
 
-    // Fall back to client-side role→permission map
+    // Bootstrap-only fallback: no permissions payload has been received yet at all.
     const derived = new Set<string>();
     for (const role of roles) {
       const rolePerms = ROLE_PERMISSIONS[role] ?? [];

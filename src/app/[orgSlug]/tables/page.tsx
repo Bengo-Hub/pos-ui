@@ -14,6 +14,7 @@ import { useTables, useSections, useUpdateTableStatus, useReleaseTable, useMerge
 import { useKDSStations } from '@/hooks/useKDS';
 import { usePermissions, P } from '@/hooks/usePermissions';
 import { useOwnScope } from '@/lib/rbac/scope';
+import { Can } from '@/components/auth/can';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { useAuthStore } from '@/store/auth';
 import { apiClient } from '@/lib/api/client';
@@ -691,37 +692,43 @@ function MyBillsTab({ orgSlug }: { orgSlug: string }) {
                 <span className="font-bold text-sm text-primary">{fmt(order.total_amount ?? 0)}</span>
               </div>
               <div className="mt-2 space-y-2">
-                {(order.status === 'open' || order.status === 'pending_payment') && can(P.ORDERS_ADD) && (
-                  <Button
-                    variant="outline"
-                    className="w-full gap-2 justify-center"
-                    onClick={() => router.push(buildAddToBillUrl(orgSlug, order))}
-                  >
-                    <Plus className="h-4 w-4" />
-                    Add to Bill
-                  </Button>
+                {(order.status === 'open' || order.status === 'pending_payment') && (
+                  <Can permission={P.ORDERS_ADD}>
+                    <Button
+                      variant="outline"
+                      className="w-full gap-2 justify-center"
+                      onClick={() => router.push(buildAddToBillUrl(orgSlug, order))}
+                    >
+                      <Plus className="h-4 w-4" />
+                      Add to Bill
+                    </Button>
+                  </Can>
                 )}
-                {(order.status === 'open' || order.status === 'pending_payment') && can(P.PAYMENTS_ADD) && (
-                  <Button
-                    className="w-full gap-2 justify-center"
-                    onClick={() => setPayOrder(order)}
-                  >
-                    <CreditCard className="h-4 w-4" />
-                    Settle Bill
-                    {(order.total_amount ?? 0) > 0 && (
-                      <span className="ml-auto font-bold text-sm">{fmt(order.total_amount ?? 0)}</span>
-                    )}
-                  </Button>
+                {(order.status === 'open' || order.status === 'pending_payment') && (
+                  <Can permission={P.PAYMENTS_ADD}>
+                    <Button
+                      className="w-full gap-2 justify-center"
+                      onClick={() => setPayOrder(order)}
+                    >
+                      <CreditCard className="h-4 w-4" />
+                      Settle Bill
+                      {(order.total_amount ?? 0) > 0 && (
+                        <span className="ml-auto font-bold text-sm">{fmt(order.total_amount ?? 0)}</span>
+                      )}
+                    </Button>
+                  </Can>
                 )}
-                {(order.status === 'open' || order.status === 'pending_payment') && can(P.PAYMENTS_ADD) && (order.total_amount ?? 0) > 0 && (
-                  <Button
-                    variant="outline"
-                    className="w-full gap-2 justify-center"
-                    onClick={() => setSplitOrder(order)}
-                  >
-                    <SplitSquareHorizontal className="h-4 w-4" />
-                    Split Order
-                  </Button>
+                {(order.status === 'open' || order.status === 'pending_payment') && (order.total_amount ?? 0) > 0 && (
+                  <Can permission={P.PAYMENTS_ADD}>
+                    <Button
+                      variant="outline"
+                      className="w-full gap-2 justify-center"
+                      onClick={() => setSplitOrder(order)}
+                    >
+                      <SplitSquareHorizontal className="h-4 w-4" />
+                      Split Order
+                    </Button>
+                  </Can>
                 )}
                 <PrintReceiptButton
                   orderId={order.id}
