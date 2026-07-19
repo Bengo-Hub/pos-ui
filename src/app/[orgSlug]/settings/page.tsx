@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import {
   ChefHat, Clock, CreditCard, DatabaseBackup, Gift, Key, Layers, Monitor, Percent, Receipt, Truck,
-  Settings, ShieldCheck, Table2, Users,
+  Settings, ShieldCheck, Table2, Users, Hash,
 } from 'lucide-react';
 import { useAuthStore } from '@/store/auth';
 import { useModuleAccess } from '@/hooks/use-module-access';
@@ -16,6 +16,7 @@ import { GeneralTab } from '@/components/settings/GeneralTab';
 import { DisplayTab } from '@/components/settings/DisplayTab';
 import { TaxTab } from '@/components/settings/TaxTab';
 import { ReceiptTab } from '@/components/settings/ReceiptTab';
+import { DocumentNumberingTab } from '@/components/settings/DocumentNumberingTab';
 import { ModulesTab } from '@/components/settings/ModulesTab';
 import { ShiftsSettingsTab } from '@/components/settings/ShiftsSettingsTab';
 import { KDSStationsTab } from '@/components/settings/KDSStationsTab';
@@ -38,6 +39,7 @@ type Tab =
   | 'display'
   | 'tax'
   | 'receipt'
+  | 'document_numbering'
   | 'payment_display'
   | 'card_terminal'
   | 'cashier_policy'
@@ -92,6 +94,7 @@ const ALL_TABS: { id: Tab; label: string; icon: React.ElementType; group: Settin
   // Sales & Payments (shared)
   { id: 'cashier_policy',   label: 'Cashier & Terminal', icon: Users,       group: 'Sales & Payments', requirePermission: CONFIG_PERMS, description: 'Sales visibility, auto-logout, and the hospitality-cashier menu surface (per outlet)' },
   { id: 'receipt',          label: 'Receipt & Printing', icon: Receipt,     group: 'Sales & Payments', requirePermission: CONFIG_PERMS, description: 'Receipt format and printer profiles' },
+  { id: 'document_numbering', label: 'Document Numbering', icon: Hash,      group: 'Sales & Payments', requirePermission: CONFIG_PERMS, description: 'Numeric or prefixed order, receipt, return, reversal & repair numbers' },
   { id: 'payment_display',  label: 'Payment Display',    icon: CreditCard,  group: 'Sales & Payments', requirePermission: CONFIG_PERMS, description: 'Paybill, till, and bank details on receipts' },
   { id: 'card_terminal',    label: 'Card Terminal',      icon: CreditCard,  group: 'Sales & Payments', requirePermission: CONFIG_PERMS, description: 'PDQ / card-terminal mode, approval ref, and integrated terminal' },
   // Use-Case Modules (surfaced per outlet use case)
@@ -190,6 +193,7 @@ export default function SettingsPage() {
         {activeTab === 'display'          && <DisplayTab />}
         {activeTab === 'tax'              && <TaxTab />}
         {activeTab === 'receipt'          && <ReceiptTab />}
+        {activeTab === 'document_numbering' && <DocumentNumberingTab />}
         {activeTab === 'payment_display'  && <PaymentDisplayTab />}
         {activeTab === 'card_terminal'    && <CardTerminalTab />}
         {activeTab === 'cashier_policy'   && <CashierPolicyTab />}
