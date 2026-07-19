@@ -10,6 +10,7 @@ import { apiClient } from '@/lib/api/client';
 import { useAuthStore } from '@/store/auth';
 import { usePermissions, P } from '@/hooks/usePermissions';
 import { PrintReceiptButton } from '@/components/pos/print-receipt-button';
+import { DownloadReceiptButton } from '@/components/pos/download-receipt-button';
 import { RecordPaymentModal } from '@/components/pos/sales/record-payment-modal';
 import { CustomerDetailsModal } from '@/components/pos/customers/customer-details-modal';
 import { prettyMethod } from '@/components/pos/sales/sales-shared';
@@ -329,6 +330,10 @@ export function SellDetailsModal({ orderId, orgSlug, onClose }: { orderId: strin
             <PrintReceiptButton orderId={orderId} label="Packing Slip" variant="outline"
               className="h-9 gap-2 text-sm" />
             <PrintReceiptButton orderId={orderId} label="Print Invoice" variant="outline"
+              className="h-9 gap-2 text-sm" />
+            {/* Direct file download — bypasses the print-agent queue entirely, a reliable "just
+                get me the file" option when the print pipeline itself is what's broken. */}
+            <DownloadReceiptButton orderId={orderId} orderNumber={(order as any).order_number} variant="outline"
               className="h-9 gap-2 text-sm" />
             {isFinal && canReturn && (
               <button

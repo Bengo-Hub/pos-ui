@@ -130,11 +130,20 @@ export function ReceiptPreview({
   receipt, open, onClose, outletName, tenantName, printerName, printerProfile, tenantId, orderId, autoPrint,
 }: ReceiptPreviewProps) {
   const [printing, setPrinting] = useState(false);
+  // Set once a Print attempt on THIS open enqueued/attempted a real printer job and it did not
+  // confirm printing (bad printer name/IP, offline agent, stalled claim). Save PDF checks this so
+  // it can open the browser print window instead of just downloading a file nobody's going to see
+  // printed — downloading is the wrong recovery step once we already know the printer is broken.
+  const [lastPrintFailed, setLastPrintFailed] = useState(false);
   // Logo only — brand colours are intentionally omitted (they print faint on thermal printers).
   const { tenant } = useTenantBranding();
   const logoUrl = tenant?.logoUrl || '';
   // One-shot per open, and only after the hidden print root has rendered (hence effect, not render).
   const autoFiredRef = useRef(false);
+
+  useEffect(() => {
+    if (!open) setLastPrintFailed(false);
+  }, [open]);
 
   const realProfile = hasRealPrinter(printerProfile) ? printerProfile : undefined;
 
@@ -193,6 +202,7 @@ export function ReceiptPreview({
               return;
             }
             toast.error('Printer did not confirm printing — opening browser print instead.');
+            setLastPrintFailed(true);
             openBrowserReceiptWindow(node);
             return;
           }
@@ -206,6 +216,7 @@ export function ReceiptPreview({
         // the customer. Fall back to the browser print dialog (any locally reachable printer)
         // while the on-site print-agent/hardware issue is diagnosed.
         toast.error('Printer unreachable — opening browser print instead.');
+        setLastPrintFailed(true);
         openBrowserReceiptWindow(node);
       })();
       return;
@@ -243,9 +254,17 @@ export function ReceiptPreview({
 
   // Real PDF: when online, download the server-rendered application/pdf (same layouts
   // registry as the printed receipt — fpdf output, not a print-to-PDF approximation).
-  // Offline (or on any failure) fall back to the browser print window, whose Save-as-PDF
-  // destination still yields a usable PDF — the offline-first path keeps working.
+  // Offline, on any download failure, OR when a Print attempt on this same receipt already
+  // enqueued/attempted a real printer job and it did NOT confirm printing — skip the download
+  // and open the browser print window directly instead. A downloaded file nobody can get to
+  // paper is not "plan B" during an outage; the browser print dialog (with its own Save-as-PDF
+  // destination as a bonus) is the solid fallback "like it used to" work.
   const handleDownloadPDF = () => {
+    if (lastPrintFailed) {
+      toast.info('Printer didn’t confirm the last print — opening browser print instead of a download.');
+      openBrowserReceiptWindow();
+      return;
+    }
     if (tenantId && orderId && (typeof navigator === 'undefined' || navigator.onLine)) {
       void apiClient
         .getBlob(`/api/v1/${tenantId}/pos/orders/${orderId}/receipt`, { format: 'pdf' })

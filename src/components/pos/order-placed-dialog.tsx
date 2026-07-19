@@ -130,10 +130,13 @@ export function OrderPlacedDialog({ open, orderNumber, orderId, tenantId, orgSlu
             handleLogout();
             return;
           }
-          // Not confirmed — manual click, cashier still on screen: offer the browser fallback
-          // instead of a false "sent" toast or a dead end.
+          // Not confirmed within the poll window — during an active print-agent/hardware
+          // incident, an extra "are you sure?" click just costs time the cashier doesn't
+          // have. Open the browser print window directly (crisis mode: decisive, not a modal).
           const unconfirmedFragment = await fetchReceiptFragment();
-          setBrowserPrompt({ ...unconfirmedFragment, reason: 'The printer did not confirm printing.' });
+          toast.error('Printer did not confirm printing — opening browser print instead.');
+          printReceiptDocument(buildReceiptDocument(`Receipt ${orderNumber}`, unconfirmedFragment.html, unconfirmedFragment.paper));
+          handleLogout();
           return;
         }
         // Agent dropped offline between checks — fall through to the client transports.
@@ -149,10 +152,10 @@ export function OrderPlacedDialog({ open, orderNumber, orderId, tenantId, orgSlu
           handleLogout();
         } else {
           // Configured printer unreachable (agent down / QZ not running / bad printer name) —
-          // this is a MANUAL click with the cashier still on screen, so offer the same
-          // browser-print fallback used for the no-printer case instead of a dead-end toast.
-          // Crisis mitigation while the on-site print-agent/hardware issue is diagnosed.
-          setBrowserPrompt({ ...fragment, reason: 'The configured printer could not be reached.' });
+          // crisis mode: open the browser print window directly instead of asking first.
+          toast.error('Printer unreachable — opening browser print instead.');
+          printReceiptDocument(buildReceiptDocument(`Receipt ${orderNumber}`, fragment.html, fragment.paper));
+          handleLogout();
         }
       } else {
         // Manual print with no configured printer → DO NOT auto-open the browser print window. Ask first.

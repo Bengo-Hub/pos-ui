@@ -15,6 +15,7 @@ import { Footer } from '@/components/footer';
 import { SubscriptionBanner } from '@/components/subscription/subscription-banner';
 import { SyncStatusIndicator } from '@/components/pos/sync-status-indicator';
 import { PWARegistration } from '@/components/pwa-registration';
+import { PWAUpdateBanner } from '@/components/pos/pwa-update-banner';
 import { StartShiftGate } from '@/components/pos/start-shift-gate';
 import { RouteGuard } from '@/components/auth/route-guard';
 import { TerminalIdleScreensaver } from '@/components/pos/terminal-idle-screensaver';
@@ -237,6 +238,9 @@ export function OrgShell({ children }: { children: ReactNode }) {
         <TenantBrandingProvider>
           <SubscriptionEntitlementsProvider>
           <ManifestInjector />
+          {/* New sw.js build waiting to activate — "Update now" applies it + clears stale
+              version caches, then reloads. Above OfflineBar so it's the topmost ribbon. */}
+          <PWAUpdateBanner />
           {/* Shared top ribbon: offline-mode (cash/manual only) + animated "Syncing offline
               data… (N)" driven by the real IndexedDB queue. SW is registered by registerBackgroundSync. */}
           <OfflineBar
