@@ -882,7 +882,7 @@ function ReturnsPage() {
                     <td className="px-4 py-3.5" onClick={(e) => e.stopPropagation()}>
                       {ret.customer_phone ? (
                         <button type="button"
-                          onClick={() => setCustomerModal({ name: ret.customer_name, phone: ret.customer_phone })}
+                          onClick={() => setCustomerModal({ name: ret.customer_name, phone: ret.customer_phone as string })}
                           className="text-primary hover:underline" title="Open customer profile">
                           {ret.customer_name || ret.customer_phone}
                         </button>

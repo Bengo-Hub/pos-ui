@@ -184,13 +184,23 @@ export function ReceiptPreview({
         if (tenantId && orderId) {
           const res = await enqueuePrintJob(tenantId, { job_type: 'receipt', order_id: orderId, profile_id: realProfile.id });
           if (res.agent_online && res.jobs.length > 0) {
-            toast.success('Receipt sent to the printer.');
+            // Enqueued only — the on-site agent still has to actually reach the printer, which
+            // is where the real failures happen (bad printer name/IP, offline agent). Don't
+            // over-claim "printed" for a job we haven't confirmed left the queue.
+            toast.success('Receipt queued for printing.');
             return;
           }
         }
         const ok = await printToProfile(true);
-        if (ok) toast.success('Receipt sent to the printer.');
-        else toast.error('Receipt did not print — check the printer connection (print agent / QZ Tray).');
+        if (ok) {
+          toast.success('Receipt sent to the printer.');
+          return;
+        }
+        // Print agent / QZ unreachable or failed — never leave the cashier with nothing to hand
+        // the customer. Fall back to the browser print dialog (any locally reachable printer)
+        // while the on-site print-agent/hardware issue is diagnosed.
+        toast.error('Printer unreachable — opening browser print instead.');
+        openBrowserReceiptWindow(node);
       })();
       return;
     }

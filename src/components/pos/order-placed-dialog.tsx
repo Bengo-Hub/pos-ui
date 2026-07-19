@@ -36,7 +36,7 @@ export function OrderPlacedDialog({ open, orderNumber, orderId, tenantId, orgSlu
   // printer was found — drives the "print on browser?" confirmation modal instead of silently
   // opening the browser print window. Paper follows the outlet's receipt layout (thermal by
   // default; A4 only when the a4_invoice format is configured) — same rule as ReceiptPreview.
-  const [browserPrompt, setBrowserPrompt] = useState<{ html: string; paper: 'thermal' | 'a4' } | null>(null);
+  const [browserPrompt, setBrowserPrompt] = useState<{ html: string; paper: 'thermal' | 'a4'; reason?: string } | null>(null);
   // Guards the one-shot auto-print so it fires once per dialog open, not on every re-render.
   const autoFiredRef = useRef(false);
 
@@ -102,9 +102,13 @@ export function OrderPlacedDialog({ open, orderNumber, orderId, tenantId, orgSlu
           const { html } = await fetchReceiptFragment();
           const escposHex = await fetchReceiptEscposHex(tenantId, orderId, 'customer', billProfile?.id ?? BILL_PROFILE_ID);
           const ok = await printProfileHtml(billProfile, `Receipt ${orderNumber}`, html, escposHex ?? undefined, { silent: true });
-          if (!ok) toast.error('Receipt did not print — check the printer connection (print agent / QZ Tray).');
+          if (!ok) {
+            // Auto-print never pops a browser window (would surprise the next cashier mid-shift-
+            // handoff) — point staff at the manual retry, which DOES fall back to browser print.
+            toast.error('Bill did not print — open the order and use Print Bill to try again (falls back to browser print).');
+          }
         } catch {
-          toast.error('Receipt did not print — check the printer connection.');
+          toast.error('Bill did not print — open the order and use Print Bill to try again.');
         }
       })();
       handleLogout();
@@ -117,7 +121,10 @@ export function OrderPlacedDialog({ open, orderNumber, orderId, tenantId, orgSlu
       if (agentOnline) {
         const res = await enqueuePrintJob(tenantId, { job_type: 'bill', order_id: orderId });
         if (res.agent_online && res.jobs.length > 0) {
-          toast.success('Bill sent to the printer.');
+          // Enqueued only — the on-site agent still has to actually reach the printer (bad
+          // printer name/IP or an offline agent are the real, common failure modes). Don't
+          // over-claim "printed" for a job we haven't confirmed left the queue.
+          toast.success('Bill queued for printing.');
           handleLogout();
           return;
         }
@@ -126,18 +133,27 @@ export function OrderPlacedDialog({ open, orderNumber, orderId, tenantId, orgSlu
       const fragment = await fetchReceiptFragment();
       if (printerConfigured) {
         // Configured printer → push the job straight to it (agent relay incl. USB-by-name, QZ
-        // Tray incl. raw network by IP). No browser print window at all.
+        // Tray incl. raw network by IP).
         const escposHex = await fetchReceiptEscposHex(tenantId, orderId, 'customer', billProfile?.id ?? BILL_PROFILE_ID);
         const ok = await printProfileHtml(billProfile, `Receipt ${orderNumber}`, fragment.html, escposHex ?? undefined, { silent: true });
-        if (!ok) toast.error('Receipt did not print — check the printer connection (print agent / QZ Tray).');
-        handleLogout();
+        if (ok) {
+          toast.success('Bill sent to the printer.');
+          handleLogout();
+        } else {
+          // Configured printer unreachable (agent down / QZ not running / bad printer name) —
+          // this is a MANUAL click with the cashier still on screen, so offer the same
+          // browser-print fallback used for the no-printer case instead of a dead-end toast.
+          // Crisis mitigation while the on-site print-agent/hardware issue is diagnosed.
+          setBrowserPrompt({ ...fragment, reason: 'The configured printer could not be reached.' });
+        }
       } else {
         // Manual print with no configured printer → DO NOT auto-open the browser print window. Ask first.
         setBrowserPrompt(fragment);
       }
     } catch {
-      // Print failed silently — still log out.
-      handleLogout();
+      // Could not even prepare the bill (e.g. receipt fetch failed) — nothing to print or fall
+      // back with, but the cashier should know rather than being silently logged out.
+      toast.error('Could not prepare the bill — try Print Bill again.');
     } finally {
       setPrinting(false);
     }
@@ -167,9 +183,9 @@ export function OrderPlacedDialog({ open, orderNumber, orderId, tenantId, orgSlu
         <div className="bg-card rounded-3xl border border-border shadow-2xl w-80 p-7 flex flex-col items-center gap-4">
           <AlertTriangle className="h-12 w-12 text-amber-500" strokeWidth={1.5} />
           <div className="text-center">
-            <p className="text-lg font-bold font-display">No printer detected</p>
+            <p className="text-lg font-bold font-display">{browserPrompt.reason ? 'Printer unreachable' : 'No printer detected'}</p>
             <p className="text-sm text-muted-foreground mt-1">
-              No configured receipt printer was found for this station. Print the bill using your
+              {browserPrompt.reason ?? 'No configured receipt printer was found for this station.'} Print the bill using your
               browser instead?
             </p>
           </div>
