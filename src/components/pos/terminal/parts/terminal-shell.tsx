@@ -23,6 +23,7 @@ import { LoyaltyPanel } from '@/components/retail/LoyaltyPanel';
 import { ScaleDisplay } from '@/components/retail/ScaleDisplay';
 import { CategoryNav } from '@/components/pos/category-nav';
 import { CourseSelector, COURSES } from '@/components/pos/course-selector';
+import { StockCell } from '@/components/pos/stock-cell';
 import { TerminalProductGrid } from '@/components/pos/terminal/parts/terminal-product-grid';
 import { TerminalModals } from '@/components/pos/terminal/parts/terminal-modals';
 import { InlinePaymentBar } from '@/components/pos/terminal/inline-payment-bar';
@@ -68,11 +69,20 @@ export function TerminalShell() {
   // Explicit column tracks (shared by header + rows) so the cart never cramps: the product
   // name flexes, the numeric columns get fixed, comfortably-spaced widths. Cost + Margin
   // only exist for management roles; Discount only for managers on retail/pharmacy.
+  // The In-Stock column (4rem) sits right after Product for EVERY role/use-case — it shows the
+  // expected stock balance after the sale and turns red as stock runs out (see StockCell).
   const cartGridCols = canViewCost
     ? (showDiscountCol
-        ? 'grid-cols-[minmax(0,1fr)_6.5rem_4.5rem_3.5rem_4rem_5rem_5.5rem]'
-        : 'grid-cols-[minmax(0,1fr)_6.5rem_4.5rem_3.5rem_5rem_5.5rem]')
-    : 'grid-cols-[minmax(0,1fr)_6.5rem_5rem_5.5rem]';
+        ? 'grid-cols-[minmax(0,1fr)_4rem_6.5rem_4.5rem_3.5rem_4rem_5rem_5.5rem]'
+        : 'grid-cols-[minmax(0,1fr)_4rem_6.5rem_4.5rem_3.5rem_5rem_5.5rem]')
+    : 'grid-cols-[minmax(0,1fr)_4rem_6.5rem_5rem_5.5rem]';
+
+  // Total sold quantity per item id across the cart, so a multi-line item's projected stock
+  // balance reflects ALL its lines (not just the row's own qty). Recomputed on every cart change.
+  const cartQtyById = cart.reduce<Record<string, number>>((acc, c) => {
+    acc[c.id] = (acc[c.id] ?? 0) + c.quantity;
+    return acc;
+  }, {});
 
   return (
     // Height uses dvh (dynamic viewport) so mobile browser chrome never pushes the bottom action
@@ -209,6 +219,7 @@ export function TerminalShell() {
           </div>
           <div className={cn('grid gap-3 px-4 py-2 shrink-0 text-[10px] font-bold uppercase tracking-wider text-muted-foreground border-b border-border', cartGridCols)}>
             <span>Product</span>
+            <span className="text-center">In Stock</span>
             <span className="text-center">Quantity</span>
             {canViewCost && (
               <>
@@ -273,11 +284,16 @@ export function TerminalShell() {
                         </div>
                       )}
                     </div>
-                    {/* Qty stepper */}
+                    {/* In-Stock (expected balance after this sale) — all roles; red as stock runs out */}
+                    <div className="flex items-center justify-center text-sm">
+                      <StockCell stockQuantity={item.stockQuantity} soldQty={cartQtyById[item.id] ?? item.quantity} itemType={item.item_type} />
+                    </div>
+                    {/* Qty stepper — the + routes through incrementCartLine so pushing a line past
+                        available stock opens the oversell (out-of-stock) manager-approval flow. */}
                     <div className="flex items-center gap-1 justify-center">
                       <button onClick={() => t.updateQuantity(idx, -1)} className="h-6 w-6 rounded-md border border-border flex items-center justify-center hover:bg-accent"><Minus className="h-3 w-3" /></button>
                       <span className="w-7 text-center text-sm font-bold tabular-nums">{item.quantity}</span>
-                      <button onClick={() => t.updateQuantity(idx, 1)} className="h-6 w-6 rounded-md border border-border flex items-center justify-center hover:bg-accent"><Plus className="h-3 w-3" /></button>
+                      <button onClick={() => t.incrementCartLine(idx)} className="h-6 w-6 rounded-md border border-border flex items-center justify-center hover:bg-accent"><Plus className="h-3 w-3" /></button>
                     </div>
                     {canViewCost && (
                       <>

@@ -226,6 +226,7 @@ export interface TerminalContextValue {
   proceedWithItem: (item: MenuItem) => void;
   handleScaleAddToCart: (weightGrams: number) => void;
   updateQuantity: (index: number, delta: number) => void;
+  incrementCartLine: (index: number) => void;
   removeFromCart: (index: number) => void;
   clearCart: () => void;
   /** Same-SKU BOGO free units earned for a cart line at its current PAID quantity (0 for
@@ -1055,15 +1056,17 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
   );
 
   const handleItemTap = useCallback((item: MenuItem) => {
-    // Retail/pharmacy: intercept out-of-stock adds for a manager PIN override (mirrors legacy /retail).
-    if (
-      cfg.managerOverride &&
-      item.item_type !== 'SERVICE' &&
-      item.stockQuantity !== undefined &&
-      item.stockQuantity === 0
-    ) {
-      setPendingOverride(item);
-      return;
+    // Oversell guard (ALL use-cases/roles now): if the item is stock-tracked and adding this unit
+    // would push the balance below zero, intercept for the manager out-of-stock override. Uses the
+    // TOTAL in-cart qty for the item so topping up a partly-allocated line also trips it.
+    if (item.item_type !== 'SERVICE' && item.stockQuantity !== undefined) {
+      const inCartQty = cart
+        .filter((c) => c.id === item.id && !c.selectedModifiers && !c.promoFree)
+        .reduce((s, c) => s + c.quantity, 0);
+      if (inCartQty + 1 > item.stockQuantity) {
+        setPendingOverride(item);
+        return;
+      }
     }
     if (item.requiresAgeVerification) {
       setAgePrompt({
@@ -1079,7 +1082,25 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
       return;
     }
     proceedWithItem(item);
-  }, [cfg.managerOverride, proceedWithItem]);
+  }, [cart, proceedWithItem]);
+
+  // Cart "+" stepper: like adding one more unit, but routes an oversell (past-stock) increment on a
+  // mergeable line through the out-of-stock manager override (the approval re-adds one unit, which
+  // merges onto the same line). Modifier/promo lines and untracked items just bump directly.
+  const incrementCartLine = useCallback((index: number) => {
+    const item = cart[index];
+    if (!item) return;
+    if (!item.selectedModifiers && !item.promoFree && item.item_type !== 'SERVICE' && item.stockQuantity !== undefined) {
+      const inCartQty = cart
+        .filter((c) => c.id === item.id && !c.selectedModifiers && !c.promoFree)
+        .reduce((s, c) => s + c.quantity, 0);
+      if (inCartQty + 1 > item.stockQuantity) {
+        setPendingOverride(item);
+        return;
+      }
+    }
+    updateQuantity(index, 1);
+  }, [cart, updateQuantity]);
 
   // Weighed-goods add: the scale returns grams; we add a generic line priced by weight (kg as qty),
   // mirroring the legacy /retail scale flow. Operators set the unit price from the cart afterwards.
@@ -1825,7 +1846,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
     pendingApprovalAction, setPendingApprovalAction, confirmApproval,
     priceEditIndex, setPriceEditIndex, setLinePrice, setLineDiscount,
     addItemToCart, handleItemTap, proceedWithItem, handleScaleAddToCart,
-    updateQuantity, removeFromCart, clearCart, bogoFreeFor, updateCourse, setItemSeat,
+    updateQuantity, incrementCartLine, removeFromCart, clearCart, bogoFreeFor, updateCourse, setItemSeat,
     pricingProfile, pricingTiers, repricing, repriceCart,
     loyaltyState, setLoyaltyState, customerResetSeq, scaleDeviceId, customerCreditAvailable,
     orderSubtype, setOrderSubtype, deliveryInfo, setDeliveryInfo, tableId, tableName,

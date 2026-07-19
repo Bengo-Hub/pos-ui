@@ -17,6 +17,8 @@ import { SplitPaymentModal } from '@/components/pos/split-payment-modal';
 import { CostHeaderToggle, MaskedCost } from '@/components/pos/cost-price';
 import { ApplyDiscountModal } from '@/components/pos/discounts/apply-discount-modal';
 import { ApprovalDialog, type ApprovalResult } from '@/components/pos/approval-dialog';
+import { StockCell } from '@/components/pos/stock-cell';
+import { rbacApi } from '@/lib/api/rbac';
 import { InlineDiscountCell, InlineMarginCell, InlinePriceCell, InlineTotalCell } from '@/components/pos/inline-line-cells';
 import { CustomerSearch, WALK_IN_CUSTOMER, type SelectedCustomer } from '@/components/pos/customer-search';
 import { useAuthStore } from '@/store/auth';
@@ -232,6 +234,8 @@ export default function AddSalePage() {
   // ApprovalDialog resolves a token/one-time code and the save is retried with it — the
   // exact flow the POS terminal runs.
   const [pendingApproval, setPendingApproval] = useState<{ action: string; mode: 'pay' | 'draft'; creditDetails?: CreditSaleDetails } | null>(null);
+  // Out-of-stock ("oversell") override for a line whose qty exceeds on-hand stock.
+  const [pendingOversell, setPendingOversell] = useState<{ index: number; qty: number } | null>(null);
 
   // ── Resume / edit an existing draft (REQ-003) ── ?order_id= comes from the Drafts page
   // "Resume Sale" action and the All-Sales "Edit" action. The draft's lines, customer and
@@ -304,13 +308,26 @@ export default function AddSalePage() {
       });
     }
   }, [pricingProfile, resolvePrice]);
-  const setQty = (i: number, q: number) => {
+  const applyQty = (i: number, q: number) => {
     if (q <= 0) {
       // Removing a line is structural — it can only persist via the replacement-order path.
       setStructuralDirty(true);
       return setLines((p) => p.filter((_, x) => x !== i));
     }
     return setLines((p) => p.map((l, x) => (x === i ? { ...l, quantity: q } : l)));
+  };
+  // Oversell guard: INCREASING a stock-tracked line beyond on-hand opens the manager out-of-stock
+  // override (same catalog.oos_override flow as the terminal). Decreases + untracked items apply
+  // directly. On approval the intended qty is applied.
+  const setQty = (i: number, q: number) => {
+    const line = lines[i];
+    const stockQty = line ? (line.item as CatalogItem).stock_quantity : undefined;
+    const itemType = line ? (line.item as CatalogItem).item_type : undefined;
+    if (line && q > line.quantity && itemType !== 'SERVICE' && typeof stockQty === 'number' && q > stockQty) {
+      setPendingOversell({ index: i, qty: q });
+      return;
+    }
+    applyQty(i, q);
   };
   // Terminal pricing policy (2026-07-18 revision, same as the POS terminal): managers/admins
   // (pos.orders.manage) set any price silently; everyone else sells AT or ABOVE the preset
@@ -786,6 +803,7 @@ export default function AddSalePage() {
             <table className="w-full text-sm">
               <thead><tr className="border-b border-border bg-muted/30 text-muted-foreground">
                 <th className="text-left px-4 py-2.5 font-medium">Product</th>
+                <th className="text-center px-2 py-2.5 font-medium">In Stock</th>
                 <th className="text-center px-2 py-2.5 font-medium">Qty</th>
                 {canViewCost && (
                   <th className="text-right px-3 py-2.5 font-medium">
@@ -799,12 +817,8 @@ export default function AddSalePage() {
                 <th></th>
               </tr></thead>
               <tbody className="divide-y divide-border">
-                {lines.length === 0 && <tr><td colSpan={5 + (canViewCost ? 2 : 0) + (canApplyDiscount ? 1 : 0)} className="px-4 py-8 text-center text-muted-foreground">Search and add products to the sale</td></tr>}
+                {lines.length === 0 && <tr><td colSpan={6 + (canViewCost ? 2 : 0) + (canApplyDiscount ? 1 : 0)} className="px-4 py-8 text-center text-muted-foreground">Search and add products to the sale</td></tr>}
                 {lines.map((l, i) => {
-                  // REQ-001: projected on-hand stock if this sale/quotation is completed —
-                  // client-side preview only; nothing is deducted until the sale finalizes.
-                  const stockQty = (l.item as any).stock_quantity;
-                  const projected = typeof stockQty === 'number' ? stockQty - l.quantity : null;
                   // REQ-006: supplier cost + margin — only serialized by pos-api to
                   // pos.catalog.view_cost holders, so it's simply absent for cashiers.
                   const cost = Number((l.item as any).cost_price ?? 0);
@@ -813,11 +827,10 @@ export default function AddSalePage() {
                       <td className="px-4 py-3">
                         <div className="font-medium">{l.item.name}</div>
                         <div className="text-xs text-muted-foreground font-mono">{l.item.sku}</div>
-                        {projected != null && (
-                          <div className={`text-[11px] mt-0.5 ${projected < 0 ? 'text-destructive font-semibold' : 'text-muted-foreground'}`}>
-                            Stock after sale: {projected}{projected < 0 ? ' — exceeds on-hand stock' : ''}
-                          </div>
-                        )}
+                      </td>
+                      {/* In-Stock (expected balance after this sale) — all roles; red as stock runs out */}
+                      <td className="px-2 py-3 text-center">
+                        <StockCell stockQuantity={l.item.stock_quantity} soldQty={l.quantity} itemType={l.item.item_type} />
                       </td>
                       <td className="px-2 py-3">
                         <div className="flex items-center justify-center gap-1">
@@ -1064,6 +1077,30 @@ export default function AddSalePage() {
             save(mode, creditDetails, approval);
           }}
           onClose={() => setPendingApproval(null)}
+        />
+      )}
+
+      {/* Out-of-stock override — the line qty exceeds on-hand stock. Same catalog.oos_override
+          manager approval the POS terminal uses; on approval the intended qty is applied. */}
+      {pendingOversell && (
+        <ApprovalDialog
+          open
+          action="catalog.oos_override"
+          description={`Overselling ${lines[pendingOversell.index]?.item.name ?? 'this item'} (exceeds on-hand stock) requires a manager to approve.`}
+          confirmLabel="Approve override"
+          onApproved={async (approval) => {
+            // scan/PIN already stepped up (verified). The one-time CODE path is redeemed here.
+            if (approval.code && !approval.approvalToken) {
+              try {
+                const res = await rbacApi.verifyApprovalCode(tenantId, 'catalog.oos_override', approval.code, outletId);
+                if (!res?.approved) { toast.error('Invalid or expired approval code'); return; }
+              } catch { toast.error('Invalid or expired approval code'); return; }
+            }
+            const { index, qty } = pendingOversell;
+            setPendingOversell(null);
+            applyQty(index, qty);
+          }}
+          onClose={() => setPendingOversell(null)}
         />
       )}
 

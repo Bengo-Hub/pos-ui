@@ -306,6 +306,9 @@ export interface CatalogItem {
   minimum_age?: number;
   is_returnable?: boolean;
   outlet_id?: string;
+  /** On-hand stock projected from inventory (pos-api catalogItemDTO.stock_quantity). Drives the
+   *  In-Stock cart column + the oversell guard; undefined = not stock-tracked. */
+  stock_quantity?: number;
   metadata?: Record<string, any>;
 }
 
@@ -342,6 +345,7 @@ export function toOfflineCatalogRows(tenantID: string, outletID: string, items: 
     tax_code_id: i.tax_code_id,
     cost_price: i.cost_price,
     non_billable: i.non_billable,
+    stock_quantity: i.stock_quantity,
     cached_at: now,
   }));
 }
@@ -408,6 +412,7 @@ export function offlineToCatalogItem(c: OfflineCatalogItem): CatalogItem {
     tax_code_id: c.tax_code_id,
     cost_price: c.cost_price,
     non_billable: c.non_billable,
+    stock_quantity: c.stock_quantity,
   };
 }
 
