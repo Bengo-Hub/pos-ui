@@ -246,6 +246,21 @@ export const ROLE_PERMISSIONS: Record<string, Permission[]> = {
     P.CLIENTS_VIEW,
     // TABLES_MANAGE enables merge, unmerge, transfer
   ],
+  // Floor Supervisor ("super waiter"): waiter grants + ORDERS_VIEW (see ALL bills) + full
+  // settle/close + tables.manage. Assigned additively to elevate one waiter for central
+  // accountability (mirrors the pos-api seed floor_supervisor role). This client fallback only
+  // applies to PIN sessions with no server permissions — SSO users get the server union.
+  floor_supervisor: [
+    P.ORDERS_ADD, P.ORDERS_VIEW, P.ORDERS_CHANGE, P.ORDERS_CHANGE_OWN, P.ORDERS_VOID,
+    P.PAYMENTS_ADD, P.PAYMENTS_VIEW, P.PAYMENTS_VIEW_OWN,
+    P.CATALOG_VIEW,
+    P.TABLES_VIEW, P.TABLES_CHANGE, P.TABLES_CHANGE_OWN, P.TABLES_MANAGE,
+    P.MODIFIERS_VIEW,
+    P.SESSIONS_ADD, P.SESSIONS_VIEW_OWN,
+    P.DRAWERS_ADD, P.DRAWERS_VIEW_OWN, P.DRAWERS_CHANGE_OWN,
+    P.KDS_VIEW,
+    P.REPORTS_VIEW,
+  ],
   kitchen: [
     P.KDS_VIEW, P.KDS_CHANGE,
     P.ORDERS_VIEW,

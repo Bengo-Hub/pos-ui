@@ -4,6 +4,8 @@ import { useModuleAccess } from '@/hooks/use-module-access';
 import { normalizeUseCase } from '@/lib/use-case-config';
 import { useSubscription } from '@/hooks/use-subscription';
 import { usePermissions } from '@/hooks/usePermissions';
+import { usePOSSettings } from '@/hooks/usePOSSettings';
+import { useOwnScope } from '@/lib/rbac/scope';
 import { isPlatformOwner as checkPlatformOwner } from '@/lib/auth/permissions';
 import { cn } from '@/lib/utils';
 import { useTenantBranding } from '@/providers/tenant-branding-provider';
@@ -158,6 +160,8 @@ export function Sidebar({ open = false, onClose, collapsed = false }: SidebarPro
   const user = useAuthStore((s) => s.user);
   const { hasModule, isSuperUser, isResolved, hiddenItems } = useModuleAccess();
   const { canAny, isSuperuser } = usePermissions();
+  const { data: posSettings } = usePOSSettings();
+  const { ownOnly: ownScope } = useOwnScope();
   const { hasFeature, isLoading: subLoading, info: subInfo } = useSubscription();
   // Platform-owner-only (device fleet, platform config, licensing). A tenant `admin` is
   // NOT a platform owner — only the is_platform_owner claim, the superuser role, or the
@@ -179,16 +183,20 @@ export function Sidebar({ open = false, onClose, collapsed = false }: SidebarPro
   // ── Nav groups ────────────────────────────────────────────────────────────
 
   const isWaiter = !isHQUser && userRoles.includes('waiter');
-  // Hospitality cashiers settle bills from the Tables/Orders surface, so the fast terminal is hidden
-  // for them. Quick-service has NO table service — the POS terminal IS the cashier's order-entry
-  // surface, so quick-service cashiers must keep it. Hence: hospitality only, not QSR.
-  const isCashierHosp = !isHQUser && userRoles.includes('cashier') && outletProfile === 'hospitality';
-  // Own-only principals (view_own without view/change/manage — cashiers, waiters) see the sales
-  // menu as "My Sales"/"My POS" (QA req 6) — the SAME permission test the sales list uses for
-  // its scoped view, so sidebar labels and page titles can never disagree.
-  const ownSalesOnly =
-    !canAny([P.ORDERS_VIEW, P.ORDERS_MANAGE, P.ORDERS_CHANGE]) && canAny([P.ORDERS_VIEW_OWN]) &&
-    !isSuperuser && !isSuperUser && !isPlatformOwner;
+  // The hospitality-cashier menu surface is now CONFIGURABLE per outlet (cashier_terminal_surface):
+  // 'full_till' (default) shows the POS Terminal + Add Sale + Tables so a hospitality cashier can
+  // ring sales AND settle bills; 'bills_only' hides those `cashierHospHidden` items so they work
+  // from the Orders/Tables bill list only. Replaces the old hardcoded "hide for hospitality" rule.
+  const terminalSurface = posSettings?.cashier_terminal_surface ?? 'full_till';
+  const isCashierBillsOnly = !isHQUser && userRoles.includes('cashier') && terminalSurface === 'bills_only';
+  // A "super waiter" (waiter/cashier granted pos.orders.view or manage — e.g. via the additive
+  // floor_supervisor role) is elevated: they see the bill/sales surfaces that are otherwise hidden
+  // from floor staff. Each such item still enforces its own permission below, so nothing leaks.
+  const elevatedBills = canAny([P.ORDERS_VIEW, P.ORDERS_MANAGE]);
+  // Own-only principals (view_own without full view — cashiers, plain waiters) see the sales menu
+  // as "My Sales"/"My POS". Shared useOwnScope keeps this identical to the sales list + Tables +
+  // server scoping (and honors the outlet's cashier_sales_visibility policy).
+  const ownSalesOnly = ownScope && !isSuperUser && !isPlatformOwner;
 
   // Single source of truth for the nav — shared with the Modules settings tab so the "hide these
   // screens" toggles always match what renders. Gating (permission/role/profile/subscription/hidden)
@@ -228,11 +236,13 @@ export function Sidebar({ open = false, onClose, collapsed = false }: SidebarPro
           if (hiddenItems.has(item.href) && !isSuperUser && !isSuperuser && !isPlatformOwner) return false;
           // Hide items not relevant to this outlet's use case (e.g. retail back-office on hospitality).
           if (item.hideForProfiles?.includes(outletProfile)) return false;
-          // Waiter role: only Tables + Shifts
-          if (isWaiter && item.waiterHidden) return false;
-          // Hospitality cashier: focused on clearing bills from Tables/Orders (terminal hidden).
-          // Quick-service cashier keeps the terminal — see isCashierHosp note above.
-          if (isCashierHosp && item.cashierHospHidden) return false;
+          // Waiter role: normally only Tables + Shifts. A super-waiter (elevated with
+          // pos.orders.view/manage) keeps the bill/sales surfaces — each still enforces its own
+          // permission below, so this only un-hides what they're actually granted.
+          if (isWaiter && !elevatedBills && item.waiterHidden) return false;
+          // Hospitality cashier with the 'bills_only' terminal surface: hide the fast terminal /
+          // add-sale items (they settle from Tables/Orders). 'full_till' (default) shows them.
+          if (isCashierBillsOnly && item.cashierHospHidden) return false;
           // Services outlets sell through the adaptive /order terminal ("New Sale") — they also have
           // Appointments/Queue/Packages, but those surfaces have no checkout, so order entry must stay
           // available (previously hiding new_order/orders left services with no way to take payment).

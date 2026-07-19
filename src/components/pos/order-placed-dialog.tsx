@@ -23,9 +23,13 @@ interface OrderPlacedDialogProps {
   tenantId: string;
   orgSlug: string;
   onClose?: () => void;
+  /** When true, finishing the order logs the operator out to pin-login (shared-terminal flow).
+   *  When false the dialog just closes and the operator stays signed in (dedicated terminal).
+   *  Resolved by the caller from the outlet's auto_logout_after_sale policy + the operator role. */
+  autoLogout?: boolean;
 }
 
-export function OrderPlacedDialog({ open, orderNumber, orderId, tenantId, orgSlug, onClose }: OrderPlacedDialogProps) {
+export function OrderPlacedDialog({ open, orderNumber, orderId, tenantId, orgSlug, onClose, autoLogout = true }: OrderPlacedDialogProps) {
   const router = useRouter();
   const { data: stationsData } = useKDSStations();
   const { data: posSettings } = usePOSSettings();
@@ -54,10 +58,12 @@ export function OrderPlacedDialog({ open, orderNumber, orderId, tenantId, orgSlu
   );
   const printerConfigured = hasRealPrinter(billProfile);
 
+  // Finish the order. On a shared terminal (autoLogout) this bounces to pin-login so the next
+  // waiter signs in; on a dedicated terminal it just closes and the operator stays signed in.
   const handleLogout = useCallback(() => {
     onClose?.();
-    router.replace(`/${orgSlug}/pin-login`);
-  }, [onClose, router, orgSlug]);
+    if (autoLogout) router.replace(`/${orgSlug}/pin-login`);
+  }, [onClose, router, orgSlug, autoLogout]);
 
   // Fetch the order's receipt JSON and render it through the SAME <ReceiptPrint> component the
   // modal preview uses, so this bill print (auto or manual) is never a different rendering path
@@ -257,10 +263,12 @@ export function OrderPlacedDialog({ open, orderNumber, orderId, tenantId, orgSlu
           </p>
         </div>
 
-        {/* Auto-logout notice */}
+        {/* Finish notice — logout (shared terminal) vs stay signed in (dedicated terminal) */}
         <div className="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
-          <span className="text-base">🔒</span>
-          <p className="text-xs font-medium text-amber-800 dark:text-amber-300">Auto-logout. Shift stays active.</p>
+          <span className="text-base">{autoLogout ? '🔒' : '✅'}</span>
+          <p className="text-xs font-medium text-amber-800 dark:text-amber-300">
+            {autoLogout ? 'Auto-logout. Shift stays active.' : 'Sent to kitchen. You stay signed in.'}
+          </p>
         </div>
 
         {/* Actions */}

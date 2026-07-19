@@ -31,6 +31,18 @@ export interface StepUpResult {
   expires_in: number;
 }
 
+/** An additive per-user role grant (POSUserRoleAssignment) — a user keeps their base role AND
+ *  gains this role's permissions. Used to elevate e.g. a waiter to a "super waiter" (floor
+ *  supervisor: see + settle all bills) without changing their base role. */
+export interface RoleAssignment {
+  id: string;
+  tenant_id: string;
+  user_id: string;
+  role_id: string;
+  assigned_by?: string;
+  assigned_at?: string;
+}
+
 const base = (tenantId: string) => `/api/v1/${tenantId}`;
 
 export const rbacApi = {
@@ -63,6 +75,21 @@ export const rbacApi = {
 
   setRolePermissions: (tenantId: string, roleId: string, permissionIds: string[]) =>
     apiClient.put<void>(`${base(tenantId)}/rbac/roles/${roleId}/permissions`, { permission_ids: permissionIds }),
+
+  // ── Additive per-user role assignments (POSUserRoleAssignment) ──────────────
+  // A staff member keeps their base role (StaffMember.Role) AND gains every assigned role's
+  // permissions (unioned server-side in resolveEffectivePermissions). This is how a manager
+  // elevates ONE waiter to a "super waiter" without editing the shared waiter role.
+  listAssignments: (tenantId: string) =>
+    apiClient
+      .get<{ assignments: RoleAssignment[] }>(`${base(tenantId)}/rbac/assignments`)
+      .then((r) => r.assignments ?? []),
+
+  assignRole: (tenantId: string, userId: string, roleId: string) =>
+    apiClient.post<{ message: string }>(`${base(tenantId)}/rbac/assignments`, { user_id: userId, role_id: roleId }),
+
+  revokeAssignment: (tenantId: string, assignmentId: string) =>
+    apiClient.delete<{ message: string }>(`${base(tenantId)}/rbac/assignments/${assignmentId}`),
 
   // Manager-PIN step-up: returns a short-lived single-action approval token.
   stepUp: (tenantId: string, action: string, pin: string, outletId: string) =>

@@ -119,6 +119,15 @@ export interface POSSettings {
   /** A paired Local Print Agent polled the server recently: the till should rely on server-side
    *  background print jobs (queue) and skip its own client-side auto-printing. */
   print_agent_online?: boolean;
+  // Cashier / terminal policy — RESOLVED values (outlet override → per-use-case default).
+  /** How far a cashier/waiter (view_own principal) can see sales: 'own' (My Sales) | 'outlet' (all outlet sales). */
+  cashier_sales_visibility: 'own' | 'outlet';
+  /** Log the waiter/cashier out after completing a sale (shared terminal). Managers/admins are always exempt. */
+  auto_logout_after_sale: boolean;
+  /** Hospitality-cashier menu surface: 'full_till' (terminal + add-sale + tables shown) | 'bills_only'. */
+  cashier_terminal_surface: 'full_till' | 'bills_only';
+  /** Which of the three policies above are explicitly overridden at this outlet (vs inheriting the default). */
+  cashier_policy_overrides?: Record<string, boolean>;
   updated_at: string;
 }
 
@@ -170,6 +179,12 @@ export interface UpdatePOSSettingsInput {
   bank_account_number?: string | null;
   bank_account_name?: string | null;
   show_payment_info_on_receipt?: boolean;
+  // Cashier / terminal policy — tri-state strings: a value SETS the override, '' or 'default'
+  // CLEARS it (reset to the per-use-case default), omitting the field leaves it unchanged.
+  cashier_sales_visibility?: 'own' | 'outlet' | 'default' | '';
+  cashier_terminal_surface?: 'full_till' | 'bills_only' | 'default' | '';
+  /** 'on'/'off' sets the override; 'default'/'' clears it. */
+  auto_logout_after_sale?: 'on' | 'off' | 'default' | '';
 }
 
 export interface UpdatePOSModulesInput {
@@ -211,6 +226,10 @@ export const posSettingsApi = {
 
   getOutlet: (tenantID: string, outletID: string) =>
     apiClient.get<POSSettings>(`/api/v1/${tenantID}/pos/outlets/${outletID}/settings`),
+
+  /** Per-outlet override PUT (e.g. cashier policy set on a specific outlet, not the caller's default). */
+  putOutlet: (tenantID: string, outletID: string, body: UpdatePOSSettingsInput) =>
+    apiClient.put<POSSettings>(`/api/v1/${tenantID}/pos/outlets/${outletID}/settings`, body),
 };
 
 /** Managed screensaver media (Settings → Display). URLs are RELATIVE /media/... paths —

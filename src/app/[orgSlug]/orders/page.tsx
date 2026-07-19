@@ -4,6 +4,7 @@ import { Badge, Button, Card, CardContent, CardHeader } from '@/components/ui/ba
 import { cn } from '@/lib/utils';
 import { useOrders, useReleaseTable } from '@/hooks/usePOS';
 import { usePermissions, P } from '@/hooks/usePermissions';
+import { useOwnScope } from '@/lib/rbac/scope';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -87,8 +88,10 @@ export default function OrdersPage() {
   const activeFilterCount =
     (dateFrom ? 1 : 0) + (dateTo ? 1 : 0) + (paymentMethod !== 'all' ? 1 : 0) + (source !== 'all' ? 1 : 0) + (debouncedCustomer ? 1 : 0);
 
-  // Roles with only view_own should see their own orders; full view sees all.
-  const viewOwnOnly = can(P.ORDERS_VIEW_OWN) && !can(P.ORDERS_VIEW);
+  // Roles with only view_own see their own orders; full view (or a super-waiter with
+  // pos.orders.view, or an "outlet"-visibility outlet) sees all. Shared useOwnScope keeps this
+  // identical to the Tables/sales-list surfaces + the server.
+  const { ownOnly: viewOwnOnly } = useOwnScope();
   const staffId = viewOwnOnly ? (user as any)?.staffId ?? (user as any)?.id : undefined;
 
   const { data: ordersData, isLoading } = useOrders(

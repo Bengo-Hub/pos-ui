@@ -341,6 +341,10 @@ export interface TerminalContextValue {
   setAgePrompt: (v: { item: MenuItem; callback: () => void } | null) => void;
 
   posSettings: ReturnType<typeof usePOSSettings>['data'];
+  /** Whether a completed sale should log this operator out (shared-terminal policy + role). */
+  autoLogoutAfterSale: boolean;
+  /** Close the after-payment receipt; also logs out when autoLogoutAfterSale (shared terminal). */
+  handleReceiptClose: () => void;
 }
 
 const TerminalContext = createContext<TerminalContextValue | null>(null);
@@ -423,12 +427,28 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
   // Phase 1b: in hospitality/quick_service/hotel, cashiers settle from the orders list — waiters create
   // orders from tables. A non-superuser cashier landing on /order directly is redirected to /orders.
   // Use the normalized profile so aliases like "hotel"/"bar"/"cafe"/"restaurant" are covered too.
+  // The hospitality-cashier terminal surface is now configurable (cashier_terminal_surface):
+  // 'full_till' (default) lets the cashier ring sales AT the terminal, so only redirect them to
+  // the Orders/bills list when the outlet is explicitly set to 'bills_only'. Quick-service always
+  // keeps the terminal (no table service) — never redirected regardless of the setting.
+  const cashierTerminalSurface = posSettings?.cashier_terminal_surface ?? 'full_till';
   useEffect(() => {
     const roles = user?.roles ?? [];
-    if (!isSuperuser && roles.includes('cashier') && (cfg.profile === 'hospitality' || cfg.profile === 'quick_service')) {
+    if (!isSuperuser && roles.includes('cashier') && cfg.profile === 'hospitality' && cashierTerminalSurface === 'bills_only') {
       router.replace(`/${orgSlug}/orders`);
     }
-  }, [user, cfg.profile, isSuperuser, orgSlug, router]);
+  }, [user, cfg.profile, isSuperuser, orgSlug, router, cashierTerminalSurface]);
+
+  // Shared-terminal auto-logout after a completed sale (auto_logout_after_sale policy). Applies to
+  // operational floor staff (cashier/waiter/floor roles) but NEVER managers/admins/HQ, who stay
+  // signed in for oversight. Consumed by OrderPlacedDialog (dine-in) and the post-payment flow.
+  const autoLogoutAfterSale = useMemo(() => {
+    if (!posSettings?.auto_logout_after_sale) return false;
+    const roles = user?.roles ?? [];
+    const MANAGER_ROLES = ['manager', 'store_manager', 'outlet_manager', 'admin', 'pos_admin', 'superuser', 'super_admin', 'owner'];
+    if (isSuperuser || roles.some((r) => MANAGER_ROLES.includes(r))) return false;
+    return true;
+  }, [posSettings?.auto_logout_after_sale, user?.roles, isSuperuser]);
   const [activeCategory, setActiveCategory] = useState('All');
   const [pickerMode, setPickerModeState] = useState<'category' | 'brand'>('category');
   const [activeBrand, setActiveBrand] = useState('All');
@@ -1770,6 +1790,18 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
     setPaymentOpen(true);
   }, []);
 
+  // Close the after-payment receipt and, on a shared terminal (auto_logout_after_sale + non-manager
+  // operator), log out so the next operator signs in. This is the "made a sale" logout for the
+  // immediate-payment (retail/QSR) flow — the dine-in "placed an order" logout is handled earlier
+  // by OrderPlacedDialog.
+  const handleReceiptClose = useCallback(() => {
+    setReceiptOpen(false);
+    setReceiptData(null);
+    if (autoLogoutAfterSale) {
+      router.replace(`/${orgSlug}/pin-login`);
+    }
+  }, [autoLogoutAfterSale, orgSlug, router]);
+
   const value: TerminalContextValue = {
     orgSlug, cfg, isHospitality, isAddToBill, user, outlet, can, taxRate,
     scanInputRef,
@@ -1809,6 +1841,8 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
     serialPrompt, setSerialPrompt, serialInput, setSerialInput,
     agePrompt, setAgePrompt,
     posSettings,
+    autoLogoutAfterSale,
+    handleReceiptClose,
   };
 
   return <TerminalContext.Provider value={value}>{children}</TerminalContext.Provider>;

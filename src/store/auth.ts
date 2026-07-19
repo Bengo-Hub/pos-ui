@@ -171,7 +171,20 @@ export const useAuthStore = create<AuthState>()(
         try {
           const freshUser = await fetchProfile(session.accessToken);
           apiClient.setTenantInfo(freshUser.tenant_id, freshUser.tenant_slug);
-          set({ user: freshUser, status: 'authenticated', lastAuthenticatedAt: Date.now() });
+          // fetchProfile returns the SSO-only profile whose `permissions` do NOT include the
+          // pos-api service union (pos.*.*). Overwriting `user` with it would transiently drop a
+          // custom/elevated role's permissions (reports/module access) until the next service
+          // refresh — the urban-loft "can't access reports" regression. Preserve the persisted
+          // pos permissions optimistically, then re-fetch the authoritative pos union.
+          set({
+            user: {
+              ...freshUser,
+              permissions: user?.permissions?.length ? user.permissions : freshUser.permissions,
+            },
+            status: 'authenticated',
+            lastAuthenticatedAt: Date.now(),
+          });
+          void get().refreshServicePermissions();
         } catch (err) {
           // Offline / weak-wifi reload: a network-shaped failure says nothing about the
           // session's validity — keep the persisted session so the terminal still works
@@ -329,11 +342,20 @@ export const useAuthStore = create<AuthState>()(
       },
 
       fetchUser: async () => {
-        const { session } = get();
+        const { session, user: prev } = get();
         if (!session) return;
         try {
           const user = await fetchProfile(session.accessToken);
-          set({ user });
+          // Preserve any pos-service permissions from the prior user (fetchProfile is SSO-only),
+          // then re-fetch the authoritative pos union so `user.permissions` never regresses to the
+          // SSO-only set (see initialize()).
+          set({
+            user: {
+              ...user,
+              permissions: prev?.permissions?.length ? prev.permissions : user.permissions,
+            },
+          });
+          void get().refreshServicePermissions();
         } catch (error) {
           console.error('Fetch user failed:', error);
         }

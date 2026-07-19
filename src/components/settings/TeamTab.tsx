@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { CalendarDays, Check, Loader2, Pencil, Plus, QrCode, Trash2, Users, X } from 'lucide-react';
+import { CalendarDays, Check, Loader2, Pencil, Plus, QrCode, ShieldPlus, Trash2, Users, X } from 'lucide-react';
 import { Button, Card, CardContent, CardHeader } from '@/components/ui/base';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import {
@@ -14,6 +14,7 @@ import type { StaffMember, UpdateStaffInput, CreateStaffInput } from '@/lib/api/
 import { StaffShiftDrawer } from '@/components/pos/staff-shift-drawer';
 import { RolesPanel } from './RolesPanel';
 import { StaffCardModal } from './StaffCardModal';
+import { ExtraRolesModal } from './ExtraRolesModal';
 import { toast } from 'sonner';
 import { inputClass } from './shared';
 import { apiErrorMessage } from '@/lib/api/error-message';
@@ -87,6 +88,7 @@ export function TeamTab() {
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [scheduleStaff, setScheduleStaff] = useState<StaffMember | null>(null);
   const [cardStaff, setCardStaff] = useState<StaffMember | null>(null);
+  const [extraRolesStaff, setExtraRolesStaff] = useState<StaffMember | null>(null);
 
   function startEdit(m: StaffMember) {
     setEditingId(m.id);
@@ -331,6 +333,17 @@ export function TeamTab() {
                                   <Button
                                     size="sm"
                                     variant="ghost"
+                                    className="h-7 w-7 p-0 text-muted-foreground hover:text-primary"
+                                    onClick={() => setExtraRolesStaff(m)}
+                                    title="Extra roles (e.g. make a waiter a super waiter)"
+                                  >
+                                    <ShieldPlus className="h-3.5 w-3.5" />
+                                  </Button>
+                                )}
+                                {!isProtected && (
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
                                     className="h-7 w-7 p-0"
                                     onClick={() => startEdit(m)}
                                   >
@@ -481,6 +494,16 @@ export function TeamTab() {
         staff={cardStaff}
         open={!!cardStaff}
         onClose={() => setCardStaff(null)}
+      />
+
+      <ExtraRolesModal
+        staff={extraRolesStaff}
+        open={!!extraRolesStaff}
+        onClose={() => setExtraRolesStaff(null)}
+        tenantId={tenantId}
+        roleLabel={roleLabel}
+        protectedRoleCodes={PROTECTED_ROLE_CODES}
+        canAssignProtected={isAdminLevel}
       />
     </div>
   );

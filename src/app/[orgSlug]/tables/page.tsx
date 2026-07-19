@@ -13,6 +13,7 @@ import { cn } from '@/lib/utils';
 import { useTables, useSections, useUpdateTableStatus, useReleaseTable, useMergeTables, useUnmergeTables, useOrders, useCategories } from '@/hooks/usePOS';
 import { useKDSStations } from '@/hooks/useKDS';
 import { usePermissions, P } from '@/hooks/usePermissions';
+import { useOwnScope } from '@/lib/rbac/scope';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { useAuthStore } from '@/store/auth';
 import { apiClient } from '@/lib/api/client';
@@ -475,7 +476,10 @@ function MyBillsTab({ orgSlug }: { orgSlug: string }) {
   const isHospitality = ['hospitality', 'quick_service', 'hotel'].includes(
     (outlet?.use_case ?? (user as any)?.outlet_use_case ?? '').toLowerCase()
   );
-  const viewOwnOnly = can(P.ORDERS_VIEW_OWN) && !can(P.ORDERS_VIEW);
+  // Shared useOwnScope: a waiter sees only their own tables' bills UNLESS they hold pos.orders.view
+  // (super waiter) or the outlet's cashier_sales_visibility is "outlet" — identical to the sales
+  // list + server scoping.
+  const { ownOnly: viewOwnOnly } = useOwnScope();
   const staffId = viewOwnOnly ? ((user as any)?.staffId ?? (user as any)?.id) : undefined;
 
   const statusMap = {

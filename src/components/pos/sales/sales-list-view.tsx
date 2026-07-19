@@ -9,7 +9,7 @@ import { useOrders, useVoidOrder, type OrderListFilters } from '@/hooks/usePOS';
 import { useStaffList } from '@/hooks/useStaff';
 import { useAuthStore } from '@/store/auth';
 import { useOutletFilterStore } from '@/store/outlet-filter';
-import { usePermissions, P } from '@/hooks/usePermissions';
+import { useOwnScope } from '@/lib/rbac/scope';
 import { Pagination } from '@/components/ui/pagination';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { SellDetailsModal } from '@/components/pos/sell-details-modal';
@@ -51,9 +51,11 @@ export function SalesListView({ orgSlug, fixedSource, title, subtitle }: {
   const selectedOutlet = useOutletFilterStore((s) => s.selectedOutlet);
   const outletNameById = useMemo(() => Object.fromEntries(outlets.map((o) => [o.id, o.name])), [outlets]);
 
-  const { can, canAny } = usePermissions();
   // view_own-only principals get the scoped "My Sales" view (server enforces the scoping).
-  const ownOnly = !canAny([P.ORDERS_VIEW, P.ORDERS_MANAGE, P.ORDERS_CHANGE]) && can(P.ORDERS_VIEW_OWN);
+  // Shared useOwnScope keeps this test identical to Tables/Orders/sidebar + honors the outlet's
+  // cashier_sales_visibility policy (a super-waiter with pos.orders.view, or an outlet configured
+  // to "outlet" visibility, is NOT own-scoped).
+  const { ownOnly } = useOwnScope();
   const effectiveTitle = ownOnly ? (fixedSource ? 'My POS Sales' : 'My Sales') : title;
   const effectiveSubtitle = ownOnly ? 'Sales you rang up. Managers can see all sales.' : subtitle;
 

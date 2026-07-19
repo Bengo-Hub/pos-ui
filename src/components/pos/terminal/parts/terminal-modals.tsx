@@ -225,10 +225,7 @@ export function TerminalModals() {
       <ReceiptPreview
         receipt={t.receiptData}
         open={t.receiptOpen}
-        onClose={() => {
-          t.setReceiptOpen(false);
-          t.setReceiptData(null);
-        }}
+        onClose={t.handleReceiptClose}
         printerProfile={resolveBillProfile((t.posSettings as any)?.printer_profiles)}
         tenantId={t.user?.tenant_id ?? ''}
         orderId={t.receiptOrderId}
@@ -244,6 +241,7 @@ export function TerminalModals() {
         tenantId={t.user?.tenant_id ?? ''}
         orgSlug={t.orgSlug}
         onClose={() => t.setOrderPlacedOpen(false)}
+        autoLogout={t.autoLogoutAfterSale}
       />
 
       {/* Manager override — out-of-stock add interception (retail/pharmacy). Same 3-mode dialog as
