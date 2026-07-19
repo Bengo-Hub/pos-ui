@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import { ModuleGate } from '@/components/auth/module-gate';
 import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
 import { useEffect, useMemo, useState } from 'react';
@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import {
   AlertTriangle, Banknote, BarChart3, Building2, CalendarDays, CalendarOff, Clock,
   CreditCard, DollarSign, History, Loader2, LogIn, LogOut,
-  RefreshCw, RotateCcw, ShoppingCart, TrendingDown,
+  RefreshCw, RotateCcw, ShoppingCart, TrendingDown, Users,
 } from 'lucide-react';
 import {
   useCurrentShift, useOpenShift, useCloseShift,
@@ -22,11 +22,12 @@ import { ShiftCloseDialog } from '@/components/pos/shift-close-dialog';
 import { ShiftPlannerPanel } from '@/components/pos/shift-planner-panel';
 import { LeaveApprovalPanel } from '@/components/pos/leave-approval-panel';
 import { ShiftRotationPanel } from '@/components/pos/shift-rotation-panel';
+import { TeamOnShiftPanel } from '@/components/pos/team-on-shift-panel';
 import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import type { ShiftHistoryRow } from '@/lib/api/shifts';
 
-type Tab = 'current' | 'history' | 'planner' | 'leave' | 'rotations';
+type Tab = 'current' | 'team' | 'history' | 'planner' | 'leave' | 'rotations';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -194,6 +195,21 @@ function ShiftsPage() {
   const handlesCash = can(P.PAYMENTS_VIEW);
   const canManageShifts = can(P.SESSIONS_MANAGE);
 
+  // Deep-link support (e.g. the dashboard's "Active Staff" card → /shifts?tab=team). Only
+  // honored once we know whether this user can actually see the requested tab — a non-manager
+  // hitting ?tab=team (or any manager-only tab) silently lands on "My Shift" instead.
+  const searchParams = useSearchParams();
+  useEffect(() => {
+    const requested = searchParams.get('tab') as Tab | null;
+    if (!requested) return;
+    const managerOnly: Tab[] = ['team', 'planner', 'leave', 'rotations'];
+    if (managerOnly.includes(requested) && !canManageShifts) return;
+    if ((['current', 'team', 'history', 'planner', 'leave', 'rotations'] as Tab[]).includes(requested)) {
+      setTab(requested);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, canManageShifts]);
+
   const { data: session, isLoading } = useCurrentShift();
   const openShift = useOpenShift();
   const closeShift = useCloseShift();
@@ -256,6 +272,7 @@ function ShiftsPage() {
 
   const tabs: { id: Tab; label: string; icon: React.ElementType }[] = [
     { id: 'current', label: 'My Shift', icon: Clock },
+    ...(canManageShifts ? [{ id: 'team' as Tab, label: 'Team', icon: Users }] : []),
     { id: 'history', label: 'History', icon: History },
     ...(canManageShifts ? [
       { id: 'planner' as Tab, label: 'Planner', icon: CalendarDays },
@@ -271,6 +288,7 @@ function ShiftsPage() {
         <div>
           <h1 className="text-2xl font-bold">
             {tab === 'planner' ? 'Shift Planner'
+              : tab === 'team' ? 'Team'
               : tab === 'history' ? 'Shift History'
               : tab === 'leave' ? 'Leave Requests'
               : tab === 'rotations' ? 'Shift Rotations'
@@ -278,6 +296,7 @@ function ShiftsPage() {
           </h1>
           <p className="text-sm text-muted-foreground mt-0.5">
             {tab === 'planner' ? 'Manage team weekly schedules'
+              : tab === 'team' ? 'See who is currently on shift and who has clocked out today'
               : tab === 'leave' ? 'Review and approve leave requests'
               : tab === 'rotations' ? 'Manage recurring shift rotation patterns'
               : isOpen ? 'Your shift is currently active'
@@ -590,6 +609,9 @@ function ShiftsPage() {
           )}
         </div>
       )}
+
+      {/* ── Team Tab (manager+): who is currently on shift ────────────────── */}
+      {tab === 'team' && <TeamOnShiftPanel />}
 
       {/* ── Planner Tab (manager+) ─────────────────────────────────────── */}
       {tab === 'planner' && <ShiftPlannerPanel />}

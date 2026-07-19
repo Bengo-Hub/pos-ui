@@ -93,6 +93,7 @@ export function KPICard({
   icon: Icon,
   trend,
   loading,
+  href,
 }: {
   label: string;
   value: string;
@@ -100,9 +101,14 @@ export function KPICard({
   icon: React.ElementType;
   trend?: number;
   loading?: boolean;
+  /** Optional — makes the whole card a link (e.g. "Active Staff" → the Team-on-shift tab). */
+  href?: string;
 }) {
-  return (
-    <div className="bg-card border border-border rounded-2xl p-5 flex flex-col gap-3">
+  const content = (
+    <div className={cn(
+      'bg-card border border-border rounded-2xl p-5 flex flex-col gap-3',
+      href && 'hover:border-primary/40 hover:shadow-sm transition-all cursor-pointer',
+    )}>
       <div className="flex items-center justify-between">
         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{label}</p>
         <div className="h-8 w-8 rounded-lg bg-primary/8 flex items-center justify-center">
@@ -128,6 +134,7 @@ export function KPICard({
       </div>
     </div>
   );
+  return href ? <Link href={href}>{content}</Link> : content;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────

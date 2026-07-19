@@ -47,7 +47,7 @@ export function AdminDashboard({ orgSlug }: { orgSlug: string }) {
         <KPICard label="Today's Revenue" value={fmt(s.total_revenue ?? 0)} sub="vs yesterday" icon={TrendingUp} trend={s.revenue_growth} loading={isLoading} />
         <KPICard label="Orders" value={fmtNum(s.total_orders ?? 0)} sub="today" icon={ClipboardList} trend={s.orders_growth} loading={isLoading} />
         <KPICard label="Avg Ticket" value={fmt(s.avg_ticket ?? 0)} sub="per order" icon={CreditCard} loading={isLoading} />
-        <KPICard label="Active Staff" value={fmtNum(s.active_staff ?? 0)} sub="on shift" icon={Users} loading={isLoading} />
+        <KPICard label="Active Staff" value={fmtNum(s.active_staff ?? 0)} sub="on shift" icon={Users} loading={isLoading} href={`/${orgSlug}/shifts?tab=team`} />
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2">
