@@ -102,10 +102,12 @@
 
 .receipt-row-name {
   flex: 1;
+  min-width: 0;
   padding-right: 6px;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+  /* Long item/payment/bank names WRAP onto a second line instead of being ellipsis-clipped —
+     the row (display:flex) simply grows taller; nothing gets silently cut off the receipt. */
+  white-space: normal;
+  word-break: break-word;
 }
 
 .receipt-row-value {
@@ -132,4 +134,52 @@
   width: 25mm;
   height: 25mm;
   object-fit: contain;
+}
+
+/* thermal_grid layout variant — bordered tables for the customer/date meta and item list
+   (same 2px-solid-black border styling already used on the A4 invoice template, narrowed to
+   thermal width). Mirrors pos-api layouts.ThermalGrid (thermal_html.go). */
+.grid-box {
+  border: 2px solid #000;
+  padding: 4px 6px;
+  text-align: center;
+  margin-bottom: 3px;
+}
+
+.grid-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 4px 0;
+}
+
+.grid-table th,
+.grid-table td {
+  border: 2px solid #000;
+  padding: 2px 4px;
+  font-size: 10px;
+  word-break: break-word;
+}
+
+.grid-table th {
+  font-weight: 700;
+  text-align: left;
+}
+
+.grid-table th.c,
+.grid-table td.c {
+  text-align: center;
+}
+
+.grid-table th.r,
+.grid-table td.r {
+  text-align: right;
+}
+
+.grid-served {
+  display: flex;
+  justify-content: space-between;
+  border-bottom: 1.5px solid #000;
+  padding: 2px 1px;
+  font-size: 10px;
+  margin-bottom: 3px;
 }

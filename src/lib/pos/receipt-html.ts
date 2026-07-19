@@ -29,11 +29,20 @@ export const RECEIPT_PRINT_CSS = `
   .receipt-bold { font-weight: bold; }
   .receipt-divider { border: none; border-top: 1px dashed #000; margin: 3px 0; }
   .receipt-row { display: flex; justify-content: space-between; align-items: baseline; padding: 1px 0; }
-  .receipt-row-name { flex: 1; padding-right: 6px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  /* Long item/payment/bank names WRAP onto a second line instead of being ellipsis-clipped. */
+  .receipt-row-name { flex: 1; min-width: 0; padding-right: 6px; white-space: normal; word-break: break-word; }
   .receipt-row-value { flex-shrink: 0; white-space: nowrap; }
   .receipt-total-row { font-weight: bold; font-size: 15px; border-top: 1px solid #000; margin-top: 2px; padding-top: 2px; }
   .receipt-small { font-size: 11px; color: #000; }
   .receipt-qr { display: block; margin: 5px auto; width: 25mm; height: 25mm; object-fit: contain; }
+  /* thermal_grid variant — bordered tables for the customer/date meta and item list. */
+  .grid-box { border: 2px solid #000; padding: 4px 6px; text-align: center; margin-bottom: 3px; }
+  .grid-table { width: 100%; border-collapse: collapse; margin: 4px 0; }
+  .grid-table th, .grid-table td { border: 2px solid #000; padding: 2px 4px; font-size: 10px; word-break: break-word; }
+  .grid-table th { font-weight: 700; text-align: left; }
+  .grid-table th.c, .grid-table td.c { text-align: center; }
+  .grid-table th.r, .grid-table td.r { text-align: right; }
+  .grid-served { display: flex; justify-content: space-between; border-bottom: 1.5px solid #000; padding: 2px 1px; font-size: 10px; margin-bottom: 3px; }
 `;
 
 export interface ReceiptBranding {

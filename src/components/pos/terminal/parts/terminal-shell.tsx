@@ -50,10 +50,16 @@ export function TerminalShell() {
   const canViewCost = cfg.showCostMargin && (t.can('pos.catalog.view_cost') || t.can('pos.orders.manage'));
   const [costRevealed, setCostRevealed] = useState(false);
   // Price/margin/discount editing policy: managers/admins (pos.orders.manage) edit any of the
-  // three freely (markdown = inline discount); everyone else may only RAISE the price (sell
-  // above the preset — higher margin), never below it. setLinePrice re-clamps and the server
-  // gates markdowns (price.override), so this is display+UX gating, not the enforcement.
+  // three freely (markdown = inline discount, any raise). Non-managers get the pencil at all
+  // ONLY when the outlet's Settings → "Cashier price edits" allows it (allow_price_above_base,
+  // default true) — this covers BOTH raising and lowering the line: a below-preset entry is
+  // accepted here too (InlinePriceCell already supports it), the outlet's
+  // require_approval_below_base flag is what the SERVER enforces at order-create (422 →
+  // ApprovalDialog), not a client-side block. Flipping allow_price_above_base off hides the
+  // pencil for non-managers entirely (matches the setting's stated purpose: "cashiers may
+  // adjust price at all", not just the raise direction).
   const canManagePrices = t.can('pos.orders.manage');
+  const priceEditAllowed = canManagePrices || (t.posSettings?.allow_price_above_base ?? true);
   // Discounting can additionally be granted to a non-manager role via pos.discounts.add
   // (tenant admin's permission matrix) — the server still demands the manager step-up for
   // over-limit/below-preset amounts, so the grant only surfaces the controls.
@@ -284,7 +290,7 @@ export function TerminalShell() {
                             sell={item.price}
                             unitDiscount={item.unitDiscount ?? 0}
                             revealed={costRevealed}
-                            editable={canManagePrices && !item.nonBillable && !item.promoFree}
+                            editable={priceEditAllowed && !item.nonBillable && !item.promoFree}
                             onCommitPrice={(p) => t.setLinePrice(idx, p, 'margin edit')}
                           />
                         </span>
@@ -302,26 +308,27 @@ export function TerminalShell() {
                       </span>
                     )}
                     <span className="text-right">
-                      {/* Price edits are MANAGER-ONLY (2026-07-17 decision): cashiers ring
-                          items at the preset price, full stop — no markdown AND no markup.
-                          Managers may set any price (audited via price.override). */}
+                      {/* Price edits: managers always; non-managers only when the outlet's
+                          allow_price_above_base setting permits it (Settings → General →
+                          Cashier price edits). A below-preset entry still passes through for
+                          everyone — the server's require_approval_below_base policy gates it
+                          at order-create (422 → ApprovalDialog), not this cell. */}
                       <InlinePriceCell
                         price={item.price}
                         preset={item.originalPrice ?? item.price}
                         canDiscount={canManagePrices}
-                        disabled={!canManagePrices || item.nonBillable || item.promoFree}
+                        disabled={!priceEditAllowed || item.nonBillable || item.promoFree}
                         onCommit={(p) => t.setLinePrice(idx, p, 'price edit')}
                       />
                     </span>
                     <div className="flex items-center justify-end gap-1.5">
-                      {/* Line subtotal is a DERIVED figure — editing it is a manager-only
-                          shortcut (unit price = total ÷ qty). Cashiers see it read-only;
-                          their only lever is the unit-price cell (at/above preset). */}
+                      {/* Line subtotal is a DERIVED figure (unit price = total ÷ qty) — same
+                          edit policy as the unit-price cell above. */}
                       <InlineTotalCell
                         price={item.price}
                         quantity={item.quantity}
                         canDiscount={canManagePrices}
-                        disabled={!canManagePrices || item.nonBillable || item.promoFree}
+                        disabled={!priceEditAllowed || item.nonBillable || item.promoFree}
                         onCommitPrice={(p) => t.setLinePrice(idx, p, 'line total edit')}
                       />
                       <button onClick={() => t.removeFromCart(idx)} className="h-6 w-6 rounded-md flex items-center justify-center text-muted-foreground hover:bg-destructive/10 hover:text-destructive" aria-label="Remove"><Trash2 className="h-3.5 w-3.5" /></button>

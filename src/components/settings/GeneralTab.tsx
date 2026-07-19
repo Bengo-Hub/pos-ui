@@ -23,8 +23,10 @@ export function GeneralTab() {
 
   const [currency, setCurrency] = useState('KES');
   const [returnWindowDays, setReturnWindowDays] = useState('30');
-  const [maxDiscountPercent, setMaxDiscountPercent] = useState('100');
-  const [maxDiscountAmount, setMaxDiscountAmount] = useState('0');
+  // Discount limit: ONE active mode at a time (percent XOR amount, never both) — the
+  // inactive field is always saved at its no-limit sentinel (100% / 0).
+  const [discountLimitType, setDiscountLimitType] = useState<'percent' | 'amount'>('percent');
+  const [discountLimitValue, setDiscountLimitValue] = useState('100');
   const [allowPriceAboveBase, setAllowPriceAboveBase] = useState(true);
   const [requireApprovalBelowBase, setRequireApprovalBelowBase] = useState(true);
 
@@ -32,21 +34,26 @@ export function GeneralTab() {
     if (settings) {
       setCurrency(settings.currency || 'KES');
       setReturnWindowDays(String(settings.return_window_days ?? 30));
-      setMaxDiscountPercent(String(settings.max_discount_percent ?? 100));
-      setMaxDiscountAmount(String(settings.max_discount_amount ?? 0));
+      const mode = settings.discount_limit_type ?? 'percent';
+      setDiscountLimitType(mode);
+      setDiscountLimitValue(String(mode === 'amount' ? (settings.max_discount_amount ?? 0) : (settings.max_discount_percent ?? 100)));
       setAllowPriceAboveBase(settings.allow_price_above_base ?? true);
       setRequireApprovalBelowBase(settings.require_approval_below_base ?? true);
     }
   }, [settings]);
 
   const handleSave = () => {
+    const value = parseFloat(discountLimitValue) || 0;
     // VAT/tax now lives in the Tax tab (sourced from treasury per item) — only currency + returns
     // are edited here. We omit vat_* so saving currency never clobbers the tax settings.
     updateSettings.mutate({
       currency,
       return_window_days: parseInt(returnWindowDays, 10) || 30,
-      max_discount_percent: parseFloat(maxDiscountPercent) || 100,
-      max_discount_amount: parseFloat(maxDiscountAmount) || 0,
+      discount_limit_type: discountLimitType,
+      // Whichever mode is NOT active is sent at its no-op sentinel so the two fields never
+      // disagree with the selected mode (server enforcement still checks both with OR).
+      max_discount_percent: discountLimitType === 'percent' ? value : 100,
+      max_discount_amount: discountLimitType === 'amount' ? value : 0,
       allow_price_above_base: allowPriceAboveBase,
       require_approval_below_base: requireApprovalBelowBase,
     });
@@ -158,39 +165,48 @@ export function GeneralTab() {
                 )}
                 <div className="space-y-2">
                   <label className={labelClass}>Max discount without approval</label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="space-y-1">
-                      <input
-                        type="number"
-                        min={0}
-                        max={100}
-                        step={1}
-                        value={maxDiscountPercent}
-                        onChange={(e) => setMaxDiscountPercent(e.target.value)}
+                  <div className="flex rounded-lg border border-border p-0.5 w-fit">
+                    {(['percent', 'amount'] as const).map((mode) => (
+                      <button
+                        key={mode}
+                        type="button"
                         disabled={!canEdit}
-                        placeholder="100"
-                        className={`${inputClass} font-mono`}
-                      />
-                      <p className="text-[10px] text-muted-foreground text-center">% of order (100 = no limit)</p>
-                    </div>
-                    <div className="space-y-1">
-                      <input
-                        type="number"
-                        min={0}
-                        step={1}
-                        value={maxDiscountAmount}
-                        onChange={(e) => setMaxDiscountAmount(e.target.value)}
-                        disabled={!canEdit}
-                        placeholder="0"
-                        className={`${inputClass} font-mono`}
-                      />
-                      <p className="text-[10px] text-muted-foreground text-center">amount in {currency} (0 = no limit)</p>
-                    </div>
+                        onClick={() => {
+                          setDiscountLimitType(mode);
+                          // Reset to that mode's no-limit sentinel when switching, so the
+                          // input doesn't carry over a value that meant something in the
+                          // other mode (e.g. a percent of "20" showing up as "20" currency).
+                          setDiscountLimitValue(mode === 'amount' ? '0' : '100');
+                        }}
+                        className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${
+                          discountLimitType === mode ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
+                        }`}
+                      >
+                        {mode === 'percent' ? 'Percentage' : 'Fixed Amount'}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="max-w-50 space-y-1">
+                    <input
+                      type="number"
+                      min={0}
+                      max={discountLimitType === 'percent' ? 100 : undefined}
+                      step={1}
+                      value={discountLimitValue}
+                      onChange={(e) => setDiscountLimitValue(e.target.value)}
+                      disabled={!canEdit}
+                      placeholder={discountLimitType === 'percent' ? '100' : '0'}
+                      className={`${inputClass} font-mono`}
+                    />
+                    <p className="text-[10px] text-muted-foreground">
+                      {discountLimitType === 'percent'
+                        ? '% of order (100 = no limit)'
+                        : `amount in ${currency} (0 = no limit)`}
+                    </p>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    A cashier discount above the % of the order <span className="font-medium text-foreground">or</span> above the
-                    fixed amount requires a manager approval (PIN or QR card). Exceeding either limit triggers the approval dialog
-                    on the terminal and in back-office Add Sale.
+                    A cashier discount above this limit requires manager approval (PIN or QR card) — the approval
+                    dialog triggers on the terminal and in back-office Add Sale.
                   </p>
                 </div>
                 {/* Pricing policy — cashier line-price rules (server-enforced on order create). */}

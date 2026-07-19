@@ -8,11 +8,13 @@
  * Layout ids (keep in sync with pos-api internal/modules/printing/layouts/registry.go):
  *  - thermal_classic — receipt-roll layout, bold monospace (classic hospitality look)
  *  - thermal_modern  — receipt-roll layout, bold sans-serif (crisp retail/ETR look)
+ *  - thermal_grid    — receipt-roll layout with bordered tables for meta/items (opt-in,
+ *                      the clearest layout for less-tech-savvy customers)
  *  - a4_invoice      — boxed invoice-style A4 sheet (opt-in via settings)
  */
-export type ReceiptLayout = 'thermal_classic' | 'thermal_modern' | 'a4_invoice';
+export type ReceiptLayout = 'thermal_classic' | 'thermal_modern' | 'thermal_grid' | 'a4_invoice';
 
-const KNOWN_LAYOUTS: ReceiptLayout[] = ['thermal_classic', 'thermal_modern', 'a4_invoice'];
+const KNOWN_LAYOUTS: ReceiptLayout[] = ['thermal_classic', 'thermal_modern', 'thermal_grid', 'a4_invoice'];
 
 /** Minimal shape needed for resolution (subset of ReceiptData). */
 interface ReceiptLayoutSource {

@@ -22,11 +22,30 @@ const FALLBACK_OPTIONS: ReceiptFormatOption[] = [
   { id: 'thermal_modern', label: 'Thermal — Modern', description: 'Receipt-roll layout in a bold sans-serif. Crisp high-contrast print (recommended for retail).', paper: 'thermal' },
   { id: 'thermal_classic', label: 'Thermal — Classic', description: 'Receipt-roll layout in bold monospace with dashed separators (the classic POS look).', paper: 'thermal' },
   { id: 'a4_invoice', label: 'A4 Invoice', description: 'Boxed invoice-style sheet with bordered tables and barcode, for regular A4 printers.', paper: 'a4' },
+  { id: 'thermal_grid', label: 'Thermal — Grid Lines', description: 'Receipt-roll layout with bordered tables for the customer/date and item list — the clearest layout for less-tech-savvy customers.', paper: 'thermal' },
 ];
 
-/** Tiny CSS mock of a layout: a narrow dashed thermal strip vs a boxed A4 sheet. */
+/** Tiny CSS mock of a layout: a narrow dashed thermal strip, a boxed A4 sheet, or a bordered
+ *  grid strip (thermal_grid). */
 function LayoutMock({ option }: { option: ReceiptFormatOption }) {
   const mono = option.id === 'thermal_classic' || option.id === 'auto';
+  if (option.id === 'thermal_grid') {
+    return (
+      <div className="mx-auto h-20 w-10 rounded-sm border border-border bg-background px-1 py-1 flex flex-col items-center gap-0.5 shadow-sm">
+        <div className="h-1.5 w-7 bg-foreground/80 rounded-sm" />
+        <div className="w-full grid grid-cols-2 gap-px border border-foreground/70 p-px mt-0.5">
+          <div className="h-1 bg-foreground/40 border-r border-foreground/60" /><div className="h-1 bg-foreground/40" />
+        </div>
+        <div className="w-full grid grid-cols-[1.4fr_0.6fr_0.7fr] gap-px border border-foreground/70 p-px mt-0.5">
+          <div className="h-1 bg-foreground/50 border-r border-foreground/60" /><div className="h-1 bg-foreground/50 border-r border-foreground/60" /><div className="h-1 bg-foreground/50" />
+          <div className="h-1 bg-foreground/25 border-r border-foreground/50" /><div className="h-1 bg-foreground/25 border-r border-foreground/50" /><div className="h-1 bg-foreground/25" />
+        </div>
+        <div className="mt-auto h-3 w-3 border border-foreground/70 p-px">
+          <div className="h-full w-full bg-[repeating-linear-gradient(45deg,transparent,transparent_1px,rgba(0,0,0,.55)_1px,rgba(0,0,0,.55)_2px)]" />
+        </div>
+      </div>
+    );
+  }
   if (option.paper === 'a4') {
     return (
       <div className="mx-auto h-20 w-16 rounded-sm border-2 border-foreground/70 bg-background p-1 flex flex-col gap-0.5">

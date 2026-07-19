@@ -43,8 +43,10 @@ export function ReceiptPrint({
   // Layout comes from the outlet's receipt_format setting (server-resolved `layout`,
   // thermal fallback for old cached payloads) — one branch here covers every client print
   // path (preview root, print window, OrderPlacedDialog, splits). The boxed A4 invoice
-  // template is strictly opt-in; both thermal variants share the row-driven layout below,
-  // differing only in font (classic monospace vs modern bold sans via .receipt-modern).
+  // template is strictly opt-in; the three thermal variants share the row-driven layout
+  // below (font: classic monospace vs modern/grid bold sans via .receipt-modern; grid
+  // additionally boxes the customer/date meta + item list in bordered tables — the
+  // clearest layout for less-tech-savvy customers, opt-in per tenant).
   const layout = resolveReceiptFormat(receipt);
   if (layout === 'a4_invoice') {
     return (
@@ -56,7 +58,8 @@ export function ReceiptPrint({
       />
     );
   }
-  const rootClass = layout === 'thermal_modern' ? 'receipt-root receipt-modern' : 'receipt-root';
+  const isGrid = layout === 'thermal_grid';
+  const rootClass = layout === 'thermal_modern' || isGrid ? 'receipt-root receipt-modern' : 'receipt-root';
   const currency = receipt.currency || 'KES';
   const fmt = (n: number) => `${currency} ${n.toFixed(2)}`;
   const norm = (s?: string) => (s ?? '').trim().toLowerCase();
@@ -78,8 +81,8 @@ export function ReceiptPrint({
       minute: '2-digit',
     });
 
-  return (
-    <div className={rootClass}>
+  const headerBlock = (
+    <>
       {/* Header / branding — logo only (and only when the receipt "show logo" setting allows) */}
       {logoUrl && receipt.show_logo !== false && (
         // eslint-disable-next-line @next/next/no-img-element
@@ -115,19 +118,76 @@ export function ReceiptPrint({
           {receipt.receipt_header}
         </p>
       )}
+    </>
+  );
 
-      <hr className="receipt-divider" style={{ marginTop: 6 }} />
+  return (
+    <div className={rootClass}>
+      {isGrid ? <div className="grid-box">{headerBlock}</div> : headerBlock}
 
-      <p className="receipt-center" style={{ marginBottom: 1 }}>
-        <span className="receipt-bold">Receipt #{receipt.receipt_number}</span>
-      </p>
-      <p className="receipt-center receipt-small">{fmtDate(receipt.issued_at)}</p>
+      {isGrid ? (
+        <>
+          {/* Bordered Customer | Receipt No mini-table — mirrors the server thermal_grid
+              layout (thermal_html.go), narrowed from the A4 Customer|INVOICE.NO|DATE grid. */}
+          <table className="grid-table">
+            <thead>
+              <tr>
+                <th>{receipt.bill_to_label || 'Customer'}</th>
+                <th className="c">Receipt No</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>{receipt.bill_to || 'Walk-in customer'}</td>
+                <td className="c">{receipt.receipt_number}</td>
+              </tr>
+            </tbody>
+          </table>
+          <p className="receipt-center receipt-small">{fmtDate(receipt.issued_at)}</p>
+          {receipt.served_by && (
+            <div className="grid-served"><b>SERVED BY</b><span>{receipt.served_by}</span></div>
+          )}
+          {/* Bordered Item | Qty | Price | Total table — Qty/Price are already their own
+              columns, so (unlike the flex layouts) no separate qty-subline is rendered. */}
+          <table className="grid-table">
+            <thead>
+              <tr>
+                <th>Item</th>
+                <th className="c">Qty</th>
+                <th className="r">Price</th>
+                <th className="r">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {receipt.lines.map((l, i) => (
+                <tr key={i}>
+                  <td>{l.name}{l.modifiers ? ` (${l.modifiers})` : ''}</td>
+                  <td className="c">{l.quantity}</td>
+                  <td className="r">{l.total_price === 0 ? 'FREE' : fmt(l.unit_price)}</td>
+                  <td className="r">{l.total_price === 0 ? 'FREE' : fmt(l.total_price)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
+      ) : (
+        <>
+          <hr className="receipt-divider" style={{ marginTop: 6 }} />
+          <p className="receipt-center" style={{ marginBottom: 1 }}>
+            <span className="receipt-bold">Receipt #{receipt.receipt_number}</span>
+          </p>
+          <p className="receipt-center receipt-small">{fmtDate(receipt.issued_at)}</p>
+          <hr className="receipt-divider" />
+        </>
+      )}
 
-      <hr className="receipt-divider" />
-
-      {/* Line items + totals + payment + eTIMS + HOW TO PAY + served-by + footer — one shared row
-          list (buildReceiptRows) so this print output can never drift from the on-screen preview. */}
-      {buildReceiptRows({ ...receipt, payment_methods: paymentMethods ?? receipt.payment_methods }).map((row, i) => {
+      {/* Totals + payment + eTIMS + HOW TO PAY + served-by + footer — one shared row list
+          (buildReceiptRows) so this print output can never drift from the on-screen preview.
+          Grid mode already rendered 'customer' and 'line' above as bordered tables, so those
+          two row kinds are skipped here to avoid double-printing them. */}
+      {buildReceiptRows({ ...receipt, payment_methods: paymentMethods ?? receipt.payment_methods })
+        .filter((row) => !isGrid || (row.kind !== 'customer' && row.kind !== 'line'))
+        .map((row, i) => {
         switch (row.kind) {
           case 'line':
             return (

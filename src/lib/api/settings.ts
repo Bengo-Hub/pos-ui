@@ -90,6 +90,10 @@ export interface POSSettings {
   max_discount_percent: number;
   /** Max order discount AMOUNT (currency) without approval (0 = no amount limit). Exceeding EITHER limit triggers the step-up. */
   max_discount_amount: number;
+  /** Which of the two fields above is the ACTIVE one in the Settings UI (percent XOR amount —
+   *  the page shows a single input at a time); the inactive field is saved at its no-limit
+   *  sentinel (100% / 0). Server enforcement is unaffected — it still checks both with OR. */
+  discount_limit_type?: 'percent' | 'amount';
   // Pricing policy — cashier price-edit rules (retail/pharmacy up-sell model):
   /** Cashiers may RAISE a line price above the catalog/base price without approval (default true). */
   allow_price_above_base: boolean;
@@ -142,6 +146,7 @@ export interface UpdatePOSSettingsInput {
   return_window_days?: number;
   max_discount_percent?: number;
   max_discount_amount?: number;
+  discount_limit_type?: 'percent' | 'amount';
   // pricing policy
   allow_price_above_base?: boolean;
   require_approval_below_base?: boolean;
