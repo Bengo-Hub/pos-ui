@@ -1084,24 +1084,6 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
     proceedWithItem(item);
   }, [cart, proceedWithItem]);
 
-  // Cart "+" stepper: like adding one more unit, but routes an oversell (past-stock) increment on a
-  // mergeable line through the out-of-stock manager override (the approval re-adds one unit, which
-  // merges onto the same line). Modifier/promo lines and untracked items just bump directly.
-  const incrementCartLine = useCallback((index: number) => {
-    const item = cart[index];
-    if (!item) return;
-    if (!item.selectedModifiers && !item.promoFree && item.item_type !== 'SERVICE' && item.stockQuantity !== undefined) {
-      const inCartQty = cart
-        .filter((c) => c.id === item.id && !c.selectedModifiers && !c.promoFree)
-        .reduce((s, c) => s + c.quantity, 0);
-      if (inCartQty + 1 > item.stockQuantity) {
-        setPendingOverride(item);
-        return;
-      }
-    }
-    updateQuantity(index, 1);
-  }, [cart, updateQuantity]);
-
   // Weighed-goods add: the scale returns grams; we add a generic line priced by weight (kg as qty),
   // mirroring the legacy /retail scale flow. Operators set the unit price from the cart afterwards.
   const handleScaleAddToCart = useCallback((weightGrams: number) => {
@@ -1175,6 +1157,25 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
     setCart((prev) =>
       prev.map((c, i) => (i === index ? { ...c, quantity: c.quantity + delta } : c)).filter((c) => c.quantity > 0)
     );
+  };
+
+  // Cart "+" stepper: like adding one more unit, but routes an oversell (past-stock) increment on a
+  // mergeable line through the out-of-stock manager override (the approval re-adds one unit, which
+  // merges onto the same line). Modifier/promo lines and untracked items just bump directly.
+  // Declared AFTER updateQuantity (a plain function) so it never references it before initialization.
+  const incrementCartLine = (index: number) => {
+    const item = cart[index];
+    if (!item) return;
+    if (!item.selectedModifiers && !item.promoFree && item.item_type !== 'SERVICE' && item.stockQuantity !== undefined) {
+      const inCartQty = cart
+        .filter((c) => c.id === item.id && !c.selectedModifiers && !c.promoFree)
+        .reduce((s, c) => s + c.quantity, 0);
+      if (inCartQty + 1 > item.stockQuantity) {
+        setPendingOverride(item);
+        return;
+      }
+    }
+    updateQuantity(index, 1);
   };
 
   const removeFromCart = (index: number) => {
