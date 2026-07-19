@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils';
 import { useOrders, useReleaseTable } from '@/hooks/usePOS';
 import { usePermissions, P } from '@/hooks/usePermissions';
 import { useOwnScope } from '@/lib/rbac/scope';
+import { Can } from '@/components/auth/can';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -475,23 +476,27 @@ export default function OrdersPage() {
                 {selectedOrder.currency && <p>Currency: {selectedOrder.currency}</p>}
               </div>
 
-              {['pending_payment', 'open'].includes(selectedOrder.status) && can(P.ORDERS_ADD) && (
-                <Link
-                  href={`/${orgSlug}/order?order_id=${selectedOrder.id}&order_total=${selectedOrder.total_amount ?? 0}&covers=${selectedOrder.covers_count ?? 1}${selectedOrder.table_reference ? `&table_name=${encodeURIComponent(selectedOrder.table_reference)}` : ''}${selectedOrder.metadata?.table_id ? `&table_id=${selectedOrder.metadata.table_id}` : ''}&mode=add_to_bill`}
-                  className="w-full flex items-center justify-center gap-2 py-2 rounded-xl border border-border text-sm font-semibold hover:bg-accent transition-colors"
-                >
-                  <Plus className="h-4 w-4" /> Add to Bill
-                </Link>
+              {['pending_payment', 'open'].includes(selectedOrder.status) && (
+                <Can permission={P.ORDERS_ADD}>
+                  <Link
+                    href={`/${orgSlug}/order?order_id=${selectedOrder.id}&order_total=${selectedOrder.total_amount ?? 0}&covers=${selectedOrder.covers_count ?? 1}${selectedOrder.table_reference ? `&table_name=${encodeURIComponent(selectedOrder.table_reference)}` : ''}${selectedOrder.metadata?.table_id ? `&table_id=${selectedOrder.metadata.table_id}` : ''}&mode=add_to_bill`}
+                    className="w-full flex items-center justify-center gap-2 py-2 rounded-xl border border-border text-sm font-semibold hover:bg-accent transition-colors"
+                  >
+                    <Plus className="h-4 w-4" /> Add to Bill
+                  </Link>
+                </Can>
               )}
 
-              {['pending_payment', 'open'].includes(selectedOrder.status) && can(P.PAYMENTS_ADD) && (
-                <Button className="w-full gap-2" onClick={() => setPaymentOpen(true)}>
-                  <CreditCard className="h-4 w-4" />
-                  Collect Payment
-                  {(selectedOrder.total_amount ?? 0) > 0 && (
-                    <span className="ml-auto font-bold text-sm">KES {(selectedOrder.total_amount ?? 0).toLocaleString()}</span>
-                  )}
-                </Button>
+              {['pending_payment', 'open'].includes(selectedOrder.status) && (
+                <Can permission={P.PAYMENTS_ADD}>
+                  <Button className="w-full gap-2" onClick={() => setPaymentOpen(true)}>
+                    <CreditCard className="h-4 w-4" />
+                    Collect Payment
+                    {(selectedOrder.total_amount ?? 0) > 0 && (
+                      <span className="ml-auto font-bold text-sm">KES {(selectedOrder.total_amount ?? 0).toLocaleString()}</span>
+                    )}
+                  </Button>
+                </Can>
               )}
 
               {/* Print receipt (completed orders) or the current bill (open/unpaid). Cancelled
