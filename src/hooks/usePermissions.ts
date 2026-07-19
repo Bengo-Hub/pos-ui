@@ -4,16 +4,16 @@
  * usePermissions — single source of truth for permission checks in pos-ui.
  *
  * Permission resolution order:
- *   1. If the session has EVER received a permissions array from the server (PIN JWT / SSO+pos
- *      /auth/me merge / offline-cached last-known-good) → that array is AUTHORITATIVE, including
- *      when it is empty or has shrunk. A tenant admin unchecking a permission in the matrix MUST
- *      take effect the moment the client re-syncs — the array is trusted exactly as received,
- *      never silently topped back up.
- *   2. ONLY when no server permissions payload has ever been received at all (permissions is
- *      literally absent — the brief pre-first-fetch bootstrap window) → derive a default set from
- *      role via the client-side ROLE_PERMISSIONS map, purely so a fresh session isn't a hard
- *      dashboard-only wall for the second or two before the real sync lands. This must NEVER be
- *      reached for a session that already has real data, however sparse.
+ *   1. If the session's `permissions[]` (PIN JWT / SSO+pos /auth/me merge / offline-cached
+ *      last-known-good) is a NON-EMPTY array → trust it as-is (server-authoritative).
+ *   2. Otherwise (empty or absent — includes the pre-first-fetch bootstrap window, and any
+ *      moment the session's array is transiently/persistently empty) → derive a default set
+ *      from role via the client-side ROLE_PERMISSIONS map. This is intentionally permissive:
+ *      it trades "an admin revoking a role down to a genuinely empty grant set won't be
+ *      reflected until the session re-authenticates" for "a role/staff member never gets
+ *      locked out of every action by a transient empty-array edge case" — the latter is a
+ *      P0 outage (2026-07-19: waiters locked out of Tables/order-taking fleet-wide after a
+ *      stricter empty-is-authoritative rule shipped for ~20 min), the former is a support ticket.
  *   3. superuser / admin / platform-owner roles always pass every check.
  *
  * Usage:
@@ -63,15 +63,23 @@ export function usePermissions() {
       return new Set(['*']);
     }
 
-    // Any server-provided permissions ARRAY (even empty) is authoritative — an admin reducing a
-    // role's grants toward zero must be respected, not silently topped up by the fallback below.
-    // Only a genuinely-absent (never-fetched) payload falls through to the client map.
+    // REVERTED 2026-07-19: treating an empty array as authoritative caused a P0 outage —
+    // waiters (a plain, unmodified role) were locked out of Tables/order-taking entirely.
+    // user.permissions can legitimately be a transient empty array for an active session
+    // (a fetch race on load/hydrate, not just "never fetched"), so distinguishing "received
+    // empty" from "never received" by array-ness alone was unsafe. Back to the original,
+    // proven-safe rule: only a NON-empty server array is trusted as-is; empty/absent falls
+    // back to the client role map. This reintroduces the original propagation-lag issue
+    // (an admin revoking every permission of a role down to a genuinely empty set won't be
+    // reflected until the role has at least one grant, or the session re-logs in) — accept
+    // that trade-off over an outage; revisit with a server-side "force re-auth" signal
+    // instead of changing this fallback's semantics again.
     const serverPerms = (user as any).permissions as string[] | undefined;
-    if (Array.isArray(serverPerms)) {
+    if (serverPerms && serverPerms.length > 0) {
       return new Set(serverPerms);
     }
 
-    // Bootstrap-only fallback: no permissions payload has been received yet at all.
+    // Fall back to client-side role→permission map.
     const derived = new Set<string>();
     for (const role of roles) {
       const rolePerms = ROLE_PERMISSIONS[role] ?? [];
