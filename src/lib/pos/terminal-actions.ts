@@ -24,7 +24,8 @@ export type TenderKey =
   | 'cod' // cash on delivery (delivery orders) — order placed, settled on delivery
   | 'on_account' // credit sale → treasury AR
   | 'room' // charge to room folio (hospitality only)
-  | 'split'; // multiple/split payment
+  | 'split' // multiple/split payment
+  | 'customer_credit'; // settle from the customer's existing stored credit (negative AR balance_due)
 
 export type TenderTone = 'cash' | 'card' | 'mpesa' | 'wallet' | 'credit' | 'room' | 'cod' | 'split';
 
@@ -44,6 +45,22 @@ const CASH: TenderAction = { key: 'cash', label: 'Cash', sublabel: 'Cash drawer'
 const CARD_PDQ: TenderAction = { key: 'card_pdq', label: 'Card (PDQ)', sublabel: 'Swipe / insert on terminal', tone: 'card' };
 const SPLIT: TenderAction = { key: 'split', label: 'Multiple Pay', sublabel: 'Split the bill', tone: 'split' };
 const ON_ACCOUNT: TenderAction = { key: 'on_account', label: 'Credit Sale', sublabel: 'On account (AR)', tone: 'credit', online: true };
+
+/**
+ * Store-credit tender — NOT part of `paymentActionsFor()` because its visibility is data-driven
+ * (does THIS customer hold usable credit?) rather than profile/gateway-driven. The caller
+ * (inline-payment-bar.tsx / payment-modal.tsx) appends it conditionally once it knows the
+ * selected customer's available balance, using this builder for a consistent label/sublabel.
+ */
+export function customerCreditAction(availableAmount: number): TenderAction {
+  return {
+    key: 'customer_credit',
+    label: 'Apply Credit',
+    sublabel: `KES ${Math.max(0, availableAmount).toLocaleString()} available`,
+    tone: 'credit',
+    online: true,
+  };
+}
 
 // Gateway-gated, online tenders.
 const MPESA_STK: TenderAction = { key: 'mpesa_stk', label: 'M-Pesa Express', sublabel: 'STK push to phone', tone: 'mpesa', online: true, requiresGateway: 'mpesa' };
@@ -106,11 +123,12 @@ export function tenderMethodFor(key: TenderKey): string {
     case 'cod': return 'cod';
     case 'on_account': return 'on_account';
     case 'room': return 'room_charge';
+    case 'customer_credit': return 'customer_credit';
     default: return 'cash';
   }
 }
 
 /** Tenders that settle immediately at the point of sale (no gateway round-trip). */
 export function isImmediateTender(key: TenderKey): boolean {
-  return key === 'cash' || key === 'card_pdq' || key === 'on_account';
+  return key === 'cash' || key === 'card_pdq' || key === 'on_account' || key === 'customer_credit';
 }

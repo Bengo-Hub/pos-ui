@@ -132,6 +132,7 @@ export function TerminalModals() {
         tenantId={t.user?.tenant_id ?? ''}
         orderLines={t.currentOrderLines}
         isHospitality={t.isHospitality}
+        customerCreditAvailable={t.customerCreditAvailable}
         onPaymentConfirmed={t.handlePaymentConfirmed}
         onLinesChanged={() => {
           // A line was replaced — refresh the snapshot with fresh server line ids IN PLACE so the

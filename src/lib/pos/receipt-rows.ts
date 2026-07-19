@@ -126,6 +126,15 @@ export function buildReceiptRows(receipt: ReceiptData): ReceiptRow[] {
   if (Math.abs(receipt.balance_due ?? 0) >= 0.005) {
     rows.push({ kind: 'money', label: 'Balance Due', amount: receipt.balance_due ?? 0 });
   }
+  // Customer's OVERALL treasury account position (store credit or amount owing) — distinct from
+  // balance_due above, which is scoped to this one order. Shown regardless of this sale's tender.
+  if (receipt.customer_account_balance != null) {
+    rows.push({
+      kind: 'money',
+      label: receipt.customer_account_balance_label ?? 'Account Balance',
+      amount: receipt.customer_account_balance,
+    });
+  }
 
   const pm = receipt.payment_methods;
   if (pm && Object.values(pm).some(Boolean)) {

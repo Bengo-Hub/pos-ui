@@ -15,7 +15,7 @@
 import { TreasuryPaymentModal } from '@bengo-hub/shared-ui-lib';
 import { cn } from '@/lib/utils';
 import {
-  Banknote, ChefHat, CreditCard, FileText, Hash, Landmark, Loader2, NotebookPen,
+  Banknote, ChefHat, Coins, CreditCard, FileText, Hash, Landmark, Loader2, NotebookPen,
   Building2, Smartphone, Truck, Wallet, SplitSquareHorizontal, X, CheckCircle2,
 } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
@@ -32,7 +32,7 @@ import { useHotelRooms } from '@/hooks/useHotel';
 import { hotelApi } from '@/lib/api/hotel';
 import type { TerminalProfile } from '@/lib/use-case-config';
 import {
-  paymentActionsFor, tenderMethodFor, isImmediateTender, type TenderKey, type TenderTone,
+  paymentActionsFor, tenderMethodFor, isImmediateTender, customerCreditAction, type TenderKey, type TenderTone,
 } from '@/lib/pos/terminal-actions';
 import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api/error-message';
@@ -58,6 +58,10 @@ export interface InlinePaymentBarProps {
   mode?: 'pay' | 'send_to_kitchen';
   /** True when a real customer is selected (loyalty phone attached). Credit Sale requires one. */
   hasCustomer?: boolean;
+  /** Attached customer's usable stored credit (KES, from useClientCredit's balance_due — already
+   *  sign-flipped to a positive available amount by the caller). Shows "Apply Credit" when > 0;
+   *  never fetched here so the bar stays a pure consumer of whatever the page already loaded. */
+  customerCreditAvailable?: number;
   /** 'panel' = stacked tiles (narrow cart column); 'bar' = compact horizontal button row (GoDigital
    *  full-width bottom action bar). Defaults to 'panel'. */
   layout?: 'panel' | 'bar';
@@ -93,6 +97,7 @@ function tenderIcon(key: TenderKey) {
     case 'mpesa_c2b': return Landmark;
     case 'wallet': return Wallet;
     case 'on_account': return NotebookPen;
+    case 'customer_credit': return Coins;
     case 'cod': return Truck;
     case 'room': return Building2;
     case 'split': return SplitSquareHorizontal;
@@ -104,6 +109,7 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
   const {
     total, tenantSlug, profile, isHospitality, allowCOD = false, customerEmail,
     tenderId = NIL_TENDER, disabled = false, mode = 'pay', layout = 'panel', hasCustomer = true,
+    customerCreditAvailable = 0,
     createOrderAsync, onSettled, onDraft, onQuotation, onCancel, onSplit,
   } = props;
 
@@ -142,11 +148,23 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
   // cashier role explicitly via Roles & Permissions. Customer + treasury credit limit remain the
   // server-side guardrails; terms are captured via CreditSaleDetailsModal.
   const canCreditSale = can('pos.payments.credit') || canPrivileged;
-  const actions = useMemo(
-    () => paymentActionsFor(profile, gateways, { isHospitality, isOnline, allowCOD })
-      .filter((a) => a.key !== 'on_account' || canCreditSale),
-    [profile, gateways, isHospitality, isOnline, allowCOD, canCreditSale],
-  );
+  // Store credit (customer_credit) is gated purely on DATA, not a permission: does the attached
+  // customer actually hold usable credit? paymentActionsFor() has no per-customer knowledge, so
+  // it's appended here instead of growing that function's signature for one data-driven tender.
+  // Placed just before Multiple Pay (same slot as Credit Sale) so a shortfall is one tap from
+  // Multiple Pay to combine it with another tender for the remainder.
+  // Requires a live server-side balance check (same as Credit Sale), so it's hidden offline —
+  // paymentActionsFor()'s own online filter never sees this tender since it's appended after.
+  const hasCustomerCredit = hasCustomer && customerCreditAvailable > 0 && isOnline;
+  const actions = useMemo(() => {
+    const base = paymentActionsFor(profile, gateways, { isHospitality, isOnline, allowCOD })
+      .filter((a) => a.key !== 'on_account' || canCreditSale);
+    if (!hasCustomerCredit) return base;
+    const action = customerCreditAction(customerCreditAvailable);
+    const splitIdx = base.findIndex((a) => a.key === 'split');
+    if (splitIdx === -1) return [...base, action];
+    return [...base.slice(0, splitIdx), action, ...base.slice(splitIdx)];
+  }, [profile, gateways, isHospitality, isOnline, allowCOD, canCreditSale, hasCustomerCredit, customerCreditAvailable]);
   // Back-office profiles (retail/pharmacy/services) get Draft + Quotation; hospitality/QSR do not.
   // Quotation is additionally manager-gated (canPrivileged).
   const isBackOffice = profile === 'retail' || profile === 'pharmacy' || profile === 'services';
@@ -276,6 +294,25 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
         // Capture credit terms first (due date default +30d, notes) via the shared modal.
         setCapture('on_account');
         return;
+      case 'customer_credit': {
+        // Nothing to capture (no ref/terms) — settle immediately like Cash/On Account when the
+        // credit covers the FULL total (this bar only ever settles one shot for the whole total,
+        // it doesn't track a "remaining balance"). When credit falls short, hand off straight to
+        // Multiple Pay so the cashier can combine a credit line with another tender for the rest —
+        // reusing the existing split-tender flow rather than inventing a second partial-payment path.
+        if (roundedTotal > 0 && customerCreditAvailable < roundedTotal) {
+          setBusyKey('customer_credit');
+          const ord = await ensureOrder();
+          setBusyKey(null);
+          if (ord) {
+            toast.info(`Store credit covers KES ${customerCreditAvailable.toLocaleString()} of KES ${roundedTotal.toLocaleString()} — use Multiple Pay to add another tender for the rest.`);
+            onSplit(ord);
+          }
+          return;
+        }
+        await settleImmediate('customer_credit');
+        return;
+      }
       case 'cod': {
         // COD: place the order; cash is collected on delivery (settled later from the order).
         setBusyKey('cod');
@@ -309,7 +346,7 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
         await startGateway(key);
         return;
     }
-  }, [roundedTotal, settleImmediate, ensureOrder, startGateway, finish, onSplit]);
+  }, [roundedTotal, settleImmediate, ensureOrder, startGateway, finish, onSplit, customerCreditAvailable]);
 
   // ── Send to Kitchen (dine-in) ────────────────────────────────────────────────
   const sendToKitchen = useCallback(async () => {

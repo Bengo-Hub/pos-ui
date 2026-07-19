@@ -148,6 +148,8 @@ export function RetailReceiptPrint({ receipt, tenantName, outletName, logoUrl }:
         {trow('AMOUNT PAID', money(currency, receipt.amount_paid ?? receipt.amount_tendered))}
         {receipt.change_due > 0 && trow('Change', money(currency, receipt.change_due))}
         {Math.abs(receipt.balance_due ?? 0) >= 0.005 && trow('Total Due with Current', money(currency, receipt.balance_due ?? 0))}
+        {receipt.customer_account_balance != null &&
+          trow(receipt.customer_account_balance_label ?? 'Account Balance', money(currency, receipt.customer_account_balance))}
       </div>
 
       {/* HOW TO PAY + KRA TIMS Details + fiscal barcode — driven by the SAME shared row

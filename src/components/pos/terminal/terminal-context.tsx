@@ -35,6 +35,7 @@ import { useLoyaltyPrograms } from '@/hooks/useLoyalty';
 import { useActiveHappyHours } from '@/hooks/useDiscounts';
 import { computeHappyHour, bogoFreeUnitsForSku, type HHLine, type HappyHourResult } from '@/lib/pos/happy-hour';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useClientCredit } from '@/hooks/useClients';
 import { useAuthStore } from '@/store/auth';
 import { apiClient } from '@/lib/api/client';
 import { apiErrorMessage } from '@/lib/api/error-message';
@@ -246,6 +247,8 @@ export interface TerminalContextValue {
   /** Remount key for the customer/loyalty panel — bumps on clearCart so the customer resets to Walk-in. */
   customerResetSeq: number;
   scaleDeviceId: string;
+  /** Attached customer's usable stored credit (KES, always >= 0; 0 when none/no customer). */
+  customerCreditAvailable: number;
 
   // ── order type / table ──
   orderSubtype: OrderSubtype | null;
@@ -405,6 +408,11 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
   // Retail loyalty panel (customer lookup + points redemption) — absorbed from /retail into the
   // adaptive terminal; its redeemDiscount applies as an order discount and posts the customer.
   const [loyaltyState, setLoyaltyState] = useState<LoyaltyState | null>(null);
+  // Stored-credit tender: the attached customer's AR balance_due (negative = customer holds
+  // credit from an over-return etc). Reuses the same cached query CustomerSearch already primes
+  // when the cashier picks the customer, so this rarely fires a second network request.
+  const { data: customerCredit } = useClientCredit(loyaltyState?.accountId);
+  const customerCreditAvailable = Math.max(0, -(parseFloat(customerCredit?.balance_due || '0') || 0));
   // Bumped by clearCart to remount the LoyaltyPanel (whose picker selection is component-local),
   // resetting the attached customer back to the Walk-in default after every completed sale.
   const [customerResetSeq, setCustomerResetSeq] = useState(0);
@@ -1819,7 +1827,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
     addItemToCart, handleItemTap, proceedWithItem, handleScaleAddToCart,
     updateQuantity, removeFromCart, clearCart, bogoFreeFor, updateCourse, setItemSeat,
     pricingProfile, pricingTiers, repricing, repriceCart,
-    loyaltyState, setLoyaltyState, customerResetSeq, scaleDeviceId,
+    loyaltyState, setLoyaltyState, customerResetSeq, scaleDeviceId, customerCreditAvailable,
     orderSubtype, setOrderSubtype, deliveryInfo, setDeliveryInfo, tableId, tableName,
     billOrderTotal,
     handlePlaceOrder, handlePark, handleResumeParked, createOrderAsync,

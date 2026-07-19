@@ -44,6 +44,9 @@ interface SplitPaymentModalProps {
   orderLines?: OrderLineItem[];
   isHospitality?: boolean;
   customerEmail?: string;
+  /** Attached customer's usable stored credit (KES) — threaded to each POSPaymentModal so a split
+   *  line can be settled from it, same as any other tender. Undefined/0 hides the tender there. */
+  customerCreditAvailable?: number;
   onPaymentConfirmed: () => void;
   /** Called after a line is replaced (set aside + swapped) so the caller refetches orderLines. */
   onLinesChanged?: () => void;
@@ -61,6 +64,7 @@ export function SplitPaymentModal({
   orderLines = [],
   isHospitality = false,
   customerEmail,
+  customerCreditAvailable,
   onPaymentConfirmed,
   onLinesChanged,
 }: SplitPaymentModalProps) {
@@ -285,6 +289,7 @@ export function SplitPaymentModal({
         tenderId={tenderId}
         isHospitality={isHospitality}
         customerEmail={customerEmail}
+        customerCreditAvailable={customerCreditAvailable}
         onPaymentConfirmed={(method) => {
           if (mode === 'equal') {
             handleEqualPayerDone();
@@ -311,6 +316,7 @@ export function SplitPaymentModal({
         tenderId={tenderId}
         isHospitality={isHospitality}
         customerEmail={customerEmail}
+        customerCreditAvailable={customerCreditAvailable}
         onPaymentConfirmed={(method) => {
           recordSettle(tenderPayer, method);
           handleTenderLinePaid(tenderPayer);
@@ -333,6 +339,7 @@ export function SplitPaymentModal({
         tenderId={tenderId}
         isHospitality={isHospitality}
         customerEmail={customerEmail}
+        customerCreditAvailable={customerCreditAvailable}
         onPaymentConfirmed={async (method) => {
           // Record the split (with its item ids) + mark it paid, so the per-split receipt is itemised.
           await ensureItemSplits();

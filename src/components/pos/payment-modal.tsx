@@ -7,6 +7,7 @@ import {
   Building2,
   CheckCircle2,
   Clock,
+  Coins,
   CreditCard,
   Gift,
   Hash,
@@ -44,6 +45,9 @@ export interface POSPaymentModalProps {
   customerEmail?: string;
   isHospitality?: boolean;
   allowedMethods?: string;
+  /** Attached customer's usable stored credit (KES, from useClientCredit's balance_due) — shows
+   *  the "Apply Credit" tender when > 0. Undefined/0 hides it (no customer, or no credit held). */
+  customerCreditAvailable?: number;
   /** Called on a successful payment. `method` is the tender used (cash | mpesa_manual | mpesa |
    *  card | card_manual | wallet | on_account | room_charge) so a split portion can record how it
    *  was paid. */
@@ -74,6 +78,7 @@ export function POSPaymentModal({
   customerEmail,
   isHospitality = false,
   allowedMethods,
+  customerCreditAvailable,
   onPaymentConfirmed,
 }: POSPaymentModalProps) {
   const roundedTotal = Math.ceil(total);
@@ -331,6 +336,26 @@ export function POSPaymentModal({
     );
   }, [orderId, roundedTotal, tenderId, createIntent, onPaymentConfirmed]);
 
+  // Store credit (customer_credit): settles from the customer's EXISTING stored credit (a
+  // negative treasury AR balance_due, e.g. from an over-return) — nothing to capture (no ref,
+  // no terms), so it settles immediately like Cash/On Account with no extra step. The `total`
+  // this modal represents may be the full order OR a single split-tender portion, so applying
+  // partial credit alongside another tender is just "pick this tender for a smaller line" —
+  // the server enforces the available-credit cap either way.
+  const handleCustomerCredit = useCallback(() => {
+    methodRef.current = 'customer_credit';
+    createIntent.mutate(
+      { orderId, tenderMethod: 'customer_credit', amount: roundedTotal, tenderId },
+      {
+        onSuccess: () => { setStep('confirmed'); onPaymentConfirmed(methodRef.current); },
+        onError: (err: any) => {
+          setErrorMsg((err as { normalizedMessage?: string })?.normalizedMessage ?? err?.message ?? 'Could not apply store credit — check the customer\'s available balance.');
+          setStep('failed');
+        },
+      }
+    );
+  }, [orderId, roundedTotal, tenderId, createIntent, onPaymentConfirmed]);
+
   // Complimentary (no-charge): reason first, then MANDATORY manager approval every time (scan
   // card, PIN, or a one-time code a manager shared) — unlike Void, there is no self-approve
   // bypass for managers-as-cashier here; the backend hard-requires an approval token/code
@@ -498,6 +523,19 @@ export function POSPaymentModal({
                       offlineBadge={!isOnline}
                       onClick={handleOnAccount}
                     />
+                    {(customerCreditAvailable ?? 0) > 0 && (
+                      <PayBadge
+                        icon={<Coins className="h-4 w-4" />}
+                        color="text-amber-600"
+                        bg="bg-amber-500/10"
+                        label="Apply Credit"
+                        sub={`KES ${(customerCreditAvailable ?? 0).toLocaleString()} available`}
+                        disabled={!isOnline}
+                        loading={createIntent.isPending}
+                        offlineBadge={!isOnline}
+                        onClick={handleCustomerCredit}
+                      />
+                    )}
                     {gateways?.complimentary && (
                       <PayBadge
                         icon={<Gift className="h-4 w-4" />}

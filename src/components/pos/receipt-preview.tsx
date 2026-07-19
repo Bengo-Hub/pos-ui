@@ -47,6 +47,12 @@ export interface ReceiptData {
   amount_paid?: number;
   /** total − paid: positive = still owed (on account), negative = customer credit. */
   balance_due?: number;
+  /** Customer's OVERALL treasury account position — distinct from balance_due, which is scoped
+   *  to this one order. Shown regardless of this sale's own tender (a cash-paying customer who
+   *  separately holds stored credit still sees it). Absent/null = not applicable/resolved. */
+  customer_account_balance?: number | null;
+  /** "Amount Owing" | "Store Credit Available" — label for customer_account_balance. */
+  customer_account_balance_label?: string;
   amount_tendered: number;
   change_due: number;
   /** Outlet use case ("retail", "hospitality", …) — content hints only; layout is `layout`. */
