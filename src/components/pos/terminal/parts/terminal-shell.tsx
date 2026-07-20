@@ -17,6 +17,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { CategoryBrandDrawer } from '@/components/pos/terminal/parts/category-brand-drawer';
+import { SaleSessionTabs } from '@/components/pos/terminal/parts/sale-session-tabs';
 import { PosToolbar } from '@/components/pos/terminal/pos-toolbar';
 import { OrderTypeSelector } from '@/components/pos/order-type-selector';
 import { LoyaltyPanel } from '@/components/retail/LoyaltyPanel';
@@ -88,6 +89,11 @@ export function TerminalShell() {
     // Height uses dvh (dynamic viewport) so mobile browser chrome never pushes the bottom action
     // bar (Place Order / tenders) below the fold — the 100vh fallback covers older WebViews.
     <div className="flex flex-col bg-background h-[calc(100vh-80px)] supports-[height:100dvh]:h-[calc(100dvh-80px)]">
+      {/* ─────────── 0. MULTI-CART SALE TABS (retail) ───────────
+          Sale 1/2/3 · + New Sale · Clear All — parallel carts so a slow M-Pesa payer parked on one
+          tab never blocks the next customer. Retail-only (cfg.multiCart). */}
+      {cfg.multiCart && <SaleSessionTabs />}
+
       {/* ─────────── 1. QUICK-ACTION TOOLBAR STRIP ───────────
           (No GoDigital "Location" band — outlet selection already lives in the app header; we use
            outlets, not locations.) */}
@@ -169,8 +175,9 @@ export function TerminalShell() {
             {/* Row 2: customer/loyalty card spanning the FULL row (its picker lays out
                 horizontally on wider screens to use the width). */}
             {cfg.showPricingProfile ? (
-              // key: remounts after each sale so the customer resets to the Walk-in default
-              <LoyaltyPanel key={t.customerResetSeq} onStateChange={t.setLoyaltyState} layout="row" />
+              // key: remounts after each sale so the customer resets to the Walk-in default; on a
+              // multi-cart switch the same remount re-seeds the chip with THIS tab's attached customer.
+              <LoyaltyPanel key={t.customerResetSeq} onStateChange={t.setLoyaltyState} layout="row" initialSelected={t.initialSelectedCustomer} />
             ) : !cfg.showOrderType ? (
               <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl border border-border bg-card text-sm font-medium text-muted-foreground">
                 <User className="h-4 w-4 shrink-0" /> Walk-In Customer

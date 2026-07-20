@@ -37,14 +37,21 @@ interface LoyaltyPanelProps {
   /** 'row' spreads the picker horizontally (full-width card under the terminal search bar);
    *  default 'stack' keeps the compact vertical layout (side panels, Add Sale). */
   layout?: 'stack' | 'row';
+  /** Seed the picker with a previously-attached customer — used by the multi-cart terminal so a
+   *  restored/switched Sale tab shows the customer already on that cart. The panel is keyed by the
+   *  caller (customerResetSeq) so this initializer re-runs on each switch. Only the chip is seeded;
+   *  the live loyaltyState is still driven by the provider, so no onStateChange fires on mount. */
+  initialSelected?: SelectedCustomer | null;
 }
 
-export function LoyaltyPanel({ onStateChange, orderId, layout = 'stack' }: LoyaltyPanelProps) {
+export function LoyaltyPanel({ onStateChange, orderId, layout = 'stack', initialSelected = null }: LoyaltyPanelProps) {
   const { can } = usePermissions();
   const canLoyalty = can(P.LOYALTY_VIEW);
   const canAdd = can(P.LOYALTY_ADD);
 
-  const [selected, setSelected] = useState<SelectedCustomer>(WALK_IN_CUSTOMER);
+  const [selected, setSelected] = useState<SelectedCustomer>(
+    initialSelected && !initialSelected.isWalkIn ? initialSelected : WALK_IN_CUSTOMER,
+  );
   // Full matched loyalty/CRM row for the selection (points balance, source) — null for
   // walk-in or when the customer was keyed in manually. CustomerSearch fires onSelectAccount
   // synchronously right before onChange, so a ref carries the fresh row into handleChange

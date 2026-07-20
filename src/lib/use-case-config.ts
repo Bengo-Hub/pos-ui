@@ -41,6 +41,11 @@ export interface TerminalConfig {
   showCostMargin: boolean;
   /** Title shown on the terminal header / new-order action. */
   terminalTitle: string;
+  /** Multi-cart Sale tabs (Sale 1/2/3 · +New · Clear All) — busy retail tills serving several
+   *  customers in parallel (e.g. slow M-Pesa payers parked on their own tab). Retail only; the
+   *  other verticals settle differently (hospitality via tables/bills, QSR/pharmacy/services
+   *  single-cart) so a tab strip would only add noise. */
+  multiCart: boolean;
 }
 
 const HOSPITALITY = ['hospitality', 'hotel', 'bar', 'cafe', 'restaurant'];
@@ -86,7 +91,7 @@ export function terminalConfigFor(useCase?: string | null): TerminalConfig {
         showOrderType: true, showCourses: true, showCalculator: false,
         keyboardCheckout: false, showBrandGrid: false,
         showStockBadge: false, showScale: false, managerOverride: false, showCostMargin: false,
-        terminalTitle: 'New Order',
+        terminalTitle: 'New Order', multiCart: false,
       };
     case 'quick_service':
       return {
@@ -94,7 +99,7 @@ export function terminalConfigFor(useCase?: string | null): TerminalConfig {
         showOrderType: true, showCourses: false, showCalculator: false,
         keyboardCheckout: false, showBrandGrid: false,
         showStockBadge: false, showScale: false, managerOverride: false, showCostMargin: false,
-        terminalTitle: 'New Order',
+        terminalTitle: 'New Order', multiCart: false,
       };
     case 'pharmacy':
       return {
@@ -102,7 +107,7 @@ export function terminalConfigFor(useCase?: string | null): TerminalConfig {
         showOrderType: false, showCourses: false, showCalculator: true,
         keyboardCheckout: true, showBrandGrid: true,
         showStockBadge: true, showScale: true, managerOverride: true, showCostMargin: true,
-        terminalTitle: 'Walk-In Sale',
+        terminalTitle: 'Walk-In Sale', multiCart: false,
       };
     case 'services':
       return {
@@ -110,7 +115,7 @@ export function terminalConfigFor(useCase?: string | null): TerminalConfig {
         showOrderType: false, showCourses: false, showCalculator: false,
         keyboardCheckout: false, showBrandGrid: false,
         showStockBadge: false, showScale: false, managerOverride: false, showCostMargin: false,
-        terminalTitle: 'New Sale',
+        terminalTitle: 'New Sale', multiCart: false,
       };
     case 'retail':
     default:
@@ -119,7 +124,7 @@ export function terminalConfigFor(useCase?: string | null): TerminalConfig {
         showOrderType: false, showCourses: false, showCalculator: true,
         keyboardCheckout: true, showBrandGrid: true,
         showStockBadge: true, showScale: true, managerOverride: true, showCostMargin: true,
-        terminalTitle: 'New Sale',
+        terminalTitle: 'New Sale', multiCart: true,
       };
   }
 }

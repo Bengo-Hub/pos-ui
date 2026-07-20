@@ -40,6 +40,9 @@ import { useClientCredit } from '@/hooks/useClients';
 import { useAuthStore } from '@/store/auth';
 import { apiClient } from '@/lib/api/client';
 import { apiErrorMessage } from '@/lib/api/error-message';
+import { useSaleSessions, type SaleSessionControls } from '@/hooks/useSaleSessions';
+import { selectedFromLoyalty, type SaleSessionSnapshot } from '@/lib/pos/sale-session';
+import { type SelectedCustomer } from '@/components/pos/customer-search';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -266,7 +269,7 @@ export interface TerminalContextValue {
 
   // ── place order / park / resume ──
   handlePlaceOrder: () => void;
-  handlePark: () => void;
+  handlePark: (opts?: { onDone?: () => void }) => void;
   handleResumeParked: (order: any) => void;
   createOrderAsync: () => Promise<CreatedOrder | null>;
   handleInlineSettled: (ord: CreatedOrder, opts?: { unpaid?: boolean }) => void;
@@ -351,6 +354,12 @@ export interface TerminalContextValue {
   autoLogoutAfterSale: boolean;
   /** Close the after-payment receipt; also logs out when autoLogoutAfterSale (shared terminal). */
   handleReceiptClose: () => void;
+
+  // ── multi-cart sale sessions (retail only — cfg.multiCart) ──
+  /** Open Sale tabs + controls (new/switch/close/finalize/clearAll). Inert when !cfg.multiCart. */
+  saleSessions: SaleSessionControls;
+  /** Customer to seed the LoyaltyPanel with for the active tab (reflects the tab's attached customer). */
+  initialSelectedCustomer: SelectedCustomer | null;
 }
 
 const TerminalContext = createContext<TerminalContextValue | null>(null);
@@ -622,6 +631,59 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
   // Holds the latest retryable place(token) so the approval dialog can resubmit.
   const placeWithDiscountApprovalRef = useRef<((approval?: { approvalToken?: string; code?: string }) => void) | null>(null);
   const addOrderLines = useAddOrderLines();
+
+  // ─── Multi-cart Sale sessions (retail only) ───────────────────────────────
+  // Several customers rung up in parallel (a slow M-Pesa payer parked on their own tab). One active
+  // cart lives in this provider; the sessions layer snapshots/swaps ALL editable order state around
+  // it and autosaves each tab so a reload/crash restores every in-progress cart. Inert when
+  // !cfg.multiCart, so the classic single-cart flow is byte-for-byte unchanged elsewhere.
+  const sessionSnapshot: SaleSessionSnapshot = useMemo(
+    () => ({
+      cart,
+      manualDiscount,
+      discountReason,
+      orderTax,
+      charges,
+      loyaltyState,
+      orderSubtype,
+      deliveryInfo,
+      pricingProfile,
+      ageVerified: ageVerifiedRef.current,
+    }),
+    [cart, manualDiscount, discountReason, orderTax, charges, loyaltyState, orderSubtype, deliveryInfo, pricingProfile],
+  );
+  // Write a tab's snapshot back into this provider's state (used on hydrate/switch/new/close).
+  const applySnapshot = useCallback((s: SaleSessionSnapshot) => {
+    setCart(s.cart ?? []);
+    setManualDiscountState(s.manualDiscount ?? 0);
+    setDiscountReason(s.discountReason ?? '');
+    setOrderTax(s.orderTax ?? 0);
+    setCharges(s.charges ?? {});
+    setLoyaltyState(s.loyaltyState ?? null);
+    setOrderSubtype(s.orderSubtype ?? null);
+    setDeliveryInfo(s.deliveryInfo ?? { address: '', notes: '' });
+    if (s.pricingProfile) setPricingProfile(s.pricingProfile);
+    ageVerifiedRef.current = s.ageVerified ?? false;
+    // Remount the customer/loyalty panel so its chip reflects THIS tab's attached customer.
+    setCustomerResetSeq((n) => n + 1);
+  }, []);
+  // Scope tabs to tenant+outlet+cashier so a shared terminal never mixes carts across users/tenants.
+  const saleSessionScope =
+    cfg.multiCart && orgSlug && orderOutletID && user?.id ? `${orgSlug}:${orderOutletID}:${user.id}` : '';
+  const saleSessions = useSaleSessions({
+    enabled: cfg.multiCart,
+    scopeKey: saleSessionScope,
+    snapshot: sessionSnapshot,
+    apply: applySnapshot,
+  });
+  // The LoyaltyPanel remounts (customerResetSeq) on every switch; seed it with the active tab's customer.
+  const initialSelectedCustomer = useMemo(() => selectedFromLoyalty(loyaltyState), [loyaltyState]);
+  // Called after a completed sale (from handlePaymentConfirmed) — ref-held to avoid re-binding that
+  // callback every render on the always-fresh saleSessions object.
+  const finalizeSessionRef = useRef<() => void>(() => {});
+  finalizeSessionRef.current = () => {
+    if (cfg.multiCart) saleSessions.finalizeActiveSession();
+  };
 
   const menuItems: MenuItem[] = useMemo(() => {
     const items = catalogItems ?? [];
@@ -1647,7 +1709,10 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
   };
 
   // Park the current cart as a draft order (retail orders persist as "draft") and clear the register.
-  const handlePark = () => {
+  // opts.onDone runs after a successful park — the multi-cart tab strip uses it to close the tab it
+  // just saved to Drafts. (Called via InlinePaymentBar's onClick too, which passes a MouseEvent as
+  // `opts`; a MouseEvent has no `onDone`, so the optional call is a safe no-op there.)
+  const handlePark = (opts?: { onDone?: () => void }) => {
     if (cart.length === 0) return;
     createOrder.mutate(
       {
@@ -1656,14 +1721,19 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
         tableId: tableId || undefined,
         coversCount: coversParam > 1 ? coversParam : undefined,
         ageVerified: ageVerifiedRef.current || undefined,
+        discountAmount: (loyaltyDiscount + manualDiscount) || undefined,
+        discountReason: discountReason || undefined,
+        customerPhone: loyaltyState?.customerPhone || undefined,
+        customerName: loyaltyState?.customerName || undefined,
         lines: orderLines,
       },
       {
         onSuccess: () => {
           clearCart();
-          toast.success('Sale parked — resume it from Parked Sales.');
+          toast.success('Sale saved to Drafts — resume it any time.');
+          opts?.onDone?.();
         },
-        onError: async (e) => toast.error(await apiErrorMessage(e, 'Failed to park sale. Please try again.')),
+        onError: async (e) => toast.error(await apiErrorMessage(e, 'Failed to save draft. Please try again.')),
       }
     );
   };
@@ -1713,6 +1783,9 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
       }
     }
     clearCart();
+    // Multi-cart: this tab's sale is done — close it and move to a neighbour (JamPos "close the tab
+    // once the sale is complete"). Keeps the lone tab when it's the only one open. No-op off retail.
+    finalizeSessionRef.current();
     setPaymentOpen(false);
     setCurrentOrderId('');
     setCurrentOrderCourses([]);
@@ -1916,6 +1989,8 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
     posSettings,
     autoLogoutAfterSale,
     handleReceiptClose,
+    saleSessions,
+    initialSelectedCustomer,
   };
 
   return <TerminalContext.Provider value={value}>{children}</TerminalContext.Provider>;
