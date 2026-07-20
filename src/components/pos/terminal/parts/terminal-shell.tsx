@@ -89,11 +89,6 @@ export function TerminalShell() {
     // Height uses dvh (dynamic viewport) so mobile browser chrome never pushes the bottom action
     // bar (Place Order / tenders) below the fold — the 100vh fallback covers older WebViews.
     <div className="flex flex-col bg-background h-[calc(100vh-80px)] supports-[height:100dvh]:h-[calc(100dvh-80px)]">
-      {/* ─────────── 0. MULTI-CART SALE TABS (retail) ───────────
-          Sale 1/2/3 · + New Sale · Clear All — parallel carts so a slow M-Pesa payer parked on one
-          tab never blocks the next customer. Retail-only (cfg.multiCart). */}
-      {cfg.multiCart && <SaleSessionTabs />}
-
       {/* ─────────── 1. QUICK-ACTION TOOLBAR STRIP ───────────
           (No GoDigital "Location" band — outlet selection already lives in the app header; we use
            outlets, not locations.) */}
@@ -213,15 +208,22 @@ export function TerminalShell() {
             )}
           </div>
 
-          {/* CART TABLE header strip */}
-          <div className="flex items-center justify-between px-4 py-2 shrink-0 bg-muted/40 border-b border-border">
-            <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-              <ShoppingCart className="h-3.5 w-3.5" />
-              {t.isAddToBill ? 'Adding to Bill' : cfg.terminalTitle}
-              {t.cartItemCount > 0 && <span className="text-primary">· {t.cartItemCount}</span>}
-            </div>
+          {/* CART TABLE header strip.
+              Retail multi-cart: the Sale 1/2/3 · + New Sale tabs live HERE (inline, above the cart
+              they control) instead of a separate top bar — parallel carts so a slow M-Pesa payer
+              parked on one tab never blocks the next customer. Other use-cases keep the plain title. */}
+          <div className="flex items-center justify-between gap-2 px-4 py-2 shrink-0 bg-muted/40 border-b border-border">
+            {cfg.multiCart && !t.isAddToBill ? (
+              <SaleSessionTabs />
+            ) : (
+              <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                <ShoppingCart className="h-3.5 w-3.5" />
+                {t.isAddToBill ? 'Adding to Bill' : cfg.terminalTitle}
+                {t.cartItemCount > 0 && <span className="text-primary">· {t.cartItemCount}</span>}
+              </div>
+            )}
             {cart.length > 0 && (
-              <button onClick={t.clearCart} className="text-[11px] text-destructive font-semibold hover:underline">Clear all</button>
+              <button onClick={t.clearCart} className="shrink-0 text-[11px] text-destructive font-semibold hover:underline">Clear all</button>
             )}
           </div>
           <div className={cn('grid gap-3 px-4 py-2 shrink-0 text-[10px] font-bold uppercase tracking-wider text-muted-foreground border-b border-border', cartGridCols)}>

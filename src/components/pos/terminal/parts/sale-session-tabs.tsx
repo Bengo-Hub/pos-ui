@@ -3,10 +3,12 @@
 /**
  * SaleSessionTabs — the multi-cart tab strip for the retail terminal (JamPos-style Sale 1/2/3).
  *
- * Lets a busy till hold several carts at once: park a slow M-Pesa payer on their own tab, ring up the
- * next customer on a fresh tab, finalize each independently. Every tab autosaves (survives reload);
- * closing a tab that still has items prompts to Save it to Drafts (server, resumable + hard-deletable)
- * or Discard. Rendered only when cfg.multiCart (retail) — see TerminalShell.
+ * Renders INLINE inside the cart-header row (in place of the "New Sale" title) so the tabs live right
+ * above the cart they control — no extra top bar. Lets a busy till hold several carts at once: park a
+ * slow M-Pesa payer on their own tab, ring up the next customer on a fresh tab, finalize each
+ * independently. Every tab autosaves (survives reload); closing a tab that still has items prompts to
+ * Save it to Drafts (server, resumable + hard-deletable) or Discard. Rendered only when cfg.multiCart
+ * (retail) — see TerminalShell.
  *
  * All state/logic lives in useTerminal().saleSessions (the sessions layer around the provider cart);
  * this component is pure presentation + the close/clear confirmations.
@@ -54,7 +56,7 @@ export function SaleSessionTabs() {
   };
 
   return (
-    <div className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 bg-card border-b border-border overflow-x-auto">
+    <div className="flex-1 min-w-0 flex items-center gap-1.5 overflow-x-auto scrollbar-none">
       {sessions.map((s) => {
         const active = s.id === activeId;
         const count = liveCount(s);
@@ -63,7 +65,7 @@ export function SaleSessionTabs() {
             key={s.id}
             onClick={() => t.saleSessions.switchSession(s.id)}
             className={cn(
-              'group flex items-center gap-1.5 pl-3 pr-1.5 py-1.5 rounded-lg border text-xs font-semibold whitespace-nowrap cursor-pointer transition-colors',
+              'group flex items-center gap-1 pl-2.5 pr-1 py-1 rounded-md border text-[11px] font-bold whitespace-nowrap cursor-pointer transition-colors',
               active
                 ? 'bg-primary text-primary-foreground border-primary'
                 : 'bg-background text-foreground border-border hover:border-primary/40',
@@ -87,8 +89,8 @@ export function SaleSessionTabs() {
               }}
               aria-label={`Close ${s.label}`}
               className={cn(
-                'h-5 w-5 rounded-md flex items-center justify-center transition-colors',
-                active ? 'hover:bg-primary-foreground/20' : 'text-muted-foreground hover:bg-destructive/10 hover:text-destructive',
+                'h-4 w-4 rounded flex items-center justify-center transition-colors',
+                active ? 'hover:bg-primary-foreground/25' : 'text-muted-foreground hover:bg-destructive/10 hover:text-destructive',
               )}
             >
               <X className="h-3 w-3" />
@@ -99,7 +101,7 @@ export function SaleSessionTabs() {
 
       <button
         onClick={() => t.saleSessions.newSession()}
-        className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-dashed border-primary/50 text-primary text-xs font-bold hover:bg-primary/10 whitespace-nowrap"
+        className="shrink-0 flex items-center gap-1 px-2 py-1 rounded-md border border-dashed border-primary/50 text-primary text-[11px] font-bold hover:bg-primary/10 whitespace-nowrap"
       >
         <Plus className="h-3.5 w-3.5" /> New Sale
       </button>
@@ -107,7 +109,7 @@ export function SaleSessionTabs() {
       {sessions.length > 1 && (
         <button
           onClick={() => (anyItems ? setClearAllOpen(true) : t.saleSessions.clearAll())}
-          className="ml-auto shrink-0 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-destructive hover:bg-destructive/10 whitespace-nowrap"
+          className="shrink-0 px-2 py-1 rounded-md text-[11px] font-semibold text-muted-foreground hover:text-destructive hover:bg-destructive/10 whitespace-nowrap"
         >
           Clear All
         </button>
