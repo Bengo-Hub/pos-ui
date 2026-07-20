@@ -5,10 +5,11 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import {
   Banknote, ChevronDown, Eye, Pencil, Trash2, Truck,
-  CreditCard, RotateCcw, Link2, Mail, Coins, CalendarClock,
+  CreditCard, RotateCcw, Link2, Mail, Coins, CalendarClock, NotebookPen,
 } from 'lucide-react';
 import { PrintReceiptButton } from '@/components/pos/print-receipt-button';
 import { useNotifySale } from '@/hooks/usePOS';
+import { canPutOnAccount } from '@/hooks/use-close-on-account';
 import { usePermissions, P } from '@/hooks/usePermissions';
 import { useAuthStore } from '@/store/auth';
 
@@ -23,6 +24,8 @@ interface SalesActionsMenuProps {
   onDelete: (order: any) => void;
   /** Settle an on-account (credit) sale — shown only while money is still owed. */
   onRecordPayment?: (order: any) => void;
+  /** Book a still-owing, NOT-yet-on-account sale's balance to treasury AR (put on account). */
+  onPutOnAccount?: (order: any) => void;
 }
 
 // Tenant admin/owner tier — deliberately narrower than P.ORDERS_MANAGE (which a plain
@@ -42,7 +45,7 @@ const DATE_MOVE_ADMIN_ROLES = new Set(['admin', 'owner', 'pos_admin', 'super_adm
  *  - Invoice URL → copy a shareable link to the sale
  *  - New Sale Notification → pos-api /notify → notifications-service (customer SMS receipt)
  */
-export function SalesActionsMenu({ order, orgSlug, onView, onEditShipping, onViewPayments, onEditLines, onMoveDate, onDelete, onRecordPayment }: SalesActionsMenuProps) {
+export function SalesActionsMenu({ order, orgSlug, onView, onEditShipping, onViewPayments, onEditLines, onMoveDate, onDelete, onRecordPayment, onPutOnAccount }: SalesActionsMenuProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -136,6 +139,12 @@ export function SalesActionsMenu({ order, orgSlug, onView, onEditShipping, onVie
             ['due', 'partial', 'overdue'].includes(order.payment_status) && (order.amount_due ?? 0) > 0.01 && (
             <button className={item} onClick={() => { onRecordPayment(order); close(); }}>
               <Banknote className="h-4 w-4 text-emerald-600" /> Record Payment
+            </button>
+          )}
+          {/* Put a still-owing, not-yet-on-account sale's balance on account (treasury AR debtor). */}
+          {onPutOnAccount && canTakePayment && canPutOnAccount(order) && (
+            <button className={item} onClick={() => { onPutOnAccount(order); close(); }}>
+              <NotebookPen className="h-4 w-4 text-orange-600" /> Put Balance on Account
             </button>
           )}
           {canEditLines && !linesLocked && <button className={item} onClick={() => { onEditLines(order); close(); }}><Coins className="h-4 w-4 text-muted-foreground" /> Edit Line Prices</button>}

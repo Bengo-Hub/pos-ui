@@ -382,6 +382,23 @@ function mapServerLines(lines: any[]): OrderLineItem[] {
     }));
 }
 
+/**
+ * Resolve a scanned/typed code to a catalog item by exact SKU **or barcode** (case-insensitive).
+ * A real EAN/UPC almost never equals the SKU, so matching SKU only (the old behaviour) meant a
+ * barcode scan added nothing to the cart. Shared by both the global hardware-scanner handler and
+ * the search-box Enter handler so scan-to-cart behaves identically wherever the code is entered.
+ */
+function findByScanCode<T extends { sku?: string; barcode?: string | null }>(
+  items: T[],
+  raw: string,
+): T | undefined {
+  const code = raw.trim().toLowerCase();
+  if (!code) return undefined;
+  return items.find(
+    (m) => (m.sku ?? '').toLowerCase() === code || (m.barcode ?? '').toLowerCase() === code,
+  );
+}
+
 export function TerminalProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const params = useParams();
@@ -1109,7 +1126,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
       // Only active when focus is NOT on any input
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
       if (e.key === 'Enter' && barcodeBuffer.length >= 4) {
-        const match = menuItems.find((m) => m.sku === barcodeBuffer);
+        const match = findByScanCode(menuItems, barcodeBuffer);
         if (match) {
           handleItemTap(match);
           toast.success(`Scanned: ${match.name}`);
@@ -1141,9 +1158,9 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
 
   // Handle Enter in the search box to attempt barcode lookup
   const handleSearchKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter' && searchQuery.length >= 4) {
-      // Attempt barcode match by SKU
-      const match = menuItems.find((m) => m.sku === searchQuery.trim());
+    if (e.key === 'Enter' && searchQuery.trim().length >= 3) {
+      // Scan/type-to-cart: exact SKU or barcode match adds the item straight to the cart.
+      const match = findByScanCode(menuItems, searchQuery);
       if (match) {
         handleItemTap(match);
         handleSearchChange('');
@@ -1151,7 +1168,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
         e.preventDefault();
       }
     }
-  }, [searchQuery, menuItems, handleItemTap]);
+  }, [searchQuery, menuItems, handleItemTap, handleSearchChange]);
 
   // ─── Cart Operations ────────────────────────────────────────────────────
 

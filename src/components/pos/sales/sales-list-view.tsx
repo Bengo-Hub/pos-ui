@@ -6,6 +6,7 @@ import { useSearchParams } from 'next/navigation';
 import { Search, Undo2, XCircle } from 'lucide-react';
 import { DataTable, type DataTableColumn } from '@bengo-hub/shared-ui-lib/data-table';
 import { useOrders, useOrdersSummary, useVoidOrder, useBulkVoidOrders, type OrderListFilters } from '@/hooks/usePOS';
+import { useCloseOnAccount } from '@/hooks/use-close-on-account';
 import { useStaffList } from '@/hooks/useStaff';
 import { usePermissions, P } from '@/hooks/usePermissions';
 import { useAuthStore } from '@/store/auth';
@@ -89,6 +90,7 @@ export function SalesListView({ orgSlug, fixedSource, title, subtitle }: {
   const [moveDateOrder, setMoveDateOrder] = useState<any>(null);
   const [deleteOrder, setDeleteOrder] = useState<any>(null);
   const [recordPayOrder, setRecordPayOrder] = useState<any>(null);
+  const [putOnAccountOrder, setPutOnAccountOrder] = useState<any>(null);
   const [customerModal, setCustomerModal] = useState<{ name?: string | null; phone: string } | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkVoidKeys, setBulkVoidKeys] = useState<string[] | null>(null);
@@ -103,6 +105,7 @@ export function SalesListView({ orgSlug, fixedSource, title, subtitle }: {
   );
   const voidOrder = useVoidOrder();
   const bulkVoid = useBulkVoidOrders();
+  const closeOnAccount = useCloseOnAccount();
 
   const filters: OrderListFilters = useMemo(() => ({
     // This page shows every sale (no status filter); "all" outlets unless narrowed.
@@ -170,6 +173,20 @@ export function SalesListView({ orgSlug, fixedSource, title, subtitle }: {
     );
   };
 
+  const handlePutOnAccount = () => {
+    if (!putOnAccountOrder) return;
+    closeOnAccount.mutate(
+      { orderId: putOnAccountOrder.id },
+      {
+        onSuccess: () => {
+          toast.success(`${putOnAccountOrder.order_number} put on account — now on ${putOnAccountOrder.customer_name || 'the customer'}'s treasury balance`);
+          setPutOnAccountOrder(null);
+        },
+        onError: (e: any) => toast.error(e?.response?.data?.error || 'Could not put the balance on account — check the customer and their credit limit.'),
+      },
+    );
+  };
+
   const handleBulkVoid = (reason: string) => {
     if (!bulkVoidKeys?.length) return;
     bulkVoid.mutate(
@@ -196,7 +213,8 @@ export function SalesListView({ orgSlug, fixedSource, title, subtitle }: {
       render: (o) => (
         <SalesActionsMenu order={o} orgSlug={orgSlug} onView={(ord) => setDetailId(ord.id)}
           onEditShipping={setShippingOrder} onViewPayments={setPaymentsOrder} onEditLines={setEditLinesOrder}
-          onMoveDate={setMoveDateOrder} onDelete={setDeleteOrder} onRecordPayment={setRecordPayOrder} />
+          onMoveDate={setMoveDateOrder} onDelete={setDeleteOrder} onRecordPayment={setRecordPayOrder}
+          onPutOnAccount={setPutOnAccountOrder} />
       ),
     },
     {
@@ -378,6 +396,10 @@ export function SalesListView({ orgSlug, fixedSource, title, subtitle }: {
       <ConfirmDialog open={!!deleteOrder} onOpenChange={(o) => !o && setDeleteOrder(null)} title="Delete sale?"
         description={`This will void ${deleteOrder?.order_number}. It may require manager approval and will reverse the sale in treasury/inventory.`}
         confirmLabel="Delete" variant="danger" onConfirm={handleDelete} />
+      <ConfirmDialog open={!!putOnAccountOrder} onOpenChange={(o) => !o && setPutOnAccountOrder(null)}
+        title="Put balance on account?"
+        description={`This books the ${money(putOnAccountOrder?.amount_due ?? 0)} still owed on ${putOnAccountOrder?.order_number} to ${putOnAccountOrder?.customer_name || 'the customer'}'s account (treasury AR) and finalizes the sale. The customer's credit limit is enforced.`}
+        confirmLabel="Put on account" onConfirm={handlePutOnAccount} loading={closeOnAccount.isPending} />
       {bulkVoidKeys && (
         <BulkVoidReasonDialog
           count={bulkVoidKeys.length}
