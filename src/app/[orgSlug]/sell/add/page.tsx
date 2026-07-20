@@ -835,7 +835,23 @@ export default function AddSalePage() {
                       <td className="px-2 py-3">
                         <div className="flex items-center justify-center gap-1">
                           <button onClick={() => setQty(i, l.quantity - 1)} className="h-6 w-6 rounded border border-border flex items-center justify-center hover:bg-accent"><Minus className="h-3 w-3" /></button>
-                          <input value={l.quantity} onChange={(e) => setQty(i, parseInt(e.target.value) || 0)} className="w-10 text-center bg-background border border-border rounded py-1 text-sm" />
+                          {/* Type a quantity (e.g. 120) directly. Commits on Enter/blur so
+                              typing a large number never fires the oversell prompt mid-digit. */}
+                          <input
+                            type="number"
+                            min={0}
+                            inputMode="numeric"
+                            key={l.quantity}
+                            defaultValue={l.quantity}
+                            aria-label="Line quantity"
+                            onFocus={(e) => e.currentTarget.select()}
+                            onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+                            onBlur={(e) => {
+                              const n = parseInt(e.currentTarget.value, 10);
+                              if (!Number.isNaN(n) && n !== l.quantity) setQty(i, n);
+                              else e.currentTarget.value = String(l.quantity);
+                            }}
+                            className="w-12 text-center bg-background border border-border rounded py-1 text-sm [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none" />
                           <button onClick={() => setQty(i, l.quantity + 1)} className="h-6 w-6 rounded border border-border flex items-center justify-center hover:bg-accent"><Plus className="h-3 w-3" /></button>
                         </div>
                       </td>

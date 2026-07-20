@@ -292,7 +292,25 @@ export function TerminalShell() {
                         available stock opens the oversell (out-of-stock) manager-approval flow. */}
                     <div className="flex items-center gap-1 justify-center">
                       <button onClick={() => t.updateQuantity(idx, -1)} className="h-6 w-6 rounded-md border border-border flex items-center justify-center hover:bg-accent"><Minus className="h-3 w-3" /></button>
-                      <span className="w-7 text-center text-sm font-bold tabular-nums">{item.quantity}</span>
+                      {/* Editable qty — type a quantity (e.g. 120) instead of tapping "+" 120×.
+                          Commits on Enter/blur; a value above stock still routes through the
+                          oversell approval inside setLineQuantity. */}
+                      <input
+                        type="number"
+                        min={0}
+                        inputMode="numeric"
+                        defaultValue={item.quantity}
+                        key={item.quantity}
+                        aria-label="Line quantity"
+                        onFocus={(e) => e.currentTarget.select()}
+                        onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+                        onBlur={(e) => {
+                          const n = parseInt(e.currentTarget.value, 10);
+                          if (!Number.isNaN(n) && n !== item.quantity) t.setLineQuantity(idx, n);
+                          else e.currentTarget.value = String(item.quantity);
+                        }}
+                        className="w-10 text-center text-sm font-bold tabular-nums rounded-md border border-border bg-background focus:ring-1 focus:ring-ring focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
+                      />
                       <button onClick={() => t.incrementCartLine(idx)} className="h-6 w-6 rounded-md border border-border flex items-center justify-center hover:bg-accent"><Plus className="h-3 w-3" /></button>
                     </div>
                     {canViewCost && (

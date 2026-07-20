@@ -227,6 +227,7 @@ export interface TerminalContextValue {
   proceedWithItem: (item: MenuItem) => void;
   handleScaleAddToCart: (weightGrams: number) => void;
   updateQuantity: (index: number, delta: number) => void;
+  setLineQuantity: (index: number, qty: number) => void;
   incrementCartLine: (index: number) => void;
   removeFromCart: (index: number) => void;
   clearCart: () => void;
@@ -1160,6 +1161,30 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
     );
   };
 
+  // Absolute quantity set — lets the cashier TYPE a quantity (e.g. 120) instead of
+  // tapping "+" 120 times. Oversell-aware: setting a stock-tracked, mergeable line
+  // above available stock routes through the same out-of-stock manager override the
+  // "+" stepper uses; qty ≤ 0 removes the line.
+  const setLineQuantity = (index: number, qty: number) => {
+    const item = cart[index];
+    if (!item) return;
+    const next = Math.floor(qty);
+    if (!Number.isFinite(next) || next <= 0) {
+      setCart((prev) => prev.filter((_, i) => i !== index));
+      return;
+    }
+    if (!item.selectedModifiers && !item.promoFree && isStockTracked(item.item_type) && item.stockQuantity !== undefined) {
+      const otherLinesQty = cart
+        .filter((c, i) => i !== index && c.id === item.id && !c.selectedModifiers && !c.promoFree)
+        .reduce((s, c) => s + c.quantity, 0);
+      if (otherLinesQty + next > item.stockQuantity) {
+        setPendingOverride(item);
+        return;
+      }
+    }
+    setCart((prev) => prev.map((c, i) => (i === index ? { ...c, quantity: next } : c)));
+  };
+
   // Cart "+" stepper: like adding one more unit, but routes an oversell (past-stock) increment on a
   // mergeable line through the out-of-stock manager override (the approval re-adds one unit, which
   // merges onto the same line). Modifier/promo lines and untracked items just bump directly.
@@ -1848,7 +1873,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
     pendingApprovalAction, setPendingApprovalAction, confirmApproval,
     priceEditIndex, setPriceEditIndex, setLinePrice, setLineDiscount,
     addItemToCart, handleItemTap, proceedWithItem, handleScaleAddToCart,
-    updateQuantity, incrementCartLine, removeFromCart, clearCart, bogoFreeFor, updateCourse, setItemSeat,
+    updateQuantity, setLineQuantity, incrementCartLine, removeFromCart, clearCart, bogoFreeFor, updateCourse, setItemSeat,
     pricingProfile, pricingTiers, repricing, repriceCart,
     loyaltyState, setLoyaltyState, customerResetSeq, scaleDeviceId, customerCreditAvailable,
     orderSubtype, setOrderSubtype, deliveryInfo, setDeliveryInfo, tableId, tableName,
