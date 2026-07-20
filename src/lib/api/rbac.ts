@@ -73,8 +73,13 @@ export const rbacApi = {
       .get<{ data?: POSPermission[]; permissions?: POSPermission[] }>(`${base(tenantId)}/rbac/roles/${roleId}/permissions`)
       .then((r) => r.data ?? r.permissions ?? []),
 
+  // Returns the EFFECTIVE role id the edit was applied to. When roleId is a shared/global system
+  // role, the server copy-on-writes a per-tenant override (so the edit never leaks to other tenants)
+  // and returns that override's id — the caller should re-target the matrix at it.
   setRolePermissions: (tenantId: string, roleId: string, permissionIds: string[]) =>
-    apiClient.put<void>(`${base(tenantId)}/rbac/roles/${roleId}/permissions`, { permission_ids: permissionIds }),
+    apiClient
+      .put<{ message?: string; role_id?: string }>(`${base(tenantId)}/rbac/roles/${roleId}/permissions`, { permission_ids: permissionIds })
+      .then((r) => r?.role_id ?? roleId),
 
   // ── Additive per-user role assignments (POSUserRoleAssignment) ──────────────
   // A staff member keeps their base role (StaffMember.Role) AND gains every assigned role's

@@ -77,6 +77,15 @@ export function useSetRolePermissions(tenantId: string) {
   return useMutation({
     mutationFn: ({ roleId, permissionIds }: { roleId: string; permissionIds: string[] }) =>
       rbacApi.setRolePermissions(tenantId, roleId, permissionIds),
-    onSuccess: (_d, vars) => qc.invalidateQueries({ queryKey: [ROLE_PERMS_KEY, tenantId, vars.roleId] }),
+    // Returns the EFFECTIVE role id. Editing a shared/global role copy-on-writes a per-tenant
+    // override with a NEW id, so refresh the roles list (it now surfaces the override under the same
+    // code) and both the old (global) and new (override) role-perms caches.
+    onSuccess: (effectiveRoleId, vars) => {
+      qc.invalidateQueries({ queryKey: [ROLES_KEY, tenantId] });
+      qc.invalidateQueries({ queryKey: [ROLE_PERMS_KEY, tenantId, vars.roleId] });
+      if (effectiveRoleId && effectiveRoleId !== vars.roleId) {
+        qc.invalidateQueries({ queryKey: [ROLE_PERMS_KEY, tenantId, effectiveRoleId] });
+      }
+    },
   });
 }

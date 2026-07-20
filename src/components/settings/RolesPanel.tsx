@@ -158,6 +158,7 @@ export function RolesPanel() {
           tenantId={tenantId}
           role={selectedRole}
           canManage={canEditMatrix}
+          onRoleChanged={setSelected}
           readOnlyReason={selectedRole?.is_system_role && !isAdminLevel
             ? 'System roles can only be edited by an administrator.'
             : undefined}
@@ -186,8 +187,8 @@ export function RolesPanel() {
 }
 
 function RolePermissionMatrix({
-  tenantId, role, canManage, readOnlyReason,
-}: { tenantId: string; role: POSRole | null; canManage: boolean; readOnlyReason?: string }) {
+  tenantId, role, canManage, readOnlyReason, onRoleChanged,
+}: { tenantId: string; role: POSRole | null; canManage: boolean; readOnlyReason?: string; onRoleChanged?: (roleId: string) => void }) {
   const roleId = role?.id ?? '';
   const { data: allPerms = [], isLoading: pl } = useRbacPermissions(tenantId);
   const { data: rolePerms = [], isLoading: rl } = useRolePermissions(tenantId, roleId || null);
@@ -247,7 +248,15 @@ function RolePermissionMatrix({
           {canManage && (
             <Button size="sm" disabled={setRolePerms.isPending}
               onClick={() => setRolePerms.mutate({ roleId, permissionIds: Array.from(selected) }, {
-                onSuccess: () => toast.success('Permissions updated'),
+                onSuccess: (effectiveRoleId) => {
+                  // A shared/global role edit is copy-on-written into a per-tenant override with a
+                  // new id — re-point the selection at it so the matrix keeps showing this role.
+                  const wasSystem = role?.is_system_role;
+                  if (effectiveRoleId && effectiveRoleId !== roleId) onRoleChanged?.(effectiveRoleId);
+                  toast.success(wasSystem && effectiveRoleId !== roleId
+                    ? 'Permissions saved for this business (other businesses unaffected)'
+                    : 'Permissions updated');
+                },
                 onError: async (e) => toast.error(await apiErrorMessage(e, 'Failed to update permissions')),
               })}>
               {setRolePerms.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Save className="h-3.5 w-3.5 mr-1" /> Save</>}
