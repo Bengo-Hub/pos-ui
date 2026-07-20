@@ -1511,6 +1511,55 @@ export function useDeleteDraft() {
   });
 }
 
+/** One order a bulk operation did NOT apply to, with pos-api's machine-readable reason:
+ *  invalid_id | not_found | not_draft | not_owner | already_voided | finalized | internal_error. */
+export interface BulkOrderSkip {
+  id: string;
+  reason: string;
+}
+
+/**
+ * useBulkDeleteDrafts removes a batch of DRAFT sales via POST /orders/bulk-delete. Per-order
+ * rules are identical to the single DeleteDraft (draft-only; pos.orders.manage deletes any,
+ * others only their own) — ineligible ids come back under `skipped` with a reason instead of
+ * failing the whole call, so the Drafts list can toast an accurate summary.
+ */
+export function useBulkDeleteDrafts() {
+  const tenantID = useTenantID();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (orderIds: string[]) =>
+      apiClient.post<{ deleted: number; skipped: BulkOrderSkip[] }>(
+        `${basePath(tenantID)}/orders/bulk-delete`,
+        { order_ids: orderIds },
+      ),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['pos-orders'] }),
+  });
+}
+
+/**
+ * useBulkVoidOrders voids a batch of unsettled orders via POST /orders/bulk-void with ONE
+ * shared reason. Route-gated server-side to pos.orders.manage. Already-voided orders and
+ * finalized sales (completed/paid/closed — ledger + KRA eTIMS state; must be reversed via a
+ * return/refund) come back under `skipped`. Also refreshes the sales-summary footer, which a
+ * mass void changes.
+ */
+export function useBulkVoidOrders() {
+  const tenantID = useTenantID();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ orderIds, reason }: { orderIds: string[]; reason: string }) =>
+      apiClient.post<{ voided: number; skipped: BulkOrderSkip[] }>(
+        `${basePath(tenantID)}/orders/bulk-void`,
+        { order_ids: orderIds, reason },
+      ),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['pos-orders'] });
+      qc.invalidateQueries({ queryKey: ['pos-orders-summary'] });
+    },
+  });
+}
+
 /**
  * useVoidOrderLine soft-voids a SINGLE line off an open bill (partial voiding) — e.g. one item
  * became unavailable (an ingredient ran out) while the rest of the order stands. Mirrors
