@@ -1495,6 +1495,23 @@ export function useVoidOrder() {
 }
 
 /**
+ * useDeleteDraft permanently removes a DRAFT (saved-but-unpaid) sale via DELETE /orders/{id}.
+ * RBAC is enforced server-side: a manager/admin (pos.orders.manage) deletes any draft, a cashier
+ * only their own — the client also hides the button accordingly, but the server is the boundary.
+ * Only draft-status orders are deletable (the backend 409s otherwise). Invalidates the orders
+ * cache so the drafts list drops the row immediately.
+ */
+export function useDeleteDraft() {
+  const tenantID = useTenantID();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (orderId: string) =>
+      apiClient.delete(`${basePath(tenantID)}/orders/${orderId}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['pos-orders'] }),
+  });
+}
+
+/**
  * useVoidOrderLine soft-voids a SINGLE line off an open bill (partial voiding) — e.g. one item
  * became unavailable (an ingredient ran out) while the rest of the order stands. Mirrors
  * useVoidOrder's online + offline-queue + idempotency shape, but keyed by line_id so the
