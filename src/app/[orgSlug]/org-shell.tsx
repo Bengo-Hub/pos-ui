@@ -129,6 +129,11 @@ function OutletContextHealer() {
   const outletUseCase = useAuthStore((s) => s.outlet?.use_case);
   const outletId = useAuthStore((s) => s.outlet?.id);
   const tenantID = useAuthStore((s) => (s.user as any)?.tenant_id ?? '');
+  // The outlet this staff member is tied to (StaffOutlet home outlet). On a fresh login the store
+  // outlet is null, so we PRESELECT the user's assigned outlet here — falling back to the tenant
+  // default/HQ only when the user has no assignment (HQ/admin). A mid-session switch persists a
+  // full outlet (with use_case), so this healer no-ops on reload and the switch is respected.
+  const homeOutletId = useAuthStore((s) => (s.user as any)?.home_outlet_id ?? '');
   useEffect(() => {
     if (status !== 'authenticated' || !tenantID) return;
     const needsHeal = isTerminalSession ? !outletId : !outletUseCase;
@@ -136,7 +141,8 @@ function OutletContextHealer() {
     let cancelled = false;
     (async () => {
       try {
-        const resolved = await resolveActiveOutlet(tenantID, outletId);
+        // Prefer the user's assigned/home outlet; fall back to the current store id when unassigned.
+        const resolved = await resolveActiveOutlet(tenantID, homeOutletId || outletId);
         if (!cancelled && resolved) {
           useAuthStore.getState().setOutlet(resolved);
         }
@@ -145,7 +151,7 @@ function OutletContextHealer() {
       }
     })();
     return () => { cancelled = true; };
-  }, [status, isTerminalSession, outletUseCase, outletId, tenantID]);
+  }, [status, isTerminalSession, outletUseCase, outletId, tenantID, homeOutletId]);
   return null;
 }
 

@@ -107,7 +107,7 @@ export async function refreshTokens(refreshToken: string): Promise<{
 export async function fetchPosServiceProfile(
   accessToken: string,
   tenantId: string
-): Promise<{ posRole: string; permissions: string[] } | null> {
+): Promise<{ posRole: string; permissions: string[]; homeOutletId: string; outletIds: string[] } | null> {
   try {
     const POS_API_URL = process.env.NEXT_PUBLIC_POS_API_URL ?? '';
     const response = await fetch(`${POS_API_URL}/api/v1/${tenantId}/pos/auth/me`, {
@@ -118,6 +118,10 @@ export async function fetchPosServiceProfile(
     return {
       posRole: data.pos_role ?? '',
       permissions: data.permissions ?? [],
+      // The staff member's assigned outlets + home outlet, so the UI can preselect the outlet
+      // the user is tied to on login (empty for HQ/admin users with no explicit assignment).
+      homeOutletId: data.home_outlet_id ?? '',
+      outletIds: Array.isArray(data.outlets) ? data.outlets : [],
     };
   } catch {
     return null;

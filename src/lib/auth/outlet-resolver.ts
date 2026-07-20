@@ -4,14 +4,20 @@ import { type OutletInfo } from '@/store/auth';
 
 /**
  * resolveActiveOutlet — fetch the tenant's outlets and pick the one this session should
- * run as, preferring (in order): an explicit preferred id → the last-used outlet id from
- * localStorage → the only outlet → the HQ outlet → the first active outlet.
+ * run as, preferring (in order):
+ *   1. an explicit preferred id — the caller passes the user's ASSIGNED/home outlet
+ *      (StaffOutlet), so a staff member always lands on the outlet they're tied to;
+ *   2. the last-used outlet id from localStorage;
+ *   3. the only outlet (single-outlet tenant);
+ *   4. the tenant DEFAULT / HQ outlet (the "default/main" fallback for an unassigned
+ *      HQ/admin user);
+ *   5. the first active outlet.
  *
  * Used by the OutletContextHealer (org-shell) to repair sessions whose store outlet is
- * missing/incomplete: SSO logins used to short-circuit past the outlet selector on a
- * leftover `pos-selected-outlet-id` WITHOUT hydrating the store, leaving outlet.use_case
- * unresolved — so useModuleAccess never resolved and the sidebar sat on its skeleton
- * forever (PIN login always sets a full outlet, which is why it worked).
+ * missing/incomplete AND to preselect the assigned outlet on a fresh login: SSO logins used to
+ * short-circuit past the outlet selector on a leftover `pos-selected-outlet-id` WITHOUT hydrating
+ * the store, leaving outlet.use_case unresolved — so useModuleAccess never resolved and the
+ * sidebar sat on its skeleton forever (PIN login always sets a full outlet, which is why it worked).
  */
 export async function resolveActiveOutlet(
   tenantID: string,
@@ -31,6 +37,7 @@ export async function resolveActiveOutlet(
     (preferredId && active.find((o) => o.id === preferredId)) ||
     (storedId && active.find((o) => o.id === storedId)) ||
     (active.length === 1 ? active[0] : null) ||
+    active.find((o) => (o as any).is_default) ||
     active.find((o) => (o as any).is_hq) ||
     active[0]
   );

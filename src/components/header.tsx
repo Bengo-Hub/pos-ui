@@ -239,7 +239,15 @@ function HeaderOutletChip() {
             <div className="max-h-64 overflow-y-auto py-1">
               <button
                 type="button"
-                onClick={() => { selectOutlet(null); apiClient.setOutletID(authOutlet?.id ?? null); setOpen(false); }}
+                onClick={() => {
+                  selectOutlet(null);
+                  // Clear the auth-store drill-down override too, so the outlet ORDERS post against
+                  // (useEffectiveOutletID) and the X-Outlet-ID header both fall back to the home
+                  // outlet. Without this the header switch changed catalog scope but sales/stock
+                  // still booked against the home outlet (the two stores were out of sync).
+                  useAuthStore.getState().setSelectedOutletId(null);
+                  setOpen(false);
+                }}
                 className={cn('w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted transition-colors text-left', !selectedOutlet && 'bg-primary/5 text-primary')}
               >
                 <Building2 className="h-3.5 w-3.5 shrink-0" />
@@ -257,7 +265,14 @@ function HeaderOutletChip() {
                   <button
                     key={o.id}
                     type="button"
-                    onClick={() => { selectOutlet(o); apiClient.setOutletID(o.id); setOpen(false); }}
+                    onClick={() => {
+                      selectOutlet(o);
+                      // Drive the auth-store drill-down override so EVERY outlet-scoped concern —
+                      // the X-Outlet-ID header, catalog scope, AND the outlet orders/stock post
+                      // against (useEffectiveOutletID) — follows this switch, not just the header UI.
+                      useAuthStore.getState().setSelectedOutletId(o.id);
+                      setOpen(false);
+                    }}
                     className={cn('w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted transition-colors text-left', isActive && 'bg-primary/5')}
                   >
                     <span className={cn('h-6 w-6 rounded-lg flex items-center justify-center shrink-0 text-[9px] font-bold', isActive ? 'bg-primary/20 text-primary' : 'bg-muted text-muted-foreground')}>

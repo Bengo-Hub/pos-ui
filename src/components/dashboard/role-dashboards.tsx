@@ -264,14 +264,7 @@ export function ReceptionistDashboard({ orgSlug }: { orgSlug: string }) {
 
 export function RetailDashboard({ orgSlug }: { orgSlug: string }) {
   const { data: summary, isLoading, refetch, isFetching } = useDashboardSummary();
-  const tenantID = useTenantID();
   const s = summary ?? {};
-  const { data: lowStockData } = useQuery({
-    queryKey: ['dashboard-low-stock', tenantID],
-    queryFn: () => apiClient.get<any>(`/api/v1/${tenantID}/pos/catalog/items?low_stock=true`),
-    enabled: !!tenantID, staleTime: 5 * 60_000, retry: false,
-  });
-  const lowStockCount = lowStockData?.meta?.total ?? lowStockData?.data?.length ?? 0;
 
   return (
     <div className="p-6 space-y-6">
@@ -290,7 +283,7 @@ export function RetailDashboard({ orgSlug }: { orgSlug: string }) {
         <KPICard label="Today's Revenue" value={fmt(s.total_revenue ?? 0)} sub="vs yesterday" icon={TrendingUp} trend={s.revenue_growth} loading={isLoading} />
         <KPICard label="Transactions" value={fmtNum(s.total_orders ?? 0)} sub="today" icon={ClipboardList} trend={s.orders_growth} loading={isLoading} />
         <KPICard label="Avg Basket Value" value={fmt(s.avg_ticket ?? 0)} sub="per transaction" icon={ShoppingBag} loading={isLoading} />
-        <KPICard label="Low Stock Alerts" value={fmtNum(lowStockCount)} sub="items below reorder" icon={Package} loading={isLoading} />
+        <KPICard label="Items Sold" value={fmtNum(s.items_sold ?? 0)} sub="units today" icon={Package} loading={isLoading} />
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2"><RecentOrdersCard orgSlug={orgSlug} /></div>

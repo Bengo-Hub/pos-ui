@@ -22,6 +22,13 @@ interface UserProfile {
   tenant_slug: string;
   isPlatformOwner?: boolean;
   isSuperUser?: boolean;
+  /** The outlet this staff member is tied to (StaffOutlet home outlet), used to PRESELECT their
+   *  outlet on login. Empty for HQ/admin users with no explicit assignment → UI falls back to
+   *  the tenant default/HQ outlet. */
+  home_outlet_id?: string;
+  /** All outlets the staff member is assigned to (for the switcher's allowed set / single-outlet
+   *  auto-select). Empty = no restriction (HQ/admin sees all). */
+  outlet_ids?: string[];
 }
 
 interface Session {
@@ -267,6 +274,8 @@ export const useAuthStore = create<AuthState>()(
                     // Merge: pos-api role overrides global role for POS contexts
                     roles: [svcProfile.posRole, ...ssoUser.roles].filter(Boolean),
                     permissions: svcProfile.permissions,
+                    home_outlet_id: svcProfile.homeOutletId,
+                    outlet_ids: svcProfile.outletIds,
                   }
                 : ssoUser;
 
@@ -384,6 +393,10 @@ export const useAuthStore = create<AuthState>()(
             // global roles fresh, and `permissions` (checked first by usePermissions) is what
             // actually drives gating.
             roles: nextRoles,
+            // Keep the outlet assignment fresh (also populates it for a persisted-fast-path login
+            // that never ran the SSO callback), so OutletContextHealer can preselect the home outlet.
+            home_outlet_id: svcProfile.homeOutletId || current.home_outlet_id,
+            outlet_ids: svcProfile.outletIds?.length ? svcProfile.outletIds : current.outlet_ids,
           },
         });
         // Keep the OFFLINE staff-profile cache (the weak-wifi/offline PIN bcrypt fallback in
