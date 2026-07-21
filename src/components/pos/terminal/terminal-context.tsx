@@ -926,8 +926,8 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
     const q = searchQuery.trim().toLowerCase();
     if (q) {
       items = items.filter((i) =>
-        i.name.toLowerCase().includes(q) ||
-        i.sku.toLowerCase().includes(q) ||
+        (i.name ?? '').toLowerCase().includes(q) ||
+        (i.sku ?? '').toLowerCase().includes(q) ||
         (i.barcode?.toLowerCase().includes(q) ?? false),
       );
     }
