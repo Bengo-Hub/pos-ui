@@ -172,9 +172,9 @@ function HeaderOutletChip() {
     return (
       <div className={chipClass}>
         <MapPin className="h-3.5 w-3.5 text-primary shrink-0" />
-        <span className="truncate max-w-[7.5rem]">{activeName}</span>
+        <span className="truncate max-w-[4.5rem] sm:max-w-[7.5rem]">{activeName}</span>
         {activeUseCase && (
-          <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary whitespace-nowrap">
+          <span className="hidden sm:inline-block rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary whitespace-nowrap">
             {USE_CASE_LABELS[activeUseCase] ?? activeUseCase}
           </span>
         )}
@@ -192,9 +192,9 @@ function HeaderOutletChip() {
         title="Switch outlet"
       >
         <MapPin className="h-3.5 w-3.5 text-primary shrink-0" />
-        <span className="truncate max-w-[7.5rem]">{activeName}</span>
+        <span className="truncate max-w-[4.5rem] sm:max-w-[7.5rem]">{activeName}</span>
         {activeUseCase && (
-          <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary whitespace-nowrap">
+          <span className="hidden sm:inline-block rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary whitespace-nowrap">
             {USE_CASE_LABELS[activeUseCase] ?? activeUseCase}
           </span>
         )}
@@ -376,7 +376,9 @@ export function Header({ onMenuClick, onToggleSidebar, sidebarCollapsed }: Heade
           </button>
         )}
         <div className="flex items-center gap-6 min-w-0">
-            <h1 className="text-lg sm:text-xl font-black tracking-tight text-foreground uppercase truncate max-w-[150px] sm:max-w-none shrink-0">
+            {/* Hidden below sm: on the narrowest phones the hamburger + outlet chip already
+                fill the row; adding the brand title crowded them into an overlapping mess. */}
+            <h1 className="hidden sm:block text-lg sm:text-xl font-black tracking-tight text-foreground uppercase truncate max-w-none shrink-0">
                 {getServiceTitle('POS')}
             </h1>
             <div className="hidden lg:flex relative w-64 max-w-full group shrink-0">

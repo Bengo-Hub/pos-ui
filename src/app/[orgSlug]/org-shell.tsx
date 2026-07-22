@@ -15,6 +15,7 @@ import { Footer } from '@/components/footer';
 import { SubscriptionBanner } from '@/components/subscription/subscription-banner';
 import { SyncStatusIndicator } from '@/components/pos/sync-status-indicator';
 import { PWARegistration } from '@/components/pwa-registration';
+import { MobileBottomNav } from '@/components/mobile-bottom-nav';
 import { StartShiftGate } from '@/components/pos/start-shift-gate';
 import { RouteGuard } from '@/components/auth/route-guard';
 import { TerminalIdleScreensaver } from '@/components/pos/terminal-idle-screensaver';
@@ -280,8 +281,10 @@ export function OrgShell({ children }: { children: ReactNode }) {
               {children}
             </div>
           ) : (
-            // Standard app shell
-            <div className="flex h-screen overflow-hidden bg-background">
+            // Standard app shell. `fixed inset-0` (not h-screen) pins the shell to the true
+            // viewport rather than the layout viewport — mobile Safari's address-bar-inclusive
+            // 100vh made h-screen unreliable for a shell meant to feel like a native app.
+            <div className="fixed inset-0 flex overflow-hidden bg-background">
               <Sidebar open={sidebarOpen} collapsed={sidebarCollapsed} onClose={() => setSidebarOpen(false)} />
               <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
                 <Header
@@ -290,9 +293,12 @@ export function OrgShell({ children }: { children: ReactNode }) {
                   onToggleSidebar={() => setSidebarCollapsed((v) => !v)}
                 />
                 <SubscriptionBanner />
-                <main className="flex-1 overflow-y-auto bg-accent/5">
+                {/* min-h-0 is required here: without it a flex child defaults to min-height:auto
+                    and overflow-y-auto can never create a scroll context. */}
+                <main className="flex-1 min-h-0 overflow-y-auto bg-accent/5">
                   <StartShiftGate>
-                    <div className="min-h-full flex flex-col">
+                    {/* Bottom padding on mobile clears the fixed bottom nav bar. */}
+                    <div className="min-h-full flex flex-col pb-[calc(4rem+env(safe-area-inset-bottom))] lg:pb-0">
                       {/* App-wide permission safety net: every classified route is gated by
                           the caller's permissions, incl. direct-URL nav. Fail-open for
                           unclassified routes; superusers bypass. */}
@@ -302,6 +308,8 @@ export function OrgShell({ children }: { children: ReactNode }) {
                   </StartShiftGate>
                 </main>
               </div>
+              {/* App-style bottom navigation, phones only. */}
+              <MobileBottomNav onOpenMenu={() => setSidebarOpen(true)} />
             </div>
           )}
           </SubscriptionEntitlementsProvider>
