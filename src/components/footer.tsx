@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { ExternalLink } from 'lucide-react';
+import { PoweredByBadge } from '@bengo-hub/shared-ui-lib';
 import { useTenantBranding } from '@/providers/tenant-branding-provider';
 
 export function Footer() {
@@ -18,23 +18,7 @@ export function Footer() {
               All Rights Reserved. <span className="text-slate-900 dark:text-white font-bold">{tenantName}</span> &copy; {currentYear}.
             </div>
             
-            <div className="flex items-center gap-2">
-              <a
-                href="https://codevertexitsolutions.com"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="group flex items-center gap-2 px-4 py-1.5 rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 transition-all hover:ring-4 hover:ring-primary/20"
-              >
-                <img
-                  src="/logo.jpeg"
-                  alt="Codevertex"
-                  className="h-3.5 w-auto brightness-0 invert dark:brightness-100 dark:invert-0"
-                />
-                <span className="text-[10px] font-black tracking-tight uppercase">
-                  Powered by <span className="text-primary">Codevertex Africa Limited</span>
-                </span>
-              </a>
-            </div>
+            <PoweredByBadge />
           </div>
         </div>
       </div>
