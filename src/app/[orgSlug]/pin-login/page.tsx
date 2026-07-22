@@ -5,11 +5,11 @@ import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { compare as bcryptCompare } from 'bcryptjs';
 import {
-  Building2, ExternalLink, Fingerprint, KeyRound, LayoutDashboard, Settings, Store,
+  Building2, Fingerprint, KeyRound, LayoutDashboard, Settings, Store,
 } from 'lucide-react';
 import {
   PinLoginLayout, PinLoginHeader, PinLoginBrandPanel, PasscodeField, PinKeypad, QwertyKeyboard,
-  OutletCard, DemoHints, USE_CASE_COLORS, USE_CASE_LABELS, type PinLoginOutlet,
+  OutletCard, DemoHints, USE_CASE_COLORS, USE_CASE_LABELS, PinLoginSSOButton, type PinLoginOutlet,
 } from '@bengo-hub/shared-ui-lib/pin-login';
 import { useEffectiveOnline } from '@/lib/connectivity';
 import { useIdleTimer, getScreensaverTimeoutMs, setScreensaverTimeoutMs, resolveScreensaverTimeoutMs } from '@/hooks/use-idle-timer';
@@ -547,24 +547,7 @@ export default function PINLoginPage() {
     </div>
   );
 
-  const SSOButton = ({ tall }: { tall?: boolean }) => (
-    <button
-      type="button"
-      onClick={() => redirectToSSO(orgSlug, `/${orgSlug}/dashboard`)}
-      className={cn(
-        'flex flex-col items-center justify-center gap-2 rounded-2xl',
-        'text-primary-foreground font-bold shadow-md ring-1 ring-inset ring-white/15',
-        'active:scale-[0.98] transition-all duration-150 hover:brightness-105',
-        tall ? 'flex-1 py-6' : 'w-full py-4'
-      )}
-      style={{ background: 'linear-gradient(160deg, hsl(var(--primary)) 0%, hsl(var(--primary-dark, var(--primary))) 100%)' }}
-    >
-      <span className="h-10 w-10 sm:h-12 sm:w-12 rounded-2xl bg-white/20 ring-1 ring-inset ring-white/25 flex items-center justify-center">
-        <ExternalLink className="h-5 w-5 sm:h-6 sm:w-6" />
-      </span>
-      <span className="text-sm">SSO Login</span>
-    </button>
-  );
+  const goSSO = () => redirectToSSO(orgSlug, `/${orgSlug}/dashboard`);
 
   const BiometricButton = () =>
     biometricSupported && hasRegisteredCredential && storedEmail ? (
@@ -611,7 +594,7 @@ export default function PINLoginPage() {
           />
         }
         card={
-          <div className="flex-1 min-h-0 flex flex-col p-4 sm:p-6 overflow-y-auto">
+          <div className="flex-1 min-h-0 flex flex-col p-3 sm:p-6 overflow-y-auto">
             {posOutlets.length === 0 && (outletsLoading || tenantLoading) ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {Array.from({ length: 4 }).map((_, i) => (
@@ -638,7 +621,7 @@ export default function PINLoginPage() {
             )}
 
             <div className="w-full max-w-xs mx-auto mt-6 flex flex-col gap-2.5">
-              <SSOButton />
+              <PinLoginSSOButton onClick={goSSO} />
               <BiometricButton />
               {biometricError && <p className="text-center text-xs text-destructive">{biometricError}</p>}
             </div>
@@ -687,7 +670,7 @@ export default function PINLoginPage() {
         }
         footer={isDemoTenant && <DemoHints subtitle={useCaseLabel} hints={getDemoHints(useCase)} />}
         card={
-          <div className="flex-1 min-h-0 flex flex-col gap-3 p-4 sm:p-6">
+          <div className="flex-1 min-h-0 flex flex-col gap-3 p-3 sm:p-6">
             <PasscodeField
               value={pinDigits.join('')}
               error={!!pinError}
@@ -703,8 +686,8 @@ export default function PINLoginPage() {
 
             {/* ── SMALL SCREENS (< lg): single active keyboard + toggle ── */}
             <div className="flex-1 min-h-0 flex flex-col gap-4 lg:hidden overflow-y-auto">
-              <SSOButton />
-              <div className="flex flex-col gap-3 rounded-2xl bg-muted/40 border border-border p-3 sm:p-4">
+              <PinLoginSSOButton onClick={goSSO} />
+              <div className="flex flex-col gap-3 rounded-2xl bg-muted/40 border border-border p-2.5 sm:p-4">
                 <div className="flex items-center justify-center gap-2 text-muted-foreground">
                   <KeyRound className="h-3.5 w-3.5" />
                   <span className="text-[11px] font-semibold uppercase tracking-[0.18em]">
@@ -743,7 +726,7 @@ export default function PINLoginPage() {
             {/* ── LARGE SCREENS (lg+): 3-zone row, both keyboards visible ── */}
             <div className="hidden lg:flex flex-1 min-h-0 items-stretch gap-5">
               <div className="w-44 shrink-0 flex flex-col">
-                <SSOButton tall />
+                <PinLoginSSOButton onClick={goSSO} tall />
               </div>
               <div className="flex-1 min-w-0 flex flex-col gap-3 rounded-2xl bg-muted/40 border border-border p-4">
                 <div className="flex items-center justify-center gap-2 text-muted-foreground">
