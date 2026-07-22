@@ -5,8 +5,12 @@ import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { compare as bcryptCompare } from 'bcryptjs';
 import {
-  Building2, CalendarClock, Clock3, ExternalLink, Fingerprint, KeyRound, UserRound,
+  Building2, ExternalLink, Fingerprint, KeyRound, LayoutDashboard, Settings, Store,
 } from 'lucide-react';
+import {
+  PinLoginLayout, PinLoginHeader, PinLoginBrandPanel, PasscodeField, PinKeypad, QwertyKeyboard,
+  OutletCard, DemoHints, USE_CASE_COLORS, USE_CASE_LABELS, type PinLoginOutlet,
+} from '@bengo-hub/shared-ui-lib/pin-login';
 import { useEffectiveOnline } from '@/lib/connectivity';
 import { useIdleTimer, getScreensaverTimeoutMs, setScreensaverTimeoutMs, resolveScreensaverTimeoutMs } from '@/hooks/use-idle-timer';
 import { useBiometric } from '@/hooks/use-biometric';
@@ -15,10 +19,7 @@ import { useAuthStore } from '@/store/auth';
 import { getCachedStaffProfiles, cacheStaffProfile, type CachedStaffProfile } from '@/lib/db/pos-db';
 import { Screensaver } from '@/components/pos/screensaver';
 import { buildScreensaverMedia } from '@/lib/screensaver';
-import {
-  LoginHero, PinKeypad, OutletCard, DemoHints, USE_CASE_COLORS, USE_CASE_LABELS,
-} from '@/components/pos/pin-login-ui';
-import { QwertyKeyboard } from '@/components/pos/pin-login-keyboards';
+import { LiveClock } from '@/components/pos/live-clock';
 import { useTenantBranding } from '@/providers/tenant-branding-provider';
 import { getStoredOutletId, setStoredOutletId } from '@/lib/auth/outlet-storage';
 import { cn } from '@/lib/utils';
@@ -51,11 +52,7 @@ interface PINLoginResponse {
   };
 }
 
-interface OutletInfo {
-  id: string;
-  name: string;
-  use_case?: string;
-  is_hq?: boolean;
+interface OutletInfo extends PinLoginOutlet {
   settings?: {
     pin_login_message?: string;
     screensaver_url?: string;
@@ -98,6 +95,12 @@ function getDemoHints(useCase: string | undefined | null) {
   return DEMO_HINTS_ALL.filter((h) => h.useCases.includes(useCase));
 }
 
+const WORKFLOW_STEPS = [
+  { icon: Store, label: 'Select outlet' },
+  { icon: KeyRound, label: 'Enter PIN' },
+  { icon: LayoutDashboard, label: 'Start selling' },
+];
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function PINLoginPage() {
@@ -125,18 +128,11 @@ export default function PINLoginPage() {
   const [step, setStep]             = useState<'outlet' | 'pin'>('pin');
   const [storedEmail, setStoredEmail] = useState<string | null>(null);
   const [shift, setShift]           = useState(false); // on-screen QWERTY shift state
-  // Where to land AFTER a successful PIN/SSO login. Default (null) → dashboard.
-  // The "Attendance" action sets this to /shifts so the user must authenticate first
-  // and then lands on their shift page (instead of navigating in without a fresh login).
-  const [postLoginRedirect, setPostLoginRedirect] = useState<string | null>(null);
   // Which on-screen keyboard is showing — like a real soft-keyboard, only ONE is
-  // visible at a time. Numeric PIN keypad is the default; "ABC"/"?123" toggle between
-  // them. This is the ONLY new state; no handler/mutation is duplicated.
+  // visible at a time on small screens. Numeric PIN keypad is the default.
   const [keyboardMode, setKeyboardMode] = useState<'numeric' | 'qwerty'>('numeric');
 
   // Device-local override (set via the gear menu) wins; otherwise fall back to the default.
-  // Once the outlet settings load, a centrally-configured timeout is applied when the user
-  // has NOT picked a device-local value (resolveScreensaverTimeoutMs keeps local precedence).
   const [hasLocalTimeout, setHasLocalTimeout] = useState(false);
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -149,10 +145,6 @@ export default function PINLoginPage() {
   }, []);
 
   // Forward an already-authenticated SSO (non-terminal) session off the kiosk.
-  // Tenant/platform admins who complete "Sign in with your account" land back here
-  // (the SSO returnTo and the org root both point at pin-login, and this kiosk page
-  // never advances an SSO session on its own). Without this they'd be stuck staring
-  // at the PIN keypad despite a valid session. Terminal PIN sessions stay put.
   useEffect(() => {
     if (authStatus === 'authenticated' && hasSession && !isTerminalSession) {
       router.replace(`/${orgSlug}/dashboard`);
@@ -189,12 +181,8 @@ export default function PINLoginPage() {
 
   // ── Outlet info ──────────────────────────────────────────────────────────────
 
-  // Slug-scoped: never resolves an outlet persisted while working in ANOTHER tenant
-  // (that leak used to send the old tenant's outlet_id to /auth/pin/identify → login failed).
   const [storedOutletId, setStoredOutletIdState] = useState<string>(() => getStoredOutletId(orgSlug));
 
-  // Both outlet queries are IndexedDB-first (kvCache): the PIN page must render its outlet
-  // context (name, use case, screensaver, timeout) on an offline/weak-wifi cold start too.
   const { data: outletInfo } = useQuery<OutletInfo | null>({
     queryKey: ['pos-current-outlet', effectiveTenantID, storedOutletId],
     queryFn: async () => {
@@ -345,15 +333,13 @@ export default function PINLoginPage() {
         id:       sessionOutlet.id,
         code:     (sessionOutlet as OutletInfo & { code?: string }).code ?? '',
         name:     sessionOutlet.name,
-        use_case: data.user.outlet_use_case ?? sessionOutlet.use_case,
+        use_case: data.user.outlet_use_case ?? sessionOutlet.use_case ?? undefined,
         is_hq:    data.user.is_hq_user ?? sessionOutlet.is_hq ?? false,
         status:   'active',
       });
       apiClient.setOutletID(sessionOutlet.id);
     }
-    // Single success-redirect path: Attendance sets postLoginRedirect → /shifts,
-    // everything else falls back to the dashboard.
-    router.push(postLoginRedirect ?? `/${orgSlug}/dashboard`);
+    router.push(`/${orgSlug}/dashboard`);
   }
 
   const loginMutation = useMutation({
@@ -391,13 +377,13 @@ export default function PINLoginPage() {
   // ── PIN input handling ───────────────────────────────────────────────────────
 
   // Single submit path shared by: numeric auto-submit at 4 digits, the on-screen
-  // QWERTY ENTER key, and the hero "Login" button. Online → loginMutation, and on a
+  // QWERTY ENTER key, and the passcode-field Login button. Online → loginMutation, and on a
   // NETWORK-shaped failure (timeout / unreachable — weak wifi reads as "online") it
   // falls back to the same bcrypt-match-against-cached-profiles branch used offline.
   async function submitPasscode(passcode?: string) {
     if (loginMutation.isPending) return;
     const pin = passcode ?? pinDigits.join('');
-    if (!pin) return; // guard empty (hero Login / Enter on an empty field)
+    if (!pin) return; // guard empty (Login button / Enter on an empty field)
 
     if (isOnline) {
       try {
@@ -425,11 +411,6 @@ export default function PINLoginPage() {
     // outlet_id (and the API client sends X-Outlet-ID once back online).
     const offlineOutletId = outletInfo?.id ?? storedOutletId;
     if (!offlineOutletId) {
-      // Neither the last-fetched outlet info nor a stored outlet id is available (e.g. the
-      // very first login on a fresh device while offline) — completing the login here would
-      // leave the session with NO outlet context, so every subsequent request (tables,
-      // sections, catalog) goes out with no X-Outlet-ID and silently gets the wrong outlet's
-      // data from the server's HQ fallback. Block instead of producing a broken session.
       triggerPinError('Connect once to select an outlet, then you can log in offline.');
       return;
     }
@@ -454,8 +435,7 @@ export default function PINLoginPage() {
       status:   'active',
     });
     apiClient.setOutletID(offlineOutletId);
-    // Same success-redirect destination as the online path (Attendance → /shifts).
-    router.push(postLoginRedirect ?? `/${orgSlug}/dashboard`);
+    router.push(`/${orgSlug}/dashboard`);
   }
 
   function handleDigit(digit: string) {
@@ -469,9 +449,9 @@ export default function PINLoginPage() {
     }
   }
 
-  // On-screen QWERTY key handler (genuinely-new logic): append to the SAME pinDigits
-  // state. Letters/space/punctuation append (case already applied by the keyboard).
-  // QWERTY input does NOT auto-submit — only ENTER / hero-Login submit.
+  // On-screen QWERTY key handler: append to the SAME pinDigits state. Letters/space/
+  // punctuation append (case already applied by the keyboard). QWERTY input does NOT
+  // auto-submit — only ENTER / the passcode-field Login button submit.
   function handleKey(char: string) {
     if (loginMutation.isPending) return;
     setPinDigits((d) => [...d, char]);
@@ -484,18 +464,13 @@ export default function PINLoginPage() {
     setPinError(null);
   }
 
-  // Clears all entered digits at once (the reference's destructive CLEAR key).
   function handleClear() {
     if (loginMutation.isPending) return;
     setPinDigits([]);
     setPinError(null);
   }
 
-  // ── Physical-keyboard support ── non-touch devices type the PIN/passcode directly:
-  // digits go through handleDigit (keeps the 4-digit auto-submit) while the entry is
-  // all-numeric; once any letter is present it's a passcode, so digits stop auto-submitting
-  // (handleKey). Backspace deletes, Enter submits, Escape clears. Real inputs (settings
-  // fields, modals) keep their own typing — we skip when focus is in one.
+  // ── Physical-keyboard support ──────────────────────────────────────────────
   useEffect(() => {
     if (step !== 'pin') return;
     const onKeyDown = (e: KeyboardEvent) => {
@@ -520,14 +495,12 @@ export default function PINLoginPage() {
   const tenantDisplayName = tenant?.orgName ?? tenant?.name ?? orgSlug;
   const outletName = outletInfo?.name ?? tenantDisplayName;
   const useCase = outletInfo?.use_case;
-  const pinLoginMessage = outletInfo?.settings?.pin_login_message;
   const useCaseColor = useCase ? USE_CASE_COLORS[useCase] : null;
   const useCaseLabel = useCase ? (USE_CASE_LABELS[useCase] ?? useCase) : null;
   const isDemoTenant = orgSlug === 'codevertex-demo';
 
   // Screensaver media: configured outlet slideshow (up to 3) → legacy single URL →
-  // tenant-brand URL → bundled per-slug defaults → branded gradient. Shared resolver
-  // with TerminalIdleScreensaver so both idle screens rotate the same set.
+  // tenant-brand URL → bundled per-slug defaults → branded gradient.
   const screensaverMedia = buildScreensaverMedia({
     configuredUrls: [
       ...(outletInfo?.settings?.screensaver_urls ?? []),
@@ -536,72 +509,67 @@ export default function PINLoginPage() {
     ],
     orgSlug,
   });
-
-  // Hero shared bits — brand backdrop image (screensaver/logo) + fallback initials.
   const heroBackdrop = tenant?.posScreensaverUrl ?? tenant?.logoUrl ?? null;
-  const heroInitials = (tenant?.orgName ?? orgSlug).slice(0, 2).toUpperCase();
 
-  // Attendance intent: if the user is ALREADY in a (terminal) session, jump straight to
-  // /shifts. Otherwise DON'T navigate — record /shifts as the post-login redirect, keep the
-  // user on the PIN screen to authenticate, and surface a brief inline hint. The actual
-  // login still flows through the SINGLE existing success path (handleLoginSuccess /
-  // offline bcrypt path) which now honours postLoginRedirect.
-  const shiftsHref = `/${orgSlug}/shifts`;
-  function handleAttendance() {
-    if (hasSession && isTerminalSession) {
-      router.push(shiftsHref);
-      return;
-    }
-    setPostLoginRedirect(shiftsHref);
-  }
-  const attendanceArmed = postLoginRedirect === shiftsHref;
-
-  // Shared Login (redirectToSSO) + Attendance (→ /shifts) action buttons. Factored
-  // out so the SAME markup/handlers serve BOTH responsive layouts without copy-paste.
-  //  - orientation="row"  → side-by-side (small-screen stacked layout, full width)
-  //  - orientation="col"  → stacked tall buttons (large-screen LEFT zone)
-  const ActionButtons = ({ orientation }: { orientation: 'row' | 'col' }) => (
-    <div className={cn('gap-3', orientation === 'row' ? 'grid grid-cols-2' : 'flex flex-col h-full')}>
+  // Settings gear (screensaver timeout) — POS-only control, rendered in the shared header's
+  // rightSlot alongside the live clock.
+  const SettingsGear = () => (
+    <div className="relative">
       <button
-        onClick={() => redirectToSSO(orgSlug, postLoginRedirect ?? `/${orgSlug}/dashboard`)}
-        className={cn(
-          'flex flex-col items-center justify-center gap-2 rounded-2xl py-4 sm:py-5',
-          'text-white font-bold shadow-md ring-1 ring-inset ring-white/15',
-          'active:scale-[0.98] transition-all duration-150',
-          orientation === 'col' && 'flex-1'
-        )}
-        style={{ background: 'linear-gradient(160deg, hsl(var(--primary)) 0%, hsl(var(--primary-dark)) 100%)' }}
+        type="button"
+        onClick={() => setShowSettings((v) => !v)}
+        className="h-9 w-9 rounded-xl flex items-center justify-center bg-white/15 ring-1 ring-inset ring-white/25 hover:bg-white/25 text-white transition-colors"
+        title="Screensaver timeout"
+        aria-label="Screensaver timeout settings"
       >
-        <span className="h-10 w-10 sm:h-12 sm:w-12 rounded-2xl bg-white/20 ring-1 ring-inset ring-white/25 flex items-center justify-center">
-          <UserRound className="h-5 w-5 sm:h-6 sm:w-6" />
-        </span>
-        <span className="text-sm">Login</span>
+        <Settings className="h-4 w-4" />
       </button>
-      <button
-        onClick={handleAttendance}
-        className={cn(
-          'flex flex-col items-center justify-center gap-2 rounded-2xl py-4 sm:py-5',
-          'text-secondary-foreground font-bold shadow-md ring-1 ring-inset',
-          'hover:brightness-95 active:scale-[0.98] transition-all duration-150',
-          // When armed (no session yet), mark Attendance as the active intent so the user
-          // knows their PIN entry will clock them in.
-          attendanceArmed ? 'ring-primary/60 ring-2' : 'ring-black/5',
-          orientation === 'col' && 'flex-1'
-        )}
-        style={{ background: 'hsl(var(--secondary))' }}
-      >
-        <span className="h-10 w-10 sm:h-12 sm:w-12 rounded-2xl bg-black/5 flex items-center justify-center">
-          <CalendarClock className="h-5 w-5 sm:h-6 sm:w-6" />
-        </span>
-        <span className="text-sm">Attendance</span>
-      </button>
+      {showSettings && (
+        <div className="absolute right-0 top-11 z-50 w-44 rounded-2xl border border-border bg-card shadow-xl p-1.5 space-y-0.5">
+          <p className="px-3 py-1.5 text-[9px] font-bold text-muted-foreground uppercase tracking-wider">Screensaver</p>
+          {TIMEOUT_OPTIONS.map((opt) => (
+            <button
+              key={opt.ms}
+              type="button"
+              onClick={() => handleTimeoutChange(opt.ms)}
+              className={cn(
+                'w-full text-left px-3 py-2 rounded-xl text-sm transition-colors',
+                timeoutMs === opt.ms
+                  ? 'bg-primary text-primary-foreground font-semibold'
+                  : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+              )}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 
-  // Shared biometric affordance — same handler/markup in both layouts.
+  const SSOButton = ({ tall }: { tall?: boolean }) => (
+    <button
+      type="button"
+      onClick={() => redirectToSSO(orgSlug, `/${orgSlug}/dashboard`)}
+      className={cn(
+        'flex flex-col items-center justify-center gap-2 rounded-2xl',
+        'text-primary-foreground font-bold shadow-md ring-1 ring-inset ring-white/15',
+        'active:scale-[0.98] transition-all duration-150 hover:brightness-105',
+        tall ? 'flex-1 py-6' : 'w-full py-4'
+      )}
+      style={{ background: 'linear-gradient(160deg, hsl(var(--primary)) 0%, hsl(var(--primary-dark, var(--primary))) 100%)' }}
+    >
+      <span className="h-10 w-10 sm:h-12 sm:w-12 rounded-2xl bg-white/20 ring-1 ring-inset ring-white/25 flex items-center justify-center">
+        <ExternalLink className="h-5 w-5 sm:h-6 sm:w-6" />
+      </span>
+      <span className="text-sm">SSO Login</span>
+    </button>
+  );
+
   const BiometricButton = () =>
     biometricSupported && hasRegisteredCredential && storedEmail ? (
       <button
+        type="button"
         onClick={() => biometricAuth(storedEmail, orgSlug)}
         disabled={biometricLoading}
         className={cn(
@@ -624,42 +592,37 @@ export default function PINLoginPage() {
                                 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3';
 
     return (
-      <div className="relative min-h-screen w-screen flex flex-col bg-slate-50">
-        {/* Brand hero band — applied to BOTH steps */}
-        <LoginHero
-          eyebrow="POS System"
-          heading="Welcome Back"
-          outletName={posOutlets.length > 1 ? 'Select your outlet to continue' : tenantDisplayName}
-          backdropUrl={heroBackdrop}
-          logoUrl={tenant?.logoUrl}
-          fallbackInitials={heroInitials}
-          isOnline={isOnline}
-        />
-
-        <svg className="pointer-events-none absolute inset-0 h-full w-full opacity-[0.015]" xmlns="http://www.w3.org/2000/svg" aria-hidden>
-          <filter id="grain-outlet"><feTurbulence type="fractalNoise" baseFrequency="0.82" numOctaves="4" stitchTiles="stitch"/></filter>
-          <rect width="100%" height="100%" filter="url(#grain-outlet)"/>
-        </svg>
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 top-40 overflow-hidden">
-          <div className="absolute top-1/2 -right-48 h-[500px] w-[500px] rounded-full blur-3xl animate-breathe-slow"
-               style={{ background: 'hsl(var(--primary) / 0.06)' }} />
-          <div className="absolute -bottom-48 left-1/3 h-96 w-96 rounded-full blur-3xl"
-               style={{ background: 'hsl(var(--primary) / 0.06)' }} />
-        </div>
-
-        <div className="relative z-10 flex flex-col flex-1 items-center px-4 sm:px-6 pt-8 pb-10 overflow-y-auto">
-          <div className="w-full max-w-2xl">
+      <PinLoginLayout
+        backdropUrl={heroBackdrop}
+        header={
+          <PinLoginHeader
+            serviceName="Codevertex POS"
+            tenantName={tenantDisplayName}
+            outletName={posOutlets.length > 1 ? 'Select your outlet to continue' : undefined}
+            isOnline={isOnline}
+            rightSlot={<LiveClock />}
+          />
+        }
+        brandPanel={
+          <PinLoginBrandPanel
+            tenantName={tenantDisplayName}
+            tenantLogoUrl={tenant?.logoUrl}
+            workflowSteps={WORKFLOW_STEPS}
+          />
+        }
+        card={
+          <div className="flex-1 min-h-0 flex flex-col p-4 sm:p-6 overflow-y-auto">
             {posOutlets.length === 0 && (outletsLoading || tenantLoading) ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {Array.from({ length: 4 }).map((_, i) => (
-                  <div key={i} className="h-36 rounded-2xl bg-slate-200/60 animate-pulse" style={{ animationDelay: `${i * 80}ms` }} />
+                  <div key={i} className="h-32 rounded-2xl bg-muted/60 animate-pulse" style={{ animationDelay: `${i * 80}ms` }} />
                 ))}
               </div>
             ) : posOutlets.length === 0 ? (
-              <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
-                <Building2 className="mx-auto mb-3 h-10 w-10 text-slate-300" />
-                <p className="text-slate-900 font-medium">No POS outlets available</p>
-                <p className="mt-1 text-sm text-slate-500">No point-of-sale outlets are configured for this business yet. Ask an administrator to create an outlet in the admin console.</p>
+              <div className="rounded-2xl border border-border bg-card p-8 text-center shadow-sm my-auto">
+                <Building2 className="mx-auto mb-3 h-10 w-10 text-muted-foreground/40" />
+                <p className="text-foreground font-medium">No POS outlets available</p>
+                <p className="mt-1 text-sm text-muted-foreground">No point-of-sale outlets are configured for this business yet. Ask an administrator to create an outlet in the admin console.</p>
               </div>
             ) : (
               <div className={cn('grid gap-3', colClass)}>
@@ -673,73 +636,19 @@ export default function PINLoginPage() {
                 ))}
               </div>
             )}
-          </div>
 
-          <div className="w-full max-w-xs mt-10 flex flex-col gap-3">
-            <div className="flex items-center gap-3">
-              <div className="flex-1 h-px bg-slate-200" />
-              <span className="text-[10px] text-slate-400 font-medium tracking-widest uppercase">or</span>
-              <div className="flex-1 h-px bg-slate-200" />
+            <div className="w-full max-w-xs mx-auto mt-6 flex flex-col gap-2.5">
+              <SSOButton />
+              <BiometricButton />
+              {biometricError && <p className="text-center text-xs text-destructive">{biometricError}</p>}
             </div>
-            <button
-              onClick={() => redirectToSSO(orgSlug, `/${orgSlug}/dashboard`)}
-              className={cn(
-                'w-full flex items-center justify-center gap-2.5 px-5 py-3 rounded-2xl',
-                'border border-slate-200 bg-white',
-                'text-sm text-slate-600 font-medium shadow-sm',
-                'hover:bg-slate-50 hover:text-slate-900 hover:border-slate-300',
-                'transition-all duration-200 group'
-              )}
-            >
-              <ExternalLink className="h-4 w-4 group-hover:text-primary transition-colors" />
-              Sign in with your account
-            </button>
-            <button
-              onClick={() => {
-                // From the outlet step the user has no session yet — arm the post-login
-                // redirect and drop them on the PIN screen to authenticate first.
-                if (hasSession && isTerminalSession) { router.push(shiftsHref); return; }
-                setPostLoginRedirect(shiftsHref);
-                setStep('pin');
-              }}
-              className={cn(
-                'w-full flex items-center justify-center gap-2.5 px-5 py-3 rounded-2xl',
-                'border bg-white',
-                'text-sm text-slate-600 font-medium shadow-sm',
-                'hover:bg-slate-50 hover:text-slate-900 hover:border-slate-300',
-                'transition-all duration-200 group',
-                attendanceArmed ? 'border-primary/50 ring-1 ring-primary/30' : 'border-slate-200'
-              )}
-            >
-              <Clock3 className="h-4 w-4 group-hover:text-primary transition-colors" />
-              Attendance
-            </button>
-            {biometricSupported && hasRegisteredCredential && storedEmail && (
-              <div className="flex flex-col gap-1">
-                <button
-                  onClick={() => biometricAuth(storedEmail, orgSlug)}
-                  disabled={biometricLoading}
-                  className={cn(
-                    'w-full flex items-center justify-center gap-2.5 px-5 py-3 rounded-2xl',
-                    'border border-primary/30 bg-primary/10',
-                    'text-sm text-primary font-medium',
-                    'hover:bg-primary/20 hover:border-primary/50',
-                    'disabled:opacity-60 transition-all duration-200'
-                  )}
-                >
-                  <Fingerprint className="h-4 w-4" />
-                  {biometricLoading ? 'Verifying…' : 'Sign in with fingerprint'}
-                </button>
-                {biometricError && <p className="text-center text-xs text-red-500">{biometricError}</p>}
-              </div>
-            )}
           </div>
-        </div>
-      </div>
+        }
+      />
     );
   }
 
-  // ── PIN entry step (full-screen, PIN-first) ───────────────────────────────────
+  // ── PIN entry step ────────────────────────────────────────────────────────────
 
   const PIN_LENGTH = 4;
 
@@ -755,91 +664,53 @@ export default function PINLoginPage() {
         outletName={outletName !== (tenant?.orgName ?? tenant?.name ?? orgSlug) ? outletName : undefined}
       />
 
-      <div className="relative h-screen w-screen overflow-hidden flex flex-col bg-slate-50">
-        {/* Grain texture */}
-        <svg className="pointer-events-none absolute inset-0 h-full w-full opacity-[0.015]" xmlns="http://www.w3.org/2000/svg" aria-hidden>
-          <filter id="grain-pin"><feTurbulence type="fractalNoise" baseFrequency="0.82" numOctaves="4" stitchTiles="stitch"/></filter>
-          <rect width="100%" height="100%" filter="url(#grain-pin)"/>
-        </svg>
-
-        {/* ── Brand hero band (identity, clock, offline, settings) ── */}
-        <LoginHero
-          eyebrow="POS System"
-          heading="Welcome Back"
-          outletName={outletName}
-          backdropUrl={heroBackdrop}
-          logoUrl={tenant?.logoUrl}
-          fallbackInitials={tenantDisplayName.slice(0, 2).toUpperCase()}
-          useCaseLabel={useCaseLabel}
-          useCaseAccent={useCaseColor?.accent ?? null}
-          isHQ={outletInfo?.is_hq}
-          pinLoginMessage={pinLoginMessage}
-          showSwitchOutlet={posOutlets.length > 1}
-          onSwitchOutlet={() => setStep('outlet')}
-          isOnline={isOnline}
-          settings={{
-            show: showSettings,
-            onToggle: () => setShowSettings((v) => !v),
-            options: TIMEOUT_OPTIONS,
-            activeMs: timeoutMs,
-            onPick: handleTimeoutChange,
-          }}
-          passcode={{
-            length: pinDigits.length,
-            error: !!pinError,
-            shake: isShaking,
-            onSubmit: () => submitPasscode(),
-            isSubmitting: loginMutation.isPending,
-          }}
-        />
-
-        {/* Ambient blob under the body */}
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 top-44 overflow-hidden">
-          <div className="absolute top-1/3 -right-32 h-96 w-96 rounded-full blur-3xl animate-breathe-slow"
-               style={{ background: 'hsl(var(--primary) / 0.06)' }} />
-          <div className="absolute -bottom-32 left-1/4 h-80 w-80 rounded-full blur-3xl"
-               style={{ background: 'hsl(var(--primary) / 0.06)' }} />
-        </div>
-
-        {/* ── Body: white card on the light panel. Two RESPONSIVE layouts of the SAME
-               content/handlers (no duplicated logic):
-                 • SMALL (< lg): single-column stack with ONE active keyboard +
-                   the ABC/?123 toggle (driven by keyboardMode).  → `lg:hidden`
-                 • LARGE (lg+): wide 3-zone row — actions LEFT, full QWERTY CENTER,
-                   numeric keypad RIGHT, both shown at once, no toggle. → `hidden lg:flex`
-               Both reuse <ActionButtons>, <PinKeypad>, <QwertyKeyboard>, <BiometricButton>
-               and the shared handlers; only `keyboardMode` differs between them. ── */}
-        <div className="relative z-10 flex-1 flex items-start justify-center overflow-y-auto px-3 sm:px-6 lg:px-8 pt-2 pb-6">
-
-          {/* ── SMALL SCREENS (< lg): single-keyboard toggle stack ── */}
-          <div className="w-full max-w-3xl lg:hidden rounded-3xl bg-white border border-slate-200 shadow-xl shadow-slate-900/5 p-4 sm:p-6">
-            {/* Error / attendance-intent hint — shared across all input zones */}
-            <div className="min-h-4 mb-2 flex items-center justify-center">
-              {pinError ? (
-                <p className="text-destructive text-xs font-medium animate-fade-in text-center">
-                  {pinError}
-                </p>
-              ) : attendanceArmed ? (
-                <p className="text-primary text-xs font-medium animate-fade-in text-center">
-                  Enter your PIN to clock in / manage your shift
-                </p>
-              ) : null}
+      <PinLoginLayout
+        backdropUrl={heroBackdrop}
+        header={
+          <PinLoginHeader
+            serviceName="Codevertex POS"
+            tenantName={tenantDisplayName}
+            outletName={outletName}
+            isHQ={outletInfo?.is_hq}
+            showSwitchOutlet={posOutlets.length > 1}
+            onSwitchOutlet={() => setStep('outlet')}
+            isOnline={isOnline}
+            rightSlot={<div className="flex items-center gap-2"><LiveClock /><SettingsGear /></div>}
+          />
+        }
+        brandPanel={
+          <PinLoginBrandPanel
+            tenantName={tenantDisplayName}
+            tenantLogoUrl={tenant?.logoUrl}
+            workflowSteps={WORKFLOW_STEPS}
+          />
+        }
+        footer={isDemoTenant && <DemoHints subtitle={useCaseLabel} hints={getDemoHints(useCase)} />}
+        card={
+          <div className="flex-1 min-h-0 flex flex-col gap-3 p-4 sm:p-6">
+            <PasscodeField
+              value={pinDigits.join('')}
+              error={!!pinError}
+              shake={isShaking}
+              onSubmit={() => submitPasscode()}
+              isSubmitting={loginMutation.isPending}
+            />
+            <div className="min-h-4 flex items-center justify-center">
+              {pinError && (
+                <p className="text-destructive text-xs font-medium text-center">{pinError}</p>
+              )}
             </div>
 
-            <div className="flex flex-col gap-4 sm:gap-5">
-              {/* Action buttons: full-width row, stacking nicely on the narrowest phones */}
-              <ActionButtons orientation="row" />
-
-              {/* Active on-screen keyboard — numeric by default, QWERTY when toggled.
-                  Only ONE keyboard is mounted at a time (like a real soft keyboard). */}
-              <div className="flex flex-col gap-3 rounded-2xl bg-slate-50/60 border border-slate-100 p-3 sm:p-4">
-                <div className="flex items-center justify-center gap-2 text-slate-400">
+            {/* ── SMALL SCREENS (< lg): single active keyboard + toggle ── */}
+            <div className="flex-1 min-h-0 flex flex-col gap-4 lg:hidden overflow-y-auto">
+              <SSOButton />
+              <div className="flex flex-col gap-3 rounded-2xl bg-muted/40 border border-border p-3 sm:p-4">
+                <div className="flex items-center justify-center gap-2 text-muted-foreground">
                   <KeyRound className="h-3.5 w-3.5" />
                   <span className="text-[11px] font-semibold uppercase tracking-[0.18em]">
                     {keyboardMode === 'numeric' ? 'Enter PIN' : 'Enter passcode'}
                   </span>
                 </div>
-
                 {keyboardMode === 'numeric' ? (
                   <div className="mx-auto w-full max-w-xs">
                     <PinKeypad
@@ -864,38 +735,18 @@ export default function PINLoginPage() {
                     disabled={loginMutation.isPending}
                   />
                 )}
-
-                {/* Biometric affordance kept available below the active keyboard */}
                 <BiometricButton />
                 {biometricError && <p className="text-center text-xs text-destructive">{biometricError}</p>}
               </div>
             </div>
-          </div>
 
-          {/* ── LARGE SCREENS (lg+): wide 3-zone layout, both keyboards visible ── */}
-          <div className="hidden lg:flex w-full max-w-6xl rounded-3xl bg-white border border-slate-200 shadow-xl shadow-slate-900/5 p-6 flex-col">
-            {/* Error / attendance-intent hint — shared across all input zones */}
-            <div className="min-h-4 mb-3 flex items-center justify-center">
-              {pinError ? (
-                <p className="text-destructive text-xs font-medium animate-fade-in text-center">
-                  {pinError}
-                </p>
-              ) : attendanceArmed ? (
-                <p className="text-primary text-xs font-medium animate-fade-in text-center">
-                  Enter your PIN to clock in / manage your shift
-                </p>
-              ) : null}
-            </div>
-
-            <div className="flex items-stretch gap-5">
-              {/* LEFT zone: tall Login + Attendance buttons */}
-              <div className="w-44 shrink-0">
-                <ActionButtons orientation="col" />
+            {/* ── LARGE SCREENS (lg+): 3-zone row, both keyboards visible ── */}
+            <div className="hidden lg:flex flex-1 min-h-0 items-stretch gap-5">
+              <div className="w-44 shrink-0 flex flex-col">
+                <SSOButton tall />
               </div>
-
-              {/* CENTER zone: full QWERTY keyboard (no ?123 toggle) */}
-              <div className="flex-1 min-w-0 flex flex-col gap-3 rounded-2xl bg-slate-50/60 border border-slate-100 p-4">
-                <div className="flex items-center justify-center gap-2 text-slate-400">
+              <div className="flex-1 min-w-0 flex flex-col gap-3 rounded-2xl bg-muted/40 border border-border p-4">
+                <div className="flex items-center justify-center gap-2 text-muted-foreground">
                   <KeyRound className="h-3.5 w-3.5" />
                   <span className="text-[11px] font-semibold uppercase tracking-[0.18em]">Enter passcode</span>
                 </div>
@@ -909,10 +760,8 @@ export default function PINLoginPage() {
                   showToggle={false}
                 />
               </div>
-
-              {/* RIGHT zone: numeric PIN keypad (no ABC toggle) */}
-              <div className="w-64 shrink-0 flex flex-col gap-3 rounded-2xl bg-slate-50/60 border border-slate-100 p-4">
-                <div className="flex items-center justify-center gap-2 text-slate-400">
+              <div className="w-64 shrink-0 flex flex-col gap-3 rounded-2xl bg-muted/40 border border-border p-4">
+                <div className="flex items-center justify-center gap-2 text-muted-foreground">
                   <KeyRound className="h-3.5 w-3.5" />
                   <span className="text-[11px] font-semibold uppercase tracking-[0.18em]">Enter PIN</span>
                 </div>
@@ -928,18 +777,13 @@ export default function PINLoginPage() {
                 />
               </div>
             </div>
-
-            {/* Biometric affordance + error — shared, centred below the 3 zones */}
-            <div className="mt-4 flex flex-col items-center gap-1">
+            <div className="hidden lg:flex flex-col items-center gap-1">
               <BiometricButton />
               {biometricError && <p className="text-center text-xs text-destructive">{biometricError}</p>}
             </div>
           </div>
-        </div>
-
-        {/* ── Demo hints (codevertex-demo only) — floating bottom-right ── */}
-        {isDemoTenant && <DemoHints useCase={useCase} hints={getDemoHints(useCase)} />}
-      </div>
+        }
+      />
     </>
   );
 }

@@ -123,6 +123,7 @@ export function TerminalModals() {
         orderLines={t.currentOrderLines}
         isHospitality={t.isHospitality}
         customerCreditAvailable={t.customerCreditAvailable}
+        loyaltyAccount={t.loyaltyRedeemInfo}
         onPaymentConfirmed={t.handlePaymentConfirmed}
         onLinesChanged={() => {
           // A line was replaced — refresh the snapshot with fresh server line ids IN PLACE so the

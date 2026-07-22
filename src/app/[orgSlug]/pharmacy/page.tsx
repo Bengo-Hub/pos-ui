@@ -17,26 +17,35 @@ import { useFieldArray, useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { z } from 'zod';
-import type { Prescription } from '@/lib/api/pharmacy';
+import type { Prescription, PrescriptionStatus } from '@/lib/api/pharmacy';
 
 // ─── Status helpers ───────────────────────────────────────────────────────────
 
-const STATUS_LABELS: Record<Prescription['status'], string> = {
+const STATUS_LABELS: Record<PrescriptionStatus, string> = {
   pending: 'Pending',
+  flagged: 'Flagged',
+  pharmacist_review: 'Review',
+  approved: 'Approved',
+  locked: 'Locked',
   partially_dispensed: 'Partial',
   dispensed: 'Dispensed',
+  rejected: 'Rejected',
   cancelled: 'Cancelled',
 };
 
-function StatusBadge({ status }: { status: Prescription['status'] }) {
+function StatusBadge({ status }: { status: PrescriptionStatus }) {
   return (
     <span
       className={cn(
         'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border',
         status === 'pending' && 'bg-yellow-500/10 text-yellow-700 border-yellow-400/30 dark:text-yellow-400',
+        status === 'flagged' && 'bg-red-500/10 text-red-700 border-red-400/30 dark:text-red-400',
+        status === 'pharmacist_review' && 'bg-orange-500/10 text-orange-700 border-orange-400/30 dark:text-orange-400',
+        status === 'approved' && 'bg-blue-500/10 text-blue-700 border-blue-400/30 dark:text-blue-400',
+        status === 'locked' && 'bg-purple-500/10 text-purple-700 border-purple-400/30 dark:text-purple-400',
         status === 'partially_dispensed' && 'bg-orange-500/10 text-orange-700 border-orange-400/30 dark:text-orange-400',
         status === 'dispensed' && 'bg-green-500/10 text-green-700 border-green-400/30 dark:text-green-400',
-        status === 'cancelled' && 'bg-muted text-muted-foreground border-border',
+        (status === 'cancelled' || status === 'rejected') && 'bg-muted text-muted-foreground border-border',
       )}
     >
       {STATUS_LABELS[status]}
@@ -548,7 +557,7 @@ function PharmacyPage() {
                         <Eye className="h-3.5 w-3.5" />
                         View
                       </Link>
-                      {rx.status === 'pending' && (
+                      {(rx.status === 'approved' || rx.status === 'locked') && (
                         <button
                           onClick={() => handleDispense(rx.id, rx.prescription_number)}
                           disabled={dispense.isPending}

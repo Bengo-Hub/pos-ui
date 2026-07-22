@@ -32,7 +32,8 @@ import {
 import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { isStockTracked } from '@/components/pos/stock-cell';
 import { useKDSStations } from '@/hooks/useKDS';
-import { useLoyaltyPrograms } from '@/hooks/useLoyalty';
+import { useLoyaltyPrograms, useLoyaltyAccount } from '@/hooks/useLoyalty';
+import type { LoyaltyRedeemInfo } from '@/lib/pos/terminal-actions';
 import { useActiveHappyHours } from '@/hooks/useDiscounts';
 import { computeHappyHour, bogoFreeUnitsForSku, type HHLine, type HappyHourResult } from '@/lib/pos/happy-hour';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -255,6 +256,9 @@ export interface TerminalContextValue {
   scaleDeviceId: string;
   /** Attached customer's usable stored credit (KES, always >= 0; 0 when none/no customer). */
   customerCreditAvailable: number;
+  /** Attached customer's live loyalty account + program terms, for the "Redeem Points" settlement
+   *  tender. Null when no customer is attached, they have no loyalty account, or no program is active. */
+  loyaltyRedeemInfo: LoyaltyRedeemInfo | null;
 
   // ── order type / table ──
   orderSubtype: OrderSubtype | null;
@@ -442,6 +446,10 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
   // when the cashier picks the customer, so this rarely fires a second network request.
   const { data: customerCredit } = useClientCredit(loyaltyState?.accountId);
   const customerCreditAvailable = Math.max(0, -(parseFloat(customerCredit?.balance_due || '0') || 0));
+  // "Redeem Points" settlement tender: the attached customer's live points balance, resolved here
+  // so InlinePaymentBar, POSPaymentModal and SplitPaymentModal all gate/settle against the same
+  // numbers (paired with `loyaltyPrograms` below for redeem_rate/min_redeem_points).
+  const { data: loyaltyAccountData } = useLoyaltyAccount(loyaltyState?.accountId || '');
   // Bumped by clearCart to remount the LoyaltyPanel (whose picker selection is component-local),
   // resetting the attached customer back to the Walk-in default after every completed sale.
   const [customerResetSeq, setCustomerResetSeq] = useState(0);
@@ -458,8 +466,17 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
   // Live KDS stations — drive per-station ticket routing/printing (same category_filter routing the
   // kitchen displays use), so a ticket prints on the printer of the station it was routed to.
   const { data: kdsStationsData } = useKDSStations();
-  // Active loyalty program — used to tell the cashier how many points the customer just earned.
+  // Active loyalty program — used to tell the cashier how many points the customer just earned,
+  // and (paired with loyaltyAccountData above) to gate/settle the "Redeem Points" tender.
   const { data: loyaltyPrograms } = useLoyaltyPrograms();
+  const loyaltyRedeemInfo: LoyaltyRedeemInfo | null = loyaltyAccountData?.account && loyaltyPrograms?.[0]
+    ? {
+        accountId: loyaltyAccountData.account.id,
+        pointsBalance: loyaltyAccountData.account.points_balance,
+        redeemRate: loyaltyPrograms[0].redeem_rate,
+        minRedeemPoints: loyaltyPrograms[0].min_redeem_points,
+      }
+    : null;
 
   // Phase 1b: in hospitality/quick_service/hotel, cashiers settle from the orders list — waiters create
   // orders from tables. A non-superuser cashier landing on /order directly is redirected to /orders.
@@ -1965,7 +1982,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
     addItemToCart, handleItemTap, proceedWithItem, handleScaleAddToCart,
     updateQuantity, setLineQuantity, incrementCartLine, removeFromCart, clearCart, bogoFreeFor, updateCourse, setItemSeat,
     pricingProfile, pricingTiers, repricing, repriceCart,
-    loyaltyState, setLoyaltyState, customerResetSeq, scaleDeviceId, customerCreditAvailable,
+    loyaltyState, setLoyaltyState, customerResetSeq, scaleDeviceId, customerCreditAvailable, loyaltyRedeemInfo,
     orderSubtype, setOrderSubtype, deliveryInfo, setDeliveryInfo, tableId, tableName,
     billOrderTotal,
     handlePlaceOrder, handlePark, handleResumeParked, createOrderAsync,

@@ -487,6 +487,7 @@ export function TerminalShell() {
             customerEmail={t.loyaltyState?.customerEmail}
             hasCustomer={!!t.loyaltyState?.customerPhone}
             customerCreditAvailable={t.customerCreditAvailable}
+            loyaltyAccount={t.loyaltyRedeemInfo}
             disabled={cart.length === 0}
             mode={t.isHospitality && t.orderSubtype === 'dine_in' ? 'send_to_kitchen' : 'pay'}
             createOrderAsync={t.createOrderAsync}

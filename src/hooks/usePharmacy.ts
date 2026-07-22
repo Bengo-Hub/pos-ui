@@ -7,6 +7,8 @@ import {
   getPrescription,
   createPrescription,
   dispensePrescription,
+  approvePrescription,
+  lockPrescription,
   type CreatePrescriptionData,
   type PrescriptionFilters,
 } from '@/lib/api/pharmacy';
@@ -59,6 +61,33 @@ export function useDispensePrescription() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => dispensePrescription(tenantSlug, id),
+    onSuccess: (_data, id) => {
+      qc.invalidateQueries({ queryKey: ['prescriptions', tenantSlug] });
+      qc.invalidateQueries({ queryKey: ['prescription', tenantSlug, id] });
+    },
+  });
+}
+
+// ─── Approve / lock prescription ──────────────────────────────────────────────
+
+export function useApprovePrescription() {
+  const tenantSlug = useTenantSlug();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, overrideReason }: { id: string; overrideReason?: string }) =>
+      approvePrescription(tenantSlug, id, overrideReason),
+    onSuccess: (_data, { id }) => {
+      qc.invalidateQueries({ queryKey: ['prescriptions', tenantSlug] });
+      qc.invalidateQueries({ queryKey: ['prescription', tenantSlug, id] });
+    },
+  });
+}
+
+export function useLockPrescription() {
+  const tenantSlug = useTenantSlug();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => lockPrescription(tenantSlug, id),
     onSuccess: (_data, id) => {
       qc.invalidateQueries({ queryKey: ['prescriptions', tenantSlug] });
       qc.invalidateQueries({ queryKey: ['prescription', tenantSlug, id] });

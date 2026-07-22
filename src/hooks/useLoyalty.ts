@@ -31,6 +31,7 @@ export interface LoyaltyAccount {
   /** Empty string for CRM-only rows merged into search results (source === 'crm'). */
   id: string;
   tenant_id: string;
+  customer_id?: string;
   customer_phone: string;
   customer_name: string;
   customer_email?: string;
@@ -39,6 +40,7 @@ export interface LoyaltyAccount {
   lifetime_points: number;
   program_id?: string;
   created_at: string;
+  updated_at: string;
   /** 'crm' — a CRM contact with no loyalty account yet (search merge); undefined — real loyalty account. */
   source?: string;
 }
@@ -193,6 +195,23 @@ export function useRedeemPoints(accountId: string) {
   return useMutation({
     mutationFn: (data: { points: number; order_id?: string; notes?: string }) =>
       apiClient.post(`${base(tenantID)}/accounts/${accountId}/redeem`, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['loyalty-account', tenantID, accountId] }),
+  });
+}
+
+/**
+ * "Pay with points" — redeems points AS a settlement tender against a real order (posts a
+ * completed POSPayment on the tenant's Loyalty Points tender for points × redeem_rate), unlike
+ * `useRedeemPoints` above which only adjusts the account balance. Used by the checkout/settlement
+ * "Redeem Points" tender (InlinePaymentBar / POSPaymentModal / Split Payment), not the pre-cart
+ * discount redemption in LoyaltyPanel.
+ */
+export function useRedeemToOrder(accountId: string) {
+  const tenantID = useTenantID();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { points: number; order_id: string; notes?: string }) =>
+      apiClient.post(`${base(tenantID)}/accounts/${accountId}/redeem-to-order`, data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['loyalty-account', tenantID, accountId] }),
   });
 }

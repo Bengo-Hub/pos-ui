@@ -25,9 +25,10 @@ export type TenderKey =
   | 'on_account' // credit sale → treasury AR
   | 'room' // charge to room folio (hospitality only)
   | 'split' // multiple/split payment
-  | 'customer_credit'; // settle from the customer's existing stored credit (negative AR balance_due)
+  | 'customer_credit' // settle from the customer's existing stored credit (negative AR balance_due)
+  | 'loyalty_points'; // pay-with-points (posts a completed payment on the tenant's Loyalty tender)
 
-export type TenderTone = 'cash' | 'card' | 'mpesa' | 'wallet' | 'credit' | 'room' | 'cod' | 'split';
+export type TenderTone = 'cash' | 'card' | 'mpesa' | 'wallet' | 'credit' | 'room' | 'cod' | 'split' | 'loyalty';
 
 export interface TenderAction {
   key: TenderKey;
@@ -58,6 +59,58 @@ export function customerCreditAction(availableAmount: number): TenderAction {
     label: 'Apply Credit',
     sublabel: `KES ${Math.max(0, availableAmount).toLocaleString()} available`,
     tone: 'credit',
+    online: true,
+  };
+}
+
+/** Loyalty account fields the redeem-as-tender math needs (subset of useLoyalty's LoyaltyAccount
+ *  + the tenant's active LoyaltyProgram, resolved by the caller). */
+export interface LoyaltyRedeemInfo {
+  accountId: string;
+  pointsBalance: number;
+  /** Currency value of 1 point. */
+  redeemRate: number;
+  minRedeemPoints: number;
+}
+
+/** Whole points required to cover `amount` KES at this program's redeem_rate. */
+export function loyaltyPointsNeeded(amount: number, redeemRate: number): number {
+  if (redeemRate <= 0) return 0;
+  return Math.ceil(amount / redeemRate);
+}
+
+/** True when the account holds ANY redeemable balance (meets min_redeem_points) — used to decide
+ *  whether to show the "Redeem Points" tender at all, independent of the amount being settled. */
+export function hasRedeemableLoyalty(info?: LoyaltyRedeemInfo | null): boolean {
+  if (!info?.accountId || info.pointsBalance <= 0 || info.redeemRate <= 0) return false;
+  return info.minRedeemPoints <= 0 || info.pointsBalance >= info.minRedeemPoints;
+}
+
+/**
+ * True when the account's points can fully cover `amount` WITHOUT exceeding the balance or
+ * dropping under the program's minimum redemption — i.e. it is safe to settle `amount` in one
+ * shot via redeem-to-order. Used to gate the settle button for a single tender/split line (never
+ * silently redeems fewer points than a line needs, which would under-report that line as paid).
+ */
+export function canRedeemLoyaltyFor(amount: number, info?: LoyaltyRedeemInfo | null): boolean {
+  if (!hasRedeemableLoyalty(info) || amount <= 0) return false;
+  const needed = loyaltyPointsNeeded(amount, info!.redeemRate);
+  return needed > 0 && needed <= info!.pointsBalance && needed >= (info!.minRedeemPoints || 0);
+}
+
+/** Points to send to POST .../redeem-to-order to cover `amount` (caller must have already
+ *  confirmed `canRedeemLoyaltyFor(amount, info)`). */
+export function loyaltyPointsToRedeem(amount: number, info: LoyaltyRedeemInfo): number {
+  return Math.min(info.pointsBalance, Math.max(loyaltyPointsNeeded(amount, info.redeemRate), info.minRedeemPoints || 0));
+}
+
+export function loyaltyRedeemAction(info: LoyaltyRedeemInfo): TenderAction {
+  const availableKES = Math.floor(info.pointsBalance * info.redeemRate);
+  return {
+    key: 'loyalty_points',
+    label: 'Redeem Points',
+    sublabel: `${info.pointsBalance.toLocaleString()} pts · KES ${availableKES.toLocaleString()} available`,
+    tone: 'loyalty',
     online: true,
   };
 }
@@ -124,6 +177,7 @@ export function tenderMethodFor(key: TenderKey): string {
     case 'on_account': return 'on_account';
     case 'room': return 'room_charge';
     case 'customer_credit': return 'customer_credit';
+    case 'loyalty_points': return 'loyalty_points'; // never routed through createIntent — see useRedeemToOrder
     default: return 'cash';
   }
 }

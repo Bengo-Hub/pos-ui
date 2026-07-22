@@ -11,6 +11,7 @@ import { renderReceiptHtml, buildReceiptDocument, printReceiptDocument } from '@
 import { paperForFormat, resolveReceiptFormat } from '@/lib/pos/receipt-format';
 import type { ReceiptData } from '@/components/pos/receipt-preview';
 import { useTenantBranding } from '@/providers/tenant-branding-provider';
+import type { LoyaltyRedeemInfo } from '@/lib/pos/terminal-actions';
 
 // 'split_tender' = one bill paid across several tenders (e.g. part Cash + part M-Pesa).
 // 'equal' / 'custom' / 'by_item' = split among several people, each paying their own portion.
@@ -47,6 +48,9 @@ interface SplitPaymentModalProps {
   /** Attached customer's usable stored credit (KES) — threaded to each POSPaymentModal so a split
    *  line can be settled from it, same as any other tender. Undefined/0 hides the tender there. */
   customerCreditAvailable?: number;
+  /** Attached customer's live loyalty account + program terms — threaded to each POSPaymentModal so
+   *  any split line can be settled with "Redeem Points" when it fully covers that line's amount. */
+  loyaltyAccount?: LoyaltyRedeemInfo | null;
   onPaymentConfirmed: () => void;
   /** Called after a line is replaced (set aside + swapped) so the caller refetches orderLines. */
   onLinesChanged?: () => void;
@@ -65,6 +69,7 @@ export function SplitPaymentModal({
   isHospitality = false,
   customerEmail,
   customerCreditAvailable,
+  loyaltyAccount,
   onPaymentConfirmed,
   onLinesChanged,
 }: SplitPaymentModalProps) {
@@ -290,6 +295,7 @@ export function SplitPaymentModal({
         isHospitality={isHospitality}
         customerEmail={customerEmail}
         customerCreditAvailable={customerCreditAvailable}
+        loyaltyAccount={loyaltyAccount}
         onPaymentConfirmed={(method) => {
           if (mode === 'equal') {
             handleEqualPayerDone();
@@ -317,6 +323,7 @@ export function SplitPaymentModal({
         isHospitality={isHospitality}
         customerEmail={customerEmail}
         customerCreditAvailable={customerCreditAvailable}
+        loyaltyAccount={loyaltyAccount}
         onPaymentConfirmed={(method) => {
           recordSettle(tenderPayer, method);
           handleTenderLinePaid(tenderPayer);
@@ -340,6 +347,7 @@ export function SplitPaymentModal({
         isHospitality={isHospitality}
         customerEmail={customerEmail}
         customerCreditAvailable={customerCreditAvailable}
+        loyaltyAccount={loyaltyAccount}
         onPaymentConfirmed={async (method) => {
           // Record the split (with its item ids) + mark it paid, so the per-split receipt is itemised.
           await ensureItemSplits();

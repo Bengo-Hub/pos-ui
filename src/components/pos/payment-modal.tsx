@@ -10,6 +10,7 @@ import {
   Coins,
   CreditCard,
   Gift,
+  Sparkles,
   Hash,
   Landmark,
   Loader2,
@@ -33,6 +34,8 @@ import { ComplimentarySaleModal } from '@/components/pos/complimentary-sale-moda
 import { ApprovalDialog, type ApprovalResult } from '@/components/pos/approval-dialog';
 import { useHotelRooms } from '@/hooks/useHotel';
 import { hotelApi, type Room } from '@/lib/api/hotel';
+import { useRedeemToOrder } from '@/hooks/useLoyalty';
+import { canRedeemLoyaltyFor, loyaltyPointsToRedeem, type LoyaltyRedeemInfo } from '@/lib/pos/terminal-actions';
 
 export interface POSPaymentModalProps {
   open: boolean;
@@ -48,6 +51,9 @@ export interface POSPaymentModalProps {
   /** Attached customer's usable stored credit (KES, from useClientCredit's balance_due) — shows
    *  the "Apply Credit" tender when > 0. Undefined/0 hides it (no customer, or no credit held). */
   customerCreditAvailable?: number;
+  /** Attached customer's live loyalty account + program terms — shows "Redeem Points" when its
+   *  points can fully cover THIS modal's `total` (a split-line amount or the whole order). */
+  loyaltyAccount?: LoyaltyRedeemInfo | null;
   /** Called on a successful payment. `method` is the tender used (cash | mpesa_manual | mpesa |
    *  card | card_manual | wallet | on_account | room_charge) so a split portion can record how it
    *  was paid. */
@@ -79,9 +85,11 @@ export function POSPaymentModal({
   isHospitality = false,
   allowedMethods,
   customerCreditAvailable,
+  loyaltyAccount,
   onPaymentConfirmed,
 }: POSPaymentModalProps) {
   const roundedTotal = Math.ceil(total);
+  const redeemToOrder = useRedeemToOrder(loyaltyAccount?.accountId ?? '');
 
   const [step, setStep] = useState<ModalStep>('select');
   const [cashTendered, setCashTendered] = useState('');
@@ -356,6 +364,24 @@ export function POSPaymentModal({
     );
   }, [orderId, roundedTotal, tenderId, createIntent, onPaymentConfirmed]);
 
+  // Redeem Points ("pay with points"): settles this modal's WHOLE `total` (the full order or a
+  // single split-line amount) from the customer's loyalty balance — only enabled when their points
+  // fully cover it (canRedeemLoyaltyFor), so a split line is never under-reported as paid.
+  const handleRedeemLoyalty = useCallback(() => {
+    if (!loyaltyAccount) return;
+    methodRef.current = 'loyalty_points';
+    redeemToOrder.mutate(
+      { points: loyaltyPointsToRedeem(roundedTotal, loyaltyAccount), order_id: orderId },
+      {
+        onSuccess: () => { setStep('confirmed'); onPaymentConfirmed(methodRef.current); },
+        onError: (err: any) => {
+          setErrorMsg(err?.message ?? 'Could not redeem points. Please try again.');
+          setStep('failed');
+        },
+      }
+    );
+  }, [loyaltyAccount, roundedTotal, orderId, redeemToOrder, onPaymentConfirmed]);
+
   // Complimentary (no-charge): reason first, then MANDATORY manager approval every time (scan
   // card, PIN, or a one-time code a manager shared) — unlike Void, there is no self-approve
   // bypass for managers-as-cashier here; the backend hard-requires an approval token/code
@@ -534,6 +560,19 @@ export function POSPaymentModal({
                         loading={createIntent.isPending}
                         offlineBadge={!isOnline}
                         onClick={handleCustomerCredit}
+                      />
+                    )}
+                    {canRedeemLoyaltyFor(roundedTotal, loyaltyAccount) && (
+                      <PayBadge
+                        icon={<Sparkles className="h-4 w-4" />}
+                        color="text-fuchsia-600"
+                        bg="bg-fuchsia-500/10"
+                        label="Redeem Points"
+                        sub={`${loyaltyAccount!.pointsBalance.toLocaleString()} pts available`}
+                        disabled={!isOnline}
+                        loading={redeemToOrder.isPending}
+                        offlineBadge={!isOnline}
+                        onClick={handleRedeemLoyalty}
                       />
                     )}
                     {gateways?.complimentary && (

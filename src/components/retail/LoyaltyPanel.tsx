@@ -12,12 +12,12 @@
  * self-gate on the loyalty permissions; the customer picker itself is available to every role.
  */
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Gift, Loader2, UserPlus } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { CustomerSearch, WALK_IN_CUSTOMER, type SelectedCustomer } from '@/components/pos/customer-search';
-import { useLoyaltyPrograms, useCreateLoyaltyAccount, useRedeemPoints } from '@/hooks/useLoyalty';
+import { useLoyaltyPrograms, useCreateLoyaltyAccount, useRedeemPoints, useLoyaltyAccount } from '@/hooks/useLoyalty';
 import type { LoyaltyAccount } from '@/lib/api/clients';
 import { usePermissions } from '@/hooks/usePermissions';
 import { P } from '@/lib/rbac/permissions';
@@ -64,6 +64,21 @@ export function LoyaltyPanel({ onStateChange, orderId, layout = 'stack', initial
   const program = programs?.[0];
   const createAccount = useCreateLoyaltyAccount();
   const redeemPoints = useRedeemPoints(account?.id ?? '');
+
+  // A restored/switched Sale tab seeds only the chip (selected.accountId) — not the full
+  // `account` row — so re-hydrate it here. Without this, a customer who already has a loyalty
+  // account reads as `hasLoyaltyAccount = false` after a tab switch, which wrongly shows
+  // "Register" again (and used to error on submit before the account already-exists case was
+  // made idempotent server-side).
+  const needsHydration = !account && !!selected.accountId && !selected.isWalkIn;
+  const { data: hydrated } = useLoyaltyAccount(needsHydration ? selected.accountId! : '');
+  useEffect(() => {
+    if (hydrated?.account) {
+      accountRef.current = hydrated.account;
+      setAccount(hydrated.account);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hydrated?.account]);
 
   const emit = (c: SelectedCustomer, acc: LoyaltyAccount | null, redeemDiscount = 0) => {
     if (c.isWalkIn || !c.name) {
@@ -126,7 +141,10 @@ export function LoyaltyPanel({ onStateChange, orderId, layout = 'stack', initial
   };
 
   const minRedeem = program?.min_redeem_points ?? 100;
-  const hasLoyaltyAccount = !!account?.id && account.source !== 'crm';
+  // Also true while the hydrate-on-restore query above is in flight (selected.accountId is only
+  // ever populated for a real loyalty account — never for a CRM-only match, see CustomerSearch),
+  // so the Register button doesn't flash on before the account row loads.
+  const hasLoyaltyAccount = !!(account?.id || selected.accountId) && account?.source !== 'crm';
   const canRedeem = !redeemed && hasLoyaltyAccount && (account?.points_balance ?? 0) >= minRedeem;
 
   const row = layout === 'row';

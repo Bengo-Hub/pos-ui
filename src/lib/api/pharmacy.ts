@@ -17,6 +17,27 @@ export interface PrescriptionLine {
   unit_price?: number;
 }
 
+export type PrescriptionStatus =
+  | 'pending'
+  | 'flagged'
+  | 'pharmacist_review'
+  | 'approved'
+  | 'locked'
+  | 'partially_dispensed'
+  | 'dispensed'
+  | 'rejected'
+  | 'cancelled';
+
+export interface PrescriptionMetadata {
+  allergy_flags?: string[];
+  interaction_check_id?: string;
+  approved_by?: string;
+  approved_at?: string;
+  approval_override_reason?: string;
+  reservation_id?: string;
+  crm_contact_id?: string;
+}
+
 export interface Prescription {
   id: string;
   outlet_id: string;
@@ -27,8 +48,9 @@ export interface Prescription {
   patient_name: string;
   patient_dob?: string;
   patient_id_number?: string;
-  status: 'pending' | 'partially_dispensed' | 'dispensed' | 'cancelled';
+  status: PrescriptionStatus;
   notes?: string;
+  metadata?: PrescriptionMetadata;
   lines: PrescriptionLine[];
   created_at: string;
 }
@@ -42,6 +64,7 @@ export interface CreatePrescriptionData {
   patient_dob?: string;
   patient_id_number?: string;
   notes?: string;
+  allergy_flags?: string[];
   lines: Omit<PrescriptionLine, 'id' | 'quantity_dispensed'>[];
 }
 
@@ -97,4 +120,32 @@ export async function dispensePrescription(tenantSlug: string, id: string): Prom
     {},
   );
   return flattenPrescription(res);
+}
+
+export async function approvePrescription(
+  tenantSlug: string,
+  id: string,
+  overrideReason?: string,
+): Promise<Prescription> {
+  return apiClient.post<Prescription>(`${base(tenantSlug)}/prescriptions/${id}/approve`, {
+    override_reason: overrideReason,
+  });
+}
+
+export async function lockPrescription(tenantSlug: string, id: string): Promise<Prescription> {
+  return apiClient.post<Prescription>(`${base(tenantSlug)}/prescriptions/${id}/lock`, {});
+}
+
+export interface InteractionCheckResult {
+  id: string;
+  result: 'clear' | 'flagged';
+  details: string;
+  drug_skus: string[];
+}
+
+export async function createInteractionCheck(
+  tenantSlug: string,
+  data: { drug_skus: string[]; prescription_id?: string; order_id?: string },
+): Promise<InteractionCheckResult> {
+  return apiClient.post<InteractionCheckResult>(`${base(tenantSlug)}/interaction-checks`, data);
 }

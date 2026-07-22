@@ -1,35 +1,50 @@
 'use client';
 
+import { useState } from 'react';
 import { ModuleGate } from '@/components/auth/module-gate';
 import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
 
-import { usePrescription, useDispensePrescription } from '@/hooks/usePharmacy';
+import {
+  usePrescription,
+  useDispensePrescription,
+  useApprovePrescription,
+  useLockPrescription,
+} from '@/hooks/usePharmacy';
 import { cn } from '@/lib/utils';
-import { ArrowLeft, Loader2, Pill } from 'lucide-react';
+import { ArrowLeft, AlertTriangle, CheckCircle2, Loader2, Lock, Pill, ShieldCheck } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api/error-message';
-import type { Prescription } from '@/lib/api/pharmacy';
+import type { Prescription, PrescriptionStatus } from '@/lib/api/pharmacy';
 
 // ─── Status badge ─────────────────────────────────────────────────────────────
 
-const STATUS_LABELS: Record<Prescription['status'], string> = {
+const STATUS_LABELS: Record<PrescriptionStatus, string> = {
   pending: 'Pending',
+  flagged: 'Flagged — Review Required',
+  pharmacist_review: 'Pharmacist Review',
+  approved: 'Approved',
+  locked: 'Locked for Dispense',
   partially_dispensed: 'Partially Dispensed',
   dispensed: 'Dispensed',
+  rejected: 'Rejected',
   cancelled: 'Cancelled',
 };
 
-function StatusBadge({ status }: { status: Prescription['status'] }) {
+function StatusBadge({ status }: { status: PrescriptionStatus }) {
   return (
     <span
       className={cn(
         'inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold border',
         status === 'pending' && 'bg-yellow-500/10 text-yellow-700 border-yellow-400/30 dark:text-yellow-400',
+        status === 'flagged' && 'bg-red-500/10 text-red-700 border-red-400/30 dark:text-red-400',
+        status === 'pharmacist_review' && 'bg-orange-500/10 text-orange-700 border-orange-400/30 dark:text-orange-400',
+        status === 'approved' && 'bg-blue-500/10 text-blue-700 border-blue-400/30 dark:text-blue-400',
+        status === 'locked' && 'bg-purple-500/10 text-purple-700 border-purple-400/30 dark:text-purple-400',
         status === 'partially_dispensed' && 'bg-orange-500/10 text-orange-700 border-orange-400/30 dark:text-orange-400',
         status === 'dispensed' && 'bg-green-500/10 text-green-700 border-green-400/30 dark:text-green-400',
-        status === 'cancelled' && 'bg-muted text-muted-foreground border-border',
+        (status === 'cancelled' || status === 'rejected') && 'bg-muted text-muted-foreground border-border',
       )}
     >
       {STATUS_LABELS[status]}
@@ -46,6 +61,9 @@ function PrescriptionDetailPage() {
 
   const { data: rx, isLoading } = usePrescription(id);
   const dispense = useDispensePrescription();
+  const approve = useApprovePrescription();
+  const lock = useLockPrescription();
+  const [overrideReason, setOverrideReason] = useState('');
 
   const handleDispense = async () => {
     if (!rx) return;
@@ -54,6 +72,27 @@ function PrescriptionDetailPage() {
       toast.success('Prescription dispensed');
     } catch (e) {
       toast.error(await apiErrorMessage(e, 'Failed to dispense prescription'));
+    }
+  };
+
+  const handleApprove = async (reason?: string) => {
+    if (!rx) return;
+    try {
+      await approve.mutateAsync({ id: rx.id, overrideReason: reason });
+      toast.success('Prescription approved');
+      setOverrideReason('');
+    } catch (e) {
+      toast.error(await apiErrorMessage(e, 'Failed to approve prescription'));
+    }
+  };
+
+  const handleLock = async () => {
+    if (!rx) return;
+    try {
+      await lock.mutateAsync(rx.id);
+      toast.success('Prescription locked for dispensing');
+    } catch (e) {
+      toast.error(await apiErrorMessage(e, 'Failed to lock prescription'));
     }
   };
 
@@ -103,21 +142,75 @@ function PrescriptionDetailPage() {
           </div>
         </div>
 
-        {rx.status === 'pending' && (
-          <button
-            onClick={handleDispense}
-            disabled={dispense.isPending}
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-green-600 text-white text-sm font-semibold hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
-          >
-            {dispense.isPending ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Pill className="h-4 w-4" />
-            )}
-            Dispense All
-          </button>
-        )}
+        <div className="flex items-center gap-2 shrink-0">
+          {(rx.status === 'pending' || rx.status === 'pharmacist_review') && (
+            <button
+              onClick={() => handleApprove()}
+              disabled={approve.isPending}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {approve.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+              Approve
+            </button>
+          )}
+          {rx.status === 'approved' && (
+            <button
+              onClick={handleLock}
+              disabled={lock.isPending}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-purple-600 text-white text-sm font-semibold hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {lock.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Lock className="h-4 w-4" />}
+              Lock for Dispense
+            </button>
+          )}
+          {(rx.status === 'approved' || rx.status === 'locked') && (
+            <button
+              onClick={handleDispense}
+              disabled={dispense.isPending}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-green-600 text-white text-sm font-semibold hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {dispense.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Pill className="h-4 w-4" />
+              )}
+              Dispense All
+            </button>
+          )}
+        </div>
       </div>
+
+      {/* Drug-interaction / allergy warning — requires an override reason to approve past it */}
+      {rx.status === 'flagged' && (
+        <div className="bg-red-500/5 border border-red-400/30 rounded-2xl p-5 mb-5">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="h-5 w-5 text-red-600 dark:text-red-400 shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <h2 className="text-sm font-bold text-red-700 dark:text-red-400 mb-1">
+                Drug interaction / allergy flag detected
+              </h2>
+              <p className="text-sm text-muted-foreground mb-4">
+                A pharmacist must document a clinical justification before this prescription can be approved.
+              </p>
+              <textarea
+                value={overrideReason}
+                onChange={(e) => setOverrideReason(e.target.value)}
+                placeholder="Override reason (required to approve)…"
+                rows={2}
+                className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-red-400/40"
+              />
+              <button
+                onClick={() => handleApprove(overrideReason)}
+                disabled={approve.isPending || !overrideReason.trim()}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-red-600 text-white text-sm font-semibold hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {approve.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
+                Approve with Override
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Prescriber + Patient */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mb-5">

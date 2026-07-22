@@ -19,6 +19,10 @@ export interface TerminalConfig {
   barcodeFirst: boolean;
   /** Show the Retail/Wholesale pricing-profile selector. */
   showPricingProfile: boolean;
+  /** Show the customer/loyalty picker (search + attach + register + redeem points). True for
+   *  every profile — hospitality/quick_service previously fell back to no customer identity at
+   *  all here (only Dine-In/Takeaway), which meant no loyalty redeem UI for those use cases. */
+  showCustomerLoyalty: boolean;
   /** Show dine-in/takeaway order-type + table selection (hospitality/quick_service). */
   showOrderType: boolean;
   /** Per-item course assignment + Fire Courses (sit-down hospitality). */
@@ -88,6 +92,7 @@ export function terminalConfigFor(useCase?: string | null): TerminalConfig {
     case 'hospitality':
       return {
         profile, defaultDisplayMode: 'list', barcodeFirst: false, showPricingProfile: false,
+        showCustomerLoyalty: true,
         showOrderType: true, showCourses: true, showCalculator: false,
         keyboardCheckout: false, showBrandGrid: false,
         showStockBadge: false, showScale: false, managerOverride: false, showCostMargin: false,
@@ -96,6 +101,7 @@ export function terminalConfigFor(useCase?: string | null): TerminalConfig {
     case 'quick_service':
       return {
         profile, defaultDisplayMode: 'list', barcodeFirst: false, showPricingProfile: false,
+        showCustomerLoyalty: true,
         showOrderType: true, showCourses: false, showCalculator: false,
         keyboardCheckout: false, showBrandGrid: false,
         showStockBadge: false, showScale: false, managerOverride: false, showCostMargin: false,
@@ -104,6 +110,7 @@ export function terminalConfigFor(useCase?: string | null): TerminalConfig {
     case 'pharmacy':
       return {
         profile, defaultDisplayMode: 'list', barcodeFirst: true, showPricingProfile: true,
+        showCustomerLoyalty: true,
         showOrderType: false, showCourses: false, showCalculator: true,
         keyboardCheckout: true, showBrandGrid: true,
         showStockBadge: true, showScale: true, managerOverride: true, showCostMargin: true,
@@ -112,6 +119,7 @@ export function terminalConfigFor(useCase?: string | null): TerminalConfig {
     case 'services':
       return {
         profile, defaultDisplayMode: 'list', barcodeFirst: false, showPricingProfile: true,
+        showCustomerLoyalty: true,
         showOrderType: false, showCourses: false, showCalculator: false,
         keyboardCheckout: false, showBrandGrid: false,
         showStockBadge: false, showScale: false, managerOverride: false, showCostMargin: false,
@@ -121,6 +129,7 @@ export function terminalConfigFor(useCase?: string | null): TerminalConfig {
     default:
       return {
         profile: 'retail', defaultDisplayMode: 'list', barcodeFirst: true, showPricingProfile: true,
+        showCustomerLoyalty: true,
         showOrderType: false, showCourses: false, showCalculator: true,
         keyboardCheckout: true, showBrandGrid: true,
         showStockBadge: true, showScale: true, managerOverride: true, showCostMargin: true,

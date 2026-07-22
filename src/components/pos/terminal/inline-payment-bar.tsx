@@ -15,7 +15,7 @@
 import { TreasuryPaymentModal } from '@bengo-hub/shared-ui-lib';
 import { cn } from '@/lib/utils';
 import {
-  Banknote, ChefHat, Coins, CreditCard, FileText, Hash, Landmark, Loader2, NotebookPen,
+  Banknote, ChefHat, Coins, CreditCard, FileText, Gift, Hash, Landmark, Loader2, NotebookPen,
   Building2, Smartphone, Truck, Wallet, SplitSquareHorizontal, X, CheckCircle2,
 } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
@@ -32,10 +32,13 @@ import { useHotelRooms } from '@/hooks/useHotel';
 import { hotelApi } from '@/lib/api/hotel';
 import type { TerminalProfile } from '@/lib/use-case-config';
 import {
-  paymentActionsFor, tenderMethodFor, isImmediateTender, customerCreditAction, type TenderKey, type TenderTone,
+  paymentActionsFor, tenderMethodFor, isImmediateTender, customerCreditAction,
+  hasRedeemableLoyalty, canRedeemLoyaltyFor, loyaltyPointsToRedeem, loyaltyRedeemAction,
+  type TenderKey, type TenderTone, type LoyaltyRedeemInfo,
 } from '@/lib/pos/terminal-actions';
 import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api/error-message';
+import { useRedeemToOrder } from '@/hooks/useLoyalty';
 
 const NIL_TENDER = '00000000-0000-0000-0000-000000000000';
 
@@ -62,6 +65,9 @@ export interface InlinePaymentBarProps {
    *  sign-flipped to a positive available amount by the caller). Shows "Apply Credit" when > 0;
    *  never fetched here so the bar stays a pure consumer of whatever the page already loaded. */
   customerCreditAvailable?: number;
+  /** Attached customer's live loyalty account + program terms. Undefined/null hides the
+   *  "Redeem Points" tender (no customer, no account, or no active program). */
+  loyaltyAccount?: LoyaltyRedeemInfo | null;
   /** 'panel' = stacked tiles (narrow cart column); 'bar' = compact horizontal button row (GoDigital
    *  full-width bottom action bar). Defaults to 'panel'. */
   layout?: 'panel' | 'bar';
@@ -86,6 +92,7 @@ const TONES: Record<TenderTone, { text: string; bg: string; ring: string }> = {
   room:  { text: 'text-indigo-700',  bg: 'bg-indigo-500/10',  ring: 'hover:border-indigo-500/50' },
   cod:   { text: 'text-amber-700',   bg: 'bg-amber-500/10',   ring: 'hover:border-amber-500/50' },
   split: { text: 'text-violet-700',  bg: 'bg-violet-500/10',  ring: 'hover:border-violet-500/50' },
+  loyalty: { text: 'text-fuchsia-700', bg: 'bg-fuchsia-500/10', ring: 'hover:border-fuchsia-500/50' },
 };
 
 function tenderIcon(key: TenderKey) {
@@ -101,6 +108,7 @@ function tenderIcon(key: TenderKey) {
     case 'cod': return Truck;
     case 'room': return Building2;
     case 'split': return SplitSquareHorizontal;
+    case 'loyalty_points': return Gift;
     default: return CreditCard;
   }
 }
@@ -109,7 +117,7 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
   const {
     total, tenantSlug, profile, isHospitality, allowCOD = false, customerEmail,
     tenderId = NIL_TENDER, disabled = false, mode = 'pay', layout = 'panel', hasCustomer = true,
-    customerCreditAvailable = 0,
+    customerCreditAvailable = 0, loyaltyAccount = null,
     createOrderAsync, onSettled, onDraft, onQuotation, onCancel, onSplit,
   } = props;
 
@@ -156,15 +164,19 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
   // Requires a live server-side balance check (same as Credit Sale), so it's hidden offline —
   // paymentActionsFor()'s own online filter never sees this tender since it's appended after.
   const hasCustomerCredit = hasCustomer && customerCreditAvailable > 0 && isOnline;
+  const canRedeemLoyalty = hasCustomer && isOnline && hasRedeemableLoyalty(loyaltyAccount);
+  const redeemToOrder = useRedeemToOrder(loyaltyAccount?.accountId ?? '');
   const actions = useMemo(() => {
     const base = paymentActionsFor(profile, gateways, { isHospitality, isOnline, allowCOD })
       .filter((a) => a.key !== 'on_account' || canCreditSale);
-    if (!hasCustomerCredit) return base;
-    const action = customerCreditAction(customerCreditAvailable);
+    const extras = [];
+    if (hasCustomerCredit) extras.push(customerCreditAction(customerCreditAvailable));
+    if (canRedeemLoyalty && loyaltyAccount) extras.push(loyaltyRedeemAction(loyaltyAccount));
+    if (extras.length === 0) return base;
     const splitIdx = base.findIndex((a) => a.key === 'split');
-    if (splitIdx === -1) return [...base, action];
-    return [...base.slice(0, splitIdx), action, ...base.slice(splitIdx)];
-  }, [profile, gateways, isHospitality, isOnline, allowCOD, canCreditSale, hasCustomerCredit, customerCreditAvailable]);
+    if (splitIdx === -1) return [...base, ...extras];
+    return [...base.slice(0, splitIdx), ...extras, ...base.slice(splitIdx)];
+  }, [profile, gateways, isHospitality, isOnline, allowCOD, canCreditSale, hasCustomerCredit, customerCreditAvailable, canRedeemLoyalty, loyaltyAccount]);
   // Back-office profiles (retail/pharmacy/services) get Draft + Quotation; hospitality/QSR do not.
   // Quotation is additionally manager-gated (canPrivileged).
   const isBackOffice = profile === 'retail' || profile === 'pharmacy' || profile === 'services';
@@ -345,8 +357,40 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
       case 'wallet':
         await startGateway(key);
         return;
+      case 'loyalty_points': {
+        if (!loyaltyAccount) return;
+        // Points fully cover the total → settle in one shot. Otherwise never partially redeem
+        // here (that would under-report the sale as paid) — place the order and hand off to
+        // Multiple Pay, same as the store-credit shortfall above, where "Redeem Points" is also
+        // offered per split line for exactly the amount its points can cover.
+        if (!canRedeemLoyaltyFor(roundedTotal, loyaltyAccount)) {
+          setBusyKey('loyalty_points');
+          const ord = await ensureOrder();
+          setBusyKey(null);
+          if (ord) {
+            const availableKES = Math.floor(loyaltyAccount.pointsBalance * loyaltyAccount.redeemRate);
+            toast.info(`Loyalty points cover up to KES ${availableKES.toLocaleString()} of KES ${roundedTotal.toLocaleString()} — use Multiple Pay to combine it with another tender.`);
+            onSplit(ord);
+          }
+          return;
+        }
+        setBusyKey('loyalty_points');
+        const ord = await ensureOrder();
+        if (!ord) { setBusyKey(null); return; }
+        redeemToOrder.mutate(
+          { points: loyaltyPointsToRedeem(roundedTotal, loyaltyAccount), order_id: ord.orderId },
+          {
+            onSuccess: () => { setBusyKey(null); finish(ord); },
+            onError: async (e: any) => {
+              setBusyKey(null);
+              toast.error(await apiErrorMessage(e, 'Could not redeem points. Please try again.'));
+            },
+          },
+        );
+        return;
+      }
     }
-  }, [roundedTotal, settleImmediate, ensureOrder, startGateway, finish, onSplit, customerCreditAvailable]);
+  }, [roundedTotal, settleImmediate, ensureOrder, startGateway, finish, onSplit, customerCreditAvailable, loyaltyAccount, redeemToOrder]);
 
   // ── Send to Kitchen (dine-in) ────────────────────────────────────────────────
   const sendToKitchen = useCallback(async () => {
