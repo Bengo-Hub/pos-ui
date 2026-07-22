@@ -107,6 +107,9 @@ export function ReceiptPrint({
       {!receipt.outlet_phones && tenantPhone && (
         <p className="receipt-center receipt-small">Tel: {tenantPhone}</p>
       )}
+      {receipt.outlet_email && (
+        <p className="receipt-center receipt-small">Email: {receipt.outlet_email}</p>
+      )}
       {/* KRA PIN — always in the header (top), mirroring the KRA-issued paper ETR receipt;
           the receipt's own fiscal PIN wins over the legacy tenantPin prop. */}
       {(receipt.etims_kra_pin || tenantPin) && (

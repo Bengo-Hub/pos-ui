@@ -80,6 +80,9 @@ export function RetailReceiptPrint({ receipt, tenantName, outletName, logoUrl }:
         {receipt.outlet_phones && (
           <div style={{ fontSize: 12 }}><b>Mobile:</b> {receipt.outlet_phones}</div>
         )}
+        {receipt.outlet_email && (
+          <div style={{ fontSize: 12 }}><b>Email:</b> {receipt.outlet_email}</div>
+        )}
         {/* KRA PIN — always in the header (top), mirroring the KRA-issued paper ETR receipt. */}
         {receipt.etims_kra_pin && (
           <div style={{ fontSize: 12, fontWeight: 700 }}>KRA PIN: {receipt.etims_kra_pin}</div>

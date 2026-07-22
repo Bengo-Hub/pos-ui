@@ -98,6 +98,9 @@ export interface ReceiptData {
   outlet_address?: string;
   /** Formatted labeled phones ("AIRTEL +2547… · MTN +2567…") — printed as "Mobile: …". */
   outlet_phones?: string;
+  /** Branch contact email — pos-api already falls back to the tenant's general contact_email
+   *  when the branch hasn't configured its own, so this is always the right value to print. */
+  outlet_email?: string;
   receipt_header?: string;
   receipt_footer?: string;
   vat_enabled?: boolean;
@@ -355,6 +358,12 @@ export function ReceiptPreview({
               if (!outlet || outlet.trim().toLowerCase() === (tenantName ?? '').trim().toLowerCase()) return null;
               return <p className="text-center text-muted-foreground mb-1">{outlet}</p>;
             })()}
+            {receipt.outlet_phones && (
+              <p className="text-center text-muted-foreground mb-1">Mobile: {receipt.outlet_phones}</p>
+            )}
+            {receipt.outlet_email && (
+              <p className="text-center text-muted-foreground mb-1">Email: {receipt.outlet_email}</p>
+            )}
             {/* KRA PIN — always in the header (top), mirroring the KRA-issued paper ETR receipt. */}
             {receipt.etims_kra_pin && (
               <p className="text-center text-muted-foreground mb-1">KRA PIN: {receipt.etims_kra_pin}</p>
