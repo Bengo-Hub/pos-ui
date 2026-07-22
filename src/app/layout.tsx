@@ -57,7 +57,6 @@ export const metadata: Metadata = {
     capable:         true,
     statusBarStyle:  "black-translucent",
     title:           "Codevertex POS",
-    startupImage:    "/icons/splash-640x1136.png",
   },
   applicationName: "Codevertex POS",
   keywords:        ["pos", "point of sale", "restaurant", "hotel", "retail", "Africa", "Kenya"],

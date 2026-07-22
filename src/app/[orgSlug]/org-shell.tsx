@@ -15,6 +15,7 @@ import { Footer } from '@/components/footer';
 import { SubscriptionBanner } from '@/components/subscription/subscription-banner';
 import { SyncStatusIndicator } from '@/components/pos/sync-status-indicator';
 import { PWARegistration } from '@/components/pwa-registration';
+import { PwaSplashScreen } from '@/components/pwa-splash-screen';
 import { MobileBottomNav } from '@/components/mobile-bottom-nav';
 import { StartShiftGate } from '@/components/pos/start-shift-gate';
 import { RouteGuard } from '@/components/auth/route-guard';
@@ -270,6 +271,7 @@ export function OrgShell({ children }: { children: ReactNode }) {
           <NotificationListener />
           <PlatformDrillInConfinement />
           <PWARegistration />
+          <PwaSplashScreen />
 
           {/* Branded idle lock for active PIN/terminal sessions — wakes to the PIN pad so the
               next staff member must re-authenticate. No-ops for SSO sessions and the kiosk route. */}
