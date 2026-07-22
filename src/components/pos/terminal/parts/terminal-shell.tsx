@@ -77,6 +77,15 @@ export function TerminalShell() {
         ? 'grid-cols-[minmax(0,1fr)_4rem_6.5rem_4.5rem_3.5rem_4rem_5rem_5.5rem]'
         : 'grid-cols-[minmax(0,1fr)_4rem_6.5rem_4.5rem_3.5rem_5rem_5.5rem]')
     : 'grid-cols-[minmax(0,1fr)_4rem_6.5rem_5rem_5.5rem]';
+  // Below lg the columns above don't reflow (every value is fixed-width, only the product name
+  // column flexes) — on a ~390px phone the fixed columns alone can exceed the viewport. Rather
+  // than cram/overlap, the cart scrolls horizontally like every other data table in this app: a
+  // min-width matching each variant's fixed-column sum (+ gaps + a livable product-name floor)
+  // forces that scrollbar to appear instead of squeezing cells unreadably. lg+ already fits
+  // comfortably in the 58% left column, so the floor is released there.
+  const cartMinWidth = canViewCost
+    ? (showDiscountCol ? 'min-w-[48rem] lg:min-w-0' : 'min-w-[44rem] lg:min-w-0')
+    : 'min-w-[34rem] lg:min-w-0';
 
   // Total sold quantity per item id across the cart, so a multi-line item's projected stock
   // balance reflects ALL its lines (not just the row's own qty). Recomputed on every cart change.
@@ -226,25 +235,29 @@ export function TerminalShell() {
               <button onClick={t.clearCart} className="shrink-0 text-[11px] text-destructive font-semibold hover:underline">Clear all</button>
             )}
           </div>
-          <div className={cn('grid gap-3 px-4 py-2 shrink-0 text-[10px] font-bold uppercase tracking-wider text-muted-foreground border-b border-border', cartGridCols)}>
-            <span>Product</span>
-            <span className="text-center">In Stock</span>
-            <span className="text-center">Quantity</span>
-            {canViewCost && (
-              <>
-                <span className="text-right">
-                  <CostHeaderToggle revealed={costRevealed} onToggle={() => setCostRevealed((v) => !v)} />
-                </span>
-                <span className="text-right">Margin</span>
-              </>
-            )}
-            {showDiscountCol && <span className="text-right">Discount</span>}
-            <span className="text-right">Price inc. tax</span>
-            <span className="text-right">Subtotal</span>
-          </div>
-          <div className="flex-1 overflow-y-auto min-h-0">
+          {/* Shared horizontal+vertical scroll container: the header stays vertically pinned via
+              sticky (not a separate sibling), so it scrolls horizontally IN SYNC with the rows
+              below it instead of drifting out of column alignment. */}
+          <div className="flex-1 overflow-auto min-h-0">
+            <div className={cartMinWidth}>
+              <div className={cn('sticky top-0 z-10 grid gap-3 px-4 py-2 shrink-0 text-[10px] font-bold uppercase tracking-wider text-muted-foreground border-b border-border bg-card', cartGridCols)}>
+                <span>Product</span>
+                <span className="text-center">In Stock</span>
+                <span className="text-center">Quantity</span>
+                {canViewCost && (
+                  <>
+                    <span className="text-right">
+                      <CostHeaderToggle revealed={costRevealed} onToggle={() => setCostRevealed((v) => !v)} />
+                    </span>
+                    <span className="text-right">Margin</span>
+                  </>
+                )}
+                {showDiscountCol && <span className="text-right">Discount</span>}
+                <span className="text-right">Price inc. tax</span>
+                <span className="text-right">Subtotal</span>
+              </div>
             {cart.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-full gap-2 text-muted-foreground py-10">
+              <div className="flex flex-col items-center justify-center gap-2 text-muted-foreground py-10">
                 <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-muted/50 mb-1">
                   <ShoppingCart className="h-8 w-8 opacity-30" />
                 </div>
@@ -380,6 +393,7 @@ export function TerminalShell() {
                 );
               })
             )}
+            </div>
           </div>
 
           {/* TOTALS FOOTER */}
