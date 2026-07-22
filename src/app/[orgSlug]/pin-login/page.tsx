@@ -493,7 +493,10 @@ export default function PINLoginPage() {
   });
 
   const tenantDisplayName = tenant?.orgName ?? tenant?.name ?? orgSlug;
-  const outletName = outletInfo?.name ?? tenantDisplayName;
+  // Prefer the outlet's configured pin_login_message when set — tenants use it for a richer,
+  // more recognisable location label (e.g. "Red Hill - Westbay Mall, Gachie") than the bare
+  // outlet name ("Gachie"), same idea as merging a street/landmark into the branch name.
+  const outletName = outletInfo?.settings?.pin_login_message || outletInfo?.name || tenantDisplayName;
   const useCase = outletInfo?.use_case;
   const useCaseColor = useCase ? USE_CASE_COLORS[useCase] : null;
   const useCaseLabel = useCase ? (USE_CASE_LABELS[useCase] ?? useCase) : null;
