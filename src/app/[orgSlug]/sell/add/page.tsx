@@ -651,7 +651,7 @@ export default function AddSalePage() {
   }
 
   return (
-    <div className="p-6 max-w-400 mx-auto space-y-6">
+    <div className="p-4 sm:p-6 max-w-400 mx-auto space-y-6">
       <div className="flex flex-wrap items-center gap-3">
         <ShoppingCart className="h-6 w-6 text-primary" />
         <h1 className="text-2xl font-bold tracking-tight">

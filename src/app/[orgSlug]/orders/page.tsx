@@ -136,8 +136,8 @@ export default function OrdersPage() {
   };
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="p-4 sm:p-6 space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">{viewOwnOnly ? 'My Orders' : 'Order History'}</h1>
           <p className="text-muted-foreground mt-1">{viewOwnOnly ? 'Your orders and bills.' : 'View and manage all orders.'}</p>
@@ -157,9 +157,13 @@ export default function OrdersPage() {
         </div>
       </div>
 
-      <div className="flex gap-6">
+      {/* Below lg the detail panel stacks BELOW the list at full width instead of squeezing
+          beside it — a fixed w-96 (384px) side panel on its own exceeds the entire viewport on
+          every supported phone width (375-430px), which visibly clipped/forced horizontal scroll
+          the moment an order was selected. */}
+      <div className="flex flex-col lg:flex-row gap-6">
         {/* Orders table */}
-        <Card className={cn("transition-all", selectedOrder ? "flex-1" : "w-full")}>
+        <Card className={cn("transition-all", selectedOrder ? "lg:flex-1" : "w-full")}>
           <CardHeader className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between py-4">
             <div className="relative w-full max-w-sm group">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
@@ -318,7 +322,7 @@ export default function OrdersPage() {
 
                 {/* Pagination */}
                 {totalPages > 1 && (
-                  <div className="flex items-center justify-between px-6 py-3 border-t border-border">
+                  <div className="flex flex-wrap items-center justify-between gap-2 px-6 py-3 border-t border-border">
                     <p className="text-xs text-muted-foreground">
                       Page {page} of {totalPages} · {total} orders
                     </p>
@@ -360,9 +364,9 @@ export default function OrdersPage() {
           </CardContent>
         </Card>
 
-        {/* Order detail side panel */}
+        {/* Order detail side panel — full width when stacked on mobile, fixed sticky sidebar at lg+ */}
         {selectedOrder && (
-          <Card className="w-96 shrink-0 self-start sticky top-8">
+          <Card className="w-full lg:w-96 lg:shrink-0 lg:self-start lg:sticky lg:top-8">
             <CardHeader className="flex flex-row items-center justify-between py-4">
               <div>
                 <h2 className="text-sm font-bold">Order {selectedOrder.order_number}</h2>
