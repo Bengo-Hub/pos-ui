@@ -95,9 +95,14 @@ export function TerminalShell() {
   }, {});
 
   return (
-    // Height uses dvh (dynamic viewport) so mobile browser chrome never pushes the bottom action
-    // bar (Place Order / tenders) below the fold — the 100vh fallback covers older WebViews.
-    <div className="flex flex-col bg-background h-[calc(100vh-80px)] supports-[height:100dvh]:h-[calc(100dvh-80px)]">
+    // h-full — NOT a hardcoded viewport-minus-header calc. This shell already renders inside
+    // org-shell's flex chain (main flex-1 min-h-0 → a min-h-0 flex-1 wrapper), which correctly
+    // accounts for the header, SubscriptionBanner (variable height), and — since the terminal
+    // hides MobileBottomNav and its own bottom-padding reservation — no leftover gap either. A
+    // fixed "100vh - 80px" assumed nothing else ever sat between the header and this shell; once
+    // the subscription banner showed, that assumption silently overflowed main's scroll container
+    // and turned the whole immersive terminal into a page-scroller.
+    <div className="flex flex-col bg-background h-full min-h-0">
       {/* ─────────── 1. QUICK-ACTION TOOLBAR STRIP ───────────
           (No GoDigital "Location" band — outlet selection already lives in the app header; we use
            outlets, not locations.) */}

@@ -21,6 +21,7 @@ import { StartShiftGate } from '@/components/pos/start-shift-gate';
 import { RouteGuard } from '@/components/auth/route-guard';
 import { TerminalIdleScreensaver } from '@/components/pos/terminal-idle-screensaver';
 import { triggerSyncNow } from '@/hooks/use-sync-offline-orders';
+import { cn } from '@/lib/utils';
 import { useBackgroundSync } from '@/lib/sync/background-sync';
 import { useEffect } from 'react';
 import { usePathname, useParams } from 'next/navigation';
@@ -249,20 +250,8 @@ export function OrgShell({ children }: { children: ReactNode }) {
         <TenantBrandingProvider>
           <SubscriptionEntitlementsProvider>
           <ManifestInjector />
-          {/* Shared top ribbon: offline-mode (cash/manual only) + animated "Syncing offline
-              data… (N)" driven by the real IndexedDB queue (SW registered by
-              registerBackgroundSync), plus the shared PwaUpdater ("new version available" banner
-              — a server build-fingerprint poll, since the committed static sw.js never changes
-              bytes per deploy; fixed in shared-ui-lib v0.1.35 to actually detect Turbopack/App
-              Router builds, which it never could before). */}
-          <OfflineBar
-            registerSW
-            getPendingCount={async () => (await getSyncStatusCounts()).pending}
-            onSyncNow={triggerSyncNow}
-            availableOffline={['Sell', 'Cash & manual payments', 'Open/close drawer']}
-            disabledOffline={['Card / M-Pesa STK', 'Live reports']}
-          />
-          {/* Floating pill kept for dead-letter review (failed items + manual retry). */}
+          {/* Floating pill kept for dead-letter review (failed items + manual retry). Already
+              `fixed`-positioned, so where it mounts in the tree doesn't affect where it paints. */}
           <SyncStatusIndicator />
           <BackgroundSyncWorker />
           <CatalogPrewarm />
@@ -289,6 +278,20 @@ export function OrgShell({ children }: { children: ReactNode }) {
             <div className="fixed inset-0 flex overflow-hidden bg-background">
               <Sidebar open={sidebarOpen} collapsed={sidebarCollapsed} onClose={() => setSidebarOpen(false)} />
               <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+                {/* Shared top ribbon: offline-mode (cash/manual only) + animated "Syncing offline
+                    data… (N)" driven by the real IndexedDB queue (SW registered by
+                    registerBackgroundSync). Rendered INSIDE the fixed shell's own content column
+                    (not as a sibling before it) — a plain in-flow banner painted before a `fixed
+                    inset-0` sibling is always stacked BEHIND it per CSS stacking rules, so the
+                    banner was invisible (or a hazy blur through the header's 80%-opacity
+                    backdrop) however high its own z-index. */}
+                <OfflineBar
+                  registerSW
+                  getPendingCount={async () => (await getSyncStatusCounts()).pending}
+                  onSyncNow={triggerSyncNow}
+                  availableOffline={['Sell', 'Cash & manual payments', 'Open/close drawer']}
+                  disabledOffline={['Card / M-Pesa STK', 'Live reports']}
+                />
                 <Header
                   onMenuClick={() => setSidebarOpen(true)}
                   sidebarCollapsed={sidebarCollapsed}
@@ -299,19 +302,22 @@ export function OrgShell({ children }: { children: ReactNode }) {
                     and overflow-y-auto can never create a scroll context. */}
                 <main className="flex-1 min-h-0 overflow-y-auto bg-accent/5">
                   <StartShiftGate>
-                    {/* Bottom padding on mobile clears the fixed bottom nav bar. */}
-                    <div className="min-h-full flex flex-col pb-[calc(4rem+env(safe-area-inset-bottom))] lg:pb-0">
+                    {/* Bottom padding on mobile clears the fixed bottom nav bar — except on the
+                        terminal, which has its own bottom action bar and hides MobileBottomNav
+                        entirely (an immersive mid-sale screen showing two competing bottom bars
+                        is not how any real POS app behaves). */}
+                    <div className={cn('min-h-full flex flex-col', !isTerminal && 'pb-[calc(4rem+env(safe-area-inset-bottom))] lg:pb-0')}>
                       {/* App-wide permission safety net: every classified route is gated by
                           the caller's permissions, incl. direct-URL nav. Fail-open for
                           unclassified routes; superusers bypass. */}
-                      <div className="flex-1"><RouteGuard>{children}</RouteGuard></div>
+                      <div className="flex-1 min-h-0"><RouteGuard>{children}</RouteGuard></div>
                       <Footer />
                     </div>
                   </StartShiftGate>
                 </main>
               </div>
-              {/* App-style bottom navigation, phones only. */}
-              <MobileBottomNav onOpenMenu={() => setSidebarOpen(true)} />
+              {/* App-style bottom navigation, phones only — hidden on the terminal (see above). */}
+              {!isTerminal && <MobileBottomNav onOpenMenu={() => setSidebarOpen(true)} />}
             </div>
           )}
           </SubscriptionEntitlementsProvider>

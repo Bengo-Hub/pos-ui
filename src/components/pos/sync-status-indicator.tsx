@@ -50,7 +50,9 @@ export function SyncStatusIndicator() {
         data-dead-letter={deadLetter}
         onClick={() => setOpen((v) => !v)}
         className={cn(
-          'fixed bottom-4 right-4 z-[90] flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold shadow-lg transition',
+          // Below lg, MobileBottomNav is a fixed h-16 bar (+ safe-area padding) along the same
+          // edge — bottom-4 sat squarely inside it, overlapping/blocking the nav's rightmost tab.
+          'fixed bottom-[calc(4rem+env(safe-area-inset-bottom)+0.75rem)] lg:bottom-4 right-4 z-[90] flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold shadow-lg transition',
           deadLetter > 0
             ? 'bg-destructive text-destructive-foreground'
             : 'bg-primary text-primary-foreground',
@@ -71,7 +73,7 @@ export function SyncStatusIndicator() {
       </button>
 
       {open && (
-        <div className="fixed bottom-16 right-4 z-[90] w-80 rounded-2xl border border-border bg-card shadow-2xl">
+        <div className="fixed bottom-[calc(4rem+env(safe-area-inset-bottom)+4rem)] lg:bottom-16 right-4 z-[90] w-80 max-w-[calc(100vw-2rem)] rounded-2xl border border-border bg-card shadow-2xl">
           <div className="flex items-center justify-between border-b border-border px-4 py-3">
             <span className="text-sm font-bold">Sync status</span>
             <button onClick={() => setOpen(false)} className="rounded-lg p-1 hover:bg-accent">
