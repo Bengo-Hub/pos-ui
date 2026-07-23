@@ -126,8 +126,11 @@ export function useCancelLayaway() {
   const tenantID = useTenantID();
   const qc = useQueryClient();
   return useMutation({
+    // Cancelling also refunds any deposit/installments already collected (see pos-api
+    // LayawayHandler.Cancel); warning is set when that refund call itself failed — the plan is
+    // still cancelled, but the refund needs manual follow-up.
     mutationFn: (planId: string) =>
-      apiClient.post<{ ok: boolean }>(`${basePath(tenantID)}/${planId}/cancel`),
+      apiClient.post<{ plan: LayawayPlan; warning?: string }>(`${basePath(tenantID)}/${planId}/cancel`),
     onSuccess: () => qc.invalidateQueries({ queryKey: layawayKeys.all(tenantID) }),
   });
 }

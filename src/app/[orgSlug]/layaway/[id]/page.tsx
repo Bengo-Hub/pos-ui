@@ -70,8 +70,13 @@ function LayawayDetailPage() {
 
   const handleCancel = () => {
     cancelPlan.mutate(id, {
-      onSuccess: () => {
-        toast.success('Layaway plan cancelled');
+      onSuccess: (res) => {
+        if (res?.warning) {
+          // Cancellation still went through -- only the deposit refund needs a human to sort out.
+          toast.warning(res.warning, { duration: 10000 });
+        } else {
+          toast.success('Layaway plan cancelled and deposit refunded');
+        }
         setCancelOpen(false);
       },
       onError: async (e) => toast.error(await apiErrorMessage(e, 'Failed to cancel plan')),
