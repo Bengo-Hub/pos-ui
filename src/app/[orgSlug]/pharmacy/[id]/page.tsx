@@ -135,6 +135,12 @@ function PrescriptionDetailPage() {
             <div className="flex items-center gap-3 flex-wrap">
               <h1 className="text-xl font-bold font-mono">{rx.prescription_number}</h1>
               <StatusBadge status={rx.status} />
+              {(rx.status === 'approved' || rx.status === 'locked') && rx.metadata?.reservation_id && (
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-500/10 text-blue-700 border border-blue-400/30 dark:text-blue-400">
+                  <ShieldCheck className="h-3 w-3" />
+                  Stock Reserved
+                </span>
+              )}
             </div>
             <p className="text-sm text-muted-foreground mt-0.5">
               Created {new Date(rx.created_at).toLocaleString()}
