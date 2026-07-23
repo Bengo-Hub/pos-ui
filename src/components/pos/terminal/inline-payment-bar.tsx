@@ -511,7 +511,7 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
                 onClick={() => onPick(a.key)}
                 title={a.sublabel}
                 className={cn(
-                  'inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-bold transition-all',
+                  'inline-flex items-center gap-2 rounded-full px-4 py-2 min-h-11 text-sm font-bold transition-all',
                   'hover:brightness-95 active:scale-95 disabled:opacity-40 disabled:pointer-events-none',
                   tone.bg, tone.text,
                 )}
@@ -589,7 +589,7 @@ function BadgeBtn({ icon: Icon, label, onClick, disabled, tone }: {
       onClick={onClick}
       disabled={disabled}
       className={cn(
-        'inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-bold transition-all',
+        'inline-flex items-center gap-2 rounded-full px-4 py-2 min-h-11 text-sm font-bold transition-all',
         'hover:brightness-95 active:scale-95 disabled:opacity-40 disabled:pointer-events-none',
         tone === 'danger'
           ? 'bg-destructive/10 text-destructive'

@@ -485,7 +485,10 @@ export function TerminalShell() {
       </div>
 
       {/* ─────────── 3. BOTTOM ACTION BAR ─────────── */}
-      <div className="shrink-0 border-t border-border bg-card">
+      {/* An outlet with many active tenders (Cash/Card/M-Pesa STK/Paybill/Wallet/Split/…) wraps to
+          several rows on a phone; capped + internally scrollable below lg so a long tender list
+          never keeps eating into the product grid/cart above it. */}
+      <div className="shrink-0 border-t border-border bg-card max-h-32 overflow-y-auto lg:max-h-none lg:overflow-visible">
         {t.isAddToBill ? (
           <div className="p-3 flex items-center justify-between gap-3">
             <span className="text-sm font-bold">Total Payable: <span className="text-primary tabular-nums">KES {t.total.toLocaleString()}</span></span>

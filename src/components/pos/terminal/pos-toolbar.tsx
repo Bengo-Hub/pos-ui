@@ -88,7 +88,12 @@ export function PosToolbar({
   ];
 
   return (
-    <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-hide px-4 pt-3 pb-1 shrink-0">
+    <div className="relative shrink-0">
+      {/* Edge fades hint there's more to scroll to — this strip can hold 8+ buttons and had no
+          visual affordance at all, so a cashier reaching for e.g. "Repair" had to blind-scroll. */}
+      <div className="pointer-events-none absolute inset-y-0 left-0 w-6 bg-gradient-to-r from-background to-transparent z-10" aria-hidden />
+      <div className="pointer-events-none absolute inset-y-0 right-0 w-6 bg-gradient-to-l from-background to-transparent z-10" aria-hidden />
+      <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-hide px-4 pt-3 pb-1">
       {buttons.filter((b) => b.show).map((b) => {
         const Icon = b.icon;
         return (
@@ -110,6 +115,7 @@ export function PosToolbar({
       {/* Manager-only: mint a one-time approval code (discount/price/adjustment/OOS override) to
           share with a cashier — the generate side of the ApprovalDialog "Code" tab. Self-gated. */}
       <GenerateApprovalCodeButton className="flex items-center gap-1.5 shrink-0 px-2.5 py-1.5 rounded-lg border border-amber-500/40 text-xs font-semibold text-amber-600 dark:text-amber-400 hover:bg-amber-500/5 transition-colors whitespace-nowrap" />
+      </div>
     </div>
   );
 }

@@ -356,7 +356,7 @@ export function Header({ onMenuClick, onToggleSidebar, sidebarCollapsed }: Heade
   }
 
   return (
-    <header className="h-20 border-b border-border bg-background/80 backdrop-blur-md sticky top-0 z-30 px-4 sm:px-8 flex items-center gap-4">
+    <header className="h-14 sm:h-20 border-b border-border bg-background/80 backdrop-blur-md sticky top-0 z-30 px-4 sm:px-8 flex items-center gap-4">
       {/* Left: title + search + outlet context */}
       <div className="flex items-center gap-4 flex-1 min-w-0 overflow-hidden">
         <button type="button" onClick={onMenuClick} className="lg:hidden p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-white/10 transition-colors shrink-0" aria-label="Open menu">
