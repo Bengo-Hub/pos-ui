@@ -1145,8 +1145,10 @@ export interface OrdersSummary {
   sum_paid: number;
   sum_due: number;
   sum_return: number;
-  status_counts: Record<string, number>; // paid|partial|due|overdue|refunded|voided|cancelled
+  status_counts: Record<string, number>; // paid|partial|due|overdue|refunded|voided|cancelled|draft
+  status_amounts: Record<string, number>; // same keys -> KSh total for that status (incl. voided/draft)
   method_counts: Record<string, number>; // cash|card|mpesa|...|multiple
+  method_amounts: Record<string, number>; // same keys -> KSh total settled by that method
 }
 
 /** Totals for the sales list footer. Deliberately page-INDEPENDENT: the query key drops

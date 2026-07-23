@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Button } from '@/components/ui/base';
+import { cn } from '@/lib/utils';
 import { money, prettyMethod, ModalFrame } from './sales-shared';
 import type { BulkOrderSkip, OrdersSummary } from '@/hooks/usePOS';
 
@@ -123,9 +124,13 @@ export function BulkVoidReasonDialog({ count, onClose, onConfirm, loading }: {
 // per-row status badge vocabulary in sales-shared).
 const STATUS_LABELS: Record<string, string> = {
   paid: 'Paid', partial: 'Partial', due: 'Due', overdue: 'Overdue',
-  refunded: 'Refunded', voided: 'Voided', cancelled: 'Cancelled',
+  refunded: 'Refunded', voided: 'Voided', cancelled: 'Cancelled', draft: 'Draft',
 };
-const STATUS_ORDER = ['paid', 'partial', 'due', 'overdue', 'refunded', 'voided', 'cancelled'];
+const STATUS_ORDER = ['paid', 'partial', 'due', 'overdue', 'refunded', 'voided', 'cancelled', 'draft'];
+// Statuses excluded from Total/Paid/Sell Due/Items above (see nonCommittedOrderStatus in
+// orders.go) — flagged here so the breakdown chip can visually distinguish "doesn't count
+// toward the headline totals" without hiding the row entirely.
+const NON_COMMITTED_STATUSES = new Set(['voided', 'cancelled', 'draft']);
 
 /**
  * SalesSummaryFooter — grand totals across the WHOLE filtered set (every page), rendered as a
@@ -151,20 +156,28 @@ export function SalesSummaryFooter({ summary }: { summary: OrdersSummary }) {
           ? <span className="text-red-600">{money(summary.sum_return)}</span>
           : money(0))}
       </div>
-      <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted-foreground">
+      <div className="flex flex-wrap gap-x-6 gap-y-1.5 text-xs text-muted-foreground">
         {STATUS_ORDER.some((s) => summary.status_counts?.[s]) && (
-          <span className="space-x-2">
+          <span className="flex flex-wrap gap-x-3">
             {STATUS_ORDER.filter((s) => summary.status_counts?.[s]).map((s) => (
-              <span key={s} className="whitespace-nowrap">{STATUS_LABELS[s]} - {summary.status_counts[s]}</span>
+              <span
+                key={s}
+                className={cn('whitespace-nowrap', NON_COMMITTED_STATUSES.has(s) && 'text-amber-600')}
+                title={NON_COMMITTED_STATUSES.has(s) ? 'Not counted in Total/Paid/Sell Due above' : undefined}
+              >
+                {STATUS_LABELS[s]} - {summary.status_counts[s]} ({money(summary.status_amounts?.[s] ?? 0)})
+              </span>
             ))}
           </span>
         )}
         {Object.keys(summary.method_counts ?? {}).length > 0 && (
-          <span className="space-x-2">
+          <span className="flex flex-wrap gap-x-3">
             {Object.entries(summary.method_counts ?? {})
               .sort((a, b) => b[1] - a[1])
               .map(([m, n]) => (
-                <span key={m} className="whitespace-nowrap">{prettyMethod(m)} - {n}</span>
+                <span key={m} className="whitespace-nowrap">
+                  {prettyMethod(m)} - {n} ({money(summary.method_amounts?.[m] ?? 0)})
+                </span>
               ))}
           </span>
         )}
