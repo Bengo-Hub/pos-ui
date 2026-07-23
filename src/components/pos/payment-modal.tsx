@@ -776,10 +776,10 @@ export function POSPaymentModal({
             {step === 'card_pdq' && (
               <div className="p-5 space-y-4">
                 <p className="text-sm text-muted-foreground">
-                  Run the card on your PDQ / card machine, then record the approval / reference code (optional).
+                  Run the card on your PDQ / card machine, then record the auth code printed on its receipt (optional).
                 </p>
                 <label className="block">
-                  <span className="text-sm font-medium text-foreground">Approval / Ref code</span>
+                  <span className="text-sm font-medium text-foreground">Auth Code (from receipt)</span>
                   <input
                     type="text"
                     placeholder="Optional"

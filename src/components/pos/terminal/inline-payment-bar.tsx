@@ -682,16 +682,16 @@ function CardRefCapture({ total, value, requireRef, onChange, busy, onConfirm, o
       <ol className="text-xs text-muted-foreground list-decimal pl-4 space-y-0.5">
         <li>Run the card on the PDQ terminal for <span className="font-semibold text-foreground">KES {total.toLocaleString()}</span>.</li>
         <li>Wait for the terminal to show <span className="font-semibold text-emerald-600">APPROVED</span>.</li>
-        <li>Enter the approval / reference code below{requireRef ? '' : ' (optional)'}, then Confirm.</li>
+        <li>Enter the Auth Code from its receipt below{requireRef ? '' : ' (optional)'}, then Confirm.</li>
       </ol>
       <input
         type="text" autoFocus value={value}
-        placeholder={requireRef ? 'Approval / Ref code (required)' : 'Approval / Ref code (optional)'}
+        placeholder={requireRef ? 'Auth Code (from receipt) — required' : 'Auth Code (from receipt) — optional'}
         onChange={(e) => onChange(e.target.value.toUpperCase())}
         onKeyDown={(e) => { if (e.key === 'Enter' && !refMissing && !busy) onConfirm(); }}
         className="w-full bg-background border border-border rounded-xl py-2.5 px-3 text-base font-semibold tracking-wide uppercase focus:ring-2 focus:ring-blue-500/40 focus:outline-none"
       />
-      {refMissing && <p className="text-[11px] text-amber-600">This outlet requires the PDQ approval code before confirming.</p>}
+      {refMissing && <p className="text-[11px] text-amber-600">This outlet requires the PDQ auth code before confirming.</p>}
       <button
         type="button" disabled={busy || refMissing} onClick={onConfirm}
         className="w-full min-h-11 rounded-xl bg-blue-600 text-white font-bold flex items-center justify-center gap-2 disabled:opacity-40 hover:bg-blue-700 transition-colors"
