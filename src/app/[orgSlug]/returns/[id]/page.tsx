@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api/client';
 import { useAuthStore } from '@/store/auth';
 import { useState } from 'react';
-import { ArrowLeft, CheckCircle2, Loader2, PackageCheck, RotateCcw, ShieldCheck, XCircle } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Info, Loader2, PackageCheck, RotateCcw, ShieldCheck, XCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api/error-message';
@@ -281,8 +281,16 @@ export default function ReturnDetailPage() {
                 onChange={(e) => setRefundChannel(e.target.value)}
                 className="mt-1 w-full bg-background border border-border rounded-xl py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
               >
-                {channelOptions.map((ch) => <option key={ch.value} value={ch.value}>{ch.label}</option>)}
+                {channelOptions.map((ch) => <option key={ch.value} value={ch.value} title={ch.hint}>{ch.label}</option>)}
               </select>
+              {/* Plain-language explanation of whichever method is selected -- always visible
+                  (not hover-only) since till devices are usually touchscreens. */}
+              {channelOptions.find((c) => c.value === effectiveChannel)?.hint && (
+                <p className="text-[11px] text-muted-foreground mt-1.5 flex items-start gap-1">
+                  <Info className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                  <span>{channelOptions.find((c) => c.value === effectiveChannel)?.hint}</span>
+                </p>
+              )}
               {channelAdvisory && (
                 <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-2">{channelAdvisory}</p>
               )}
@@ -367,8 +375,14 @@ export default function ReturnDetailPage() {
                 onChange={(e) => setCompleteChannel(e.target.value)}
                 className="mt-1 w-full bg-background border border-border rounded-xl py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
               >
-                {channelOptions.map((ch) => <option key={ch.value} value={ch.value}>{ch.label}</option>)}
+                {channelOptions.map((ch) => <option key={ch.value} value={ch.value} title={ch.hint}>{ch.label}</option>)}
               </select>
+              {channelOptions.find((c) => c.value === effectiveCompleteChannel)?.hint && (
+                <p className="text-[11px] text-muted-foreground mt-1.5 flex items-start gap-1">
+                  <Info className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                  <span>{channelOptions.find((c) => c.value === effectiveCompleteChannel)?.hint}</span>
+                </p>
+              )}
               {channelAdvisory && (
                 <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-2">{channelAdvisory}</p>
               )}

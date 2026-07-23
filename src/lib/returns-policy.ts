@@ -14,15 +14,26 @@
 export interface RefundChannelOption {
   value: string;
   label: string;
+  /** Plain-language explanation for a hover/tap info-tip — no accounting jargon, written for a
+   *  business owner who never studied bookkeeping. */
+  hint: string;
 }
 
 export const REFUND_CHANNELS: RefundChannelOption[] = [
-  { value: 'cash',           label: 'Cash' },
-  { value: 'mpesa',          label: 'M-Pesa' },
-  { value: 'bank',           label: 'Bank' },
-  { value: 'cheque',         label: 'Cheque' },
-  { value: 'store_credit',   label: 'Store Credit' },
-  { value: 'offset_invoice', label: 'Offset Customer Account (AR)' },
+  { value: 'cash', label: 'Cash', hint: 'Hand the money back to the customer in cash.' },
+  { value: 'mpesa', label: 'M-Pesa', hint: 'Send the money back to the customer via M-Pesa.' },
+  { value: 'bank', label: 'Bank', hint: 'Send the money back to the customer’s bank account.' },
+  { value: 'cheque', label: 'Cheque', hint: 'Give the money back by writing the customer a cheque.' },
+  {
+    value: 'store_credit',
+    label: 'Store Credit',
+    hint: 'Don’t give money back now — instead, keep this amount as credit the customer can spend on a future visit.',
+  },
+  {
+    value: 'offset_invoice',
+    label: 'Reduce what they owe you',
+    hint: 'Use this amount to lower how much the customer still owes you, instead of giving money back. Use this when the sale was on credit and not yet fully paid.',
+  },
 ];
 
 export const STORE_CREDIT_BLOCKED_REASONS = new Set(['defective', 'damaged', 'expired', 'wrong_item']);
@@ -30,7 +41,11 @@ export const STORE_CREDIT_BLOCKED_REASONS = new Set(['defective', 'damaged', 'ex
 /** Channels the server will accept for this (reason, on-account) combination. */
 export function allowedRefundChannels(reasonCode?: string, onAccount?: boolean): RefundChannelOption[] {
   return REFUND_CHANNELS.filter((ch) => {
-    if (onAccount && ch.value !== 'offset_invoice' && ch.value !== 'store_credit') return false;
+    // An on-account (unpaid credit) sale can ONLY be settled by offsetting the balance — never
+    // store credit, which would stack a new credit on top of the still-open debt instead of
+    // reducing it (see returns_policy.go validateRefundChannel; matches the server 1:1 so the
+    // cashier never picks an option the backend will 422 on).
+    if (onAccount && ch.value !== 'offset_invoice') return false;
     if (ch.value === 'store_credit' && reasonCode && STORE_CREDIT_BLOCKED_REASONS.has(reasonCode)) return false;
     return true;
   });
@@ -39,11 +54,8 @@ export function allowedRefundChannels(reasonCode?: string, onAccount?: boolean):
 /** Human explanation of the constraint currently in force, or null when unrestricted. */
 export function refundChannelAdvisory(reasonCode?: string, onAccount?: boolean): string | null {
   const fault = !!reasonCode && STORE_CREDIT_BLOCKED_REASONS.has(reasonCode);
-  if (onAccount && fault) {
-    return 'This sale was on account (unpaid) and the goods are faulty — the return must offset the customer’s balance.';
-  }
   if (onAccount) {
-    return 'This sale was on account (unpaid) — the return offsets the customer’s balance instead of paying out money.';
+    return 'This sale was on account (still owed) — the return reduces what the customer owes instead of paying out money or store credit.';
   }
   if (fault) {
     return 'Faulty/wrong goods must be refunded to the customer — store credit is not offered for this reason.';
