@@ -17,6 +17,7 @@ import { SyncStatusIndicator } from '@/components/pos/sync-status-indicator';
 import { PWARegistration } from '@/components/pwa-registration';
 import { PwaSplashScreen } from '@/components/pwa-splash-screen';
 import { MobileBottomNav } from '@/components/mobile-bottom-nav';
+import { TerminalSessionExpiryWarning } from '@/components/pos/terminal-session-expiry';
 import { StartShiftGate } from '@/components/pos/start-shift-gate';
 import { RouteGuard } from '@/components/auth/route-guard';
 import { TerminalIdleScreensaver } from '@/components/pos/terminal-idle-screensaver';
@@ -297,6 +298,9 @@ export function OrgShell({ children }: { children: ReactNode }) {
                   sidebarCollapsed={sidebarCollapsed}
                   onToggleSidebar={() => setSidebarCollapsed((v) => !v)}
                 />
+                {/* Terminal (PIN) sessions can't silently refresh — warn loudly before the ~4h
+                    token lapses so a payment never fails mid-sale with a bearer-token error. */}
+                <TerminalSessionExpiryWarning />
                 <SubscriptionBanner />
                 {/* min-h-0 is required here: without it a flex child defaults to min-height:auto
                     and overflow-y-auto can never create a scroll context. */}
