@@ -30,6 +30,7 @@ import {
   useAssignTable, useReleaseTable, usePricingTiers, useEffectiveOutletID, type OrderSubtype,
 } from '@/hooks/usePOS';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
+import { ETIMS_FISCALIZED_EVENT, type EtimsFiscalizedPayload } from '@/hooks/use-notification-stream';
 import { isStockTracked } from '@/components/pos/stock-cell';
 import { useKDSStations } from '@/hooks/useKDS';
 import { useLoyaltyPrograms, useLoyaltyAccount } from '@/hooks/useLoyalty';
@@ -1824,43 +1825,56 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
         setReceiptData({ ...data, served_by: data.served_by || user?.fullName || user?.email });
         setReceiptOrderId(settledOrderId);
         setReceiptOpen(true);
-        // eTIMS fiscalisation is ASYNC (treasury worker, ~30s): the receipt is fetched right
-        // after payment, before the KRA fiscal identity lands. The pos-api backfills the order's
-        // eTIMS fields from treasury on each receipt fetch, so poll a few times until the CU inv
-        // no / signature / QR appear, then merge them into the open receipt (no manual reprint).
+        // eTIMS fiscalisation lands asynchronously to the on-screen receipt (the sale signs on the
+        // post-settlement fan-out). PRIMARY path: pos-api PUSHES `etims_fiscalized` over the
+        // notification WebSocket the instant it signs — use-notification-stream re-broadcasts it as
+        // the ETIMS_FISCALIZED_EVENT window event, so we refetch ONCE and merge the KRA TIMS block
+        // immediately (no 30-50s poll). FALLBACK: a few slow polls in case the socket was momentarily
+        // down; then give up (the receipt endpoint still backfills on any later manual view/reprint).
         if (!data.etims_cu_inv_no && !data.etims_invoice_number) {
-          void (async () => {
-            for (let attempt = 0; attempt < 10; attempt++) {
-              await new Promise((r) => setTimeout(r, 5000));
-              try {
-                const fresh = await apiClient.get<ReceiptData>(
-                  `/api/v1/${tenantId}/pos/orders/${settledOrderId}/receipt`
-                );
-                if (fresh.etims_cu_inv_no || fresh.etims_invoice_number) {
-                  setReceiptData((prev) =>
-                    prev && prev.order_number === data.order_number
-                      ? {
-                          ...prev,
-                          etims_invoice_number: fresh.etims_invoice_number,
-                          etims_qr_code_url: fresh.etims_qr_code_url,
-                          etims_qr_png: fresh.etims_qr_png,
-                          etims_scu_id: fresh.etims_scu_id,
-                          etims_cu_inv_no: fresh.etims_cu_inv_no,
-                          etims_rcpt_sign: fresh.etims_rcpt_sign,
-                          etims_kra_pin: fresh.etims_kra_pin,
-                          // Fiscalisation just landed — the barcode switches from the plain order
-                          // number to the eTIMS CU invoice number (FiscalBarcodeValue on the server).
-                          barcode_png: fresh.barcode_png,
-                          barcode_value: fresh.barcode_value,
-                        }
-                      : prev,
-                  );
-                  break;
-                }
-              } catch {
-                // keep polling — transient
-              }
+          let done = false;
+          const applyFresh = (fresh: ReceiptData) => {
+            if (done || !(fresh.etims_cu_inv_no || fresh.etims_invoice_number)) return;
+            done = true;
+            setReceiptData((prev) =>
+              prev && prev.order_number === data.order_number
+                ? {
+                    ...prev,
+                    etims_invoice_number: fresh.etims_invoice_number,
+                    etims_qr_code_url: fresh.etims_qr_code_url,
+                    etims_qr_png: fresh.etims_qr_png,
+                    etims_scu_id: fresh.etims_scu_id,
+                    etims_cu_inv_no: fresh.etims_cu_inv_no,
+                    etims_rcpt_sign: fresh.etims_rcpt_sign,
+                    etims_kra_pin: fresh.etims_kra_pin,
+                    // Fiscalisation just landed — the barcode switches from the plain order
+                    // number to the eTIMS CU invoice number (FiscalBarcodeValue on the server).
+                    barcode_png: fresh.barcode_png,
+                    barcode_value: fresh.barcode_value,
+                  }
+                : prev,
+            );
+          };
+          const refetchOnce = async () => {
+            try {
+              applyFresh(
+                await apiClient.get<ReceiptData>(`/api/v1/${tenantId}/pos/orders/${settledOrderId}/receipt`),
+              );
+            } catch {
+              // transient — the push/fallback will retry
             }
+          };
+          const onPush = (e: Event) => {
+            const detail = (e as CustomEvent<EtimsFiscalizedPayload>).detail;
+            if (detail?.order_id === settledOrderId) void refetchOnce();
+          };
+          window.addEventListener(ETIMS_FISCALIZED_EVENT, onPush as EventListener);
+          void (async () => {
+            for (let attempt = 0; attempt < 3 && !done; attempt++) {
+              await new Promise((r) => setTimeout(r, 5000));
+              if (!done) await refetchOnce();
+            }
+            window.removeEventListener(ETIMS_FISCALIZED_EVENT, onPush as EventListener);
           })();
         }
       } catch {

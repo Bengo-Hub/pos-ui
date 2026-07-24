@@ -8,9 +8,26 @@ import { apiClient } from '@/lib/api/client';
 // Stream against the API host (matches REST/SSE), not the UI host.
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://posapi.codevertexitsolutions.com';
 
+// EtimsFiscalizedPayload is pushed by pos-api the instant a sale is signed with KRA (sync
+// checkout sign or the async transmitted event), so the open receipt merges the TIMS block
+// without polling. The window event `pos:etims-fiscalized` re-broadcasts it (detail = payload).
+export interface EtimsFiscalizedPayload {
+  order_id: string;
+  order_number: string;
+  invoice_number: string;
+  cu_invoice_no: string;
+  scu_id: string;
+  rcpt_sign: string;
+  qr_code_url: string;
+  kra_pin: string;
+}
+
+export const ETIMS_FISCALIZED_EVENT = 'pos:etims-fiscalized';
+
 export type NotificationStreamMessage =
   | { type: 'order_ready_for_payment'; payload: { order_id: string; order_number: string } }
   | { type: 'waiter_called'; payload: { order_id: string; order_number: string } }
+  | { type: 'etims_fiscalized'; payload: EtimsFiscalizedPayload }
   | { type: 'ping' | 'pong'; payload: { ts: number } };
 
 interface UseNotificationStreamOptions {
@@ -76,6 +93,12 @@ export function useNotificationStream({ tenantID, userID, onMessage }: UseNotifi
         playNotificationChime();
         qc.invalidateQueries({ queryKey: ['pos-orders'] });
         qc.invalidateQueries({ queryKey: ['pos-notifications'] });
+      }
+
+      // eTIMS fiscal identity just landed for a sale — re-broadcast as a window event so the
+      // open receipt (terminal-context) merges the KRA TIMS block instantly, replacing its poll.
+      if (msg.type === 'etims_fiscalized' && typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent(ETIMS_FISCALIZED_EVENT, { detail: msg.payload }));
       }
 
       onMessage?.(msg);
