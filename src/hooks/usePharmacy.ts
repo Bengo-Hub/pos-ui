@@ -9,6 +9,8 @@ import {
   dispensePrescription,
   approvePrescription,
   lockPrescription,
+  searchCRMContacts,
+  linkCRMContact,
   type CreatePrescriptionData,
   type PrescriptionFilters,
 } from '@/lib/api/pharmacy';
@@ -89,6 +91,31 @@ export function useLockPrescription() {
   return useMutation({
     mutationFn: (id: string) => lockPrescription(tenantSlug, id),
     onSuccess: (_data, id) => {
+      qc.invalidateQueries({ queryKey: ['prescriptions', tenantSlug] });
+      qc.invalidateQueries({ queryKey: ['prescription', tenantSlug, id] });
+    },
+  });
+}
+
+// ─── Patient <-> CRM contact linkage (Phase 8) ────────────────────────────────
+
+export function useCRMContactSearch(query: string) {
+  const tenantSlug = useTenantSlug();
+  return useQuery({
+    queryKey: ['crm-contacts', tenantSlug, query],
+    queryFn: () => searchCRMContacts(tenantSlug, query),
+    enabled: !!tenantSlug && query.trim().length >= 2,
+    staleTime: 30_000,
+  });
+}
+
+export function useLinkCRMContact() {
+  const tenantSlug = useTenantSlug();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, crmContactId }: { id: string; crmContactId: string }) =>
+      linkCRMContact(tenantSlug, id, crmContactId),
+    onSuccess: (_data, { id }) => {
       qc.invalidateQueries({ queryKey: ['prescriptions', tenantSlug] });
       qc.invalidateQueries({ queryKey: ['prescription', tenantSlug, id] });
     },

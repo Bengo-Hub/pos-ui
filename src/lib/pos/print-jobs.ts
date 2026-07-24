@@ -9,7 +9,7 @@
 import { apiClient } from '@/lib/api/client';
 import { AGENT_BASE } from '@/lib/pos/printer-discovery';
 
-export type PrintJobType = 'bill' | 'receipt' | 'test' | 'drawer';
+export type PrintJobType = 'bill' | 'receipt' | 'test' | 'drawer' | 'dispensing_label';
 
 export interface EnqueueJobInput {
   job_type: PrintJobType;
@@ -18,6 +18,8 @@ export interface EnqueueJobInput {
   profile_id?: string;
   payment_method?: string;
   station?: string;
+  /** Required for job_type: 'dispensing_label' — one label per dispensed PrescriptionLine. */
+  prescription_id?: string;
 }
 
 export interface EnqueueJobResult {

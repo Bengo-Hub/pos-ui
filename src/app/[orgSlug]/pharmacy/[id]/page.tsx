@@ -9,14 +9,18 @@ import {
   useDispensePrescription,
   useApprovePrescription,
   useLockPrescription,
+  useCRMContactSearch,
+  useLinkCRMContact,
 } from '@/hooks/usePharmacy';
 import { cn } from '@/lib/utils';
-import { ArrowLeft, AlertTriangle, CheckCircle2, Loader2, Lock, Pill, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, AlertTriangle, CheckCircle2, Loader2, Lock, Pill, Printer, ShieldCheck, UserPlus, X } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import type { Prescription, PrescriptionStatus } from '@/lib/api/pharmacy';
+import { useAuthStore } from '@/store/auth';
+import { enqueuePrintJob } from '@/lib/pos/print-jobs';
 
 // ─── Status badge ─────────────────────────────────────────────────────────────
 
@@ -52,6 +56,93 @@ function StatusBadge({ status }: { status: PrescriptionStatus }) {
   );
 }
 
+// ─── CRM contact link (Phase 8: optional pointer, CRM remains the source of truth) ────────────
+
+function CRMContactLink({ prescriptionId, crmContactId }: { prescriptionId: string; crmContactId?: string }) {
+  const [query, setQuery] = useState('');
+  const [open, setOpen] = useState(false);
+  const { data: contacts } = useCRMContactSearch(query);
+  const link = useLinkCRMContact();
+
+  const handleLink = async (contactId: string) => {
+    try {
+      await link.mutateAsync({ id: prescriptionId, crmContactId: contactId });
+      toast.success('Linked to CRM contact');
+      setQuery('');
+      setOpen(false);
+    } catch (e) {
+      toast.error(await apiErrorMessage(e, 'Failed to link CRM contact'));
+    }
+  };
+
+  const handleUnlink = async () => {
+    try {
+      await link.mutateAsync({ id: prescriptionId, crmContactId: '' });
+      toast.success('Unlinked CRM contact');
+    } catch (e) {
+      toast.error(await apiErrorMessage(e, 'Failed to unlink CRM contact'));
+    }
+  };
+
+  if (crmContactId) {
+    return (
+      <div>
+        <p className="text-xs text-muted-foreground mb-0.5">CRM Contact</p>
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium font-mono">{crmContactId}</span>
+          <button
+            onClick={handleUnlink}
+            disabled={link.isPending}
+            className="text-muted-foreground hover:text-red-600 transition-colors disabled:opacity-50"
+            title="Unlink CRM contact"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative">
+      <p className="text-xs text-muted-foreground mb-0.5">Link CRM Contact</p>
+      <div className="flex items-center gap-2 rounded-xl border border-border px-3 py-1.5">
+        <UserPlus className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+        <input
+          value={query}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setOpen(true);
+          }}
+          onFocus={() => setOpen(true)}
+          placeholder="Search name, email or phone…"
+          className="w-full bg-transparent text-sm focus:outline-none"
+        />
+      </div>
+      {open && query.trim().length >= 2 && (
+        <div className="absolute z-10 mt-1 w-full max-h-56 overflow-y-auto rounded-xl border border-border bg-popover shadow-lg">
+          {(contacts ?? []).length === 0 ? (
+            <p className="px-3 py-2 text-xs text-muted-foreground">No contacts found</p>
+          ) : (
+            (contacts ?? []).map((c) => (
+              <button
+                key={c.id}
+                onClick={() => handleLink(c.id)}
+                className="w-full text-left px-3 py-2 text-sm hover:bg-accent transition-colors"
+              >
+                <span className="font-medium">
+                  {c.first_name} {c.last_name}
+                </span>
+                {c.phone && <span className="text-muted-foreground ml-2 text-xs">{c.phone}</span>}
+              </button>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 function PrescriptionDetailPage() {
@@ -64,6 +155,27 @@ function PrescriptionDetailPage() {
   const approve = useApprovePrescription();
   const lock = useLockPrescription();
   const [overrideReason, setOverrideReason] = useState('');
+  const [printing, setPrinting] = useState(false);
+  const tenantId = useAuthStore((s) => s.user?.tenant_id ?? '');
+
+  const handlePrintLabel = async () => {
+    if (!rx || !tenantId) return;
+    setPrinting(true);
+    try {
+      const res = await enqueuePrintJob(tenantId, { job_type: 'dispensing_label', prescription_id: rx.id });
+      if (!res.agent_online) {
+        toast.error('No print agent online for this outlet');
+      } else if (res.jobs.length === 0) {
+        toast.error('No dispensed lines to print labels for');
+      } else {
+        toast.success('Dispensing label sent to printer');
+      }
+    } catch (e) {
+      toast.error(await apiErrorMessage(e, 'Failed to print dispensing label'));
+    } finally {
+      setPrinting(false);
+    }
+  };
 
   const handleDispense = async () => {
     if (!rx) return;
@@ -183,6 +295,16 @@ function PrescriptionDetailPage() {
               Dispense All
             </button>
           )}
+          {(rx.status === 'dispensed' || rx.status === 'partially_dispensed') && (
+            <button
+              onClick={handlePrintLabel}
+              disabled={printing}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-border text-sm font-semibold hover:bg-accent transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {printing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Printer className="h-4 w-4" />}
+              Print Label
+            </button>
+          )}
         </div>
       </div>
 
@@ -255,6 +377,7 @@ function PrescriptionDetailPage() {
                 <p className={fieldCls}>{rx.patient_id_number}</p>
               </div>
             )}
+            <CRMContactLink prescriptionId={rx.id} crmContactId={rx.metadata?.crm_contact_id} />
           </div>
         </div>
       </div>

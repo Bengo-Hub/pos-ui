@@ -149,3 +149,29 @@ export async function createInteractionCheck(
 ): Promise<InteractionCheckResult> {
   return apiClient.post<InteractionCheckResult>(`${base(tenantSlug)}/interaction-checks`, data);
 }
+
+export interface CRMContact {
+  id: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  phone: string;
+  created_at: string;
+}
+
+export async function searchCRMContacts(tenantSlug: string, q: string): Promise<CRMContact[]> {
+  const res = await apiClient.get<{ contacts: CRMContact[] }>(`${base(tenantSlug)}/crm-contacts`, { q });
+  return res.contacts ?? [];
+}
+
+export async function linkCRMContact(
+  tenantSlug: string,
+  id: string,
+  crmContactId: string,
+): Promise<Prescription> {
+  const res = await apiClient.post<{ prescription: Prescription }>(
+    `${base(tenantSlug)}/prescriptions/${id}/link-crm-contact`,
+    { crm_contact_id: crmContactId },
+  );
+  return res.prescription;
+}
