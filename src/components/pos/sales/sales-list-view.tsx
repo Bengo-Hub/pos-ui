@@ -209,7 +209,7 @@ export function SalesListView({ orgSlug, fixedSource, title, subtitle }: {
 
   const columns = useMemo<DataTableColumn<any>[]>(() => [
     {
-      key: 'action', header: 'Action', exportable: false,
+      key: 'action', header: 'Action', exportable: false, mobileAction: true,
       render: (o) => (
         <SalesActionsMenu order={o} orgSlug={orgSlug} onView={(ord) => setDetailId(ord.id)}
           onEditShipping={setShippingOrder} onViewPayments={setPaymentsOrder} onEditLines={setEditLinesOrder}
@@ -222,7 +222,7 @@ export function SalesListView({ orgSlug, fixedSource, title, subtitle }: {
       render: (o) => <span className="text-xs text-muted-foreground whitespace-nowrap">{new Date(o.created_at).toLocaleString('en-KE')}</span>,
     },
     {
-      key: 'invoice', header: 'Invoice No.', accessor: (o) => o.order_number,
+      key: 'invoice', header: 'Invoice No.', primary: true, accessor: (o) => o.order_number,
       render: (o) => (
         <span className="inline-flex items-center gap-1.5 font-mono text-xs font-bold text-primary whitespace-nowrap">
           {o.order_number}
@@ -250,7 +250,7 @@ export function SalesListView({ orgSlug, fixedSource, title, subtitle }: {
       ) : (o.customer_name || 'Walk-in'),
     },
     {
-      key: 'contact', header: 'Contact', accessor: (o) => o.customer_phone ?? '',
+      key: 'contact', header: 'Contact', mobileHidden: true, accessor: (o) => o.customer_phone ?? '',
       render: (o) => o.customer_phone ? (
         <button type="button" className="text-xs hover:underline"
           onClick={(e) => { e.stopPropagation(); setCustomerModal({ name: o.customer_name, phone: o.customer_phone }); }}>

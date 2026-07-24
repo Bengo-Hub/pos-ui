@@ -135,7 +135,7 @@ export function DraftsListView({ orgSlug }: { orgSlug: string }) {
 
   const columns = useMemo<DataTableColumn<any>[]>(() => [
     {
-      key: 'order', header: 'Order #', accessor: (o) => o.order_number,
+      key: 'order', header: 'Order #', primary: true, accessor: (o) => o.order_number,
       render: (o) => <span className="font-mono text-xs font-bold text-primary">{o.order_number}</span>,
     },
     {

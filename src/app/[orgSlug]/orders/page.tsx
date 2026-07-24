@@ -13,16 +13,14 @@ import {
   Download,
   Eye,
   Filter,
-  Loader2,
   Map,
   Plus,
-  ChevronLeft,
-  ChevronRight,
   Search,
 } from 'lucide-react';
 import { useState, useMemo, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { TrackingIframeModal } from '@bengo-hub/shared-ui-lib';
+import { DataTable, type DataTableColumn } from '@bengo-hub/shared-ui-lib/data-table';
 import { SplitPaymentModal } from '@/components/pos/split-payment-modal';
 import { PrintReceiptButton } from '@/components/pos/print-receipt-button';
 import { VoidBillButton } from '@/components/pos/void-bill-button';
@@ -135,6 +133,65 @@ export default function OrdersPage() {
     setSelectedOrder(null);
   };
 
+  const statusBadge = (status: string) => (
+    <Badge variant={
+      status === 'completed' ? 'success' :
+        status === 'pending_payment' ? 'warning' :
+          status === 'cancelled' ? 'error' : 'default'
+    }>
+      {status === 'pending_payment' ? 'Ready for Payment' : status}
+    </Badge>
+  );
+
+  // Shared DataTable columns — one config drives both the desktop grid and the mobile
+  // card view (order # as the card title, the row actions in the card's top-right slot).
+  const orderColumns: DataTableColumn<any>[] = [
+    {
+      key: 'order_number', header: 'Order #', primary: true,
+      accessor: (o) => o.order_number,
+      render: (o) => <span className="font-mono text-xs font-bold">{o.order_number}</span>,
+    },
+    {
+      key: 'items', header: 'Items', align: 'center',
+      accessor: (o) => o.edges?.lines?.length ?? 0,
+      render: (o) => <span className="text-xs">{o.edges?.lines?.length ?? 0}</span>,
+    },
+    {
+      key: 'total', header: 'Total', align: 'right',
+      accessor: (o) => o.total_amount ?? 0,
+      render: (o) => <span className="font-bold text-xs tabular-nums whitespace-nowrap">KES {(o.total_amount || 0).toLocaleString()}</span>,
+    },
+    {
+      key: 'status', header: 'Status', align: 'center',
+      accessor: (o) => o.status,
+      render: (o) => statusBadge(o.status),
+    },
+    {
+      key: 'time', header: 'Time', align: 'right',
+      accessor: (o) => o.created_at,
+      render: (o) => <span className="text-xs text-muted-foreground whitespace-nowrap">{formatTime(o.created_at)}</span>,
+    },
+    {
+      key: 'actions', header: '', exportable: false, mobileAction: true,
+      render: (o) => (
+        <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+          <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => setSelectedOrder(o)}>
+            <Eye className="h-3.5 w-3.5" />
+          </Button>
+          {o.status !== 'cancelled' && (
+            <PrintReceiptButton
+              orderId={o.id}
+              size="icon"
+              variant="ghost"
+              className="h-8 w-8 p-0"
+              label={o.status === 'completed' ? 'Print Receipt' : 'Print Bill'}
+            />
+          )}
+        </div>
+      ),
+    },
+  ];
+
   return (
     <div className="p-4 sm:p-6 space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -245,122 +302,21 @@ export default function OrdersPage() {
               )}
             </div>
           )}
-          <CardContent className="p-0">
-            {isLoading ? (
-              <div className="flex justify-center py-16">
-                <Loader2 className="h-6 w-6 animate-spin text-primary" />
-              </div>
-            ) : (
-              <>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-border bg-accent/5">
-                        <th className="text-left px-6 py-3 font-bold text-xs uppercase tracking-wider text-muted-foreground">Order #</th>
-                        <th className="text-center px-6 py-3 font-bold text-xs uppercase tracking-wider text-muted-foreground">Items</th>
-                        <th className="text-right px-6 py-3 font-bold text-xs uppercase tracking-wider text-muted-foreground">Total</th>
-                        <th className="text-center px-6 py-3 font-bold text-xs uppercase tracking-wider text-muted-foreground">Status</th>
-                        <th className="text-right px-6 py-3 font-bold text-xs uppercase tracking-wider text-muted-foreground">Time</th>
-                        <th className="px-6 py-3"></th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border">
-                      {filtered.map((order: any) => (
-                        <tr
-                          key={order.id}
-                          className={cn(
-                            "hover:bg-accent/5 transition-colors cursor-pointer",
-                            selectedOrder?.id === order.id && "bg-accent/10"
-                          )}
-                          onClick={() => setSelectedOrder(order)}
-                        >
-                          <td className="px-6 py-4 font-mono text-xs font-bold">{order.order_number}</td>
-                          <td className="px-6 py-4 text-center text-xs">{order.edges?.lines?.length ?? 0}</td>
-                          <td className="px-6 py-4 text-right font-bold text-xs">KES {(order.total_amount || 0).toLocaleString()}</td>
-                          <td className="px-6 py-4 text-center">
-                            <Badge variant={
-                              order.status === 'completed' ? 'success' :
-                                order.status === 'pending_payment' ? 'warning' :
-                                  order.status === 'cancelled' ? 'error' : 'default'
-                            }>
-                              {order.status === 'pending_payment' ? 'Ready for Payment' : order.status}
-                            </Badge>
-                          </td>
-                          <td className="px-6 py-4 text-right text-xs text-muted-foreground">{formatTime(order.created_at)}</td>
-                          <td className="px-6 py-4">
-                            <div className="flex items-center justify-end gap-1">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-8 w-8 p-0"
-                                onClick={(e: React.MouseEvent) => {
-                                  e.stopPropagation();
-                                  setSelectedOrder(order);
-                                }}
-                              >
-                                <Eye className="h-3.5 w-3.5" />
-                              </Button>
-                              {order.status !== 'cancelled' && (
-                                <PrintReceiptButton
-                                  orderId={order.id}
-                                  size="icon"
-                                  variant="ghost"
-                                  className="h-8 w-8 p-0"
-                                  label={order.status === 'completed' ? 'Print Receipt' : 'Print Bill'}
-                                />
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                  {filtered.length === 0 && (
-                    <div className="p-12 text-center text-muted-foreground">No orders match your filters.</div>
-                  )}
-                </div>
-
-                {/* Pagination */}
-                {totalPages > 1 && (
-                  <div className="flex flex-wrap items-center justify-between gap-2 px-6 py-3 border-t border-border">
-                    <p className="text-xs text-muted-foreground">
-                      Page {page} of {totalPages} · {total} orders
-                    </p>
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => handlePageChange(page - 1)}
-                        disabled={page <= 1}
-                        className="h-8 w-8 rounded-lg border border-border flex items-center justify-center hover:bg-accent transition-colors disabled:opacity-40"
-                      >
-                        <ChevronLeft className="h-3.5 w-3.5" />
-                      </button>
-                      {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                        const p = Math.max(1, Math.min(page - 2, totalPages - 4)) + i;
-                        return p <= totalPages ? (
-                          <button
-                            key={p}
-                            onClick={() => handlePageChange(p)}
-                            className={cn(
-                              "h-8 w-8 rounded-lg text-xs font-semibold transition-all",
-                              p === page ? "bg-primary text-primary-foreground" : "border border-border hover:bg-accent"
-                            )}
-                          >
-                            {p}
-                          </button>
-                        ) : null;
-                      })}
-                      <button
-                        onClick={() => handlePageChange(page + 1)}
-                        disabled={page >= totalPages}
-                        className="h-8 w-8 rounded-lg border border-border flex items-center justify-center hover:bg-accent transition-colors disabled:opacity-40"
-                      >
-                        <ChevronRight className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
+          <CardContent className="p-4">
+            <DataTable<any>
+              columns={orderColumns}
+              rows={filtered}
+              rowKey={(o) => o.id}
+              loading={isLoading}
+              emptyText="No orders match your filters."
+              onRowClick={(o) => setSelectedOrder(o)}
+              rowClassName={(o) => (selectedOrder?.id === o.id ? 'bg-accent/10' : undefined)}
+              page={page}
+              totalPages={totalPages}
+              onPageChange={handlePageChange}
+              total={total}
+              pageSize={PAGE_SIZE}
+            />
           </CardContent>
         </Card>
 
