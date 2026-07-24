@@ -72,22 +72,27 @@ export function buildNavGroups(orgSlug: string): NavGroup[] {
       label: 'Sell',
       items: [
         { label: 'POS Terminal', icon: Plus, href: '/order', moduleKey: 'new_order', permission: P.ORDERS_ADD, waiterHidden: true, cashierHospHidden: true },
-        { label: 'Add Sale', icon: FilePlus, href: '/sell/add', moduleKey: 'new_order', permission: [P.ORDERS_ADD, P.ORDERS_MANAGE], waiterHidden: true, cashierHospHidden: true, hideForProfiles: ['hospitality', 'quick_service'] },
+        { label: 'Add Sale', icon: FilePlus, href: '/sell/add', moduleKey: 'new_order', permission: [P.ORDERS_ADD, P.ORDERS_MANAGE], waiterHidden: true, cashierHospHidden: true, hideForProfiles: ['hospitality', 'quick_service', 'pharmacy'] },
         { label: 'All Sales', icon: ClipboardList, href: '/sell/all-sales', moduleKey: 'orders', permission: [P.ORDERS_ADD, P.ORDERS_CHANGE_OWN, P.ORDERS_CHANGE, P.ORDERS_MANAGE, P.ORDERS_VIEW_OWN, P.REPORTS_VIEW], waiterHidden: true },
-        { label: 'POS Sales', icon: ClipboardList, href: '/sell/pos-sales', moduleKey: 'orders', permission: [P.ORDERS_ADD, P.ORDERS_CHANGE_OWN, P.ORDERS_CHANGE, P.ORDERS_MANAGE, P.ORDERS_VIEW_OWN, P.REPORTS_VIEW], waiterHidden: true, hideForProfiles: ['hospitality', 'quick_service'] },
-        { label: 'Drafts', icon: FileText, href: '/sell/drafts', moduleKey: 'orders', permission: [P.ORDERS_ADD, P.ORDERS_CHANGE_OWN, P.ORDERS_CHANGE, P.ORDERS_MANAGE], waiterHidden: true, hideForProfiles: ['hospitality', 'quick_service'] },
+        // POS Sales/Drafts are a retail-terminal artifact (parked/held sale-in-progress rows) —
+        // pharmacy checkout is always a single prescription or walk-in cart, never a running list
+        // of in-progress tabs, so both are redundant with All Sales for this profile.
+        { label: 'POS Sales', icon: ClipboardList, href: '/sell/pos-sales', moduleKey: 'orders', permission: [P.ORDERS_ADD, P.ORDERS_CHANGE_OWN, P.ORDERS_CHANGE, P.ORDERS_MANAGE, P.ORDERS_VIEW_OWN, P.REPORTS_VIEW], waiterHidden: true, hideForProfiles: ['hospitality', 'quick_service', 'pharmacy'] },
+        { label: 'Drafts', icon: FileText, href: '/sell/drafts', moduleKey: 'orders', permission: [P.ORDERS_ADD, P.ORDERS_CHANGE_OWN, P.ORDERS_CHANGE, P.ORDERS_MANAGE], waiterHidden: true, hideForProfiles: ['hospitality', 'quick_service', 'pharmacy'] },
         { label: 'Credit Sale', icon: HandCoins, href: '/sell/add?credit=1', moduleKey: 'new_order', permission: [P.ORDERS_ADD, P.ORDERS_MANAGE], waiterHidden: true, cashierHospHidden: true, hideForProfiles: ['hospitality', 'quick_service'] },
-        { label: 'Quotations', icon: FileText, href: `${TREASURY_URL}/${orgSlug}/quotations`, moduleKey: 'orders', permission: [P.ORDERS_ADD, P.ORDERS_MANAGE, P.REPORTS_VIEW], waiterHidden: true, hideForProfiles: ['hospitality', 'quick_service'] },
+        // Quotations/Shipments/Import Sales are B2B wholesale/distribution concepts, not a
+        // pharmacy counter workflow (prescription/OTC dispensing never quotes or ships).
+        { label: 'Quotations', icon: FileText, href: `${TREASURY_URL}/${orgSlug}/quotations`, moduleKey: 'orders', permission: [P.ORDERS_ADD, P.ORDERS_MANAGE, P.REPORTS_VIEW], waiterHidden: true, hideForProfiles: ['hospitality', 'quick_service', 'pharmacy'] },
         { label: 'Layaway', icon: Package, href: '/layaway', moduleKey: 'layaway', permission: [P.ORDERS_ADD, P.ORDERS_CHANGE_OWN, P.ORDERS_CHANGE, P.ORDERS_MANAGE], subFeature: 'layaway', subPlan: 'Growth', waiterHidden: true },
         { label: 'Staff Credit', icon: Package, href: '/staff-credit', moduleKey: 'layaway', permission: [P.ORDERS_CHANGE, P.ORDERS_MANAGE], subFeature: 'staff_fund_from_salary', subPlan: 'Professional', waiterHidden: true },
         { label: 'Sell Returns', icon: RotateCcw, href: '/returns', moduleKey: 'returns', permission: [P.ORDERS_CHANGE_OWN, P.ORDERS_CHANGE, P.ORDERS_MANAGE], waiterHidden: true },
-        { label: 'Shipments', icon: Truck, href: '/sell/shipments', moduleKey: 'orders', permission: [P.ORDERS_VIEW, P.ORDERS_CHANGE, P.ORDERS_MANAGE, P.ORDERS_VIEW_OWN], waiterHidden: true, cashierHospHidden: true },
+        { label: 'Shipments', icon: Truck, href: '/sell/shipments', moduleKey: 'orders', permission: [P.ORDERS_VIEW, P.ORDERS_CHANGE, P.ORDERS_MANAGE, P.ORDERS_VIEW_OWN], waiterHidden: true, cashierHospHidden: true, hideForProfiles: ['pharmacy'] },
         // Management surface for the platform discount source of truth (pos-api promotions) —
         // promo codes, automatic and time-windowed discounts across ALL use cases (the
         // hotel/happy-hour page remains the hospitality-flavored BOGO editor of the same rows).
         { label: 'Discounts', icon: Percent, href: '/sell/discounts', moduleKey: 'orders', permission: [P.PROMOTIONS_VIEW, P.PROMOTIONS_ADD, P.PROMOTIONS_CHANGE, P.PROMOTIONS_MANAGE], waiterHidden: true, cashierHospHidden: true },
         // Historical sales migration (CSV) — manager/admin only, idempotent on invoice no.
-        { label: 'Import Sales', icon: FilePlus, href: '/sell/import', moduleKey: 'orders', permission: P.ORDERS_MANAGE, waiterHidden: true, cashierHospHidden: true, hideForProfiles: ['hospitality', 'quick_service'] },
+        { label: 'Import Sales', icon: FilePlus, href: '/sell/import', moduleKey: 'orders', permission: P.ORDERS_MANAGE, waiterHidden: true, cashierHospHidden: true, hideForProfiles: ['hospitality', 'quick_service', 'pharmacy'] },
       ],
     },
     {

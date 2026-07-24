@@ -123,6 +123,10 @@ export const P = {
   PHARMACY_CHANGE:   'pos.pharmacy.change',
   PHARMACY_ADD:      'pos.pharmacy.add',
   PHARMACY_MANAGE:   'pos.pharmacy.manage',
+  // Extras outside the module x action matrix (cmd/seed/main.go `extras` list) — pharmacist-only
+  // clinical sign-off gates, picked up automatically via the pharmacist role's pos.pharmacy.* wildcard.
+  PHARMACY_APPROVE:               'pos.pharmacy.approve',
+  PHARMACY_INTERACTION_OVERRIDE:  'pos.pharmacy.interaction_override',
 
   // KDS (Kitchen Display System) — kitchen/bar staff only
   KDS_VIEW:          'pos.kds.view',
@@ -202,6 +206,7 @@ export const ROLE_PERMISSIONS: Record<string, Permission[]> = {
     P.PROMOTIONS_VIEW, P.PROMOTIONS_ADD, P.PROMOTIONS_CHANGE, P.PROMOTIONS_MANAGE,
     P.APPOINTMENTS_ADD, P.APPOINTMENTS_VIEW, P.APPOINTMENTS_CHANGE, P.APPOINTMENTS_MANAGE,
     P.PHARMACY_ADD, P.PHARMACY_VIEW, P.PHARMACY_CHANGE, P.PHARMACY_MANAGE,
+    P.PHARMACY_APPROVE, P.PHARMACY_INTERACTION_OVERRIDE,
   ],
   cashier: [
     // view_own (NOT view): cashiers see only their OWN sales/drafts ("My Sales", REQ-007).

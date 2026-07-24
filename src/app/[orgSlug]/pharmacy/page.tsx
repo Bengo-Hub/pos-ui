@@ -2,22 +2,26 @@
 
 import { ModuleGate } from '@/components/auth/module-gate';
 import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
+import { Can } from '@/components/auth/can';
+import { P } from '@/lib/rbac/permissions';
 
 import { cn } from '@/lib/utils';
-import { usePrescriptions, useDispensePrescription, useCreatePrescription } from '@/hooks/usePharmacy';
-import { useMenuItems, type CatalogItem } from '@/hooks/usePOS';
+import { usePrescriptions, useDispensePrescription, useCreatePrescription, useLinkCRMContact } from '@/hooks/usePharmacy';
+import { apiClient } from '@/lib/api/client';
 import { useAuthStore } from '@/store/auth';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { WalkInSaleModal } from '@/components/pos/walk-in-sale-modal';
-import { ChevronDown, Loader2, Pill, Plus, Eye, ShoppingCart, Trash2, X } from 'lucide-react';
+import { CustomerSearch, type SelectedCustomer } from '@/components/pos/customer-search';
+import { SearchableCombobox, type ComboboxOption } from '@bengo-hub/shared-ui-lib/combobox';
+import { Loader2, Pill, Plus, Eye, ShoppingCart, Trash2, X } from 'lucide-react';
 import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useFieldArray, useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { z } from 'zod';
-import type { Prescription, PrescriptionStatus } from '@/lib/api/pharmacy';
+import type { PrescriptionStatus } from '@/lib/api/pharmacy';
 
 // ─── Status helpers ───────────────────────────────────────────────────────────
 
@@ -53,102 +57,35 @@ function StatusBadge({ status }: { status: PrescriptionStatus }) {
   );
 }
 
-// ─── Drug search combobox ─────────────────────────────────────────────────────
+// ─── Drug search (shared combobox, remote search over the pharmaceutical catalog) ─────────────
 
-function DrugSearchCombobox({
-  selectedName,
-  onSelect,
-}: {
-  selectedName: string;
-  onSelect: (item: CatalogItem) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const [search, setSearch] = useState('');
-  const ref = useRef<HTMLDivElement>(null);
+interface DrugCatalogItem {
+  id: string;
+  name: string;
+  sku: string;
+  price?: number;
+}
 
-  const { data: catalog, isFetching } = useMenuItems({ category: 'pharmaceutical', search, limit: 30 });
-  const items = catalog?.data ?? [];
-
-  const handleSelect = useCallback(
-    (item: CatalogItem) => {
-      onSelect(item);
-      setOpen(false);
-      setSearch('');
-    },
-    [onSelect],
-  );
-
-  useEffect(() => {
-    function onClickOutside(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    }
-    if (open) document.addEventListener('mousedown', onClickOutside);
-    return () => document.removeEventListener('mousedown', onClickOutside);
-  }, [open]);
-
-  const inputCls =
-    'w-full bg-background border border-border rounded-xl py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40';
-
-  return (
-    <div ref={ref} className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        className={cn(
-          inputCls,
-          'flex items-center justify-between text-left cursor-pointer',
-          !selectedName && 'text-muted-foreground',
-        )}
-      >
-        <span className="truncate">{selectedName || 'Search drugs…'}</span>
-        <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground ml-2" />
-      </button>
-
-      {open && (
-        <div className="absolute z-50 mt-1 w-full rounded-xl border border-border bg-card shadow-xl overflow-hidden">
-          <div className="p-2 border-b border-border">
-            <input
-              autoFocus
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Type to search…"
-              className="w-full bg-background border border-border rounded-lg py-1.5 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
-            />
-          </div>
-          <div className="max-h-52 overflow-y-auto">
-            {isFetching ? (
-              <div className="flex items-center justify-center py-6 gap-2 text-sm text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Searching…
-              </div>
-            ) : items.length === 0 ? (
-              <p className="text-center text-sm text-muted-foreground py-6">No drugs found</p>
-            ) : (
-              items.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => handleSelect(item)}
-                  className="w-full flex items-center justify-between px-3 py-2.5 text-sm hover:bg-accent transition-colors text-left"
-                >
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium truncate">{item.name}</p>
-                    <p className="text-xs text-muted-foreground">{item.sku}</p>
-                  </div>
-                  {item.price !== undefined && (
-                    <span className="text-xs font-semibold text-muted-foreground ml-3 shrink-0">
-                      {item.price.toFixed(2)}
-                    </span>
-                  )}
-                </button>
-              ))
-            )}
-          </div>
-        </div>
-      )}
-    </div>
-  );
+/** Fetches pharmaceutical catalog items for the drug-line combobox — same /catalog/items endpoint
+ *  useMenuItems() uses, called directly (not via the hook) since SearchableCombobox's
+ *  onRemoteSearch wants a plain async fetcher, not a reactive query. */
+async function searchDrugs(tenantID: string, query: string, cache: Map<string, DrugCatalogItem>): Promise<ComboboxOption[]> {
+  if (!tenantID || query.trim().length < 1) return [];
+  const res = await apiClient.get<{ data: DrugCatalogItem[] }>(`/api/v1/${tenantID}/pos/catalog/items`, {
+    category: 'pharmaceutical',
+    search: query,
+    limit: 20,
+  });
+  const rows = res?.data ?? [];
+  return rows.map((item) => {
+    cache.set(item.id, item);
+    return {
+      value: item.id,
+      label: item.name,
+      hint: item.price !== undefined ? item.price.toFixed(2) : undefined,
+      description: item.sku,
+    };
+  });
 }
 
 // ─── New Prescription form schema ────────────────────────────────────────────
@@ -182,23 +119,36 @@ function NewPrescriptionModal({ onClose }: { onClose: () => void }) {
   const orgSlug = params?.orgSlug as string;
   const router = useRouter();
   const outlet = useAuthStore((s) => s.outlet);
+  const user = useAuthStore((s) => s.user);
+  const tenantID = user?.tenant_id ?? '';
   const createPrescription = useCreatePrescription();
+  const linkCRMContact = useLinkCRMContact();
+
+  // Per-line catalog-item lookup (id -> full item, incl. price/sku) fed by each SearchableCombobox's
+  // remote search — a single shared cache since drug names/ids are unique across lines.
+  const drugCache = useRef(new Map<string, DrugCatalogItem>());
+  const [patient, setPatient] = useState<SelectedCustomer | null>(null);
 
   const {
     register,
     handleSubmit,
     control,
     setValue,
-    watch,
     formState: { errors, isSubmitting },
   } = useForm<PrescriptionFormValues>({
     resolver: zodResolver(prescriptionSchema),
     defaultValues: {
+      prescriber_name: user?.fullName ?? '',
       lines: [{ drug_name: '', dosage: '', form: '', instructions: '', quantity_prescribed: 1 }],
     },
   });
 
-  const watchedLines = watch('lines');
+  // Prescriber defaults to the logged-in dispensing user (pharmacist/doctor) — still editable for
+  // scripts written by an outside prescriber and entered by a technician.
+  useEffect(() => {
+    if (user?.fullName) setValue('prescriber_name', user.fullName);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.fullName]);
 
   const { fields, append, remove } = useFieldArray({ control, name: 'lines' });
 
@@ -228,6 +178,16 @@ function NewPrescriptionModal({ onClose }: { onClose: () => void }) {
           unit_price: l.unit_price || undefined,
         })),
       });
+      // Link the selected/created patient's CRM contact so the derived-patients list and the
+      // detail-page CRM link both resolve to the same real customer record (no PII duplication —
+      // marketflow/CRM stays the source of truth, we only store the pointer).
+      if (patient?.crmContactId) {
+        try {
+          await linkCRMContact.mutateAsync({ id: rx.id, crmContactId: patient.crmContactId });
+        } catch {
+          // Best-effort — the prescription itself was created successfully either way.
+        }
+      }
       toast.success('Prescription created');
       onClose();
       router.push(`/${orgSlug}/pharmacy/${rx.id}`);
@@ -282,6 +242,7 @@ function NewPrescriptionModal({ onClose }: { onClose: () => void }) {
               <div>
                 <label className={labelCls}>Prescriber Name <span className="text-destructive">*</span></label>
                 <input {...register('prescriber_name')} placeholder="Dr. Jane Doe" className={inputCls} />
+                <p className="text-[11px] text-muted-foreground mt-0.5">Defaults to you — edit if this script was written by another prescriber.</p>
                 {errors.prescriber_name && <p className={errorCls}>{errors.prescriber_name.message}</p>}
               </div>
               <div>
@@ -291,15 +252,25 @@ function NewPrescriptionModal({ onClose }: { onClose: () => void }) {
               </div>
             </div>
 
-            {/* Patient info */}
+            {/* Patient info — search an existing patient (by name/phone/email) or add a new one,
+                reusing the exact same customer directory the retail checkout uses. */}
             <div className="rounded-xl border border-border bg-background/50 p-4 space-y-3">
               <h4 className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Patient Details</h4>
+              <div>
+                <label className={labelCls}>Patient <span className="text-destructive">*</span></label>
+                <CustomerSearch
+                  value={patient}
+                  onChange={(c) => {
+                    setPatient(c);
+                    setValue('patient_name', c.isWalkIn ? '' : c.name, { shouldValidate: true });
+                  }}
+                  requireRealCustomer
+                  requiredForLabel="a prescription"
+                />
+                <input type="hidden" {...register('patient_name')} />
+                {errors.patient_name && <p className={errorCls}>{errors.patient_name.message}</p>}
+              </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className={labelCls}>Patient Name <span className="text-destructive">*</span></label>
-                  <input {...register('patient_name')} placeholder="Full name" className={inputCls} />
-                  {errors.patient_name && <p className={errorCls}>{errors.patient_name.message}</p>}
-                </div>
                 <div>
                   <label className={labelCls}>Date of Birth</label>
                   <input {...register('patient_dob')} type="date" className={inputCls} />
@@ -348,15 +319,21 @@ function NewPrescriptionModal({ onClose }: { onClose: () => void }) {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <label className={labelCls}>Drug <span className="text-destructive">*</span></label>
-                      <DrugSearchCombobox
-                        selectedName={watchedLines?.[idx]?.drug_name ?? ''}
-                        onSelect={(item) => {
+                      <SearchableCombobox
+                        options={[]}
+                        value={undefined}
+                        onChange={(value) => {
+                          const item = drugCache.current.get(value);
+                          if (!item) return;
                           setValue(`lines.${idx}.drug_name`, item.name, { shouldValidate: true });
                           setValue(`lines.${idx}.catalog_item_id`, item.id);
-                          if (item.price !== undefined) {
-                            setValue(`lines.${idx}.unit_price`, item.price);
-                          }
+                          if (item.price !== undefined) setValue(`lines.${idx}.unit_price`, item.price);
                         }}
+                        onRemoteSearch={(q) => searchDrugs(tenantID, q, drugCache.current)}
+                        placeholder="Search drugs…"
+                        searchPlaceholder="Type drug name or SKU…"
+                        emptyText="No drugs found"
+                        clearable
                       />
                       {/* hidden field keeps RHF validation working */}
                       <input type="hidden" {...register(`lines.${idx}.drug_name`)} />
@@ -467,21 +444,25 @@ function PharmacyPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setWalkInOpen(true)}
-            className="inline-flex items-center gap-2 border border-border bg-background text-foreground px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-accent transition-colors"
-          >
-            <ShoppingCart className="h-4 w-4" />
-            Walk-In Sale
-          </button>
-          <button
-            onClick={() => setCreateOpen(true)}
-            className="inline-flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-primary/90 transition-colors"
-          >
-            <Plus className="h-4 w-4" />
-            Fill Prescription
-          </button>
+          <Can permission={P.ORDERS_ADD}>
+            <button
+              type="button"
+              onClick={() => setWalkInOpen(true)}
+              className="inline-flex items-center gap-2 border border-border bg-background text-foreground px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-accent transition-colors"
+            >
+              <ShoppingCart className="h-4 w-4" />
+              Walk-In Sale
+            </button>
+          </Can>
+          <Can permission={P.PHARMACY_ADD}>
+            <button
+              onClick={() => setCreateOpen(true)}
+              className="inline-flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-primary/90 transition-colors"
+            >
+              <Plus className="h-4 w-4" />
+              Fill Prescription
+            </button>
+          </Can>
         </div>
       </div>
 
@@ -515,9 +496,11 @@ function PharmacyPage() {
         <div className="flex flex-col items-center justify-center h-48 text-muted-foreground gap-2">
           <Pill className="h-10 w-10 opacity-30" />
           <p className="font-medium">No prescriptions found</p>
-          <button onClick={() => setCreateOpen(true)} className="text-sm text-primary underline">
-            Fill a prescription
-          </button>
+          <Can permission={P.PHARMACY_ADD}>
+            <button onClick={() => setCreateOpen(true)} className="text-sm text-primary underline">
+              Fill a prescription
+            </button>
+          </Can>
         </div>
       ) : (
         <div className="rounded-2xl border border-border overflow-hidden bg-card">
@@ -558,18 +541,20 @@ function PharmacyPage() {
                         View
                       </Link>
                       {(rx.status === 'approved' || rx.status === 'locked') && (
-                        <button
-                          onClick={() => handleDispense(rx.id, rx.prescription_number)}
-                          disabled={dispense.isPending}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-600 text-white text-xs font-medium hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          {dispense.isPending ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          ) : (
-                            <Pill className="h-3.5 w-3.5" />
-                          )}
-                          Dispense
-                        </button>
+                        <Can permission={P.PHARMACY_CHANGE}>
+                          <button
+                            onClick={() => handleDispense(rx.id, rx.prescription_number)}
+                            disabled={dispense.isPending}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-600 text-white text-xs font-medium hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {dispense.isPending ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <Pill className="h-3.5 w-3.5" />
+                            )}
+                            Dispense
+                          </button>
+                        </Can>
                       )}
                     </div>
                   </td>

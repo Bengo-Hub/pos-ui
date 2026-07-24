@@ -34,9 +34,12 @@ export function WalkInSaleModal({ open, onClose, tenantSlug }: WalkInSaleModalPr
   const [search, setSearch] = useState('');
   const [completedOrder, setCompletedOrder] = useState<CompletedOrder | null>(null);
 
+  // 'pharmaceutical' matches the category the New Prescription drug picker searches
+  // (pharmacy/page.tsx) — previously this used 'medication', a silently different value that
+  // never matched the same catalog rows.
   const { data: drugData, isFetching } = useMenuItems({
     itemType: 'GOODS',
-    category: 'medication',
+    category: 'pharmaceutical',
     search: search || undefined,
     limit: 30,
   });
@@ -66,7 +69,9 @@ export function WalkInSaleModal({ open, onClose, tenantSlug }: WalkInSaleModalPr
     createOrder.mutate(
       {
         outletId,
-        orderSubtype: 'pharmacy_walk_in' as any,
+        // 'pharmacy_walk_in' is not a valid posorder.order_subtype value (server enum is
+        // dine_in/takeaway/room_service/delivery/bar_tab/retail) — every walk-in sale 400'd here.
+        orderSubtype: 'retail',
         lines: cart.map((l) => ({
           catalog_item_id: l.item.id,
           sku: l.item.sku,

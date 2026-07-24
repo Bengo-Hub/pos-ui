@@ -11,6 +11,8 @@ import {
   lockPrescription,
   searchCRMContacts,
   linkCRMContact,
+  checkoutPrescription,
+  rejectPrescription,
   type CreatePrescriptionData,
   type PrescriptionFilters,
 } from '@/lib/api/pharmacy';
@@ -64,6 +66,34 @@ export function useDispensePrescription() {
   return useMutation({
     mutationFn: (id: string) => dispensePrescription(tenantSlug, id),
     onSuccess: (_data, id) => {
+      qc.invalidateQueries({ queryKey: ['prescriptions', tenantSlug] });
+      qc.invalidateQueries({ queryKey: ['prescription', tenantSlug, id] });
+    },
+  });
+}
+
+// ─── Checkout (create the payable order for a dispensed prescription) ────────
+
+export function useCheckoutPrescription() {
+  const tenantSlug = useTenantSlug();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => checkoutPrescription(tenantSlug, id),
+    onSuccess: (_data, id) => {
+      qc.invalidateQueries({ queryKey: ['prescriptions', tenantSlug] });
+      qc.invalidateQueries({ queryKey: ['prescription', tenantSlug, id] });
+    },
+  });
+}
+
+// ─── Reject prescription ───────────────────────────────────────────────────────
+
+export function useRejectPrescription() {
+  const tenantSlug = useTenantSlug();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, reason }: { id: string; reason: string }) => rejectPrescription(tenantSlug, id, reason),
+    onSuccess: (_data, { id }) => {
       qc.invalidateQueries({ queryKey: ['prescriptions', tenantSlug] });
       qc.invalidateQueries({ queryKey: ['prescription', tenantSlug, id] });
     },

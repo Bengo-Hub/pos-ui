@@ -3,24 +3,29 @@
 import { useState } from 'react';
 import { ModuleGate } from '@/components/auth/module-gate';
 import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
+import { Can } from '@/components/auth/can';
+import { P } from '@/lib/rbac/permissions';
 
 import {
   usePrescription,
   useDispensePrescription,
   useApprovePrescription,
   useLockPrescription,
+  useCheckoutPrescription,
+  useRejectPrescription,
   useCRMContactSearch,
   useLinkCRMContact,
 } from '@/hooks/usePharmacy';
 import { cn } from '@/lib/utils';
-import { ArrowLeft, AlertTriangle, CheckCircle2, Loader2, Lock, Pill, Printer, ShieldCheck, UserPlus, X } from 'lucide-react';
+import { ArrowLeft, AlertTriangle, Ban, CheckCircle2, CreditCard, Loader2, Lock, Pill, Printer, ShieldCheck, UserPlus, X } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api/error-message';
-import type { Prescription, PrescriptionStatus } from '@/lib/api/pharmacy';
+import type { PrescriptionStatus } from '@/lib/api/pharmacy';
 import { useAuthStore } from '@/store/auth';
 import { enqueuePrintJob } from '@/lib/pos/print-jobs';
+import { SplitPaymentModal } from '@/components/pos/split-payment-modal';
 
 // ─── Status badge ─────────────────────────────────────────────────────────────
 
@@ -154,9 +159,15 @@ function PrescriptionDetailPage() {
   const dispense = useDispensePrescription();
   const approve = useApprovePrescription();
   const lock = useLockPrescription();
+  const checkout = useCheckoutPrescription();
+  const reject = useRejectPrescription();
   const [overrideReason, setOverrideReason] = useState('');
+  const [showReject, setShowReject] = useState(false);
+  const [rejectReason, setRejectReason] = useState('');
   const [printing, setPrinting] = useState(false);
+  const [paymentOrder, setPaymentOrder] = useState<{ id: string; order_number: string; total: number } | null>(null);
   const tenantId = useAuthStore((s) => s.user?.tenant_id ?? '');
+  const tenantSlug = useAuthStore((s) => s.user?.tenant_slug ?? '');
 
   const handlePrintLabel = async () => {
     if (!rx || !tenantId) return;
@@ -205,6 +216,28 @@ function PrescriptionDetailPage() {
       toast.success('Prescription locked for dispensing');
     } catch (e) {
       toast.error(await apiErrorMessage(e, 'Failed to lock prescription'));
+    }
+  };
+
+  const handleCheckout = async () => {
+    if (!rx) return;
+    try {
+      const res = await checkout.mutateAsync(rx.id);
+      setPaymentOrder({ id: res.order_id, order_number: res.order_number, total: res.total_amount });
+    } catch (e) {
+      toast.error(await apiErrorMessage(e, 'Failed to start checkout'));
+    }
+  };
+
+  const handleReject = async () => {
+    if (!rx || !rejectReason.trim()) return;
+    try {
+      await reject.mutateAsync({ id: rx.id, reason: rejectReason.trim() });
+      toast.success('Prescription rejected');
+      setShowReject(false);
+      setRejectReason('');
+    } catch (e) {
+      toast.error(await apiErrorMessage(e, 'Failed to reject prescription'));
     }
   };
 
@@ -262,51 +295,130 @@ function PrescriptionDetailPage() {
 
         <div className="flex items-center gap-2 shrink-0">
           {(rx.status === 'pending' || rx.status === 'pharmacist_review') && (
-            <button
-              onClick={() => handleApprove()}
-              disabled={approve.isPending}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {approve.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-              Approve
-            </button>
+            <Can permission={P.PHARMACY_APPROVE}>
+              <button
+                onClick={() => handleApprove()}
+                disabled={approve.isPending}
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {approve.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                Approve
+              </button>
+            </Can>
           )}
           {rx.status === 'approved' && (
-            <button
-              onClick={handleLock}
-              disabled={lock.isPending}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-purple-600 text-white text-sm font-semibold hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {lock.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Lock className="h-4 w-4" />}
-              Lock for Dispense
-            </button>
+            <Can permission={P.PHARMACY_CHANGE}>
+              <button
+                onClick={handleLock}
+                disabled={lock.isPending}
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-purple-600 text-white text-sm font-semibold hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {lock.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Lock className="h-4 w-4" />}
+                Lock for Dispense
+              </button>
+            </Can>
           )}
           {(rx.status === 'approved' || rx.status === 'locked') && (
-            <button
-              onClick={handleDispense}
-              disabled={dispense.isPending}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-green-600 text-white text-sm font-semibold hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {dispense.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Pill className="h-4 w-4" />
-              )}
-              Dispense All
-            </button>
+            <Can permission={P.PHARMACY_CHANGE}>
+              <button
+                onClick={handleDispense}
+                disabled={dispense.isPending}
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-green-600 text-white text-sm font-semibold hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {dispense.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Pill className="h-4 w-4" />
+                )}
+                Dispense All
+              </button>
+            </Can>
+          )}
+          {!['dispensed', 'partially_dispensed', 'rejected', 'cancelled'].includes(rx.status) && (
+            <Can permission={P.PHARMACY_CHANGE}>
+              <button
+                onClick={() => setShowReject((v) => !v)}
+                disabled={reject.isPending}
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-destructive/30 text-destructive text-sm font-semibold hover:bg-destructive/10 transition-colors disabled:opacity-50"
+              >
+                <Ban className="h-4 w-4" />
+                Reject
+              </button>
+            </Can>
+          )}
+          {rx.status === 'dispensed' && !rx.order_id && (
+            <Can permission={P.PHARMACY_CHANGE}>
+              <button
+                onClick={handleCheckout}
+                disabled={checkout.isPending}
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {checkout.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />}
+                Checkout &amp; Collect Payment
+              </button>
+            </Can>
           )}
           {(rx.status === 'dispensed' || rx.status === 'partially_dispensed') && (
-            <button
-              onClick={handlePrintLabel}
-              disabled={printing}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-border text-sm font-semibold hover:bg-accent transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {printing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Printer className="h-4 w-4" />}
-              Print Label
-            </button>
+            <Can permission={P.PHARMACY_CHANGE}>
+              <button
+                onClick={handlePrintLabel}
+                disabled={printing}
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-border text-sm font-semibold hover:bg-accent transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {printing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Printer className="h-4 w-4" />}
+                Print Label
+              </button>
+            </Can>
           )}
         </div>
       </div>
+
+      {/* Reject reason (inline, toggled by the Reject button above) */}
+      {showReject && (
+        <div className="bg-destructive/5 border border-destructive/20 rounded-2xl p-5 mb-5">
+          <h2 className="text-sm font-bold text-destructive mb-2">Reject Prescription</h2>
+          <p className="text-sm text-muted-foreground mb-3">
+            Any stock reserved for this prescription will be released. This cannot be undone.
+          </p>
+          <textarea
+            value={rejectReason}
+            onChange={(e) => setRejectReason(e.target.value)}
+            placeholder="Reason for rejection (required)…"
+            rows={2}
+            className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-destructive/40"
+          />
+          <div className="flex gap-2">
+            <button
+              onClick={() => setShowReject(false)}
+              className="px-4 py-2 rounded-xl border border-border text-sm font-semibold hover:bg-accent transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleReject}
+              disabled={reject.isPending || !rejectReason.trim()}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-destructive text-destructive-foreground text-sm font-semibold hover:bg-destructive/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {reject.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Ban className="h-4 w-4" />}
+              Confirm Rejection
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Payment collection for the checkout order just created above */}
+      {paymentOrder && (
+        <SplitPaymentModal
+          open
+          onClose={() => setPaymentOrder(null)}
+          onPaymentConfirmed={() => setPaymentOrder(null)}
+          orderId={paymentOrder.id}
+          orderNumber={paymentOrder.order_number}
+          total={paymentOrder.total}
+          tenantSlug={tenantSlug}
+          tenantId={tenantId}
+        />
+      )}
 
       {/* Drug-interaction / allergy warning — requires an override reason to approve past it */}
       {rx.status === 'flagged' && (

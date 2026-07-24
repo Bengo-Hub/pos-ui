@@ -136,6 +136,23 @@ export async function lockPrescription(tenantSlug: string, id: string): Promise<
   return apiClient.post<Prescription>(`${base(tenantSlug)}/prescriptions/${id}/lock`, {});
 }
 
+export async function rejectPrescription(tenantSlug: string, id: string, reason: string): Promise<Prescription> {
+  return apiClient.post<Prescription>(`${base(tenantSlug)}/prescriptions/${id}/reject`, { reason });
+}
+
+export interface PrescriptionCheckoutResult {
+  order_id: string;
+  order_number: string;
+  total_amount: number;
+}
+
+/** Creates the payable POSOrder for a DISPENSED prescription's drug lines — closes the
+ *  prescription -> payment gap (workflow 3.1 Order Aggregation). Must be called after dispense;
+ *  stock was already committed at that step, so this endpoint only creates the money-side order. */
+export async function checkoutPrescription(tenantSlug: string, id: string): Promise<PrescriptionCheckoutResult> {
+  return apiClient.post<PrescriptionCheckoutResult>(`${base(tenantSlug)}/prescriptions/${id}/checkout`, {});
+}
+
 export interface InteractionCheckResult {
   id: string;
   result: 'clear' | 'flagged';
