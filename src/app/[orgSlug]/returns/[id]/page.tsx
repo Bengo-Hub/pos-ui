@@ -10,6 +10,7 @@ import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { usePermissions, P } from '@/hooks/usePermissions';
+import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { allowedRefundChannels, defaultRefundChannel, refundChannelAdvisory, REFUND_CHANNELS } from '@/lib/returns-policy';
 import { ExchangeLinesPicker, exchangeTotal, type ExchangeLine } from '@/components/pos/returns/exchange-lines-picker';
 import { SplitPaymentModal } from '@/components/pos/split-payment-modal';
@@ -115,6 +116,14 @@ function useCompleteReturn(returnId: string) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['return', tenantID, returnId] });
       qc.invalidateQueries({ queryKey: ['returns', tenantID] });
+      // Money actually moves at COMPLETE (refund/offset-invoice settles here — see
+      // pos-returns-three-stage-lifecycle) — any already-cached customer balance (the POS
+      // customer modal, the terminal's CustomerSearch chip) must be refetched, or it keeps
+      // showing the pre-return "balance due" for its staleTime window. Both the account-id and
+      // identifier-based credit hooks share the 'pos-client-credit' key prefix, so one prefix
+      // invalidation covers every consumer.
+      qc.invalidateQueries({ queryKey: ['pos-client-credit', tenantID] });
+      qc.invalidateQueries({ queryKey: ['customer-modal-orders', tenantID] });
     },
   });
 }
@@ -128,6 +137,7 @@ export default function ReturnDetailPage() {
   const { data: ret, isLoading } = useReturnDetail(returnId);
   const approve = useApproveReturn(returnId);
   const complete = useCompleteReturn(returnId);
+  const { data: posSettings } = usePOSSettings();
   const { canManageOrders, canAny } = usePermissions();
   const [notes, setNotes] = useState('');
   // Approval-time refund channel override; seeded from the return once loaded (default cash).
@@ -163,8 +173,9 @@ export default function ReturnDetailPage() {
   const isExchange = ret.return_type === 'exchange';
   // Reason/on-account policy (mirrors pos-api returns_policy.go; the server enforces it).
   const onAccount = !!ret.metadata?.on_account_sale;
-  const channelOptions = allowedRefundChannels(ret.reason_code, onAccount);
-  const channelAdvisory = refundChannelAdvisory(ret.reason_code, onAccount);
+  const restrictOnAccount = posSettings?.restrict_credit_sale_refund_to_offset ?? true;
+  const channelOptions = allowedRefundChannels(ret.reason_code, onAccount, restrictOnAccount);
+  const channelAdvisory = refundChannelAdvisory(ret.reason_code, onAccount, restrictOnAccount);
   const policyDefault = defaultRefundChannel(ret.return_type, onAccount);
   const validChannel = (v: string) => (channelOptions.some((c) => c.value === v) ? v : policyDefault);
   // Effective channel: local override → existing channel on the return → policy default —

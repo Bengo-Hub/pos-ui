@@ -304,18 +304,31 @@ export function OrgShell({ children }: { children: ReactNode }) {
                 <SubscriptionBanner />
                 {/* min-h-0 is required here: without it a flex child defaults to min-height:auto
                     and overflow-y-auto can never create a scroll context. */}
-                <main className="flex-1 min-h-0 overflow-y-auto bg-accent/5">
+                {/* The terminal (/order) manages its OWN internal scroll regions (cart + product
+                    grid scroll independently, payment bar always pinned) and must never be handed
+                    only a min-height: with `min-h-full` a flex container is free to grow past the
+                    viewport to fit an overflowing child (e.g. 50 catalog rows/page), which is
+                    exactly what turned the whole page into one long scroller with the payment bar
+                    buried at the bottom. `h-full overflow-hidden` gives it a TRUE bound instead, so
+                    TerminalShell's own `overflow-auto` regions do the scrolling. Every other route
+                    keeps `min-h-full` (content-driven height + page scroll — unchanged). */}
+                <main className={cn('flex-1 min-h-0 bg-accent/5', isTerminal ? 'overflow-hidden' : 'overflow-y-auto')}>
                   <StartShiftGate>
                     {/* Bottom padding on mobile clears the fixed bottom nav bar — except on the
                         terminal, which has its own bottom action bar and hides MobileBottomNav
                         entirely (an immersive mid-sale screen showing two competing bottom bars
                         is not how any real POS app behaves). */}
-                    <div className={cn('min-h-full flex flex-col', !isTerminal && 'pb-[calc(4rem+env(safe-area-inset-bottom))] lg:pb-0')}>
+                    <div className={cn(
+                      'flex flex-col',
+                      isTerminal ? 'h-full min-h-0 overflow-hidden' : 'min-h-full pb-[calc(4rem+env(safe-area-inset-bottom))] lg:pb-0',
+                    )}>
                       {/* App-wide permission safety net: every classified route is gated by
                           the caller's permissions, incl. direct-URL nav. Fail-open for
                           unclassified routes; superusers bypass. */}
-                      <div className="flex-1 min-h-0"><RouteGuard>{children}</RouteGuard></div>
-                      <Footer />
+                      <div className={cn('flex-1 min-h-0', isTerminal && 'overflow-hidden')}><RouteGuard>{children}</RouteGuard></div>
+                      {/* Footer has no place on the immersive, height-bound terminal — it would
+                          either get clipped by overflow-hidden or steal space from the cart. */}
+                      {!isTerminal && <Footer />}
                     </div>
                   </StartShiftGate>
                 </main>

@@ -17,7 +17,7 @@
 import { useEffect, useState } from 'react';
 import { Loader2, UserPlus, UserRound, X, Search } from 'lucide-react';
 import { toast } from 'sonner';
-import { useClientSearch, useClientCredit, useCreateLoyaltyAccount } from '@/hooks/useClients';
+import { useClientSearch, useClientCredit, useClientCreditByIdentifier, useCreateLoyaltyAccount } from '@/hooks/useClients';
 import { classifySearchQuery, type LoyaltyAccount } from '@/lib/api/clients';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { normalizeKePhone, nationalSubscriberDigits } from '@/lib/phone';
@@ -29,6 +29,9 @@ export interface SelectedCustomer {
   /** Loyalty account id — set when picked from search or newly created (layaway needs it). */
   accountId?: string;
   email?: string;
+  /** CRM contact id (marketflow) — set even for a CRM-only match with NO loyalty account, so the
+   *  customer's real AR balance can still be looked up (treasury keys on this, not on accountId). */
+  crmContactId?: string;
 }
 
 export const WALK_IN_CUSTOMER: SelectedCustomer = {
@@ -83,9 +86,16 @@ export function CustomerSearch({ value, onChange, requireRealCustomer = false, r
   const selected = value && !value.isWalkIn ? value : null;
 
   // Account balances for the attached customer (treasury AR via the pos proxy): outstanding
-  // balance (debit), credit limit and payment period. Loyalty-account-keyed — CRM-only picks
-  // (no account yet) simply show no balance row.
-  const { data: credit } = useClientCredit(selected?.accountId);
+  // balance (debit), credit limit and payment period. Prefer the loyalty-account-keyed lookup
+  // when there IS a loyalty account; otherwise fall back to the identifier-based lookup (CRM
+  // contact id or phone) so a customer with no loyalty account yet — the common case — still
+  // shows their real balance instead of an empty row.
+  const { data: accountCredit } = useClientCredit(selected?.accountId);
+  const { data: identifierCredit } = useClientCreditByIdentifier(
+    selected?.accountId ? undefined : selected?.crmContactId,
+    selected?.accountId ? undefined : selected?.phone,
+  );
+  const credit = accountCredit ?? identifierCredit;
 
   const select = (c: SelectedCustomer) => {
     setQuery('');
@@ -238,6 +248,7 @@ export function CustomerSearch({ value, onChange, requireRealCustomer = false, r
                   isWalkIn: false,
                   accountId: c.id || undefined,
                   email: c.customer_email || undefined,
+                  crmContactId: c.crm_contact_id || undefined,
                 });
               }}
               className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-accent transition-colors"

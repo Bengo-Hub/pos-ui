@@ -493,38 +493,42 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
         </div>
       ) : layout === 'bar' ? (
         /* GoDigital compact horizontal action bar — tenders render as modern pill BADGES (soft toned
-           bg + tone text, icon + label inline), Draft/Quotation as neutral badges, Cancel red, and
-           the Total Payable pinned right. */
-        <div className="flex flex-wrap items-center gap-2 px-3 py-2.5">
-          {isBackOffice && <BadgeBtn icon={FileText} label="Draft" onClick={onDraft} disabled={disabled || anyBusy} />}
-          {showQuotation && <BadgeBtn icon={FileText} label="Quotation" onClick={onQuotation} disabled={anyBusy} />}
-          {actions.map((a) => {
-            const Icon = tenderIcon(a.key);
-            const tone = TONES[a.tone];
-            const isBusy = busyKey === a.key;
-            return (
-              <button
-                key={a.key}
-                data-testid={`pos-tender-${a.key}`}
-                type="button"
-                disabled={disabled || anyBusy}
-                onClick={() => onPick(a.key)}
-                title={a.sublabel}
-                className={cn(
-                  'inline-flex items-center gap-2 rounded-full px-4 py-2 min-h-11 text-sm font-bold transition-all',
-                  'hover:brightness-95 active:scale-95 disabled:opacity-40 disabled:pointer-events-none',
-                  tone.bg, tone.text,
-                )}
-              >
-                {isBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Icon className="h-4 w-4 shrink-0" />}
-                <span className="whitespace-nowrap">{a.label}</span>
-              </button>
-            );
-          })}
-          <BadgeBtn icon={X} label="Cancel" tone="danger" onClick={onCancel} disabled={anyBusy} />
-          <div className="ml-auto flex items-center gap-2 pl-2">
-            <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Total Payable</span>
-            <span className="text-xl font-extrabold tabular-nums text-emerald-600">{fmt(roundedTotal)}</span>
+           bg + tone text, icon + label inline), Draft/Quotation as neutral badges, Cancel red. The
+           Total Payable gets its OWN full-width row (never sharing wrap-space with the tender pills,
+           which push it around/shrink it on a long tender list) so it stays big and obvious for both
+           the cashier and the customer-facing display. */
+        <div className="flex flex-col gap-1.5 px-3 py-2.5">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Total Payable</span>
+            <span className="text-3xl font-extrabold tabular-nums text-emerald-600 leading-none">{fmt(roundedTotal)}</span>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {isBackOffice && <BadgeBtn icon={FileText} label="Draft" onClick={onDraft} disabled={disabled || anyBusy} />}
+            {showQuotation && <BadgeBtn icon={FileText} label="Quotation" onClick={onQuotation} disabled={anyBusy} />}
+            {actions.map((a) => {
+              const Icon = tenderIcon(a.key);
+              const tone = TONES[a.tone];
+              const isBusy = busyKey === a.key;
+              return (
+                <button
+                  key={a.key}
+                  data-testid={`pos-tender-${a.key}`}
+                  type="button"
+                  disabled={disabled || anyBusy}
+                  onClick={() => onPick(a.key)}
+                  title={a.sublabel}
+                  className={cn(
+                    'inline-flex items-center gap-2 rounded-full px-4 py-2 min-h-11 text-sm font-bold transition-all',
+                    'hover:brightness-95 active:scale-95 disabled:opacity-40 disabled:pointer-events-none',
+                    tone.bg, tone.text,
+                  )}
+                >
+                  {isBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Icon className="h-4 w-4 shrink-0" />}
+                  <span className="whitespace-nowrap">{a.label}</span>
+                </button>
+              );
+            })}
+            <BadgeBtn icon={X} label="Cancel" tone="danger" onClick={onCancel} disabled={anyBusy} />
           </div>
         </div>
       ) : (

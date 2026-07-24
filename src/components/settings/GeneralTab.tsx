@@ -29,6 +29,7 @@ export function GeneralTab() {
   const [discountLimitValue, setDiscountLimitValue] = useState('100');
   const [allowPriceAboveBase, setAllowPriceAboveBase] = useState(true);
   const [requireApprovalBelowBase, setRequireApprovalBelowBase] = useState(true);
+  const [restrictCreditSaleRefund, setRestrictCreditSaleRefund] = useState(true);
 
   useEffect(() => {
     if (settings) {
@@ -39,6 +40,7 @@ export function GeneralTab() {
       setDiscountLimitValue(String(mode === 'amount' ? (settings.max_discount_amount ?? 0) : (settings.max_discount_percent ?? 100)));
       setAllowPriceAboveBase(settings.allow_price_above_base ?? true);
       setRequireApprovalBelowBase(settings.require_approval_below_base ?? true);
+      setRestrictCreditSaleRefund(settings.restrict_credit_sale_refund_to_offset ?? true);
     }
   }, [settings]);
 
@@ -56,6 +58,7 @@ export function GeneralTab() {
       max_discount_amount: discountLimitType === 'amount' ? value : 0,
       allow_price_above_base: allowPriceAboveBase,
       require_approval_below_base: requireApprovalBelowBase,
+      restrict_credit_sale_refund_to_offset: restrictCreditSaleRefund,
     });
   };
 
@@ -239,6 +242,28 @@ export function GeneralTab() {
                     </span>
                   </label>
                 </div>
+                {showReturnWindow && (
+                  <div className="space-y-3 pt-2 border-t border-border">
+                    <label className={labelClass}>Sell-return refund method</label>
+                    <label className="flex items-start gap-2.5 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={restrictCreditSaleRefund}
+                        onChange={(e) => setRestrictCreditSaleRefund(e.target.checked)}
+                        disabled={!canEdit}
+                        className="mt-0.5 h-4 w-4 rounded border-border accent-primary"
+                      />
+                      <span className="text-xs">
+                        <span className="font-medium text-foreground">Restrict returns on unpaid credit sales to &ldquo;Reduce customer credit&rdquo;.</span>{' '}
+                        <span className="text-muted-foreground">
+                          Recommended — prevents a return against a sale you were never paid for from handing out cash or store
+                          credit (which would strand a credit balance on top of the still-open debt). Turn off to let cashiers
+                          choose any refund method for these returns at their own discretion.
+                        </span>
+                      </span>
+                    </label>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>

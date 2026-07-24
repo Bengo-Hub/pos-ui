@@ -53,3 +53,26 @@ export function useClientCredit(accountID?: string) {
     staleTime: 30_000,
   });
 }
+
+/**
+ * Identifier-based variant of useClientCredit — no POS LoyaltyAccount required. Most attached
+ * customers have no loyalty account yet (the common CRM-merge search result), but treasury's AR
+ * balance is keyed by crm_contact_id/phone regardless of loyalty membership, so this is what shows
+ * a real balance for them. crmContactId wins when both are given. Query key shares the
+ * 'pos-client-credit' prefix so a single invalidateQueries({queryKey:['pos-client-credit', tid]})
+ * (e.g. after a return completes) covers both this and the account-id form.
+ */
+export function useClientCreditByIdentifier(crmContactId?: string, phone?: string) {
+  const tenantID = useTenantID();
+  const key = crmContactId || phone || '';
+  return useQuery({
+    queryKey: ['pos-client-credit', tenantID, 'by-identifier', key],
+    queryFn: () =>
+      apiClient.get<ClientCredit>(`/api/v1/${tenantID}/pos/clients/credit`, {
+        ...(crmContactId ? { crm_contact_id: crmContactId } : {}),
+        ...(!crmContactId && phone ? { phone } : {}),
+      }),
+    enabled: !!tenantID && !!key,
+    staleTime: 30_000,
+  });
+}

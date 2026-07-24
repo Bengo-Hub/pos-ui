@@ -7,6 +7,7 @@ import { Banknote, CreditCard, Loader2, Mail, Phone, User, X } from 'lucide-reac
 import { cn } from '@/lib/utils';
 import { apiClient } from '@/lib/api/client';
 import { clientsApi, type LoyaltyAccount } from '@/lib/api/clients';
+import { useClientCreditByIdentifier } from '@/hooks/useClients';
 import { useAuthStore } from '@/store/auth';
 import { RecordPaymentModal } from '@/components/pos/sales/record-payment-modal';
 
@@ -50,13 +51,11 @@ export function CustomerDetailsModal({
   });
   const account: LoyaltyAccount | undefined = accountData?.accounts?.[0];
 
-  // Treasury AR position (balance due + credit limit/period), proxied by pos-api.
-  const { data: credit } = useQuery({
-    queryKey: ['customer-modal-credit', tenantID, account?.id],
-    queryFn: () => apiClient.get<any>(`/api/v1/${tenantID}/pos/clients/${account!.id}/credit`),
-    enabled: !!tenantID && !!account?.id,
-    staleTime: 60_000,
-  });
+  // Treasury AR position (balance due + credit limit/period), proxied by pos-api. Identifier-based
+  // (crm_contact_id, falling back to phone) so a customer with no loyalty account yet still shows
+  // their real balance — shares the 'pos-client-credit' query-key prefix with useClientCredit /
+  // useClientCreditByIdentifier so a return-completion invalidation refreshes this modal too.
+  const { data: credit } = useClientCreditByIdentifier(account?.crm_contact_id, customerPhone);
 
   // Recent sales for this customer (same filter the All-Sales table uses).
   const { data: ordersData, isLoading: ordersLoading } = useQuery({

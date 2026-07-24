@@ -39,23 +39,26 @@ export const REFUND_CHANNELS: RefundChannelOption[] = [
 export const STORE_CREDIT_BLOCKED_REASONS = new Set(['defective', 'damaged', 'expired', 'wrong_item']);
 
 /** Channels the server will accept for this (reason, on-account) combination. */
-export function allowedRefundChannels(reasonCode?: string, onAccount?: boolean): RefundChannelOption[] {
+export function allowedRefundChannels(reasonCode?: string, onAccount?: boolean, restrictOnAccount = true): RefundChannelOption[] {
   return REFUND_CHANNELS.filter((ch) => {
     // An on-account (unpaid credit) sale can ONLY be settled by offsetting the balance — never
     // store credit, which would stack a new credit on top of the still-open debt instead of
     // reducing it (see returns_policy.go validateRefundChannel; matches the server 1:1 so the
     // cashier never picks an option the backend will 422 on).
-    if (onAccount && ch.value !== 'offset_invoice') return false;
+    if (onAccount && restrictOnAccount && ch.value !== 'offset_invoice') return false;
     if (ch.value === 'store_credit' && reasonCode && STORE_CREDIT_BLOCKED_REASONS.has(reasonCode)) return false;
     return true;
   });
 }
 
 /** Human explanation of the constraint currently in force, or null when unrestricted. */
-export function refundChannelAdvisory(reasonCode?: string, onAccount?: boolean): string | null {
+export function refundChannelAdvisory(reasonCode?: string, onAccount?: boolean, restrictOnAccount = true): string | null {
   const fault = !!reasonCode && STORE_CREDIT_BLOCKED_REASONS.has(reasonCode);
-  if (onAccount) {
+  if (onAccount && restrictOnAccount) {
     return 'This sale was on account (still owed) — the return reduces what the customer owes instead of paying out money or store credit.';
+  }
+  if (onAccount) {
+    return "This sale was on account (still owed) — your tenant settings allow any refund method here at your discretion; offsetting the customer's balance is still recommended.";
   }
   if (fault) {
     return 'Faulty/wrong goods must be refunded to the customer — store credit is not offered for this reason.';

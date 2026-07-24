@@ -86,6 +86,10 @@ export interface POSSettings {
   shift_max_hours: number;
   table_max_occupation_minutes: number;
   return_window_days: number;
+  /** When true (default), a return against an unpaid on-account sale may ONLY offset the
+   *  customer's balance (never cash/mpesa/bank/cheque/store_credit) — the anti-phantom-debt
+   *  guard. Opt out to let cashiers choose any refund channel for such a return. */
+  restrict_credit_sale_refund_to_offset: boolean;
   /** Max order discount % a cashier may apply without manager approval (100 = no limit). */
   max_discount_percent: number;
   /** Max order discount AMOUNT (currency) without approval (0 = no amount limit). Exceeding EITHER limit triggers the step-up. */
@@ -153,6 +157,7 @@ export interface UpdatePOSSettingsInput {
   screensaver_urls?: string[];
   printer_profiles?: PrinterProfile[];
   return_window_days?: number;
+  restrict_credit_sale_refund_to_offset?: boolean;
   max_discount_percent?: number;
   max_discount_amount?: number;
   discount_limit_type?: 'percent' | 'amount';

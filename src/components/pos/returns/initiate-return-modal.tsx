@@ -10,6 +10,7 @@ import { SearchableCombobox, type ComboboxOption } from '@bengo-hub/shared-ui-li
 import { apiClient } from '@/lib/api/client';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { useEffectiveOnline } from '@/lib/connectivity';
+import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { allowedRefundChannels, defaultRefundChannel, refundChannelAdvisory } from '@/lib/returns-policy';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/store/auth';
@@ -135,6 +136,8 @@ export function InitiateReturnModal({
 }) {
   const user = useAuthStore((s) => s.user);
   const tenantID = user?.tenant_id ?? '';
+  const { data: posSettings } = usePOSSettings();
+  const restrictOnAccount = posSettings?.restrict_credit_sale_refund_to_offset ?? true;
 
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
   const [comboValue, setComboValue] = useState('');
@@ -228,15 +231,15 @@ export function InitiateReturnModal({
   const onAccount = ((orderPayments as any)?.data ?? []).some(
     (p: any) => p.tender_type === 'on_account' && p.status === 'completed',
   );
-  const channelOptions = allowedRefundChannels(reasonCode || undefined, onAccount);
-  const channelAdvisory = refundChannelAdvisory(reasonCode || undefined, onAccount);
+  const channelOptions = allowedRefundChannels(reasonCode || undefined, onAccount, restrictOnAccount);
+  const channelAdvisory = refundChannelAdvisory(reasonCode || undefined, onAccount, restrictOnAccount);
   // Keep the selection valid when the reason/on-account context narrows the options.
   useEffect(() => {
     if (returnType !== 'exchange' && !channelOptions.some((c) => c.value === refundChannel)) {
       setRefundChannel(defaultRefundChannel(returnType, onAccount));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reasonCode, onAccount, returnType]);
+  }, [reasonCode, onAccount, returnType, restrictOnAccount]);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -285,7 +288,14 @@ export function InitiateReturnModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-      <div className="bg-background rounded-2xl border border-border shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+      {/* stopPropagation: this modal is sometimes rendered nested inside another modal's own
+          backdrop (e.g. SellDetailsModal's "Sell Return" action) which closes itself on any click
+          that bubbles to it — without this, clicking into a field here (even just to focus it
+          before typing) closed BOTH modals. */}
+      <div
+        className="bg-background rounded-2xl border border-border shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="flex items-center justify-between px-6 py-4 border-b border-border sticky top-0 bg-background z-10">
           <h2 className="text-base font-bold">Initiate Return</h2>
           <button onClick={onClose} className="h-8 w-8 rounded-xl hover:bg-accent flex items-center justify-center">
