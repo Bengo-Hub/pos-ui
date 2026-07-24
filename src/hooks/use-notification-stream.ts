@@ -28,6 +28,7 @@ export type NotificationStreamMessage =
   | { type: 'order_ready_for_payment'; payload: { order_id: string; order_number: string } }
   | { type: 'waiter_called'; payload: { order_id: string; order_number: string } }
   | { type: 'etims_fiscalized'; payload: EtimsFiscalizedPayload }
+  | { type: 'catalog_changed'; payload: { tenant_id: string } }
   | { type: 'ping' | 'pong'; payload: { ts: number } };
 
 interface UseNotificationStreamOptions {
@@ -99,6 +100,14 @@ export function useNotificationStream({ tenantID, userID, onMessage }: UseNotifi
       // open receipt (terminal-context) merges the KRA TIMS block instantly, replacing its poll.
       if (msg.type === 'etims_fiscalized' && typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent(ETIMS_FISCALIZED_EVENT, { detail: msg.payload }));
+      }
+
+      // Inventory changed for this tenant — refresh the catalog NOW via push instead of waiting
+      // for the ~45s version poll. Invalidating the full-catalog + version queries refetches them
+      // with their own params (the version poll stays as the socket-down fallback).
+      if (msg.type === 'catalog_changed') {
+        qc.invalidateQueries({ queryKey: ['pos-catalog-full'] }); // = FULL_CATALOG_QUERY_KEY (usePOS)
+        qc.invalidateQueries({ queryKey: ['pos-catalog-version'] });
       }
 
       onMessage?.(msg);
