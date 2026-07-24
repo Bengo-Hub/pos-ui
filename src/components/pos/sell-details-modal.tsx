@@ -74,21 +74,19 @@ export function SellDetailsModal({ orderId, orgSlug, onClose }: { orderId: strin
   const lines = (order as any)?.edges?.lines ?? [];
   const payments = (order as any)?.edges?.payments ?? [];
   const meta = (order as any)?.metadata ?? {};
-  const totalPaid = payments.filter((p: any) => p.status === 'completed').reduce((s: number, p: any) => s + (p.amount ?? 0), 0);
-  const remaining = Math.max(0, ((order as any)?.total_amount ?? 0) - totalPaid);
+  // amount_due/total_paid come from the server's canonical orders.ComputeSettlement (the SAME
+  // number the All-Sales list and the Customer modal read) — this endpoint used to return the
+  // raw order and force the modal to re-derive "outstanding" itself 3 different ways (Total
+  // paid summed ALL completed payments incl. on_account; Total remaining subtracted that from
+  // total; the footer button instead excluded on_account payments AND ignored returns), which is
+  // exactly why the footer button and the totals row could disagree for the same sale. One
+  // server-computed number now, used everywhere in this modal.
+  const totalPaid = (order as any)?.total_paid ?? 0;
+  const amountDue = (order as any)?.amount_due ?? 0;
   const isFinal = (order as any)?.status === 'completed';
-  // On-account (credit) sale settlement: money ACTUALLY collected excludes the on_account
-  // tender row, so a credit sale shows its real outstanding balance here + a Record Payment
-  // action (settle-credit endpoint) until it's collected.
   const [recordPayOpen, setRecordPayOpen] = useState(false);
   const [customerOpen, setCustomerOpen] = useState(false);
   const [returnModalOpen, setReturnModalOpen] = useState(false);
-  const collected = payments
-    .filter((p: any) => p.status === 'completed' && p.payment_data?.method !== 'on_account')
-    .reduce((s: number, p: any) => s + (p.amount ?? 0), 0);
-  const creditOutstanding = meta.on_account === true
-    ? Math.max(0, ((order as any)?.total_amount ?? 0) - collected)
-    : 0;
   const canTakePayment = canAny([P.PAYMENTS_ADD, P.PAYMENTS_MANAGE]);
 
   // Activity timeline assembled from what the order already carries (no extra endpoint):
@@ -139,7 +137,10 @@ export function SellDetailsModal({ orderId, orgSlug, onClose }: { orderId: strin
               <div>
                 <p><b>Invoice No.:</b> #{(order as any).order_number}</p>
                 <p><b>Status:</b> {STATUS_LABEL[(order as any).status] ?? (order as any).status}</p>
-                <p><b>Payment Status:</b> {remaining <= 0.01 ? 'Paid' : totalPaid > 0 ? 'Partial' : 'Due'}</p>
+                <p><b>Payment Status:</b> {(() => {
+                  const ps: string = (order as any).payment_status || (amountDue <= 0.01 ? 'paid' : totalPaid > 0 ? 'partial' : 'due');
+                  return ps.charAt(0).toUpperCase() + ps.slice(1);
+                })()}</p>
               </div>
               <div>
                 <p><b>Customer:</b>{' '}
@@ -239,7 +240,7 @@ export function SellDetailsModal({ orderId, orgSlug, onClose }: { orderId: strin
                 <TotalLine label="Total Payable" value={money((order as any).total_amount)} bold />
                 <TotalLine label="Total paid" value={money(totalPaid)} />
                 {returnedTotal > 0.001 && <TotalLine label="Sell Return (-)" value={money(returnedTotal)} tone="destructive" />}
-                <TotalLine label="Total remaining" value={money(remaining)} bold tone={remaining > 0.01 ? 'destructive' : undefined} />
+                <TotalLine label="Total remaining" value={money(amountDue)} bold tone={amountDue > 0.01 ? 'destructive' : undefined} />
               </div>
             </div>
 
@@ -320,11 +321,11 @@ export function SellDetailsModal({ orderId, orgSlug, onClose }: { orderId: strin
         {/* Footer action bar — mirrors the per-row Actions dropdown's core actions. */}
         {order && (
           <div className="flex flex-wrap items-center justify-end gap-2 px-6 py-4 border-t border-border sticky bottom-0 bg-card rounded-b-2xl">
-            {canTakePayment && creditOutstanding > 0.01 && (
+            {canTakePayment && amountDue > 0.01 && (
               <button
                 onClick={() => setRecordPayOpen(true)}
                 className="inline-flex items-center gap-2 h-9 px-3 rounded-md bg-primary text-primary-foreground text-sm font-bold hover:opacity-90">
-                <Banknote className="h-4 w-4" /> Record Payment ({money(creditOutstanding)})
+                <Banknote className="h-4 w-4" /> Record Payment ({money(amountDue)})
               </button>
             )}
             <PrintReceiptButton orderId={orderId} label="Packing Slip" variant="outline"
@@ -357,8 +358,8 @@ export function SellDetailsModal({ orderId, orgSlug, onClose }: { orderId: strin
             order_number: (order as any).order_number,
             customer_name: (order as any).customer_name,
             total_amount: (order as any).total_amount,
-            total_paid: collected,
-            amount_due: creditOutstanding,
+            total_paid: totalPaid,
+            amount_due: amountDue,
           }}
           onClose={() => setRecordPayOpen(false)}
         />

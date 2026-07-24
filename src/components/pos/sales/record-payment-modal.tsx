@@ -72,8 +72,15 @@ export function RecordPaymentModal({
       } else {
         toast.warning('Payment recorded at the till, but the treasury balance did not update — re-record it from the treasury Customers page.');
       }
+      // Invalidate every owed-amount surface, not just the list: the Sell Details modal
+      // (['pos-order']) and any open Customer modal (['pos-client-credit'], ['customer-modal-
+      // orders']) previously kept serving the pre-payment number until their own staleTime —
+      // this was the root cause of a just-settled sale still showing "Sell Due" seconds later.
       void qc.invalidateQueries({ queryKey: ['orders'] });
       void qc.invalidateQueries({ queryKey: ['pos-orders'] });
+      void qc.invalidateQueries({ queryKey: ['pos-order'] });
+      void qc.invalidateQueries({ queryKey: ['pos-client-credit'] });
+      void qc.invalidateQueries({ queryKey: ['customer-modal-orders'] });
       onDone?.();
       onClose();
     },

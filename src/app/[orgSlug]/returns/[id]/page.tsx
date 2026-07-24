@@ -124,6 +124,11 @@ function useCompleteReturn(returnId: string) {
       // invalidation covers every consumer.
       qc.invalidateQueries({ queryKey: ['pos-client-credit', tenantID] });
       qc.invalidateQueries({ queryKey: ['customer-modal-orders', tenantID] });
+      // A completed return also changes the ORIGINAL sale's own amount_due (completed returns net
+      // out of it — see orders.ComputeSettlement) — invalidate the list + single-order queries too,
+      // or the All-Sales row and a still-open Sell Details modal keep showing the pre-return due.
+      qc.invalidateQueries({ queryKey: ['pos-orders', tenantID] });
+      qc.invalidateQueries({ queryKey: ['pos-order', tenantID] });
     },
   });
 }
