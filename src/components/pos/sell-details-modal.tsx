@@ -2,12 +2,12 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { X, Loader2, RotateCcw, Undo2, Banknote } from 'lucide-react';
 import { useOrder } from '@/hooks/usePOS';
 import { apiClient } from '@/lib/api/client';
 import { useAuthStore } from '@/store/auth';
+import { InitiateReturnModal } from '@/components/pos/returns/initiate-return-modal';
 import { usePermissions, P } from '@/hooks/usePermissions';
 import { PrintReceiptButton } from '@/components/pos/print-receipt-button';
 import { DownloadReceiptButton } from '@/components/pos/download-receipt-button';
@@ -50,7 +50,6 @@ interface OrderReturn {
  * per-row Actions dropdown.
  */
 export function SellDetailsModal({ orderId, orgSlug, onClose }: { orderId: string; orgSlug: string; onClose: () => void }) {
-  const router = useRouter();
   const { data: order, isLoading } = useOrder(orderId);
   const tenantID = useAuthStore((s) => s.user?.tenant_id ?? '');
   const { canAny } = usePermissions();
@@ -83,6 +82,7 @@ export function SellDetailsModal({ orderId, orgSlug, onClose }: { orderId: strin
   // action (settle-credit endpoint) until it's collected.
   const [recordPayOpen, setRecordPayOpen] = useState(false);
   const [customerOpen, setCustomerOpen] = useState(false);
+  const [returnModalOpen, setReturnModalOpen] = useState(false);
   const collected = payments
     .filter((p: any) => p.status === 'completed' && p.payment_data?.method !== 'on_account')
     .reduce((s: number, p: any) => s + (p.amount ?? 0), 0);
@@ -337,7 +337,7 @@ export function SellDetailsModal({ orderId, orgSlug, onClose }: { orderId: strin
               className="h-9 gap-2 text-sm" />
             {isFinal && canReturn && (
               <button
-                onClick={() => router.push(`/${orgSlug}/returns?invoice=${encodeURIComponent((order as any).order_number)}`)}
+                onClick={() => setReturnModalOpen(true)}
                 className="inline-flex items-center gap-2 h-9 px-3 rounded-md border border-red-300 text-red-600 text-sm font-medium hover:bg-red-50">
                 <RotateCcw className="h-4 w-4" /> Sell Return
               </button>
@@ -368,6 +368,12 @@ export function SellDetailsModal({ orderId, orgSlug, onClose }: { orderId: strin
           customerName={(order as any).customer_name}
           customerPhone={(order as any).customer_phone}
           onClose={() => setCustomerOpen(false)}
+        />
+      )}
+      {returnModalOpen && order && (
+        <InitiateReturnModal
+          initialOrderNumber={(order as any).order_number}
+          onClose={() => setReturnModalOpen(false)}
         />
       )}
     </div>

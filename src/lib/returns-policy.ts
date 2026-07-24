@@ -31,7 +31,7 @@ export const REFUND_CHANNELS: RefundChannelOption[] = [
   },
   {
     value: 'offset_invoice',
-    label: 'Reduce what they owe you',
+    label: 'Reduce customer credit',
     hint: 'Use this amount to lower how much the customer still owes you, instead of giving money back. Use this when the sale was on credit and not yet fully paid.',
   },
 ];
