@@ -21,6 +21,7 @@ import { useClientSearch, useClientCredit, useClientCreditByIdentifier, useCreat
 import { classifySearchQuery, type LoyaltyAccount } from '@/lib/api/clients';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { normalizeKePhone, nationalSubscriberDigits } from '@/lib/phone';
+import { cn } from '@/lib/utils';
 
 export interface SelectedCustomer {
   phone: string;
@@ -56,9 +57,13 @@ interface CustomerSearchProps {
   /** 'row' places the walk-in chip and the search input side-by-side on md+ (full-width
    *  terminal card); default 'stack' keeps the vertical layout for narrow panels/forms. */
   layout?: 'stack' | 'row';
+  /** Extra grouped-column content rendered inline in the selected-customer bar (e.g. LoyaltyPanel's
+   *  points/Register column) — keeps the card ONE slim row instead of the caller stacking its own
+   *  row underneath. */
+  extra?: React.ReactNode;
 }
 
-export function CustomerSearch({ value, onChange, requireRealCustomer = false, requiredForLabel = 'a credit sale', onSelectAccount, layout = 'stack' }: CustomerSearchProps) {
+export function CustomerSearch({ value, onChange, requireRealCustomer = false, requiredForLabel = 'a credit sale', onSelectAccount, layout = 'stack', extra }: CustomerSearchProps) {
   const [query, setQuery] = useState('');
   const [debounced, setDebounced] = useState('');
   const [showAdd, setShowAdd] = useState(false);
@@ -152,41 +157,54 @@ export function CustomerSearch({ value, onChange, requireRealCustomer = false, r
     );
   };
 
-  // ── Selected customer chip ────────────────────────────────────────────────
+  // ── Selected customer chip — ONE slim row, details laid out as grouped columns
+  // (name, balance, credit terms, +extra) running horizontally so the card never grows tall
+  // and the width is put to use instead of stacking everything into 2-3 lines. Each column
+  // wraps to the next line only when the container is genuinely too narrow for it. ────────
   if (selected) {
+    const due = credit ? parseFloat(credit.balance_due || '0') : 0;
+    const limit = credit ? parseFloat(credit.credit_limit || '0') : 0;
     return (
-      <div className="flex items-center justify-between gap-2 rounded-xl border border-primary/30 bg-primary/5 px-3 py-2.5">
-        <div className="flex items-center gap-2 min-w-0">
-          <UserRound className="h-4 w-4 text-primary shrink-0" />
+      <div className="flex items-center gap-3 rounded-xl border border-primary/30 bg-primary/5 pl-3 pr-2 py-2 min-w-0">
+        <UserRound className="h-4 w-4 text-primary shrink-0" />
+        <div className="flex-1 min-w-0 flex flex-wrap items-center gap-x-6 gap-y-1">
+          {/* Column: name + phone/email */}
           <div className="min-w-0">
-            <p className="text-sm font-semibold truncate">{selected.name}</p>
+            <p className="text-sm font-semibold truncate leading-tight">{selected.name}</p>
             {(selected.phone || selected.email) && (
-              <p className="text-xs text-muted-foreground truncate">
+              <p className="text-[11px] text-muted-foreground truncate leading-tight">
                 {[selected.phone, selected.email].filter(Boolean).join(' · ')}
               </p>
             )}
-            {credit && (() => {
-              const due = parseFloat(credit.balance_due || '0');
-              const limit = parseFloat(credit.credit_limit || '0');
-              return (
-                <p className="text-xs truncate">
-                  <span className={due > 0 ? 'text-amber-600 font-semibold' : due < 0 ? 'text-emerald-600 font-semibold' : 'text-muted-foreground'}>
-                    {due > 0
-                      ? `Owes ${credit.currency || 'KES'} ${due.toLocaleString()}`
-                      : due < 0
-                        ? `Credit ${credit.currency || 'KES'} ${Math.abs(due).toLocaleString()}`
-                        : 'No balance due'}
-                  </span>
-                  {limit > 0 && (
-                    <span className="text-muted-foreground"> · limit {(credit.currency || 'KES')} {limit.toLocaleString()}</span>
-                  )}
-                  {typeof credit.credit_period_days === 'number' && credit.credit_period_days > 0 && (
-                    <span className="text-muted-foreground"> · {credit.credit_period_days}d terms</span>
-                  )}
-                </p>
-              );
-            })()}
           </div>
+          {/* Column: balance due / credit */}
+          {credit && (
+            <div className="shrink-0">
+              <p className="text-[10px] uppercase tracking-wide text-muted-foreground leading-tight">Balance</p>
+              <p className={cn(
+                'text-xs font-semibold leading-tight whitespace-nowrap',
+                due > 0 ? 'text-amber-600' : due < 0 ? 'text-emerald-600' : 'text-muted-foreground',
+              )}>
+                {due > 0
+                  ? `Owes ${credit.currency || 'KES'} ${due.toLocaleString()}`
+                  : due < 0
+                    ? `Credit ${credit.currency || 'KES'} ${Math.abs(due).toLocaleString()}`
+                    : 'No balance due'}
+              </p>
+            </div>
+          )}
+          {/* Column: credit limit + terms (only when there's something to show) */}
+          {credit && (limit > 0 || (typeof credit.credit_period_days === 'number' && credit.credit_period_days > 0)) && (
+            <div className="shrink-0">
+              <p className="text-[10px] uppercase tracking-wide text-muted-foreground leading-tight">Terms</p>
+              <p className="text-xs text-muted-foreground leading-tight whitespace-nowrap">
+                {limit > 0 ? `${(credit.currency || 'KES')} ${limit.toLocaleString()} limit` : 'No limit'}
+                {typeof credit.credit_period_days === 'number' && credit.credit_period_days > 0 && ` · ${credit.credit_period_days}d`}
+              </p>
+            </div>
+          )}
+          {/* Caller-supplied extra column (e.g. loyalty points / Register) */}
+          {extra}
         </div>
         <button
           type="button"

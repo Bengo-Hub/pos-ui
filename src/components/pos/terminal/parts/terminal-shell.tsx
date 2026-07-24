@@ -225,7 +225,10 @@ export function TerminalShell() {
           {/* CART TABLE header strip.
               Retail multi-cart: the Sale 1/2/3 · + New Sale tabs live HERE (inline, above the cart
               they control) instead of a separate top bar — parallel carts so a slow M-Pesa payer
-              parked on one tab never blocks the next customer. Other use-cases keep the plain title. */}
+              parked on one tab never blocks the next customer. Other use-cases keep the plain title.
+              The grand total also lives HERE (not repeated in the totals footer or the bottom
+              payment bar) — always visible the instant something's in the cart, and it frees the
+              bottom action bar to be tender buttons only instead of splitting space with a number. */}
           <div className="flex items-center justify-between gap-2 px-4 py-2 shrink-0 bg-muted/40 border-b border-border">
             {cfg.multiCart && !t.isAddToBill ? (
               <SaleSessionTabs />
@@ -236,9 +239,16 @@ export function TerminalShell() {
                 {t.cartItemCount > 0 && <span className="text-primary">· {t.cartItemCount}</span>}
               </div>
             )}
-            {cart.length > 0 && (
-              <button onClick={t.clearCart} className="shrink-0 text-[11px] text-destructive font-semibold hover:underline">Clear all</button>
-            )}
+            <div className="flex items-center gap-3 shrink-0">
+              {cart.length > 0 && (
+                <span className="text-sm font-extrabold tabular-nums text-primary">
+                  KES {t.total.toLocaleString()}
+                </span>
+              )}
+              {cart.length > 0 && (
+                <button onClick={t.clearCart} className="text-[11px] text-destructive font-semibold hover:underline">Clear all</button>
+              )}
+            </div>
           </div>
           {/* Shared horizontal+vertical scroll container: the header stays vertically pinned via
               sticky (not a separate sibling), so it scrolls horizontally IN SYNC with the rows
@@ -410,13 +420,6 @@ export function TerminalShell() {
             <div className="flex items-center justify-between text-xs">
               <span className="text-muted-foreground">Order Tax(+): <b className="text-foreground tabular-nums">KES {t.tax.toLocaleString()}</b></span>
               {t.loyaltyDiscount > 0 && <span className="text-emerald-600">Discount: -KES {t.loyaltyDiscount.toLocaleString()}</span>}
-            </div>
-            {/* Big, obvious grand total — visible here in the cart panel itself (not only in the
-                bottom payment bar), so both the cashier and a customer-facing display can see what's
-                owed without needing the bottom action bar in view. */}
-            <div className="flex items-center justify-between pt-1 border-t border-border/60">
-              <span className="text-sm font-bold uppercase tracking-wide">Total</span>
-              <span className="text-2xl font-extrabold tabular-nums text-primary">KES {t.total.toLocaleString()}</span>
             </div>
             {/* Void + fire-courses (hospitality), preserved from the cart panel */}
             {t.currentOrderId && t.can('pos.orders.void') && (

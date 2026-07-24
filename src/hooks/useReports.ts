@@ -281,7 +281,14 @@ export function useShiftReport(from: string, to: string) {
   const tenantID = useTenantID();
   return useQuery({
     queryKey: reportKeys.shifts(tenantID, from, to),
-    queryFn: () => apiClient.get<ShiftRow[]>(`${basePath(tenantID)}/shifts`, { from, to }),
+    // The backend wraps this list in a `{data, total}` envelope (ShiftReportList), not a bare
+    // array — every caller here destructures `data: rows = []` expecting a real array, so an
+    // un-unwrapped envelope object silently became `rows` itself: iterating/mapping it then threw
+    // "is not iterable"/"map is not a function" (hit live on the Shifts "Team" tab).
+    queryFn: async () => {
+      const res = await apiClient.get<{ data?: ShiftRow[] } | ShiftRow[]>(`${basePath(tenantID)}/shifts`, { from, to });
+      return Array.isArray(res) ? res : res.data ?? [];
+    },
     enabled: !!tenantID && !!from && !!to,
     staleTime: 2 * 60_000,
   });

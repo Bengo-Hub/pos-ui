@@ -148,20 +148,62 @@ export function LoyaltyPanel({ onStateChange, orderId, layout = 'stack', initial
   const canRedeem = !redeemed && hasLoyaltyAccount && (account?.points_balance ?? 0) >= minRedeem;
 
   const row = layout === 'row';
-  return (
-    <div className="bg-card border border-border rounded-2xl p-3 space-y-2 min-w-0">
-      <div className={row ? 'flex flex-col md:flex-row md:items-start gap-2' : 'space-y-2'}>
-        <div className={row ? 'flex items-center gap-2 shrink-0 md:pt-2.5' : 'flex items-center gap-2'}>
-          <Gift className="h-4 w-4 text-primary shrink-0" />
-          <span className="text-sm font-bold">Customer</span>
-          {canLoyalty && hasLoyaltyAccount && (
-            <span className="ml-auto md:ml-1 text-xs text-muted-foreground whitespace-nowrap">
+
+  // Loyalty status column — rendered INSIDE the customer bar (CustomerSearch's `extra` slot) as
+  // one more grouped column, not a separate row underneath. Self-gated on loyalty permissions +
+  // only for a real (non-walk-in) selection with a name.
+  const loyaltyColumn = canLoyalty && !selected.isWalkIn && selected.name ? (
+    <div className="shrink-0">
+      <p className="text-[10px] uppercase tracking-wide text-muted-foreground leading-tight">Loyalty</p>
+      <div className="text-xs leading-tight whitespace-nowrap">
+        {hasLoyaltyAccount ? (
+          redeemed ? (
+            <span className="font-semibold text-green-600">✓ redeemed</span>
+          ) : canRedeem && canAdd ? (
+            <button
+              type="button"
+              disabled={redeemPoints.isPending}
+              onClick={handleRedeem}
+              className="inline-flex items-center gap-1 rounded-lg bg-primary px-2 py-1 font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+            >
+              {redeemPoints.isPending && <Loader2 className="h-3 w-3 animate-spin" />}
+              Redeem KSh {Math.floor((account?.points_balance ?? 0) * (program?.redeem_rate ?? 0.01)).toLocaleString()}
+            </button>
+          ) : (
+            <span className="text-muted-foreground">
               {(account?.points_balance ?? 0).toLocaleString()} pts
+              {(account?.points_balance ?? 0) > 0 && (account?.points_balance ?? 0) < minRedeem ? ` (need ${minRedeem})` : ''}
             </span>
-          )}
+          )
+        ) : canAdd && normalizeKePhone(selected.phone) ? (
+          <button
+            type="button"
+            disabled={createAccount.isPending}
+            onClick={handleRegister}
+            className="inline-flex items-center gap-1 rounded-lg border border-primary/40 px-2 py-1 font-semibold text-primary hover:bg-primary/10 disabled:opacity-50"
+          >
+            {createAccount.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <UserPlus className="h-3 w-3" />}
+            Register
+          </button>
+        ) : (
+          <span className="text-muted-foreground">not enrolled</span>
+        )}
+      </div>
+    </div>
+  ) : null;
+
+  return (
+    <div className="bg-card border border-border rounded-2xl p-3 min-w-0">
+      <div className={row ? 'flex items-center gap-2' : 'space-y-2'}>
+        <div className="flex items-center gap-2 shrink-0">
+          <Gift className="h-4 w-4 text-primary shrink-0" />
+          <span className="text-sm font-bold hidden sm:inline">Customer</span>
         </div>
 
-        {/* Same picker as Add Sale: walk-in default chip, match list, selected chip w/ X to replace. */}
+        {/* Same picker as Add Sale: walk-in default chip, match list, selected chip w/ X to
+            replace. The selected-customer bar lays its own details (phone/balance/terms) out as
+            grouped columns; `extra` appends the loyalty column so the whole thing stays ONE slim
+            row instead of this panel stacking a second row underneath. */}
         <div className="flex-1 min-w-0">
           <CustomerSearch
             value={selected}
@@ -169,49 +211,10 @@ export function LoyaltyPanel({ onStateChange, orderId, layout = 'stack', initial
             layout={layout}
             // Fires right before onChange with the raw match row; handleChange reads it via the ref.
             onSelectAccount={(acc) => { accountRef.current = acc; }}
+            extra={loyaltyColumn}
           />
         </div>
       </div>
-
-      {/* Loyalty layer for the attached customer (self-gated on loyalty permissions). */}
-      {canLoyalty && !selected.isWalkIn && selected.name && (
-        <div className="flex items-center justify-between gap-2 px-1 text-xs">
-          {hasLoyaltyAccount ? (
-            redeemed ? (
-              <span className="font-semibold text-green-600">✓ points redeemed</span>
-            ) : canRedeem && canAdd ? (
-              <button
-                type="button"
-                disabled={redeemPoints.isPending}
-                onClick={handleRedeem}
-                className="inline-flex items-center gap-1 rounded-lg bg-primary px-2 py-1 font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-              >
-                {redeemPoints.isPending && <Loader2 className="h-3 w-3 animate-spin" />}
-                Redeem KSh {Math.floor((account?.points_balance ?? 0) * (program?.redeem_rate ?? 0.01)).toLocaleString()}
-              </button>
-            ) : (
-              <span className="text-muted-foreground">
-                {(account?.points_balance ?? 0) > 0 ? `need ${minRedeem} pts to redeem` : 'loyalty member'}
-              </span>
-            )
-          ) : (
-            <>
-              <span className="text-muted-foreground">customer (no loyalty)</span>
-              {canAdd && normalizeKePhone(selected.phone) && (
-                <button
-                  type="button"
-                  disabled={createAccount.isPending}
-                  onClick={handleRegister}
-                  className="shrink-0 inline-flex items-center gap-1 rounded-lg border border-primary/40 px-2 py-1 font-semibold text-primary hover:bg-primary/10 disabled:opacity-50"
-                >
-                  {createAccount.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <UserPlus className="h-3 w-3" />}
-                  Register
-                </button>
-              )}
-            </>
-          )}
-        </div>
-      )}
     </div>
   );
 }
