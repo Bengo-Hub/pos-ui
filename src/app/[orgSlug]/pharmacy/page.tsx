@@ -7,6 +7,7 @@ import { P } from '@/lib/rbac/permissions';
 
 import { cn } from '@/lib/utils';
 import { usePrescriptions, useDispensePrescription, useCreatePrescription, useLinkCRMContact } from '@/hooks/usePharmacy';
+import { usePrescribers } from '@/hooks/useClinical';
 import { apiClient } from '@/lib/api/client';
 import { useAuthStore } from '@/store/auth';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -105,7 +106,8 @@ const prescriptionSchema = z.object({
   // No prescription_number field — the server auto-generates it via the tenant's document
   // sequence (Settings -> Documents), the same way order/receipt/return numbers are minted.
   prescriber_name: z.string().min(1, 'Prescriber name required'),
-  prescriber_license: z.string().min(1, 'Prescriber license required'),
+  prescriber_license: z.string().optional(),
+  external_facility_name: z.string().optional(),
   patient_name: z.string().min(1, 'Patient name required'),
   patient_dob: z.string().optional(),
   patient_id_number: z.string().optional(),
@@ -124,11 +126,17 @@ function NewPrescriptionModal({ onClose }: { onClose: () => void }) {
   const tenantID = user?.tenant_id ?? '';
   const createPrescription = useCreatePrescription();
   const linkCRMContact = useLinkCRMContact();
+  const { data: prescribers } = usePrescribers();
 
   // Per-line catalog-item lookup (id -> full item, incl. price/sku) fed by each SearchableCombobox's
   // remote search — a single shared cache since drug names/ids are unique across lines.
   const drugCache = useRef(new Map<string, DrugCatalogItem>());
   const [patient, setPatient] = useState<SelectedCustomer | null>(null);
+  // Most scripts are written by the dispensing pharmacist/doctor themselves; 'external' is for a
+  // patient walking in with a prescription from another facility — the prescriber/license fields
+  // then describe the OUTSIDE prescriber instead of picking from our own staff directory.
+  const [source, setSource] = useState<'local' | 'external'>('local');
+  const [selectedPrescriberId, setSelectedPrescriberId] = useState('');
 
   const {
     register,
@@ -139,17 +147,20 @@ function NewPrescriptionModal({ onClose }: { onClose: () => void }) {
   } = useForm<PrescriptionFormValues>({
     resolver: zodResolver(prescriptionSchema),
     defaultValues: {
-      prescriber_name: user?.fullName ?? '',
       lines: [{ drug_name: '', dosage: '', form: '', instructions: '', quantity_prescribed: 1 }],
     },
   });
 
-  // Prescriber defaults to the logged-in dispensing user (pharmacist/doctor) — still editable for
-  // scripts written by an outside prescriber and entered by a technician.
+  // Preselect the logged-in user if they're an eligible prescriber (pharmacist/doctor), and
+  // auto-fill their license number — editable in case it's missing on file.
   useEffect(() => {
-    if (user?.fullName) setValue('prescriber_name', user.fullName);
+    if (source !== 'local' || !prescribers || prescribers.length === 0 || selectedPrescriberId) return;
+    const mine = prescribers.find((p) => p.user_id === user?.id) ?? prescribers[0];
+    setSelectedPrescriberId(mine.staff_id);
+    setValue('prescriber_name', mine.name, { shouldValidate: true });
+    setValue('prescriber_license', mine.license_number ?? '');
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.fullName]);
+  }, [prescribers, source]);
 
   const { fields, append, remove } = useFieldArray({ control, name: 'lines' });
 
@@ -158,11 +169,16 @@ function NewPrescriptionModal({ onClose }: { onClose: () => void }) {
       toast.error('No outlet selected — please select an outlet first');
       return;
     }
+    if (source === 'external' && !values.external_facility_name?.trim()) {
+      toast.error('Enter the originating facility name');
+      return;
+    }
     try {
       const rx = await createPrescription.mutateAsync({
         outlet_id: outlet.id,
         prescriber_name: values.prescriber_name,
-        prescriber_license: values.prescriber_license,
+        prescriber_license: values.prescriber_license || undefined,
+        external_facility_name: source === 'external' ? values.external_facility_name : undefined,
         patient_name: values.patient_name,
         patient_dob: values.patient_dob || undefined,
         patient_id_number: values.patient_id_number || undefined,
@@ -234,18 +250,86 @@ function NewPrescriptionModal({ onClose }: { onClose: () => void }) {
 
             {/* Prescription info — the Rx # itself is auto-assigned on save via the tenant's
                 document sequence (Settings -> Documents), so there's nothing to type here. */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className={labelCls}>Prescriber Name <span className="text-destructive">*</span></label>
-                <input {...register('prescriber_name')} placeholder="Dr. Jane Doe" className={inputCls} />
-                <p className="text-[11px] text-muted-foreground mt-0.5">Defaults to you — edit if this script was written by another prescriber.</p>
-                {errors.prescriber_name && <p className={errorCls}>{errors.prescriber_name.message}</p>}
+            <div className="space-y-3">
+              <div className="inline-flex rounded-xl border border-border p-1 bg-background/50">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSource('local');
+                    setValue('external_facility_name', '');
+                    setSelectedPrescriberId('');
+                  }}
+                  className={cn(
+                    'px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors',
+                    source === 'local' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground',
+                  )}
+                >
+                  Written Here
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSource('external');
+                    setValue('prescriber_name', '');
+                    setValue('prescriber_license', '');
+                  }}
+                  className={cn(
+                    'px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors',
+                    source === 'external' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground',
+                  )}
+                >
+                  External Facility
+                </button>
               </div>
-              <div>
-                <label className={labelCls}>Prescriber License # <span className="text-destructive">*</span></label>
-                <input {...register('prescriber_license')} placeholder="LIC-12345" className={inputCls} />
-                {errors.prescriber_license && <p className={errorCls}>{errors.prescriber_license.message}</p>}
-              </div>
+
+              {source === 'local' ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className={labelCls}>Prescriber <span className="text-destructive">*</span></label>
+                    <SearchableCombobox
+                      options={(prescribers ?? []).map((p) => ({
+                        value: p.staff_id,
+                        label: p.name,
+                        hint: p.role,
+                        description: p.license_number ? `Lic. ${p.license_number}` : undefined,
+                      }))}
+                      value={selectedPrescriberId}
+                      onChange={(value) => {
+                        setSelectedPrescriberId(value);
+                        const p = (prescribers ?? []).find((x) => x.staff_id === value);
+                        if (p) {
+                          setValue('prescriber_name', p.name, { shouldValidate: true });
+                          setValue('prescriber_license', p.license_number ?? '');
+                        }
+                      }}
+                      placeholder="Select prescriber…"
+                      emptyText="No pharmacists/doctors found — add a license number in Staff settings"
+                    />
+                    <input type="hidden" {...register('prescriber_name')} />
+                    {errors.prescriber_name && <p className={errorCls}>{errors.prescriber_name.message}</p>}
+                  </div>
+                  <div>
+                    <label className={labelCls}>Prescriber License #</label>
+                    <input {...register('prescriber_license')} placeholder="LIC-12345" className={inputCls} />
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className={labelCls}>Originating Facility <span className="text-destructive">*</span></label>
+                    <input {...register('external_facility_name')} placeholder="e.g. Nairobi Hospital" className={inputCls} />
+                  </div>
+                  <div>
+                    <label className={labelCls}>Prescriber Name <span className="text-destructive">*</span></label>
+                    <input {...register('prescriber_name')} placeholder="Dr. Jane Doe" className={inputCls} />
+                    {errors.prescriber_name && <p className={errorCls}>{errors.prescriber_name.message}</p>}
+                  </div>
+                  <div>
+                    <label className={labelCls}>Prescriber License #</label>
+                    <input {...register('prescriber_license')} placeholder="LIC-12345" className={inputCls} />
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Patient info — search an existing patient (by name/phone/email) or add a new one,

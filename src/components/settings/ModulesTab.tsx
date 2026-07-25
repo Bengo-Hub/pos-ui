@@ -19,12 +19,20 @@ import { Toggle } from './shared';
 // Backend feature flags that some sidebar modules ALSO drive (not just visibility). Toggling such a
 // module writes both the disabled_modules list (visibility) and the functional flag, so hiding a
 // module the outlet doesn't use also stops its background processing.
-type BackendFlagKey = 'hotel_module_enabled' | 'enable_kds' | 'enable_appointments' | 'layaway_enabled';
+type BackendFlagKey =
+  | 'hotel_module_enabled' | 'enable_kds' | 'enable_appointments' | 'layaway_enabled'
+  | 'enable_records_module' | 'enable_triage_module' | 'enable_examination_module' | 'enable_lab_module';
 const BACKEND_FLAG: Record<string, BackendFlagKey> = {
   hotel: 'hotel_module_enabled',
   kds: 'enable_kds',
   appointments: 'enable_appointments',
   layaway: 'layaway_enabled',
+  // OPD clinical workflow — each stage its own independent flag so a small chemist can leave all
+  // four off and a clinic-attached pharmacy can turn on only the stages it actually runs.
+  records: 'enable_records_module',
+  triage: 'enable_triage_module',
+  examination: 'enable_examination_module',
+  lab: 'enable_lab_module',
 };
 
 // Friendly module names for the visibility tree (falls back to a title-cased key).
@@ -35,6 +43,7 @@ const MODULE_LABELS: Record<string, string> = {
   queue: 'Walk-in Queue', repairs: 'Repairs', staff_schedule: 'Staff Schedule', resources: 'Resources',
   kds: 'Kitchen Display (KDS)', hotel: 'Hotel / Rooms', online_orders: 'Online Orders',
   pharmacy: 'Pharmacy', patients: 'Patients', inventory: 'Inventory',
+  records: 'Records (Patient Registration)', triage: 'Triage', examination: 'Examination', lab: 'Lab',
   accounting: 'Accounting', crm: 'CRM & Marketing', reports: 'Reports & Analytics',
   loyalty: 'Loyalty', commissions: 'Commissions', settings: 'Settings',
 };
@@ -82,6 +91,7 @@ export function ModulesTab() {
   const [byRoleHidden, setByRoleHidden] = useState<Record<string, string[]>>({});
   const [flags, setFlags] = useState<Record<BackendFlagKey, boolean>>({
     hotel_module_enabled: false, enable_kds: false, enable_appointments: false, layaway_enabled: false,
+    enable_records_module: false, enable_triage_module: false, enable_examination_module: false, enable_lab_module: false,
   });
   const [saving, setSaving] = useState<string | null>(null);
   const [assigningUC, setAssigningUC] = useState(false);
@@ -99,6 +109,10 @@ export function ModulesTab() {
         enable_kds: settings.enable_kds ?? false,
         enable_appointments: settings.enable_appointments ?? false,
         layaway_enabled: settings.layaway_enabled ?? false,
+        enable_records_module: settings.enable_records_module ?? false,
+        enable_triage_module: settings.enable_triage_module ?? false,
+        enable_examination_module: settings.enable_examination_module ?? false,
+        enable_lab_module: settings.enable_lab_module ?? false,
       });
     }
   }, [settings]);

@@ -41,6 +41,10 @@ export type ModuleKey =
   | 'pharmacy'
   | 'patients'
   | 'drug_inventory'
+  | 'records'
+  | 'triage'
+  | 'examination'
+  | 'lab'
   | 'inventory'
   | 'returns'
   | 'clients'
@@ -92,7 +96,7 @@ const USE_CASE_MODULES: Record<UseCaseType, ModuleKey[]> = {
   retail:        [...COMMON_MODULES, 'retail', 'shifts', 'reports', 'layaway', 'loyalty', 'commissions', 'online_orders', 'returns', 'clients', 'repairs'],
   services:      [...COMMON_MODULES, 'appointments', 'packages', 'shifts', 'reports', 'loyalty', 'commissions', 'clients', 'staff_schedule', 'resources', 'queue', 'repairs'],
   quick_service: [...COMMON_MODULES, 'kds', 'shifts', 'reports', 'online_orders'],
-  pharmacy:      [...COMMON_MODULES, 'shifts', 'reports', 'pharmacy', 'patients', 'drug_inventory'],
+  pharmacy:      [...COMMON_MODULES, 'shifts', 'reports', 'pharmacy', 'patients', 'drug_inventory', 'records', 'triage', 'examination', 'lab'],
 };
 
 // ─── Hook ───────────────────────────────────────────────────────────────────

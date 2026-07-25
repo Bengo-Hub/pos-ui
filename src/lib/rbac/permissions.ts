@@ -15,6 +15,7 @@ export const MODULES = [
   'kds', 'retail', 'layaway', 'serial', 'loyalty', 'webhooks',
   'integrations', 'fiscal', 'queue', 'staff', 'commissions',
   'packages', 'clients', 'conference', 'promotions',
+  'records', 'triage', 'examination', 'lab',
 ] as const;
 
 export const ACTIONS = [
@@ -127,6 +128,24 @@ export const P = {
   // clinical sign-off gates, picked up automatically via the pharmacist role's pos.pharmacy.* wildcard.
   PHARMACY_APPROVE:               'pos.pharmacy.approve',
   PHARMACY_INTERACTION_OVERRIDE:  'pos.pharmacy.interaction_override',
+
+  // OPD clinical workflow (pharmacy use case, each stage independently toggleable in Settings)
+  RECORDS_VIEW:        'pos.records.view',
+  RECORDS_ADD:         'pos.records.add',
+  RECORDS_CHANGE:      'pos.records.change',
+  RECORDS_MANAGE:      'pos.records.manage',
+  TRIAGE_VIEW:         'pos.triage.view',
+  TRIAGE_ADD:          'pos.triage.add',
+  TRIAGE_CHANGE:       'pos.triage.change',
+  TRIAGE_MANAGE:       'pos.triage.manage',
+  EXAMINATION_VIEW:    'pos.examination.view',
+  EXAMINATION_ADD:     'pos.examination.add',
+  EXAMINATION_CHANGE:  'pos.examination.change',
+  EXAMINATION_MANAGE:  'pos.examination.manage',
+  LAB_VIEW:            'pos.lab.view',
+  LAB_ADD:             'pos.lab.add',
+  LAB_CHANGE:          'pos.lab.change',
+  LAB_MANAGE:          'pos.lab.manage',
 
   // KDS (Kitchen Display System) — kitchen/bar staff only
   KDS_VIEW:          'pos.kds.view',

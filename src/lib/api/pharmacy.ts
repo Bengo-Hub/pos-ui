@@ -61,7 +61,10 @@ export interface CreatePrescriptionData {
   // from the create form. Accepted optionally only for callers that truly need to pin a value.
   prescription_number?: string;
   prescriber_name: string;
-  prescriber_license: string;
+  prescriber_license?: string;
+  // Set only when the script was written by an outside facility and brought in by the patient —
+  // skips the local prescriber directory, records where it actually came from.
+  external_facility_name?: string;
   patient_name: string;
   patient_dob?: string;
   patient_id_number?: string;
