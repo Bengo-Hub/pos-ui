@@ -28,6 +28,11 @@ export interface UpsertPlatformConfigBody {
 /** service_config key for the POS terminal screensaver idle-timeout (seconds). */
 export const SCREENSAVER_TIMEOUT_KEY = 'pos.screensaver_idle_timeout_seconds';
 
+/** service_config key for the "Developed & maintained by CodeVertex" document footer. Platform
+ *  default true (shown); a tenant override lets platform staff grant a specific tenant an
+ *  opt-out — never tenant self-service. */
+export const PROVIDER_FOOTER_KEY = 'provider_footer_enabled';
+
 export const platformConfigApi = {
   list: () =>
     apiClient
@@ -36,4 +41,17 @@ export const platformConfigApi = {
 
   upsert: (key: string, body: UpsertPlatformConfigBody) =>
     apiClient.put<PlatformConfig>(`/api/v1/admin/config/${key}`, body),
+
+  /** A specific tenant's config overrides (platform-owner action, NOT the tenant's own
+   *  self-service settings route). GET /api/v1/admin/tenants/{tenantID}/config */
+  listTenantOverrides: (tenantID: string) =>
+    apiClient
+      .get<{ data: PlatformConfig[]; total: number }>(`/api/v1/admin/tenants/${tenantID}/config`)
+      .then((r) => r.data ?? []),
+
+  upsertTenantOverride: (tenantID: string, key: string, body: UpsertPlatformConfigBody) =>
+    apiClient.put<PlatformConfig>(`/api/v1/admin/tenants/${tenantID}/config/${key}`, body),
+
+  deleteTenantOverride: (tenantID: string, key: string) =>
+    apiClient.delete(`/api/v1/admin/tenants/${tenantID}/config/${key}`),
 };
