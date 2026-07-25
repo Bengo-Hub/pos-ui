@@ -27,12 +27,19 @@ export function CustomerCreditHint({ accountId, saleTotal }: { accountId?: strin
   if (!credit) return null;
   const available = availableCredit(credit);
   const overLimit = available != null && typeof saleTotal === 'number' && saleTotal > available;
+  // storeCredit is money the BUSINESS owes the CUSTOMER (e.g. from a return) — a completely
+  // different figure from "Available credit" above (which is borrowing headroom against the
+  // credit limit). Never conflate the two labels.
+  const storeCredit = num(credit.store_credit_balance);
   return (
     <p className={`text-xs px-1 ${overLimit ? 'text-destructive font-semibold' : 'text-muted-foreground'}`}>
       Balance due: {fmt(num(credit.balance_due))}
       {available != null && <> · Available credit: {fmt(available)}</>}
       {credit.credit_period_days ? <> · due in {credit.credit_period_days} days</> : null}
       {overLimit && <> — this sale exceeds the available credit</>}
+      {storeCredit > 0 && (
+        <span className="text-emerald-600 font-medium"> · Store credit available: {fmt(storeCredit)}</span>
+      )}
     </p>
   );
 }

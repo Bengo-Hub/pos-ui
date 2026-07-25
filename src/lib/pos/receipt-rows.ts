@@ -178,12 +178,16 @@ export function buildReceiptRows(receipt: ReceiptData): ReceiptRow[] {
 
   rows.push({ kind: 'footer', text: receipt.receipt_footer || 'Thank you for your business!' });
 
-  // Platform-owner (Codevertex) advertisement — always shown, from the API or a static fallback.
-  rows.push({
-    kind: 'provider',
-    lead: receipt.provider_footer_lead || PROVIDER_FOOTER_FALLBACK.lead,
-    contact: receipt.provider_footer_contact || PROVIDER_FOOTER_FALLBACK.contact,
-  });
+  // Platform-owner (Codevertex) advertisement — platform default ON, per-tenant opt-out.
+  // Undefined (older/offline-cached payloads) is treated as "show", matching show_logo's
+  // convention, so an unrelated pos-api rollout never silently drops the ad by default.
+  if (receipt.show_provider_footer !== false) {
+    rows.push({
+      kind: 'provider',
+      lead: receipt.provider_footer_lead || PROVIDER_FOOTER_FALLBACK.lead,
+      contact: receipt.provider_footer_contact || PROVIDER_FOOTER_FALLBACK.contact,
+    });
+  }
 
   return rows;
 }

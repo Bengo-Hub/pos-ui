@@ -33,8 +33,9 @@ export function useCreateLoyaltyAccount() {
   });
 }
 
-/** Customer AR credit info (treasury via pos-api proxy): balance due + credit limit/period.
- *  Credit terms are EDITED centrally on the treasury Customers page, not in POS. */
+/** Customer AR credit info (treasury via pos-api proxy): balance due + credit limit/period +
+ *  the full account-balance picture (debit/credit/opening). Credit terms are EDITED centrally
+ *  on the treasury Customers page, not in POS. */
 export interface ClientCredit {
   crm_contact_id?: string;
   customer_name?: string;
@@ -42,6 +43,14 @@ export interface ClientCredit {
   credit_limit?: string;
   credit_period_days?: number;
   currency: string;
+  /** AR balance carried in at onboarding (undefined = never set). */
+  opening_balance?: string;
+  /** Money the BUSINESS owes the CUSTOMER (store credit — e.g. from a return), drawable via the
+   *  "Apply Credit" tender. Always >= 0; independent of balance_due. */
+  store_credit_balance?: string;
+  /** Money the CUSTOMER owes the BUSINESS — max(0, balance_due). */
+  outstanding_debit?: string;
+  overdue_amount?: string;
 }
 
 export function useClientCredit(accountID?: string) {

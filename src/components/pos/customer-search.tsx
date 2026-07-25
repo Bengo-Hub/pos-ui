@@ -164,6 +164,13 @@ export function CustomerSearch({ value, onChange, requireRealCustomer = false, r
   if (selected) {
     const due = credit ? parseFloat(credit.balance_due || '0') : 0;
     const limit = credit ? parseFloat(credit.credit_limit || '0') : 0;
+    const currency = credit?.currency || 'KES';
+    // Full account-balance picture: debit (owed TO the business), credit (owed BY the business —
+    // store credit, drawable via the "Apply Credit" tender), and the onboarding opening balance —
+    // not just the netted "Owes/Credit" figure this chip used to collapse them into.
+    const owed = credit ? parseFloat(credit.outstanding_debit ?? credit.balance_due ?? '0') || 0 : 0;
+    const storeCredit = credit ? parseFloat(credit.store_credit_balance || '0') || 0 : 0;
+    const openingBalance = credit?.opening_balance != null ? parseFloat(credit.opening_balance) || 0 : null;
     return (
       <div className="flex items-center gap-3 rounded-xl border border-primary/30 bg-primary/5 pl-3 pr-2 py-2 min-w-0">
         <UserRound className="h-4 w-4 text-primary shrink-0" />
@@ -177,20 +184,37 @@ export function CustomerSearch({ value, onChange, requireRealCustomer = false, r
               </p>
             )}
           </div>
-          {/* Column: balance due / credit */}
-          {credit && (
+          {/* Column: amount owed TO the business */}
+          {credit && owed > 0 && (
+            <div className="shrink-0">
+              <p className="text-[10px] uppercase tracking-wide text-muted-foreground leading-tight">Owes</p>
+              <p className="text-xs font-semibold leading-tight whitespace-nowrap text-amber-600">
+                {currency} {owed.toLocaleString()}
+              </p>
+            </div>
+          )}
+          {/* Column: store credit — money the business owes THIS customer, drawable at checkout */}
+          {credit && storeCredit > 0 && (
+            <div className="shrink-0">
+              <p className="text-[10px] uppercase tracking-wide text-muted-foreground leading-tight">Store Credit</p>
+              <p className="text-xs font-semibold leading-tight whitespace-nowrap text-emerald-600">
+                {currency} {storeCredit.toLocaleString()}
+              </p>
+            </div>
+          )}
+          {/* Column: opening balance (onboarding carry-in, if ever set) */}
+          {credit && openingBalance != null && openingBalance !== 0 && (
+            <div className="shrink-0">
+              <p className="text-[10px] uppercase tracking-wide text-muted-foreground leading-tight">Opening Bal.</p>
+              <p className="text-xs text-muted-foreground leading-tight whitespace-nowrap">
+                {currency} {openingBalance.toLocaleString()}
+              </p>
+            </div>
+          )}
+          {credit && owed <= 0 && storeCredit <= 0 && (
             <div className="shrink-0">
               <p className="text-[10px] uppercase tracking-wide text-muted-foreground leading-tight">Balance</p>
-              <p className={cn(
-                'text-xs font-semibold leading-tight whitespace-nowrap',
-                due > 0 ? 'text-amber-600' : due < 0 ? 'text-emerald-600' : 'text-muted-foreground',
-              )}>
-                {due > 0
-                  ? `Owes ${credit.currency || 'KES'} ${due.toLocaleString()}`
-                  : due < 0
-                    ? `Credit ${credit.currency || 'KES'} ${Math.abs(due).toLocaleString()}`
-                    : 'No balance due'}
-              </p>
+              <p className="text-xs text-muted-foreground leading-tight whitespace-nowrap">No balance due</p>
             </div>
           )}
           {/* Column: credit limit + terms (only when there's something to show) */}

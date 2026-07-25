@@ -180,8 +180,9 @@ export function DocumentNumberingTab() {
         </div>
         <p className="text-xs text-muted-foreground mt-1">
           Choose pure numeric numbering (the default, e.g. 000001) or a prefixed/dated format (e.g.
-          POS-260625-000001) for order, receipt, return, reversal, and repair-job numbers. Changes
-          apply to newly created documents.
+          POS-260625-000001) for order, return, reversal, and repair-job numbers. The receipt
+          printed for a sale always shows that sale's own order number. Changes apply to newly
+          created documents.
         </p>
       </CardHeader>
       <CardContent className="space-y-3">

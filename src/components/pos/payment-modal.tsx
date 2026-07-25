@@ -332,6 +332,7 @@ export function POSPaymentModal({
       {
         orderId, tenderMethod: 'on_account', amount: roundedTotal, tenderId,
         paymentDueDate: details.dueDate, creditNotes: details.notes || undefined,
+        applyStoreCredit: details.applyStoreCredit,
       },
       {
         onSuccess: () => { setCreditDetailsOpen(false); setStep('confirmed'); onPaymentConfirmed(methodRef.current); },
@@ -1019,6 +1020,8 @@ export function POSPaymentModal({
       <CreditSaleDetailsModal
         open={creditDetailsOpen}
         amountLabel={`KES ${roundedTotal.toLocaleString()}`}
+        amount={roundedTotal}
+        availableStoreCredit={customerCreditAvailable ?? 0}
         loading={createIntent.isPending}
         onCancel={() => setCreditDetailsOpen(false)}
         onConfirm={handleOnAccountConfirm}

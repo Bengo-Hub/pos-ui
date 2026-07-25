@@ -243,6 +243,7 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
       {
         orderId: ord.orderId, tenderMethod: method, amount: roundedTotal, tenderId, externalRef,
         paymentDueDate: creditDetails?.dueDate, creditNotes: creditDetails?.notes || undefined,
+        applyStoreCredit: creditDetails?.applyStoreCredit,
       },
       {
         onSuccess: () => { autoOpenOnSettle(method); finish(ord); },
@@ -441,6 +442,8 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
         <CreditSaleDetailsModal
           open
           amountLabel={fmt(roundedTotal)}
+          amount={roundedTotal}
+          availableStoreCredit={customerCreditAvailable}
           loading={anyBusy}
           onCancel={reset}
           onConfirm={(details) => { setCapture(null); void settleImmediate('on_account', undefined, details); }}

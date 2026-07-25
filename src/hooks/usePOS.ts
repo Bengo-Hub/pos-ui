@@ -1802,6 +1802,7 @@ export function useCreatePaymentIntent() {
       externalRef,
       paymentDueDate,
       creditNotes,
+      applyStoreCredit,
       reason,
       approvalToken,
       approvalCode,
@@ -1814,6 +1815,7 @@ export function useCreatePaymentIntent() {
       externalRef?: string; // cashier-entered reference for manual/paybill payments
       paymentDueDate?: string; // credit sale due date (YYYY-MM-DD, from the credit-sale modal)
       creditNotes?: string; // credit sale notes/terms
+      applyStoreCredit?: boolean; // net existing store credit into a NEW credit-sale debt
       // Complimentary (no-charge) extras: a mandatory reason, plus ONE of a live manager
       // approval token (PIN/card step-up) or a manager-generated one-time code.
       reason?: string;
@@ -1828,6 +1830,7 @@ export function useCreatePaymentIntent() {
         externalRef,
         paymentDueDate,
         creditNotes,
+        applyStoreCredit,
         reason,
         approvalToken,
         approvalCode,

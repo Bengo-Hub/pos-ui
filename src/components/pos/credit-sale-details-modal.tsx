@@ -10,6 +10,8 @@ export interface CreditSaleDetails {
   dueDate: string;
   /** Optional free-text terms/notes stamped on the order (metadata.credit_notes). */
   notes: string;
+  /** Net the customer's existing store credit into this new debt (offset-AR workflow). */
+  applyStoreCredit: boolean;
 }
 
 export const DEFAULT_CREDIT_PERIOD_DAYS = 30;
@@ -30,6 +32,9 @@ export function CreditSaleDetailsModal({
   open,
   customerName,
   amountLabel,
+  amount,
+  availableStoreCredit = 0,
+  currency = 'KES',
   loading,
   onCancel,
   onConfirm,
@@ -38,20 +43,33 @@ export function CreditSaleDetailsModal({
   customerName?: string | null;
   /** Preformatted amount (e.g. "KSh 2,400.00") shown in the header strip. */
   amountLabel?: string;
+  /** Raw numeric sale total — used only to preview the net amount after a store-credit offset. */
+  amount?: number;
+  /** The customer's currently available store credit (money the business owes them). Zero/absent
+   *  hides the offset checkbox entirely — most sales have none. */
+  availableStoreCredit?: number;
+  currency?: string;
   loading?: boolean;
   onCancel: () => void;
   onConfirm: (details: CreditSaleDetails) => void;
 }) {
   const [dueDate, setDueDate] = useState(() => plusDays(DEFAULT_CREDIT_PERIOD_DAYS));
   const [notes, setNotes] = useState('');
+  const [applyStoreCredit, setApplyStoreCredit] = useState(availableStoreCredit > 0);
 
   // Fresh defaults each time it opens (a new credit sale, not the previous one's terms).
+  // Defaults to applying store credit whenever the customer has any available — reduces the
+  // business's own liability at the same time as the new debt, at no cost to either side.
   useEffect(() => {
     if (open) {
       setDueDate(plusDays(DEFAULT_CREDIT_PERIOD_DAYS));
       setNotes('');
+      setApplyStoreCredit(availableStoreCredit > 0);
     }
-  }, [open]);
+  }, [open, availableStoreCredit]);
+
+  const offset = Math.min(availableStoreCredit, amount ?? 0);
+  const netAmount = Math.max(0, (amount ?? 0) - offset);
 
   if (!open || typeof document === 'undefined') return null;
 
@@ -135,6 +153,31 @@ export function CreditSaleDetailsModal({
               className="w-full rounded-xl border border-border bg-background px-3.5 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary/50"
             />
           </div>
+
+          {availableStoreCredit > 0 && (
+            <label
+              className="flex items-start gap-2.5 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3.5 py-2.5 cursor-pointer"
+              data-testid="apply-store-credit"
+            >
+              <input
+                type="checkbox"
+                checked={applyStoreCredit}
+                onChange={(e) => setApplyStoreCredit(e.target.checked)}
+                className="mt-0.5 h-4 w-4 accent-emerald-600"
+              />
+              <span className="text-sm">
+                <span className="font-semibold">
+                  Apply available store credit ({currency} {availableStoreCredit.toLocaleString()})
+                </span>
+                {applyStoreCredit && amount != null && (
+                  <span className="block text-xs text-muted-foreground mt-0.5">
+                    Customer will owe only {currency} {netAmount.toLocaleString()} instead of{' '}
+                    {currency} {amount.toLocaleString()}.
+                  </span>
+                )}
+              </span>
+            </label>
+          )}
         </div>
 
         <div className="flex gap-2 px-5 pb-5">
@@ -145,7 +188,7 @@ export function CreditSaleDetailsModal({
             Cancel
           </button>
           <button
-            onClick={() => onConfirm({ dueDate, notes: notes.trim() })}
+            onClick={() => onConfirm({ dueDate, notes: notes.trim(), applyStoreCredit })}
             disabled={!dateValid || loading}
             className="flex-1 rounded-xl bg-primary text-primary-foreground py-2.5 text-sm font-bold disabled:opacity-50 flex items-center justify-center gap-2"
             data-testid="credit-confirm"

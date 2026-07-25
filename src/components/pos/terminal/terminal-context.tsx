@@ -442,11 +442,14 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
   // Retail loyalty panel (customer lookup + points redemption) — absorbed from /retail into the
   // adaptive terminal; its redeemDiscount applies as an order discount and posts the customer.
   const [loyaltyState, setLoyaltyState] = useState<LoyaltyState | null>(null);
-  // Stored-credit tender: the attached customer's AR balance_due (negative = customer holds
-  // credit from an over-return etc). Reuses the same cached query CustomerSearch already primes
-  // when the cashier picks the customer, so this rarely fires a second network request.
+  // Stored-credit tender: the attached customer's treasury store_credit_balance (money the
+  // BUSINESS owes the CUSTOMER, e.g. from a return issued as store credit) — tracked
+  // independently of balance_due (which is always >= 0 post-Phase-B; the old "-balance_due"
+  // convention this replaced silently zeroed out for any credit granted through the current,
+  // correct refund_channel=store_credit path). Reuses the same cached query CustomerSearch
+  // already primes when the cashier picks the customer, so this rarely fires a second request.
   const { data: customerCredit } = useClientCredit(loyaltyState?.accountId);
-  const customerCreditAvailable = Math.max(0, -(parseFloat(customerCredit?.balance_due || '0') || 0));
+  const customerCreditAvailable = Math.max(0, parseFloat(customerCredit?.store_credit_balance || '0') || 0);
   // "Redeem Points" settlement tender: the attached customer's live points balance, resolved here
   // so InlinePaymentBar, POSPaymentModal and SplitPaymentModal all gate/settle against the same
   // numbers (paired with `loyaltyPrograms` below for redeem_rate/min_redeem_points).

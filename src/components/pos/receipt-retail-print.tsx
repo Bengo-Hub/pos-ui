@@ -210,13 +210,15 @@ export function RetailReceiptPrint({ receipt, tenantName, outletName, logoUrl }:
         {(receipt.receipt_footer || 'Thank you for your business!').toUpperCase()}
       </div>
 
-      {/* Provider advertisement — smaller than everything above, but never sub-9px
-          (that vanishes on low-quality printers). */}
-      <div style={{ fontSize: 10, textAlign: 'center', marginTop: 8, lineHeight: 1.4 }}>
-        <b>{receipt.provider_footer_lead || 'Developed & maintained by Codevertex Africa Limited'}</b>
-        <br />
-        {receipt.provider_footer_contact || 'www.codevertexitsolutions.com · info@codevertexitsolutions.com · +254 742 201 368'}
-      </div>
+      {/* Provider advertisement — platform default ON, per-tenant opt-out. Smaller than
+          everything above, but never sub-9px (that vanishes on low-quality printers). */}
+      {receipt.show_provider_footer !== false && (
+        <div style={{ fontSize: 10, textAlign: 'center', marginTop: 8, lineHeight: 1.4 }}>
+          <b>{receipt.provider_footer_lead || 'Developed & maintained by Codevertex Africa Limited'}</b>
+          <br />
+          {receipt.provider_footer_contact || 'www.codevertexitsolutions.com · info@codevertexitsolutions.com · +254 742 201 368'}
+        </div>
+      )}
     </div>
   );
 }

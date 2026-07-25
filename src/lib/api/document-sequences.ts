@@ -20,9 +20,10 @@ export type UpdateDocumentSequenceInput = Pick<
   'prefix' | 'separator' | 'date_format' | 'padding' | 'reset_freq'
 >;
 
+// Note: there is no separate "Receipt" doc type — a receipt always carries its order's own
+// number, so this ONE sequence drives both the order number and the printed receipt number.
 export const DOC_TYPE_LABELS: Record<string, string> = {
-  order: 'Order Number',
-  pos_receipt: 'Receipt',
+  order: 'Order / Receipt Number',
   pos_return: 'Return',
   pos_reversal: 'Reversal',
   repair_job: 'Repair Job',
@@ -32,7 +33,6 @@ export const DOC_TYPE_LABELS: Record<string, string> = {
 // Suggested prefixes pre-filled ONLY when a tenant switches a doc type to the "Prefixed" format.
 export const DOC_TYPE_SUGGESTED_PREFIX: Record<string, string> = {
   order: 'POS',
-  pos_receipt: 'RCT',
   pos_return: 'RET',
   pos_reversal: 'REV',
   repair_job: 'JOB',

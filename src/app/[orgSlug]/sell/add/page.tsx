@@ -28,6 +28,7 @@ import { FeatureLock, useFeatureUpgrade } from '@bengo-hub/shared-ui-lib/subscri
 import { apiClient } from '@/lib/api/client';
 import { applyRoundOff, computeCartTax } from '@/lib/pos/cart-tax';
 import { CustomerCreditHint } from '@/components/pos/clients/credit-terms';
+import { useClientCredit } from '@/hooks/useClients';
 import { CreditSaleDetailsModal, type CreditSaleDetails } from '@/components/pos/credit-sale-details-modal';
 import { ShippingDetailsFields, emptyShippingForm, shippingFormFromMetadata, type ShippingFormValue } from '@/components/pos/shipping/shipping-details-fields';
 import { Button } from '@/components/ui/base';
@@ -87,6 +88,10 @@ export default function AddSalePage() {
   // ── Customer ── (rich phone search; defaults to the seeded Walk-in Customer)
   const [customer, setCustomer] = useState<SelectedCustomer | null>(WALK_IN_CUSTOMER);
   const realCustomer = !!(customer && !customer.isWalkIn && customer.phone);
+  // Shares the same cached query CustomerCreditHint below already primes for this account, so
+  // this rarely fires a second request — used for the offset-AR "Apply store credit" checkbox.
+  const { data: customerCredit } = useClientCredit(realCustomer ? customer?.accountId : undefined);
+  const availableStoreCredit = Math.max(0, parseFloat(customerCredit?.store_credit_balance || '0') || 0);
 
   // ── Bill-to party (credit sales): existing customer OR a staff member. Staff credit can be
   // funded from salary (premium) — pos-api routes it to an ERP payroll deduction instead of AR.
@@ -522,7 +527,11 @@ export default function AddSalePage() {
       return;
     }
     const creditExtras = creditDetails
-      ? { paymentDueDate: creditDetails.dueDate, creditNotes: creditDetails.notes || undefined }
+      ? {
+          paymentDueDate: creditDetails.dueDate,
+          creditNotes: creditDetails.notes || undefined,
+          applyStoreCredit: creditDetails.applyStoreCredit,
+        }
       : {};
     // Resuming an UNMODIFIED draft → settle the SAME order (REQ-003: the draft is
     // reclassified to completed by the payment, never duplicated). Charge the SERVER's
@@ -1125,6 +1134,8 @@ export default function AddSalePage() {
         open={creditModalOpen}
         customerName={staffParty ? undefined : custName || undefined}
         amountLabel={fmt(total)}
+        amount={total}
+        availableStoreCredit={staffParty ? 0 : availableStoreCredit}
         loading={createOrder.isPending || createIntent.isPending}
         onCancel={() => setCreditModalOpen(false)}
         onConfirm={(details) => save('pay', details)}

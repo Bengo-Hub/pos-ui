@@ -75,9 +75,11 @@ export interface ReceiptData {
   bill_to_label?: string;
   /** Staff display name/email shown as "Served by" — from the pos-api receipt endpoint's `served_by`. */
   served_by?: string;
-  /** Platform-owner (Codevertex) advertisement lines from the pos-api receipt endpoint. */
+  /** Platform-owner (Codevertex) advertisement lines from the pos-api receipt endpoint, and
+   *  whether it should render at all (platform default ON + optional per-tenant override). */
   provider_footer_lead?: string;
   provider_footer_contact?: string;
+  show_provider_footer?: boolean;
   currency?: string;
   etims_invoice_number?: string;
   /** KRA verification LINK — never usable as an <img src>; the QR IMAGE is etims_qr_png. */

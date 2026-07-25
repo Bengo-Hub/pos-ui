@@ -49,6 +49,8 @@ export interface POSSettings {
   receipt_footer?: string | null;
   /** Include the tenant/outlet logo on generated receipts (Receipt & Printing; default true). */
   show_logo_on_receipt?: boolean;
+  /** Print the tenant/outlet contact email on generated receipts (Receipt & Printing; default false). */
+  show_tenant_email_on_receipt?: boolean;
   currency: string;
   vat_enabled: boolean;
   vat_rate: number;
@@ -151,6 +153,7 @@ export interface UpdatePOSSettingsInput {
   receipt_header?: string | null;
   receipt_footer?: string | null;
   show_logo_on_receipt?: boolean;
+  show_tenant_email_on_receipt?: boolean;
   currency?: string;
   vat_enabled?: boolean;
   vat_rate?: number;
