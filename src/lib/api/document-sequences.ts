@@ -26,6 +26,7 @@ export const DOC_TYPE_LABELS: Record<string, string> = {
   pos_return: 'Return',
   pos_reversal: 'Reversal',
   repair_job: 'Repair Job',
+  prescription: 'Prescription Number',
 };
 
 // Suggested prefixes pre-filled ONLY when a tenant switches a doc type to the "Prefixed" format.
@@ -35,6 +36,7 @@ export const DOC_TYPE_SUGGESTED_PREFIX: Record<string, string> = {
   pos_return: 'RET',
   pos_reversal: 'REV',
   repair_job: 'JOB',
+  prescription: 'RX',
 };
 
 export const DATE_FORMATS: { value: string; label: string }[] = [

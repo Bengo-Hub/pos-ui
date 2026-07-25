@@ -57,7 +57,9 @@ export interface Prescription {
 
 export interface CreatePrescriptionData {
   outlet_id: string;
-  prescription_number: string;
+  // Server-generated via the tenant's document sequence (Settings -> Documents) — never sent
+  // from the create form. Accepted optionally only for callers that truly need to pin a value.
+  prescription_number?: string;
   prescriber_name: string;
   prescriber_license: string;
   patient_name: string;

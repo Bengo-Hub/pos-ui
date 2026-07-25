@@ -102,7 +102,8 @@ const drugLineSchema = z.object({
 });
 
 const prescriptionSchema = z.object({
-  prescription_number: z.string().min(1, 'Prescription number required'),
+  // No prescription_number field — the server auto-generates it via the tenant's document
+  // sequence (Settings -> Documents), the same way order/receipt/return numbers are minted.
   prescriber_name: z.string().min(1, 'Prescriber name required'),
   prescriber_license: z.string().min(1, 'Prescriber license required'),
   patient_name: z.string().min(1, 'Patient name required'),
@@ -160,7 +161,6 @@ function NewPrescriptionModal({ onClose }: { onClose: () => void }) {
     try {
       const rx = await createPrescription.mutateAsync({
         outlet_id: outlet.id,
-        prescription_number: values.prescription_number,
         prescriber_name: values.prescriber_name,
         prescriber_license: values.prescriber_license,
         patient_name: values.patient_name,
@@ -232,13 +232,9 @@ function NewPrescriptionModal({ onClose }: { onClose: () => void }) {
               </div>
             )}
 
-            {/* Prescription info */}
+            {/* Prescription info — the Rx # itself is auto-assigned on save via the tenant's
+                document sequence (Settings -> Documents), so there's nothing to type here. */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className={labelCls}>Prescription # <span className="text-destructive">*</span></label>
-                <input {...register('prescription_number')} placeholder="RX-00001" className={inputCls} />
-                {errors.prescription_number && <p className={errorCls}>{errors.prescription_number.message}</p>}
-              </div>
               <div>
                 <label className={labelCls}>Prescriber Name <span className="text-destructive">*</span></label>
                 <input {...register('prescriber_name')} placeholder="Dr. Jane Doe" className={inputCls} />
