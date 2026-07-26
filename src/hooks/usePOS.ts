@@ -1236,12 +1236,28 @@ export function useUpdateShipping() {
   });
 }
 
-/** New Sale Notification (All-Sales action) — (re)sends the customer their receipt. */
+/** New Sale Notification / receipt-share (All-Sales action) — (re)sends the customer their
+ * receipt via SMS, email, or WhatsApp (each carries a durable public download link). */
 export function useNotifySale() {
   const tenantID = useTenantID();
   return useMutation({
-    mutationFn: (data: { orderId: string; phone?: string; email?: string }) =>
-      apiClient.post(`${basePath(tenantID)}/orders/${data.orderId}/notify`, { phone: data.phone, email: data.email }),
+    mutationFn: (data: { orderId: string; phone?: string; email?: string; channel?: 'sms' | 'email' | 'whatsapp' }) =>
+      apiClient.post(`${basePath(tenantID)}/orders/${data.orderId}/notify`, {
+        phone: data.phone, email: data.email, channel: data.channel,
+      }),
+  });
+}
+
+/** "Share via WhatsApp" wa.me quick action — resolves the order's durable public receipt link
+ * (+ its on-file customer phone) client-side, so the cashier's own WhatsApp app can send it
+ * without a notifications-service round-trip. */
+export function useReceiptShareLink() {
+  const tenantID = useTenantID();
+  return useMutation({
+    mutationFn: (orderId: string) =>
+      apiClient.get<{ download_link: string; customer_phone: string }>(
+        `${basePath(tenantID)}/orders/${orderId}/receipt/share-link`,
+      ),
   });
 }
 

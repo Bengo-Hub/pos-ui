@@ -5,10 +5,11 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import {
   Banknote, ChevronDown, Eye, Pencil, Trash2, Truck,
-  CreditCard, RotateCcw, Link2, Mail, Coins, CalendarClock, NotebookPen,
+  CreditCard, RotateCcw, Link2, Mail, Coins, CalendarClock, NotebookPen, MessageCircle,
 } from 'lucide-react';
 import { PrintReceiptButton } from '@/components/pos/print-receipt-button';
-import { useNotifySale } from '@/hooks/usePOS';
+import { useReceiptShareLink } from '@/hooks/usePOS';
+import { ReceiptShareDialog } from './receipt-share-dialog';
 import { canPutOnAccount } from '@/hooks/use-close-on-account';
 import { usePermissions, P } from '@/hooks/usePermissions';
 import { useAuthStore } from '@/store/auth';
@@ -45,11 +46,22 @@ const DATE_MOVE_ADMIN_ROLES = new Set(['admin', 'owner', 'pos_admin', 'super_adm
  *  - Invoice URL → copy a shareable link to the sale
  *  - New Sale Notification → pos-api /notify → notifications-service (customer SMS receipt)
  */
+// waPhone normalizes a Kenyan-style local number ("0712345678", "712345678", "+254712345678")
+// into the bare digit string wa.me expects (no "+"). Left as-is if already in another format.
+function waPhone(phone: string): string {
+  const digits = phone.replace(/\D/g, '');
+  if (digits.startsWith('254')) return digits;
+  if (digits.startsWith('0') && digits.length === 10) return `254${digits.slice(1)}`;
+  if (digits.length === 9) return `254${digits}`;
+  return digits;
+}
+
 export function SalesActionsMenu({ order, orgSlug, onView, onEditShipping, onViewPayments, onEditLines, onMoveDate, onDelete, onRecordPayment, onPutOnAccount }: SalesActionsMenuProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
-  const notify = useNotifySale();
+  const shareLink = useReceiptShareLink();
   const authUser = useAuthStore((s) => s.user);
 
   // Permission gating — items the user cannot act on are HIDDEN (not disabled). The
@@ -93,15 +105,23 @@ export function SalesActionsMenu({ order, orgSlug, onView, onEditShipping, onVie
     close();
   };
 
-  const sendNotification = () => {
-    notify.mutate(
-      { orderId: order.id },
-      {
-        onSuccess: () => toast.success('Sale notification queued'),
-        onError: (e: any) => toast.error(e?.response?.data?.error || 'Could not send notification'),
-      },
-    );
+  // "Share via WhatsApp" — the default, one-click path: resolves the durable public receipt
+  // link, then hands off to the cashier's OWN WhatsApp (wa.me), pre-filled with a message. No
+  // notifications-service round-trip, no WhatsApp Business subscription required. Prompts for a
+  // number if the sale has none on file.
+  const shareViaWhatsApp = () => {
     close();
+    shareLink.mutate(order.id, {
+      onSuccess: (res) => {
+        const phone = res.customer_phone || window.prompt('Customer WhatsApp number:') || '';
+        if (!phone.trim()) return;
+        const message = `Thank you for your purchase! Order ${order.order_number ?? ''}.${
+          res.download_link ? ` Download your receipt: ${res.download_link}` : ''
+        }`;
+        window.open(`https://wa.me/${waPhone(phone)}?text=${encodeURIComponent(message)}`, '_blank');
+      },
+      onError: (e: any) => toast.error(e?.response?.data?.error || 'Could not build the receipt link'),
+    });
   };
 
   return (
@@ -155,8 +175,27 @@ export function SalesActionsMenu({ order, orgSlug, onView, onEditShipping, onVie
             </button>
           )}
           {canView && <button className={item} onClick={copyInvoiceUrl}><Link2 className="h-4 w-4 text-muted-foreground" /> Invoice URL</button>}
-          {canNotify && <button className={item} onClick={sendNotification}><Mail className="h-4 w-4 text-muted-foreground" /> New Sale Notification</button>}
+          {canNotify && (
+            <button className={item} onClick={shareViaWhatsApp} disabled={shareLink.isPending}>
+              <MessageCircle className="h-4 w-4 text-muted-foreground" /> Share via WhatsApp
+            </button>
+          )}
+          {canNotify && (
+            <button className={item} onClick={() => { setShareOpen(true); close(); }}>
+              <Mail className="h-4 w-4 text-muted-foreground" /> Send Notification
+            </button>
+          )}
         </div>
+      )}
+
+      {canNotify && shareOpen && (
+        <ReceiptShareDialog
+          open={shareOpen}
+          onOpenChange={setShareOpen}
+          orderId={order.id}
+          defaultPhone={order.customer_phone ?? ''}
+          defaultEmail={order.customer_email ?? ''}
+        />
       )}
     </div>
   );
