@@ -1,12 +1,12 @@
 'use client';
 
 import { useModuleAccess } from '@/hooks/use-module-access';
-import { normalizeUseCase } from '@/lib/use-case-config';
 import { useSubscription } from '@/hooks/use-subscription';
 import { usePermissions } from '@/hooks/usePermissions';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { useOwnScope } from '@/lib/rbac/scope';
 import { isPlatformOwner as checkPlatformOwner } from '@/lib/auth/permissions';
+import { normalizeUseCase } from '@/lib/use-case-config';
 import { cn } from '@/lib/utils';
 import { useTenantBranding } from '@/providers/tenant-branding-provider';
 import { useAuthStore } from '@/store/auth';

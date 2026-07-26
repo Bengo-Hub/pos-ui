@@ -118,7 +118,7 @@ export function loyaltyRedeemAction(info: LoyaltyRedeemInfo): TenderAction {
 // Gateway-gated, online tenders.
 const MPESA_STK: TenderAction = { key: 'mpesa_stk', label: 'M-Pesa Express', sublabel: 'STK push to phone', tone: 'mpesa', online: true, requiresGateway: 'mpesa' };
 const MPESA_C2B: TenderAction = { key: 'mpesa_c2b', label: 'M-Pesa Paybill', sublabel: 'Match Paybill / Till', tone: 'mpesa', online: true, requiresGateway: 'mpesa' };
-const CARD_ONLINE: TenderAction = { key: 'card_online', label: 'Card (Online)', sublabel: 'Paystack secure page', tone: 'card', online: true, requiresGateway: 'paystack' };
+const CARD_ONLINE: TenderAction = { key: 'card_online', label: 'Paystack', sublabel: 'Paystack secure page', tone: 'card', online: true, requiresGateway: 'paystack' };
 const WALLET: TenderAction = { key: 'wallet', label: 'Wallet', sublabel: 'Airtel Money & more', tone: 'wallet', online: true, requiresGateway: 'wallet' };
 const COD: TenderAction = { key: 'cod', label: 'Cash on Delivery', sublabel: 'Collect on delivery', tone: 'cod', online: true, requiresGateway: 'cod' };
 const ROOM: TenderAction = { key: 'room', label: 'Charge to Room', sublabel: 'Post to guest folio', tone: 'room', online: true };

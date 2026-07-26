@@ -54,7 +54,7 @@ function prettyTender(t: { name?: string; type?: string }): string {
   const raw = (t.name || t.type || 'Other').toString();
   const map: Record<string, string> = {
     cash: 'Cash',
-    card: 'Card (Online)',
+    card: 'Paystack',
     card_manual: 'Card / PDQ',
     pdq: 'Card / PDQ',
     card_terminal: 'Card Terminal',
