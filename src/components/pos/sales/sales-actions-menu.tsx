@@ -1,18 +1,26 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { toast } from 'sonner';
-import {
-  Banknote, ChevronDown, Eye, Pencil, Trash2, Truck,
-  CreditCard, RotateCcw, Link2, Mail, Coins, CalendarClock, NotebookPen, MessageCircle,
-} from 'lucide-react';
 import { PrintReceiptButton } from '@/components/pos/print-receipt-button';
-import { useReceiptShareLink } from '@/hooks/usePOS';
-import { ReceiptShareDialog } from './receipt-share-dialog';
 import { canPutOnAccount } from '@/hooks/use-close-on-account';
-import { usePermissions, P } from '@/hooks/usePermissions';
+import { P, usePermissions } from '@/hooks/usePermissions';
 import { useAuthStore } from '@/store/auth';
+import {
+    Banknote,
+    CalendarClock,
+    ChevronDown,
+    Coins,
+    CreditCard,
+    Eye,
+    Link2,
+    NotebookPen,
+    Pencil,
+    RotateCcw,
+    Trash2, Truck
+} from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { useEffect, useRef, useState } from 'react';
+import { toast } from 'sonner';
+import { ReceiptShareButtons } from './receipt-share-actions';
 
 interface SalesActionsMenuProps {
   order: any;
@@ -36,32 +44,10 @@ interface SalesActionsMenuProps {
 // the backend enforces the real boundary.
 const DATE_MOVE_ADMIN_ROLES = new Set(['admin', 'owner', 'pos_admin', 'super_admin', 'superuser']);
 
-/**
- * SalesActionsMenu — the GoDigital "Actions" dropdown for an All-Sales / POS-only row. Each item
- * routes to the correct integrated flow:
- *  - View / Edit Shipping / View Payments / Edit Line Prices / Delete → open modals (delegated to the parent)
- *  - Edit → the back-office Add Sale editor
- *  - Print Invoice / Packing Slip / Delivery Note → the receipt/print pipeline (PrintReceiptButton)
- *  - Sell Return → the returns flow (pos-api → treasury refund + credit note + inventory restock)
- *  - Invoice URL → copy a shareable link to the sale
- *  - New Sale Notification → pos-api /notify → notifications-service (customer SMS receipt)
- */
-// waPhone normalizes a Kenyan-style local number ("0712345678", "712345678", "+254712345678")
-// into the bare digit string wa.me expects (no "+"). Left as-is if already in another format.
-function waPhone(phone: string): string {
-  const digits = phone.replace(/\D/g, '');
-  if (digits.startsWith('254')) return digits;
-  if (digits.startsWith('0') && digits.length === 10) return `254${digits.slice(1)}`;
-  if (digits.length === 9) return `254${digits}`;
-  return digits;
-}
-
 export function SalesActionsMenu({ order, orgSlug, onView, onEditShipping, onViewPayments, onEditLines, onMoveDate, onDelete, onRecordPayment, onPutOnAccount }: SalesActionsMenuProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [shareOpen, setShareOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
-  const shareLink = useReceiptShareLink();
   const authUser = useAuthStore((s) => s.user);
 
   // Permission gating — items the user cannot act on are HIDDEN (not disabled). The
@@ -105,25 +91,6 @@ export function SalesActionsMenu({ order, orgSlug, onView, onEditShipping, onVie
     close();
   };
 
-  // "Share via WhatsApp" — the default, one-click path: resolves the durable public receipt
-  // link, then hands off to the cashier's OWN WhatsApp (wa.me), pre-filled with a message. No
-  // notifications-service round-trip, no WhatsApp Business subscription required. Prompts for a
-  // number if the sale has none on file.
-  const shareViaWhatsApp = () => {
-    close();
-    shareLink.mutate(order.id, {
-      onSuccess: (res) => {
-        const phone = res.customer_phone || window.prompt('Customer WhatsApp number:') || '';
-        if (!phone.trim()) return;
-        const message = `Thank you for your purchase! Order ${order.order_number ?? ''}.${
-          res.download_link ? ` Download your receipt: ${res.download_link}` : ''
-        }`;
-        window.open(`https://wa.me/${waPhone(phone)}?text=${encodeURIComponent(message)}`, '_blank');
-      },
-      onError: (e: any) => toast.error(e?.response?.data?.error || 'Could not build the receipt link'),
-    });
-  };
-
   return (
     <div className="relative" ref={ref} onClick={(e) => e.stopPropagation()}>
       <button
@@ -143,10 +110,10 @@ export function SalesActionsMenu({ order, orgSlug, onView, onEditShipping, onVie
           {/* Print pipeline — the receipt document reused for invoice / packing slip / delivery note. */}
           {canView && (
             <div className="px-1">
-              <PrintReceiptButton orderId={order.id} label="Print Invoice" variant="ghost" className="w-full !justify-start gap-2.5 !px-2 h-9 text-sm font-normal" />
-              <PrintReceiptButton orderId={order.id} label="Packing Slip" variant="ghost" className="w-full !justify-start gap-2.5 !px-2 h-9 text-sm font-normal" />
+              <PrintReceiptButton orderId={order.id} label="Print Invoice" variant="ghost" className="w-full justify-start! gap-2.5 px-2! h-9 text-sm font-normal" />
+              <PrintReceiptButton orderId={order.id} label="Packing Slip" variant="ghost" className="w-full justify-start! gap-2.5 px-2! h-9 text-sm font-normal" />
               {isDelivery && (
-                <PrintReceiptButton orderId={order.id} label="Delivery Note" variant="ghost" className="w-full !justify-start gap-2.5 !px-2 h-9 text-sm font-normal" />
+                <PrintReceiptButton orderId={order.id} label="Delivery Note" variant="ghost" className="w-full justify-start! gap-2.5 px-2! h-9 text-sm font-normal" />
               )}
             </div>
           )}
@@ -176,27 +143,18 @@ export function SalesActionsMenu({ order, orgSlug, onView, onEditShipping, onVie
           )}
           {canView && <button className={item} onClick={copyInvoiceUrl}><Link2 className="h-4 w-4 text-muted-foreground" /> Invoice URL</button>}
           {canNotify && (
-            <button className={item} onClick={shareViaWhatsApp} disabled={shareLink.isPending}>
-              <MessageCircle className="h-4 w-4 text-muted-foreground" /> Share via WhatsApp
-            </button>
-          )}
-          {canNotify && (
-            <button className={item} onClick={() => { setShareOpen(true); close(); }}>
-              <Mail className="h-4 w-4 text-muted-foreground" /> Send Notification
-            </button>
+            <div className="px-2 py-2">
+              <ReceiptShareButtons
+                order={order}
+                className="flex flex-col gap-2"
+                compact
+                buttonClassName="w-full justify-start gap-2.5 px-2 h-9 text-sm font-normal"
+              />
+            </div>
           )}
         </div>
       )}
 
-      {canNotify && shareOpen && (
-        <ReceiptShareDialog
-          open={shareOpen}
-          onOpenChange={setShareOpen}
-          orderId={order.id}
-          defaultPhone={order.customer_phone ?? ''}
-          defaultEmail={order.customer_email ?? ''}
-        />
-      )}
     </div>
   );
 }

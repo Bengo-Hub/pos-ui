@@ -1,34 +1,35 @@
 'use client';
 
-import { Badge, Button, Card, CardContent, CardHeader } from '@/components/ui/base';
-import { cn } from '@/lib/utils';
-import { useOrders, useReleaseTable } from '@/hooks/usePOS';
-import { usePermissions, P } from '@/hooks/usePermissions';
-import { useOwnScope } from '@/lib/rbac/scope';
 import { Can } from '@/components/auth/can';
-import { useParams } from 'next/navigation';
-import Link from 'next/link';
-import {
-  CreditCard,
-  Download,
-  Eye,
-  Filter,
-  Map,
-  Plus,
-  Search,
-} from 'lucide-react';
-import { useState, useMemo, useEffect } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
-import { TrackingIframeModal } from '@bengo-hub/shared-ui-lib';
-import { DataTable, type DataTableColumn } from '@bengo-hub/shared-ui-lib/data-table';
-import { SplitPaymentModal } from '@/components/pos/split-payment-modal';
+import { GenerateComplimentaryCodeButton } from '@/components/pos/generate-complimentary-code-button';
+import { GenerateVoidCodeButton } from '@/components/pos/generate-void-code-button';
 import { PrintReceiptButton } from '@/components/pos/print-receipt-button';
+import { ReceiptShareButtons } from '@/components/pos/sales/receipt-share-actions';
+import { SplitPaymentModal } from '@/components/pos/split-payment-modal';
 import { VoidBillButton } from '@/components/pos/void-bill-button';
 import { VoidLineButton } from '@/components/pos/void-line-button';
-import { GenerateVoidCodeButton } from '@/components/pos/generate-void-code-button';
-import { GenerateComplimentaryCodeButton } from '@/components/pos/generate-complimentary-code-button';
-import { useAuthStore } from '@/store/auth';
+import { Badge, Button, Card, CardContent, CardHeader } from '@/components/ui/base';
+import { useOrders, useReleaseTable } from '@/hooks/usePOS';
+import { P, usePermissions } from '@/hooks/usePermissions';
 import { orderSubtypeBadge } from '@/lib/pos/order-subtype-label';
+import { useOwnScope } from '@/lib/rbac/scope';
+import { cn } from '@/lib/utils';
+import { useAuthStore } from '@/store/auth';
+import { TrackingIframeModal } from '@bengo-hub/shared-ui-lib';
+import { DataTable, type DataTableColumn } from '@bengo-hub/shared-ui-lib/data-table';
+import { useQueryClient } from '@tanstack/react-query';
+import {
+    CreditCard,
+    Download,
+    Eye,
+    Filter,
+    Map,
+    Plus,
+    Search,
+} from 'lucide-react';
+import Link from 'next/link';
+import { useParams } from 'next/navigation';
+import { useEffect, useMemo, useState } from 'react';
 
 const PAGE_SIZE = 20;
 
@@ -468,6 +469,8 @@ export default function OrdersPage() {
                   className="w-full justify-center"
                 />
               )}
+
+              <ReceiptShareButtons order={selectedOrder} className="w-full" buttonClassName="w-full justify-center" />
 
               {/* Manager: generate a shareable one-time code to authorize a remote void. */}
               <GenerateVoidCodeButton

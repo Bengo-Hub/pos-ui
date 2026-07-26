@@ -1,19 +1,20 @@
 'use client';
 
-import Link from 'next/link';
-import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { X, Loader2, RotateCcw, Undo2, Banknote } from 'lucide-react';
+import { CustomerDetailsModal } from '@/components/pos/customers/customer-details-modal';
+import { DownloadReceiptButton } from '@/components/pos/download-receipt-button';
+import { PrintReceiptButton } from '@/components/pos/print-receipt-button';
+import { InitiateReturnModal } from '@/components/pos/returns/initiate-return-modal';
+import { ReceiptShareButtons } from '@/components/pos/sales/receipt-share-actions';
+import { RecordPaymentModal } from '@/components/pos/sales/record-payment-modal';
+import { prettyMethod } from '@/components/pos/sales/sales-shared';
+import { P, usePermissions } from '@/hooks/usePermissions';
 import { useOrder } from '@/hooks/usePOS';
 import { apiClient } from '@/lib/api/client';
 import { useAuthStore } from '@/store/auth';
-import { InitiateReturnModal } from '@/components/pos/returns/initiate-return-modal';
-import { usePermissions, P } from '@/hooks/usePermissions';
-import { PrintReceiptButton } from '@/components/pos/print-receipt-button';
-import { DownloadReceiptButton } from '@/components/pos/download-receipt-button';
-import { RecordPaymentModal } from '@/components/pos/sales/record-payment-modal';
-import { CustomerDetailsModal } from '@/components/pos/customers/customer-details-modal';
-import { prettyMethod } from '@/components/pos/sales/sales-shared';
+import { useQuery } from '@tanstack/react-query';
+import { Banknote, Loader2, RotateCcw, Undo2, X } from 'lucide-react';
+import Link from 'next/link';
+import { useState } from 'react';
 
 const money = (n: number | undefined | null) =>
   `KSh ${Number(n ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -332,6 +333,7 @@ export function SellDetailsModal({ orderId, orgSlug, onClose }: { orderId: strin
               className="h-9 gap-2 text-sm" />
             <PrintReceiptButton orderId={orderId} label="Print Invoice" variant="outline"
               className="h-9 gap-2 text-sm" />
+            <ReceiptShareButtons order={order as any} compact buttonClassName="h-9 gap-2 text-sm" />
             {/* Direct file download — bypasses the print-agent queue entirely, a reliable "just
                 get me the file" option when the print pipeline itself is what's broken. */}
             <DownloadReceiptButton orderId={orderId} orderNumber={(order as any).order_number} variant="outline"
