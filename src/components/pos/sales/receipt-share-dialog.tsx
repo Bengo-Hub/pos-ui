@@ -21,19 +21,33 @@ const selectCls = inputCls;
  */
 export function ReceiptShareDialog({
   open, onOpenChange, orderId, defaultPhone, defaultEmail,
+  forcedChannel, onManualSend, title,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   orderId: string;
   defaultPhone?: string;
   defaultEmail?: string;
+  /** Locks the channel selector to one value and hides it (e.g. the "Share via WhatsApp" quick
+   * action only ever wants a phone number, never a channel choice). */
+  forcedChannel?: Channel;
+  /** When set, "Send" calls this with the entered phone/email instead of dispatching through
+   * notifications-service — reuses this dialog's UI/validation for a purely client-side flow
+   * (e.g. building a wa.me deep link) rather than a bespoke prompt. */
+  onManualSend?: (value: string) => void;
+  title?: string;
 }) {
-  const [channel, setChannel] = useState<Channel>(defaultPhone ? 'sms' : 'email');
+  const [channel, setChannel] = useState<Channel>(forcedChannel ?? (defaultPhone ? 'sms' : 'email'));
   const [phone, setPhone] = useState(defaultPhone ?? '');
   const [email, setEmail] = useState(defaultEmail ?? '');
   const notify = useNotifySale();
 
   function handleSend() {
+    if (onManualSend) {
+      onManualSend((needsPhone ? phone : email).trim());
+      onOpenChange(false);
+      return;
+    }
     notify.mutate(
       { orderId, phone: phone || undefined, email: email || undefined, channel },
       {
@@ -53,17 +67,19 @@ export function ReceiptShareDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-sm">
         <DialogHeader>
-          <DialogTitle>Send Receipt Notification</DialogTitle>
+          <DialogTitle>{title ?? 'Send Receipt Notification'}</DialogTitle>
         </DialogHeader>
         <div className="space-y-3">
-          <div>
-            <label className="text-xs font-medium text-muted-foreground mb-1 block">Channel</label>
-            <select className={selectCls} value={channel} onChange={(e) => setChannel(e.target.value as Channel)}>
-              <option value="sms">SMS</option>
-              <option value="email">Email</option>
-              <option value="whatsapp">WhatsApp</option>
-            </select>
-          </div>
+          {!forcedChannel && (
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">Channel</label>
+              <select className={selectCls} value={channel} onChange={(e) => setChannel(e.target.value as Channel)}>
+                <option value="sms">SMS</option>
+                <option value="email">Email</option>
+                <option value="whatsapp">WhatsApp</option>
+              </select>
+            </div>
+          )}
           {needsPhone ? (
             <div>
               <label className="text-xs font-medium text-muted-foreground mb-1 block">Phone number</label>
@@ -79,7 +95,7 @@ export function ReceiptShareDialog({
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
           <Button onClick={handleSend} disabled={!canSend || notify.isPending}>
-            {notify.isPending ? 'Sending…' : 'Send'}
+            {notify.isPending ? 'Sending…' : onManualSend ? 'Continue' : 'Send'}
           </Button>
         </DialogFooter>
       </DialogContent>

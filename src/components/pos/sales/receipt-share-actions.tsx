@@ -2,8 +2,9 @@
 
 import { Button } from '@/components/ui/button';
 import { useReceiptShareLink } from '@/hooks/usePOS';
+import { useTenantBranding } from '@/providers/tenant-branding-provider';
 import { Mail, MessageCircle } from 'lucide-react';
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { ReceiptShareDialog } from './receipt-share-dialog';
 
@@ -25,19 +26,72 @@ function waPhone(phone: string): string {
 export function useOrderShareActions(order: ShareOrderLike | null | undefined) {
   const shareLink = useReceiptShareLink();
   const [shareOpen, setShareOpen] = useState(false);
+  const [waPromptOpen, setWaPromptOpen] = useState(false);
+  const { tenant } = useTenantBranding();
+  // Holds the blank tab opened synchronously in the click handler (before the async share-link
+  // fetch resolves) so it can be navigated later without a second window.open() call — a browser
+  // only allows window.open() during the original user-gesture call stack; opening it AFTER an
+  // await/mutation callback is what got silently blocked (the "Pop-ups blocked" banner).
+  const pendingWinRef = useRef<Window | null>(null);
+  const pendingDownloadLinkRef = useRef<string | undefined>(undefined);
+
+  const buildMessage = useCallback((downloadLink?: string) => {
+    const store = tenant?.name?.trim();
+    const greeting = store ? `Thank you for shopping with ${store}!` : 'Thank you for your purchase!';
+    const orderLine = order?.order_number ? ` Order ${order.order_number}.` : '';
+    const linkLine = downloadLink ? ` Download your receipt: ${downloadLink}` : '';
+    return `${greeting}${orderLine}${linkLine}`;
+  }, [tenant?.name, order?.order_number]);
+
+  const openWhatsApp = useCallback((phone: string, downloadLink?: string) => {
+    const trimmed = phone.trim();
+    if (!trimmed) {
+      pendingWinRef.current?.close();
+      pendingWinRef.current = null;
+      return;
+    }
+    const url = `https://wa.me/${waPhone(trimmed)}?text=${encodeURIComponent(buildMessage(downloadLink))}`;
+    const win = pendingWinRef.current;
+    pendingWinRef.current = null;
+    if (win && !win.closed) {
+      win.location.href = url;
+    } else {
+      // The pre-opened tab is gone (already closed) or was itself blocked — try once more
+      // directly (still inside this click/dialog-submit user gesture) before falling back.
+      const retry = window.open(url, '_blank');
+      if (!retry) {
+        toast.error('Pop-up blocked — tap the link to open WhatsApp', {
+          action: { label: 'Open', onClick: () => window.open(url, '_blank') },
+        });
+      }
+    }
+  }, [buildMessage]);
 
   const shareViaWhatsApp = useCallback(() => {
     if (!order?.id) return;
+    // Open the tab synchronously, still inside the click handler's user-gesture — filled in (or
+    // closed) once the share-link fetch resolves below.
+    pendingWinRef.current = window.open('', '_blank');
     shareLink.mutate(order.id, {
       onSuccess: (res: { download_link?: string; customer_phone?: string }) => {
-        const phone = res.customer_phone || window.prompt('Customer WhatsApp number:') || '';
-        if (!phone.trim()) return;
-        const message = `Thank you for your purchase! Order ${order.order_number ?? ''}.${res.download_link ? ` Download your receipt: ${res.download_link}` : ''}`;
-        window.open(`https://wa.me/${waPhone(phone)}?text=${encodeURIComponent(message)}`, '_blank');
+        pendingDownloadLinkRef.current = res.download_link;
+        if (res.customer_phone) {
+          openWhatsApp(res.customer_phone, res.download_link);
+        } else {
+          // No phone on file — ask via the same modal the other notification actions use,
+          // instead of a raw window.prompt().
+          pendingWinRef.current?.close();
+          pendingWinRef.current = null;
+          setWaPromptOpen(true);
+        }
       },
-      onError: (e: any) => toast.error(e?.response?.data?.error || 'Could not build the receipt link'),
+      onError: (e: any) => {
+        pendingWinRef.current?.close();
+        pendingWinRef.current = null;
+        toast.error(e?.response?.data?.error || 'Could not build the receipt link');
+      },
     });
-  }, [order?.id, order?.order_number, shareLink]);
+  }, [order?.id, shareLink, openWhatsApp]);
 
   const openShareDialog = useCallback(() => setShareOpen(true), []);
 
@@ -46,6 +100,9 @@ export function useOrderShareActions(order: ShareOrderLike | null | undefined) {
     openShareDialog,
     shareOpen,
     setShareOpen,
+    waPromptOpen,
+    setWaPromptOpen,
+    onManualWhatsAppPhone: (phone: string) => openWhatsApp(phone, pendingDownloadLinkRef.current),
     shareLink,
   };
 }
@@ -61,7 +118,10 @@ export function ReceiptShareButtons({
   compact?: boolean;
   buttonClassName?: string;
 }) {
-  const { shareViaWhatsApp, openShareDialog, shareOpen, setShareOpen, shareLink } = useOrderShareActions(order);
+  const {
+    shareViaWhatsApp, openShareDialog, shareOpen, setShareOpen,
+    waPromptOpen, setWaPromptOpen, onManualWhatsAppPhone, shareLink,
+  } = useOrderShareActions(order);
 
   if (!order) return null;
 
@@ -94,6 +154,16 @@ export function ReceiptShareButtons({
         orderId={order.id}
         defaultPhone={order.customer_phone ?? ''}
         defaultEmail={order.customer_email ?? ''}
+      />
+      {/* No phone on file for the wa.me quick-share — ask via the same modal as the other
+          notification actions, instead of a raw window.prompt(). */}
+      <ReceiptShareDialog
+        open={waPromptOpen}
+        onOpenChange={(v) => { if (!v) onManualWhatsAppPhone(''); setWaPromptOpen(v); }}
+        orderId={order.id}
+        title="Share via WhatsApp"
+        forcedChannel="whatsapp"
+        onManualSend={onManualWhatsAppPhone}
       />
     </div>
   );
