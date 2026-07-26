@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { Bluetooth, Download, HelpCircle, Inbox, Loader2, Lock, Network, Printer, Receipt, Save, Usb, Wifi } from 'lucide-react';
 
 // pos-api base — the print-agent installer download is served by pos-api, not the pos-ui host.
-const POS_API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'https://posapi.codevertexitsolutions.com';
+const POS_API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'https://posapi.codevertexafrica.com';
 import { Button, Card, CardContent, CardHeader } from '@/components/ui/base';
 import { usePOSSettings, useUpdatePOSSettings } from '@/hooks/usePOSSettings';
 import { ReceiptFormatPicker } from './receipt-format-picker';

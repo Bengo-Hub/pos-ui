@@ -6,7 +6,7 @@ import type { KDSTicket } from './useKDS';
 import { apiClient } from '@/lib/api/client';
 
 // Stream against the API host (matches REST/SSE), not the UI host.
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://posapi.codevertexitsolutions.com';
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://posapi.codevertexafrica.com';
 
 export type KDSWSMessage =
   | { type: 'ticket_created'; payload: KDSTicket }

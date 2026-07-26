@@ -10,8 +10,8 @@ import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { inputClass, labelClass } from './shared';
 
-const AUTH_API_URL_DEFAULT = process.env.NEXT_PUBLIC_AUTH_API_URL || 'https://sso.codevertexitsolutions.com';
-const POS_API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://posapi.codevertexitsolutions.com';
+const AUTH_API_URL_DEFAULT = process.env.NEXT_PUBLIC_AUTH_API_URL || 'https://sso.codevertexafrica.com';
+const POS_API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://posapi.codevertexafrica.com';
 
 export function IntegrationsTab() {
   const { isSuperUser } = useModuleAccess();

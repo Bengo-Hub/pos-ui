@@ -9,7 +9,7 @@ declare module 'axios' {
   }
 }
 
-const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'https://posapi.codevertexitsolutions.com';
+const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'https://posapi.codevertexafrica.com';
 
 class ApiClient {
   private instance: AxiosInstance;

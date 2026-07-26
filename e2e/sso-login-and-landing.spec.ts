@@ -11,7 +11,7 @@ import { expect, test } from '@playwright/test';
  * (default = codevertex-demo admin per the platform's demo-tenant E2E convention).
  */
 
-const EMAIL = process.env.E2E_LOGIN_EMAIL || 'admin@demo.codevertexitsolutions.com';
+const EMAIL = process.env.E2E_LOGIN_EMAIL || 'admin@demo.codevertexafrica.com';
 const PASSWORD = process.env.E2E_LOGIN_PASSWORD || 'DemoAdmin2024!';
 
 test.describe('POS UI SSO login and landing', () => {

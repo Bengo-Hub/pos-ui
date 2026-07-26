@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 
 const PRICING_API =
   process.env.NEXT_PUBLIC_SUBSCRIPTIONS_API_URL ||
-  'https://pricingapi.codevertexitsolutions.com';
+  'https://pricingapi.codevertexafrica.com';
 
 const SERVICE_KEY = process.env.INTERNAL_SERVICE_KEY ?? '';
 

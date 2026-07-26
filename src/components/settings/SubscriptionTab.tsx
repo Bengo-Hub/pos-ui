@@ -95,7 +95,7 @@ export function SubscriptionTab() {
                     limits and premium features.
                   </p>
                   <a
-                    href="https://pricing.codevertexitsolutions.com/plans?service=pos"
+                    href="https://pricing.codevertexafrica.com/plans?service=pos"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-block mt-2 text-sm font-medium text-amber-700 dark:text-amber-400 underline"

@@ -7,7 +7,7 @@
 
 ## Backend API (pos-api)
 
-**Base URL**: `NEXT_PUBLIC_POS_API_URL` (default: `https://posapi.codevertexitsolutions.com`)
+**Base URL**: `NEXT_PUBLIC_POS_API_URL` (default: `https://posapi.codevertexafrica.com`)
 
 ### Request Conventions
 
@@ -218,7 +218,7 @@ Conflict resolution: server-assigned `order_number` replaces client-side temp ID
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `NEXT_PUBLIC_POS_API_URL` | `https://posapi.codevertexitsolutions.com` | Backend API base URL |
-| `NEXT_PUBLIC_SSO_URL` | `https://sso.codevertexitsolutions.com` | Auth service |
-| `NEXT_PUBLIC_AUTH_UI_URL` | `https://accounts.codevertexitsolutions.com` | Auth UI |
+| `NEXT_PUBLIC_POS_API_URL` | `https://posapi.codevertexafrica.com` | Backend API base URL |
+| `NEXT_PUBLIC_SSO_URL` | `https://sso.codevertexafrica.com` | Auth service |
+| `NEXT_PUBLIC_AUTH_UI_URL` | `https://accounts.codevertexafrica.com` | Auth UI |
 | `NEXT_PUBLIC_SSO_CLIENT_ID` | `pos-ui` | OIDC client ID |

@@ -292,7 +292,7 @@ export function RetailDashboard({ orgSlug }: { orgSlug: string }) {
           <QuickAction icon={Plus} label="New Sale" desc="Start a new transaction" href={`/${orgSlug}/order`} accent />
           <QuickAction icon={ClipboardList} label="Orders" desc="View all transactions" href={`/${orgSlug}/orders`} />
           {/* Purchase orders are owned by inventory-service — the POS duplicate page was removed. */}
-          <QuickAction icon={Package} label="Purchase Orders" desc="Receive stock (Inventory)" href={`${process.env.NEXT_PUBLIC_INVENTORY_UI_URL || 'https://inventory.codevertexitsolutions.com'}/${orgSlug}/purchase-orders`} />
+          <QuickAction icon={Package} label="Purchase Orders" desc="Receive stock (Inventory)" href={`${process.env.NEXT_PUBLIC_INVENTORY_UI_URL || 'https://inventory.codevertexafrica.com'}/${orgSlug}/purchase-orders`} />
           <QuickAction icon={BarChart3} label="Reports" desc="Sales & inventory" href={`/${orgSlug}/reports`} />
         </div>
       </div>

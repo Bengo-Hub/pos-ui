@@ -3,7 +3,7 @@ import { type NextRequest, NextResponse } from 'next/server';
 const AUTH_API_BASE =
   process.env.NEXT_PUBLIC_SSO_URL ||
   process.env.NEXT_PUBLIC_AUTH_API_URL ||
-  'https://sso.codevertexitsolutions.com';
+  'https://sso.codevertexafrica.com';
 
 const DEFAULT_PRIMARY = '#ea8022';
 const DEFAULT_BG = '#1c0f02';

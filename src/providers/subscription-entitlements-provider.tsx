@@ -13,7 +13,7 @@ import { useSubscription } from '@/hooks/use-subscription';
 import { useAuthStore } from '@/store/auth';
 import { useSubscriptionStore } from '@/store/subscription';
 
-const UPGRADE_BASE = process.env.NEXT_PUBLIC_SUBSCRIPTIONS_UI_URL || 'https://pricing.codevertexitsolutions.com';
+const UPGRADE_BASE = process.env.NEXT_PUBLIC_SUBSCRIPTIONS_UI_URL || 'https://pricing.codevertexafrica.com';
 
 interface CatalogItem {
   featureCode: string;

@@ -19,11 +19,11 @@ import { P } from '@/lib/rbac/permissions';
 
 // Cross-service UIs we LINK to (never duplicate). Code fallback is the real safety net since
 // NEXT_PUBLIC URLs are baked at build time.
-const INVENTORY_URL = process.env.NEXT_PUBLIC_INVENTORY_UI_URL || 'https://inventory.codevertexitsolutions.com';
-const TREASURY_URL = process.env.NEXT_PUBLIC_TREASURY_UI_URL || 'https://books.codevertexitsolutions.com';
-const MARKETFLOW_URL = process.env.NEXT_PUBLIC_MARKETFLOW_UI_URL || 'https://marketflow.codevertexitsolutions.com';
-const ERP_URL = process.env.NEXT_PUBLIC_ERP_UI_URL || 'https://erp.codevertexitsolutions.com';
-const LOGISTICS_URL = process.env.NEXT_PUBLIC_LOGISTICS_UI_URL || 'https://logistics.codevertexitsolutions.com';
+const INVENTORY_URL = process.env.NEXT_PUBLIC_INVENTORY_UI_URL || 'https://inventory.codevertexafrica.com';
+const TREASURY_URL = process.env.NEXT_PUBLIC_TREASURY_UI_URL || 'https://books.codevertexafrica.com';
+const MARKETFLOW_URL = process.env.NEXT_PUBLIC_MARKETFLOW_UI_URL || 'https://marketflow.codevertexafrica.com';
+const ERP_URL = process.env.NEXT_PUBLIC_ERP_UI_URL || 'https://erp.codevertexafrica.com';
+const LOGISTICS_URL = process.env.NEXT_PUBLIC_LOGISTICS_UI_URL || 'https://logistics.codevertexafrica.com';
 
 export interface NavItem {
   label: string;

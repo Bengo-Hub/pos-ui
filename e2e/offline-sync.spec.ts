@@ -10,12 +10,12 @@ import * as path from 'path';
  * is created on the backend EXACTLY ONCE (idempotent replay), then clean up the created order.
  *
  * Env: BASE_URL, E2E_ORG_SLUG (default codevertex-demo), E2E_POS_PIN (default 0000=Admin),
- *      POS_API_URL (default https://posapi.codevertexitsolutions.com).
+ *      POS_API_URL (default https://posapi.codevertexafrica.com).
  */
 
 const ORG = process.env.E2E_ORG_SLUG || 'codevertex-demo';
 const PIN = process.env.E2E_POS_PIN || '0000';
-const API = process.env.POS_API_URL || 'https://posapi.codevertexitsolutions.com';
+const API = process.env.POS_API_URL || 'https://posapi.codevertexafrica.com';
 const ARTIFACT = path.join('test-results', 'offline-created.json');
 
 // ── IndexedDB helpers (read pos_offline_db directly in the page) ──────────────────

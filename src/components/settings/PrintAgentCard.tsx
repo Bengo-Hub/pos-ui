@@ -12,7 +12,7 @@ import {
   type PrintAgentInfo,
 } from '@/lib/pos/print-jobs';
 
-const POS_API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'https://posapi.codevertexitsolutions.com';
+const POS_API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'https://posapi.codevertexafrica.com';
 
 /**
  * Print Agent pairing + status (Settings → Receipt & Printing).

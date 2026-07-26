@@ -111,7 +111,7 @@ export function useEffectiveOnline(): boolean {
 let probeTimer: ReturnType<typeof setInterval> | null = null;
 
 async function probeOnce(): Promise<void> {
-  const base = process.env.NEXT_PUBLIC_API_URL || 'https://posapi.codevertexitsolutions.com';
+  const base = process.env.NEXT_PUBLIC_API_URL || 'https://posapi.codevertexafrica.com';
   try {
     const res = await fetch(`${base}/healthz`, {
       method: 'GET',

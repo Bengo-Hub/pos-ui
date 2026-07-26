@@ -19,7 +19,7 @@ import { useAuthStore } from "@/store/auth";
 import { setOverageEnabled } from "@/lib/auth/subscription";
 
 const SUBSCRIBE_URL =
-  process.env.NEXT_PUBLIC_SUBSCRIPTIONS_UI_URL || "https://pricing.codevertexitsolutions.com";
+  process.env.NEXT_PUBLIC_SUBSCRIPTIONS_UI_URL || "https://pricing.codevertexafrica.com";
 
 const fmtKes = (n: number) =>
   new Intl.NumberFormat("en-KE", { style: "currency", currency: "KES", maximumFractionDigits: 0 }).format(n);

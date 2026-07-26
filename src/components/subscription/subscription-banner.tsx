@@ -7,7 +7,7 @@ import { useTenantBranding } from '@/providers/tenant-branding-provider';
 import { useAuthStore } from '@/store/auth';
 
 const SUBSCRIPTIONS_UI_URL =
-  process.env.NEXT_PUBLIC_SUBSCRIPTIONS_UI_URL || 'https://pricing.codevertexitsolutions.com';
+  process.env.NEXT_PUBLIC_SUBSCRIPTIONS_UI_URL || 'https://pricing.codevertexafrica.com';
 
 const UPGRADE_URL = `${SUBSCRIPTIONS_UI_URL}/plans?service=pos`;
 const BILLING_URL = `${SUBSCRIPTIONS_UI_URL}/billing`;

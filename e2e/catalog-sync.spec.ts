@@ -13,14 +13,14 @@ import { test, expect, type Page } from '@playwright/test';
  *     so inventory changes surface without a refresh or re-login.
  *
  * Env: BASE_URL, E2E_ORG_SLUG (default codevertex-demo), E2E_POS_PIN (default 0000=Admin),
- *      POS_API_URL (default https://posapi.codevertexitsolutions.com).
+ *      POS_API_URL (default https://posapi.codevertexafrica.com).
  *
  * READ-ONLY: creates no orders/items — nothing to clean up afterwards.
  */
 
 const ORG = process.env.E2E_ORG_SLUG || 'codevertex-demo';
 const PIN = process.env.E2E_POS_PIN || '0000';
-const API = process.env.POS_API_URL || 'https://posapi.codevertexitsolutions.com';
+const API = process.env.POS_API_URL || 'https://posapi.codevertexafrica.com';
 
 async function idbCatalogCount(page: Page): Promise<number> {
   return page.evaluate(

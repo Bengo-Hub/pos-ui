@@ -42,7 +42,7 @@ export interface ScreensaverMedia {
  *  convention) — they are served by pos-api, not the UI origin, so prefix the API base. */
 export function resolveMediaUrl(url: string): string {
   if (!url.startsWith('/media/')) return url;
-  const base = process.env.NEXT_PUBLIC_API_URL || 'https://posapi.codevertexitsolutions.com';
+  const base = process.env.NEXT_PUBLIC_API_URL || 'https://posapi.codevertexafrica.com';
   return `${base.replace(/\/$/, '')}${url}`;
 }
 

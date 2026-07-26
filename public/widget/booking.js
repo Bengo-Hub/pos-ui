@@ -2,10 +2,10 @@
  * Codevertex POS — Table Booking Widget v1.0
  *
  * Usage:
- *   <script src="https://pos.codevertexitsolutions.com/widget/booking.js"
+ *   <script src="https://pos.codevertexafrica.com/widget/booking.js"
  *           data-tenant="<tenant-slug>"
  *           data-outlet-id="<outlet-uuid>"        (optional — picker shown if omitted)
- *           data-api-url="https://posapi.codevertexitsolutions.com"
+ *           data-api-url="https://posapi.codevertexafrica.com"
  *           data-primary-color="#EC4899"
  *           data-accent-color="#7C3AED"
  *           data-restaurant-name="Urban Loft"
@@ -36,22 +36,22 @@
   // Support window.__cvBookingConfig as fallback (for dynamic injection in SPAs/Next.js)
   var _cfg = window.__cvBookingConfig || {};
 
-  var ALLOWED_HOSTS = ['posapi.codevertexitsolutions.com', 'localhost'];
+  var ALLOWED_HOSTS = ['posapi.codevertexafrica.com', 'localhost'];
   function validateApiUrl(url) {
     try {
       var p = new URL(url);
       if (ALLOWED_HOSTS.indexOf(p.hostname) === -1) {
-        return 'https://posapi.codevertexitsolutions.com';
+        return 'https://posapi.codevertexafrica.com';
       }
       return url.replace(/\/$/, '');
-    } catch (e) { return 'https://posapi.codevertexitsolutions.com'; }
+    } catch (e) { return 'https://posapi.codevertexafrica.com'; }
   }
 
   var _rawTenant = (script && script.dataset.tenant) || _cfg.tenant || '';
   var tenantSlug = /^[a-z0-9][a-z0-9-]{0,62}[a-z0-9]?$/.test(_rawTenant) ? _rawTenant : '';
   if (!tenantSlug) { console.warn('[cv-booking] data-tenant is required'); return; }
 
-  var apiURL         = validateApiUrl((script && script.dataset.apiUrl) || _cfg.apiUrl || 'https://posapi.codevertexitsolutions.com');
+  var apiURL         = validateApiUrl((script && script.dataset.apiUrl) || _cfg.apiUrl || 'https://posapi.codevertexafrica.com');
   var configOutletId = (script && script.dataset.outletId) || _cfg.outletId || '';
   var primaryColor   = (script && script.dataset.primaryColor)  || _cfg.primaryColor  || '#6366F1';
   var accentColor    = (script && script.dataset.accentColor)   || _cfg.accentColor   || '#8B5CF6';
@@ -333,7 +333,7 @@ textarea{resize:none;rows:3}\
         '<p class="step-title">Choose your preferred location</p>' +
         '<div class="table-grid" id="cv-outlet-grid"><p class="loading">Loading…</p></div>' +
         '</div>';
-      pwr = '<div class="powered">Powered by <a href="https://codevertexitsolutions.com" target="_blank" rel="noreferrer">Codevertex</a></div>';
+      pwr = '<div class="powered">Powered by <a href="https://codevertexafrica.com" target="_blank" rel="noreferrer">Codevertex</a></div>';
       panel.innerHTML = hdr + body + pwr;
       shadow.getElementById('cv-close').addEventListener('click', closePanel);
       loadOutlets();
@@ -360,7 +360,7 @@ textarea{resize:none;rows:3}\
         '<button class="btn" id="cv-search-btn">Check Availability →</button>' +
         (waHref ? '<div style="text-align:center;margin-top:10px;font-size:11px;color:#6b7280">Prefer to call? <a href="' + escHTML(waHref) + '" target="_blank" rel="noreferrer" style="color:' + primaryColor + '">WhatsApp us</a></div>' : '') +
         '</div>';
-      pwr = '<div class="powered">Powered by <a href="https://codevertexitsolutions.com" target="_blank" rel="noreferrer">Codevertex</a></div>';
+      pwr = '<div class="powered">Powered by <a href="https://codevertexafrica.com" target="_blank" rel="noreferrer">Codevertex</a></div>';
       panel.innerHTML = hdr + body + pwr;
       shadow.getElementById('cv-close').addEventListener('click', closePanel);
       if (shadow.getElementById('cv-back-outlet')) {
@@ -422,7 +422,7 @@ textarea{resize:none;rows:3}\
           ? '<button class="btn" id="cv-slot-next">Continue →</button>'
           : '') +
         '</div>';
-      pwr = '<div class="powered">Powered by <a href="https://codevertexitsolutions.com" target="_blank" rel="noreferrer">Codevertex</a></div>';
+      pwr = '<div class="powered">Powered by <a href="https://codevertexafrica.com" target="_blank" rel="noreferrer">Codevertex</a></div>';
       panel.innerHTML = hdr + body + pwr;
       shadow.getElementById('cv-close').addEventListener('click', closePanel);
       shadow.getElementById('cv-back-search').addEventListener('click', function () { step = 'search'; renderStep(); });
@@ -477,7 +477,7 @@ textarea{resize:none;rows:3}\
         '<div class="warn-box">📋 Your booking will be reviewed by our team. We\'ll contact you within 1 hour to confirm.</div>' +
         '<button class="btn" id="cv-submit-btn">Request Reservation →</button>' +
         '</div>';
-      pwr = '<div class="powered">Powered by <a href="https://codevertexitsolutions.com" target="_blank" rel="noreferrer">Codevertex</a></div>';
+      pwr = '<div class="powered">Powered by <a href="https://codevertexafrica.com" target="_blank" rel="noreferrer">Codevertex</a></div>';
       panel.innerHTML = hdr + body + pwr;
       shadow.getElementById('cv-close').addEventListener('click', closePanel);
       shadow.getElementById('cv-back-tables').addEventListener('click', function () { step = 'tables'; renderStep(); });
@@ -504,7 +504,7 @@ textarea{resize:none;rows:3}\
         (waHref ? '<a href="' + escHTML(waHref) + '" target="_blank" rel="noreferrer" style="display:block;text-align:center;margin-top:8px;font-size:12px;color:#fff;background:#22c55e;padding:10px;border-radius:10px;text-decoration:none;font-weight:600">💬 WhatsApp us for faster confirmation</a>' : '') +
         '<button class="btn btn-ghost" id="cv-new-booking" style="margin-top:12px">Make another booking</button>' +
         '</div>';
-      pwr = '<div class="powered">Powered by <a href="https://codevertexitsolutions.com" target="_blank" rel="noreferrer">Codevertex</a></div>';
+      pwr = '<div class="powered">Powered by <a href="https://codevertexafrica.com" target="_blank" rel="noreferrer">Codevertex</a></div>';
       panel.innerHTML = hdr + body + pwr;
       shadow.getElementById('cv-close').addEventListener('click', closePanel);
       shadow.getElementById('cv-new-booking').addEventListener('click', function () {

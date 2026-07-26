@@ -216,7 +216,7 @@ export function RetailReceiptPrint({ receipt, tenantName, outletName, logoUrl }:
         <div style={{ fontSize: 10, textAlign: 'center', marginTop: 8, lineHeight: 1.4 }}>
           <b>{receipt.provider_footer_lead || 'Developed & maintained by Codevertex Africa Limited'}</b>
           <br />
-          {receipt.provider_footer_contact || 'www.codevertexitsolutions.com · info@codevertexitsolutions.com · +254 742 201 368'}
+          {receipt.provider_footer_contact || 'www.codevertexafrica.com · info@codevertexafrica.com · +254 742 201 368'}
         </div>
       )}
     </div>

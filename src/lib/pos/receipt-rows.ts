@@ -63,7 +63,7 @@ export type ReceiptRow =
 /** Static fallback for the platform-owner advertisement, mirroring pos-api's DefaultProviderFooter. */
 const PROVIDER_FOOTER_FALLBACK = {
   lead: 'Developed & maintained by Codevertex Africa Limited',
-  contact: 'www.codevertexitsolutions.com  ·  info@codevertexitsolutions.com  ·  +254 742 201 368',
+  contact: 'www.codevertexafrica.com  ·  info@codevertexafrica.com  ·  +254 742 201 368',
 };
 
 /** Builds the ordered receipt body: items → totals → payment → eTIMS → HOW TO PAY → served-by →

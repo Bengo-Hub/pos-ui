@@ -6,7 +6,7 @@ import { playNotificationChime } from '@/lib/sounds';
 import { apiClient } from '@/lib/api/client';
 
 // Stream against the API host (matches REST/SSE), not the UI host.
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://posapi.codevertexitsolutions.com';
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://posapi.codevertexafrica.com';
 
 // EtimsFiscalizedPayload is pushed by pos-api the instant a sale is signed with KRA (sync
 // checkout sign or the async transmitted event), so the open receipt merges the TIMS block
