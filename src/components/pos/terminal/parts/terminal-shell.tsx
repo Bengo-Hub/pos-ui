@@ -17,6 +17,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { CategoryBrandDrawer } from '@/components/pos/terminal/parts/category-brand-drawer';
+import { MobileCartBar } from '@/components/pos/terminal/parts/mobile-cart-bar';
 import { SaleSessionTabs } from '@/components/pos/terminal/parts/sale-session-tabs';
 import { PosToolbar } from '@/components/pos/terminal/pos-toolbar';
 import { OrderTypeSelector } from '@/components/pos/order-type-selector';
@@ -34,7 +35,7 @@ import { InlineDiscountCell, InlineMarginCell, InlinePriceCell, InlineTotalCell 
 import { searchPlaceholderFor } from '@/lib/use-case-config';
 import { cn } from '@/lib/utils';
 import {
-  Ban, ChefHat, Flame, Grid3x3, Image as ImageIcon, LayoutGrid, LayoutList, Loader2,
+  Ban, ChefHat, ChevronDown, Flame, Grid3x3, Image as ImageIcon, LayoutGrid, LayoutList, Loader2,
   Minus, Plus, Search, ShoppingCart, Trash2, User, X,
 } from 'lucide-react';
 
@@ -125,21 +126,40 @@ export function TerminalShell() {
       {/* ─────────── 2. BODY: order builder (left) + product picker (right) ───────────
           On lg+ a fixed two-column grid (58% / 42%) keeps the split robust — the wider left
           track gives the cart TABLE room for every column (product/qty/cost/margin/price/
-          subtotal) while the product picker stays comfortable. Below lg the sections STACK on
-          a bounded row grid (55% / 45%) so both share the viewport and scroll internally — the
-          cart/totals actions and the product grid can never push the bottom action bar
-          off-screen. Each section scrolls independently (min-h-0). */}
-      <div className="flex-1 grid grid-rows-[minmax(0,55%)_minmax(0,45%)] lg:grid-rows-none lg:grid-cols-[58%_42%] min-h-0 overflow-hidden">
+          subtotal) while the product picker stays comfortable, and BOTH panels stay visible at
+          once. Below lg there is no room to show both — instead ONE full-height panel shows at a
+          time, driven by cartOpen: browsing shows the catalog (+ a MobileCartBar pill once the
+          cart has items); tapping it flips to the cart panel (order builder + payment bar) full
+          height. This is what makes "cart not visible after adding items" impossible — the cart,
+          when open, IS the whole screen, not a capped 55% band fighting the catalog for space. */}
+      <div className="flex-1 grid grid-rows-1 lg:grid-rows-none lg:grid-cols-[58%_42%] min-h-0 overflow-hidden">
 
-        {/* ===== LEFT: ORDER BUILDER ===== */}
-        <div className="flex flex-col min-h-0 overflow-hidden lg:border-r border-border">
+        {/* ===== LEFT: ORDER BUILDER (cart) — full panel on lg+; a full-screen sheet below lg,
+            shown only while cartOpen (toggled by MobileCartBar / the back button below) ===== */}
+        <div className={cn('min-h-0 overflow-hidden lg:flex lg:flex-col lg:border-r border-border', t.cartOpen ? 'flex flex-col' : 'hidden')}>
+          {/* Mobile-only cart-sheet header: lets the cashier return to the catalog without
+              losing anything already in the cart (cartOpen only flips back via this button, the
+              hardware/OS back gesture, or a completed/cleared sale — never automatically while
+              there's still something to review). */}
+          <div className="lg:hidden shrink-0 flex items-center gap-2 px-3 py-2.5 border-b border-border bg-card">
+            <button
+              type="button"
+              onClick={() => t.setCartOpen(false)}
+              className="flex items-center gap-1.5 text-sm font-bold text-muted-foreground hover:text-foreground"
+            >
+              <ChevronDown className="h-4 w-4" /> Back to catalog
+            </button>
+            <span className="ml-auto text-xs font-bold text-muted-foreground">
+              Cart{t.cartItemCount > 0 ? ` (${t.cartItemCount})` : ''}
+            </span>
+          </div>
           {/* Customer + product search.
               The customer/search row stacks on narrow widths (flex-col) and sits side-by-side
               from sm+ so it never cramps or overflows. The "Walk-In Customer" fallback chip is a
               back-office concept: it shows only for profiles WITHOUT the order-type selector
               (hospitality/quick_service use Dine-In/Takeaway/Delivery as the equivalent, so showing
               both would duplicate). */}
-          <div className="shrink-0 p-3 space-y-2 border-b border-border bg-card/40">
+          <div className="shrink-0 p-2.5 sm:p-3 space-y-1.5 sm:space-y-2 border-b border-border bg-card/40">
             {/* Row 1: product search (flexes) + pricing profile (right, same line). */}
             <div className="flex items-center gap-2">
               <div className="relative group flex-1 min-w-0">
@@ -445,8 +465,9 @@ export function TerminalShell() {
           </div>
         </div>
 
-        {/* ===== RIGHT: PRODUCT PICKER (Category/Brands tabs + grid) ===== */}
-        <div className="flex flex-col min-h-0 overflow-hidden bg-card/30">
+        {/* ===== RIGHT: PRODUCT PICKER (Category/Brands tabs + grid) — full panel on lg+;
+            below lg this IS the default view (catalog-first) and hides only while cartOpen ===== */}
+        <div className={cn('min-h-0 overflow-hidden bg-card/30 lg:flex lg:flex-col', t.cartOpen ? 'hidden' : 'flex flex-col')}>
           <div className="shrink-0 px-3 py-2.5 flex items-center gap-2 border-b border-border">
             {/* Category | Brands switch — Brands apply to retail/pharmacy only (cfg.showBrandGrid). */}
             {cfg.showBrandGrid && (
@@ -494,11 +515,22 @@ export function TerminalShell() {
         </div>
       </div>
 
-      {/* ─────────── 3. BOTTOM ACTION BAR ─────────── */}
-      {/* An outlet with many active tenders (Cash/Card/M-Pesa STK/Paybill/Wallet/Split/…) wraps to
-          several rows on a phone; capped + internally scrollable below lg so a long tender list
-          never keeps eating into the product grid/cart above it. */}
-      <div className="shrink-0 border-t border-border bg-card max-h-32 overflow-y-auto lg:max-h-none lg:overflow-visible">
+      {/* Mobile-only "View Cart" pill — shown while browsing (cartOpen=false) whenever the cart
+          has items; hidden once the cart sheet is open (the panel above already shows it) or on
+          lg+ (the cart is a permanent side panel there, no pill needed). */}
+      {!t.cartOpen && <MobileCartBar />}
+
+      {/* ─────────── 3. BOTTOM ACTION BAR ───────────
+          The Add-to-Bill button is a single compact action (like the mobile cart pill above it in
+          spirit) so it stays visible on mobile regardless of cartOpen — a waiter tapping several
+          menu items still needs to submit without an extra "open cart" tap. The full tender bar
+          (Cash/Card/M-Pesa/Draft/Quotation/…) only makes sense once the cart is actually being
+          reviewed, so on mobile it renders ONLY inside the open cart sheet — never fighting the
+          catalog for space, and never capped/scroll-clipped the way it used to be. */}
+      <div className={cn(
+        'shrink-0 border-t border-border bg-card pb-[env(safe-area-inset-bottom)] lg:pb-0',
+        t.isAddToBill ? 'block' : (t.cartOpen ? 'block' : 'hidden lg:block'),
+      )}>
         {t.isAddToBill ? (
           <div className="p-3 flex items-center justify-between gap-3">
             <span className="text-sm font-bold">Total Payable: <span className="text-primary tabular-nums">KES {t.total.toLocaleString()}</span></span>

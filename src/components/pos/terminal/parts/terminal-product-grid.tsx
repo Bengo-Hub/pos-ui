@@ -16,8 +16,10 @@ export function TerminalProductGrid() {
 
   return (
     <>
-      {/* Items area — scrolls internally (extra bottom padding clears the mobile cart bar) */}
-      <div className="flex-1 overflow-y-auto min-h-0 px-4 pb-24 lg:pb-4">
+      {/* Items area — scrolls internally within its own panel bounds. MobileCartBar (below lg)
+          renders as a normal in-flow sibling of this panel, not an overlay, so no extra bottom
+          padding is needed to "clear" it — the panel's own height already excludes it. */}
+      <div className="flex-1 overflow-y-auto min-h-0 px-4 pb-4">
         {menuLoading ? (
           <div className="flex flex-col items-center justify-center h-48 gap-3">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
