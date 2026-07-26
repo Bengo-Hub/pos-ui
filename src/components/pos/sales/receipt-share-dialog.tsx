@@ -42,7 +42,11 @@ export function ReceiptShareDialog({
   const [email, setEmail] = useState(defaultEmail ?? '');
   const notify = useNotifySale();
 
+  const needsPhone = channel === 'sms' || channel === 'whatsapp';
+  const canSend = needsPhone ? phone.trim().length > 0 : email.trim().length > 0;
+
   function handleSend() {
+    if (!canSend) return;
     if (onManualSend) {
       onManualSend((needsPhone ? phone : email).trim());
       onOpenChange(false);
@@ -60,44 +64,49 @@ export function ReceiptShareDialog({
     );
   }
 
-  const needsPhone = channel === 'sms' || channel === 'whatsapp';
-  const canSend = needsPhone ? phone.trim().length > 0 : email.trim().length > 0;
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-sm">
-        <DialogHeader>
-          <DialogTitle>{title ?? 'Send Receipt Notification'}</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-3">
-          {!forcedChannel && (
-            <div>
-              <label className="text-xs font-medium text-muted-foreground mb-1 block">Channel</label>
-              <select className={selectCls} value={channel} onChange={(e) => setChannel(e.target.value as Channel)}>
-                <option value="sms">SMS</option>
-                <option value="email">Email</option>
-                <option value="whatsapp">WhatsApp</option>
-              </select>
-            </div>
-          )}
-          {needsPhone ? (
-            <div>
-              <label className="text-xs font-medium text-muted-foreground mb-1 block">Phone number</label>
-              <input className={inputCls} value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="e.g. 0712345678" />
-            </div>
-          ) : (
-            <div>
-              <label className="text-xs font-medium text-muted-foreground mb-1 block">Email address</label>
-              <input className={inputCls} type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="customer@example.com" />
-            </div>
-          )}
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={handleSend} disabled={!canSend || notify.isPending}>
-            {notify.isPending ? 'Sending…' : onManualSend ? 'Continue' : 'Send'}
-          </Button>
-        </DialogFooter>
+        <form
+          className="grid gap-4"
+          onSubmit={(e) => {
+            e.preventDefault();
+            handleSend();
+          }}
+        >
+          <DialogHeader>
+            <DialogTitle>{title ?? 'Send Receipt Notification'}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            {!forcedChannel && (
+              <div>
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">Channel</label>
+                <select className={selectCls} value={channel} onChange={(e) => setChannel(e.target.value as Channel)}>
+                  <option value="sms">SMS</option>
+                  <option value="email">Email</option>
+                  <option value="whatsapp">WhatsApp</option>
+                </select>
+              </div>
+            )}
+            {needsPhone ? (
+              <div>
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">Phone number</label>
+                <input className={inputCls} value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="e.g. 0712345678" autoFocus />
+              </div>
+            ) : (
+              <div>
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">Email address</label>
+                <input className={inputCls} type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="customer@example.com" autoFocus />
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+            <Button type="submit" disabled={!canSend || notify.isPending}>
+              {notify.isPending ? 'Sending…' : onManualSend ? 'Continue' : 'Send'}
+            </Button>
+          </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   );

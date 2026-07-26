@@ -34,6 +34,10 @@ export function useOrderShareActions(order: ShareOrderLike | null | undefined) {
   // await/mutation callback is what got silently blocked (the "Pop-ups blocked" banner).
   const pendingWinRef = useRef<Window | null>(null);
   const pendingDownloadLinkRef = useRef<string | undefined>(undefined);
+  // Tracks whether the "no phone on file" prompt was actually submitted (vs. cancelled/dismissed),
+  // so the dialog's onOpenChange cleanup (below) doesn't re-fire the empty-phone cleanup path a
+  // second time after a real submission already navigated the pending window.
+  const waSubmittedRef = useRef(false);
 
   const buildMessage = useCallback((downloadLink?: string) => {
     const store = tenant?.name?.trim();
@@ -82,6 +86,7 @@ export function useOrderShareActions(order: ShareOrderLike | null | undefined) {
           // instead of a raw window.prompt().
           pendingWinRef.current?.close();
           pendingWinRef.current = null;
+          waSubmittedRef.current = false;
           setWaPromptOpen(true);
         }
       },
@@ -102,7 +107,10 @@ export function useOrderShareActions(order: ShareOrderLike | null | undefined) {
     setShareOpen,
     waPromptOpen,
     setWaPromptOpen,
-    onManualWhatsAppPhone: (phone: string) => openWhatsApp(phone, pendingDownloadLinkRef.current),
+    onManualWhatsAppPhone: (phone: string) => {
+      waSubmittedRef.current = true;
+      openWhatsApp(phone, pendingDownloadLinkRef.current);
+    },
     shareLink,
   };
 }
@@ -159,7 +167,14 @@ export function ReceiptShareButtons({
           notification actions, instead of a raw window.prompt(). */}
       <ReceiptShareDialog
         open={waPromptOpen}
-        onOpenChange={(v) => { if (!v) onManualWhatsAppPhone(''); setWaPromptOpen(v); }}
+        onOpenChange={(v) => {
+          // Only treat closing as a cancellation (and tear down the pending window) when the
+          // dialog wasn't already closed by a real submission via onManualWhatsAppPhone above —
+          // otherwise this would immediately re-run with an empty phone right after a successful
+          // Continue click and close the tab that was just navigated to WhatsApp.
+          if (!v && !waSubmittedRef.current) onManualWhatsAppPhone('');
+          setWaPromptOpen(v);
+        }}
         orderId={order.id}
         title="Share via WhatsApp"
         forcedChannel="whatsapp"
