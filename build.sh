@@ -44,8 +44,8 @@ fi
 KUBE_CONFIG=${KUBE_CONFIG:-${KUBE_CONFIG_B64:-}}
 
 # Build-time env (POS UI uses API + NOTIFICATIONS only in values; can override via Secrets)
-NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-"https://posapi.codevertexitsolutions.com"}
-NEXT_PUBLIC_NOTIFICATIONS_URL=${NEXT_PUBLIC_NOTIFICATIONS_URL:-"https://notifications.codevertexitsolutions.com"}
+NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-"https://posapi.codevertexafrica.com"}
+NEXT_PUBLIC_NOTIFICATIONS_URL=${NEXT_PUBLIC_NOTIFICATIONS_URL:-"https://notifications.codevertexafrica.com"}
 
 info "Building ${APP_NAME}:${GIT_COMMIT_ID}"
 

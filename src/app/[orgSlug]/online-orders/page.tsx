@@ -21,10 +21,10 @@ import { Bike, CheckCircle2, Clock, Loader2, MapPin, Package, Phone, QrCode, Use
 import { toast } from 'sonner';
 
 // Public online-store/menu base — the same URL the header's "Online Store" link uses.
-const ORDERING_URL = process.env.NEXT_PUBLIC_ORDERING_UI_URL ?? 'https://ordersapp.codevertexitsolutions.com';
+const ORDERING_URL = process.env.NEXT_PUBLIC_ORDERING_UI_URL ?? 'https://ordering.codevertexafrica.com';
 // Absolute pos-api base — the menu document is served by pos-api, NOT the pos-ui Next.js host, so
 // these links must be absolute (a relative /api/v1 path 404s on the pos-ui domain). Matches apiClient.
-const POS_API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'https://posapi.codevertexitsolutions.com';
+const POS_API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'https://posapi.codevertexafrica.com';
 
 const STATUS_COLOR: Record<string, string> = {
   pending:           'bg-amber-500/10 text-amber-700 dark:text-amber-400',

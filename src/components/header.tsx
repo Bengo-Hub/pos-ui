@@ -19,14 +19,14 @@ import { toast } from 'sonner';
 import { NotificationBell } from './notifications/NotificationBell';
 import { ThemeToggle } from './theme-toggle';
 
-const INVENTORY_URL = process.env.NEXT_PUBLIC_INVENTORY_UI_URL ?? 'https://inventory.codevertexitsolutions.com';
-const TREASURY_URL = process.env.NEXT_PUBLIC_TREASURY_UI_URL ?? 'https://books.codevertexitsolutions.com';
-const PRICING_URL = process.env.NEXT_PUBLIC_SUBSCRIPTIONS_UI_URL ?? 'https://pricing.codevertexitsolutions.com';
-const ORDERING_URL = process.env.NEXT_PUBLIC_ORDERING_UI_URL ?? 'https://ordersapp.codevertexitsolutions.com';
-const AUTH_URL = process.env.NEXT_PUBLIC_AUTH_UI_URL ?? 'https://accounts.codevertexitsolutions.com';
-const CRM_URL = process.env.NEXT_PUBLIC_CRM_UI_URL ?? 'https://marketflow.codevertexitsolutions.com';
-const LOGISTICS_URL = process.env.NEXT_PUBLIC_LOGISTICS_UI_URL ?? 'https://logistics.codevertexitsolutions.com';
-const ERP_URL = process.env.NEXT_PUBLIC_ERP_UI_URL ?? 'https://erp.codevertexitsolutions.com';
+const INVENTORY_URL = process.env.NEXT_PUBLIC_INVENTORY_UI_URL ?? 'https://inventory.codevertexafrica.com';
+const TREASURY_URL = process.env.NEXT_PUBLIC_TREASURY_UI_URL ?? 'https://books.codevertexafrica.com';
+const PRICING_URL = process.env.NEXT_PUBLIC_SUBSCRIPTIONS_UI_URL ?? 'https://pricing.codevertexafrica.com';
+const ORDERING_URL = process.env.NEXT_PUBLIC_ORDERING_UI_URL ?? 'https://ordering.codevertexafrica.com';
+const AUTH_URL = process.env.NEXT_PUBLIC_AUTH_UI_URL ?? 'https://accounts.codevertexafrica.com';
+const CRM_URL = process.env.NEXT_PUBLIC_CRM_UI_URL ?? 'https://marketflow.codevertexafrica.com';
+const LOGISTICS_URL = process.env.NEXT_PUBLIC_LOGISTICS_UI_URL ?? 'https://logistics.codevertexafrica.com';
+const ERP_URL = process.env.NEXT_PUBLIC_ERP_UI_URL ?? 'https://erp.codevertexafrica.com';
 
 const SERVICES = [
   { label: 'Inventory', href: (slug: string) => `${INVENTORY_URL}/${slug}`, Icon: Package },
@@ -54,7 +54,7 @@ const USE_CASE_LABELS: Record<string, string> = {
 const AUTH_API_URL =
   process.env.NEXT_PUBLIC_AUTH_API_URL ||
   process.env.NEXT_PUBLIC_SSO_URL ||
-  'https://sso.codevertexitsolutions.com';
+  'https://sso.codevertexafrica.com';
 
 // Outlet use cases pos-ui can actually open (mirrors pos-api's posAcceptedUseCases) —
 // logistics/warehouse/weighbridge outlets belong to other services.

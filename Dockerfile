@@ -13,10 +13,10 @@ RUN npm install -g pnpm@10
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-ARG NEXT_PUBLIC_API_URL=https://posapi.codevertexitsolutions.com
-ARG NEXT_PUBLIC_NOTIFICATIONS_URL=https://notifications.codevertexitsolutions.com
-ARG NEXT_PUBLIC_TREASURY_API_URL=https://booksapi.codevertexitsolutions.com
-ARG NEXT_PUBLIC_TREASURY_UI_URL=https://books.codevertexitsolutions.com
+ARG NEXT_PUBLIC_API_URL=https://posapi.codevertexafrica.com
+ARG NEXT_PUBLIC_NOTIFICATIONS_URL=https://notifications.codevertexafrica.com
+ARG NEXT_PUBLIC_TREASURY_API_URL=https://booksapi.codevertexafrica.com
+ARG NEXT_PUBLIC_TREASURY_UI_URL=https://books.codevertexafrica.com
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_NOTIFICATIONS_URL=$NEXT_PUBLIC_NOTIFICATIONS_URL
 ENV NEXT_PUBLIC_TREASURY_API_URL=$NEXT_PUBLIC_TREASURY_API_URL
