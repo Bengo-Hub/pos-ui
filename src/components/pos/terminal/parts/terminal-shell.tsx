@@ -12,6 +12,14 @@
  *
  * All state/handlers come from useTerminal(); per-use-case differences are driven by cfg
  * (terminalConfigFor) exactly as before, so behaviour is unchanged — only the layout is GoDigital.
+ *
+ * Mobile (<lg): the order builder + payment bar render as a TRUE fixed-overlay drawer (same
+ * `fixed inset-0 z-50` pattern as CategoryBrandDrawer), not an in-flow panel swap — this decouples
+ * the cart from the shell's own flex/grid height chain entirely, so it always gets the full
+ * viewport rather than whatever's left over after the product grid/toolbar. The drawer covers the
+ * top icon toolbar (Add Expense/Repair/Register etc. — not needed mid-checkout) but keeps the
+ * product search + pricing-profile row, since that's how a cashier keeps adding/re-pricing items
+ * while reviewing the cart, not just a catalog-browsing control.
  */
 
 import { useState } from 'react';
@@ -35,7 +43,7 @@ import { InlineDiscountCell, InlineMarginCell, InlinePriceCell, InlineTotalCell 
 import { searchPlaceholderFor } from '@/lib/use-case-config';
 import { cn } from '@/lib/utils';
 import {
-  Ban, ChefHat, ChevronDown, Flame, Grid3x3, Image as ImageIcon, LayoutGrid, LayoutList, Loader2,
+  Ban, ChefHat, ChevronLeft, Flame, Grid3x3, Image as ImageIcon, LayoutGrid, LayoutList, Loader2,
   Minus, Plus, Search, ShoppingCart, Trash2, User, X,
 } from 'lucide-react';
 
@@ -78,12 +86,8 @@ export function TerminalShell() {
         ? 'grid-cols-[minmax(0,1fr)_4rem_6.5rem_4.5rem_3.5rem_4rem_5rem_5.5rem]'
         : 'grid-cols-[minmax(0,1fr)_4rem_6.5rem_4.5rem_3.5rem_5rem_5.5rem]')
     : 'grid-cols-[minmax(0,1fr)_4rem_6.5rem_5rem_5.5rem]';
-  // Below lg the columns above don't reflow (every value is fixed-width, only the product name
-  // column flexes) — on a ~390px phone the fixed columns alone can exceed the viewport. Rather
-  // than cram/overlap, the cart scrolls horizontally like every other data table in this app: a
-  // min-width matching each variant's fixed-column sum (+ gaps + a livable product-name floor)
-  // forces that scrollbar to appear instead of squeezing cells unreadably. lg+ already fits
-  // comfortably in the 58% left column, so the floor is released there.
+  // The table variant is lg+-only now (mobile gets a card list instead — see cartMinWidth's
+  // sibling below). lg+ already fits comfortably in the 58% left column.
   const cartMinWidth = canViewCost
     ? (showDiscountCol ? 'min-w-[48rem] lg:min-w-0' : 'min-w-[44rem] lg:min-w-0')
     : 'min-w-[34rem] lg:min-w-0';
@@ -94,6 +98,473 @@ export function TerminalShell() {
     acc[c.id] = (acc[c.id] ?? 0) + c.quantity;
     return acc;
   }, {});
+
+  const emptyCart = (
+    <div className="flex flex-col items-center justify-center gap-2 text-muted-foreground py-10">
+      <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-muted/50 mb-1">
+        <ShoppingCart className="h-8 w-8 opacity-30" />
+      </div>
+      <p className="text-sm font-medium">Cart is empty</p>
+      <p className="text-xs">Add items from the right to start an order</p>
+    </div>
+  );
+
+  // ─────────── ORDER BUILDER — shared between the lg+ side panel and the mobile drawer ───────────
+  // Search/customer/order-type row, the cart itself (table on lg+, cards below lg — no horizontal
+  // scroll on a phone), and the totals footer. Purely a function of shared state/handlers, so it's
+  // safe to call twice per render (desktop panel + mobile drawer) without any duplicated logic.
+  const renderOrderBuilder = () => (
+    <>
+      {/* Customer + product search.
+          The customer/search row stacks on narrow widths (flex-col) and sits side-by-side
+          from sm+ so it never cramps or overflows. The "Walk-In Customer" fallback chip is a
+          back-office concept: it shows only for profiles WITHOUT the order-type selector
+          (hospitality/quick_service use Dine-In/Takeaway/Delivery as the equivalent, so showing
+          both would duplicate). */}
+      <div className="shrink-0 p-2.5 sm:p-3 space-y-1.5 sm:space-y-2 border-b border-border bg-card/40">
+        {/* Row 1: product search (flexes) + pricing profile (right, same line). */}
+        <div className="flex items-center gap-2">
+          <div className="relative group flex-1 min-w-0">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary" />
+            <input
+              ref={t.scanInputRef}
+              placeholder={searchPlaceholderFor(cfg.profile)}
+              className="w-full bg-card border border-border rounded-xl py-2.5 pl-9 pr-9 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 font-medium"
+              value={t.searchQuery}
+              onChange={(e) => t.handleSearchChange(e.target.value)}
+              onKeyDown={t.handleSearchKeyDown}
+            />
+            {t.searchQuery && (
+              <button
+                onClick={() => t.handleSearchChange('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 h-6 w-6 rounded-full bg-muted flex items-center justify-center hover:bg-destructive/10 hover:text-destructive"
+                aria-label="Clear search"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            )}
+          </div>
+          {cfg.showPricingProfile && (
+            <div className="flex items-center gap-1.5 shrink-0">
+              <span className="hidden sm:inline text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Price</span>
+              <select
+                value={t.pricingProfile}
+                onChange={(e) => t.repriceCart(e.target.value)}
+                disabled={t.repricing || t.pricingTiers.length === 0}
+                className="px-2.5 py-2.5 rounded-xl text-xs font-semibold bg-card border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:opacity-50 max-w-36"
+              >
+                {t.pricingTiers.length === 0 && <option value="">Default Selling Price</option>}
+                {t.pricingTiers.map((tier) => (
+                  <option key={tier.code} value={tier.code}>{tier.name}</option>
+                ))}
+              </select>
+              {t.repricing && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
+            </div>
+          )}
+        </div>
+
+        {/* Row 2: customer/loyalty card spanning the FULL row (its picker lays out
+            horizontally on wider screens to use the width). */}
+        {cfg.showPricingProfile ? (
+          // key: remounts after each sale so the customer resets to the Walk-in default; on a
+          // multi-cart switch the same remount re-seeds the chip with THIS tab's attached customer.
+          <LoyaltyPanel key={t.customerResetSeq} onStateChange={t.setLoyaltyState} layout="row" initialSelected={t.initialSelectedCustomer} />
+        ) : !cfg.showOrderType ? (
+          <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl border border-border bg-card text-sm font-medium text-muted-foreground">
+            <User className="h-4 w-4 shrink-0" /> Walk-In Customer
+          </div>
+        ) : null}
+
+        {/* Order type (hospitality/quick-service) keeps its own row. */}
+        {cfg.showOrderType && (
+          <OrderTypeSelector
+            value={t.orderSubtype}
+            onChange={t.setOrderSubtype}
+            tableName={t.tableName || undefined}
+            onSelectTable={() => router.push(`/${t.orgSlug}/tables`)}
+            useCase={t.outlet?.use_case}
+          />
+        )}
+
+        {/* Hardware scale (retail/pharmacy) */}
+        {cfg.showScale && t.scaleDeviceId && (
+          <ScaleDisplay
+            tenantSlug={t.user?.tenant_slug ?? t.orgSlug}
+            deviceId={t.scaleDeviceId}
+            onAddToCart={t.handleScaleAddToCart}
+          />
+        )}
+
+        {/* Add-to-bill banner */}
+        {t.isAddToBill && (
+          <div className="px-3 py-2 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 flex items-center gap-2 text-sm">
+            <span className="text-blue-600 dark:text-blue-400 font-bold">Current bill:</span>
+            <span className="text-blue-700 dark:text-blue-300">KSh {t.billOrderTotal.toLocaleString()}</span>
+          </div>
+        )}
+      </div>
+
+      {/* CART header strip.
+          Retail multi-cart: the Sale 1/2/3 · + New Sale tabs live HERE (inline, above the cart
+          they control) instead of a separate top bar — parallel carts so a slow M-Pesa payer
+          parked on one tab never blocks the next customer. Other use-cases keep the plain title.
+          The grand total also lives HERE (not repeated in the totals footer or the bottom
+          payment bar) — always visible the instant something's in the cart, and it frees the
+          bottom action bar to be tender buttons only instead of splitting space with a number. */}
+      <div className="flex items-center justify-between gap-2 px-4 py-2 shrink-0 bg-muted/40 border-b border-border">
+        {cfg.multiCart && !t.isAddToBill ? (
+          <SaleSessionTabs />
+        ) : (
+          <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+            <ShoppingCart className="h-3.5 w-3.5" />
+            {t.isAddToBill ? 'Adding to Bill' : cfg.terminalTitle}
+            {t.cartItemCount > 0 && <span className="text-primary">· {t.cartItemCount}</span>}
+          </div>
+        )}
+        <div className="flex items-center gap-3 shrink-0">
+          {cart.length > 0 && (
+            <span className="text-sm font-extrabold tabular-nums text-primary">
+              KES {t.total.toLocaleString()}
+            </span>
+          )}
+          {cart.length > 0 && (
+            <button onClick={t.clearCart} className="text-[11px] text-destructive font-semibold hover:underline">Clear all</button>
+          )}
+        </div>
+      </div>
+
+      {/* Cart items — lg+: fixed-column data table (horizontal-scrolls only below its min-width,
+          which is released at lg+). Below lg: a card per line — every value gets its own row
+          instead of fighting for a fixed column slot, so nothing is ever cut off. */}
+      <div className="flex-1 overflow-auto min-h-0">
+        <div className={cn('hidden lg:block', cartMinWidth)}>
+          <div className={cn('sticky top-0 z-10 grid gap-3 px-4 py-2 shrink-0 text-[10px] font-bold uppercase tracking-wider text-muted-foreground border-b border-border bg-card', cartGridCols)}>
+            <span>Product</span>
+            <span className="text-center">In Stock</span>
+            <span className="text-center">Quantity</span>
+            {canViewCost && (
+              <>
+                <span className="text-right">
+                  <CostHeaderToggle revealed={costRevealed} onToggle={() => setCostRevealed((v) => !v)} />
+                </span>
+                <span className="text-right">Margin</span>
+              </>
+            )}
+            {showDiscountCol && <span className="text-right">Discount</span>}
+            <span className="text-right">Price inc. tax</span>
+            <span className="text-right">Subtotal</span>
+          </div>
+          {cart.length === 0 ? emptyCart : cart.map((item, idx) => (
+            <div key={`${item.id}-${idx}`} className={cn('grid gap-3 items-center px-4 py-2.5 border-b border-border/60 hover:bg-primary/5 transition-colors', cartGridCols)}>
+              <div className="min-w-0">
+                <p className="text-sm font-bold truncate leading-tight">
+                  {item.name}
+                  {item.nonBillable && (
+                    <span className="ml-1.5 align-middle text-[9px] font-bold uppercase tracking-wide text-emerald-700 bg-emerald-500/10 border border-emerald-200 px-1.5 py-0.5 rounded-full" title="Non-billable — never charged; stock still deducts">
+                      Free
+                    </span>
+                  )}
+                </p>
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <span className="text-[11px] text-muted-foreground font-mono">{item.sku}</span>
+                  {item.serialNumber && <span className="text-[10px] text-muted-foreground">SN: {item.serialNumber}</span>}
+                </div>
+                {item.selectedModifiers && Object.values(item.selectedModifiers).flat().length > 0 && (
+                  <p className="text-[10px] text-primary truncate">{Object.values(item.selectedModifiers).flat().join(', ')}</p>
+                )}
+                {/* Per-line course selector (hospitality) — restored: lets the waiter assign each
+                    line to a course (Starter/Main/Dessert/Bar) for kitchen firing. */}
+                {cfg.showCourses && (
+                  <div className="mt-1 flex items-center gap-1.5">
+                    <CourseSelector value={item.courseNumber ?? 0} onChange={(c) => t.updateCourse(idx, c)} compact />
+                    {/* Per-line seat/guest — pre-populates split-by-item so each guest gets
+                        their own bill without re-creating the order. */}
+                    <select
+                      value={item.seat ?? 0}
+                      onChange={(e) => t.setItemSeat(idx, parseInt(e.target.value))}
+                      title="Assign to a guest"
+                      className="h-6 rounded-md border border-border bg-background px-1.5 text-[11px] focus:outline-none focus:ring-1 focus:ring-primary/30"
+                    >
+                      <option value={0}>Guest…</option>
+                      {Array.from({ length: 8 }, (_, g) => (
+                        <option key={g + 1} value={g + 1}>Guest {g + 1}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
+              {/* In-Stock (expected balance after this sale) — all roles; red as stock runs out */}
+              <div className="flex items-center justify-center text-sm">
+                <StockCell stockQuantity={item.stockQuantity} soldQty={cartQtyById[item.id] ?? item.quantity} itemType={item.item_type} />
+              </div>
+              {/* Qty stepper — the + routes through incrementCartLine so pushing a line past
+                  available stock opens the oversell (out-of-stock) manager-approval flow. */}
+              <div className="flex items-center gap-1 justify-center">
+                <button onClick={() => t.updateQuantity(idx, -1)} className="h-6 w-6 rounded-md border border-border flex items-center justify-center hover:bg-accent"><Minus className="h-3 w-3" /></button>
+                <input
+                  type="number"
+                  min={0}
+                  inputMode="numeric"
+                  defaultValue={item.quantity}
+                  key={item.quantity}
+                  aria-label="Line quantity"
+                  onFocus={(e) => e.currentTarget.select()}
+                  onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+                  onBlur={(e) => {
+                    const n = parseInt(e.currentTarget.value, 10);
+                    if (!Number.isNaN(n) && n !== item.quantity) t.setLineQuantity(idx, n);
+                    else e.currentTarget.value = String(item.quantity);
+                  }}
+                  className="w-10 text-center text-sm font-bold tabular-nums rounded-md border border-border bg-background focus:ring-1 focus:ring-ring focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
+                />
+                <button onClick={() => t.incrementCartLine(idx)} className="h-6 w-6 rounded-md border border-border flex items-center justify-center hover:bg-accent"><Plus className="h-3 w-3" /></button>
+              </div>
+              {canViewCost && (
+                <>
+                  <span className="text-right text-xs">
+                    <MaskedCost cost={item.costPrice} sell={item.price} revealed={costRevealed} showMargin={false} />
+                  </span>
+                  <span className="text-right text-xs">
+                    <InlineMarginCell
+                      cost={item.costPrice}
+                      sell={item.price}
+                      unitDiscount={item.unitDiscount ?? 0}
+                      revealed={costRevealed}
+                      editable={priceEditAllowed && !item.nonBillable && !item.promoFree}
+                      onCommitPrice={(p) => t.setLinePrice(idx, p, 'margin edit')}
+                    />
+                  </span>
+                </>
+              )}
+              {showDiscountCol && (
+                <span className="text-right text-xs">
+                  <InlineDiscountCell
+                    price={item.price}
+                    unitDiscount={item.unitDiscount ?? 0}
+                    quantity={item.quantity}
+                    editable={!item.nonBillable && !item.promoFree}
+                    onCommitDiscount={(ud) => t.setLineDiscount(idx, ud)}
+                  />
+                </span>
+              )}
+              <span className="text-right">
+                <InlinePriceCell
+                  price={item.price}
+                  preset={item.originalPrice ?? item.price}
+                  canDiscount={canManagePrices}
+                  disabled={!priceEditAllowed || item.nonBillable || item.promoFree}
+                  onCommit={(p) => t.setLinePrice(idx, p, 'price edit')}
+                />
+              </span>
+              <div className="flex items-center justify-end gap-1.5">
+                <InlineTotalCell
+                  price={item.price}
+                  quantity={item.quantity}
+                  canDiscount={canManagePrices}
+                  disabled={!priceEditAllowed || item.nonBillable || item.promoFree}
+                  onCommitPrice={(p) => t.setLinePrice(idx, p, 'line total edit')}
+                />
+                <button onClick={() => t.removeFromCart(idx)} className="h-6 w-6 rounded-md flex items-center justify-center text-muted-foreground hover:bg-destructive/10 hover:text-destructive" aria-label="Remove"><Trash2 className="h-3.5 w-3.5" /></button>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Below lg: card list — every field gets its own row, so nothing needs a horizontal
+            scrollbar to be read (the old fixed-column table cut its own header off at ~390px). */}
+        <div className="lg:hidden divide-y divide-border/60">
+          {cart.length === 0 ? emptyCart : cart.map((item, idx) => (
+            <div key={`${item.id}-${idx}`} className="p-3 space-y-2">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-bold truncate leading-tight">
+                    {item.name}
+                    {item.nonBillable && (
+                      <span className="ml-1.5 align-middle text-[9px] font-bold uppercase tracking-wide text-emerald-700 bg-emerald-500/10 border border-emerald-200 px-1.5 py-0.5 rounded-full">
+                        Free
+                      </span>
+                    )}
+                  </p>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <span className="text-[11px] text-muted-foreground font-mono">{item.sku}</span>
+                    {item.serialNumber && <span className="text-[10px] text-muted-foreground">SN: {item.serialNumber}</span>}
+                    <StockCell stockQuantity={item.stockQuantity} soldQty={cartQtyById[item.id] ?? item.quantity} itemType={item.item_type} />
+                  </div>
+                  {item.selectedModifiers && Object.values(item.selectedModifiers).flat().length > 0 && (
+                    <p className="text-[10px] text-primary truncate">{Object.values(item.selectedModifiers).flat().join(', ')}</p>
+                  )}
+                  {cfg.showCourses && (
+                    <div className="mt-1 flex items-center gap-1.5">
+                      <CourseSelector value={item.courseNumber ?? 0} onChange={(c) => t.updateCourse(idx, c)} compact />
+                      <select
+                        value={item.seat ?? 0}
+                        onChange={(e) => t.setItemSeat(idx, parseInt(e.target.value))}
+                        title="Assign to a guest"
+                        className="h-6 rounded-md border border-border bg-background px-1.5 text-[11px] focus:outline-none focus:ring-1 focus:ring-primary/30"
+                      >
+                        <option value={0}>Guest…</option>
+                        {Array.from({ length: 8 }, (_, g) => (
+                          <option key={g + 1} value={g + 1}>Guest {g + 1}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                </div>
+                <button onClick={() => t.removeFromCart(idx)} className="h-8 w-8 shrink-0 rounded-md flex items-center justify-center text-muted-foreground hover:bg-destructive/10 hover:text-destructive" aria-label="Remove">
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-1">
+                  <button onClick={() => t.updateQuantity(idx, -1)} className="h-8 w-8 rounded-md border border-border flex items-center justify-center hover:bg-accent"><Minus className="h-3.5 w-3.5" /></button>
+                  <input
+                    type="number"
+                    min={0}
+                    inputMode="numeric"
+                    defaultValue={item.quantity}
+                    key={item.quantity}
+                    aria-label="Line quantity"
+                    onFocus={(e) => e.currentTarget.select()}
+                    onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+                    onBlur={(e) => {
+                      const n = parseInt(e.currentTarget.value, 10);
+                      if (!Number.isNaN(n) && n !== item.quantity) t.setLineQuantity(idx, n);
+                      else e.currentTarget.value = String(item.quantity);
+                    }}
+                    className="w-12 h-8 text-center text-sm font-bold tabular-nums rounded-md border border-border bg-background focus:ring-1 focus:ring-ring focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
+                  />
+                  <button onClick={() => t.incrementCartLine(idx)} className="h-8 w-8 rounded-md border border-border flex items-center justify-center hover:bg-accent"><Plus className="h-3.5 w-3.5" /></button>
+                </div>
+                <div className="flex items-center gap-3 text-right">
+                  <span className="text-xs text-muted-foreground">
+                    <InlinePriceCell
+                      price={item.price}
+                      preset={item.originalPrice ?? item.price}
+                      canDiscount={canManagePrices}
+                      disabled={!priceEditAllowed || item.nonBillable || item.promoFree}
+                      onCommit={(p) => t.setLinePrice(idx, p, 'price edit')}
+                    /> ea
+                  </span>
+                  <span className="text-sm font-extrabold tabular-nums">
+                    <InlineTotalCell
+                      price={item.price}
+                      quantity={item.quantity}
+                      canDiscount={canManagePrices}
+                      disabled={!priceEditAllowed || item.nonBillable || item.promoFree}
+                      onCommitPrice={(p) => t.setLinePrice(idx, p, 'line total edit')}
+                    />
+                  </span>
+                </div>
+              </div>
+
+              {(canViewCost || showDiscountCol) && (
+                <div className="flex items-center gap-4 text-[11px] text-muted-foreground pt-1 border-t border-border/40">
+                  {canViewCost && (
+                    <span className="flex items-center gap-1">
+                      Cost: <MaskedCost cost={item.costPrice} sell={item.price} revealed={costRevealed} showMargin={false} />
+                    </span>
+                  )}
+                  {canViewCost && (
+                    <span className="flex items-center gap-1">
+                      Margin: <InlineMarginCell
+                        cost={item.costPrice}
+                        sell={item.price}
+                        unitDiscount={item.unitDiscount ?? 0}
+                        revealed={costRevealed}
+                        editable={priceEditAllowed && !item.nonBillable && !item.promoFree}
+                        onCommitPrice={(p) => t.setLinePrice(idx, p, 'margin edit')}
+                      />
+                    </span>
+                  )}
+                  {showDiscountCol && (
+                    <span className="flex items-center gap-1">
+                      Disc: <InlineDiscountCell
+                        price={item.price}
+                        unitDiscount={item.unitDiscount ?? 0}
+                        quantity={item.quantity}
+                        editable={!item.nonBillable && !item.promoFree}
+                        onCommitDiscount={(ud) => t.setLineDiscount(idx, ud)}
+                      />
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* TOTALS FOOTER */}
+      <div className="shrink-0 border-t border-border bg-card px-4 py-2.5 space-y-1">
+        <div className="flex items-center justify-between text-xs">
+          <span className="text-muted-foreground">Items: <b className="text-foreground">{t.cartItemCount}</b></span>
+          <span className="text-muted-foreground">Subtotal: <b className="text-foreground tabular-nums">KES {t.subtotal.toLocaleString()}</b></span>
+        </div>
+        <div className="flex items-center justify-between text-xs">
+          <span className="text-muted-foreground">Order Tax(+): <b className="text-foreground tabular-nums">KES {t.tax.toLocaleString()}</b></span>
+          {t.loyaltyDiscount > 0 && <span className="text-emerald-600">Discount: -KES {t.loyaltyDiscount.toLocaleString()}</span>}
+        </div>
+        {/* Void + fire-courses (hospitality), preserved from the cart panel */}
+        {t.currentOrderId && t.can('pos.orders.void') && (
+          <button onClick={() => t.setVoidOpen(true)} className="w-full mt-1 flex items-center justify-center gap-2 py-1.5 rounded-lg border border-destructive/40 text-destructive text-xs font-semibold hover:bg-destructive/5">
+            <Ban className="h-3.5 w-3.5" /> Void Order #{t.currentOrderNumber}
+          </button>
+        )}
+        {cfg.showCourses && t.currentOrderId && t.currentOrderCourses.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 pt-1">
+            {t.currentOrderCourses.map((c) => {
+              const label = COURSES.find((x) => x.value === c)?.label ?? `Course ${c}`;
+              const fired = c <= t.firedCourses;
+              return (
+                <button key={c} disabled={fired || t.firingCourse !== null} onClick={() => t.handleFireCourse(c)}
+                  className={cn('flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-semibold', fired ? 'bg-muted text-muted-foreground' : 'bg-primary/10 text-primary hover:bg-primary/20')}>
+                  {t.firingCourse === c ? <Loader2 className="h-3 w-3 animate-spin" /> : fired ? <span className="h-2.5 w-2.5 rounded-full bg-green-500 inline-block" /> : <Flame className="h-3 w-3" />}
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </>
+  );
+
+  // ─────────── PAYMENT BAR — shared between the lg+ docked bar and the mobile drawer's pinned
+  // footer. The Add-to-Bill button is its own compact variant (hospitality bill-adding flow). ───
+  const renderAddToBill = () => (
+    <div className="p-3 flex items-center justify-between gap-3">
+      <span className="text-sm font-bold">Total Payable: <span className="text-primary tabular-nums">KES {t.total.toLocaleString()}</span></span>
+      <button onClick={t.handlePlaceOrder} disabled={cart.length === 0 || t.addOrderLinesPending}
+        className="min-h-12 px-6 rounded-xl bg-primary text-primary-foreground font-bold flex items-center gap-2 disabled:opacity-50">
+        {t.addOrderLinesPending ? <Loader2 className="h-5 w-5 animate-spin" /> : <ChefHat className="h-5 w-5" />} Add to Bill →
+      </button>
+    </div>
+  );
+
+  const renderPaymentBar = () => (
+    <InlinePaymentBar
+      layout="bar"
+      total={t.total}
+      tenantSlug={t.user?.tenant_slug ?? ''}
+      profile={cfg.profile}
+      isHospitality={t.isHospitality}
+      // COD is delivery-only (paid to the rider on delivery) — never for takeaway/counter/dine-in.
+      allowCOD={t.orderSubtype === 'delivery'}
+      customerEmail={t.loyaltyState?.customerEmail}
+      hasCustomer={!!t.loyaltyState?.customerPhone}
+      customerCreditAvailable={t.customerCreditAvailable}
+      loyaltyAccount={t.loyaltyRedeemInfo}
+      disabled={cart.length === 0}
+      mode={t.isHospitality && t.orderSubtype === 'dine_in' ? 'send_to_kitchen' : 'pay'}
+      createOrderAsync={t.createOrderAsync}
+      onSettled={t.handleInlineSettled}
+      onDraft={t.handlePark}
+      onQuotation={t.handlePark}
+      onCancel={t.clearCart}
+      onSplit={t.handleInlineSplit}
+    />
+  );
 
   return (
     // h-full — NOT a hardcoded viewport-minus-header calc. This shell already renders inside
@@ -123,351 +594,21 @@ export function TerminalShell() {
         />
       </div>
 
-      {/* ─────────── 2. BODY: order builder (left) + product picker (right) ───────────
-          On lg+ a fixed two-column grid (58% / 42%) keeps the split robust — the wider left
-          track gives the cart TABLE room for every column (product/qty/cost/margin/price/
-          subtotal) while the product picker stays comfortable, and BOTH panels stay visible at
-          once. Below lg there is no room to show both — instead ONE full-height panel shows at a
-          time, driven by cartOpen: browsing shows the catalog (+ a MobileCartBar pill once the
-          cart has items); tapping it flips to the cart panel (order builder + payment bar) full
-          height. This is what makes "cart not visible after adding items" impossible — the cart,
-          when open, IS the whole screen, not a capped 55% band fighting the catalog for space. */}
+      {/* ─────────── 2. BODY: order builder (left, lg+ only) + product picker (right) ───────────
+          On lg+ a fixed two-column grid (58% / 42%) keeps the split robust — both panels stay
+          visible at once. Below lg the grid holds ONLY the catalog — the cart is a full-viewport
+          drawer (see #2b below), so it's never squeezed by, or fighting for space with, the
+          catalog/toolbar/payment bar. */}
       <div className="flex-1 grid grid-rows-1 lg:grid-rows-none lg:grid-cols-[58%_42%] min-h-0 overflow-hidden">
 
-        {/* ===== LEFT: ORDER BUILDER (cart) — full panel on lg+; a full-screen sheet below lg,
-            shown only while cartOpen (toggled by MobileCartBar / the back button below) ===== */}
-        <div className={cn('min-h-0 overflow-hidden lg:flex lg:flex-col lg:border-r border-border', t.cartOpen ? 'flex flex-col' : 'hidden')}>
-          {/* Mobile-only cart-sheet header: lets the cashier return to the catalog without
-              losing anything already in the cart (cartOpen only flips back via this button, the
-              hardware/OS back gesture, or a completed/cleared sale — never automatically while
-              there's still something to review). */}
-          <div className="lg:hidden shrink-0 flex items-center gap-2 px-3 py-2.5 border-b border-border bg-card">
-            <button
-              type="button"
-              onClick={() => t.setCartOpen(false)}
-              className="flex items-center gap-1.5 text-sm font-bold text-muted-foreground hover:text-foreground"
-            >
-              <ChevronDown className="h-4 w-4" /> Back to catalog
-            </button>
-            <span className="ml-auto text-xs font-bold text-muted-foreground">
-              Cart{t.cartItemCount > 0 ? ` (${t.cartItemCount})` : ''}
-            </span>
-          </div>
-          {/* Customer + product search.
-              The customer/search row stacks on narrow widths (flex-col) and sits side-by-side
-              from sm+ so it never cramps or overflows. The "Walk-In Customer" fallback chip is a
-              back-office concept: it shows only for profiles WITHOUT the order-type selector
-              (hospitality/quick_service use Dine-In/Takeaway/Delivery as the equivalent, so showing
-              both would duplicate). */}
-          <div className="shrink-0 p-2.5 sm:p-3 space-y-1.5 sm:space-y-2 border-b border-border bg-card/40">
-            {/* Row 1: product search (flexes) + pricing profile (right, same line). */}
-            <div className="flex items-center gap-2">
-              <div className="relative group flex-1 min-w-0">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary" />
-                <input
-                  ref={t.scanInputRef}
-                  placeholder={searchPlaceholderFor(cfg.profile)}
-                  className="w-full bg-card border border-border rounded-xl py-2.5 pl-9 pr-9 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 font-medium"
-                  value={t.searchQuery}
-                  onChange={(e) => t.handleSearchChange(e.target.value)}
-                  onKeyDown={t.handleSearchKeyDown}
-                />
-                {t.searchQuery && (
-                  <button
-                    onClick={() => t.handleSearchChange('')}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 h-6 w-6 rounded-full bg-muted flex items-center justify-center hover:bg-destructive/10 hover:text-destructive"
-                    aria-label="Clear search"
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                )}
-              </div>
-              {cfg.showPricingProfile && (
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <span className="hidden sm:inline text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Price</span>
-                  <select
-                    value={t.pricingProfile}
-                    onChange={(e) => t.repriceCart(e.target.value)}
-                    disabled={t.repricing || t.pricingTiers.length === 0}
-                    className="px-2.5 py-2.5 rounded-xl text-xs font-semibold bg-card border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:opacity-50 max-w-36"
-                  >
-                    {t.pricingTiers.length === 0 && <option value="">Default Selling Price</option>}
-                    {t.pricingTiers.map((tier) => (
-                      <option key={tier.code} value={tier.code}>{tier.name}</option>
-                    ))}
-                  </select>
-                  {t.repricing && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
-                </div>
-              )}
-            </div>
-
-            {/* Row 2: customer/loyalty card spanning the FULL row (its picker lays out
-                horizontally on wider screens to use the width). */}
-            {cfg.showPricingProfile ? (
-              // key: remounts after each sale so the customer resets to the Walk-in default; on a
-              // multi-cart switch the same remount re-seeds the chip with THIS tab's attached customer.
-              <LoyaltyPanel key={t.customerResetSeq} onStateChange={t.setLoyaltyState} layout="row" initialSelected={t.initialSelectedCustomer} />
-            ) : !cfg.showOrderType ? (
-              <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl border border-border bg-card text-sm font-medium text-muted-foreground">
-                <User className="h-4 w-4 shrink-0" /> Walk-In Customer
-              </div>
-            ) : null}
-
-            {/* Order type (hospitality/quick-service) keeps its own row. */}
-            {cfg.showOrderType && (
-              <OrderTypeSelector
-                value={t.orderSubtype}
-                onChange={t.setOrderSubtype}
-                tableName={t.tableName || undefined}
-                onSelectTable={() => router.push(`/${t.orgSlug}/tables`)}
-                useCase={t.outlet?.use_case}
-              />
-            )}
-
-            {/* Hardware scale (retail/pharmacy) */}
-            {cfg.showScale && t.scaleDeviceId && (
-              <ScaleDisplay
-                tenantSlug={t.user?.tenant_slug ?? t.orgSlug}
-                deviceId={t.scaleDeviceId}
-                onAddToCart={t.handleScaleAddToCart}
-              />
-            )}
-
-            {/* Add-to-bill banner */}
-            {t.isAddToBill && (
-              <div className="px-3 py-2 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 flex items-center gap-2 text-sm">
-                <span className="text-blue-600 dark:text-blue-400 font-bold">Current bill:</span>
-                <span className="text-blue-700 dark:text-blue-300">KSh {t.billOrderTotal.toLocaleString()}</span>
-              </div>
-            )}
-          </div>
-
-          {/* CART TABLE header strip.
-              Retail multi-cart: the Sale 1/2/3 · + New Sale tabs live HERE (inline, above the cart
-              they control) instead of a separate top bar — parallel carts so a slow M-Pesa payer
-              parked on one tab never blocks the next customer. Other use-cases keep the plain title.
-              The grand total also lives HERE (not repeated in the totals footer or the bottom
-              payment bar) — always visible the instant something's in the cart, and it frees the
-              bottom action bar to be tender buttons only instead of splitting space with a number. */}
-          <div className="flex items-center justify-between gap-2 px-4 py-2 shrink-0 bg-muted/40 border-b border-border">
-            {cfg.multiCart && !t.isAddToBill ? (
-              <SaleSessionTabs />
-            ) : (
-              <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-                <ShoppingCart className="h-3.5 w-3.5" />
-                {t.isAddToBill ? 'Adding to Bill' : cfg.terminalTitle}
-                {t.cartItemCount > 0 && <span className="text-primary">· {t.cartItemCount}</span>}
-              </div>
-            )}
-            <div className="flex items-center gap-3 shrink-0">
-              {cart.length > 0 && (
-                <span className="text-sm font-extrabold tabular-nums text-primary">
-                  KES {t.total.toLocaleString()}
-                </span>
-              )}
-              {cart.length > 0 && (
-                <button onClick={t.clearCart} className="text-[11px] text-destructive font-semibold hover:underline">Clear all</button>
-              )}
-            </div>
-          </div>
-          {/* Shared horizontal+vertical scroll container: the header stays vertically pinned via
-              sticky (not a separate sibling), so it scrolls horizontally IN SYNC with the rows
-              below it instead of drifting out of column alignment. */}
-          <div className="flex-1 overflow-auto min-h-0">
-            <div className={cartMinWidth}>
-              <div className={cn('sticky top-0 z-10 grid gap-3 px-4 py-2 shrink-0 text-[10px] font-bold uppercase tracking-wider text-muted-foreground border-b border-border bg-card', cartGridCols)}>
-                <span>Product</span>
-                <span className="text-center">In Stock</span>
-                <span className="text-center">Quantity</span>
-                {canViewCost && (
-                  <>
-                    <span className="text-right">
-                      <CostHeaderToggle revealed={costRevealed} onToggle={() => setCostRevealed((v) => !v)} />
-                    </span>
-                    <span className="text-right">Margin</span>
-                  </>
-                )}
-                {showDiscountCol && <span className="text-right">Discount</span>}
-                <span className="text-right">Price inc. tax</span>
-                <span className="text-right">Subtotal</span>
-              </div>
-            {cart.length === 0 ? (
-              <div className="flex flex-col items-center justify-center gap-2 text-muted-foreground py-10">
-                <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-muted/50 mb-1">
-                  <ShoppingCart className="h-8 w-8 opacity-30" />
-                </div>
-                <p className="text-sm font-medium">Cart is empty</p>
-                <p className="text-xs">Add items from the right to start an order</p>
-              </div>
-            ) : (
-              cart.map((item, idx) => {
-                const lineTotal = (item.price + (item.modifierTotal ?? 0)) * item.quantity;
-                return (
-                  <div key={`${item.id}-${idx}`} className={cn('grid gap-3 items-center px-4 py-2.5 border-b border-border/60 hover:bg-primary/5 transition-colors', cartGridCols)}>
-                    <div className="min-w-0">
-                      <p className="text-sm font-bold truncate leading-tight">
-                        {item.name}
-                        {item.nonBillable && (
-                          <span className="ml-1.5 align-middle text-[9px] font-bold uppercase tracking-wide text-emerald-700 bg-emerald-500/10 border border-emerald-200 px-1.5 py-0.5 rounded-full" title="Non-billable — never charged; stock still deducts">
-                            Free
-                          </span>
-                        )}
-                      </p>
-                      <div className="flex items-center gap-1.5 mt-0.5">
-                        <span className="text-[11px] text-muted-foreground font-mono">{item.sku}</span>
-                        {item.serialNumber && <span className="text-[10px] text-muted-foreground">SN: {item.serialNumber}</span>}
-                      </div>
-                      {item.selectedModifiers && Object.values(item.selectedModifiers).flat().length > 0 && (
-                        <p className="text-[10px] text-primary truncate">{Object.values(item.selectedModifiers).flat().join(', ')}</p>
-                      )}
-                      {/* Per-line course selector (hospitality) — restored: lets the waiter assign each
-                          line to a course (Starter/Main/Dessert/Bar) for kitchen firing. */}
-                      {cfg.showCourses && (
-                        <div className="mt-1 flex items-center gap-1.5">
-                          <CourseSelector value={item.courseNumber ?? 0} onChange={(c) => t.updateCourse(idx, c)} compact />
-                          {/* Per-line seat/guest — pre-populates split-by-item so each guest gets
-                              their own bill without re-creating the order. */}
-                          <select
-                            value={item.seat ?? 0}
-                            onChange={(e) => t.setItemSeat(idx, parseInt(e.target.value))}
-                            title="Assign to a guest"
-                            className="h-6 rounded-md border border-border bg-background px-1.5 text-[11px] focus:outline-none focus:ring-1 focus:ring-primary/30"
-                          >
-                            <option value={0}>Guest…</option>
-                            {Array.from({ length: 8 }, (_, g) => (
-                              <option key={g + 1} value={g + 1}>Guest {g + 1}</option>
-                            ))}
-                          </select>
-                        </div>
-                      )}
-                    </div>
-                    {/* In-Stock (expected balance after this sale) — all roles; red as stock runs out */}
-                    <div className="flex items-center justify-center text-sm">
-                      <StockCell stockQuantity={item.stockQuantity} soldQty={cartQtyById[item.id] ?? item.quantity} itemType={item.item_type} />
-                    </div>
-                    {/* Qty stepper — the + routes through incrementCartLine so pushing a line past
-                        available stock opens the oversell (out-of-stock) manager-approval flow. */}
-                    <div className="flex items-center gap-1 justify-center">
-                      <button onClick={() => t.updateQuantity(idx, -1)} className="h-6 w-6 rounded-md border border-border flex items-center justify-center hover:bg-accent"><Minus className="h-3 w-3" /></button>
-                      {/* Editable qty — type a quantity (e.g. 120) instead of tapping "+" 120×.
-                          Commits on Enter/blur; a value above stock still routes through the
-                          oversell approval inside setLineQuantity. */}
-                      <input
-                        type="number"
-                        min={0}
-                        inputMode="numeric"
-                        defaultValue={item.quantity}
-                        key={item.quantity}
-                        aria-label="Line quantity"
-                        onFocus={(e) => e.currentTarget.select()}
-                        onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
-                        onBlur={(e) => {
-                          const n = parseInt(e.currentTarget.value, 10);
-                          if (!Number.isNaN(n) && n !== item.quantity) t.setLineQuantity(idx, n);
-                          else e.currentTarget.value = String(item.quantity);
-                        }}
-                        className="w-10 text-center text-sm font-bold tabular-nums rounded-md border border-border bg-background focus:ring-1 focus:ring-ring focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
-                      />
-                      <button onClick={() => t.incrementCartLine(idx)} className="h-6 w-6 rounded-md border border-border flex items-center justify-center hover:bg-accent"><Plus className="h-3 w-3" /></button>
-                    </div>
-                    {canViewCost && (
-                      <>
-                        <span className="text-right text-xs">
-                          <MaskedCost cost={item.costPrice} sell={item.price} revealed={costRevealed} showMargin={false} />
-                        </span>
-                        <span className="text-right text-xs">
-                          <InlineMarginCell
-                            cost={item.costPrice}
-                            sell={item.price}
-                            unitDiscount={item.unitDiscount ?? 0}
-                            revealed={costRevealed}
-                            editable={priceEditAllowed && !item.nonBillable && !item.promoFree}
-                            onCommitPrice={(p) => t.setLinePrice(idx, p, 'margin edit')}
-                          />
-                        </span>
-                      </>
-                    )}
-                    {showDiscountCol && (
-                      <span className="text-right text-xs">
-                        <InlineDiscountCell
-                          price={item.price}
-                          unitDiscount={item.unitDiscount ?? 0}
-                          quantity={item.quantity}
-                          editable={!item.nonBillable && !item.promoFree}
-                          onCommitDiscount={(ud) => t.setLineDiscount(idx, ud)}
-                        />
-                      </span>
-                    )}
-                    <span className="text-right">
-                      {/* Price edits: managers always; non-managers only when the outlet's
-                          allow_price_above_base setting permits it (Settings → General →
-                          Cashier price edits). A below-preset entry still passes through for
-                          everyone — the server's require_approval_below_base policy gates it
-                          at order-create (422 → ApprovalDialog), not this cell. */}
-                      <InlinePriceCell
-                        price={item.price}
-                        preset={item.originalPrice ?? item.price}
-                        canDiscount={canManagePrices}
-                        disabled={!priceEditAllowed || item.nonBillable || item.promoFree}
-                        onCommit={(p) => t.setLinePrice(idx, p, 'price edit')}
-                      />
-                    </span>
-                    <div className="flex items-center justify-end gap-1.5">
-                      {/* Line subtotal is a DERIVED figure (unit price = total ÷ qty) — same
-                          edit policy as the unit-price cell above. */}
-                      <InlineTotalCell
-                        price={item.price}
-                        quantity={item.quantity}
-                        canDiscount={canManagePrices}
-                        disabled={!priceEditAllowed || item.nonBillable || item.promoFree}
-                        onCommitPrice={(p) => t.setLinePrice(idx, p, 'line total edit')}
-                      />
-                      <button onClick={() => t.removeFromCart(idx)} className="h-6 w-6 rounded-md flex items-center justify-center text-muted-foreground hover:bg-destructive/10 hover:text-destructive" aria-label="Remove"><Trash2 className="h-3.5 w-3.5" /></button>
-                    </div>
-                  </div>
-                );
-              })
-            )}
-            </div>
-          </div>
-
-          {/* TOTALS FOOTER */}
-          <div className="shrink-0 border-t border-border bg-card px-4 py-2.5 space-y-1">
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-muted-foreground">Items: <b className="text-foreground">{t.cartItemCount}</b></span>
-              <span className="text-muted-foreground">Subtotal: <b className="text-foreground tabular-nums">KES {t.subtotal.toLocaleString()}</b></span>
-            </div>
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-muted-foreground">Order Tax(+): <b className="text-foreground tabular-nums">KES {t.tax.toLocaleString()}</b></span>
-              {t.loyaltyDiscount > 0 && <span className="text-emerald-600">Discount: -KES {t.loyaltyDiscount.toLocaleString()}</span>}
-            </div>
-            {/* Void + fire-courses (hospitality), preserved from the cart panel */}
-            {t.currentOrderId && t.can('pos.orders.void') && (
-              <button onClick={() => t.setVoidOpen(true)} className="w-full mt-1 flex items-center justify-center gap-2 py-1.5 rounded-lg border border-destructive/40 text-destructive text-xs font-semibold hover:bg-destructive/5">
-                <Ban className="h-3.5 w-3.5" /> Void Order #{t.currentOrderNumber}
-              </button>
-            )}
-            {cfg.showCourses && t.currentOrderId && t.currentOrderCourses.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 pt-1">
-                {t.currentOrderCourses.map((c) => {
-                  const label = COURSES.find((x) => x.value === c)?.label ?? `Course ${c}`;
-                  const fired = c <= t.firedCourses;
-                  return (
-                    <button key={c} disabled={fired || t.firingCourse !== null} onClick={() => t.handleFireCourse(c)}
-                      className={cn('flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-semibold', fired ? 'bg-muted text-muted-foreground' : 'bg-primary/10 text-primary hover:bg-primary/20')}>
-                      {t.firingCourse === c ? <Loader2 className="h-3 w-3 animate-spin" /> : fired ? <span className="h-2.5 w-2.5 rounded-full bg-green-500 inline-block" /> : <Flame className="h-3 w-3" />}
-                      {label}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
+        {/* ===== LEFT: ORDER BUILDER (cart) — lg+ only; mobile uses the drawer below instead ===== */}
+        <div className="hidden min-h-0 overflow-hidden lg:flex lg:flex-col lg:border-r border-border">
+          {renderOrderBuilder()}
         </div>
 
-        {/* ===== RIGHT: PRODUCT PICKER (Category/Brands tabs + grid) — full panel on lg+;
-            below lg this IS the default view (catalog-first) and hides only while cartOpen ===== */}
-        <div className={cn('min-h-0 overflow-hidden bg-card/30 lg:flex lg:flex-col', t.cartOpen ? 'hidden' : 'flex flex-col')}>
+        {/* ===== RIGHT: PRODUCT PICKER (Category/Brands tabs + grid) — always the mobile view;
+            a permanent side panel on lg+ ===== */}
+        <div className="flex flex-col min-h-0 overflow-hidden bg-card/30">
           <div className="shrink-0 px-3 py-2.5 flex items-center gap-2 border-b border-border">
             {/* Category | Brands switch — Brands apply to retail/pharmacy only (cfg.showBrandGrid). */}
             {cfg.showBrandGrid && (
@@ -516,52 +657,47 @@ export function TerminalShell() {
       </div>
 
       {/* Mobile-only "View Cart" pill — shown while browsing (cartOpen=false) whenever the cart
-          has items; hidden once the cart sheet is open (the panel above already shows it) or on
-          lg+ (the cart is a permanent side panel there, no pill needed). */}
+          has items; hidden once the drawer is open (below) or on lg+ (permanent side panel). */}
       {!t.cartOpen && <MobileCartBar />}
 
-      {/* ─────────── 3. BOTTOM ACTION BAR ───────────
-          The Add-to-Bill button is a single compact action (like the mobile cart pill above it in
-          spirit) so it stays visible on mobile regardless of cartOpen — a waiter tapping several
-          menu items still needs to submit without an extra "open cart" tap. The full tender bar
-          (Cash/Card/M-Pesa/Draft/Quotation/…) only makes sense once the cart is actually being
-          reviewed, so on mobile it renders ONLY inside the open cart sheet — never fighting the
-          catalog for space, and never capped/scroll-clipped the way it used to be. */}
-      <div className={cn(
-        'shrink-0 border-t border-border bg-card pb-[env(safe-area-inset-bottom)] lg:pb-0',
-        t.isAddToBill ? 'block' : (t.cartOpen ? 'block' : 'hidden lg:block'),
-      )}>
-        {t.isAddToBill ? (
-          <div className="p-3 flex items-center justify-between gap-3">
-            <span className="text-sm font-bold">Total Payable: <span className="text-primary tabular-nums">KES {t.total.toLocaleString()}</span></span>
-            <button onClick={t.handlePlaceOrder} disabled={cart.length === 0 || t.addOrderLinesPending}
-              className="min-h-12 px-6 rounded-xl bg-primary text-primary-foreground font-bold flex items-center gap-2 disabled:opacity-50">
-              {t.addOrderLinesPending ? <Loader2 className="h-5 w-5 animate-spin" /> : <ChefHat className="h-5 w-5" />} Add to Bill →
+      {/* ─────────── 2b. MOBILE CART DRAWER — a TRUE fixed-viewport overlay (matches
+          CategoryBrandDrawer's `fixed inset-0 z-50` pattern exactly), not an in-flow panel. This
+          is what makes "cart squeezed" impossible: it owns the full viewport, independent of the
+          toolbar/product-grid/payment-bar heights beneath it. The top icon toolbar and catalog
+          grid are covered (not relevant mid-checkout); the search + pricing-profile row stays,
+          since it's how items keep getting added/re-priced while the cart is under review. ────── */}
+      {!t.isAddToBill && (
+        <div className={cn('lg:hidden fixed inset-0 z-50 flex-col bg-background', t.cartOpen ? 'flex' : 'hidden')}>
+          <div className="shrink-0 flex items-center gap-2 px-3 py-2.5 border-b border-border bg-card">
+            <button
+              type="button"
+              onClick={() => t.setCartOpen(false)}
+              className="flex items-center gap-1.5 text-sm font-bold text-muted-foreground hover:text-foreground"
+            >
+              <ChevronLeft className="h-4 w-4" /> Back to catalog
             </button>
           </div>
-        ) : (
-          <InlinePaymentBar
-            layout="bar"
-            total={t.total}
-            tenantSlug={t.user?.tenant_slug ?? ''}
-            profile={cfg.profile}
-            isHospitality={t.isHospitality}
-            // COD is delivery-only (paid to the rider on delivery) — never for takeaway/counter/dine-in.
-            allowCOD={t.orderSubtype === 'delivery'}
-            customerEmail={t.loyaltyState?.customerEmail}
-            hasCustomer={!!t.loyaltyState?.customerPhone}
-            customerCreditAvailable={t.customerCreditAvailable}
-            loyaltyAccount={t.loyaltyRedeemInfo}
-            disabled={cart.length === 0}
-            mode={t.isHospitality && t.orderSubtype === 'dine_in' ? 'send_to_kitchen' : 'pay'}
-            createOrderAsync={t.createOrderAsync}
-            onSettled={t.handleInlineSettled}
-            onDraft={t.handlePark}
-            onQuotation={t.handlePark}
-            onCancel={t.clearCart}
-            onSplit={t.handleInlineSplit}
-          />
-        )}
+          <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
+            {renderOrderBuilder()}
+          </div>
+          <div className="shrink-0 border-t border-border bg-card pb-[env(safe-area-inset-bottom)]">
+            {renderPaymentBar()}
+          </div>
+        </div>
+      )}
+
+      {/* Add-to-Bill (hospitality waiter flow): a slim sticky bar, always visible on mobile
+          regardless of cartOpen — a waiter tapping several menu items still needs to submit
+          without an extra "open cart" tap. */}
+      {t.isAddToBill && (
+        <div className="lg:hidden shrink-0 border-t border-border bg-card pb-[env(safe-area-inset-bottom)]">
+          {renderAddToBill()}
+        </div>
+      )}
+
+      {/* ─────────── 3. BOTTOM ACTION BAR (lg+ only — mobile uses the drawer/slim-bar above) ─── */}
+      <div className="hidden lg:block shrink-0 border-t border-border bg-card">
+        {t.isAddToBill ? renderAddToBill() : renderPaymentBar()}
       </div>
 
       <TerminalModals />
