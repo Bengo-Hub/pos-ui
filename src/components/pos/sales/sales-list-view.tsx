@@ -23,6 +23,7 @@ import { CustomerDetailsModal } from '@/components/pos/customers/customer-detail
 import { ViewPaymentsModal } from './view-payments-modal';
 import { EditOrderLinesModal } from './edit-order-lines-modal';
 import { MoveOrderDateModal } from './move-order-date-modal';
+import { EditSaleInfoModal } from './edit-sale-info-modal';
 import { money, payStatusBadge, prettyMethod, PAYMENT_STATUSES, SOURCES } from './sales-shared';
 import { cashierNameOf, OrderLinesPanel, SalesSummaryFooter, BulkVoidReasonDialog, skippedSummary } from './sales-table-shared';
 import { ReportExportButtons } from '@/components/reports/report-document-button';
@@ -90,6 +91,7 @@ export function SalesListView({ orgSlug, fixedSource, title, subtitle }: {
   const [moveDateOrder, setMoveDateOrder] = useState<any>(null);
   const [deleteOrder, setDeleteOrder] = useState<any>(null);
   const [recordPayOrder, setRecordPayOrder] = useState<any>(null);
+  const [editSaleInfoOrder, setEditSaleInfoOrder] = useState<any>(null);
   const [putOnAccountOrder, setPutOnAccountOrder] = useState<any>(null);
   const [customerModal, setCustomerModal] = useState<{ name?: string | null; phone: string } | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -214,7 +216,7 @@ export function SalesListView({ orgSlug, fixedSource, title, subtitle }: {
         <SalesActionsMenu order={o} orgSlug={orgSlug} onView={(ord) => setDetailId(ord.id)}
           onEditShipping={setShippingOrder} onViewPayments={setPaymentsOrder} onEditLines={setEditLinesOrder}
           onMoveDate={setMoveDateOrder} onDelete={setDeleteOrder} onRecordPayment={setRecordPayOrder}
-          onPutOnAccount={setPutOnAccountOrder} />
+          onPutOnAccount={setPutOnAccountOrder} onEditSaleInfo={setEditSaleInfoOrder} />
       ),
     },
     {
@@ -393,6 +395,7 @@ export function SalesListView({ orgSlug, fixedSource, title, subtitle }: {
       {paymentsOrder && <ViewPaymentsModal order={paymentsOrder} onClose={() => setPaymentsOrder(null)} />}
       {editLinesOrder && <EditOrderLinesModal order={editLinesOrder} onClose={() => setEditLinesOrder(null)} />}
       {moveDateOrder && <MoveOrderDateModal order={moveDateOrder} onClose={() => setMoveDateOrder(null)} />}
+      {editSaleInfoOrder && <EditSaleInfoModal order={editSaleInfoOrder} onClose={() => setEditSaleInfoOrder(null)} />}
       <ConfirmDialog open={!!deleteOrder} onOpenChange={(o) => !o && setDeleteOrder(null)} title="Delete sale?"
         description={`This will void ${deleteOrder?.order_number}. It may require manager approval and will reverse the sale in treasury/inventory.`}
         confirmLabel="Delete" variant="danger" onConfirm={handleDelete} />

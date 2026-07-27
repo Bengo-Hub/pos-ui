@@ -35,6 +35,8 @@ interface SalesActionsMenuProps {
   onRecordPayment?: (order: any) => void;
   /** Book a still-owing, NOT-yet-on-account sale's balance to treasury AR (put on account). */
   onPutOnAccount?: (order: any) => void;
+  /** Correct served-by/customer on a COMPLETED sale — line items/totals stay locked. */
+  onEditSaleInfo?: (order: any) => void;
 }
 
 // Tenant admin/owner tier — deliberately narrower than P.ORDERS_MANAGE (which a plain
@@ -44,7 +46,7 @@ interface SalesActionsMenuProps {
 // the backend enforces the real boundary.
 const DATE_MOVE_ADMIN_ROLES = new Set(['admin', 'owner', 'pos_admin', 'super_admin', 'superuser']);
 
-export function SalesActionsMenu({ order, orgSlug, onView, onEditShipping, onViewPayments, onEditLines, onMoveDate, onDelete, onRecordPayment, onPutOnAccount }: SalesActionsMenuProps) {
+export function SalesActionsMenu({ order, orgSlug, onView, onEditShipping, onViewPayments, onEditLines, onMoveDate, onDelete, onRecordPayment, onPutOnAccount, onEditSaleInfo }: SalesActionsMenuProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -65,6 +67,9 @@ export function SalesActionsMenu({ order, orgSlug, onView, onEditShipping, onVie
   // server-side. Visible to anyone who can view the sale at all (same tier as Print/Invoice URL).
   const canNotify = canView;
   const canEditLines = can(P.ORDERS_MANAGE);
+  // Correcting served-by/customer on an already-completed sale is the same authority tier as
+  // editing line prices (backend PATCH /orders/{id}/sale-info requires pos.orders.manage too).
+  const canEditSaleInfo = can(P.ORDERS_MANAGE);
   const canMoveDate =
     authUser?.isPlatformOwner === true ||
     authUser?.isSuperUser === true ||
@@ -107,7 +112,19 @@ export function SalesActionsMenu({ order, orgSlug, onView, onEditShipping, onVie
       {open && (
         <div className="absolute left-0 top-full mt-1 z-50 w-52 rounded-xl border border-border bg-card shadow-xl py-1.5">
           {canView && <button className={item} onClick={() => { onView(order); close(); }}><Eye className="h-4 w-4 text-muted-foreground" /> View</button>}
-          {canChange && <button className={item} onClick={() => { router.push(`/${orgSlug}/sell/add?order_id=${order.id}`); close(); }}><Pencil className="h-4 w-4 text-muted-foreground" /> Edit</button>}
+          {/* Resuming into the terminal only works for a still-open draft/order — a completed
+              sale's lines/totals are locked (eTIMS-signed, GL-posted), so route it to the
+              sale-info corrector instead of a resume that pos-api will reject outright. */}
+          {canChange && !linesLocked && (
+            <button className={item} onClick={() => { router.push(`/${orgSlug}/sell/add?order_id=${order.id}`); close(); }}>
+              <Pencil className="h-4 w-4 text-muted-foreground" /> Edit
+            </button>
+          )}
+          {isFinal && canEditSaleInfo && onEditSaleInfo && (
+            <button className={item} onClick={() => { onEditSaleInfo(order); close(); }}>
+              <Pencil className="h-4 w-4 text-muted-foreground" /> Edit
+            </button>
+          )}
           {canDelete && <button className={item} onClick={() => { onDelete(order); close(); }}><Trash2 className="h-4 w-4 text-destructive" /> Delete</button>}
           {canChange && <button className={item} onClick={() => { onEditShipping(order); close(); }}><Truck className="h-4 w-4 text-muted-foreground" /> Edit Shipping</button>}
 
