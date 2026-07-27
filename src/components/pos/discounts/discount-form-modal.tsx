@@ -4,12 +4,14 @@ import { useEffect, useState } from 'react';
 import { X, Loader2, Percent, Ticket, Zap, Clock3, Repeat, CalendarClock, Lock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Discount, DiscountInput, DiscountKind } from '@/lib/api/discounts';
+import { discountConfigFor } from '@/lib/use-case-config';
 import {
   DAYS, MEAL_PERIODS, blankForm, formFromDiscount, toPayload,
   type FormState, type DiscountItemRef,
 } from './discount-form-types';
 import { ScopeItemPicker, CategoryQuickAdd, type SearchItemsFn, type FetchCategoryItemsFn } from './discount-item-pickers';
 import { PairEditor } from './discount-pair-editor';
+import { StorefrontBannerFields } from './discount-banner-fields';
 
 export { describeDiscount, describeScope, type DiscountItemRef } from './discount-form-types';
 
@@ -36,6 +38,7 @@ export { describeDiscount, describeScope, type DiscountItemRef } from './discoun
 export function DiscountFormModal({
   open, initial, saving, onClose, onSubmit, searchItems, resolveItemName,
   categories, fetchCategoryItems, happyHourLocked, onLockedKindClick,
+  useCase, currentOutletId, currentOutletName,
 }: {
   open: boolean;
   /** Existing discount to edit; omit for create. */
@@ -55,6 +58,13 @@ export function DiscountFormModal({
   happyHourLocked?: boolean;
   /** Called when the user taps the locked Time Window kind (host opens its upgrade flow). */
   onLockedKindClick?: () => void;
+  /** Current outlet's use_case (e.g. 'retail', 'hospitality') — scopes which fields render
+   *  (Happy Hour kind + meal period are hospitality-only concepts). Omit to show every field. */
+  useCase?: string | null;
+  /** Current outlet id + display name — lets the host offer "This outlet only" scoping.
+   *  Omit to hide the scope toggle (discount stays tenant-wide, the historical behavior). */
+  currentOutletId?: string;
+  currentOutletName?: string;
 }) {
   const [f, setF] = useState<FormState>(blankForm());
   useEffect(() => {
@@ -64,6 +74,7 @@ export function DiscountFormModal({
 
   if (!open) return null;
   const set = <K extends keyof FormState>(k: K, v: FormState[K]) => setF((s) => ({ ...s, [k]: v }));
+  const setBanner = (patch: Partial<FormState['banner']>) => setF((s) => ({ ...s, banner: { ...s.banner, ...patch } }));
   const input = 'mt-1 w-full px-3.5 py-2.5 rounded-xl border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring';
 
   // Editing an existing happy hour stays allowed even when the feature is locked
@@ -74,14 +85,24 @@ export function DiscountFormModal({
   const isHappyHour = f.kind === 'happy_hour';
   const categoryScopeAvailable = (categories?.length ?? 0) > 0 && !isBogo;
 
-  const KINDS: { v: DiscountKind; label: string; hint: string; icon: typeof Ticket; locked?: boolean }[] = [
+  // Use-case scoping: Happy Hour (time-window scheduling) and meal period are hospitality-only
+  // concepts — hide them for retail/pharmacy/quick_service/services so those tenants only ever
+  // see the fields that mean something to them (Code + Automatic already cover their "applies
+  // without a customer entering anything" need). An existing happy_hour-kind discount edited from
+  // a non-hospitality context still shows its own kind (never silently hidden mid-edit).
+  const discountCfg = discountConfigFor(useCase);
+  const showHappyHourKind = discountCfg.showHappyHourKind || isHappyHour;
+  const showMealPeriod = discountCfg.showMealPeriod;
+
+  const ALL_KINDS: { v: DiscountKind; label: string; hint: string; icon: typeof Ticket; locked?: boolean }[] = [
     { v: 'code', label: 'Promo Code', hint: 'Customer/cashier enters a code at checkout', icon: Ticket },
     { v: 'auto', label: 'Automatic', hint: 'Applies to every qualifying sale automatically', icon: Zap },
     { v: 'happy_hour', label: 'Time Window', hint: 'Auto-applies during a recurring or one-time window', icon: Clock3, locked: hhLockedHere },
   ];
+  const KINDS = ALL_KINDS.filter((k) => k.v !== 'happy_hour' || showHappyHourKind);
 
   const submit = async () => {
-    const payload = toPayload(f);
+    const payload = toPayload(f, currentOutletId);
     if (!payload) return;
     await onSubmit(payload);
   };
@@ -317,15 +338,18 @@ export function DiscountFormModal({
             </div>
           )}
 
-          {/* Meal period + validity (code/auto use start/end as validity; happy_hour one-time has its own). */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <label className="block">
-              <span className="text-sm font-medium">Meal period <span className="text-xs text-muted-foreground">(optional)</span></span>
-              <select value={f.mealPeriod} onChange={(e) => set('mealPeriod', e.target.value)} className={input}>
-                <option value="">— Not meal-specific —</option>
-                {MEAL_PERIODS.map((m) => <option key={m.v} value={m.v}>{m.l}</option>)}
-              </select>
-            </label>
+          {/* Meal period (hospitality-only) + validity (code/auto use start/end as validity;
+              happy_hour one-time has its own). */}
+          <div className={cn('grid grid-cols-1 gap-3', showMealPeriod && 'sm:grid-cols-2')}>
+            {showMealPeriod && (
+              <label className="block">
+                <span className="text-sm font-medium">Meal period <span className="text-xs text-muted-foreground">(optional)</span></span>
+                <select value={f.mealPeriod} onChange={(e) => set('mealPeriod', e.target.value)} className={input}>
+                  <option value="">— Not meal-specific —</option>
+                  {MEAL_PERIODS.map((m) => <option key={m.v} value={m.v}>{m.l}</option>)}
+                </select>
+              </label>
+            )}
             {!isHappyHour && (
               <div className="grid grid-cols-2 gap-3">
                 <label className="block">
@@ -339,6 +363,27 @@ export function DiscountFormModal({
               </div>
             )}
           </div>
+
+          {/* Outlet scope — only offered when the host tells us which outlet we're in. */}
+          {currentOutletId && (
+            <div>
+              <span className="text-sm font-medium">Applies at</span>
+              <div className="mt-1 flex gap-2">
+                <button type="button" onClick={() => set('outletScope', 'all')}
+                  className={cn('flex-1 py-2 rounded-xl border text-sm font-medium transition-colors',
+                    f.outletScope === 'all' ? 'bg-primary text-primary-foreground border-primary' : 'border-input hover:bg-muted')}>
+                  All outlets
+                </button>
+                <button type="button" onClick={() => set('outletScope', 'this_outlet')}
+                  className={cn('flex-1 py-2 rounded-xl border text-sm font-medium transition-colors',
+                    f.outletScope === 'this_outlet' ? 'bg-primary text-primary-foreground border-primary' : 'border-input hover:bg-muted')}>
+                  {currentOutletName || 'This outlet'} only
+                </button>
+              </div>
+            </div>
+          )}
+
+          <StorefrontBannerFields banner={f.banner} onChange={setBanner} />
 
           <p className="text-xs text-muted-foreground bg-muted/50 rounded-lg px-3 py-2">
             Discounts are stored once in the platform&apos;s discount source of truth and apply on the POS

@@ -1,5 +1,5 @@
 import { toast } from 'sonner';
-import type { Discount, DiscountInput, DiscountKind, MealPeriod } from '@/lib/api/discounts';
+import type { Discount, DiscountBannerConfig, DiscountInput, DiscountKind, MealPeriod } from '@/lib/api/discounts';
 
 /**
  * Form model + (de)serialization for the shared DiscountFormModal — covers the FULL
@@ -31,6 +31,20 @@ export type DiscountTypeOpt = 'percentage' | 'fixed_amount' | 'fixed_price' | 'b
 export type ScheduleMode = 'recurring' | 'one_time';
 export type ScopeMode = 'all' | 'items' | 'category';
 
+/** Form model for the "Show on storefront" banner section — camelCase mirror of
+ *  DiscountBannerConfig, stored inside Promotion.metadata["banner"] server-side. */
+export interface BannerFormState {
+  showOnStorefront: boolean;
+  bannerTitle: string;
+  bannerSubtitle: string;
+  bannerImageUrl: string;
+  ctaLabel: string;
+  ctaLink: string;
+  bannerColor: string;
+  textColor: string;
+  useCases: string[];
+}
+
 export interface FormState {
   name: string;
   kind: DiscountKind;
@@ -58,6 +72,13 @@ export interface FormState {
   // When false (default), the free unit is another unit of the same item being bought.
   crossItemGet: boolean;
   pairs: PairRow[];
+  // Outlet scope — 'all' (tenant-wide, the historical default) or 'this_outlet' (scoped to
+  // whichever outlet the form was opened from). The actual outlet id is supplied by the host
+  // at submit time (see toPayload), not stored on the form itself.
+  outletScope: 'all' | 'this_outlet';
+  // Optional storefront marketing banner — off by default so existing promotions (and every
+  // new one that doesn't opt in) are unaffected.
+  banner: BannerFormState;
 }
 
 export const DAYS = [
@@ -73,6 +94,13 @@ export const MEAL_PERIODS: { v: MealPeriod; l: string }[] = [
   { v: 'dinner', l: 'Dinner' },
 ];
 
+export function blankBanner(): BannerFormState {
+  return {
+    showOnStorefront: false, bannerTitle: '', bannerSubtitle: '', bannerImageUrl: '',
+    ctaLabel: '', ctaLink: '', bannerColor: '', textColor: '', useCases: [],
+  };
+}
+
 export function blankForm(): FormState {
   return {
     name: '', kind: 'code', promoCode: '', discountType: 'percentage', discountValue: '10',
@@ -81,6 +109,43 @@ export function blankForm(): FormState {
     startAt: '', endAt: '',
     buyQuantity: '1', getQuantity: '1', getDiscountPercent: '100',
     crossItemGet: false, pairs: [],
+    outletScope: 'all',
+    banner: blankBanner(),
+  };
+}
+
+/** Rehydrate the banner form section from a stored promotion's metadata["banner"] — LOSSLESS
+ *  round-trip is the same invariant formFromDiscount holds for the rest of the form. */
+function bannerFromDiscount(d: Discount): BannerFormState {
+  const b = d.metadata?.banner;
+  if (!b) return blankBanner();
+  return {
+    showOnStorefront: !!b.show_on_storefront,
+    bannerTitle: b.banner_title ?? '',
+    bannerSubtitle: b.banner_subtitle ?? '',
+    bannerImageUrl: b.banner_image_url ?? '',
+    ctaLabel: b.cta_label ?? '',
+    ctaLink: b.cta_link ?? '',
+    bannerColor: b.banner_color ?? '',
+    textColor: b.text_color ?? '',
+    useCases: b.use_cases ?? [],
+  };
+}
+
+/** Serialize the banner form section into the wire shape (DiscountBannerConfig). Always
+ *  included in the submitted payload (even when off) so toggling "Show on storefront" back
+ *  off actually clears a previously-saved banner instead of leaving stale metadata behind. */
+function bannerToPayload(b: BannerFormState): DiscountBannerConfig {
+  return {
+    show_on_storefront: b.showOnStorefront,
+    ...(b.bannerTitle.trim() ? { banner_title: b.bannerTitle.trim() } : {}),
+    ...(b.bannerSubtitle.trim() ? { banner_subtitle: b.bannerSubtitle.trim() } : {}),
+    ...(b.bannerImageUrl.trim() ? { banner_image_url: b.bannerImageUrl.trim() } : {}),
+    ...(b.ctaLabel.trim() ? { cta_label: b.ctaLabel.trim() } : {}),
+    ...(b.ctaLink.trim() ? { cta_link: b.ctaLink.trim() } : {}),
+    ...(b.bannerColor.trim() ? { banner_color: b.bannerColor.trim() } : {}),
+    ...(b.textColor.trim() ? { text_color: b.textColor.trim() } : {}),
+    ...(b.useCases.length ? { use_cases: b.useCases } : {}),
   };
 }
 
@@ -121,11 +186,18 @@ export function formFromDiscount(d: Discount, resolveName?: (sku: string) => str
     getDiscountPercent: String(r?.get_discount_percent ?? 100),
     crossItemGet: pairs.length > 0,
     pairs,
+    outletScope: d.outlet_id ? 'this_outlet' : 'all',
+    banner: bannerFromDiscount(d),
   };
 }
 
-/** Serialize + validate the form. Returns null (with a toast) on validation failure. */
-export function toPayload(f: FormState): DiscountInput | null {
+/** Serialize + validate the form. Returns null (with a toast) on validation failure.
+ *  `currentOutletId` is the outlet the form was opened from — only used when the user picked
+ *  "This outlet only"; always sent explicitly (including as '' for "All outlets") so an EDIT
+ *  can clear a previously-set outlet_id back to tenant-wide (the backend's UpdatePromotion
+ *  clears outlet_id when it fails to parse a UUID, so omitting the key would leave a stale
+ *  scope in place instead of widening it). */
+export function toPayload(f: FormState, currentOutletId?: string): DiscountInput | null {
   if (!f.name.trim()) { toast.error('Name is required'); return null; }
   const isHappyHour = f.kind === 'happy_hour';
   const isBogo = f.discountType === 'bogo';
@@ -159,6 +231,10 @@ export function toPayload(f: FormState): DiscountInput | null {
     toast.error('Every pair needs both a bought item and its free item');
     return null;
   }
+  if (f.banner.showOnStorefront && !f.banner.bannerTitle.trim()) {
+    toast.error('Banner title is required when "Show on storefront" is on');
+    return null;
+  }
   // Explicit correspondence map (buy SKU → free get SKU). Server derives scope_ids/get_scope_ids
   // from it, but we send them too so an older backend still applies the deal.
   const pairMap: Record<string, string> = {};
@@ -182,6 +258,7 @@ export function toPayload(f: FormState): DiscountInput | null {
 
   return {
     name: f.name.trim(),
+    outlet_id: f.outletScope === 'this_outlet' && currentOutletId ? currentOutletId : '',
     promo_kind: f.kind,
     ...(f.kind === 'code' && f.promoCode.trim() ? { promo_code: f.promoCode.trim().toUpperCase() } : {}),
     auto_apply: f.kind !== 'code',
@@ -203,6 +280,7 @@ export function toPayload(f: FormState): DiscountInput | null {
     } : {}),
     ...(f.maxDiscount ? { max_discount: parseFloat(f.maxDiscount) } : {}),
     ...(f.mealPeriod ? { meal_period: f.mealPeriod as DiscountInput['meal_period'] } : {}),
+    banner: bannerToPayload(f.banner),
   };
 }
 

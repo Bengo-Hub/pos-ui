@@ -40,6 +40,25 @@ export interface PromotionRule {
   meal_period?: MealPeriod | null;
 }
 
+/**
+ * Storefront marketing banner config — lives inside Promotion.metadata["banner"] (no
+ * dedicated schema column). Flags a promotion to also surface as a banner on the
+ * customer-facing ordering storefront (a separate app); ordering-backend reads active
+ * flagged promotions via pos-api's GET /s2s/{tenant}/discounts/banners.
+ */
+export interface DiscountBannerConfig {
+  show_on_storefront: boolean;
+  banner_title?: string;
+  banner_subtitle?: string;
+  banner_image_url?: string;
+  cta_label?: string;
+  cta_link?: string;
+  banner_color?: string;
+  text_color?: string;
+  /** Empty/absent = show for every outlet use_case. */
+  use_cases?: string[];
+}
+
 export interface Discount {
   id: string;
   name: string;
@@ -55,6 +74,8 @@ export interface Discount {
   auto_apply: boolean;
   status: string;
   rule?: PromotionRule | null;
+  /** Freeform JSON blob; `banner` is the only key this app currently reads/writes. */
+  metadata?: { banner?: DiscountBannerConfig; [key: string]: unknown } | null;
 }
 
 /**
@@ -88,6 +109,9 @@ export interface DiscountInput {
   get_pair_map?: Record<string, string>;
   max_discount?: number;
   meal_period?: MealPeriod | '';
+  /** Optional storefront banner config — merged read/merge/write into metadata["banner"]
+   *  server-side; other metadata keys already stored on the promotion are preserved. */
+  banner?: DiscountBannerConfig;
 }
 
 export interface DiscountListResponse {
