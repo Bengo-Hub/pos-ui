@@ -4,6 +4,7 @@ import { CustomerDetailsModal } from '@/components/pos/customers/customer-detail
 import { DownloadReceiptButton } from '@/components/pos/download-receipt-button';
 import { PrintReceiptButton } from '@/components/pos/print-receipt-button';
 import { InitiateReturnModal } from '@/components/pos/returns/initiate-return-modal';
+import { EditSaleInfoModal } from '@/components/pos/sales/edit-sale-info-modal';
 import { ReceiptShareButtons } from '@/components/pos/sales/receipt-share-actions';
 import { RecordPaymentModal } from '@/components/pos/sales/record-payment-modal';
 import { prettyMethod } from '@/components/pos/sales/sales-shared';
@@ -12,7 +13,7 @@ import { useOrder } from '@/hooks/usePOS';
 import { apiClient } from '@/lib/api/client';
 import { useAuthStore } from '@/store/auth';
 import { useQuery } from '@tanstack/react-query';
-import { Banknote, Loader2, RotateCcw, Undo2, X } from 'lucide-react';
+import { Banknote, Loader2, Pencil, RotateCcw, Undo2, X } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
 
@@ -53,8 +54,13 @@ interface OrderReturn {
 export function SellDetailsModal({ orderId, orgSlug, onClose }: { orderId: string; orgSlug: string; onClose: () => void }) {
   const { data: order, isLoading } = useOrder(orderId);
   const tenantID = useAuthStore((s) => s.user?.tenant_id ?? '');
-  const { canAny } = usePermissions();
+  const { can, canAny } = usePermissions();
   const canReturn = canAny([P.ORDERS_CHANGE_OWN, P.ORDERS_CHANGE, P.ORDERS_MANAGE]);
+  // Edit Sale Info (served-by + customer correction) — same admin/manager tier the backend
+  // route enforces (pos.orders.manage); blocked only on voided/cancelled/refunded orders,
+  // mirroring orders.Service.UpdateSaleInfo's status guard.
+  const canEditSaleInfo = can(P.ORDERS_MANAGE);
+  const [editSaleInfoOpen, setEditSaleInfoOpen] = useState(false);
 
   // Linked sell-returns for this sale (rejected included here — the section is an audit view).
   const { data: returnsData } = useQuery({
@@ -157,6 +163,7 @@ export function SellDetailsModal({ orderId, orgSlug, onClose }: { orderId: strin
               </div>
               <div className="sm:text-right">
                 <p><b>Date:</b> {new Date((order as any).created_at).toLocaleString('en-KE')}</p>
+                <p><b>Served by:</b> {(order as any).served_by_name || (order as any).cashier_name || '—'}</p>
                 {meta.shipping_status && <p><b>Shipping:</b> {meta.shipping_status}</p>}
               </div>
             </div>
@@ -345,6 +352,13 @@ export function SellDetailsModal({ orderId, orgSlug, onClose }: { orderId: strin
                 <RotateCcw className="h-4 w-4" /> Sell Return
               </button>
             )}
+            {canEditSaleInfo && !['voided', 'cancelled', 'refunded'].includes((order as any).status) && (
+              <button
+                onClick={() => setEditSaleInfoOpen(true)}
+                className="inline-flex items-center gap-2 h-9 px-3 rounded-md border border-border text-sm font-medium hover:bg-accent">
+                <Pencil className="h-4 w-4" /> Edit Sale Info
+              </button>
+            )}
             <button onClick={onClose}
               className="inline-flex items-center gap-2 h-9 px-4 rounded-md bg-foreground text-background text-sm font-medium hover:opacity-90">
               Close
@@ -378,6 +392,9 @@ export function SellDetailsModal({ orderId, orgSlug, onClose }: { orderId: strin
           initialOrderNumber={(order as any).order_number}
           onClose={() => setReturnModalOpen(false)}
         />
+      )}
+      {editSaleInfoOpen && order && (
+        <EditSaleInfoModal order={order as any} onClose={() => setEditSaleInfoOpen(false)} />
       )}
     </div>
   );

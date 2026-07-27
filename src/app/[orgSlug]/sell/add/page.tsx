@@ -254,6 +254,23 @@ export default function AddSalePage() {
   // price/qty edits on persisted lines are tracked per line (savedPrice/savedQty) so a
   // per-line ✓ save can clear them without touching the rest of the sale.
   const [structuralDirty, setStructuralDirty] = useState(false);
+
+  // ── Served by ── who is credited with serving this sale (audit/accountability — distinct from
+  // the credit-sale "bill-to" staff party above). Reuses the SAME staff list already loaded for
+  // that picker. Defaults to the current session user for a brand-new sale; the resume-hydrate
+  // effect below overwrites it with the draft's original served_by_user_id/user_id (the display
+  // name arrives as served_by_name) so a resumed AND modified sale still credits the original
+  // drafter instead of whoever finishes it.
+  const authUser = useAuthStore((s) => s.user);
+  const [servedByUserId, setServedByUserId] = useState('');
+  const [servedByName, setServedByName] = useState('');
+  useEffect(() => {
+    if (!resume && !servedByUserId && authUser?.id) {
+      setServedByUserId(authUser.id);
+      setServedByName(authUser.fullName || '');
+    }
+  }, [authUser?.id, authUser?.fullName, resume, servedByUserId]);
+
   useEffect(() => {
     const o: any = resumeQ.data;
     if (!o || !resumeId || resume?.id === o.id) return;
@@ -265,6 +282,8 @@ export default function AddSalePage() {
     // (resumed lines carry no tax info), which can differ from what the order actually
     // stores — settling an unmodified resume must charge the stored total, not the preview.
     setResume({ id: o.id, number: o.order_number, total: Number(o.total_amount) || undefined });
+    setServedByUserId(o.served_by_user_id || o.user_id || '');
+    setServedByName(o.served_by_name || o.cashier_name || '');
     setLines((o.edges?.lines ?? []).map((l: any) => ({
       item: { id: l.catalog_item_id, sku: l.sku, name: l.name, price: l.unit_price, category: '' } as CatalogItem,
       quantity: l.quantity,
@@ -450,6 +469,10 @@ export default function AddSalePage() {
       approvalCode: approval?.code,
       customerPhone: custPhone || undefined,
       customerName: custName || undefined,
+      // Carries the original drafter's attribution through the resume-and-modify supersede
+      // path (a fresh order is created for the edited draft); harmless to send unconditionally
+      // for a brand-new sale too, since it then just equals the creating user.
+      servedByUserId: servedByUserId || undefined,
       // Shipping charge rides the real order-level charges cost so the server total includes it.
       ...(shippingAmount > 0 ? { charges: { shipping: shippingAmount } } : {}),
       metadata: (() => {
@@ -759,6 +782,25 @@ export default function AddSalePage() {
             {creditSale && realCustomer && <CustomerCreditHint accountId={customer?.accountId} saleTotal={total} />}
           </div>
         )}
+
+        {/* Served by — who is credited with serving this sale (audit/accountability). Reuses
+            the same staff list loaded for the credit-sale bill-to picker above. Resuming a draft
+            prefills the ORIGINAL drafter (see the resume-hydrate effect); changeable by anyone
+            with access to this page — a full admin-gated correction after completion goes
+            through the Sell Details "Edit Sale Info" action instead. */}
+        <div className="space-y-2">
+          <label className="text-xs font-semibold text-muted-foreground">Served by</label>
+          <select
+            value={servedByUserId}
+            onChange={(e) => { setServedByUserId(e.target.value); setServedByName(staff.find((s: any) => s.id === e.target.value)?.name ?? ''); }}
+            className="w-full bg-background border border-border rounded-xl py-2.5 px-3.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+          >
+            <option value={servedByUserId}>{servedByName || '— Select staff —'}</option>
+            {staff.filter((s: any) => s.id !== servedByUserId).map((s: any) => (
+              <option key={s.id} value={s.id}>{s.name}{s.role ? ` · ${s.role}` : ''}</option>
+            ))}
+          </select>
+        </div>
         </div>
 
         <div className="space-y-4">

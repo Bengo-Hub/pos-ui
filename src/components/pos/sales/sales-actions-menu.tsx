@@ -59,7 +59,11 @@ export function SalesActionsMenu({ order, orgSlug, onView, onEditShipping, onVie
   const canViewPayments = canAny([P.PAYMENTS_VIEW, P.PAYMENTS_VIEW_OWN, P.PAYMENTS_MANAGE]);
   const canTakePayment = canAny([P.PAYMENTS_ADD, P.PAYMENTS_MANAGE]);
   const canReturn = canChange; // return initiation mirrors the backend change_own/change/manage gate
-  const canNotify = can(P.ORDERS_MANAGE);
+  // Share via WhatsApp / Send Notification: pos-api's /notify and /receipt/share-link routes
+  // carry NO permission middleware (any authenticated outlet user can already call them) — the
+  // pos.orders.manage gate here was frontend-only over-restriction with nothing backing it
+  // server-side. Visible to anyone who can view the sale at all (same tier as Print/Invoice URL).
+  const canNotify = canView;
   const canEditLines = can(P.ORDERS_MANAGE);
   const canMoveDate =
     authUser?.isPlatformOwner === true ||

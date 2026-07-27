@@ -10,6 +10,9 @@ import { usePermissions, P } from '@/hooks/usePermissions';
 import { useDiscounts, useCreateDiscount, useUpdateDiscount, useDeleteDiscount } from '@/hooks/useDiscounts';
 import { useFullCatalog, useCategories } from '@/hooks/usePOS';
 import { useSubscription } from '@/hooks/use-subscription';
+import { useModuleAccess } from '@/hooks/use-module-access';
+import { useAuthStore } from '@/store/auth';
+import { useOutletFilterStore } from '@/store/outlet-filter';
 import { UpgradeDialog } from '@bengo-hub/shared-ui-lib/subscription';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import type { Discount, DiscountInput } from '@/lib/api/discounts';
@@ -56,6 +59,23 @@ export default function DiscountsPage() {
   const { can, canAny } = usePermissions();
   const canView = canAny([P.PROMOTIONS_VIEW, P.PROMOTIONS_ADD, P.PROMOTIONS_CHANGE, P.PROMOTIONS_MANAGE]);
   const canManage = canAny([P.PROMOTIONS_ADD, P.PROMOTIONS_MANAGE]);
+
+  // Current outlet's use_case scopes which discount fields the form shows (Happy Hour + meal
+  // period are hospitality-only); the outlet id lets the form offer "this outlet only" scoping.
+  // Drill-down (HQ admin viewing another outlet) takes priority over the home outlet, same
+  // resolution order useModuleAccess uses internally.
+  const { useCase } = useModuleAccess();
+  const homeOutlet = useAuthStore((s) => s.outlet);
+  const drillOutlet = useOutletFilterStore((s) => s.selectedOutlet);
+  const currentOutletId = drillOutlet?.id ?? homeOutlet?.id;
+  const currentOutletName = drillOutlet?.name ?? homeOutlet?.name;
+  const allOutlets = useOutletFilterStore((s) => s.outlets);
+  const outletNameById = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const o of allOutlets) m.set(o.id, o.name);
+    if (homeOutlet?.id) m.set(homeOutlet.id, homeOutlet.name);
+    return m;
+  }, [allOutlets, homeOutlet]);
 
   // Search-first pagination: typing resets to page 1 and the query is applied SERVER-side
   // (promotions ?q= name filter), so matches surface from the full set — never just the
@@ -189,6 +209,7 @@ export default function DiscountsPage() {
                     <th className="px-4 py-3 font-bold">Code</th>
                     <th className="px-4 py-3 font-bold">Deal</th>
                     <th className="px-4 py-3 font-bold">Scope</th>
+                    <th className="px-4 py-3 font-bold">Outlet</th>
                     <th className="px-4 py-3 font-bold">Schedule / Validity</th>
                     <th className="px-4 py-3 font-bold text-center">Status</th>
                     {canManage && <th className="px-4 py-3 font-bold text-right">Actions</th>}
@@ -209,6 +230,9 @@ export default function DiscountsPage() {
                         <td className="px-4 py-3 font-mono text-xs">{d.promo_kind === 'code' ? (d.promo_code || '—') : '—'}</td>
                         <td className="px-4 py-3">{describeDiscount(d)}</td>
                         <td className="px-4 py-3 text-xs text-muted-foreground">{describeScope(d)}</td>
+                        <td className="px-4 py-3 text-xs text-muted-foreground">
+                          {d.outlet_id ? (outletNameById.get(d.outlet_id) ?? 'This outlet') : 'All outlets'}
+                        </td>
                         <td className="px-4 py-3 text-xs text-muted-foreground">{scheduleText(d)}</td>
                         <td className="px-4 py-3 text-center">
                           <span className={cn('text-xs px-2 py-1 rounded-full font-medium',
@@ -258,6 +282,9 @@ export default function DiscountsPage() {
         fetchCategoryItems={fetchCategoryItemsAdapter}
         happyHourLocked={!hasFeature('happy_hour')}
         onLockedKindClick={() => setUpgradeOpen(true)}
+        useCase={useCase}
+        currentOutletId={currentOutletId}
+        currentOutletName={currentOutletName}
       />
       <UpgradeDialog feature="happy_hour" open={upgradeOpen} onClose={() => setUpgradeOpen(false)} />
 

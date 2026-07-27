@@ -1334,6 +1334,10 @@ interface CreateOrderInput {
   coversCount?: number;
   customerPhone?: string;
   customerName?: string;
+  /** Who is credited with SERVING this sale — only sent when it differs from the current
+   *  session's user (the resume-and-modify supersede flow on Add Sale, so the finalized sale
+   *  keeps crediting the original drafter instead of resetting to whoever finishes it). */
+  servedByUserId?: string;
   ageVerified?: boolean;
   discountReason?: string;
   approvalToken?: string;
@@ -1425,6 +1429,7 @@ export function useCreateOrder() {
             covers_count: data.coversCount,
             customer_phone: data.customerPhone,
             customer_name: data.customerName,
+            served_by_user_id: data.servedByUserId,
             age_verified: data.ageVerified,
             discount_amount: data.discountAmount,
             discount_reason: data.discountReason,
@@ -1745,6 +1750,31 @@ export function useMoveOrderDate() {
       qc.invalidateQueries({ queryKey: ['pos-orders'] });
       qc.invalidateQueries({ queryKey: ['pos-order', tenantID, v.orderId] });
       qc.invalidateQueries({ queryKey: ['pos-reports'] });
+    },
+  });
+}
+
+/** Admin/manager (pos.orders.manage) correction tool: who served a sale + the customer on
+ * file — draft, open, OR completed (never voided/cancelled/refunded, enforced server-side).
+ * Never touches totals/lines/discounts/tax/payment — those stay immutable once completed. */
+export function useUpdateSaleInfo() {
+  const tenantID = useTenantID();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      orderId, servedByUserId, customerName, customerPhone, reason,
+    }: {
+      orderId: string; servedByUserId?: string; customerName?: string; customerPhone?: string; reason: string;
+    }) =>
+      apiClient.patch(`${basePath(tenantID)}/orders/${orderId}/sale-info`, {
+        served_by_user_id: servedByUserId,
+        customer_name: customerName,
+        customer_phone: customerPhone,
+        reason,
+      }),
+    onSuccess: (_d, v) => {
+      qc.invalidateQueries({ queryKey: ['pos-orders'] });
+      qc.invalidateQueries({ queryKey: ['pos-order', tenantID, v.orderId] });
     },
   });
 }

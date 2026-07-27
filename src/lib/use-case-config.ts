@@ -137,3 +137,23 @@ export function terminalConfigFor(useCase?: string | null): TerminalConfig {
       };
   }
 }
+
+export interface DiscountConfig {
+  /** Show the "Happy Hour" kind tile + its day/time schedule fields — a hospitality/bar/restaurant
+   *  time-window concept with no equivalent for the other verticals. Those tenants use "Automatic"
+   *  (no time window) for the same "applies without a code" need. */
+  showHappyHourKind: boolean;
+  /** Show the meal-period picker (breakfast/lunch/dinner) — meaningless outside food service. */
+  showMealPeriod: boolean;
+}
+
+/** Pure discount-form field config for a given outlet use_case — mirrors terminalConfigFor's
+ *  pattern so DiscountFormModal scopes its fields per use case instead of always rendering
+ *  hospitality-only concepts (Happy Hour scheduling, meal period) for every vertical.
+ *  quick_service counts as food service here too (meal periods/time-windowed deals are just as
+ *  applicable to a QSR counter as a sit-down restaurant) — only retail/pharmacy/services hide them. */
+export function discountConfigFor(useCase?: string | null): DiscountConfig {
+  const profile = normalizeUseCase(useCase);
+  const isFoodService = profile === 'hospitality' || profile === 'quick_service';
+  return { showHappyHourKind: isFoodService, showMealPeriod: isFoodService };
+}
