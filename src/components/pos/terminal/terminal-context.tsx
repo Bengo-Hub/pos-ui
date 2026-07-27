@@ -1687,16 +1687,22 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
   // a step-up; OFF → free markdowns. So the till no longer clamps below-preset entries;
   // enforcement is fully server-side. The preset is recorded as originalPrice so the
   // backend can audit/gate markdowns (price.override).
+  //
+  // 2026-07-27 FIX: this used to also clamp to `item.maxSellingPrice` — but that field is
+  // the inventory-side item.max_selling_price GUARDRAIL, which for most GOODS (anything
+  // without its own pricing-tier row) IS the item's own default/catalog price (inventory-api's
+  // effectivePrice() falls back to it directly). Clamping to it here silently reverted EVERY
+  // markup attempt straight back to the original price for such items — for ANY role,
+  // including managers/admins, since the clamp ran unconditionally. The guardrail is already
+  // enforced correctly server-side (orders.go min/max band gate): managers bypass it, and
+  // non-managers get the exact same price.override 422 → ApprovalDialog step-up as a
+  // below-base markdown. min_selling_price already worked this way (metadata-only, no local
+  // clamp) — max_selling_price now matches it for consistency.
   const setLinePrice = (index: number, newPrice: number, reason: string) => {
     setCart((prev) => prev.map((it, i) => {
       if (i !== index) return it;
       const original = it.originalPrice ?? it.price;
-      let next = Math.max(0, newPrice);
-      // Catalog hard ceiling applies to everyone (server band-gates it anyway).
-      if (typeof it.maxSellingPrice === 'number' && it.maxSellingPrice > 0) {
-        next = Math.min(next, it.maxSellingPrice);
-      }
-      next = Math.round(next * 100) / 100;
+      const next = Math.round(Math.max(0, newPrice) * 100) / 100;
       // The stored unitDiscount is deliberately KEPT: a direct price/line-total edit re-bases
       // the price around the same discount value instead of clearing it.
       return { ...it, price: next, originalPrice: original, overrideReason: reason };
@@ -1713,11 +1719,9 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
       if (i !== index) return it;
       const original = it.originalPrice ?? it.price;
       const base = it.price + (it.unitDiscount ?? 0);
-      let next = base - Math.max(0, unitDiscount);
-      if (typeof it.maxSellingPrice === 'number' && it.maxSellingPrice > 0) {
-        next = Math.min(next, it.maxSellingPrice);
-      }
-      next = Math.max(0, Math.round(next * 100) / 100);
+      // No local max_selling_price clamp here either — see setLinePrice's 2026-07-27 note;
+      // the server band-gates it (bypassing managers, approval-dialog for everyone else).
+      const next = Math.max(0, Math.round((base - Math.max(0, unitDiscount)) * 100) / 100);
       const applied = Math.round((base - next) * 100) / 100;
       return {
         ...it,

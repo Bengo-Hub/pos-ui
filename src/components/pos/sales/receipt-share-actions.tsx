@@ -111,6 +111,7 @@ export function useOrderShareActions(order: ShareOrderLike | null | undefined) {
       waSubmittedRef.current = true;
       openWhatsApp(phone, pendingDownloadLinkRef.current);
     },
+    waSubmittedRef,
     shareLink,
   };
 }
@@ -128,7 +129,7 @@ export function ReceiptShareButtons({
 }) {
   const {
     shareViaWhatsApp, openShareDialog, shareOpen, setShareOpen,
-    waPromptOpen, setWaPromptOpen, onManualWhatsAppPhone, shareLink,
+    waPromptOpen, setWaPromptOpen, onManualWhatsAppPhone, waSubmittedRef, shareLink,
   } = useOrderShareActions(order);
 
   if (!order) return null;

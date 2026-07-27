@@ -32,10 +32,16 @@ export function LinePriceModal({ open, item, canDiscount = false, requireApprova
 
   const maxPrice = typeof item.maxSellingPrice === 'number' && item.maxSellingPrice > 0 ? item.maxSellingPrice : undefined;
   const newPrice = parseFloat(value);
-  // Below-preset entries are always accepted here — the pricing policy is enforced at
-  // placement (server 422 → manager-approval dialog) — so the only hard bound is the ceiling.
+  // Below-preset AND above-ceiling entries are both accepted here — the pricing policy is
+  // enforced at placement (server 422 → manager-approval dialog for non-managers; managers
+  // bypass entirely). 2026-07-27 FIX: this used to hard-block Apply once newPrice > maxPrice
+  // (item.max_selling_price) — but that guardrail is the inventory-side "ceiling", which for
+  // most GOODS without their own pricing-tier row IS the item's own default price, so the
+  // block silently made every markup impossible. min_selling_price never had a local floor
+  // block; max_selling_price now matches it.
   const belowPreset = !isNaN(newPrice) && newPrice < original - 0.004;
-  const valid = !isNaN(newPrice) && newPrice >= 0 && (maxPrice == null || newPrice <= maxPrice);
+  const abovePreset = !isNaN(newPrice) && maxPrice != null && newPrice > maxPrice + 0.004;
+  const valid = !isNaN(newPrice) && newPrice >= 0;
   const deltaPct = original > 0 && !isNaN(newPrice) ? ((newPrice - original) / original) * 100 : 0;
 
   return (
@@ -53,7 +59,7 @@ export function LinePriceModal({ open, item, canDiscount = false, requireApprova
         </div>
 
         <input
-          type="number" min={0} max={maxPrice} autoFocus inputMode="decimal"
+          type="number" min={0} autoFocus inputMode="decimal"
           value={value} onChange={(e) => setValue(e.target.value)}
           placeholder="New unit price (KES)"
           className="w-full bg-accent/10 border border-border rounded-lg py-2.5 px-3 text-lg font-bold text-center focus:ring-1 focus:ring-primary outline-none"
@@ -63,8 +69,10 @@ export function LinePriceModal({ open, item, canDiscount = false, requireApprova
             Selling below the preset price needs a manager — the approval prompt will appear at payment.
           </p>
         )}
-        {maxPrice != null && !isNaN(newPrice) && newPrice > maxPrice && (
-          <p className="text-xs text-destructive text-center">Price can&apos;t exceed the catalog ceiling.</p>
+        {!canDiscount && abovePreset && (
+          <p className="text-xs text-amber-600 text-center">
+            Above the catalog ceiling — a manager approval prompt will appear at payment.
+          </p>
         )}
 
         <input

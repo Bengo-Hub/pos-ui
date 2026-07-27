@@ -299,6 +299,11 @@ export interface CatalogItem {
   /** Manager-only supplier cost — pos-api serialises it only to callers with pos.catalog.view_cost
    *  / pos.orders.manage. Drives the cart Cost + Margin columns. */
   cost_price?: number;
+  /** Selling-price guardrails (inventory Item.min/max_selling_price) — echoed to the order line
+   *  as metadata.min_price/max_price so pos-api's band gate can require manager approval for a
+   *  line priced outside them (managers bypass it entirely). Never enforced client-side. */
+  min_selling_price?: number;
+  max_selling_price?: number;
   requires_age_verification?: boolean;
   track_serial_numbers?: boolean;
   requires_prescription?: boolean;

@@ -491,6 +491,15 @@ export default function AddSalePage() {
           lineMeta.price_override = true;
           lineMeta.override_reason = (l.unitDiscount ?? 0) > 0 ? 'line discount' : 'price edit';
         }
+        // Selling-price guardrails (mirrors the terminal's cart payload) — without these the
+        // server's min/max band gate never sees them, so a below-floor/above-ceiling price
+        // typed here skipped manager approval entirely (a real gap vs. the terminal).
+        if (!free && typeof l.item.min_selling_price === 'number' && l.item.min_selling_price > 0) {
+          lineMeta.min_price = l.item.min_selling_price;
+        }
+        if (!free && typeof l.item.max_selling_price === 'number' && l.item.max_selling_price > 0) {
+          lineMeta.max_price = l.item.max_selling_price;
+        }
         return {
           catalog_item_id: l.item.id,
           sku: l.item.sku,
