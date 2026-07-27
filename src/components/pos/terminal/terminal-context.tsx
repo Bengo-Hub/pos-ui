@@ -221,6 +221,9 @@ export interface TerminalContextValue {
   pendingApprovalAction: string | null;
   setPendingApprovalAction: (v: string | null) => void;
   confirmApproval: (approval: { approvalToken?: string; code?: string }) => void;
+  /** Dismiss the approval dialog WITHOUT approving — settles any pending createOrderAsync()
+   *  caller with null so it stops waiting (e.g. the tender-confirm spinner clears). */
+  cancelApproval: () => void;
   // Per-line price override
   priceEditIndex: number | null;
   setPriceEditIndex: (i: number | null) => void;
@@ -651,6 +654,13 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
   const [priceEditIndex, setPriceEditIndex] = useState<number | null>(null);
   // Holds the latest retryable place(token) so the approval dialog can resubmit.
   const placeWithDiscountApprovalRef = useRef<((approval?: { approvalToken?: string; code?: string }) => void) | null>(null);
+  // 2026-07-27: the inline/GoDigital payment bar's createOrderAsync() is a second, separate
+  // order-creation path (used by every tender — Cash, Card, Credit, etc. — via ensureOrder()).
+  // It used to have NO approval-required (422) handling at all, leaving the cashier stuck on
+  // the tender-confirm screen with nothing but a toast. This resolver lets createOrderAsync's
+  // caller keep AWAITing the same promise while confirmApproval (below) retries the create
+  // call with the manager's token/code and resolves it once an order is actually produced.
+  const pendingCreateOrderResolveRef = useRef<((order: CreatedOrder | null) => void) | null>(null);
   const addOrderLines = useAddOrderLines();
 
   // ─── Multi-cart Sale sessions (retail only) ───────────────────────────────
@@ -1674,9 +1684,32 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
 
   // Confirm a manager approval (discount / price override / adjustment) and retry the order.
   // Accepts either a live step-up token or a manager-generated one-time code (ApprovalResult).
+  // Two independent order-creation paths can be pending: the older handlePlaceOrder flow
+  // (placeWithDiscountApprovalRef) and the inline/GoDigital payment bar's createOrderAsync
+  // (pendingCreateOrderResolveRef) — only one is ever active at a time in practice, so the
+  // create-order-async one is checked first and, if present, wins.
   const confirmApproval = (approval: { approvalToken?: string; code?: string }) => {
     setPendingApprovalAction(null);
+    if (pendingCreateOrderResolveRef.current) {
+      const resolve = pendingCreateOrderResolveRef.current;
+      pendingCreateOrderResolveRef.current = null;
+      // Chains correctly even if this retry ALSO 422s: createOrderAsync would return another
+      // pending promise, and resolve(that) just waits for it before settling the original one.
+      createOrderAsync(approval).then(resolve);
+      return;
+    }
     placeWithDiscountApprovalRef.current?.(approval);
+  };
+
+  // Dismiss without approving — a pending createOrderAsync() caller must still settle (with
+  // null) or its awaiter (e.g. the tender-confirm bar) would spin forever.
+  const cancelApproval = () => {
+    setPendingApprovalAction(null);
+    if (pendingCreateOrderResolveRef.current) {
+      const resolve = pendingCreateOrderResolveRef.current;
+      pendingCreateOrderResolveRef.current = null;
+      resolve(null);
+    }
   };
 
   // Override a cart line's unit price (2026-07-18 policy revision): managers/admins
@@ -1893,7 +1926,16 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
   // ─── Inline GoDigital payment bar orchestration ─────────────────────────
   // createOrderAsync creates (and returns) the order so the inline bar can settle against it,
   // mirroring handlePlaceOrder's validation. The bar owns the tender; the page owns order creation.
-  const createOrderAsync = useCallback(async (): Promise<CreatedOrder | null> => {
+  //
+  // 2026-07-27 FIX: this never handled the server's 422 approval_required response (a line
+  // below the outlet's minimum price, or an over-limit discount) — it just toasted the raw
+  // error and returned null, leaving the cashier stuck on the tender-confirm screen with no
+  // way to proceed (the ApprovalDialog retry only existed on the older handlePlaceOrder path,
+  // never ported to this newer inline bar). Now it opens the SAME ApprovalDialog
+  // (pendingApprovalAction) and keeps the original caller's promise pending until
+  // confirmApproval resolves it — settleImmediate's `await ensureOrder()` simply keeps
+  // waiting (busy spinner) and continues automatically once a manager approves.
+  const createOrderAsync = useCallback(async (approval?: { approvalToken?: string; code?: string }): Promise<CreatedOrder | null> => {
     if (cart.length === 0) return null;
     if (isHospitality && !orderSubtype) {
       toast.error('Please select Dine-In or Takeaway before placing the order.');
@@ -1915,6 +1957,8 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
         customerPhone: loyaltyState?.customerPhone || undefined,
         customerName: loyaltyState?.customerName || undefined,
         ageVerified: ageVerifiedRef.current || undefined,
+        approvalToken: approval?.approvalToken,
+        approvalCode: approval?.code,
         metadata: orderSubtype === 'delivery'
           ? {
               ...(deliveryInfo.address ? { delivery_address: deliveryInfo.address } : {}),
@@ -1942,7 +1986,15 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
       }
       if (tableId && orderId) assignTable.mutate({ tableId, orderId });
       return { orderId, orderNumber };
-    } catch (e) {
+    } catch (e: any) {
+      const status = e?.response?.status;
+      const errData = e?.response?.data ?? {};
+      if (status === 422 && errData.approval_required) {
+        return new Promise<CreatedOrder | null>((resolve) => {
+          pendingCreateOrderResolveRef.current = resolve;
+          setPendingApprovalAction(errData.action || 'price.override');
+        });
+      }
       toast.error(await apiErrorMessage(e, 'Failed to create order. Please try again.'));
       return null;
     }
@@ -1998,7 +2050,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
     manualDiscount, discountReason, discountOpen, setDiscountOpen, applyDiscount,
     orderTax, orderTaxOpen, setOrderTaxOpen, applyOrderTax,
     charges, chargesTotal, chargesOpen, setChargesOpen, applyCharges, roundOff,
-    pendingApprovalAction, setPendingApprovalAction, confirmApproval,
+    pendingApprovalAction, setPendingApprovalAction, confirmApproval, cancelApproval,
     priceEditIndex, setPriceEditIndex, setLinePrice, setLineDiscount,
     addItemToCart, handleItemTap, proceedWithItem, handleScaleAddToCart,
     updateQuantity, setLineQuantity, incrementCartLine, removeFromCart, clearCart, bogoFreeFor, updateCourse, setItemSeat,

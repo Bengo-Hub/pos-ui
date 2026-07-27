@@ -189,7 +189,7 @@ export function TerminalModals() {
                 : 'A manager must approve this discount.'
           }
           confirmLabel="Approve"
-          onClose={() => t.setPendingApprovalAction(null)}
+          onClose={t.cancelApproval}
           onApproved={t.confirmApproval}
         />
       )}
