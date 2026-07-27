@@ -109,6 +109,33 @@ export function TerminalShell() {
     </div>
   );
 
+  // Shared product-search field — the input itself, clear button, and placeholder are identical
+  // wherever it's shown (order-builder row + the mobile quick-search bar below); only whether it
+  // carries the barcode-scan focus ref differs, since a scanner should always target the ONE
+  // field a cashier is actually looking at, not whichever instance rendered last.
+  const renderSearchInput = (bindScanRef: boolean) => (
+    <div className="relative group flex-1 min-w-0">
+      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary" />
+      <input
+        ref={bindScanRef ? t.scanInputRef : undefined}
+        placeholder={searchPlaceholderFor(cfg.profile)}
+        className="w-full bg-card border border-border rounded-xl py-2.5 pl-9 pr-9 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 font-medium"
+        value={t.searchQuery}
+        onChange={(e) => t.handleSearchChange(e.target.value)}
+        onKeyDown={t.handleSearchKeyDown}
+      />
+      {t.searchQuery && (
+        <button
+          onClick={() => t.handleSearchChange('')}
+          className="absolute right-2.5 top-1/2 -translate-y-1/2 h-6 w-6 rounded-full bg-muted flex items-center justify-center hover:bg-destructive/10 hover:text-destructive"
+          aria-label="Clear search"
+        >
+          <X className="h-3 w-3" />
+        </button>
+      )}
+    </div>
+  );
+
   // ─────────── ORDER BUILDER — shared between the lg+ side panel and the mobile drawer ───────────
   // Search/customer/order-type row, the cart itself (table on lg+, cards below lg — no horizontal
   // scroll on a phone), and the totals footer. Purely a function of shared state/handlers, so it's
@@ -124,26 +151,7 @@ export function TerminalShell() {
       <div className="shrink-0 p-2.5 sm:p-3 space-y-1.5 sm:space-y-2 border-b border-border bg-card/40">
         {/* Row 1: product search (flexes) + pricing profile (right, same line). */}
         <div className="flex items-center gap-2">
-          <div className="relative group flex-1 min-w-0">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary" />
-            <input
-              ref={t.scanInputRef}
-              placeholder={searchPlaceholderFor(cfg.profile)}
-              className="w-full bg-card border border-border rounded-xl py-2.5 pl-9 pr-9 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 font-medium"
-              value={t.searchQuery}
-              onChange={(e) => t.handleSearchChange(e.target.value)}
-              onKeyDown={t.handleSearchKeyDown}
-            />
-            {t.searchQuery && (
-              <button
-                onClick={() => t.handleSearchChange('')}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 h-6 w-6 rounded-full bg-muted flex items-center justify-center hover:bg-destructive/10 hover:text-destructive"
-                aria-label="Clear search"
-              >
-                <X className="h-3 w-3" />
-              </button>
-            )}
-          </div>
+          {renderSearchInput(true)}
           {cfg.showPricingProfile && (
             <div className="flex items-center gap-1.5 shrink-0">
               <span className="hidden sm:inline text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Price</span>
@@ -609,6 +617,12 @@ export function TerminalShell() {
         {/* ===== RIGHT: PRODUCT PICKER (Category/Brands tabs + grid) — always the mobile view;
             a permanent side panel on lg+ ===== */}
         <div className="flex flex-col min-h-0 overflow-hidden bg-card/30">
+          {/* Mobile-only quick search — sits above the catalog so a search doesn't require first
+              opening the cart drawer (previously the ONLY place a search field existed on phone,
+              forcing open-cart → search → back-to-catalog just to look an item up mid-browse). */}
+          <div className="lg:hidden shrink-0 px-3 pt-2.5 pb-1 border-b border-border">
+            {renderSearchInput(false)}
+          </div>
           <div className="shrink-0 px-3 py-2.5 flex items-center gap-2 border-b border-border">
             {/* Category | Brands switch — Brands apply to retail/pharmacy only (cfg.showBrandGrid). */}
             {cfg.showBrandGrid && (
