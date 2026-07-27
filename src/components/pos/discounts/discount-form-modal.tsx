@@ -12,6 +12,11 @@ import {
 import { ScopeItemPicker, CategoryQuickAdd, type SearchItemsFn, type FetchCategoryItemsFn } from './discount-item-pickers';
 import { PairEditor } from './discount-pair-editor';
 import { StorefrontBannerFields } from './discount-banner-fields';
+import { FeatureLock } from '@bengo-hub/shared-ui-lib/subscription';
+
+// Backend feature code (subscriptions.FeatureStorefrontBanner in pos-api) gating the
+// storefront banner section to Pro/Gold PowerSuite tenants — same string on both sides.
+const STOREFRONT_BANNER_FEATURE = 'storefront_banner';
 
 export { describeDiscount, describeScope, type DiscountItemRef } from './discount-form-types';
 
@@ -383,7 +388,13 @@ export function DiscountFormModal({
             </div>
           )}
 
-          <StorefrontBannerFields banner={f.banner} onChange={setBanner} />
+          {/* Storefront banner is Pro/Gold PowerSuite only — this is UX defense-in-depth
+              (show, don't hide), never the security boundary: pos-api re-checks the same
+              feature entitlement server-side on every write AND on every S2SListBanners read,
+              so a downgraded tenant's banner stops being served even if this client is bypassed. */}
+          <FeatureLock feature={STOREFRONT_BANNER_FEATURE} mode="overlay">
+            <StorefrontBannerFields banner={f.banner} onChange={setBanner} />
+          </FeatureLock>
 
           <p className="text-xs text-muted-foreground bg-muted/50 rounded-lg px-3 py-2">
             Discounts are stored once in the platform&apos;s discount source of truth and apply on the POS
