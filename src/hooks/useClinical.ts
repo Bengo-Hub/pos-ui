@@ -15,6 +15,16 @@ import {
   prescribeFromExamination,
   listLabOrders,
   submitLabResults,
+  listLabTests,
+  createLabTest,
+  updateLabTest,
+  deleteLabTest,
+  listDiagnoses,
+  createDiagnosis,
+  activateLabOrder,
+  listPharmacyBills,
+  getPharmacyWorkflow,
+  updatePharmacyWorkflow,
   type CreatePatientData,
   type CreateVisitData,
   type VisitStatus,
@@ -22,6 +32,7 @@ import {
   type ExaminationInput,
   type PrescribeInput,
   type LabResultLineInput,
+  type LabTestInput,
 } from '@/lib/api/clinical';
 
 function useTenantSlug() {
@@ -164,6 +175,106 @@ export function useSubmitLabResults() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['clinical-lab-orders', tenantSlug] });
       qc.invalidateQueries({ queryKey: ['clinical-visits', tenantSlug] });
+    },
+  });
+}
+
+// ─── Lab test catalogue ────────────────────────────────────────────────────────
+
+export function useLabTests(params?: { category?: string; q?: string; include_inactive?: boolean }) {
+  const tenantSlug = useTenantSlug();
+  return useQuery({
+    queryKey: ['clinical-lab-tests', tenantSlug, params],
+    queryFn: () => listLabTests(tenantSlug, params),
+    enabled: !!tenantSlug,
+    staleTime: 5 * 60_000,
+  });
+}
+
+export function useSaveLabTest() {
+  const tenantSlug = useTenantSlug();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, body }: { id?: string; body: LabTestInput }) =>
+      id ? updateLabTest(tenantSlug, id, body) : createLabTest(tenantSlug, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['clinical-lab-tests', tenantSlug] }),
+  });
+}
+
+export function useDeleteLabTest() {
+  const tenantSlug = useTenantSlug();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => deleteLabTest(tenantSlug, id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['clinical-lab-tests', tenantSlug] }),
+  });
+}
+
+// ─── Diagnosis catalogue ───────────────────────────────────────────────────────
+
+export function useDiagnoses(q?: string) {
+  const tenantSlug = useTenantSlug();
+  return useQuery({
+    queryKey: ['clinical-diagnoses', tenantSlug, q],
+    queryFn: () => listDiagnoses(tenantSlug, q),
+    enabled: !!tenantSlug,
+    staleTime: 5 * 60_000,
+  });
+}
+
+export function useCreateDiagnosis() {
+  const tenantSlug = useTenantSlug();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { name: string; code?: string; category?: string }) => createDiagnosis(tenantSlug, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['clinical-diagnoses', tenantSlug] }),
+  });
+}
+
+// ─── Lab order activation + Bills queue ────────────────────────────────────────
+
+export function useActivateLabOrder() {
+  const tenantSlug = useTenantSlug();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (labOrderId: string) => activateLabOrder(tenantSlug, labOrderId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['clinical-lab-orders', tenantSlug] }),
+  });
+}
+
+export function usePharmacyBills() {
+  const tenantSlug = useTenantSlug();
+  return useQuery({
+    queryKey: ['pharmacy-bills', tenantSlug],
+    queryFn: () => listPharmacyBills(tenantSlug),
+    enabled: !!tenantSlug,
+    staleTime: 15_000,
+    refetchInterval: 30_000,
+  });
+}
+
+// ─── Pharmacy dispensing-workflow config ───────────────────────────────────────
+
+export function usePharmacyWorkflow(outletId?: string) {
+  const tenantSlug = useTenantSlug();
+  return useQuery({
+    queryKey: ['pharmacy-workflow-config', tenantSlug, outletId],
+    queryFn: () => getPharmacyWorkflow(tenantSlug, outletId),
+    enabled: !!tenantSlug,
+    staleTime: 60_000,
+  });
+}
+
+export function useUpdatePharmacyWorkflow() {
+  const tenantSlug = useTenantSlug();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { outlet_id?: string; pharmacy_workflow_mode?: 'direct' | 'billing'; require_lab_prepayment?: boolean }) =>
+      updatePharmacyWorkflow(tenantSlug, body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['pharmacy-workflow-config', tenantSlug] });
+      // The Bills nav item is derived from this mode — refresh the settings the sidebar reads.
+      qc.invalidateQueries({ queryKey: ['pos-settings'] });
     },
   });
 }

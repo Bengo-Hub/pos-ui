@@ -41,7 +41,7 @@ export type ModuleKey =
   | 'pharmacy'
   | 'patients'
   | 'drug_inventory'
-  | 'records'
+  | 'pharmacy_bills'
   | 'triage'
   | 'examination'
   | 'lab'
@@ -96,7 +96,7 @@ const USE_CASE_MODULES: Record<UseCaseType, ModuleKey[]> = {
   retail:        [...COMMON_MODULES, 'retail', 'shifts', 'reports', 'layaway', 'loyalty', 'commissions', 'online_orders', 'returns', 'clients', 'repairs'],
   services:      [...COMMON_MODULES, 'appointments', 'packages', 'shifts', 'reports', 'loyalty', 'commissions', 'clients', 'staff_schedule', 'resources', 'queue', 'repairs'],
   quick_service: [...COMMON_MODULES, 'kds', 'shifts', 'reports', 'online_orders'],
-  pharmacy:      [...COMMON_MODULES, 'shifts', 'reports', 'pharmacy', 'patients', 'drug_inventory', 'records', 'triage', 'examination', 'lab'],
+  pharmacy:      [...COMMON_MODULES, 'shifts', 'reports', 'pharmacy', 'patients', 'drug_inventory', 'pharmacy_bills', 'triage', 'examination', 'lab'],
 };
 
 // ─── Hook ───────────────────────────────────────────────────────────────────
@@ -217,6 +217,14 @@ export function useModuleAccess() {
       if (moduleKey === 'kds'          && !posSettings.enable_kds)              return false;
       if (moduleKey === 'bar'          && !posSettings.enable_kds)              return false; // bar shares KDS toggle
       if (moduleKey === 'appointments' && !posSettings.enable_appointments)     return false;
+      // OPD clinical stages — each independently toggleable so a small chemist runs none of them
+      // and a clinic-attached pharmacy runs only the stages it actually staffs.
+      if (moduleKey === 'triage'       && !posSettings.enable_triage_module)      return false;
+      if (moduleKey === 'examination'  && !posSettings.enable_examination_module) return false;
+      if (moduleKey === 'lab'          && !posSettings.enable_lab_module)         return false;
+      // The cashier Bills queue only exists in "billing" mode — in "direct" mode the person who
+      // writes the prescription also takes payment, straight from the prescription page.
+      if (moduleKey === 'pharmacy_bills' && posSettings.pharmacy_workflow_mode !== 'billing') return false;
     }
     return true;
   }

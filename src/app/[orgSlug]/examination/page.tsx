@@ -8,8 +8,10 @@ import { P } from '@/lib/rbac/permissions';
 import { VisitStatusBadge } from '@/components/clinical/visit-status-badge';
 import {
   useVisits, usePatient, useVisit, useRecordExamination, usePrescribeFromExamination,
+  usePrescribers, useLabTests, useDiagnoses, useCreateDiagnosis,
 } from '@/hooks/useClinical';
-import { usePrescribers } from '@/hooks/useClinical';
+import { MultiSelect, type MultiSelectOption } from '@/components/ui/multi-select';
+import { formatCurrency } from '@/lib/utils';
 import { apiClient } from '@/lib/api/client';
 import { useAuthStore } from '@/store/auth';
 import { SearchableCombobox, type ComboboxOption } from '@bengo-hub/shared-ui-lib/combobox';
@@ -38,16 +40,19 @@ function ExaminationModal({ visit, onClose, onLabRequested, onReadyToPrescribe }
   const { data } = usePatient(visit.patient_id);
   const { data: visitDetail } = useVisit(visit.id);
   const recordExamination = useRecordExamination();
+  const { data: labTestData } = useLabTests();
+  const { data: diagnosisOptions } = useDiagnoses();
+  const createDiagnosis = useCreateDiagnosis();
   const [chiefComplaint, setChiefComplaint] = useState(visit.chief_complaint ?? '');
-  const [diagnosis, setDiagnosis] = useState('');
+  const [diagnosisCodes, setDiagnosisCodes] = useState<string[]>([]);
   const [notes, setNotes] = useState('');
   const [labRequested, setLabRequested] = useState(false);
-  const [tests, setTests] = useState<string[]>(['']);
+  const [selectedTestIds, setSelectedTestIds] = useState<string[]>([]);
 
   useEffect(() => {
     if (visitDetail?.examination) {
       setChiefComplaint(visitDetail.examination.chief_complaint ?? chiefComplaint);
-      setDiagnosis(visitDetail.examination.diagnosis ?? '');
+      setDiagnosisCodes(visitDetail.examination.diagnosis_codes ?? []);
       setNotes(visitDetail.examination.clinical_notes ?? '');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -56,19 +61,43 @@ function ExaminationModal({ visit, onClose, onLabRequested, onReadyToPrescribe }
   const inputCls = 'w-full bg-background border border-border rounded-xl py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40';
   const labelCls = 'text-xs font-semibold text-muted-foreground mb-1 block';
 
+  const labTests = labTestData?.data ?? [];
+  const testOptions: MultiSelectOption[] = labTests.map((t) => ({
+    value: t.id,
+    label: t.name,
+    hint: formatCurrency(Number(t.price)),
+    category: t.category || 'Uncategorised',
+  }));
+  const diagOptions: MultiSelectOption[] = (diagnosisOptions ?? []).map((d) => ({
+    value: d.name,
+    label: d.name,
+    hint: d.code,
+    category: d.category || 'General',
+  }));
+
+  // Running total so the clinician sees what the patient will be billed before ordering.
+  const labTotal = selectedTestIds.reduce((sum, id) => {
+    const t = labTests.find((x) => x.id === id);
+    return sum + Number(t?.price ?? 0);
+  }, 0);
+
   const handleSubmit = async () => {
+    if (labRequested && selectedTestIds.length === 0) {
+      toast.error('Select at least one lab test');
+      return;
+    }
     try {
-      const res = await recordExamination.mutateAsync({
+      await recordExamination.mutateAsync({
         visitId: visit.id,
         data: {
           chief_complaint: chiefComplaint || undefined,
-          diagnosis: diagnosis || undefined,
+          diagnosis_codes: diagnosisCodes,
           clinical_notes: notes || undefined,
           lab_requested: labRequested,
-          lab_tests: labRequested ? tests.filter((t) => t.trim()) : undefined,
+          lab_test_ids: labRequested ? selectedTestIds : undefined,
         },
       });
-      toast.success(labRequested ? 'Lab tests ordered' : 'Examination saved');
+      toast.success(labRequested ? 'Lab tests ordered — patient must pay before testing starts' : 'Examination saved');
       onClose();
       if (labRequested) onLabRequested();
       else onReadyToPrescribe();
@@ -112,7 +141,26 @@ function ExaminationModal({ visit, onClose, onLabRequested, onReadyToPrescribe }
           </div>
           <div>
             <label className={labelCls}>Diagnosis</label>
-            <textarea value={diagnosis} onChange={(e) => setDiagnosis(e.target.value)} rows={2} className={`${inputCls} resize-none`} />
+            <MultiSelect
+              options={diagOptions}
+              selected={diagnosisCodes}
+              onChange={setDiagnosisCodes}
+              onCreate={async (name) => {
+                try {
+                  await createDiagnosis.mutateAsync({ name });
+                  setDiagnosisCodes((prev) => [...prev, name]);
+                } catch (e) {
+                  toast.error(await apiErrorMessage(e, 'Failed to add diagnosis'));
+                }
+              }}
+              placeholder="Select one or more diagnoses…"
+              searchPlaceholder="Search or type a new diagnosis…"
+              emptyText="No matching diagnosis"
+              createLabel="Add diagnosis"
+            />
+            <p className="text-[11px] text-muted-foreground mt-1">
+              Pick any combination — anything you type that isn&apos;t listed is added to the catalogue.
+            </p>
           </div>
           <div>
             <label className={labelCls}>Clinical Notes</label>
@@ -124,24 +172,20 @@ function ExaminationModal({ visit, onClose, onLabRequested, onReadyToPrescribe }
           </label>
           {labRequested && (
             <div className="space-y-2">
-              {tests.map((t, i) => (
-                <div key={i} className="flex gap-2">
-                  <input
-                    value={t}
-                    onChange={(e) => setTests((prev) => prev.map((x, j) => (j === i ? e.target.value : x)))}
-                    placeholder="e.g. Full Blood Count"
-                    className={inputCls}
-                  />
-                  {tests.length > 1 && (
-                    <button onClick={() => setTests((prev) => prev.filter((_, j) => j !== i))} className="text-muted-foreground hover:text-destructive">
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  )}
+              <MultiSelect
+                options={testOptions}
+                selected={selectedTestIds}
+                onChange={setSelectedTestIds}
+                placeholder="Select lab tests…"
+                searchPlaceholder="Search tests…"
+                emptyText="No tests configured — add them in Settings › Lab Tests"
+              />
+              {selectedTestIds.length > 0 && (
+                <div className="flex items-center justify-between rounded-xl border border-border bg-background/50 px-3 py-2 text-sm">
+                  <span className="text-muted-foreground">{selectedTestIds.length} test(s) — patient pays before testing</span>
+                  <span className="font-bold">{formatCurrency(labTotal)}</span>
                 </div>
-              ))}
-              <button onClick={() => setTests((prev) => [...prev, ''])} className="text-xs text-primary font-semibold flex items-center gap-1">
-                <Plus className="h-3.5 w-3.5" /> Add test
-              </button>
+              )}
             </div>
           )}
         </div>

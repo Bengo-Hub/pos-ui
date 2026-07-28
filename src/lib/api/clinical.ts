@@ -130,6 +130,7 @@ export interface Examination {
   examined_by: string;
   chief_complaint?: string;
   diagnosis?: string;
+  diagnosis_codes?: string[];
   clinical_notes?: string;
   lab_requested: boolean;
   prescription_id?: string;
@@ -196,9 +197,15 @@ export async function recordTriage(tenantSlug: string, visitId: string, data: Tr
 
 export interface ExaminationInput {
   chief_complaint?: string;
+  /** Free-text summary; derived by joining diagnosis_codes when left empty. */
   diagnosis?: string;
+  /** Structured multi-select from the diagnosis catalogue (a visit may carry a combination). */
+  diagnosis_codes?: string[];
   clinical_notes?: string;
   lab_requested: boolean;
+  /** Priced catalogue picks. */
+  lab_test_ids?: string[];
+  /** Free-typed one-off tests the catalogue doesn't carry yet. */
   lab_tests?: string[];
 }
 
@@ -249,4 +256,126 @@ export interface LabResultLineInput {
 
 export async function submitLabResults(tenantSlug: string, labOrderId: string, lines: LabResultLineInput[]) {
   return apiClient.post(`${base(tenantSlug)}/lab-orders/${labOrderId}/results`, { lines });
+}
+
+// ─── Lab test catalogue ────────────────────────────────────────────────────────
+
+export interface LabTest {
+  id: string;
+  name: string;
+  code?: string;
+  category?: string;
+  price: string | number;
+  sample_type?: string;
+  reference_range?: string;
+  unit?: string;
+  turnaround_hours?: number;
+  is_active: boolean;
+}
+
+export interface LabTestInput {
+  name: string;
+  code?: string;
+  category?: string;
+  price: number;
+  sample_type?: string;
+  reference_range?: string;
+  unit?: string;
+  turnaround_hours?: number;
+  is_active?: boolean;
+}
+
+export async function listLabTests(
+  tenantSlug: string,
+  params?: { category?: string; q?: string; include_inactive?: boolean },
+): Promise<{ data: LabTest[]; categories: string[] }> {
+  const res = await apiClient.get<{ data: LabTest[]; categories: string[] }>(
+    `${base(tenantSlug)}/lab-tests`,
+    params as Record<string, unknown> | undefined,
+  );
+  return { data: res.data ?? [], categories: res.categories ?? [] };
+}
+
+export async function createLabTest(tenantSlug: string, body: LabTestInput): Promise<LabTest> {
+  return apiClient.post<LabTest>(`${base(tenantSlug)}/lab-tests`, body);
+}
+
+export async function updateLabTest(tenantSlug: string, id: string, body: LabTestInput): Promise<LabTest> {
+  return apiClient.put<LabTest>(`${base(tenantSlug)}/lab-tests/${id}`, body);
+}
+
+export async function deleteLabTest(tenantSlug: string, id: string): Promise<void> {
+  await apiClient.delete(`${base(tenantSlug)}/lab-tests/${id}`);
+}
+
+// ─── Diagnosis catalogue ───────────────────────────────────────────────────────
+
+export interface Diagnosis {
+  id: string;
+  name: string;
+  code?: string;
+  category?: string;
+  is_global: boolean;
+  is_active: boolean;
+}
+
+export async function listDiagnoses(tenantSlug: string, q?: string): Promise<Diagnosis[]> {
+  const res = await apiClient.get<{ data: Diagnosis[] }>(`${base(tenantSlug)}/diagnoses`, q ? { q } : undefined);
+  return res.data ?? [];
+}
+
+export async function createDiagnosis(
+  tenantSlug: string,
+  body: { name: string; code?: string; category?: string },
+): Promise<Diagnosis> {
+  return apiClient.post<Diagnosis>(`${base(tenantSlug)}/diagnoses`, body);
+}
+
+// ─── Lab order activation (after its bill is settled) ──────────────────────────
+
+export async function activateLabOrder(tenantSlug: string, labOrderId: string) {
+  return apiClient.post(`${base(tenantSlug)}/lab-orders/${labOrderId}/activate`, {});
+}
+
+// ─── Bills queue (cashier-facing, "billing" workflow mode) ─────────────────────
+
+export interface PharmacyBill {
+  prescription: {
+    id: string;
+    prescription_number: string;
+    patient_name: string;
+    prescriber_name: string;
+    status: string;
+    order_id?: string;
+    created_at: string;
+  };
+  lines: { id: string; drug_name: string; quantity_prescribed: number; quantity_dispensed: number }[];
+  line_count: number;
+  estimated_total: number;
+  order_id?: string;
+  order_total?: number;
+}
+
+export async function listPharmacyBills(tenantSlug: string): Promise<PharmacyBill[]> {
+  const res = await apiClient.get<{ data: PharmacyBill[] }>(`/api/v1/${tenantSlug}/pos/pharmacy/bills`);
+  return res.data ?? [];
+}
+
+// ─── Pharmacy dispensing-workflow config ───────────────────────────────────────
+
+export interface PharmacyWorkflowConfig {
+  outlet_id: string;
+  pharmacy_workflow_mode: 'direct' | 'billing';
+  require_lab_prepayment: boolean;
+}
+
+export async function getPharmacyWorkflow(tenantSlug: string, outletId?: string): Promise<PharmacyWorkflowConfig> {
+  return apiClient.get(`${base(tenantSlug)}/workflow-config`, outletId ? { outlet_id: outletId } : undefined);
+}
+
+export async function updatePharmacyWorkflow(
+  tenantSlug: string,
+  body: { outlet_id?: string; pharmacy_workflow_mode?: 'direct' | 'billing'; require_lab_prepayment?: boolean },
+): Promise<PharmacyWorkflowConfig> {
+  return apiClient.patch(`${base(tenantSlug)}/workflow-config`, body);
 }

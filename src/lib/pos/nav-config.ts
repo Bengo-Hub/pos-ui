@@ -12,7 +12,7 @@
 import {
   BarChart3, BedDouble, Calendar, ChefHat, ClipboardList, Clock, Cpu, FilePlus, FileText,
   FlaskConical, Gift, Grid3x3, HandCoins, HeartPulse, LayoutDashboard, Package, Percent, Pill, Plus, Presentation,
-  RotateCcw, Settings, ShoppingBag, Sofa, Stethoscope, TrendingUp, Truck, UserSquare, Users, Wallet, Wine, Wrench,
+  Receipt, RotateCcw, Settings, ShoppingBag, Sofa, Stethoscope, TrendingUp, Truck, UserSquare, Users, Wallet, Wine, Wrench,
 } from 'lucide-react';
 import type { Permission } from '@/lib/rbac/permissions';
 import { P } from '@/lib/rbac/permissions';
@@ -148,11 +148,17 @@ export function buildNavGroups(orgSlug: string): NavGroup[] {
       defaultCollapsed: true,
       items: [
         { label: 'Prescriptions', icon: Pill, href: '/pharmacy', moduleKey: 'pharmacy', permission: [P.PHARMACY_VIEW, P.PHARMACY_ADD, P.PHARMACY_CHANGE, P.PHARMACY_MANAGE], waiterHidden: true },
-        { label: 'Patient Profiles', icon: UserSquare, href: '/patients', moduleKey: 'patients', permission: [P.PHARMACY_VIEW, P.PHARMACY_MANAGE], waiterHidden: true },
+        // Bills — the cashier queue for the "billing" workflow mode (a prescriber posts the script,
+        // any cashier settles it). Hidden in "direct" mode, where the prescriber takes payment
+        // themselves straight from the prescription page.
+        { label: 'Bills', icon: Receipt, href: '/bills', moduleKey: 'pharmacy_bills', permission: [P.PAYMENTS_ADD, P.PAYMENTS_VIEW], waiterHidden: true },
+        // ONE patient directory. This used to be two near-identical screens ("Patient Profiles"
+        // over derived prescription patients + "Records" over registered ones) — merged, with the
+        // register/open-visit actions inside gated on the OPD Records module toggle.
+        { label: 'Patients', icon: UserSquare, href: '/patients', moduleKey: 'patients', permission: [P.PHARMACY_VIEW, P.RECORDS_VIEW, P.RECORDS_MANAGE], waiterHidden: true },
         // OPD clinical workflow — each independently OFF by default (OutletSetting.enable_*_module,
         // toggled in Settings > Modules); a small chemist never sees these, a clinic-attached
         // pharmacy turns on only the stages it actually runs.
-        { label: 'Records', icon: FileText, href: '/records', moduleKey: 'records', permission: [P.RECORDS_VIEW, P.RECORDS_ADD, P.RECORDS_CHANGE, P.RECORDS_MANAGE], waiterHidden: true },
         { label: 'Triage', icon: HeartPulse, href: '/triage', moduleKey: 'triage', permission: [P.TRIAGE_VIEW, P.TRIAGE_ADD, P.TRIAGE_CHANGE, P.TRIAGE_MANAGE], waiterHidden: true },
         { label: 'Examination', icon: Stethoscope, href: '/examination', moduleKey: 'examination', permission: [P.EXAMINATION_VIEW, P.EXAMINATION_ADD, P.EXAMINATION_CHANGE, P.EXAMINATION_MANAGE], waiterHidden: true },
         { label: 'Lab', icon: FlaskConical, href: '/lab', moduleKey: 'lab', permission: [P.LAB_VIEW, P.LAB_ADD, P.LAB_CHANGE, P.LAB_MANAGE], waiterHidden: true },

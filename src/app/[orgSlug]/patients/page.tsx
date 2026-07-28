@@ -1,151 +1,297 @@
 'use client';
 
-import { ModuleGate } from '@/components/auth/module-gate';
-import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
-import { useAuthStore } from '@/store/auth';
-import { useQuery } from '@tanstack/react-query';
-import { apiClient } from '@/lib/api/client';
-import { useParams } from 'next/navigation';
 import { useState } from 'react';
-import { Loader2, Plus, UserSquare } from 'lucide-react';
+import { PageGuard } from '@/components/auth/page-guard';
+import { Can } from '@/components/auth/can';
+import { P } from '@/lib/rbac/permissions';
+import { PageHeader } from '@/components/ui/page-header';
+import { EmptyState } from '@/components/ui/empty-state';
+import { useAuthStore } from '@/store/auth';
+import { useModuleAccess } from '@/hooks/use-module-access';
+import { usePatients, useCreatePatient, useCreateVisit, useVisits } from '@/hooks/useClinical';
+import { SplitPaymentModal } from '@/components/pos/split-payment-modal';
+import { ClipboardPlus, Loader2, Search, UserPlus, UserSquare, X } from 'lucide-react';
+import { toast } from 'sonner';
+import { apiErrorMessage } from '@/lib/api/error-message';
 import Link from 'next/link';
-import { cn } from '@/lib/utils';
+import { useParams } from 'next/navigation';
+import type { Patient } from '@/lib/api/clinical';
 
-// Patients are a derived view over prescriptions — there is no standalone Patient
-// entity. The backend returns distinct patients keyed by id-number (fallback: name).
-interface Patient {
-  patient_name: string;
-  patient_dob?: string;
-  patient_id_number?: string;
-  visit_count: number;
-  last_visit?: string;
-}
+function RegisterPatientModal({ onClose, onRegistered }: { onClose: () => void; onRegistered: (p: Patient) => void }) {
+  const outlet = useAuthStore((s) => s.outlet);
+  const createPatient = useCreatePatient();
+  const [fullName, setFullName] = useState('');
+  const [dob, setDob] = useState('');
+  const [gender, setGender] = useState('');
+  const [phone, setPhone] = useState('');
+  const [idNumber, setIdNumber] = useState('');
+  const [address, setAddress] = useState('');
 
-function usePatients(search: string) {
-  const user = useAuthStore((s) => s.user);
-  const tenantID = user?.tenant_id ?? '';
-  return useQuery({
-    queryKey: ['pharmacy-patients', tenantID, search],
-    // Backend search param is `q`; response is the `{ data }` pagination envelope.
-    queryFn: () => apiClient.get<{ data: Patient[] }>(`/api/v1/${tenantID}/pos/pharmacy/patients${search ? `?q=${encodeURIComponent(search)}` : ''}`),
-    enabled: !!tenantID,
-    staleTime: 2 * 60_000,
-    select: (res) => res.data ?? [],
-  });
-}
+  const inputCls = 'w-full bg-background border border-border rounded-xl py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40';
+  const labelCls = 'text-xs font-semibold text-muted-foreground mb-1 block';
 
-function PatientCard({ patient, orgSlug }: { patient: Patient; orgSlug: string }) {
-  const age = patient.patient_dob
-    ? Math.floor((Date.now() - new Date(patient.patient_dob).getTime()) / (365.25 * 24 * 3600 * 1000))
-    : null;
-  // Route by name (always present); id-number is unreliable / often blank.
-  const key = encodeURIComponent(patient.patient_name);
+  const handleSubmit = async () => {
+    if (!outlet?.id || !fullName.trim()) {
+      toast.error('Full name is required');
+      return;
+    }
+    try {
+      const patient = await createPatient.mutateAsync({
+        outlet_id: outlet.id,
+        full_name: fullName.trim(),
+        dob: dob || undefined,
+        gender: gender || undefined,
+        phone: phone || undefined,
+        id_number: idNumber || undefined,
+        address: address || undefined,
+      });
+      toast.success(`${patient.full_name} registered — ${patient.patient_number}`);
+      onRegistered(patient);
+    } catch (e) {
+      toast.error(await apiErrorMessage(e, 'Failed to register patient'));
+    }
+  };
 
   return (
-    <Link
-      href={`/${orgSlug}/patients/${key}`}
-      className="flex items-center gap-4 px-5 py-4 bg-card border border-border rounded-2xl hover:border-primary/30 hover:shadow-md hover:shadow-primary/8 transition-all duration-200"
-    >
-      <div className="h-11 w-11 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
-        <span className="text-sm font-bold text-primary">
-          {patient.patient_name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase()}
-        </span>
-      </div>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 flex-wrap">
-          <p className="font-semibold text-sm text-foreground">{patient.patient_name}</p>
-          {patient.patient_id_number && (
-            <span className="text-[10px] font-medium bg-accent text-muted-foreground px-1.5 py-0.5 rounded-full">
-              ID {patient.patient_id_number}
-            </span>
-          )}
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+      <div className="bg-card rounded-2xl border border-border w-full max-w-md shadow-2xl">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+          <div className="flex items-center gap-3">
+            <div className="h-9 w-9 rounded-xl bg-primary/10 flex items-center justify-center">
+              <UserPlus className="h-4.5 w-4.5 text-primary" />
+            </div>
+            <div>
+              <h3 className="font-bold text-base">Register Patient</h3>
+              <p className="text-xs text-muted-foreground">Create a new OPD patient record</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="h-9 w-9 rounded-xl flex items-center justify-center hover:bg-accent">
+            <X className="h-4 w-4" />
+          </button>
         </div>
-        <p className="text-xs text-muted-foreground mt-0.5">
-          {age !== null ? `${age} yrs` : ''}
-          {age !== null && patient.last_visit ? ' · ' : ''}
-          {patient.last_visit ? `last visit ${new Date(patient.last_visit).toLocaleDateString()}` : ''}
-        </p>
+        <div className="p-6 space-y-3">
+          <div>
+            <label className={labelCls}>Full Name *</label>
+            <input value={fullName} onChange={(e) => setFullName(e.target.value)} className={inputCls} placeholder="Full name" />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={labelCls}>Date of Birth</label>
+              <input type="date" value={dob} onChange={(e) => setDob(e.target.value)} className={inputCls} />
+            </div>
+            <div>
+              <label className={labelCls}>Gender</label>
+              <select value={gender} onChange={(e) => setGender(e.target.value)} className={inputCls}>
+                <option value="">—</option>
+                <option value="male">Male</option>
+                <option value="female">Female</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={labelCls}>Phone</label>
+              <input value={phone} onChange={(e) => setPhone(e.target.value)} className={inputCls} placeholder="0712 345 678" />
+            </div>
+            <div>
+              <label className={labelCls}>ID / Passport #</label>
+              <input value={idNumber} onChange={(e) => setIdNumber(e.target.value)} className={inputCls} />
+            </div>
+          </div>
+          <div>
+            <label className={labelCls}>Address</label>
+            <input value={address} onChange={(e) => setAddress(e.target.value)} className={inputCls} />
+          </div>
+        </div>
+        <div className="flex gap-3 px-6 pb-6">
+          <button onClick={onClose} className="flex-1 min-h-11 rounded-xl border border-border text-sm font-semibold hover:bg-accent transition-colors">
+            Cancel
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={createPatient.isPending}
+            className="flex-1 min-h-11 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            {createPatient.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+            Register
+          </button>
+        </div>
       </div>
-      <div className="text-right shrink-0">
-        <p className="text-xs font-semibold text-foreground">{patient.visit_count ?? 0} Rx</p>
-      </div>
-    </Link>
+    </div>
   );
 }
 
-function PatientsPage() {
+function RecordsPage() {
   const params = useParams();
   const orgSlug = params?.orgSlug as string;
+  const outlet = useAuthStore((s) => s.outlet);
   const [search, setSearch] = useState('');
-  const { data: patients = [], isLoading } = usePatients(search);
+  const [registerOpen, setRegisterOpen] = useState(false);
+  const [paymentOrder, setPaymentOrder] = useState<{ id: string; order_number: string; total: number } | null>(null);
+  const tenantSlug = useAuthStore((s) => s.user?.tenant_slug ?? orgSlug);
+  const tenantId = useAuthStore((s) => s.user?.tenant_id ?? '');
+
+  // This page merges what used to be two near-identical screens (Records + Patient Profiles).
+  // Registration and visit-opening only apply when the OPD Records module is on; a plain pharmacy
+  // still gets the directory, populated from whoever appears on its prescriptions.
+  const { hasModule } = useModuleAccess();
+  const recordsEnabled = hasModule('records');
+
+  const { data: patients, isLoading } = usePatients(search || undefined);
+  const { data: activeVisits } = useVisits('registered');
+  const createVisit = useCreateVisit();
+
+  const handleOpenVisit = async (patientId: string) => {
+    if (!outlet?.id) {
+      toast.error('No outlet selected');
+      return;
+    }
+    try {
+      const res = await createVisit.mutateAsync({ patient_id: patientId, outlet_id: outlet.id });
+      toast.success(`Visit ${res.visit.visit_number} opened`);
+      if (res.registration_fee_order) {
+        setPaymentOrder({
+          id: res.registration_fee_order.id,
+          order_number: res.registration_fee_order.order_number,
+          total: res.registration_fee_order.total_amount,
+        });
+      }
+    } catch (e) {
+      toast.error(await apiErrorMessage(e, 'Failed to open visit'));
+    }
+  };
 
   return (
     <div className="p-6">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
-            <UserSquare className="h-5 w-5 text-primary" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold">Patient Profiles</h1>
-            <p className="text-sm text-muted-foreground mt-0.5">Manage patient records and medication history</p>
-          </div>
-        </div>
-        {/* Patients are created implicitly when a prescription is filled. */}
-        <Link
-          href={`/${orgSlug}/pharmacy?new=1`}
-          className="inline-flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-primary/90 transition-colors"
-        >
-          <Plus className="h-4 w-4" />
-          New Patient
-        </Link>
-      </div>
+      <PageHeader
+        icon={UserSquare}
+        title="Patients"
+        subtitle={recordsEnabled ? 'Patient directory — register patients and open OPD visits' : 'Patient directory'}
+        actions={
+          recordsEnabled ? (
+            <Can permission={P.RECORDS_ADD}>
+              <button
+                onClick={() => setRegisterOpen(true)}
+                className="inline-flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-primary/90 transition-colors"
+              >
+                <UserPlus className="h-4 w-4" />
+                Register Patient
+              </button>
+            </Can>
+          ) : undefined
+        }
+      />
 
-      {/* Search */}
-      <div className="mb-5">
+      {recordsEnabled && activeVisits && activeVisits.length > 0 && (
+        <div className="mb-5 rounded-2xl border border-amber-400/30 bg-amber-500/5 p-4">
+          <p className="text-xs font-bold uppercase tracking-wide text-amber-700 dark:text-amber-400 mb-1">
+            {activeVisits.length} visit(s) waiting for triage
+          </p>
+          <Link href={`/${orgSlug}/triage`} className="text-sm text-primary underline">
+            Go to Triage queue
+          </Link>
+        </div>
+      )}
+
+      <div className="relative mb-5 max-w-md">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <input
-          type="text"
-          placeholder="Search by name or phone…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="w-full max-w-sm bg-background border border-border rounded-xl py-2.5 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+          placeholder="Search patients by name, phone, ID…"
+          className="w-full bg-background border border-border rounded-xl py-2.5 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
         />
       </div>
 
-      {/* Content */}
       {isLoading ? (
         <div className="flex items-center justify-center h-48 gap-3">
           <Loader2 className="h-6 w-6 animate-spin text-primary" />
           <span className="text-sm text-muted-foreground">Loading patients…</span>
         </div>
-      ) : patients.length === 0 ? (
-        <div className="flex flex-col items-center justify-center h-48 text-muted-foreground gap-2">
-          <UserSquare className="h-10 w-10 opacity-30" />
-          <p className="font-medium">{search ? 'No patients found for that search' : 'No patient profiles yet'}</p>
-          <Link href={`/${orgSlug}/pharmacy?new=1`} className="text-sm text-primary underline">
-            Fill first prescription
-          </Link>
-        </div>
+      ) : (patients ?? []).length === 0 ? (
+        <EmptyState
+          icon={UserSquare}
+          title="No patients found"
+          description={
+            recordsEnabled
+              ? 'Register a patient to open their first visit.'
+              : 'Patients appear here once they are recorded on a prescription.'
+          }
+        />
       ) : (
-        <div className="space-y-3">
-          {patients.map((patient) => (
-            <PatientCard
-              key={patient.patient_id_number || patient.patient_name}
-              patient={patient}
-              orgSlug={orgSlug}
-            />
-          ))}
+        <div className="rounded-2xl border border-border overflow-hidden bg-card">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-border bg-accent/30">
+                <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Patient #</th>
+                <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Name</th>
+                <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Phone</th>
+                <th className="text-left px-4 py-3 font-semibold text-muted-foreground">ID Number</th>
+                <th className="text-right px-4 py-3 font-semibold text-muted-foreground">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {(patients ?? []).map((p) => (
+                <tr key={p.id} className="hover:bg-accent/20 transition-colors">
+                  <td className="px-4 py-3.5 font-mono text-xs">{p.patient_number}</td>
+                  <td className="px-4 py-3.5 font-medium">{p.full_name}</td>
+                  <td className="px-4 py-3.5 text-muted-foreground">{p.phone || '—'}</td>
+                  <td className="px-4 py-3.5 text-muted-foreground">{p.id_number || '—'}</td>
+                  <td className="px-4 py-3.5 text-right">
+                    {recordsEnabled && (
+                      <Can permission={P.RECORDS_ADD}>
+                        <button
+                          onClick={() => handleOpenVisit(p.id)}
+                          disabled={createVisit.isPending}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
+                        >
+                          <ClipboardPlus className="h-3.5 w-3.5" />
+                          Open Visit
+                        </button>
+                      </Can>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
+      )}
+
+      {registerOpen && (
+        <RegisterPatientModal
+          onClose={() => setRegisterOpen(false)}
+          onRegistered={(p) => {
+            setRegisterOpen(false);
+            handleOpenVisit(p.id);
+          }}
+        />
+      )}
+
+      {paymentOrder && (
+        <SplitPaymentModal
+          open
+          onClose={() => setPaymentOrder(null)}
+          onPaymentConfirmed={() => setPaymentOrder(null)}
+          orderId={paymentOrder.id}
+          orderNumber={paymentOrder.order_number}
+          total={paymentOrder.total}
+          tenantSlug={tenantSlug}
+          tenantId={tenantId}
+        />
       )}
     </div>
   );
 }
 
 export default function PatientsPageGated() {
+  // Gated on `patients` (always on for pharmacy outlets), NOT `records` — a plain chemist that
+  // never turns on the OPD Records module still needs the patient directory; the registration
+  // and visit actions inside are what the records toggle controls.
   return (
-    <ModuleGate moduleKey="patients" fallback={<ModuleUnavailablePage moduleKey="patients" />}>
-      <PatientsPage />
-    </ModuleGate>
+    <PageGuard moduleKey="patients" permission={[P.PHARMACY_VIEW, P.RECORDS_VIEW]} label="Patients">
+      <RecordsPage />
+    </PageGuard>
   );
 }

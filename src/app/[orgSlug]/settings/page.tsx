@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import {
   ChefHat, Clock, CreditCard, DatabaseBackup, Gift, Key, Layers, Monitor, Percent, Receipt, Truck,
-  Settings, ShieldCheck, Table2, Users, Hash,
+  Settings, ShieldCheck, Table2, Users, Hash, Pill,
 } from 'lucide-react';
 import { useAuthStore } from '@/store/auth';
 import { useModuleAccess } from '@/hooks/use-module-access';
@@ -31,6 +31,7 @@ import { DevicesTab } from '@/components/settings/DevicesTab';
 import { CardTerminalTab } from '@/components/settings/CardTerminalTab';
 import { ChannelsTab } from '@/components/settings/ChannelsTab';
 import { BookingPolicyTab } from '@/components/settings/BookingPolicyTab';
+import { PharmacyWorkflowTab } from '@/components/settings/PharmacyWorkflowTab';
 import { BackupsTab } from '@/components/settings/BackupsTab';
 import { CashierPolicyTab } from '@/components/settings/CashierPolicyTab';
 
@@ -52,6 +53,7 @@ type Tab =
   | 'subscription'
   | 'devices'
   | 'booking_policy'
+  | 'pharmacy_workflow'
   | 'platform'
   | 'team'
   | 'audit'
@@ -105,6 +107,7 @@ const ALL_TABS: { id: Tab; label: string; icon: React.ElementType; group: Settin
   { id: 'loyalty',          label: 'Loyalty',            icon: Gift,        group: 'Use-Case Modules', requireModule: 'loyalty', requirePermission: CONFIG_PERMS, description: 'Points, tiers, and earn rates' },
   { id: 'channels',         label: 'Delivery Channels',  icon: Truck,       group: 'Use-Case Modules', requireModule: 'online_orders', requirePermission: CONFIG_PERMS, description: '3rd-party delivery integrations & catalogue sync' },
   { id: 'booking_policy',   label: 'Booking Policy',     icon: Clock,       group: 'Use-Case Modules', requireModule: 'hotel', requirePermission: CONFIG_PERMS, description: 'Amendment & cancellation windows and fees for hotel bookings' },
+  { id: 'pharmacy_workflow', label: 'Pharmacy Workflow', icon: Pill,        group: 'Use-Case Modules', requireModule: 'pharmacy', requirePermission: CONFIG_PERMS, description: 'Dispensing mode, lab pre-payment, and the lab test price list' },
   // Team & Security (shared)
   { id: 'team',             label: 'Team',               icon: Users,       group: 'Team & Security', requirePermission: TEAM_PERMS, description: 'Staff members, roles, and permissions' },
   { id: 'audit',            label: 'Loss Prevention',    icon: ShieldCheck, group: 'Team & Security', requirePermission: AUDIT_PERMS, description: 'Audit trail + per-cashier exception report' },
@@ -206,6 +209,7 @@ export default function SettingsPage() {
         {activeTab === 'subscription'     && canTab('subscription') && <SubscriptionTab />}
         {activeTab === 'devices'          && canTab('devices') && <DevicesTab />}
         {activeTab === 'booking_policy'   && <BookingPolicyTab />}
+        {activeTab === 'pharmacy_workflow' && <PharmacyWorkflowTab />}
         {activeTab === 'team'             && canTab('team') && <TeamTab />}
         {activeTab === 'audit'            && canTab('audit') && <AuditTab />}
         {activeTab === 'backups'          && canTab('backups') && <BackupsTab />}

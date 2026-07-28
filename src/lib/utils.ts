@@ -22,3 +22,17 @@ export function formatElapsed(ms: number): string {
   if (mins > 0) return `${mins}m ${String(secs).padStart(2, '0')}s`;
   return `${secs}s`;
 }
+
+/**
+ * Format a money amount as the tenant currency (KES by default). Centralised here because the
+ * codebase had ~9 separate inline Intl.NumberFormat definitions plus a divergent `money()` helper
+ * that emitted "KSh" instead of "KES" — new code should always use this one.
+ */
+export function formatCurrency(amount: number | null | undefined, currency = 'KES'): string {
+  return new Intl.NumberFormat('en-KE', {
+    style: 'currency',
+    currency,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(Number(amount ?? 0));
+}
