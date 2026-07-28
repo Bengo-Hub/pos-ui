@@ -3,6 +3,7 @@
 import { useAuthStore } from '@/store/auth';
 import { useOutletFilterStore, type OutletOption } from '@/store/outlet-filter';
 import { apiClient } from '@/lib/api/client';
+import { canAccessAllOutlets } from '@/lib/auth/outlet-access';
 import { useQuery } from '@tanstack/react-query';
 import { Check, ChevronDown, Store, X } from 'lucide-react';
 import { useParams } from 'next/navigation';
@@ -40,12 +41,9 @@ export function OutletFilter({ className }: { className?: string }) {
   const orgSlug = params?.orgSlug as string;
   const user = useAuthStore((s) => s.user);
 
-  // HQ/admin users can drill into specific outlets
-  const canFilter = !!(
-    user?.isPlatformOwner ||
-    user?.isSuperUser ||
-    user?.roles?.some((r) => ['admin', 'superuser', 'manager', 'pos_admin'].includes(r))
-  );
+  // HQ/admin/manager users can drill into specific outlets — same role gate as the header
+  // outlet switcher (see canAccessAllOutlets), so the two never drift out of sync again.
+  const canFilter = canAccessAllOutlets(user);
 
   const { selectedOutlet, outlets, setOutlets, selectOutlet, clearOutlet } = useOutletFilterStore();
   const [open, setOpen] = useState(false);

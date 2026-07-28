@@ -4,6 +4,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { useCloseShift, useCurrentShift } from '@/hooks/useShifts';
 import { apiClient } from '@/lib/api/client';
 import { apiErrorMessage } from '@/lib/api/error-message';
+import { canAccessAllOutlets } from '@/lib/auth/outlet-access';
 import { P } from '@/lib/rbac/permissions';
 import { cn } from '@/lib/utils';
 import { useTenantBranding } from '@/providers/tenant-branding-provider';
@@ -104,7 +105,6 @@ function HeaderOutletChip() {
   const user = useAuthStore((s) => s.user);
   const session = useAuthStore((s) => s.session);
   const authOutlet = useAuthStore((s) => s.outlet);
-  const isTerminalSession = useAuthStore((s) => s.isTerminalSession);
   const { selectedOutlet, outlets, setOutlets, selectOutlet } = useOutletFilterStore();
   const [open, setOpen] = useState(false);
   const [outletSearch, setOutletSearch] = useState('');
@@ -128,13 +128,12 @@ function HeaderOutletChip() {
 
   // THE outlet switcher — the sidebar duplicate was removed; this chip is the single place
   // admins/managers load and switch outlets (visible on every breakpoint).
-  const canSwitch = !isTerminalSession && !!(
-    user?.isPlatformOwner ||
-    user?.isSuperUser ||
-    user?.roles?.some((r) =>
-      ['admin', 'superuser', 'manager', 'store_manager', 'owner', 'tenant_admin', 'pos_admin', 'super_admin'].includes(r)
-    )
-  );
+  // Gated on ROLE ONLY — admins/managers get the switcher whether they signed in via SSO or a
+  // terminal PIN login. Switching here just drives the X-Outlet-ID drill-down override (see
+  // selectOutlet below), which pos-api's OutletContextMiddleware already honors for admin/manager
+  // roles regardless of session type — there's no re-authentication involved, so there's no
+  // reason to block PIN sessions from it.
+  const canSwitch = canAccessAllOutlets(user);
 
   const tenantId = user?.tenant_id ?? '';
   const tenantSlug = user?.tenant_slug ?? '';
