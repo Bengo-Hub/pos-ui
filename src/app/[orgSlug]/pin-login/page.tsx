@@ -22,6 +22,7 @@ import { buildScreensaverMedia } from '@/lib/screensaver';
 import { LiveClock } from '@/components/pos/live-clock';
 import { useTenantBranding } from '@/providers/tenant-branding-provider';
 import { getStoredOutletId, setStoredOutletId } from '@/lib/auth/outlet-storage';
+import { cashierLandingPath } from '@/lib/pos/cashier-landing';
 import { cn } from '@/lib/utils';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -339,7 +340,10 @@ export default function PINLoginPage() {
       });
       apiClient.setOutletID(sessionOutlet.id);
     }
-    router.push(`/${orgSlug}/dashboard`);
+    // Cashiers land straight on their working surface (POS Terminal / Order History) instead of
+    // the outlet-wide Dashboard — see cashierLandingPath.
+    const landing = cashierLandingPath(data.user.role, data.user.outlet_use_case ?? sessionOutlet?.use_case);
+    router.push(`/${orgSlug}${landing ?? '/dashboard'}`);
   }
 
   const loginMutation = useMutation({
@@ -435,7 +439,8 @@ export default function PINLoginPage() {
       status:   'active',
     });
     apiClient.setOutletID(offlineOutletId);
-    router.push(`/${orgSlug}/dashboard`);
+    const landing = cashierLandingPath(matched.roles?.[0], outletInfo?.use_case);
+    router.push(`/${orgSlug}${landing ?? '/dashboard'}`);
   }
 
   function handleDigit(digit: string) {

@@ -3,6 +3,7 @@
 import { useCurrentShift, useOpenShift } from '@/hooks/useShifts';
 import { useAuthStore } from '@/store/auth';
 import { usePermissions, P } from '@/hooks/usePermissions';
+import { cashierLandingPath } from '@/lib/pos/cashier-landing';
 import { cn } from '@/lib/utils';
 import { Loader2, Play } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -33,7 +34,6 @@ export function StartShiftGate({ children }: StartShiftGateProps) {
 
   const role = user?.roles?.[0] ?? '';
   const outletUseCase = (outlet?.use_case ?? (user as any)?.outlet_use_case ?? '').toLowerCase();
-  const isCashierHospOrQSR = role === 'cashier' && ['hospitality', 'quick_service'].includes(outletUseCase);
   // Retail cashiers manage a physical cash drawer whichever way they signed in (PIN terminal
   // OR web SSO): they always get the start-shift gate with the opening-float field, and land
   // on the POS terminal once the drawer is counted.
@@ -73,13 +73,11 @@ export function StartShiftGate({ children }: StartShiftGateProps) {
       await openShift.mutateAsync(opening);
       setSubmitted(true);
       toast.success('Shift started');
-      // Cashiers in hospitality/quick_service go straight to the Orders page
-      // (their only workflow is clearing bills, not taking new orders).
-      if (isCashierHospOrQSR && orgSlug) {
-        router.push(`/${orgSlug}/orders`);
-      } else if (isRetailCashier && orgSlug) {
-        // Retail/pharmacy/services cashiers ring sales — drop them on the POS terminal.
-        router.push(`/${orgSlug}/order`);
+      // Cashiers land on their working surface (POS Terminal / Order History) — same helper
+      // pin-login uses, so both entry points agree.
+      const landing = cashierLandingPath(role, outletUseCase);
+      if (landing && orgSlug) {
+        router.push(`/${orgSlug}${landing}`);
       }
     } catch (e) {
       toast.error(await apiErrorMessage(e, 'Failed to open shift'));
