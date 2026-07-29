@@ -309,6 +309,33 @@ export default function AddSalePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resumeQ.data, resumeId]);
 
+  // ── Edit a FINALIZED sale ── ?edit_from= comes from the admin "Edit Sale" action
+  // (SalesActionsMenu), after it has already called POST /orders/{id}/prepare-edit (which
+  // reverses the original sale's GL/inventory/eTIMS via the same engine the platform Txn
+  // Reversal tool uses). Unlike `resume` above, this is NOT a resumable draft — it prefills the
+  // cart from the now-reversed original as a starting point for a genuinely NEW replacement
+  // order; submitting here always creates a fresh sale (no supersede/void call, the original was
+  // already handled server-side) tagged with metadata.edited_from_order_id for lineage.
+  const editFromId = searchParams.get('edit_from') || '';
+  const editFromQ = useOrder(editFromId);
+  const [editPrefilled, setEditPrefilled] = useState(false);
+  useEffect(() => {
+    const o: any = editFromQ.data;
+    if (!o || !editFromId || editPrefilled) return;
+    setLines((o.edges?.lines ?? []).map((l: any) => ({
+      item: { id: l.catalog_item_id, sku: l.sku, name: l.name, price: l.unit_price, category: '' } as CatalogItem,
+      quantity: l.quantity,
+      unitPrice: l.unit_price,
+      preset: l.unit_price,
+      priceEdited: true,
+    })));
+    if (o.customer_name || o.customer_phone) {
+      setCustomer({ name: o.customer_name ?? '', phone: o.customer_phone ?? '', isWalkIn: !o.customer_phone } as SelectedCustomer);
+    }
+    setEditPrefilled(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editFromQ.data, editFromId, editPrefilled]);
+
   const addLine = useCallback((item: CatalogItem) => {
     let newQty = 1;
     setStructuralDirty(true);
@@ -477,6 +504,7 @@ export default function AddSalePage() {
       ...(shippingAmount > 0 ? { charges: { shipping: shippingAmount } } : {}),
       metadata: (() => {
         const md: Record<string, any> = {};
+        if (editFromId) md.edited_from_order_id = editFromId;
         if (pricingProfile) md.pricing_profile = pricingProfile;
         if (shippingOpen && (shipping.address || shipping.details || shipping.deliveredTo || shipping.deliveryPerson || shippingAmount > 0)) {
           md.shipping_status = shipping.status || 'ordered';
@@ -696,10 +724,10 @@ export default function AddSalePage() {
       <div className="flex flex-wrap items-center gap-3">
         <ShoppingCart className="h-6 w-6 text-primary" />
         <h1 className="text-2xl font-bold tracking-tight">
-          {resume ? `Resume Sale — ${resume.number}` : creditSale ? 'Credit Sale' : 'Add Sale'}
+          {editFromId ? `Edit Sale — replacing ${editFromQ.data?.order_number ?? '…'}` : resume ? `Resume Sale — ${resume.number}` : creditSale ? 'Credit Sale' : 'Add Sale'}
         </h1>
         <span className="text-sm text-muted-foreground">
-          {resume ? 'Draft prefilled — collect payment to complete it' : creditSale ? 'Sell on account — posts to customer AR' : 'Back-office sale entry'}
+          {editFromId ? 'Original sale reversed — complete this replacement to finish the edit' : resume ? 'Draft prefilled — collect payment to complete it' : creditSale ? 'Sell on account — posts to customer AR' : 'Back-office sale entry'}
         </span>
         <span className="ml-auto text-xs text-muted-foreground">
           Sale date: <b className="text-foreground">{new Date().toLocaleString('en-KE')}</b> · Invoice No. auto-generated

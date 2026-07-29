@@ -5,6 +5,7 @@ import { canPutOnAccount } from '@/hooks/use-close-on-account';
 import { P, usePermissions } from '@/hooks/usePermissions';
 import { useAuthStore } from '@/store/auth';
 import {
+    Ban,
     Banknote,
     CalendarClock,
     ChevronDown,
@@ -30,7 +31,14 @@ interface SalesActionsMenuProps {
   onViewPayments: (order: any) => void;
   onEditLines: (order: any) => void;
   onMoveDate: (order: any) => void;
+  /** Soft-void a still-correctable sale (existing tool — reverses/voids, never removes it). */
   onDelete: (order: any) => void;
+  /** Permanently delete a FINALIZED sale via the admin Delete-Sale ("shred") tool — fiscalised
+   *  sales are reversed+soft-marked, non-fiscalised sales are genuinely hard-deleted. */
+  onDeleteSale?: (order: any) => void;
+  /** Edit a FINALIZED sale's lines/qty/price/customer — reverses the original then opens Add
+   *  Sale prefilled to create the replacement. */
+  onEditFinalizedSale?: (order: any) => void;
   /** Settle an on-account (credit) sale — shown only while money is still owed. */
   onRecordPayment?: (order: any) => void;
   /** Book a still-owing, NOT-yet-on-account sale's balance to treasury AR (put on account). */
@@ -46,7 +54,7 @@ interface SalesActionsMenuProps {
 // the backend enforces the real boundary.
 const DATE_MOVE_ADMIN_ROLES = new Set(['admin', 'owner', 'pos_admin', 'super_admin', 'superuser']);
 
-export function SalesActionsMenu({ order, orgSlug, onView, onEditShipping, onViewPayments, onEditLines, onMoveDate, onDelete, onRecordPayment, onPutOnAccount, onEditSaleInfo }: SalesActionsMenuProps) {
+export function SalesActionsMenu({ order, orgSlug, onView, onEditShipping, onViewPayments, onEditLines, onMoveDate, onDelete, onDeleteSale, onEditFinalizedSale, onRecordPayment, onPutOnAccount, onEditSaleInfo }: SalesActionsMenuProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -58,6 +66,11 @@ export function SalesActionsMenu({ order, orgSlug, onView, onEditShipping, onVie
   const canView = canAny([P.ORDERS_VIEW, P.ORDERS_VIEW_OWN]);
   const canChange = canAny([P.ORDERS_CHANGE_OWN, P.ORDERS_CHANGE, P.ORDERS_MANAGE]);
   const canDelete = canAny([P.ORDERS_VOID, P.ORDERS_MANAGE]);
+  // Permanent delete of a FINALIZED sale — a distinct, stronger tier than the void/soft-delete
+  // above (admin by default; tenant-configurable via the Roles & Permissions matrix).
+  const canDeleteSale = can(P.ORDERS_DELETE);
+  // Full line/qty/price edit of a FINALIZED sale (reverse + recreate) — admin by default.
+  const canEditFinalizedSale = can(P.ORDERS_EDIT_FINALIZED);
   const canViewPayments = canAny([P.PAYMENTS_VIEW, P.PAYMENTS_VIEW_OWN, P.PAYMENTS_MANAGE]);
   const canTakePayment = canAny([P.PAYMENTS_ADD, P.PAYMENTS_MANAGE]);
   const canReturn = canChange; // return initiation mirrors the backend change_own/change/manage gate
@@ -125,7 +138,17 @@ export function SalesActionsMenu({ order, orgSlug, onView, onEditShipping, onVie
               <Pencil className="h-4 w-4 text-muted-foreground" /> Edit
             </button>
           )}
-          {canDelete && <button className={item} onClick={() => { onDelete(order); close(); }}><Trash2 className="h-4 w-4 text-destructive" /> Delete</button>}
+          {canDelete && <button className={item} onClick={() => { onDelete(order); close(); }}><Ban className="h-4 w-4 text-destructive" /> Void Sale</button>}
+          {isFinal && canDeleteSale && onDeleteSale && (
+            <button className={item} onClick={() => { onDeleteSale(order); close(); }}>
+              <Trash2 className="h-4 w-4 text-destructive" /> Delete Sale
+            </button>
+          )}
+          {isFinal && canEditFinalizedSale && onEditFinalizedSale && (
+            <button className={item} onClick={() => { onEditFinalizedSale(order); close(); }}>
+              <Pencil className="h-4 w-4 text-muted-foreground" /> Edit Sale
+            </button>
+          )}
           {canChange && <button className={item} onClick={() => { onEditShipping(order); close(); }}><Truck className="h-4 w-4 text-muted-foreground" /> Edit Shipping</button>}
 
           {/* Print pipeline — the receipt document reused for invoice / packing slip / delivery note. */}

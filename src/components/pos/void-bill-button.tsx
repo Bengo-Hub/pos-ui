@@ -5,10 +5,8 @@ import { Ban } from 'lucide-react';
 import { toast } from 'sonner';
 import { useVoidOrder } from '@/hooks/usePOS';
 import { usePermissions, P } from '@/hooks/usePermissions';
-import { useAuthStore } from '@/store/auth';
 import { VoidOrderModal } from '@/components/pos/void-order-modal';
 import { VoidApprovalDialog, type VoidApproval } from '@/components/pos/void-approval-dialog';
-import { VOID_SELF_ROLES } from '@/lib/pos/rbac-constants';
 
 // Bill states that can still be voided. Paid/closed bills go through Returns/Refunds instead;
 // already cancelled/voided bills are terminal.
@@ -30,7 +28,6 @@ interface VoidBillButtonProps {
  */
 export function VoidBillButton({ orderId, orderNumber, status, onVoided, className }: VoidBillButtonProps) {
   const { can } = usePermissions();
-  const role = (useAuthStore((s) => s.user?.roles?.[0]) ?? '') as string;
   const voidOrder = useVoidOrder();
 
   const [reasonOpen, setReasonOpen] = useState(false);
@@ -70,7 +67,7 @@ export function VoidBillButton({ orderId, orderNumber, status, onVoided, classNa
         orderNumber={orderNumber}
         onClose={() => setReasonOpen(false)}
         onConfirm={async (reason) => {
-          if (VOID_SELF_ROLES.includes(role)) {
+          if (can(P.ORDERS_VOID_SELF)) {
             await finalizeVoid(reason);
           } else {
             // Cashier / non-manager: require manager approval (scan card, PIN, or a shared code).

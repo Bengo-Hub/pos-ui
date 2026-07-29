@@ -5,9 +5,7 @@ import { Ban, AlertTriangle, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useVoidOrderLine } from '@/hooks/usePOS';
 import { usePermissions, P } from '@/hooks/usePermissions';
-import { useAuthStore } from '@/store/auth';
 import { ApprovalDialog, type ApprovalResult } from '@/components/pos/approval-dialog';
-import { VOID_SELF_ROLES } from '@/lib/pos/rbac-constants';
 
 // Line-void reasons lead with the "item became unavailable" case (an ingredient ran out) — the
 // scenario partial voiding exists for — then the usual correction reasons.
@@ -49,8 +47,10 @@ export function VoidLineButton({
   orderId, orderNumber, lineId, name, quantity, status, voidedQty, onVoided, compact,
 }: VoidLineButtonProps) {
   const { can } = usePermissions();
-  const role = (useAuthStore((s) => s.user?.roles?.[0]) ?? '') as string;
-  const selfApprove = VOID_SELF_ROLES.includes(role);
+  // Self-approve without a manager step-up — a real, tenant-configurable permission (replaces
+  // the old hardcoded VOID_SELF_ROLES role-name list) so a custom role can be granted or denied
+  // this via the Roles & Permissions matrix like any other capability.
+  const selfApprove = can(P.ORDERS_VOID_SELF);
   const voidLine = useVoidOrderLine();
 
   const [reasonOpen, setReasonOpen] = useState(false);

@@ -2,6 +2,7 @@
 
 import { useCurrentShift, useOpenShift } from '@/hooks/useShifts';
 import { useAuthStore } from '@/store/auth';
+import { usePermissions, P } from '@/hooks/usePermissions';
 import { cn } from '@/lib/utils';
 import { Loader2, Play } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -9,9 +10,10 @@ import { useRouter, useParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api/error-message';
 
-// Roles that always require an explicit shift start (with or without float)
-// Admin and manager are exempt — they can access the app without opening a shift.
-const SHIFT_ROLES = ['cashier', 'waiter', 'receptionist'];
+// Float/auto-shift are business-workflow nuances (which specific roles count a cash float or
+// auto-open silently on login), not access grants — there is no natural 1:1 permission code for
+// them without inventing a dedicated one, so they stay keyed on role name. The GATE ITSELF
+// (needsShiftGate, below) is a real access distinction and is permission-driven.
 // Roles that get the opening float input (cashier manages cash)
 const FLOAT_ROLES = ['cashier'];
 // Roles that auto-open a shift immediately on login (no gate UI)
@@ -37,7 +39,13 @@ export function StartShiftGate({ children }: StartShiftGateProps) {
   // on the POS terminal once the drawer is counted.
   const isRetailCashier = role === 'cashier' && ['retail', 'pharmacy', 'services'].includes(outletUseCase);
 
-  const needsShiftGate = SHIFT_ROLES.includes(role);
+  // Real access distinction, permission-driven (replaces the old hardcoded SHIFT_ROLES list):
+  // anyone who can start their own session but cannot MANAGE sessions (i.e. isn't a
+  // manager/admin, who get pos.sessions.* via their wildcard) must open a shift before working —
+  // exactly the cashier/waiter/receptionist set today, but now reconfigurable per tenant via the
+  // permission matrix instead of being frozen to those three role names.
+  const { can } = usePermissions();
+  const needsShiftGate = can(P.SESSIONS_ADD) && !can(P.SESSIONS_MANAGE);
   const needsFloat = FLOAT_ROLES.includes(role);
   const isAutoShift = AUTO_SHIFT_ROLES.includes(role);
 

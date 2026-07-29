@@ -35,6 +35,13 @@ export const P = {
   ORDERS_DELETE:     'pos.orders.delete',
   ORDERS_MANAGE:     'pos.orders.manage',
   ORDERS_VOID:       'pos.orders.void',
+  /** Self-approve a void without a manager step-up (replaces the old VOID_SELF_ROLES role-name
+   *  list). Admin/manager by default; a tenant admin can grant/revoke it per role. */
+  ORDERS_VOID_SELF:  'pos.orders.void_self',
+  /** Full edit of a FINALIZED sale (lines/qty/price/customer/payment/date) with automatic
+   *  GL/inventory/eTIMS resync. Admin-only by default — hidden from managers unless a tenant
+   *  admin explicitly grants it via the permission matrix. */
+  ORDERS_EDIT_FINALIZED: 'pos.orders.edit_finalized',
 
   // Payments
   PAYMENTS_ADD:      'pos.payments.add',
@@ -202,7 +209,12 @@ export const ROLE_PERMISSIONS: Record<string, Permission[]> = {
   superuser: Object.values(P) as Permission[],
   admin:     Object.values(P) as Permission[],
   manager: [
-    P.ORDERS_ADD, P.ORDERS_VIEW, P.ORDERS_CHANGE, P.ORDERS_DELETE, P.ORDERS_MANAGE, P.ORDERS_VOID,
+    // NOTE: ORDERS_DELETE and ORDERS_EDIT_FINALIZED are deliberately NOT in the default manager
+    // set (mirrors the backend seed's "!pos.orders.delete"/"!pos.orders.edit_finalized" carve-out
+    // of the pos.orders.* wildcard) — hard-delete and full finalized-sale edit default to admin
+    // only. A tenant admin can still grant either to manager via the permission matrix; this
+    // client map is only the pre-fetch fallback and stays in sync with that default.
+    P.ORDERS_ADD, P.ORDERS_VIEW, P.ORDERS_CHANGE, P.ORDERS_MANAGE, P.ORDERS_VOID, P.ORDERS_VOID_SELF,
     P.PAYMENTS_ADD, P.PAYMENTS_VIEW, P.PAYMENTS_MANAGE,
     P.DISCOUNTS_APPLY,
     P.CATALOG_ADD, P.CATALOG_VIEW, P.CATALOG_CHANGE, P.CATALOG_DELETE, P.CATALOG_MANAGE, P.CATALOG_VIEW_COST,

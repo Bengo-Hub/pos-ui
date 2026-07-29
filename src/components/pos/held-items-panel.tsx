@@ -3,11 +3,10 @@
 import { useState } from 'react';
 import { PackageOpen, Loader2, Ban, HandCoins } from 'lucide-react';
 import { toast } from 'sonner';
-import { useAuthStore } from '@/store/auth';
+import { usePermissions, P } from '@/hooks/usePermissions';
 import { useHeldItems, useVoidHeldItem, type HeldItem } from '@/hooks/useHeldItems';
 import { ClaimHeldItemDialog } from '@/components/pos/claim-held-item-dialog';
 import { ManagerPinDialog } from '@/components/pos/manager-pin-dialog';
-import { canSelfApproveVoid } from '@/lib/pos/rbac-constants';
 
 /**
  * HeldItemsPanel lists the outlet's set-aside (parked/upsell) items — wrongly-ordered but already
@@ -19,8 +18,8 @@ import { canSelfApproveVoid } from '@/lib/pos/rbac-constants';
 export function HeldItemsPanel({ compact = false }: { compact?: boolean }) {
   const { data: held = [], isLoading } = useHeldItems('held');
   const voidItem = useVoidHeldItem();
-  const roles = useAuthStore((s) => s.user?.roles as string[] | undefined);
-  const selfApprove = canSelfApproveVoid(roles);
+  const { can } = usePermissions();
+  const selfApprove = can(P.ORDERS_VOID_SELF);
 
   const [claiming, setClaiming] = useState<HeldItem | null>(null);
   const [voiding, setVoiding] = useState<HeldItem | null>(null);

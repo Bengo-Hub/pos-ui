@@ -201,11 +201,11 @@ export function ReceiptPrint({
                   </span>
                   <span className="receipt-row-value">{row.free ? 'FREE' : fmt(row.total)}</span>
                 </div>
-                {row.quantity !== 1 && (
-                  <div className="receipt-small" style={{ paddingLeft: 8 }}>
-                    {row.quantity} × {fmt(row.unitPrice)}
-                  </div>
-                )}
+                {/* Qty × unit-price sub-line on EVERY item (always visible, not just multi-qty) —
+                    matches the server thermal/ESC-POS renderers. */}
+                <div className="receipt-small" style={{ paddingLeft: 8 }}>
+                  {row.quantity} × {fmt(row.unitPrice)}
+                </div>
               </div>
             );
           case 'divider':

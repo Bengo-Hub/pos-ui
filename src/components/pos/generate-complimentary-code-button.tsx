@@ -5,8 +5,6 @@ import { Gift, Copy, Check, X, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useGenerateComplimentaryCode } from '@/hooks/usePOS';
 import { usePermissions, P } from '@/hooks/usePermissions';
-import { useAuthStore } from '@/store/auth';
-import { VOID_SELF_ROLES } from '@/lib/pos/rbac-constants';
 
 interface GenerateComplimentaryCodeButtonProps {
   orderId: string;
@@ -23,8 +21,7 @@ interface GenerateComplimentaryCodeButtonProps {
  */
 export function GenerateComplimentaryCodeButton({ orderId, orderNumber, status, className }: GenerateComplimentaryCodeButtonProps) {
   const { can } = usePermissions();
-  const role = (useAuthStore((s) => s.user?.roles?.[0]) ?? '') as string;
-  const isManager = VOID_SELF_ROLES.includes(role) || can(P.ORDERS_MANAGE);
+  const isManager = can(P.ORDERS_VOID_SELF) || can(P.ORDERS_MANAGE);
   const generate = useGenerateComplimentaryCode();
 
   const [result, setResult] = useState<{ code: string; expires_in: number } | null>(null);

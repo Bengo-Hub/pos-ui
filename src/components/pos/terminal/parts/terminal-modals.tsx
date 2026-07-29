@@ -28,7 +28,6 @@ import { LinePriceModal } from '@/components/pos/line-price-modal';
 import { OrderPlacedDialog } from '@/components/pos/order-placed-dialog';
 import { RegisterDetailsModal, RecentTransactionsModal, SellReturnModal } from '@/components/pos/terminal/toolbar-modals';
 import { resolveBillProfile } from '@/lib/pos/printer-stations';
-import { VOID_SELF_ROLES } from '@/lib/pos/rbac-constants';
 import { useTerminal } from '@/components/pos/terminal/terminal-context';
 import { rbacApi } from '@/lib/api/rbac';
 import { AlertTriangle } from 'lucide-react';
@@ -139,8 +138,7 @@ export function TerminalModals() {
         orderNumber={t.currentOrderNumber}
         onClose={() => t.setVoidOpen(false)}
         onConfirm={async (reason) => {
-          const role = (t.user?.roles?.[0] ?? '') as string;
-          if (VOID_SELF_ROLES.includes(role)) {
+          if (t.can('pos.orders.void_self')) {
             await finalizeVoid(reason);
           } else {
             // Cashier: require a manager PIN step-up before voiding.

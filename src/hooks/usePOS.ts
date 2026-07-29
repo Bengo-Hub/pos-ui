@@ -1662,6 +1662,65 @@ export function useGenerateVoidCode() {
   });
 }
 
+/** One tracked step of a Delete-Sale run (mirrors pos-api's ReversalStepJSON shape). */
+export interface SaleDeleteStep {
+  step: string;
+  service: string;
+  status: string;
+  detail?: string;
+  ref?: string;
+  at?: string;
+}
+
+export interface SaleDeleteResult {
+  branch: 'fiscalized' | 'non_fiscalized';
+  order_id: string;
+  steps: SaleDeleteStep[];
+  shred_id?: string;
+}
+
+/**
+ * useDeleteSale runs the tenant-admin Delete-Sale ("shred") tool on a FINALIZED sale
+ * (POST /orders/{id}/delete — pos.orders.delete, admin by default). A sale already reported to
+ * KRA (has a treasury tax invoice) is reversed + soft-marked deleted, never hard-removed; a
+ * plain cash sale is genuinely hard-deleted (ledger + pos rows) with a permanent POSSaleShred
+ * audit snapshot left behind. Distinct from useVoidOrder (the existing "Delete" sales-list
+ * action, which soft-voids a still-correctable sale) — this is the stronger, admin-gated tool
+ * for a settled sale the tenant wants gone for good.
+ */
+export function useDeleteSale() {
+  const tenantID = useTenantID();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ orderId, reason }: { orderId: string; reason: string }) =>
+      apiClient.post<SaleDeleteResult>(`${basePath(tenantID)}/orders/${orderId}/delete`, { reason }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['pos-orders'] }),
+  });
+}
+
+export interface PrepareEditResult {
+  order_id: string;
+  reversal_id: string;
+  reversal_number: string;
+}
+
+/**
+ * usePrepareEditSale runs the "prepare" half of the Edit-Sale tool
+ * (POST /orders/{id}/prepare-edit — pos.orders.edit_finalized, admin by default): reverses the
+ * original FINALIZED sale's GL/inventory/eTIMS via the same engine the platform Txn Reversal
+ * tool uses. On success the caller navigates to Add Sale (`?edit_from={id}`) to create the
+ * replacement through the normal, already-proven checkout pipeline.
+ */
+export function usePrepareEditSale() {
+  const tenantID = useTenantID();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ orderId, reason }: { orderId: string; reason: string }) =>
+      apiClient.post<PrepareEditResult>(`${basePath(tenantID)}/orders/${orderId}/prepare-edit`, { reason }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['pos-orders'] }),
+  });
+}
+
 /**
  * useGenerateComplimentaryCode lets a manager generate a one-time, order-scoped code to SHARE
  * with a waiter/cashier so they can close a specific bill via the Complimentary/no-charge tender
