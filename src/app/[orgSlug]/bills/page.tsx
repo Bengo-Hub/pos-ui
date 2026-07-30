@@ -72,7 +72,7 @@ function BillsPage() {
     setPaymentOrder(null);
     if (!prescriptionId) return;
     try {
-      await dispense.mutateAsync(prescriptionId);
+      await dispense.mutateAsync({ id: prescriptionId });
       toast.success('Paid and dispensed — medicine can be handed over');
     } catch (e) {
       toast.error(await apiErrorMessage(e, 'Payment recorded, but dispensing failed — dispense from the prescription page'));
@@ -87,6 +87,16 @@ function BillsPage() {
         icon={Receipt}
         title="Bills"
         subtitle="Prescriptions awaiting payment — settle and hand over the medicine"
+        actions={
+          <Can permission={P.PHARMACY_VIEW}>
+            <Link
+              href={`/${orgSlug}/pharmacy`}
+              className="inline-flex items-center gap-2 border border-border bg-background text-foreground px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-accent transition-colors"
+            >
+              Full Pharmacy List
+            </Link>
+          </Can>
+        }
       />
 
       {isLoading ? (

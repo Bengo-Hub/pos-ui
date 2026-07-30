@@ -36,6 +36,7 @@ export interface PrescriptionMetadata {
   approval_override_reason?: string;
   reservation_id?: string;
   crm_contact_id?: string;
+  cancel_reason?: string;
 }
 
 export interface Prescription {
@@ -119,10 +120,27 @@ export async function createPrescription(tenantSlug: string, data: CreatePrescri
   return flattenPrescription(res);
 }
 
-export async function dispensePrescription(tenantSlug: string, id: string): Promise<Prescription> {
+export interface DispenseLineInput {
+  line_id: string;
+  quantity: number;
+}
+
+export interface DispenseOptions {
+  /** Omit for "Dispense All" (fills every remaining line in full). Provide to dispense only the
+   *  given quantity per line — e.g. the pharmacy is out of stock on one drug but can fill the
+   *  rest, which moves the prescription to 'partially_dispensed' instead of 'dispensed'. */
+  lines?: DispenseLineInput[];
+  notes?: string;
+}
+
+export async function dispensePrescription(
+  tenantSlug: string,
+  id: string,
+  options?: DispenseOptions,
+): Promise<Prescription> {
   const res = await apiClient.post<{ prescription: Prescription; lines?: PrescriptionLine[] }>(
     `${base(tenantSlug)}/prescriptions/${id}/dispense`,
-    {},
+    options ?? {},
   );
   return flattenPrescription(res);
 }
@@ -143,6 +161,12 @@ export async function lockPrescription(tenantSlug: string, id: string): Promise<
 
 export async function rejectPrescription(tenantSlug: string, id: string, reason: string): Promise<Prescription> {
   return apiClient.post<Prescription>(`${base(tenantSlug)}/prescriptions/${id}/reject`, { reason });
+}
+
+/** Administrative withdrawal (patient changed their mind, order opened in error) — distinct from
+ *  reject, which is the pharmacist's clinical refusal to fill the script. */
+export async function cancelPrescription(tenantSlug: string, id: string, reason: string): Promise<Prescription> {
+  return apiClient.post<Prescription>(`${base(tenantSlug)}/prescriptions/${id}/cancel`, { reason });
 }
 
 export interface PrescriptionCheckoutResult {
@@ -196,4 +220,61 @@ export async function linkCRMContact(
     { crm_contact_id: crmContactId },
   );
   return res.prescription;
+}
+
+// ─── Controlled-substance dispensing register ─────────────────────────────────
+// Regulator-mandated dual-witness log for scheduled/controlled drugs — separate from the normal
+// Dispense flow because it requires a verified witness step-up (PIN/card), not just a permission.
+
+export interface ControlledSubstanceLog {
+  id: string;
+  outlet_id: string;
+  prescription_id?: string;
+  catalog_item_id: string;
+  item_sku: string;
+  item_name: string;
+  quantity_dispensed: number;
+  dispensed_by: string;
+  witness_staff_id: string;
+  patient_name: string;
+  patient_id_number?: string;
+  lot_number?: string;
+  lot_expiry_date?: string;
+  notes?: string;
+  dispensed_at: string;
+}
+
+export interface CreateControlledLogData {
+  outlet_id: string;
+  prescription_id?: string;
+  catalog_item_id: string;
+  item_sku: string;
+  item_name: string;
+  quantity_dispensed: number;
+  dispensed_by: string;
+  patient_name: string;
+  patient_id_number?: string;
+  lot_number?: string;
+  notes?: string;
+  /** The step-up approval token from a witness PIN/card verification (action
+   *  'controlled_substance_dispense') — required, verified server-side. */
+  approval_token: string;
+}
+
+export async function listControlledLogs(
+  tenantSlug: string,
+  params?: { catalog_item_id?: string; page?: number; limit?: number },
+): Promise<ControlledSubstanceLog[]> {
+  const res = await apiClient.get<{ data: ControlledSubstanceLog[] }>(
+    `${base(tenantSlug)}/controlled-substances`,
+    params,
+  );
+  return res.data ?? [];
+}
+
+export async function createControlledLog(
+  tenantSlug: string,
+  data: CreateControlledLogData,
+): Promise<ControlledSubstanceLog> {
+  return apiClient.post<ControlledSubstanceLog>(`${base(tenantSlug)}/controlled-substances`, data);
 }

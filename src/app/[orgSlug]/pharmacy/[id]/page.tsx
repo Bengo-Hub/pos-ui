@@ -13,11 +13,14 @@ import {
   useLockPrescription,
   useCheckoutPrescription,
   useRejectPrescription,
+  useCancelPrescription,
   useCRMContactSearch,
   useLinkCRMContact,
 } from '@/hooks/usePharmacy';
+import { usePharmacyWorkflow } from '@/hooks/useClinical';
+import { usePermissions } from '@/hooks/usePermissions';
 import { cn } from '@/lib/utils';
-import { ArrowLeft, AlertTriangle, Ban, CheckCircle2, CreditCard, Loader2, Lock, Pill, Printer, ShieldCheck, UserPlus, X } from 'lucide-react';
+import { ArrowLeft, AlertTriangle, Ban, CheckCircle2, CreditCard, Loader2, Lock, Pill, Printer, Receipt, ShieldCheck, UserPlus, X, XCircle } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { toast } from 'sonner';
@@ -156,18 +159,33 @@ function PrescriptionDetailPage() {
   const id = params?.id as string;
 
   const { data: rx, isLoading } = usePrescription(id);
+  // Dispensing-workflow mode (Settings -> Pharmacy Workflow): 'direct' = the prescriber also
+  // takes payment and hands over the medicine; 'billing' = payment/handover moves to a shared
+  // Bills queue any cashier can settle — this page's Dispense/Checkout controls are then hidden
+  // in favor of directing the patient to that desk. Defaults to 'direct' while loading so the
+  // page doesn't flash-hide controls on a slow settings fetch.
+  const { data: workflowConfig } = usePharmacyWorkflow();
+  const isBillingMode = workflowConfig?.pharmacy_workflow_mode === 'billing';
   const dispense = useDispensePrescription();
   const approve = useApprovePrescription();
   const lock = useLockPrescription();
   const checkout = useCheckoutPrescription();
   const reject = useRejectPrescription();
+  const cancelRx = useCancelPrescription();
+  const { can } = usePermissions();
   const [overrideReason, setOverrideReason] = useState('');
   const [showReject, setShowReject] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
+  const [showCancel, setShowCancel] = useState(false);
+  const [cancelReason, setCancelReason] = useState('');
+  const [showDispense, setShowDispense] = useState(false);
+  const [dispenseQty, setDispenseQty] = useState<Record<string, number>>({});
   const [printing, setPrinting] = useState(false);
   const [paymentOrder, setPaymentOrder] = useState<{ id: string; order_number: string; total: number } | null>(null);
   const tenantId = useAuthStore((s) => s.user?.tenant_id ?? '');
   const tenantSlug = useAuthStore((s) => s.user?.tenant_slug ?? '');
+
+  const canOverrideInteraction = can(P.PHARMACY_INTERACTION_OVERRIDE);
 
   const handlePrintLabel = async () => {
     if (!rx || !tenantId) return;
@@ -188,11 +206,29 @@ function PrescriptionDetailPage() {
     }
   };
 
+  const openDispense = () => {
+    if (!rx) return;
+    const initial: Record<string, number> = {};
+    rx.lines.forEach((l) => {
+      initial[l.id] = l.quantity_prescribed - l.quantity_dispensed;
+    });
+    setDispenseQty(initial);
+    setShowDispense(true);
+  };
+
   const handleDispense = async () => {
     if (!rx) return;
+    const lines = Object.entries(dispenseQty)
+      .filter(([, qty]) => qty > 0)
+      .map(([line_id, quantity]) => ({ line_id, quantity }));
+    if (lines.length === 0) {
+      toast.error('Enter a quantity to dispense for at least one drug line');
+      return;
+    }
     try {
-      await dispense.mutateAsync(rx.id);
-      toast.success('Prescription dispensed');
+      const updated = await dispense.mutateAsync({ id: rx.id, options: { lines } });
+      setShowDispense(false);
+      toast.success(updated.status === 'partially_dispensed' ? 'Partial dispense recorded' : 'Prescription dispensed');
     } catch (e) {
       toast.error(await apiErrorMessage(e, 'Failed to dispense prescription'));
     }
@@ -238,6 +274,18 @@ function PrescriptionDetailPage() {
       setRejectReason('');
     } catch (e) {
       toast.error(await apiErrorMessage(e, 'Failed to reject prescription'));
+    }
+  };
+
+  const handleCancel = async () => {
+    if (!rx || !cancelReason.trim()) return;
+    try {
+      await cancelRx.mutateAsync({ id: rx.id, reason: cancelReason.trim() });
+      toast.success('Prescription cancelled');
+      setShowCancel(false);
+      setCancelReason('');
+    } catch (e) {
+      toast.error(await apiErrorMessage(e, 'Failed to cancel prescription'));
     }
   };
 
@@ -294,7 +342,7 @@ function PrescriptionDetailPage() {
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
-          {(rx.status === 'pending' || rx.status === 'pharmacist_review') && (
+          {rx.status === 'pending' && (
             <Can permission={P.PHARMACY_APPROVE}>
               <button
                 onClick={() => handleApprove()}
@@ -307,7 +355,10 @@ function PrescriptionDetailPage() {
             </Can>
           )}
           {rx.status === 'approved' && (
-            <Can permission={P.PHARMACY_CHANGE}>
+            // Gated on PHARMACY_APPROVE (not CHANGE) to match the backend route, which requires
+            // pos.pharmacy.approve — a role with only CHANGE (e.g. pharmacy_technician) would
+            // otherwise see this button and get a 403 clicking it.
+            <Can permission={P.PHARMACY_APPROVE}>
               <button
                 onClick={handleLock}
                 disabled={lock.isPending}
@@ -318,10 +369,10 @@ function PrescriptionDetailPage() {
               </button>
             </Can>
           )}
-          {(rx.status === 'approved' || rx.status === 'locked') && (
+          {!isBillingMode && (rx.status === 'approved' || rx.status === 'locked' || rx.status === 'partially_dispensed') && (
             <Can permission={P.PHARMACY_CHANGE}>
               <button
-                onClick={handleDispense}
+                onClick={openDispense}
                 disabled={dispense.isPending}
                 className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-green-600 text-white text-sm font-semibold hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
@@ -330,7 +381,7 @@ function PrescriptionDetailPage() {
                 ) : (
                   <Pill className="h-4 w-4" />
                 )}
-                Dispense All
+                Dispense
               </button>
             </Can>
           )}
@@ -346,7 +397,19 @@ function PrescriptionDetailPage() {
               </button>
             </Can>
           )}
-          {rx.status === 'dispensed' && !rx.order_id && (
+          {!['dispensed', 'partially_dispensed', 'rejected', 'cancelled'].includes(rx.status) && (
+            <Can permission={P.PHARMACY_CHANGE}>
+              <button
+                onClick={() => setShowCancel((v) => !v)}
+                disabled={cancelRx.isPending}
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-border text-muted-foreground text-sm font-semibold hover:bg-accent transition-colors disabled:opacity-50"
+              >
+                <XCircle className="h-4 w-4" />
+                Cancel Rx
+              </button>
+            </Can>
+          )}
+          {!isBillingMode && rx.status === 'dispensed' && !rx.order_id && (
             <Can permission={P.PHARMACY_CHANGE}>
               <button
                 onClick={handleCheckout}
@@ -372,6 +435,25 @@ function PrescriptionDetailPage() {
           )}
         </div>
       </div>
+
+      {/* Billing-mode guidance — once approved, this outlet's dispensing/payment happens at the
+          shared Bills desk (any cashier), not here, so point staff there instead of leaving them
+          looking for a Dispense/Checkout button that's intentionally hidden. */}
+      {isBillingMode && ['approved', 'locked', 'partially_dispensed'].includes(rx.status) && (
+        <div className="bg-blue-500/5 border border-blue-400/30 rounded-2xl p-4 mb-5 flex items-center gap-3">
+          <Receipt className="h-5 w-5 text-blue-600 dark:text-blue-400 shrink-0" />
+          <p className="text-sm text-muted-foreground flex-1">
+            This outlet uses <span className="font-semibold text-foreground">Billing mode</span> — direct the
+            patient to the Cashier / Bills Desk to pay and collect. Dispensing happens there, not here.
+          </p>
+          <Link
+            href={`/${orgSlug}/bills`}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 transition-colors shrink-0"
+          >
+            Go to Bills Desk
+          </Link>
+        </div>
+      )}
 
       {/* Reject reason (inline, toggled by the Reject button above) */}
       {showReject && (
@@ -406,6 +488,115 @@ function PrescriptionDetailPage() {
         </div>
       )}
 
+      {/* Cancel reason (inline, toggled by the Cancel Rx button above) — administrative
+          withdrawal, distinct from Reject's clinical refusal. */}
+      {showCancel && (
+        <div className="bg-muted/40 border border-border rounded-2xl p-5 mb-5">
+          <h2 className="text-sm font-bold mb-2">Cancel Prescription</h2>
+          <p className="text-sm text-muted-foreground mb-3">
+            Any stock reserved for this prescription will be released. This cannot be undone.
+          </p>
+          <textarea
+            value={cancelReason}
+            onChange={(e) => setCancelReason(e.target.value)}
+            placeholder="Reason for cancellation (required)…"
+            rows={2}
+            className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-primary/40"
+          />
+          <div className="flex gap-2">
+            <button
+              onClick={() => setShowCancel(false)}
+              className="px-4 py-2 rounded-xl border border-border text-sm font-semibold hover:bg-accent transition-colors"
+            >
+              Back
+            </button>
+            <button
+              onClick={handleCancel}
+              disabled={cancelRx.isPending || !cancelReason.trim()}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-foreground text-background text-sm font-semibold hover:opacity-90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {cancelRx.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />}
+              Confirm Cancellation
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Dispense (toggled by the Dispense button above) — quantities default to the full
+          remaining amount per line; edit any down to record a partial dispense instead. */}
+      {showDispense && rx && (
+        <div
+          className="fixed inset-0 z-[55] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => setShowDispense(false)}
+        >
+          <div
+            className="bg-card rounded-2xl border border-border shadow-2xl w-full max-w-lg p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-3 mb-4">
+              <div className="h-10 w-10 rounded-xl bg-green-500/10 flex items-center justify-center shrink-0">
+                <Pill className="h-5 w-5 text-green-600" />
+              </div>
+              <div className="min-w-0">
+                <h2 className="font-bold text-base leading-tight">Dispense Prescription</h2>
+                <p className="text-xs text-muted-foreground">
+                  Reduce a quantity below the full remaining amount to record a partial dispense.
+                </p>
+              </div>
+            </div>
+            <div className="space-y-2.5 mb-5 max-h-72 overflow-y-auto">
+              {rx.lines
+                .filter((l) => l.quantity_dispensed < l.quantity_prescribed)
+                .map((line) => {
+                  const remaining = line.quantity_prescribed - line.quantity_dispensed;
+                  const value = dispenseQty[line.id] ?? remaining;
+                  return (
+                    <div
+                      key={line.id}
+                      className="flex items-center justify-between gap-3 rounded-xl border border-border px-3 py-2.5"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium truncate">{line.drug_name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {[line.dosage, line.form].filter(Boolean).join(' · ')} — {remaining} remaining of{' '}
+                          {line.quantity_prescribed}
+                        </p>
+                      </div>
+                      <input
+                        type="number"
+                        min={0}
+                        max={remaining}
+                        value={value}
+                        onChange={(e) => {
+                          const n = Math.min(Math.max(0, Number(e.target.value) || 0), remaining);
+                          setDispenseQty((prev) => ({ ...prev, [line.id]: n }));
+                        }}
+                        className="w-20 shrink-0 rounded-lg border border-border bg-background px-2 py-1.5 text-sm text-center focus:outline-none focus:ring-2 focus:ring-primary/40"
+                      />
+                    </div>
+                  );
+                })}
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowDispense(false)}
+                className="flex-1 py-2.5 rounded-xl border border-border text-sm font-semibold hover:bg-accent transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDispense}
+                disabled={dispense.isPending}
+                className="flex-1 inline-flex items-center justify-center gap-2 py-2.5 rounded-xl bg-green-600 text-white text-sm font-semibold hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {dispense.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Pill className="h-4 w-4" />}
+                Confirm Dispense
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Payment collection for the checkout order just created above */}
       {paymentOrder && (
         <SplitPaymentModal
@@ -420,17 +611,24 @@ function PrescriptionDetailPage() {
         />
       )}
 
-      {/* Drug-interaction / allergy warning — requires an override reason to approve past it */}
-      {rx.status === 'flagged' && (
+      {/* Drug-interaction / allergy warning — requires an override reason to approve past it.
+          pharmacist_review is the strictest tier (contraindicated finding): it additionally
+          requires the pos.pharmacy.interaction_override permission, enforced both here (so the
+          button disables with an explanation instead of a confusing 403) and server-side. */}
+      {(rx.status === 'flagged' || rx.status === 'pharmacist_review') && (
         <div className="bg-red-500/5 border border-red-400/30 rounded-2xl p-5 mb-5">
           <div className="flex items-start gap-3">
             <AlertTriangle className="h-5 w-5 text-red-600 dark:text-red-400 shrink-0 mt-0.5" />
             <div className="flex-1">
               <h2 className="text-sm font-bold text-red-700 dark:text-red-400 mb-1">
-                Drug interaction / allergy flag detected
+                {rx.status === 'pharmacist_review'
+                  ? 'Contraindicated drug interaction / allergy detected'
+                  : 'Drug interaction / allergy flag detected'}
               </h2>
               <p className="text-sm text-muted-foreground mb-4">
-                A pharmacist must document a clinical justification before this prescription can be approved.
+                {rx.status === 'pharmacist_review'
+                  ? 'This is the strictest interaction tier. A pharmacist holding interaction-override rights must document a clinical justification before this prescription can be approved.'
+                  : 'A pharmacist must document a clinical justification before this prescription can be approved.'}
               </p>
               <textarea
                 value={overrideReason}
@@ -439,9 +637,18 @@ function PrescriptionDetailPage() {
                 rows={2}
                 className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-red-400/40"
               />
+              {rx.status === 'pharmacist_review' && !canOverrideInteraction && (
+                <p className="text-xs text-destructive mb-3">
+                  You don&apos;t hold the interaction-override permission — a senior pharmacist must approve this one.
+                </p>
+              )}
               <button
                 onClick={() => handleApprove(overrideReason)}
-                disabled={approve.isPending || !overrideReason.trim()}
+                disabled={
+                  approve.isPending ||
+                  !overrideReason.trim() ||
+                  (rx.status === 'pharmacist_review' && !canOverrideInteraction)
+                }
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-red-600 text-white text-sm font-semibold hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {approve.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}

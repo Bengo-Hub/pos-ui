@@ -7,14 +7,14 @@ import { P } from '@/lib/rbac/permissions';
 
 import { cn } from '@/lib/utils';
 import { usePrescriptions, useDispensePrescription, useCreatePrescription, useLinkCRMContact } from '@/hooks/usePharmacy';
-import { usePrescribers } from '@/hooks/useClinical';
+import { usePrescribers, usePharmacyWorkflow } from '@/hooks/useClinical';
 import { apiClient } from '@/lib/api/client';
 import { useAuthStore } from '@/store/auth';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { WalkInSaleModal } from '@/components/pos/walk-in-sale-modal';
 import { CustomerSearch, type SelectedCustomer } from '@/components/pos/customer-search';
 import { SearchableCombobox, type ComboboxOption } from '@bengo-hub/shared-ui-lib/combobox';
-import { Loader2, Pill, Plus, Eye, ShoppingCart, Trash2, X } from 'lucide-react';
+import { Loader2, Pill, Plus, Eye, Receipt, ShieldCheck, ShoppingCart, Trash2, X } from 'lucide-react';
 import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useState, useEffect, useRef } from 'react';
@@ -65,6 +65,8 @@ interface DrugCatalogItem {
   name: string;
   sku: string;
   price?: number;
+  dosage_form?: string;
+  strength?: string;
 }
 
 /** Fetches pharmaceutical catalog items for the drug-line combobox — same /catalog/items endpoint
@@ -84,7 +86,7 @@ async function searchDrugs(tenantID: string, query: string, cache: Map<string, D
       value: item.id,
       label: item.name,
       hint: item.price !== undefined ? item.price.toFixed(2) : undefined,
-      description: item.sku,
+      description: [item.sku, item.strength].filter(Boolean).join(' · '),
     };
   });
 }
@@ -127,6 +129,8 @@ function NewPrescriptionModal({ onClose }: { onClose: () => void }) {
   const createPrescription = useCreatePrescription();
   const linkCRMContact = useLinkCRMContact();
   const { data: prescribers } = usePrescribers();
+  const { data: workflowConfig } = usePharmacyWorkflow();
+  const isBillingMode = workflowConfig?.pharmacy_workflow_mode === 'billing';
 
   // Per-line catalog-item lookup (id -> full item, incl. price/sku) fed by each SearchableCombobox's
   // remote search — a single shared cache since drug names/ids are unique across lines.
@@ -143,6 +147,7 @@ function NewPrescriptionModal({ onClose }: { onClose: () => void }) {
     handleSubmit,
     control,
     setValue,
+    watch,
     formState: { errors, isSubmitting },
   } = useForm<PrescriptionFormValues>({
     resolver: zodResolver(prescriptionSchema),
@@ -204,7 +209,11 @@ function NewPrescriptionModal({ onClose }: { onClose: () => void }) {
           // Best-effort — the prescription itself was created successfully either way.
         }
       }
-      toast.success('Prescription created');
+      toast.success(
+        isBillingMode
+          ? 'Prescription created — approve it, then direct the patient to the Cashier Desk to pay'
+          : 'Prescription created',
+      );
       onClose();
       router.push(`/${orgSlug}/pharmacy/${rx.id}`);
     } catch (e) {
@@ -401,13 +410,15 @@ function NewPrescriptionModal({ onClose }: { onClose: () => void }) {
                       <label className={labelCls}>Drug <span className="text-destructive">*</span></label>
                       <SearchableCombobox
                         options={[]}
-                        value={undefined}
+                        value={watch(`lines.${idx}.catalog_item_id`)}
                         onChange={(value) => {
                           const item = drugCache.current.get(value);
                           if (!item) return;
                           setValue(`lines.${idx}.drug_name`, item.name, { shouldValidate: true });
                           setValue(`lines.${idx}.catalog_item_id`, item.id);
                           if (item.price !== undefined) setValue(`lines.${idx}.unit_price`, item.price);
+                          if (item.strength) setValue(`lines.${idx}.dosage`, item.strength, { shouldValidate: true });
+                          if (item.dosage_form) setValue(`lines.${idx}.form`, item.dosage_form, { shouldValidate: true });
                         }}
                         onRemoteSearch={(q) => searchDrugs(tenantID, q, drugCache.current)}
                         placeholder="Search drugs…"
@@ -498,11 +509,13 @@ function PharmacyPage() {
   };
 
   const { data: prescriptions, isLoading } = usePrescriptions(filters);
+  const { data: workflowConfig } = usePharmacyWorkflow();
+  const isBillingMode = workflowConfig?.pharmacy_workflow_mode === 'billing';
   const dispense = useDispensePrescription();
 
   const handleDispense = async (id: string, rx: string) => {
     try {
-      await dispense.mutateAsync(id);
+      await dispense.mutateAsync({ id });
       toast.success(`Prescription ${rx} dispensed`);
     } catch (e) {
       toast.error(await apiErrorMessage(e, 'Failed to dispense prescription'));
@@ -519,11 +532,48 @@ function PharmacyPage() {
             <Pill className="h-5 w-5 text-primary" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold">Pharmacy</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-bold">Pharmacy</h1>
+              <span
+                className={cn(
+                  'inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border',
+                  isBillingMode
+                    ? 'bg-blue-500/10 text-blue-700 border-blue-400/30 dark:text-blue-400'
+                    : 'bg-muted text-muted-foreground border-border',
+                )}
+                title={
+                  isBillingMode
+                    ? 'Approved scripts are posted to the shared Bills queue — any cashier collects payment and dispenses'
+                    : 'You approve, dispense, and collect payment yourself at this counter'
+                }
+              >
+                {isBillingMode ? 'Billing mode' : 'Direct mode'}
+              </span>
+            </div>
             <p className="text-sm text-muted-foreground mt-0.5">Manage prescriptions and dispensing</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {isBillingMode && (
+            <Can any={[P.PAYMENTS_ADD, P.PAYMENTS_VIEW]}>
+              <Link
+                href={`/${orgSlug}/bills`}
+                className="inline-flex items-center gap-2 border border-border bg-background text-foreground px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-accent transition-colors"
+              >
+                <Receipt className="h-4 w-4" />
+                Bills / Cashier Desk
+              </Link>
+            </Can>
+          )}
+          <Can permission={P.PHARMACY_VIEW}>
+            <Link
+              href={`/${orgSlug}/pharmacy/controlled-substances`}
+              className="inline-flex items-center gap-2 border border-border bg-background text-foreground px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-accent transition-colors"
+            >
+              <ShieldCheck className="h-4 w-4" />
+              Controlled Substances
+            </Link>
+          </Can>
           <Can permission={P.ORDERS_ADD}>
             <button
               type="button"
@@ -554,8 +604,13 @@ function PharmacyPage() {
         >
           <option value="">All Statuses</option>
           <option value="pending">Pending</option>
+          <option value="flagged">Flagged</option>
+          <option value="pharmacist_review">Pharmacist Review</option>
+          <option value="approved">Approved</option>
+          <option value="locked">Locked</option>
           <option value="partially_dispensed">Partially Dispensed</option>
           <option value="dispensed">Dispensed</option>
+          <option value="rejected">Rejected</option>
           <option value="cancelled">Cancelled</option>
         </select>
         <input
@@ -620,7 +675,7 @@ function PharmacyPage() {
                         <Eye className="h-3.5 w-3.5" />
                         View
                       </Link>
-                      {(rx.status === 'approved' || rx.status === 'locked') && (
+                      {!isBillingMode && (rx.status === 'approved' || rx.status === 'locked') && (
                         <Can permission={P.PHARMACY_CHANGE}>
                           <button
                             onClick={() => handleDispense(rx.id, rx.prescription_number)}

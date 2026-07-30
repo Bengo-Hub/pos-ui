@@ -13,8 +13,13 @@ import {
   linkCRMContact,
   checkoutPrescription,
   rejectPrescription,
+  cancelPrescription,
+  listControlledLogs,
+  createControlledLog,
   type CreatePrescriptionData,
   type PrescriptionFilters,
+  type DispenseOptions,
+  type CreateControlledLogData,
 } from '@/lib/api/pharmacy';
 
 function useTenantSlug() {
@@ -64,8 +69,9 @@ export function useDispensePrescription() {
   const tenantSlug = useTenantSlug();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => dispensePrescription(tenantSlug, id),
-    onSuccess: (_data, id) => {
+    mutationFn: ({ id, options }: { id: string; options?: DispenseOptions }) =>
+      dispensePrescription(tenantSlug, id, options),
+    onSuccess: (_data, { id }) => {
       qc.invalidateQueries({ queryKey: ['prescriptions', tenantSlug] });
       qc.invalidateQueries({ queryKey: ['prescription', tenantSlug, id] });
     },
@@ -93,6 +99,20 @@ export function useRejectPrescription() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, reason }: { id: string; reason: string }) => rejectPrescription(tenantSlug, id, reason),
+    onSuccess: (_data, { id }) => {
+      qc.invalidateQueries({ queryKey: ['prescriptions', tenantSlug] });
+      qc.invalidateQueries({ queryKey: ['prescription', tenantSlug, id] });
+    },
+  });
+}
+
+// ─── Cancel prescription (administrative withdrawal, distinct from Reject) ───
+
+export function useCancelPrescription() {
+  const tenantSlug = useTenantSlug();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, reason }: { id: string; reason: string }) => cancelPrescription(tenantSlug, id, reason),
     onSuccess: (_data, { id }) => {
       qc.invalidateQueries({ queryKey: ['prescriptions', tenantSlug] });
       qc.invalidateQueries({ queryKey: ['prescription', tenantSlug, id] });
@@ -148,6 +168,29 @@ export function useLinkCRMContact() {
     onSuccess: (_data, { id }) => {
       qc.invalidateQueries({ queryKey: ['prescriptions', tenantSlug] });
       qc.invalidateQueries({ queryKey: ['prescription', tenantSlug, id] });
+    },
+  });
+}
+
+// ─── Controlled-substance dispensing register ─────────────────────────────────
+
+export function useControlledLogs(params?: { catalog_item_id?: string; page?: number; limit?: number }) {
+  const tenantSlug = useTenantSlug();
+  return useQuery({
+    queryKey: ['controlled-substance-logs', tenantSlug, params],
+    queryFn: () => listControlledLogs(tenantSlug, params),
+    enabled: !!tenantSlug,
+    staleTime: 15_000,
+  });
+}
+
+export function useCreateControlledLog() {
+  const tenantSlug = useTenantSlug();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: CreateControlledLogData) => createControlledLog(tenantSlug, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['controlled-substance-logs', tenantSlug] });
     },
   });
 }
