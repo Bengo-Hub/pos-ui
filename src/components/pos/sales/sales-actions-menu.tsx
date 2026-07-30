@@ -36,8 +36,8 @@ interface SalesActionsMenuProps {
   /** Permanently delete a FINALIZED sale via the admin Delete-Sale ("shred") tool — fiscalised
    *  sales are reversed+soft-marked, non-fiscalised sales are genuinely hard-deleted. */
   onDeleteSale?: (order: any) => void;
-  /** Edit a FINALIZED sale's lines/qty/price/customer — reverses the original then opens Add
-   *  Sale prefilled to create the replacement. */
+  /** Edit a FINALIZED sale's lines/qty/price in place — opens the in-place editor directly;
+   *  nothing is reversed until Save, and only for whatever was actually removed/reduced. */
   onEditFinalizedSale?: (order: any) => void;
   /** Settle an on-account (credit) sale — shown only while money is still owed. */
   onRecordPayment?: (order: any) => void;
@@ -133,20 +133,24 @@ export function SalesActionsMenu({ order, orgSlug, onView, onEditShipping, onVie
               <Pencil className="h-4 w-4 text-muted-foreground" /> Edit
             </button>
           )}
+          {/* The real full-CRUD editor for a finalized sale (add/remove/swap lines, qty, price —
+              adjusts the sale in place). Listed first among the finalized-sale actions so it
+              isn't missed in favor of the narrower "Edit Sale Info" below (they used to share
+              the same "Edit" label, which is exactly why admins kept landing on the wrong one). */}
+          {isFinal && canEditFinalizedSale && onEditFinalizedSale && (
+            <button className={item} onClick={() => { onEditFinalizedSale(order); close(); }}>
+              <Pencil className="h-4 w-4 text-primary" /> Edit Sale
+            </button>
+          )}
           {isFinal && canEditSaleInfo && onEditSaleInfo && (
             <button className={item} onClick={() => { onEditSaleInfo(order); close(); }}>
-              <Pencil className="h-4 w-4 text-muted-foreground" /> Edit
+              <Pencil className="h-4 w-4 text-muted-foreground" /> Edit Sale Info
             </button>
           )}
           {canDelete && <button className={item} onClick={() => { onDelete(order); close(); }}><Ban className="h-4 w-4 text-destructive" /> Void Sale</button>}
           {isFinal && canDeleteSale && onDeleteSale && (
             <button className={item} onClick={() => { onDeleteSale(order); close(); }}>
               <Trash2 className="h-4 w-4 text-destructive" /> Delete Sale
-            </button>
-          )}
-          {isFinal && canEditFinalizedSale && onEditFinalizedSale && (
-            <button className={item} onClick={() => { onEditFinalizedSale(order); close(); }}>
-              <Pencil className="h-4 w-4 text-muted-foreground" /> Edit Sale
             </button>
           )}
           {canChange && <button className={item} onClick={() => { onEditShipping(order); close(); }}><Truck className="h-4 w-4 text-muted-foreground" /> Edit Shipping</button>}

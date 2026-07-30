@@ -27,6 +27,7 @@ const STEP_LABELS: Record<string, string> = {
   inventory_consumption: 'Inventory consumption',
   treasury_gl: 'Treasury GL',
   etims_credit_note: 'KRA eTIMS credit note',
+  loyalty_commission: 'Loyalty & commission clawback',
 };
 
 function StepBadge({ status }: { status: ReversalStep['status'] }) {

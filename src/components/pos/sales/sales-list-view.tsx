@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Search, Undo2, XCircle } from 'lucide-react';
 import { DataTable, type DataTableColumn } from '@bengo-hub/shared-ui-lib/data-table';
-import { useOrders, useOrdersSummary, useVoidOrder, useBulkVoidOrders, useDeleteSale, usePrepareEditSale, type OrderListFilters } from '@/hooks/usePOS';
+import { useOrders, useOrdersSummary, useVoidOrder, useBulkVoidOrders, useDeleteSale, type OrderListFilters } from '@/hooks/usePOS';
 import { useCloseOnAccount } from '@/hooks/use-close-on-account';
 import { useStaffList } from '@/hooks/useStaff';
 import { usePermissions, P } from '@/hooks/usePermissions';
@@ -92,7 +92,6 @@ export function SalesListView({ orgSlug, fixedSource, title, subtitle }: {
   const [moveDateOrder, setMoveDateOrder] = useState<any>(null);
   const [deleteOrder, setDeleteOrder] = useState<any>(null);
   const [deleteSaleOrder, setDeleteSaleOrder] = useState<any>(null);
-  const [editFinalizedOrder, setEditFinalizedOrder] = useState<any>(null);
   const [recordPayOrder, setRecordPayOrder] = useState<any>(null);
   const [editSaleInfoOrder, setEditSaleInfoOrder] = useState<any>(null);
   const [putOnAccountOrder, setPutOnAccountOrder] = useState<any>(null);
@@ -110,7 +109,6 @@ export function SalesListView({ orgSlug, fixedSource, title, subtitle }: {
   );
   const voidOrder = useVoidOrder();
   const deleteSale = useDeleteSale();
-  const prepareEditSale = usePrepareEditSale();
   const bulkVoid = useBulkVoidOrders();
   const closeOnAccount = useCloseOnAccount();
 
@@ -200,22 +198,10 @@ export function SalesListView({ orgSlug, fixedSource, title, subtitle }: {
     );
   };
 
-  // Edit a FINALIZED sale: reverse the original (GL/inventory/eTIMS), then hand off to Add Sale
-  // (prefilled from the original) to create the replacement through the normal checkout pipeline.
-  const handleEditFinalizedSale = () => {
-    if (!editFinalizedOrder) return;
-    prepareEditSale.mutate(
-      { orderId: editFinalizedOrder.id, reason: 'Edited from Sales list' },
-      {
-        onSuccess: () => {
-          toast.success(`${editFinalizedOrder.order_number} reversed — complete the replacement sale to finish editing.`);
-          const id = editFinalizedOrder.id;
-          setEditFinalizedOrder(null);
-          router.push(`/${orgSlug}/sell/add?edit_from=${id}`);
-        },
-        onError: (e: any) => toast.error(e?.response?.data?.error || 'Could not start the edit'),
-      },
-    );
+  // Edit a FINALIZED sale: opens the true in-place editor directly — nothing is reversed just
+  // to open it (only Save actually reduces/reverses whatever was actually removed/lowered).
+  const handleEditFinalizedSale = (order: any) => {
+    router.push(`/${orgSlug}/sell/add?edit_inplace=${order.id}`);
   };
 
   const handlePutOnAccount = () => {
@@ -259,7 +245,7 @@ export function SalesListView({ orgSlug, fixedSource, title, subtitle }: {
         <SalesActionsMenu order={o} orgSlug={orgSlug} onView={(ord) => setDetailId(ord.id)}
           onEditShipping={setShippingOrder} onViewPayments={setPaymentsOrder} onEditLines={setEditLinesOrder}
           onMoveDate={setMoveDateOrder} onDelete={setDeleteOrder} onDeleteSale={setDeleteSaleOrder}
-          onEditFinalizedSale={setEditFinalizedOrder}
+          onEditFinalizedSale={handleEditFinalizedSale}
           onRecordPayment={setRecordPayOrder}
           onPutOnAccount={setPutOnAccountOrder} onEditSaleInfo={setEditSaleInfoOrder} />
       ),
@@ -448,10 +434,6 @@ export function SalesListView({ orgSlug, fixedSource, title, subtitle }: {
         title="Permanently delete this sale?"
         description={`${deleteSaleOrder?.order_number}: if this sale was reported to KRA, it will be reversed (GL/inventory/credit-note) and marked deleted — never removed, since a transmitted tax record can't be destroyed. If it was never reported to KRA, it will be PERMANENTLY DELETED (ledger + records), with only an audit snapshot kept. This cannot be undone.`}
         confirmLabel="Delete permanently" variant="danger" onConfirm={handleDeleteSale} loading={deleteSale.isPending} />
-      <ConfirmDialog open={!!editFinalizedOrder} onOpenChange={(o) => !o && setEditFinalizedOrder(null)}
-        title="Edit this sale?"
-        description={`${editFinalizedOrder?.order_number} will be reversed (GL, inventory and eTIMS credit-note if it was fiscalised) and you'll be taken to Add Sale, prefilled with its items, to enter the corrected sale.`}
-        confirmLabel="Reverse & edit" variant="danger" onConfirm={handleEditFinalizedSale} loading={prepareEditSale.isPending} />
       <ConfirmDialog open={!!putOnAccountOrder} onOpenChange={(o) => !o && setPutOnAccountOrder(null)}
         title="Put balance on account?"
         description={`This books the ${money(putOnAccountOrder?.amount_due ?? 0)} still owed on ${putOnAccountOrder?.order_number} to ${putOnAccountOrder?.customer_name || 'the customer'}'s account (treasury AR) and finalizes the sale. The customer's credit limit is enforced.`}

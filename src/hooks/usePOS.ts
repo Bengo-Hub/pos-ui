@@ -1721,6 +1721,35 @@ export function usePrepareEditSale() {
   });
 }
 
+export interface EditReduceLine {
+  line_id: string;
+  quantity?: number; // 0/omitted = whole line
+}
+
+export interface EditReduceResult {
+  order_id: string;
+  reversal_id?: string;
+  reversal_number?: string;
+}
+
+/**
+ * useApplyEditSale is the TRUE in-place half of Edit Sale
+ * (POST /orders/{id}/edit-reduce — pos.orders.edit_finalized, admin by default): removes/reduces
+ * the given lines via a partial reversal — inventory add-back, treasury GL refund, an eTIMS
+ * credit note only if the tenant is actually fiscalized, and loyalty/commission clawback are all
+ * prorated to the reduced value. The order's status and number are UNCHANGED — this never creates
+ * a replacement order. Pass an empty `lines` array for a pure-increase edit (nothing to reduce).
+ */
+export function useApplyEditSale() {
+  const tenantID = useTenantID();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ orderId, reason, lines }: { orderId: string; reason: string; lines: EditReduceLine[] }) =>
+      apiClient.post<EditReduceResult>(`${basePath(tenantID)}/orders/${orderId}/edit-reduce`, { reason, lines }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['pos-orders'] }),
+  });
+}
+
 /**
  * useGenerateComplimentaryCode lets a manager generate a one-time, order-scoped code to SHARE
  * with a waiter/cashier so they can close a specific bill via the Complimentary/no-charge tender

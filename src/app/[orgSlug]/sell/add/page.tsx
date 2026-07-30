@@ -10,7 +10,7 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { Check, Loader2, Minus, Plus, Search, ShoppingCart, Trash2, Truck, User, Users, X } from 'lucide-react';
-import { useMenuItems, useFullCatalog, useCreateOrder, useCreatePaymentIntent, usePricingTiers, useOrder, useVoidOrder, useEditOrderLine, useSetOrderDiscount, type CatalogItem } from '@/hooks/usePOS';
+import { useMenuItems, useFullCatalog, useCreateOrder, useCreatePaymentIntent, usePricingTiers, useOrder, useVoidOrder, useEditOrderLine, useSetOrderDiscount, useApplyEditSale, type CatalogItem, type EditReduceLine } from '@/hooks/usePOS';
 import { Tag } from 'lucide-react';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { SplitPaymentModal } from '@/components/pos/split-payment-modal';
@@ -69,6 +69,7 @@ function tierPrice(item: any, profile: string): number {
 }
 
 const fmt = (n: number) => `KES ${n.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+const round2 = (n: number) => Math.round(n * 100) / 100;
 
 export default function AddSalePage() {
   const params = useParams();
@@ -336,6 +337,142 @@ export default function AddSalePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editFromQ.data, editFromId, editPrefilled]);
 
+  // ── Edit a FINALIZED sale IN PLACE ── ?edit_inplace= comes from the admin "Edit Sale" action.
+  // Unlike edit_from above, nothing is reversed just to open this — the original order is
+  // prefilled AS-IS, tagged with its lineIds, and a snapshot of the original lines is kept for
+  // diffing at save time. Save then does the minimum necessary: lines removed or reduced in
+  // quantity go through a PARTIAL reversal (POST /edit-reduce — inventory/GL/eTIMS/loyalty/
+  // commission all adjusted proportionally, the original order's status/number never change);
+  // brand-new lines or quantity increases on existing lines are billed as a small linked
+  // addendum sale through the normal create-order pipeline (fresh inventory consumption, GL,
+  // and — only if the tenant is actually eTIMS-integrated — a fresh KRA invoice, all for free).
+  const editInplaceId = searchParams.get('edit_inplace') || '';
+  const editInplaceQ = useOrder(editInplaceId);
+  const [editInplace, setEditInplace] = useState<{
+    id: string;
+    number: string;
+    originalLines: { lineId: string; quantity: number; unitPrice: number }[];
+  } | null>(null);
+  const applyEditSale = useApplyEditSale();
+  const [editInplaceSaving, setEditInplaceSaving] = useState(false);
+  useEffect(() => {
+    const o: any = editInplaceQ.data;
+    if (!o || !editInplaceId || editInplace) return;
+    const activeLines = (o.edges?.lines ?? []).filter((l: any) => !l.voided_qty);
+    setLines(activeLines.map((l: any) => ({
+      item: { id: l.catalog_item_id, sku: l.sku, name: l.name, price: l.unit_price, category: '' } as CatalogItem,
+      quantity: l.quantity,
+      unitPrice: l.unit_price,
+      preset: l.unit_price,
+      priceEdited: true,
+      lineId: l.id,
+      savedPrice: l.unit_price,
+      savedQty: l.quantity,
+    })));
+    if (o.customer_name || o.customer_phone) {
+      setCustomer({ name: o.customer_name ?? '', phone: o.customer_phone ?? '', isWalkIn: !o.customer_phone } as SelectedCustomer);
+    }
+    setEditInplace({
+      id: o.id,
+      number: o.order_number,
+      originalLines: activeLines.map((l: any) => ({ lineId: l.id, quantity: l.quantity, unitPrice: l.unit_price })),
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editInplaceQ.data, editInplaceId, editInplace]);
+
+  // Diffs the live cart against editInplace.originalLines and saves the minimum necessary:
+  // removed/reduced original lines -> edit-reduce (partial reversal); new lines or quantity
+  // increases on an original line -> a linked addendum sale at the CURRENT price. A same-quantity
+  // price-only change on an original line is NOT captured here (the reduce endpoint is qty-based,
+  // and re-billing it as an addendum would double-consume inventory for units already sold) — the
+  // user is warned so the change isn't silently dropped.
+  async function saveEditInplace() {
+    if (!editInplace) return;
+    const currentByLineId = new Map<string, SaleLine>();
+    for (const l of lines) if (l.lineId) currentByLineId.set(l.lineId, l);
+
+    const reductions: EditReduceLine[] = [];
+    const increaseLines: SaleLine[] = [];
+    let priceOnlyChanged = false;
+
+    for (const orig of editInplace.originalLines) {
+      const cur = currentByLineId.get(orig.lineId);
+      if (!cur) {
+        reductions.push({ line_id: orig.lineId }); // whole line removed
+        continue;
+      }
+      if (cur.quantity < orig.quantity) {
+        reductions.push({ line_id: orig.lineId, quantity: round2(orig.quantity - cur.quantity) });
+      } else if (cur.quantity > orig.quantity) {
+        increaseLines.push({ ...cur, quantity: round2(cur.quantity - orig.quantity) });
+      } else if (Math.abs(cur.unitPrice - orig.unitPrice) > 0.004) {
+        priceOnlyChanged = true;
+      }
+    }
+    for (const l of lines) {
+      if (!l.lineId) increaseLines.push(l); // brand-new line
+    }
+
+    if (priceOnlyChanged) {
+      toast.warning("A price change on an unchanged quantity isn't saved by Edit Sale — remove the line and re-add it at the new price instead.");
+    }
+    if (reductions.length === 0 && increaseLines.length === 0) {
+      toast.info('Nothing to save.');
+      return;
+    }
+
+    setEditInplaceSaving(true);
+    try {
+      if (reductions.length > 0) {
+        await applyEditSale.mutateAsync({ orderId: editInplace.id, reason: 'Edited from Sales list', lines: reductions });
+      }
+      if (increaseLines.length > 0) {
+        const payload: any = buildPayload();
+        payload.lines = increaseLines.map(lineToPayload);
+        payload.metadata = { ...(payload.metadata ?? {}), related_order_id: editInplace.id, edit_addendum: true };
+        createOrder.mutate(payload, {
+          onSuccess: (o: any) => {
+            const total = increaseLines.reduce((sum, l) => sum + l.unitPrice * l.quantity, 0);
+            toast.success(`${editInplace.number} updated — collect payment for the added item(s).`);
+            setPayOrder({ id: o.id || o.order_id || '', number: o.order_number || '', total });
+          },
+          onError: async (e: any) => toast.error(await apiErrorMessage(e, 'Reduction saved, but the addendum sale for the added item(s) failed.')),
+        });
+      } else {
+        toast.success(`${editInplace.number} updated`);
+        reset();
+        router.replace(`/${orgSlug}/sell/add`);
+      }
+    } catch (e) {
+      toast.error(await apiErrorMessage(e, 'Failed to save the edit.'));
+    } finally {
+      setEditInplaceSaving(false);
+    }
+  }
+
+  // Backfill catalog fields the resume/edit prefills above don't carry (they only copy what the
+  // ORDER LINE stores: id/sku/name/price). Without this, "In Stock"/"Cost price"/"Margin" render
+  // blank dashes for a resumed/edited line, and — more seriously — buildPayload's tax_code_id/
+  // tax_rate/tax_inclusive/min_selling_price/max_selling_price all silently drop on save (they're
+  // only sent `if l.item.xxx` is set), so a resumed or edited sale quietly loses its tax code and
+  // price-band guardrails. Runs whenever fullCatalog changes so it also catches the case where the
+  // catalog finishes loading AFTER the resume/edit effect already ran.
+  useEffect(() => {
+    if (!fullCatalog?.length) return;
+    setLines((prev) => {
+      let changed = false;
+      const next = prev.map((l) => {
+        if (l.item.stock_quantity !== undefined && l.item.cost_price !== undefined) return l;
+        const match = fullCatalog.find((c) => c.id === l.item.id || (l.item.sku && c.sku === l.item.sku));
+        if (!match) return l;
+        changed = true;
+        // Catalog fields fill the gaps; anything already set from the sale (name/sku/price) wins.
+        return { ...l, item: { ...match, ...l.item } };
+      });
+      return changed ? next : prev;
+    });
+  }, [fullCatalog]);
+
   const addLine = useCallback((item: CatalogItem) => {
     let newQty = 1;
     setStructuralDirty(true);
@@ -478,6 +615,49 @@ export default function AddSalePage() {
   }, [lines, taxRate]);
   const { roundOff, total } = applyRoundOff(subtotal + tax - discount + shippingAmount);
 
+  // Per-line request shape — shared by buildPayload (the whole cart) and the edit_inplace
+  // addendum save (just the added/increased lines), so both send identical tax/price-guardrail
+  // metadata.
+  function lineToPayload(l: SaleLine) {
+    const free = l.item.non_billable === true || l.item.is_complimentary === true;
+    const lineMeta: Record<string, any> = {};
+    if (notes) lineMeta.notes = notes;
+    // Free-of-charge marker — the server zeroes the line on this flag (belt & braces).
+    if (free) lineMeta.non_billable = true;
+    // Price-override audit trail — the SAME metadata contract the terminal sends:
+    // metadata.original_price is what pos-api's markdown gate (price.override step-up +
+    // audit) keys off, so back-office markdowns get identical enforcement.
+    if ((l.unitDiscount ?? 0) > 0) lineMeta.unit_discount = l.unitDiscount;
+    if (!free && l.preset > 0 && Math.abs(l.unitPrice - l.preset) > 0.004) {
+      lineMeta.original_price = l.preset;
+      lineMeta.price_override = true;
+      lineMeta.override_reason = (l.unitDiscount ?? 0) > 0 ? 'line discount' : 'price edit';
+    }
+    // Selling-price guardrails (mirrors the terminal's cart payload) — without these the
+    // server's min/max band gate never sees them, so a below-floor/above-ceiling price
+    // typed here skipped manager approval entirely (a real gap vs. the terminal).
+    if (!free && typeof l.item.min_selling_price === 'number' && l.item.min_selling_price > 0) {
+      lineMeta.min_price = l.item.min_selling_price;
+    }
+    if (!free && typeof l.item.max_selling_price === 'number' && l.item.max_selling_price > 0) {
+      lineMeta.max_price = l.item.max_selling_price;
+    }
+    return {
+      catalog_item_id: l.item.id,
+      sku: l.item.sku,
+      name: l.item.name,
+      category: l.item.category,
+      quantity: l.quantity,
+      unit_price: free ? 0 : l.unitPrice,
+      total_price: free ? 0 : l.unitPrice * l.quantity,
+      metadata: Object.keys(lineMeta).length > 0 ? lineMeta : undefined,
+      // Tax as priced in the catalog — keeps the server payable equal to what is charged here.
+      ...(l.item.tax_code_id ? { tax_code_id: l.item.tax_code_id } : {}),
+      ...(l.item.tax_inclusive != null ? { price_includes_tax: l.item.tax_inclusive } : {}),
+      ...(typeof l.item.tax_rate === 'number' ? { tax_rate: l.item.tax_rate } : {}),
+    };
+  }
+
   function buildPayload(approval?: ApprovalResult) {
     return {
       outletId,
@@ -527,45 +707,7 @@ export default function AddSalePage() {
         }
         return Object.keys(md).length > 0 ? md : undefined;
       })(),
-      lines: lines.map((l) => {
-        const free = l.item.non_billable === true || l.item.is_complimentary === true;
-        const lineMeta: Record<string, any> = {};
-        if (notes) lineMeta.notes = notes;
-        // Free-of-charge marker — the server zeroes the line on this flag (belt & braces).
-        if (free) lineMeta.non_billable = true;
-        // Price-override audit trail — the SAME metadata contract the terminal sends:
-        // metadata.original_price is what pos-api's markdown gate (price.override step-up +
-        // audit) keys off, so back-office markdowns get identical enforcement.
-        if ((l.unitDiscount ?? 0) > 0) lineMeta.unit_discount = l.unitDiscount;
-        if (!free && l.preset > 0 && Math.abs(l.unitPrice - l.preset) > 0.004) {
-          lineMeta.original_price = l.preset;
-          lineMeta.price_override = true;
-          lineMeta.override_reason = (l.unitDiscount ?? 0) > 0 ? 'line discount' : 'price edit';
-        }
-        // Selling-price guardrails (mirrors the terminal's cart payload) — without these the
-        // server's min/max band gate never sees them, so a below-floor/above-ceiling price
-        // typed here skipped manager approval entirely (a real gap vs. the terminal).
-        if (!free && typeof l.item.min_selling_price === 'number' && l.item.min_selling_price > 0) {
-          lineMeta.min_price = l.item.min_selling_price;
-        }
-        if (!free && typeof l.item.max_selling_price === 'number' && l.item.max_selling_price > 0) {
-          lineMeta.max_price = l.item.max_selling_price;
-        }
-        return {
-          catalog_item_id: l.item.id,
-          sku: l.item.sku,
-          name: l.item.name,
-          category: l.item.category,
-          quantity: l.quantity,
-          unit_price: free ? 0 : l.unitPrice,
-          total_price: free ? 0 : l.unitPrice * l.quantity,
-          metadata: Object.keys(lineMeta).length > 0 ? lineMeta : undefined,
-          // Tax as priced in the catalog — keeps the server payable equal to what is charged here.
-          ...(l.item.tax_code_id ? { tax_code_id: l.item.tax_code_id } : {}),
-          ...(l.item.tax_inclusive != null ? { price_includes_tax: l.item.tax_inclusive } : {}),
-          ...(typeof l.item.tax_rate === 'number' ? { tax_rate: l.item.tax_rate } : {}),
-        };
-      }),
+      lines: lines.map(lineToPayload),
     };
   }
 
@@ -724,10 +866,10 @@ export default function AddSalePage() {
       <div className="flex flex-wrap items-center gap-3">
         <ShoppingCart className="h-6 w-6 text-primary" />
         <h1 className="text-2xl font-bold tracking-tight">
-          {editFromId ? `Edit Sale — replacing ${editFromQ.data?.order_number ?? '…'}` : resume ? `Resume Sale — ${resume.number}` : creditSale ? 'Credit Sale' : 'Add Sale'}
+          {editInplace ? `Edit Sale — ${editInplace.number}` : editFromId ? `Edit Sale — replacing ${editFromQ.data?.order_number ?? '…'}` : resume ? `Resume Sale — ${resume.number}` : creditSale ? 'Credit Sale' : 'Add Sale'}
         </h1>
         <span className="text-sm text-muted-foreground">
-          {editFromId ? 'Original sale reversed — complete this replacement to finish the edit' : resume ? 'Draft prefilled — collect payment to complete it' : creditSale ? 'Sell on account — posts to customer AR' : 'Back-office sale entry'}
+          {editInplace ? 'Add, remove or reduce items — nothing is reversed until you save, and only for what actually changed' : editFromId ? 'Original sale reversed — complete this replacement to finish the edit' : resume ? 'Draft prefilled — collect payment to complete it' : creditSale ? 'Sell on account — posts to customer AR' : 'Back-office sale entry'}
         </span>
         <span className="ml-auto text-xs text-muted-foreground">
           Sale date: <b className="text-foreground">{new Date().toLocaleString('en-KE')}</b> · Invoice No. auto-generated
@@ -1130,23 +1272,34 @@ export default function AddSalePage() {
             <div className="flex justify-between pt-2 border-t border-border"><span className="font-bold">Total</span><span className="font-bold text-primary tabular-nums">{fmt(total)}</span></div>
           </div>
 
-          <label className="flex items-center gap-2 text-sm px-1">
-            <input type="checkbox" checked={creditSale} onChange={(e) => setCreditSale(e.target.checked)} className="rounded" />
-            <span>Credit sale (on account → AR)</span>
-          </label>
+          {!editInplace && (
+            <label className="flex items-center gap-2 text-sm px-1">
+              <input type="checkbox" checked={creditSale} onChange={(e) => setCreditSale(e.target.checked)} className="rounded" />
+              <span>Credit sale (on account → AR)</span>
+            </label>
+          )}
 
           <div className="space-y-2">
-            <Button onClick={() => save('pay')} disabled={lines.length === 0 || createOrder.isPending} className="w-full min-h-12 font-bold rounded-xl gap-2">
-              {createOrder.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShoppingCart className="h-4 w-4" />}
-              {resume && !linesDirty ? 'Complete Sale' : creditSale ? 'Save — On Account' : 'Save & Pay'} · {fmt(total)}
-            </Button>
-            <Button variant="outline" onClick={() => save('draft')} disabled={lines.length === 0 || createOrder.isPending} className="w-full rounded-xl">
-              Save as Draft
-            </Button>
-            {canPrivileged && (
-              <Button variant="outline" onClick={saveQuotation} disabled={lines.length === 0 || quotationSaving} className="w-full rounded-xl">
-                {quotationSaving ? 'Saving…' : 'Save as Quotation'}
+            {editInplace ? (
+              <Button onClick={saveEditInplace} disabled={editInplaceSaving || applyEditSale.isPending || createOrder.isPending} className="w-full min-h-12 font-bold rounded-xl gap-2">
+                {(editInplaceSaving || applyEditSale.isPending || createOrder.isPending) ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                Save Changes
               </Button>
+            ) : (
+              <>
+                <Button onClick={() => save('pay')} disabled={lines.length === 0 || createOrder.isPending} className="w-full min-h-12 font-bold rounded-xl gap-2">
+                  {createOrder.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShoppingCart className="h-4 w-4" />}
+                  {resume && !linesDirty ? 'Complete Sale' : creditSale ? 'Save — On Account' : 'Save & Pay'} · {fmt(total)}
+                </Button>
+                <Button variant="outline" onClick={() => save('draft')} disabled={lines.length === 0 || createOrder.isPending} className="w-full rounded-xl">
+                  Save as Draft
+                </Button>
+                {canPrivileged && (
+                  <Button variant="outline" onClick={saveQuotation} disabled={lines.length === 0 || quotationSaving} className="w-full rounded-xl">
+                    {quotationSaving ? 'Saving…' : 'Save as Quotation'}
+                  </Button>
+                )}
+              </>
             )}
           </div>
         </div>
