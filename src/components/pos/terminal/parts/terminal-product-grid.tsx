@@ -13,13 +13,22 @@ import { Image as ImageIcon, Loader2, Plus, Search } from 'lucide-react';
 export function TerminalProductGrid() {
   const t = useTerminal();
   const { cfg, cart, filteredItems, displayMode, handleItemTap, menuLoading, searchQuery } = t;
+  // MobileCartBar floats via `position: fixed` (see its own file for why), so it no longer
+  // reserves its own space in this panel's flex flow — whichever element ends up last at the
+  // bottom of this panel (pagination row when there's more than one page, otherwise the scroll
+  // area itself) needs matching clearance so the floating pill never covers it.
+  const cartBarClearance = cart.length > 0 && !t.cartOpen;
+  const clearanceClass = cartBarClearance && 'lg:pb-4 pb-[calc(4.5rem_+_env(safe-area-inset-bottom))]';
 
   return (
     <>
-      {/* Items area — scrolls internally within its own panel bounds. MobileCartBar (below lg)
-          renders as a normal in-flow sibling of this panel, not an overlay, so no extra bottom
-          padding is needed to "clear" it — the panel's own height already excludes it. */}
-      <div className="flex-1 overflow-y-auto min-h-0 px-4 pb-4">
+      {/* Items area — scrolls internally within its own panel bounds. */}
+      <div
+        className={cn(
+          'flex-1 overflow-y-auto min-h-0 px-4 pb-4',
+          t.totalPages <= 1 && clearanceClass,
+        )}
+      >
         {menuLoading ? (
           <div className="flex flex-col items-center justify-center h-48 gap-3">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -249,9 +258,10 @@ export function TerminalProductGrid() {
         )}
       </div>
 
-      {/* Pagination */}
+      {/* Pagination — the last element in this panel when shown, so it (not the scroll area
+          above) is what needs bottom clearance from the floating MobileCartBar. */}
       {t.totalPages > 1 && (
-        <div className="shrink-0 px-4 py-2.5 border-t border-border flex items-center justify-between bg-background">
+        <div className={cn('shrink-0 px-4 py-2.5 border-t border-border flex items-center justify-between bg-background', clearanceClass)}>
           <span className="text-xs text-muted-foreground">
             {((t.page - 1) * t.PAGE_SIZE) + 1}–{Math.min(t.page * t.PAGE_SIZE, t.totalItems)} of {t.totalItems} items
           </span>

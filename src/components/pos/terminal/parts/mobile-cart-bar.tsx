@@ -1,11 +1,18 @@
 'use client';
 
 /**
- * MobileCartBar — the sticky "View Cart" pill shown below `lg` while the cashier is browsing the
+ * MobileCartBar — the floating "View Cart" pill shown below `lg` while the cashier is browsing the
  * catalog with items already in the cart (terminal-shell hides it whenever the cart is empty or
  * the cart sheet is already open, and hides on lg+ where the cart is a permanent side panel).
  * Completes the `cartOpen`/`setCartOpen` state terminal-context.tsx already scaffolds — see
  * terminal-shell.tsx for how the two panels swap on tap.
+ *
+ * `position: fixed` (not an in-flow flex sibling) so it always floats above the catalog regardless
+ * of viewport-height quirks (mobile browser chrome collapsing/expanding shrinks the visible area
+ * below whatever `100%`/`h-full` resolved to at layout time — an in-flow bottom bar can end up
+ * below the fold until the user scrolls the page itself). TerminalProductGrid reserves matching
+ * bottom clearance (see its `cartBarClearance`) so the floating pill never covers the last item or
+ * the pagination row.
  */
 
 import { useEffect, useRef, useState } from 'react';
@@ -38,7 +45,8 @@ export function MobileCartBar() {
       type="button"
       onClick={() => t.setCartOpen(true)}
       className={cn(
-        'lg:hidden shrink-0 mx-3 mb-2 flex items-center justify-between gap-3 rounded-2xl bg-primary text-primary-foreground px-4 py-3 shadow-lg transition-transform motion-reduce:transition-none',
+        'lg:hidden fixed left-3 right-3 z-40 flex items-center justify-between gap-3 rounded-2xl bg-primary text-primary-foreground px-4 py-3 shadow-lg transition-transform motion-reduce:transition-none',
+        'bottom-[calc(0.75rem_+_env(safe-area-inset-bottom))]',
         pulse && 'scale-[1.02]',
       )}
       aria-label={`View cart, ${cartItemCount} item${cartItemCount === 1 ? '' : 's'}, total KES ${total.toLocaleString()}`}
