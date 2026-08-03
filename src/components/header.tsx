@@ -11,7 +11,7 @@ import { useTenantBranding } from '@/providers/tenant-branding-provider';
 import { useAuthStore } from '@/store/auth';
 import { useOutletFilterStore } from '@/store/outlet-filter';
 import { useQuery } from '@tanstack/react-query';
-import { BookOpen, Building2, Check, ChevronDown, ExternalLink, Globe, Loader2, LogOut, MapPin, Menu, Package, PanelLeft, Search, Settings, ShoppingCart, Square, Tag, Truck, User, Users } from 'lucide-react';
+import { BookOpen, Building2, Check, ChevronDown, ExternalLink, Loader2, LogOut, MapPin, Menu, PanelLeft, Search, Settings, Square, User } from 'lucide-react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
@@ -19,28 +19,23 @@ import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
 import { NotificationBell } from './notifications/NotificationBell';
 import { ThemeToggle } from './theme-toggle';
+import { useVisibleServices, type ServiceKey } from '@bengo-hub/shared-ui-lib/app-switcher';
 
-const INVENTORY_URL = process.env.NEXT_PUBLIC_INVENTORY_UI_URL ?? 'https://inventory.codevertexafrica.com';
+// Canonical service list (labels/icons/coverage, incl. 'coming-soon' entries) lives in
+// shared-ui-lib's app-switcher now — see useVisibleServices below. Treasury isn't in that
+// registry (pos-ui links OUT to treasury, but treasury doesn't list itself), so it's kept here.
 const TREASURY_URL = process.env.NEXT_PUBLIC_TREASURY_UI_URL ?? 'https://books.codevertexafrica.com';
-const PRICING_URL = process.env.NEXT_PUBLIC_SUBSCRIPTIONS_UI_URL ?? 'https://pricing.codevertexafrica.com';
-const ORDERING_URL = process.env.NEXT_PUBLIC_ORDERING_UI_URL ?? 'https://ordering.codevertexafrica.com';
-const AUTH_URL = process.env.NEXT_PUBLIC_AUTH_UI_URL ?? 'https://accounts.codevertexafrica.com';
-const CRM_URL = process.env.NEXT_PUBLIC_CRM_UI_URL ?? 'https://marketflow.codevertexafrica.com';
-const LOGISTICS_URL = process.env.NEXT_PUBLIC_LOGISTICS_UI_URL ?? 'https://logistics.codevertexafrica.com';
-const ERP_URL = process.env.NEXT_PUBLIC_ERP_UI_URL ?? 'https://erp.codevertexafrica.com';
-
-const SERVICES = [
-  { label: 'Inventory', href: (slug: string) => `${INVENTORY_URL}/${slug}`, Icon: Package },
-  { label: 'CRM', href: (slug: string) => `${CRM_URL}/${slug}`, Icon: Users },
-  { label: 'Treasury', href: (slug: string) => `${TREASURY_URL}/${slug}`, Icon: BookOpen },
-  // Delivery-execution owner (dispatch board, riders, tracking) — shipments dispatched
-  // from Sell → Shipments are assigned/tracked there. Target enforces its own RBAC.
-  { label: 'Logistics', href: (slug: string) => `${LOGISTICS_URL}/${slug}`, Icon: Truck },
-  { label: 'ERP', href: (slug: string) => `${ERP_URL}/${slug}`, Icon: Users },
-  { label: 'Online Store', href: (slug: string) => `${ORDERING_URL}/${slug}`, Icon: ShoppingCart },
-  { label: 'Subscriptions', href: (slug: string) => `${PRICING_URL}/${slug}`, Icon: Tag },
-  { label: 'Client Portal', href: (slug: string) => `${AUTH_URL}/${slug}`, Icon: Globe },
-] as const;
+const SERVICE_URLS: Partial<Record<ServiceKey, string>> = {
+  inventory: process.env.NEXT_PUBLIC_INVENTORY_UI_URL ?? 'https://inventory.codevertexafrica.com',
+  marketflow: process.env.NEXT_PUBLIC_CRM_UI_URL ?? process.env.NEXT_PUBLIC_MARKETFLOW_UI_URL ?? 'https://marketflow.codevertexafrica.com',
+  logistics: process.env.NEXT_PUBLIC_LOGISTICS_UI_URL ?? 'https://logistics.codevertexafrica.com',
+  erp: process.env.NEXT_PUBLIC_ERP_UI_URL ?? 'https://erp.codevertexafrica.com',
+  ordering: process.env.NEXT_PUBLIC_ORDERING_UI_URL ?? 'https://ordering.codevertexafrica.com',
+  subscriptions: process.env.NEXT_PUBLIC_SUBSCRIPTIONS_UI_URL ?? 'https://pricing.codevertexafrica.com',
+  auth: process.env.NEXT_PUBLIC_AUTH_UI_URL ?? 'https://accounts.codevertexafrica.com',
+  projects: process.env.NEXT_PUBLIC_PROJECTS_UI_URL ?? 'https://projects.codevertexafrica.com',
+  afya: process.env.NEXT_PUBLIC_HOSPITAL_UI_URL ?? 'https://afya.codevertexafrica.com',
+};
 
 const USE_CASE_LABELS: Record<string, string> = {
   hospitality: 'Hospitality',
@@ -334,6 +329,9 @@ export function Header({ onMenuClick, onToggleSidebar, sidebarCollapsed }: Heade
     ['admin', 'pos_admin', 'manager', 'store_manager', 'superuser', 'super_admin'].includes(r)
   );
   const showSettings = isHQUser || can(P.CONFIG_VIEW) || can(P.CONFIG_CHANGE) || can(P.CONFIG_MANAGE);
+  // activeServiceTags omitted: no browser-safe endpoint returns active subscription SERVICE TAGS
+  // yet (only feature codes) — fails open (shows everything), matching current behavior.
+  const services = useVisibleServices({ orgSlug, urls: SERVICE_URLS, canManageLinks: isHQUser });
 
   const { data: currentShift } = useCurrentShift();
   const closeShift = useCloseShift();
@@ -480,22 +478,49 @@ export function Header({ onMenuClick, onToggleSidebar, sidebarCollapsed }: Heade
                     {/* No inner scroll cap — full titles, all items visible; the panel itself
                         scrolls only when taller than the viewport. */}
                     <div className="grid gap-1">
-                      {SERVICES.map(({ label, href, Icon }) => (
-                        <a
-                          key={label}
-                          href={href(orgSlug)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          onClick={() => setProfileOpen(false)}
-                          className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5 transition-all group"
-                        >
-                          <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-white/10 flex items-center justify-center group-hover:text-primary transition-colors">
-                            <Icon className="h-4 w-4" />
+                      <a
+                        href={`${TREASURY_URL}/${orgSlug}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={() => setProfileOpen(false)}
+                        className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5 transition-all group"
+                      >
+                        <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-white/10 flex items-center justify-center group-hover:text-primary transition-colors">
+                          <BookOpen className="h-4 w-4" />
+                        </div>
+                        <span className="flex-1">Treasury</span>
+                        <ExternalLink className="h-3 w-3 text-slate-400 opacity-60" />
+                      </a>
+                      {services.map(({ key, label, href, Icon }) =>
+                        href ? (
+                          <a
+                            key={key}
+                            href={href}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={() => setProfileOpen(false)}
+                            className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5 transition-all group"
+                          >
+                            <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-white/10 flex items-center justify-center group-hover:text-primary transition-colors">
+                              <Icon className="h-4 w-4" />
+                            </div>
+                            <span className="flex-1">{label}</span>
+                            <ExternalLink className="h-3 w-3 text-slate-400 opacity-60" />
+                          </a>
+                        ) : (
+                          <div
+                            key={key}
+                            className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold text-slate-400 dark:text-slate-500 cursor-default"
+                            title={`${label} — coming soon`}
+                          >
+                            <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-white/10 flex items-center justify-center">
+                              <Icon className="h-4 w-4" />
+                            </div>
+                            <span className="flex-1">{label}</span>
+                            <span className="text-[9px] font-bold uppercase tracking-wider bg-slate-100 dark:bg-white/10 px-1.5 py-0.5 rounded-full">Soon</span>
                           </div>
-                          <span className="flex-1">{label}</span>
-                          <ExternalLink className="h-3 w-3 text-slate-400 opacity-60" />
-                        </a>
-                      ))}
+                        ),
+                      )}
                     </div>
                   </>
                 )}
