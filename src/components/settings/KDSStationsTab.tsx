@@ -16,6 +16,7 @@ import { useAuthStore } from '@/store/auth';
 import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { Toggle, inputClass, labelClass } from './shared';
+import { KDSItemAssignmentPanel } from './KDSItemAssignmentPanel';
 
 type StationRef = { id: string; name: string; is_active: boolean };
 
@@ -407,6 +408,8 @@ export function KDSStationsTab() {
         loading={deleteStation.isPending}
         onConfirm={doDelete}
       />
+
+      <KDSItemAssignmentPanel />
     </div>
   );
 }

@@ -134,6 +134,28 @@ export function useDeleteKDSStation() {
   });
 }
 
+// ─── Item → Station assignment ────────────────────────────────────────────────
+// The priority-1 explicit routing override (POSCatalogOverride.kds_station_id) — wins over both
+// the hot-beverage guard and category_filter matching in resolveStationForLine. Distinct base
+// path from the /kds/* routes above: this hits the catalog endpoints (pos-api's CatalogHandler).
+
+export interface SetCatalogItemKDSStationInput {
+  sku: string;
+  /** Omit/empty clears the override, reverting the item to category_filter/hot-beverage routing. */
+  station_id?: string;
+  outlet_id?: string;
+}
+
+export function useSetCatalogItemKDSStation() {
+  const tenantID = useTenantID();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: SetCatalogItemKDSStationInput) =>
+      apiClient.patch(`/api/v1/${tenantID}/pos/catalog/items/kds-station`, input),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['pos-catalog-items'] }),
+  });
+}
+
 // ─── Kitchen Queue ────────────────────────────────────────────────────────────
 
 export function useKitchenQueue() {
