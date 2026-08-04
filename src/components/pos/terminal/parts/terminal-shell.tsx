@@ -41,6 +41,7 @@ import { useTerminal } from '@/components/pos/terminal/terminal-context';
 import { CostHeaderToggle, MaskedCost } from '@/components/pos/cost-price';
 import { InlineDiscountCell, InlineMarginCell, InlinePriceCell, InlineTotalCell } from '@/components/pos/inline-line-cells';
 import { searchPlaceholderFor } from '@/lib/use-case-config';
+import { isFractionalUnit, parseQuantityInput } from '@/lib/pos/units';
 import { cn } from '@/lib/utils';
 import {
   Ban, ChefHat, ChevronLeft, Flame, Grid3x3, Image as ImageIcon, LayoutGrid, LayoutList, Loader2,
@@ -312,15 +313,16 @@ export function TerminalShell() {
                 <input
                   type="number"
                   min={0}
-                  inputMode="numeric"
+                  step={isFractionalUnit(item.unit) ? 0.01 : 1}
+                  inputMode={isFractionalUnit(item.unit) ? 'decimal' : 'numeric'}
                   defaultValue={item.quantity}
                   key={item.quantity}
                   aria-label="Line quantity"
                   onFocus={(e) => e.currentTarget.select()}
                   onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
                   onBlur={(e) => {
-                    const n = parseInt(e.currentTarget.value, 10);
-                    if (!Number.isNaN(n) && n !== item.quantity) t.setLineQuantity(idx, n);
+                    const n = parseQuantityInput(e.currentTarget.value, isFractionalUnit(item.unit));
+                    if (n != null && n !== item.quantity) t.setLineQuantity(idx, n);
                     else e.currentTarget.value = String(item.quantity);
                   }}
                   className="w-10 text-center text-sm font-bold tabular-nums rounded-md border border-border bg-background focus:ring-1 focus:ring-ring focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
@@ -429,15 +431,16 @@ export function TerminalShell() {
                   <input
                     type="number"
                     min={0}
-                    inputMode="numeric"
+                    step={isFractionalUnit(item.unit) ? 0.01 : 1}
+                    inputMode={isFractionalUnit(item.unit) ? 'decimal' : 'numeric'}
                     defaultValue={item.quantity}
                     key={item.quantity}
                     aria-label="Line quantity"
                     onFocus={(e) => e.currentTarget.select()}
                     onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
                     onBlur={(e) => {
-                      const n = parseInt(e.currentTarget.value, 10);
-                      if (!Number.isNaN(n) && n !== item.quantity) t.setLineQuantity(idx, n);
+                      const n = parseQuantityInput(e.currentTarget.value, isFractionalUnit(item.unit));
+                      if (n != null && n !== item.quantity) t.setLineQuantity(idx, n);
                       else e.currentTarget.value = String(item.quantity);
                     }}
                     className="w-12 h-8 text-center text-sm font-bold tabular-nums rounded-md border border-border bg-background focus:ring-1 focus:ring-ring focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"

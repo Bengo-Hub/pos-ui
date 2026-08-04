@@ -94,7 +94,10 @@ export function EditOrderLinesModal({ order: initialOrder, onClose }: { order: a
                     value={editing.unitPrice} onChange={(e) => setEditing({ ...editing, unitPrice: e.target.value })} />
                 </label>
                 <label className="text-[11px] font-semibold text-muted-foreground">Quantity
-                  <input type="number" step="1" min="1" className="w-full bg-background border border-border rounded-md py-1.5 px-2 text-xs"
+                  {/* step relaxed to allow a decimal correction (e.g. a fractional-unit line like
+                      ml/kg) — no per-line unit signal is available here to gate it, and a manager
+                      typing a decimal for a whole-count item is a deliberate override, not a mistake. */}
+                  <input type="number" step="0.01" min="0.01" className="w-full bg-background border border-border rounded-md py-1.5 px-2 text-xs"
                     value={editing.quantity} onChange={(e) => setEditing({ ...editing, quantity: e.target.value })} />
                 </label>
               </div>

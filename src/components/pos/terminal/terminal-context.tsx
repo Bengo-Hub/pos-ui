@@ -24,6 +24,7 @@ import type { LoyaltyState } from '@/components/retail/LoyaltyPanel';
 import type { CreatedOrder } from '@/components/pos/terminal/inline-payment-bar';
 import { printKitchenBarTickets } from '@/lib/pos/kitchen-bar-print';
 import { applyRoundOff, computeCartTax } from '@/lib/pos/cart-tax';
+import { isFractionalUnit, normalizeQuantity } from '@/lib/pos/units';
 import { terminalConfigFor, type TerminalConfig } from '@/lib/use-case-config';
 import {
   useFullCatalog, useCategories, useCreateOrder, useAddOrderLines, useVoidOrder,
@@ -94,6 +95,9 @@ export interface MenuItem {
   /** On-hand stock for the StockBadge / out-of-stock override (retail/pharmacy). Only present
    *  when the backend catalog list projects stock_quantity — see integrator note. */
   stockQuantity?: number;
+  /** Stock unit abbreviation (ml/kg/pc/...) — gates whether the cart qty input accepts a
+   *  decimal (see lib/pos/units.ts isFractionalUnit). */
+  unit?: string;
   /** Never charged at the till (free accompaniments like ugali, supplies like packaging):
    *  pos-api forces price 0 and the line carries a non_billable metadata flag so the server
    *  zeroes it even if a price sneaks in. Shows the FREE chip. */
@@ -772,6 +776,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
       modifierGroups: item.modifier_groups,
       // stock_quantity is only populated if the backend projects it on the catalog list (see note).
       stockQuantity: item.stock_quantity,
+      unit: item.unit,
       // Per-item tax from treasury (via inventory-api enrichment → pos-api catalog passthrough).
       taxCodeId: item.tax_code_id ?? undefined,
       taxInclusive: item.tax_inclusive ?? undefined,
@@ -1278,7 +1283,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
   const setLineQuantity = (index: number, qty: number) => {
     const item = cart[index];
     if (!item) return;
-    const next = Math.floor(qty);
+    const next = normalizeQuantity(qty, isFractionalUnit(item.unit));
     if (!Number.isFinite(next) || next <= 0) {
       setCart((prev) => prev.filter((_, i) => i !== index));
       return;

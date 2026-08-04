@@ -314,6 +314,10 @@ export interface CatalogItem {
   /** On-hand stock projected from inventory (pos-api catalogItemDTO.stock_quantity). Drives the
    *  In-Stock cart column + the oversell guard; undefined = not stock-tracked. */
   stock_quantity?: number;
+  /** Stock unit abbreviation (e.g. "ml", "kg", "pc") synced from inventory. Drives whether the
+   *  cart quantity input accepts a decimal (continuous units like ml/l/g/kg) or stays
+   *  whole-number-only (discretely counted items) — see lib/pos/units.ts isFractionalUnit(). */
+  unit?: string;
   metadata?: Record<string, any>;
 }
 
@@ -351,6 +355,7 @@ export function toOfflineCatalogRows(tenantID: string, outletID: string, items: 
     cost_price: i.cost_price,
     non_billable: i.non_billable,
     stock_quantity: i.stock_quantity,
+    unit: i.unit,
     cached_at: now,
   }));
 }
@@ -418,6 +423,7 @@ export function offlineToCatalogItem(c: OfflineCatalogItem): CatalogItem {
     cost_price: c.cost_price,
     non_billable: c.non_billable,
     stock_quantity: c.stock_quantity,
+    unit: c.unit,
   };
 }
 

@@ -5,6 +5,7 @@ import { Loader2, Repeat, Search, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { useFullCatalog, useAddOrderLines, type CatalogItem } from '@/hooks/usePOS';
 import { useSetAsideLine } from '@/hooks/useHeldItems';
+import { isFractionalUnit, parseQuantityInput } from '@/lib/pos/units';
 
 export interface ReplaceableLine {
   id: string;
@@ -157,9 +158,11 @@ export function ReplaceItemDialog({
               <div className="flex items-center gap-2 shrink-0">
                 <input
                   type="number"
-                  min={1}
+                  min={isFractionalUnit(replacement.unit) ? 0.01 : 1}
+                  step={isFractionalUnit(replacement.unit) ? 0.01 : 1}
+                  inputMode={isFractionalUnit(replacement.unit) ? 'decimal' : 'numeric'}
                   value={quantity}
-                  onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+                  onChange={(e) => setQuantity(Math.max(isFractionalUnit(replacement.unit) ? 0.01 : 1, parseQuantityInput(e.target.value, isFractionalUnit(replacement.unit)) ?? 1))}
                   className="w-16 bg-background border border-border rounded-lg py-1.5 px-2 text-sm text-center focus:outline-none focus:ring-2 focus:ring-primary/40"
                   aria-label="Quantity"
                 />

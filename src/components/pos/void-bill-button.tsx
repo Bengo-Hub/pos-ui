@@ -18,6 +18,9 @@ interface VoidBillButtonProps {
   status: string;
   onVoided?: () => void;
   className?: string;
+  /** Button label — defaults to "Void Bill"; callers embedding this in a different context
+   *  (e.g. the All-Sales row menu, which historically said "Void Sale") can override it. */
+  label?: string;
 }
 
 /**
@@ -26,7 +29,7 @@ interface VoidBillButtonProps {
  * AFTER it was placed (not only while it is open in the terminal). Hidden entirely for users
  * without pos.orders.void and for bills that are no longer voidable.
  */
-export function VoidBillButton({ orderId, orderNumber, status, onVoided, className }: VoidBillButtonProps) {
+export function VoidBillButton({ orderId, orderNumber, status, onVoided, className, label = 'Void Bill' }: VoidBillButtonProps) {
   const { can } = usePermissions();
   const voidOrder = useVoidOrder();
 
@@ -58,7 +61,7 @@ export function VoidBillButton({ orderId, orderNumber, status, onVoided, classNa
         }
       >
         <Ban className="h-4 w-4" />
-        Void Bill
+        {label}
       </button>
 
       <VoidOrderModal

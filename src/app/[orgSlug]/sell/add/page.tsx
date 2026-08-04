@@ -7,34 +7,34 @@
  * Reuses the existing order + catalog + client hooks and SplitPaymentModal — no new sale logic.
  */
 
-import { useState, useMemo, useCallback, useEffect } from 'react';
-import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { Check, Loader2, Minus, Plus, Search, ShoppingCart, Trash2, Truck, User, Users, X } from 'lucide-react';
-import { useMenuItems, useFullCatalog, useCreateOrder, useCreatePaymentIntent, usePricingTiers, useOrder, useVoidOrder, useEditOrderLine, useSetOrderDiscount, useApplyEditSale, type CatalogItem, type EditReduceLine } from '@/hooks/usePOS';
-import { Tag } from 'lucide-react';
-import { usePOSSettings } from '@/hooks/usePOSSettings';
-import { SplitPaymentModal } from '@/components/pos/split-payment-modal';
-import { CostHeaderToggle, MaskedCost } from '@/components/pos/cost-price';
-import { ApplyDiscountModal } from '@/components/pos/discounts/apply-discount-modal';
 import { ApprovalDialog, type ApprovalResult } from '@/components/pos/approval-dialog';
-import { StockCell, isStockTracked } from '@/components/pos/stock-cell';
-import { rbacApi } from '@/lib/api/rbac';
-import { InlineDiscountCell, InlineMarginCell, InlinePriceCell, InlineTotalCell } from '@/components/pos/inline-line-cells';
-import { CustomerSearch, WALK_IN_CUSTOMER, type SelectedCustomer } from '@/components/pos/customer-search';
-import { useAuthStore } from '@/store/auth';
-import { usePermissions } from '@/hooks/usePermissions';
-import { useStaffAdmin } from '@/hooks/useStaff';
-import { FeatureLock, useFeatureUpgrade } from '@bengo-hub/shared-ui-lib/subscription';
-import { apiClient } from '@/lib/api/client';
-import { applyRoundOff, computeCartTax } from '@/lib/pos/cart-tax';
 import { CustomerCreditHint } from '@/components/pos/clients/credit-terms';
-import { useClientCredit } from '@/hooks/useClients';
+import { CostHeaderToggle, MaskedCost } from '@/components/pos/cost-price';
 import { CreditSaleDetailsModal, type CreditSaleDetails } from '@/components/pos/credit-sale-details-modal';
+import { CustomerSearch, WALK_IN_CUSTOMER, type SelectedCustomer } from '@/components/pos/customer-search';
+import { ApplyDiscountModal } from '@/components/pos/discounts/apply-discount-modal';
+import { InlineDiscountCell, InlineMarginCell, InlinePriceCell, InlineTotalCell } from '@/components/pos/inline-line-cells';
 import { ShippingDetailsFields, emptyShippingForm, shippingFormFromMetadata, type ShippingFormValue } from '@/components/pos/shipping/shipping-details-fields';
+import { SplitPaymentModal } from '@/components/pos/split-payment-modal';
+import { StockCell, isStockTracked } from '@/components/pos/stock-cell';
 import { Button } from '@/components/ui/base';
-import { cn } from '@/lib/utils';
-import { toast } from 'sonner';
+import { useClientCredit } from '@/hooks/useClients';
+import { usePermissions } from '@/hooks/usePermissions';
+import { useApplyEditSale, useCreateOrder, useCreatePaymentIntent, useEditOrderLine, useFullCatalog, useMenuItems, useOrder, usePricingTiers, useSetOrderDiscount, useVoidOrder, type CatalogItem, type EditReduceLine } from '@/hooks/usePOS';
+import { usePOSSettings } from '@/hooks/usePOSSettings';
+import { useStaffAdmin } from '@/hooks/useStaff';
+import { apiClient } from '@/lib/api/client';
 import { apiErrorMessage } from '@/lib/api/error-message';
+import { rbacApi } from '@/lib/api/rbac';
+import { applyRoundOff, computeCartTax } from '@/lib/pos/cart-tax';
+import { isFractionalUnit, parseQuantityInput } from '@/lib/pos/units';
+import { cn } from '@/lib/utils';
+import { useAuthStore } from '@/store/auth';
+import { FeatureLock, useFeatureUpgrade } from '@bengo-hub/shared-ui-lib/subscription';
+import { Check, Loader2, Minus, Plus, Search, ShoppingCart, Tag, Trash2, Truck, User, Users, X } from 'lucide-react';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { toast } from 'sonner';
 
 // Premium: staff credit funded from salary (ERP payroll deduction). Shown + upgrade-gated below top tier.
 const STAFF_CREDIT_FEATURE = 'staff_fund_from_salary';
@@ -334,7 +334,7 @@ export default function AddSalePage() {
       setCustomer({ name: o.customer_name ?? '', phone: o.customer_phone ?? '', isWalkIn: !o.customer_phone } as SelectedCustomer);
     }
     setEditPrefilled(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [editFromQ.data, editFromId, editPrefilled]);
 
   // ── Edit a FINALIZED sale IN PLACE ── ?edit_inplace= comes from the admin "Edit Sale" action.
@@ -377,7 +377,7 @@ export default function AddSalePage() {
       number: o.order_number,
       originalLines: activeLines.map((l: any) => ({ lineId: l.id, quantity: l.quantity, unitPrice: l.unit_price })),
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [editInplaceQ.data, editInplaceId, editInplace]);
 
   // Diffs the live cart against editInplace.originalLines and saves the minimum necessary:
@@ -1070,15 +1070,16 @@ export default function AddSalePage() {
                           <input
                             type="number"
                             min={0}
-                            inputMode="numeric"
+                            step={isFractionalUnit(l.item.unit) ? 1.0 : 1}
+                            inputMode={isFractionalUnit(l.item.unit) ? 'decimal' : 'numeric'}
                             key={l.quantity}
                             defaultValue={l.quantity}
                             aria-label="Line quantity"
                             onFocus={(e) => e.currentTarget.select()}
                             onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
                             onBlur={(e) => {
-                              const n = parseInt(e.currentTarget.value, 10);
-                              if (!Number.isNaN(n) && n !== l.quantity) setQty(i, n);
+                              const n = parseQuantityInput(e.currentTarget.value, isFractionalUnit(l.item.unit));
+                              if (n != null && n !== l.quantity) setQty(i, n);
                               else e.currentTarget.value = String(l.quantity);
                             }}
                             className="w-12 text-center bg-background border border-border rounded py-1 text-sm [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none" />

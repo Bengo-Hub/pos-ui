@@ -309,6 +309,7 @@ export default function OrdersPage() {
               rows={filtered}
               rowKey={(o) => o.id}
               loading={isLoading}
+              storageKey="pos-orders"
               emptyText="No orders match your filters."
               onRowClick={(o) => setSelectedOrder(o)}
               rowClassName={(o) => (selectedOrder?.id === o.id ? 'bg-accent/10' : undefined)}

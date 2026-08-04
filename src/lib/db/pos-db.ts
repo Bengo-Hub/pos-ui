@@ -34,6 +34,9 @@ export interface OfflineCatalogItem {
   // On-hand stock SNAPSHOT (inventory on_hand projected onto the catalog) so the In-Stock cart
   // column paints on the cache-first/offline path too. Volatile — the fresh online sweep updates it.
   stock_quantity?: number;
+  // Stock unit abbreviation (ml/kg/pc/...) — see CatalogItem.unit in usePOS.ts. Carried offline
+  // so decimal-qty entry stays correct on the cache-first/offline path too.
+  unit?: string;
   cached_at: string;
 }
 

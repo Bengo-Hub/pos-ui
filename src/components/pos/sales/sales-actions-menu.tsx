@@ -1,11 +1,11 @@
 'use client';
 
 import { PrintReceiptButton } from '@/components/pos/print-receipt-button';
+import { VoidBillButton } from '@/components/pos/void-bill-button';
 import { canPutOnAccount } from '@/hooks/use-close-on-account';
 import { P, usePermissions } from '@/hooks/usePermissions';
 import { useAuthStore } from '@/store/auth';
 import {
-    Ban,
     Banknote,
     CalendarClock,
     ChevronDown,
@@ -31,8 +31,6 @@ interface SalesActionsMenuProps {
   onViewPayments: (order: any) => void;
   onEditLines: (order: any) => void;
   onMoveDate: (order: any) => void;
-  /** Soft-void a still-correctable sale (existing tool — reverses/voids, never removes it). */
-  onDelete: (order: any) => void;
   /** Permanently delete a FINALIZED sale via the admin Delete-Sale ("shred") tool — fiscalised
    *  sales are reversed+soft-marked, non-fiscalised sales are genuinely hard-deleted. */
   onDeleteSale?: (order: any) => void;
@@ -54,7 +52,7 @@ interface SalesActionsMenuProps {
 // the backend enforces the real boundary.
 const DATE_MOVE_ADMIN_ROLES = new Set(['admin', 'owner', 'pos_admin', 'super_admin', 'superuser']);
 
-export function SalesActionsMenu({ order, orgSlug, onView, onEditShipping, onViewPayments, onEditLines, onMoveDate, onDelete, onDeleteSale, onEditFinalizedSale, onRecordPayment, onPutOnAccount, onEditSaleInfo }: SalesActionsMenuProps) {
+export function SalesActionsMenu({ order, orgSlug, onView, onEditShipping, onViewPayments, onEditLines, onMoveDate, onDeleteSale, onEditFinalizedSale, onRecordPayment, onPutOnAccount, onEditSaleInfo }: SalesActionsMenuProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -65,7 +63,6 @@ export function SalesActionsMenu({ order, orgSlug, onView, onEditShipping, onVie
   const { can, canAny } = usePermissions();
   const canView = canAny([P.ORDERS_VIEW, P.ORDERS_VIEW_OWN]);
   const canChange = canAny([P.ORDERS_CHANGE_OWN, P.ORDERS_CHANGE, P.ORDERS_MANAGE]);
-  const canDelete = canAny([P.ORDERS_VOID, P.ORDERS_MANAGE]);
   // Permanent delete of a FINALIZED sale — a distinct, stronger tier than the void/soft-delete
   // above (admin by default; tenant-configurable via the Roles & Permissions matrix).
   const canDeleteSale = can(P.ORDERS_DELETE);
@@ -147,7 +144,18 @@ export function SalesActionsMenu({ order, orgSlug, onView, onEditShipping, onVie
               <Pencil className="h-4 w-4 text-muted-foreground" /> Edit Sale Info
             </button>
           )}
-          {canDelete && <button className={item} onClick={() => { onDelete(order); close(); }}><Ban className="h-4 w-4 text-destructive" /> Void Sale</button>}
+          {/* VoidBillButton is self-contained (permission gate, voidable-status gate, reason
+              dialog, manager-approval collection) — the same component used on the bill detail
+              page / My Bills, so this row can never drift out of sync with the real void flow
+              the way the old plain "onDelete" callback silently did. */}
+          <VoidBillButton
+            orderId={order.id}
+            orderNumber={order.order_number}
+            status={order.status}
+            label="Void Sale"
+            className={`${item} text-destructive`}
+            onVoided={close}
+          />
           {isFinal && canDeleteSale && onDeleteSale && (
             <button className={item} onClick={() => { onDeleteSale(order); close(); }}>
               <Trash2 className="h-4 w-4 text-destructive" /> Delete Sale

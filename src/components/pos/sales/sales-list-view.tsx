@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Search, Undo2, XCircle } from 'lucide-react';
 import { DataTable, type DataTableColumn } from '@bengo-hub/shared-ui-lib/data-table';
-import { useOrders, useOrdersSummary, useVoidOrder, useBulkVoidOrders, useDeleteSale, type OrderListFilters } from '@/hooks/usePOS';
+import { useOrders, useOrdersSummary, useBulkVoidOrders, useDeleteSale, type OrderListFilters } from '@/hooks/usePOS';
 import { useCloseOnAccount } from '@/hooks/use-close-on-account';
 import { useStaffList } from '@/hooks/useStaff';
 import { usePermissions, P } from '@/hooks/usePermissions';
@@ -90,7 +90,6 @@ export function SalesListView({ orgSlug, fixedSource, title, subtitle }: {
   const [paymentsOrder, setPaymentsOrder] = useState<any>(null);
   const [editLinesOrder, setEditLinesOrder] = useState<any>(null);
   const [moveDateOrder, setMoveDateOrder] = useState<any>(null);
-  const [deleteOrder, setDeleteOrder] = useState<any>(null);
   const [deleteSaleOrder, setDeleteSaleOrder] = useState<any>(null);
   const [recordPayOrder, setRecordPayOrder] = useState<any>(null);
   const [editSaleInfoOrder, setEditSaleInfoOrder] = useState<any>(null);
@@ -107,7 +106,6 @@ export function SalesListView({ orgSlug, fixedSource, title, subtitle }: {
     () => Object.fromEntries(staff.map((s: any) => [s.user_id, s.name])),
     [staff],
   );
-  const voidOrder = useVoidOrder();
   const deleteSale = useDeleteSale();
   const bulkVoid = useBulkVoidOrders();
   const closeOnAccount = useCloseOnAccount();
@@ -166,17 +164,6 @@ export function SalesListView({ orgSlug, fixedSource, title, subtitle }: {
     setSelected(new Set());
   }, []);
   const goToPage = useCallback((p: number) => { setPage(p); setSelected(new Set()); }, []);
-
-  const handleDelete = () => {
-    if (!deleteOrder) return;
-    voidOrder.mutate(
-      { orderId: deleteOrder.id, reason: 'Deleted from Sales list' },
-      {
-        onSuccess: () => { toast.success(`Deleted ${deleteOrder.order_number}`); setDeleteOrder(null); },
-        onError: (e: any) => toast.error(e?.response?.data?.error || 'Delete failed (may require manager approval)'),
-      },
-    );
-  };
 
   // Permanent Delete Sale ("shred" tool) — branches server-side on fiscal status: a sale already
   // reported to KRA is reversed + soft-marked deleted (never removed); a plain cash sale is
@@ -244,7 +231,7 @@ export function SalesListView({ orgSlug, fixedSource, title, subtitle }: {
       render: (o) => (
         <SalesActionsMenu order={o} orgSlug={orgSlug} onView={(ord) => setDetailId(ord.id)}
           onEditShipping={setShippingOrder} onViewPayments={setPaymentsOrder} onEditLines={setEditLinesOrder}
-          onMoveDate={setMoveDateOrder} onDelete={setDeleteOrder} onDeleteSale={setDeleteSaleOrder}
+          onMoveDate={setMoveDateOrder} onDeleteSale={setDeleteSaleOrder}
           onEditFinalizedSale={handleEditFinalizedSale}
           onRecordPayment={setRecordPayOrder}
           onPutOnAccount={setPutOnAccountOrder} onEditSaleInfo={setEditSaleInfoOrder} />
@@ -427,9 +414,6 @@ export function SalesListView({ orgSlug, fixedSource, title, subtitle }: {
       {editLinesOrder && <EditOrderLinesModal order={editLinesOrder} onClose={() => setEditLinesOrder(null)} />}
       {moveDateOrder && <MoveOrderDateModal order={moveDateOrder} onClose={() => setMoveDateOrder(null)} />}
       {editSaleInfoOrder && <EditSaleInfoModal order={editSaleInfoOrder} onClose={() => setEditSaleInfoOrder(null)} />}
-      <ConfirmDialog open={!!deleteOrder} onOpenChange={(o) => !o && setDeleteOrder(null)} title="Void sale?"
-        description={`This will void ${deleteOrder?.order_number}. It may require manager approval and will reverse the sale in treasury/inventory.`}
-        confirmLabel="Void" variant="danger" onConfirm={handleDelete} />
       <ConfirmDialog open={!!deleteSaleOrder} onOpenChange={(o) => !o && setDeleteSaleOrder(null)}
         title="Permanently delete this sale?"
         description={`${deleteSaleOrder?.order_number}: if this sale was reported to KRA, it will be reversed (GL/inventory/credit-note) and marked deleted — never removed, since a transmitted tax record can't be destroyed. If it was never reported to KRA, it will be PERMANENTLY DELETED (ledger + records), with only an audit snapshot kept. This cannot be undone.`}
