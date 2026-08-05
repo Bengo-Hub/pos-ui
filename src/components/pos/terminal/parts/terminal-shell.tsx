@@ -519,9 +519,31 @@ export function TerminalShell() {
           <span className="text-muted-foreground">Subtotal: <b className="text-foreground tabular-nums">{fmt(t.subtotal)}</b></span>
         </div>
         <div className="flex items-center justify-between text-xs">
-          <span className="text-muted-foreground">Order Tax(+): <b className="text-foreground tabular-nums">{fmt(t.tax)}</b></span>
+          {/* Order Tax(+) and Charges(+) — manager-only quick edits (QA req 4). Like the discount
+              row above, these modals/handlers already existed (OrderTaxModal/ChargesModal,
+              t.orderTaxOpen/t.chargesOpen) but had NO UI trigger anywhere in the terminal —
+              same missing-wiring bug as the discount modal, fixed the same way. */}
+          {canManagePrices ? (
+            <button type="button" onClick={() => t.setOrderTaxOpen(true)} className="text-muted-foreground hover:underline flex items-center gap-1">
+              Order Tax(+): <b className="text-foreground tabular-nums">{fmt(t.tax)}</b>
+            </button>
+          ) : (
+            <span className="text-muted-foreground">Order Tax(+): <b className="text-foreground tabular-nums">{fmt(t.tax)}</b></span>
+          )}
           {t.loyaltyDiscount > 0 && <span className="text-emerald-600">Discount: -{fmt(t.loyaltyDiscount)}</span>}
         </div>
+        {canManagePrices && (
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-muted-foreground">Charges(+)</span>
+            <button
+              type="button"
+              onClick={() => t.setChargesOpen(true)}
+              className={cn('font-semibold hover:underline', t.chargesTotal > 0 ? 'text-amber-600' : 'text-primary')}
+            >
+              {t.chargesTotal > 0 ? `+ ${fmt(t.chargesTotal)}` : 'Add charges'}
+            </button>
+          </div>
+        )}
         {t.happyHourDiscount > 0 && (
           <div className="flex items-center justify-between text-xs">
             <span className="text-muted-foreground truncate">{t.happyHour.promoName || 'Auto discount'}</span>
