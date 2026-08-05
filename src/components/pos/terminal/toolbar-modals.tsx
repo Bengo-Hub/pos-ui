@@ -13,15 +13,13 @@ import { useOrders, useQuotationAction, useQuotations, useVoidOrder } from '@/ho
 import { usePermissions } from '@/hooks/usePermissions';
 import { useCurrentShift } from '@/hooks/useShifts';
 import { useRegisterDetails } from '@/hooks/useReports';
+import { usePOSSettings } from '@/hooks/usePOSSettings';
+import { formatCurrency } from '@/lib/utils';
 import { format, startOfDay } from 'date-fns';
 import { Pagination } from '@/components/ui/pagination';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { PrintReceiptButton } from '@/components/pos/print-receipt-button';
 import { toast } from 'sonner';
-
-function fmt(n: number | undefined) {
-  return `KES ${Number(n ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
 
 function ModalShell({ title, icon: Icon, onClose, children, wide, size }: {
   title: string; icon: React.ElementType; onClose: () => void; children: React.ReactNode; wide?: boolean;
@@ -76,6 +74,9 @@ function prettyTender(t: { name?: string; type?: string }): string {
 //    refund/payment/credit totals, products sold, and products sold by brand). Scrollable. ──
 export function RegisterDetailsModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { data: shift } = useCurrentShift();
+  const { data: posSettings } = usePOSSettings();
+  const currency = (posSettings as any)?.currency ?? 'KES';
+  const fmt = (n: number | undefined) => formatCurrency(n, currency);
   // Report window: from the shift open (or start of today) through now.
   const to = format(new Date(), 'yyyy-MM-dd');
   const from = shift?.opened_at ? format(new Date(shift.opened_at), 'yyyy-MM-dd') : format(startOfDay(new Date()), 'yyyy-MM-dd');
@@ -229,6 +230,9 @@ const RECENT_PAGE_SIZE = 10;
 
 export function RecentTransactionsModal({ open, onClose, orgSlug }: { open: boolean; onClose: () => void; orgSlug: string }) {
   const router = useRouter();
+  const { data: posSettings } = usePOSSettings();
+  const currency = (posSettings as any)?.currency ?? 'KES';
+  const fmt = (n: number | undefined) => formatCurrency(n, currency);
   const [tab, setTab] = useState<RecentTab>('final');
   const [page, setPage] = useState(1);
   const [confirmDelete, setConfirmDelete] = useState<{ id: string; number: string } | null>(null);

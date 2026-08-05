@@ -1448,8 +1448,8 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
       const qty = item.quantity + bogoFreeUnitsForSku(item.sku, item.quantity, activeHappyHours);
       return { sku: item.sku, category: item.category, unitPrice: unit, quantity: qty, total: unit * qty };
     });
-    return computeHappyHour(lines, activeHappyHours);
-  }, [cart, activeHappyHours]);
+    return computeHappyHour(lines, activeHappyHours, (posSettings as any)?.currency ?? 'KES');
+  }, [cart, activeHappyHours, posSettings]);
   const happyHourDiscount = happyHour.total;
   // Whole-number payable (QA req 5): ceiling round-off applied ONCE at the order level —
   // the same math pos-api's finalizeTotals runs, so till total == stored total.

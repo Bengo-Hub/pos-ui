@@ -8,9 +8,10 @@ import { Combobox } from '@/components/ui/combobox';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { useRoomBookings, useCreateRoomBooking, useUpdateRoomBooking, useInventoryBundles } from '@/hooks/useHotel';
 import { usePermissions, P } from '@/hooks/usePermissions';
+import { usePOSSettings } from '@/hooks/usePOSSettings';
 import type { CreateRoomBookingInput, RoomBooking } from '@/lib/api/hotel';
 import { ArrowLeft, ChevronDown, ChevronRight, Loader2, Pencil, Plus, Users, X, XCircle } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, formatCurrency } from '@/lib/utils';
 import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { ModuleGate } from '@/components/auth/module-gate';
@@ -201,6 +202,8 @@ function BookingsPageInner() {
   const { data: bookings = [], isLoading } = useRoomBookings();
   const { data: bundles = [] } = useInventoryBundles();
   const createMut = useCreateRoomBooking();
+  const { data: posSettings } = usePOSSettings();
+  const currency = (posSettings as any)?.currency ?? 'KES';
   const { can } = usePermissions();
   const canManage = can(P.HOTEL_MANAGE);
 
@@ -303,7 +306,7 @@ function BookingsPageInner() {
             <label className="block sm:col-span-2"><span className="text-sm font-medium">Rate plan / Package (optional)</span>
               <div className="mt-1">
                 <Combobox
-                  options={bundles.map((b) => ({ value: b.id, label: b.name, hint: [b.sku, b.price ? `KES ${b.price.toLocaleString()}` : null].filter(Boolean).join(' · ') }))}
+                  options={bundles.map((b) => ({ value: b.id, label: b.name, hint: [b.sku, b.price ? formatCurrency(b.price, currency) : null].filter(Boolean).join(' · ') }))}
                   value={form.inventory_rate_plan_bundle_id ?? ''}
                   onChange={(v) => set('inventory_rate_plan_bundle_id', v)}
                   placeholder="Select a package / rate plan…"

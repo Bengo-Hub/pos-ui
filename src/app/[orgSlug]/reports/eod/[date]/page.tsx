@@ -5,9 +5,10 @@ import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
 import { Card, CardContent } from '@/components/ui/base';
 import { useEODList, useSalesByKDSStation } from '@/hooks/useReports';
 import { useModuleAccess } from '@/hooks/use-module-access';
+import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { ReportDocumentButton } from '@/components/reports/report-document-button';
 import { useAuthStore } from '@/store/auth';
-import { cn } from '@/lib/utils';
+import { cn, formatCurrency } from '@/lib/utils';
 import { ArrowLeft, ChefHat, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
@@ -18,6 +19,8 @@ function EODDetailContent() {
 
   const { data: closings = [], isLoading } = useEODList(outletId, date, date);
   const eod = closings[0] as any;
+  const { data: posSettings } = usePOSSettings();
+  const currency = (posSettings as any)?.currency ?? 'KES';
   // "How much did bar vs kitchen do today" — grouped by KDS station, same as the kitchen/bar
   // displays, so a manager closing the day can see each station's contribution at a glance.
   // KDS stations are a kitchen concept — the query is skipped entirely for retail/services/
@@ -95,10 +98,10 @@ function EODDetailContent() {
       {/* KPI grid */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: 'Total Sales', value: `KES ${(eod.total_sales ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}` },
+          { label: 'Total Sales', value: formatCurrency(eod.total_sales ?? 0, currency) },
           { label: 'Orders', value: (eod.total_orders ?? 0).toString() },
-          { label: 'Refunds', value: `KES ${(eod.total_refunds ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}` },
-          { label: 'Tax Collected', value: `KES ${(eod.total_tax ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}` },
+          { label: 'Refunds', value: formatCurrency(eod.total_refunds ?? 0, currency) },
+          { label: 'Tax Collected', value: formatCurrency(eod.total_tax ?? 0, currency) },
         ].map(({ label, value }) => (
           <Card key={label}>
             <CardContent className="p-5">
@@ -133,7 +136,7 @@ function EODDetailContent() {
                 <span className="text-muted-foreground">
                   {row.station_name}{row.station_type ? ` (${row.station_type})` : ''} · {row.order_count} order{row.order_count === 1 ? '' : 's'}
                 </span>
-                <span className="font-medium">KES {row.revenue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                <span className="font-medium">{formatCurrency(row.revenue, currency)}</span>
               </div>
             ))}
           </CardContent>
@@ -148,7 +151,7 @@ function EODDetailContent() {
             {tenderRows.map(({ label, value }) => (
               <div key={label} className="flex justify-between text-sm">
                 <span className="text-muted-foreground">{label}</span>
-                <span className="font-medium">KES {value.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                <span className="font-medium">{formatCurrency(value, currency)}</span>
               </div>
             ))}
           </CardContent>
@@ -167,7 +170,7 @@ function EODDetailContent() {
             <div key={label} className="flex justify-between text-sm">
               <span className="text-muted-foreground">{label}</span>
               <span className={cn('font-medium', highlight && value !== 0 ? (value < 0 ? 'text-red-600' : 'text-green-600') : '')}>
-                {value < 0 ? '-' : ''}KES {Math.abs(value).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                {value < 0 ? '-' : ''}{formatCurrency(Math.abs(value), currency)}
               </span>
             </div>
           ))}

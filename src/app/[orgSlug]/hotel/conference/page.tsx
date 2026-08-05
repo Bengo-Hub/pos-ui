@@ -15,6 +15,8 @@ import {
 } from '@/hooks/useHotel';
 import type { CreateEventBookingInput, EventBooking, Facility } from '@/lib/api/hotel';
 import { usePermissions, P } from '@/hooks/usePermissions';
+import { usePOSSettings } from '@/hooks/usePOSSettings';
+import { formatCurrency } from '@/lib/utils';
 import { Combobox } from '@/components/ui/combobox';
 import { FacilityFormModal } from '@/components/hotel/facility-form-modal';
 import { Loader2, Plus, Presentation, Ticket } from 'lucide-react';
@@ -40,6 +42,8 @@ function ConferencePageInner() {
   const { data: events = [], isLoading } = useEventBookings();
   const { data: bundles = [] } = useInventoryBundles();
   const createMut = useCreateEventBooking();
+  const { data: posSettings } = usePOSSettings();
+  const currency = (posSettings as any)?.currency ?? 'KES';
   const { can } = usePermissions();
   const canAdd = can(P.CONFERENCE_ADD);
   const canManageVenue = can(P.HOTEL_MANAGE);
@@ -175,7 +179,7 @@ function ConferencePageInner() {
                     options={bundles.map((b) => ({
                       value: b.id,
                       label: b.name,
-                      hint: [b.sku, b.price ? `KES ${b.price.toLocaleString()}` : null].filter(Boolean).join(' · '),
+                      hint: [b.sku, b.price ? formatCurrency(b.price, currency) : null].filter(Boolean).join(' · '),
                     }))}
                     value={form.inventory_bundle_id ?? ''}
                     onChange={(v) => set('inventory_bundle_id', v)}

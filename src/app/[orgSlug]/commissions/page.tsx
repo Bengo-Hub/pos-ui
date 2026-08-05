@@ -6,14 +6,11 @@ import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
 import { useCommissions, type CommissionRecord } from '@/hooks/useCommissions';
 import { usePermissions, P } from '@/hooks/usePermissions';
 import { useAuthStore } from '@/store/auth';
-import { cn } from '@/lib/utils';
+import { usePOSSettings } from '@/hooks/usePOSSettings';
+import { cn, formatCurrency } from '@/lib/utils';
 import { Loader2, TrendingUp } from 'lucide-react';
 import { useState, useMemo } from 'react';
 import { toast } from 'sonner';
-
-function formatCurrency(amount: number) {
-  return new Intl.NumberFormat(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount);
-}
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
@@ -22,6 +19,8 @@ function formatDate(iso: string) {
 function CommissionsPage() {
   const { can } = usePermissions();
   const user = useAuthStore((s) => s.user);
+  const { data: posSettings } = usePOSSettings();
+  const currency = (posSettings as any)?.currency ?? 'KES';
 
   // Roles with view_own only (stylist, therapist, technician) see their own commissions.
   const viewOwnOnly = can(P.COMMISSIONS_VIEW_OWN) && !can(P.COMMISSIONS_VIEW);
@@ -50,7 +49,7 @@ function CommissionsPage() {
         {records.length > 0 && (
           <div className="text-right">
             <p className="text-xs text-muted-foreground">Total shown</p>
-            <p className="text-xl font-bold text-primary">{formatCurrency(totalAmount)}</p>
+            <p className="text-xl font-bold text-primary">{formatCurrency(totalAmount, currency)}</p>
           </div>
         )}
       </div>
@@ -91,12 +90,12 @@ function CommissionsPage() {
                     {rec.order_id ? rec.order_id.slice(0, 8) + '…' : '—'}
                   </td>
                   <td className="px-4 py-3 text-muted-foreground">{rec.service_sku || '—'}</td>
-                  <td className="px-4 py-3 text-right">{formatCurrency(rec.sale_amount)}</td>
+                  <td className="px-4 py-3 text-right">{formatCurrency(rec.sale_amount, currency)}</td>
                   <td className="px-4 py-3 text-right text-muted-foreground">
                     {(rec.commission_rate ?? 0).toFixed(1)}%
                   </td>
                   <td className="px-4 py-3 text-right font-semibold text-primary">
-                    {formatCurrency(rec.commission_amount)}
+                    {formatCurrency(rec.commission_amount, currency)}
                   </td>
                   <td className="px-4 py-3">
                     <span className={cn(
@@ -113,7 +112,7 @@ function CommissionsPage() {
             <tfoot>
               <tr className="border-t border-border bg-accent/30">
                 <td colSpan={5} className="px-4 py-3 font-semibold text-muted-foreground">Total</td>
-                <td className="px-4 py-3 text-right font-bold text-primary">{formatCurrency(totalAmount)}</td>
+                <td className="px-4 py-3 text-right font-bold text-primary">{formatCurrency(totalAmount, currency)}</td>
                 <td colSpan={2} />
               </tr>
             </tfoot>

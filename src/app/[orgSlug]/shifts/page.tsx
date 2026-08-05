@@ -18,6 +18,8 @@ import {
 } from '@/hooks/useShifts';
 import { useModuleAccess } from '@/hooks/use-module-access';
 import { usePermissions, P } from '@/hooks/usePermissions';
+import { usePOSSettings } from '@/hooks/usePOSSettings';
+import { formatCurrency } from '@/lib/utils';
 import { ShiftCloseDialog } from '@/components/pos/shift-close-dialog';
 import { ShiftPlannerPanel } from '@/components/pos/shift-planner-panel';
 import { LeaveApprovalPanel } from '@/components/pos/leave-approval-panel';
@@ -90,9 +92,9 @@ function ElapsedTimer({ since }: { since: string }) {
   return <span className="font-mono text-3xl font-bold text-primary tabular-nums">{elapsed}</span>;
 }
 
-function VarianceBadge({ variance }: { variance: number }) {
+function VarianceBadge({ variance, currency = 'KES' }: { variance: number; currency?: string }) {
   const abs = Math.abs(variance);
-  const label = `${variance >= 0 ? '+' : ''}KES ${variance.toLocaleString()}`;
+  const label = `${variance >= 0 ? '+' : ''}${formatCurrency(variance, currency)}`;
   if (abs === 0) return <span className="text-xs text-green-600 font-semibold">{label}</span>;
   if (abs <= 200) return (
     <span className="inline-flex items-center gap-1 text-xs text-amber-600 font-semibold">
@@ -108,7 +110,7 @@ function VarianceBadge({ variance }: { variance: number }) {
 
 // ── History table ─────────────────────────────────────────────────────────────
 
-function HistoryTable({ rows }: { rows: ShiftHistoryRow[] }) {
+function HistoryTable({ rows, currency = 'KES' }: { rows: ShiftHistoryRow[]; currency?: string }) {
   if (rows.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-center">
@@ -152,18 +154,18 @@ function HistoryTable({ rows }: { rows: ShiftHistoryRow[] }) {
                   <span className="text-xs text-muted-foreground">
                     Revenue:{' '}
                     <span className="font-semibold text-foreground">
-                      KES {row.total_revenue.toLocaleString()}
+                      {formatCurrency(row.total_revenue, currency)}
                     </span>
                   </span>
                   {row.closing_float !== undefined && (
                     <span className="text-xs text-muted-foreground">
                       Cash in:{' '}
                       <span className="font-semibold text-foreground">
-                        KES {row.closing_float.toLocaleString()}
+                        {formatCurrency(row.closing_float, currency)}
                       </span>
                     </span>
                   )}
-                  {row.variance !== undefined && <VarianceBadge variance={row.variance} />}
+                  {row.variance !== undefined && <VarianceBadge variance={row.variance} currency={currency} />}
                 </div>
                 {row.notes && (
                   <p className="text-xs text-muted-foreground mt-1.5 italic">"{row.notes}"</p>
@@ -194,6 +196,8 @@ function ShiftsPage() {
   const { can } = usePermissions();
   const handlesCash = can(P.PAYMENTS_VIEW);
   const canManageShifts = can(P.SESSIONS_MANAGE);
+  const { data: posSettings } = usePOSSettings();
+  const currency = (posSettings as any)?.currency ?? 'KES';
 
   // Deep-link support (e.g. the dashboard's "Active Staff" card → /shifts?tab=team). Only
   // honored once we know whether this user can actually see the requested tab — a non-manager
@@ -360,7 +364,7 @@ function ShiftsPage() {
                         <p>
                           Opening float:{' '}
                           <span className="font-medium text-foreground">
-                            KES {session.float_amount.toLocaleString()}
+                            {formatCurrency(session.float_amount, currency)}
                           </span>
                         </p>
                       )}
@@ -389,7 +393,7 @@ function ShiftsPage() {
               <CardContent className="p-5 space-y-4">
                 {!isOpen && handlesCash && (
                   <label className="block">
-                    <span className="text-sm font-medium">Opening Float (KES)</span>
+                    <span className="text-sm font-medium">Opening Float ({currency})</span>
                     <div className="relative mt-1.5">
                       <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                       <input
@@ -446,8 +450,8 @@ function ShiftsPage() {
               <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-2 xl:grid-cols-4 gap-3">
                 {[
                   { label: 'Orders', value: summary.order_count.toString(), icon: ShoppingCart },
-                  { label: 'Revenue', value: `KES ${summary.total_revenue.toLocaleString()}`, icon: BarChart3 },
-                  { label: 'Expected Cash', value: `KES ${summary.expected_cash.toLocaleString()}`, icon: DollarSign },
+                  { label: 'Revenue', value: formatCurrency(summary.total_revenue, currency), icon: BarChart3 },
+                  { label: 'Expected Cash', value: formatCurrency(summary.expected_cash, currency), icon: DollarSign },
                   { label: 'Voids', value: summary.void_count.toString(), icon: TrendingDown },
                 ].map(({ label, value, icon: Icon }) => (
                   <Card key={label}>
@@ -480,7 +484,7 @@ function ShiftsPage() {
                             <span className="text-foreground capitalize">{t.name || t.type}</span>
                             <span className="text-xs text-muted-foreground">×{t.count}</span>
                           </div>
-                          <span className="font-semibold">KES {t.amount.toLocaleString()}</span>
+                          <span className="font-semibold">{formatCurrency(t.amount, currency)}</span>
                         </div>
                       ))}
                     </div>
@@ -488,7 +492,7 @@ function ShiftsPage() {
                       <div className="flex items-center justify-between text-sm border-t mt-3 pt-3 text-muted-foreground">
                         <span>Refunds ({summary.refund_count})</span>
                         <span className="text-red-500 font-semibold">
-                          − KES {summary.total_refunds.toLocaleString()}
+                          − {formatCurrency(summary.total_refunds, currency)}
                         </span>
                       </div>
                     )}
@@ -577,7 +581,7 @@ function ShiftsPage() {
             </div>
           ) : (
             <>
-              <HistoryTable rows={historyRows} />
+              <HistoryTable rows={historyRows} currency={currency} />
 
               {/* Pagination */}
               {historyTotalPages > 1 && (

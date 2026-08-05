@@ -15,6 +15,7 @@ import { paperForFormat, resolveReceiptFormat } from '@/lib/pos/receipt-format';
 import { apiClient } from '@/lib/api/client';
 import type { PrinterProfile } from '@/lib/api/settings';
 import { useTenantBranding } from '@/providers/tenant-branding-provider';
+import { formatCurrency as formatCurrencyShared } from '@/lib/utils';
 
 export interface ReceiptLine {
   sku: string;
@@ -295,8 +296,7 @@ export function ReceiptPreview({
     openBrowserReceiptWindow();
   };
 
-  const formatCurrency = (amount: number) =>
-    new Intl.NumberFormat('en-KE', { style: 'currency', currency: 'KES' }).format(amount);
+  const formatCurrency = (amount: number) => formatCurrencyShared(amount, receipt.currency || 'KES');
 
   const formatDate = (dateStr: string) =>
     new Date(dateStr).toLocaleString('en-KE', {

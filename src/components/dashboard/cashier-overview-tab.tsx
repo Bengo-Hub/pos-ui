@@ -2,7 +2,7 @@
 
 import { useDashboardSummary, fmt, fmtNum, KPICard } from './widgets';
 import { useCurrentDrawer, useShiftSummary } from '@/hooks/usePOS';
-import { BarChart3, CreditCard, TrendingUp, Wallet } from 'lucide-react';
+import { BarChart3, Coins, TrendingUp, Wallet } from 'lucide-react';
 
 export function CashierOverviewTab() {
   const { data: summary, isLoading } = useDashboardSummary();
@@ -21,10 +21,10 @@ export function CashierOverviewTab() {
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-2 gap-4">
-        <KPICard label="Today's Revenue" value={fmt(s.total_revenue ?? 0)} sub="vs yesterday" icon={TrendingUp} trend={s.revenue_growth} loading={isLoading} />
+        <KPICard label="Today's Revenue" value={fmt(s.total_revenue ?? 0, s.currency)} sub="vs yesterday" icon={TrendingUp} trend={s.revenue_growth} loading={isLoading} />
         <KPICard label="Orders" value={fmtNum(s.total_orders ?? 0)} sub="today" icon={BarChart3} loading={isLoading} />
-        <KPICard label="Avg Ticket" value={fmt(s.avg_ticket ?? 0)} sub="per order" icon={CreditCard} loading={isLoading} />
-        <KPICard label="Cash in Drawer" value={fmt(cashInDrawer)} sub="opening + cash sales" icon={Wallet} />
+        <KPICard label="Gross Profit" value={fmt(s.gross_profit ?? 0, s.currency)} sub={`${(s.gross_margin_pct ?? 0).toFixed(1)}% margin`} icon={Coins} trend={s.gross_profit_growth} loading={isLoading} />
+        <KPICard label="Cash in Drawer" value={fmt(cashInDrawer, s.currency)} sub="opening + cash sales" icon={Wallet} />
       </div>
 
       {tenderTotal > 0 && (

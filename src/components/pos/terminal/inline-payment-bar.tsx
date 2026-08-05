@@ -21,6 +21,7 @@ import {
 import { useCallback, useMemo, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { useCreatePaymentIntent, useListC2BPayments, useClaimC2BPayment } from '@/hooks/usePOS';
+import { formatCurrency } from '@/lib/utils';
 import { useEffectiveOnline } from '@/lib/connectivity';
 import { savePendingPayment, getOfflineOrderByLocalId } from '@/lib/db/pos-db';
 import { useCashDrawer } from '@/hooks/useCashDrawer';
@@ -131,6 +132,7 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
   const isOnline = useEffectiveOnline();
   const { data: gateways } = usePOSGateways();
   const { data: posSettings } = usePOSSettings();
+  const currency = (posSettings as any)?.currency ?? 'KES';
   const { autoOpenOnSettle } = useCashDrawer();
   const createIntent = useCreatePaymentIntent();
   // Manual-PDQ policy: when the outlet requires an approval ref, the cashier must enter it before
@@ -170,13 +172,13 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
     const base = paymentActionsFor(profile, gateways, { isHospitality, isOnline, allowCOD })
       .filter((a) => a.key !== 'on_account' || canCreditSale);
     const extras = [];
-    if (hasCustomerCredit) extras.push(customerCreditAction(customerCreditAvailable));
-    if (canRedeemLoyalty && loyaltyAccount) extras.push(loyaltyRedeemAction(loyaltyAccount));
+    if (hasCustomerCredit) extras.push(customerCreditAction(customerCreditAvailable, currency));
+    if (canRedeemLoyalty && loyaltyAccount) extras.push(loyaltyRedeemAction(loyaltyAccount, currency));
     if (extras.length === 0) return base;
     const splitIdx = base.findIndex((a) => a.key === 'split');
     if (splitIdx === -1) return [...base, ...extras];
     return [...base.slice(0, splitIdx), ...extras, ...base.slice(splitIdx)];
-  }, [profile, gateways, isHospitality, isOnline, allowCOD, canCreditSale, hasCustomerCredit, customerCreditAvailable, canRedeemLoyalty, loyaltyAccount]);
+  }, [profile, gateways, isHospitality, isOnline, allowCOD, canCreditSale, hasCustomerCredit, customerCreditAvailable, canRedeemLoyalty, loyaltyAccount, currency]);
   // Back-office profiles (retail/pharmacy/services) get Draft + Quotation; hospitality/QSR do not.
   // Quotation is additionally manager-gated (canPrivileged).
   const isBackOffice = profile === 'retail' || profile === 'pharmacy' || profile === 'services';
@@ -220,7 +222,7 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
           tender_id: tenderId,
           tender_method: method,
           amount: roundedTotal,
-          currency: 'KES',
+          currency,
           external_ref: externalRef,
           tenant_slug: tenantSlug,
           created_at: new Date().toISOString(),
@@ -260,7 +262,7 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
         },
       },
     );
-  }, [ensureOrder, createIntent, roundedTotal, tenderId, finish, autoOpenOnSettle, isOnline, tenantSlug]);
+  }, [ensureOrder, createIntent, roundedTotal, tenderId, finish, autoOpenOnSettle, isOnline, tenantSlug, currency]);
 
   // ── Online gateway tenders (M-Pesa STK / Paystack card / Wallet) ─────────────
   const startGateway = useCallback(async (key: TenderKey) => {
@@ -318,7 +320,7 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
           const ord = await ensureOrder();
           setBusyKey(null);
           if (ord) {
-            toast.info(`Store credit covers KES ${customerCreditAvailable.toLocaleString()} of KES ${roundedTotal.toLocaleString()} — use Multiple Pay to add another tender for the rest.`);
+            toast.info(`Store credit covers ${formatCurrency(customerCreditAvailable, currency)} of ${formatCurrency(roundedTotal, currency)} — use Multiple Pay to add another tender for the rest.`);
             onSplit(ord);
           }
           return;
@@ -370,7 +372,7 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
           setBusyKey(null);
           if (ord) {
             const availableKES = Math.floor(loyaltyAccount.pointsBalance * loyaltyAccount.redeemRate);
-            toast.info(`Loyalty points cover up to KES ${availableKES.toLocaleString()} of KES ${roundedTotal.toLocaleString()} — use Multiple Pay to combine it with another tender.`);
+            toast.info(`Loyalty points cover up to ${formatCurrency(availableKES, currency)} of ${formatCurrency(roundedTotal, currency)} — use Multiple Pay to combine it with another tender.`);
             onSplit(ord);
           }
           return;
@@ -391,7 +393,7 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
         return;
       }
     }
-  }, [roundedTotal, settleImmediate, ensureOrder, startGateway, finish, onSplit, customerCreditAvailable, loyaltyAccount, redeemToOrder]);
+  }, [roundedTotal, settleImmediate, ensureOrder, startGateway, finish, onSplit, customerCreditAvailable, loyaltyAccount, redeemToOrder, currency]);
 
   // ── Send to Kitchen (dine-in) ────────────────────────────────────────────────
   const sendToKitchen = useCallback(async () => {
@@ -401,7 +403,7 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
     if (ord) finish(ord, { unpaid: true });
   }, [createOrderAsync, finish]);
 
-  const fmt = (n: number) => `KES ${n.toLocaleString()}`;
+  const fmt = (n: number) => formatCurrency(n, currency);
   const anyBusy = busyKey !== null || createIntent.isPending;
 
   return (
@@ -410,6 +412,7 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
       {capture === 'cash' && (
         <CashCapture
           total={roundedTotal}
+          currency={currency}
           value={cashTendered}
           onChange={setCashTendered}
           busy={anyBusy}
@@ -420,6 +423,7 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
       {capture === 'card_pdq' && (
         <CardRefCapture
           total={roundedTotal}
+          currency={currency}
           value={cardRef}
           onChange={setCardRef}
           requireRef={requireCardRef}
@@ -431,6 +435,7 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
       {capture === 'mpesa_c2b' && order && (
         <C2BCapture
           amount={roundedTotal}
+          currency={currency}
           orderId={order.orderId}
           tenderId={tenderId}
           isOnline={isOnline}
@@ -452,6 +457,7 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
       {capture === 'room' && order && (
         <RoomCapture
           amount={roundedTotal}
+          currency={currency}
           orderNumber={order.orderNumber}
           tenantSlug={tenantSlug}
           search={roomSearch}
@@ -470,7 +476,7 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
           tenantSlug={tenantSlug}
           initiateUrl={initiateUrl}
           amount={roundedTotal}
-          currency="KES"
+          currency={currency}
           description={`Order ${order.orderNumber}`}
           customerEmail={customerEmail}
           allowedMethods={gatewayMethod ?? undefined}
@@ -625,15 +631,15 @@ function SecondaryBtn({ icon: Icon, label, onClick, disabled, tone }: {
 }
 
 // ── Inline cash capture ────────────────────────────────────────────────────────
-function CashCapture({ total, value, onChange, busy, onConfirm, onCancel }: {
-  total: number; value: string; onChange: (v: string) => void; busy: boolean; onConfirm: () => void; onCancel: () => void;
+function CashCapture({ total, currency, value, onChange, busy, onConfirm, onCancel }: {
+  total: number; currency: string; value: string; onChange: (v: string) => void; busy: boolean; onConfirm: () => void; onCancel: () => void;
 }) {
   const change = (parseFloat(value) || 0) - total;
   const quick = [total, Math.ceil(total / 100) * 100, Math.ceil(total / 500) * 500].filter((v, i, a) => a.indexOf(v) === i);
   return (
     <div className="p-3 border-b border-border bg-emerald-500/5 space-y-2">
       <div className="flex items-center justify-between">
-        <span className="text-sm font-bold">Cash · {`KES ${total.toLocaleString()}`}</span>
+        <span className="text-sm font-bold">Cash · {formatCurrency(total, currency)}</span>
         <button onClick={onCancel} className="h-7 w-7 rounded-lg flex items-center justify-center hover:bg-accent"><X className="h-4 w-4" /></button>
       </div>
       <input
@@ -651,7 +657,7 @@ function CashCapture({ total, value, onChange, busy, onConfirm, onCancel }: {
       {change >= 0 && (
         <div className="flex justify-between text-sm rounded-lg bg-emerald-500/10 px-3 py-2">
           <span className="text-muted-foreground font-medium">Change</span>
-          <span className="font-bold text-emerald-600 tabular-nums">KES {change.toLocaleString()}</span>
+          <span className="font-bold text-emerald-600 tabular-nums">{formatCurrency(change, currency)}</span>
         </div>
       )}
       <button
@@ -670,18 +676,18 @@ function CashCapture({ total, value, onChange, busy, onConfirm, onCancel }: {
 // Manual flow: the cashier runs the card on the standalone PDQ machine, waits for the terminal to
 // APPROVE, then records the approval/reference code here. When the outlet requires a ref, Confirm is
 // disabled until a code is entered (some acquirers/audits mandate it on file).
-function CardRefCapture({ total, value, requireRef, onChange, busy, onConfirm, onCancel }: {
-  total: number; value: string; requireRef: boolean; onChange: (v: string) => void; busy: boolean; onConfirm: () => void; onCancel: () => void;
+function CardRefCapture({ total, currency, value, requireRef, onChange, busy, onConfirm, onCancel }: {
+  total: number; currency: string; value: string; requireRef: boolean; onChange: (v: string) => void; busy: boolean; onConfirm: () => void; onCancel: () => void;
 }) {
   const refMissing = requireRef && value.trim() === '';
   return (
     <div className="p-3 border-b border-border bg-blue-500/5 space-y-2">
       <div className="flex items-center justify-between">
-        <span className="text-sm font-bold">Card / PDQ · {`KES ${total.toLocaleString()}`}</span>
+        <span className="text-sm font-bold">Card / PDQ · {formatCurrency(total, currency)}</span>
         <button onClick={onCancel} className="h-7 w-7 rounded-lg flex items-center justify-center hover:bg-accent"><X className="h-4 w-4" /></button>
       </div>
       <ol className="text-xs text-muted-foreground list-decimal pl-4 space-y-0.5">
-        <li>Run the card on the PDQ terminal for <span className="font-semibold text-foreground">KES {total.toLocaleString()}</span>.</li>
+        <li>Run the card on the PDQ terminal for <span className="font-semibold text-foreground">{formatCurrency(total, currency)}</span>.</li>
         <li>Wait for the terminal to show <span className="font-semibold text-emerald-600">APPROVED</span>.</li>
         <li>Enter the Auth Code from its receipt below{requireRef ? '' : ' (optional)'}, then Confirm.</li>
       </ol>
@@ -705,8 +711,8 @@ function CardRefCapture({ total, value, requireRef, onChange, busy, onConfirm, o
 }
 
 // ── Inline M-Pesa Paybill/Till (C2B) reconciliation ─────────────────────────────
-function C2BCapture({ amount, orderId, tenderId, isOnline, onCancel, onClaimed }: {
-  amount: number; orderId: string; tenderId: string; isOnline: boolean; onCancel: () => void; onClaimed: () => void;
+function C2BCapture({ amount, currency, orderId, tenderId, isOnline, onCancel, onClaimed }: {
+  amount: number; currency: string; orderId: string; tenderId: string; isOnline: boolean; onCancel: () => void; onClaimed: () => void;
 }) {
   const c2bQuery = useListC2BPayments(amount, isOnline);
   const claimC2B = useClaimC2BPayment();
@@ -714,7 +720,7 @@ function C2BCapture({ amount, orderId, tenderId, isOnline, onCancel, onClaimed }
   return (
     <div className="p-3 border-b border-border bg-green-500/5 space-y-2">
       <div className="flex items-center justify-between">
-        <span className="text-sm font-bold">M-Pesa Paybill / Till · KES {amount.toLocaleString()}</span>
+        <span className="text-sm font-bold">M-Pesa Paybill / Till · {formatCurrency(amount, currency)}</span>
         <button onClick={onCancel} className="h-7 w-7 rounded-lg flex items-center justify-center hover:bg-accent"><X className="h-4 w-4" /></button>
       </div>
       <p className="text-xs text-muted-foreground">Match the customer&apos;s payment to this sale.</p>
@@ -739,7 +745,7 @@ function C2BCapture({ amount, orderId, tenderId, isOnline, onCancel, onClaimed }
                 <span className="block text-sm font-semibold truncate">{c.payer_name || c.msisdn || 'M-Pesa payer'}</span>
                 <span className="block text-[10px] text-muted-foreground truncate">{c.trans_id}</span>
               </span>
-              <span className="text-sm font-bold tabular-nums shrink-0">KES {parseFloat(String(c.amount)).toLocaleString()}</span>
+              <span className="text-sm font-bold tabular-nums shrink-0">{formatCurrency(parseFloat(String(c.amount)), currency)}</span>
             </button>
           ))}
         </div>
@@ -749,8 +755,8 @@ function C2BCapture({ amount, orderId, tenderId, isOnline, onCancel, onClaimed }
 }
 
 // ── Inline room-charge picker (hospitality) ─────────────────────────────────────
-function RoomCapture({ amount, orderNumber, tenantSlug, search, onSearch, onCancel, onCharged }: {
-  amount: number; orderNumber: string; tenantSlug: string; search: string; onSearch: (v: string) => void; onCancel: () => void; onCharged: () => void;
+function RoomCapture({ amount, currency, orderNumber, tenantSlug, search, onSearch, onCancel, onCharged }: {
+  amount: number; currency: string; orderNumber: string; tenantSlug: string; search: string; onSearch: (v: string) => void; onCancel: () => void; onCharged: () => void;
 }) {
   const { data: rooms = [], isLoading } = useHotelRooms('occupied');
   const post = useMutation({
@@ -765,7 +771,7 @@ function RoomCapture({ amount, orderNumber, tenantSlug, search, onSearch, onCanc
   return (
     <div className="p-3 border-b border-border bg-indigo-500/5 space-y-2">
       <div className="flex items-center justify-between">
-        <span className="text-sm font-bold">Charge to Room · KES {amount.toLocaleString()}</span>
+        <span className="text-sm font-bold">Charge to Room · {formatCurrency(amount, currency)}</span>
         <button onClick={onCancel} className="h-7 w-7 rounded-lg flex items-center justify-center hover:bg-accent"><X className="h-4 w-4" /></button>
       </div>
       <input

@@ -20,11 +20,11 @@ import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import {
   BarChart3,
+  Coins,
   DollarSign,
   Download,
   Loader2,
   Package,
-  Receipt,
   ShoppingCart,
   TrendingDown,
   Users,
@@ -97,12 +97,18 @@ function ReportsPage() {
     }
   }
 
+  // Tenant's real currency, resolved server-side from POSOrder.Currency (falls back to "KES"
+  // only when there's no order data at all) — used for every money figure on this page instead
+  // of assuming KES.
+  const currency = sales?.currency ?? 'KES';
+  const money = (n: number) => `${currency} ${n.toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
+
   const kpis = sales
     ? [
-        { label: 'Total Revenue', value: `KES ${sales.total_revenue.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, icon: DollarSign, color: 'text-green-600 bg-green-500/10' },
+        { label: 'Total Revenue', value: money(sales.total_revenue), icon: DollarSign, color: 'text-green-600 bg-green-500/10' },
         { label: 'Orders', value: sales.order_count.toString(), icon: ShoppingCart, color: 'text-blue-600 bg-blue-500/10' },
-        { label: 'Avg Order', value: `KES ${sales.avg_order_value.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, icon: Receipt, color: 'text-purple-600 bg-purple-500/10' },
-        { label: 'Refunds', value: `KES ${(refunds?.total_refunded ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`, icon: TrendingDown, color: 'text-red-600 bg-red-500/10' },
+        { label: 'Gross Profit', value: `${money(sales.gross_profit)} (${(sales.gross_margin_pct ?? 0).toFixed(1)}%)`, icon: Coins, color: 'text-amber-600 bg-amber-500/10' },
+        { label: 'Refunds', value: money(refunds?.total_refunded ?? 0), icon: TrendingDown, color: 'text-red-600 bg-red-500/10' },
       ]
     : [];
 
@@ -206,13 +212,14 @@ function ReportsPage() {
                   <p className="text-sm font-semibold">Revenue Breakdown</p>
                 </div>
                 {[
-                  { label: 'Gross Revenue', amount: sales.total_revenue + sales.total_discount - sales.total_tax, color: 'bg-primary' },
-                  { label: 'Tax Collected', amount: sales.total_tax, color: 'bg-yellow-500' },
-                  { label: 'Discounts Given', amount: sales.total_discount, color: 'bg-red-400' },
+                  { label: 'Gross Revenue', amount: sales.total_revenue + sales.total_discount - sales.total_tax },
+                  { label: 'Tax Collected', amount: sales.total_tax },
+                  { label: 'Discounts Given', amount: sales.total_discount },
+                  { label: 'Gross Profit', amount: sales.gross_profit },
                 ].map(({ label, amount }) => (
                   <div key={label} className="flex justify-between text-sm">
                     <span className="text-muted-foreground">{label}</span>
-                    <span className="font-medium">KES {amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                    <span className="font-medium">{money(amount)}</span>
                   </div>
                 ))}
               </CardContent>
@@ -233,7 +240,7 @@ function ReportsPage() {
                   {daily.map((row) => {
                     const pct = maxRevenue > 0 ? (row.revenue / maxRevenue) * 100 : 0;
                     return (
-                      <div key={row.date} className="flex-1 flex flex-col items-center gap-1 group" title={`${bucketLabel(row.date, gran)}: KES ${row.revenue.toLocaleString()}`}>
+                      <div key={row.date} className="flex-1 flex flex-col items-center gap-1 group" title={`${bucketLabel(row.date, gran)}: ${money(row.revenue)}`}>
                         <div className="w-full bg-primary/20 rounded-t-sm relative flex-1">
                           <div
                             className="absolute bottom-0 w-full bg-primary rounded-t-sm transition-all"
@@ -269,7 +276,7 @@ function ReportsPage() {
                           <div className="flex items-center justify-between mb-0.5">
                             <span className="text-sm font-medium truncate">{item.name}</span>
                             <span className="text-xs text-muted-foreground ml-2 shrink-0">
-                              {item.quantity_sold.toLocaleString()} sold · KES {item.revenue.toLocaleString()}
+                              {item.quantity_sold.toLocaleString()} sold · {money(item.revenue)}
                             </span>
                           </div>
                           <div className="h-1.5 bg-muted rounded-full overflow-hidden">
@@ -298,7 +305,7 @@ function ReportsPage() {
                         <p className="font-medium text-foreground">{row.staff_name || `${row.user_id.slice(0, 8)}…`}</p>
                         <p className="text-xs text-muted-foreground">{row.order_count} orders</p>
                       </div>
-                      <p className="font-semibold text-foreground">KES {row.revenue.toLocaleString()}</p>
+                      <p className="font-semibold text-foreground">{money(row.revenue)}</p>
                     </div>
                   ))}
                 </div>

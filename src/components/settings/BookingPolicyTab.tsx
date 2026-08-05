@@ -8,6 +8,7 @@ import { usePermissions, P } from '@/hooks/usePermissions';
 import { Loader2, ShieldAlert } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api/error-message';
+import { SUPPORTED_CURRENCIES } from '@/lib/utils';
 
 type PaymentTiming = 'settle_at_checkout' | 'pay_upfront' | 'per_day_split';
 
@@ -136,7 +137,7 @@ export function BookingPolicyTab() {
         <label className="block">
           <span className="text-sm font-medium">Currency</span>
           <select value={form.currency} onChange={(e) => set('currency', e.target.value)} className={num} disabled={!canManage}>
-            {['KES', 'USD', 'EUR', 'GBP', 'UGX', 'TZS'].map((c) => <option key={c} value={c}>{c}</option>)}
+            {SUPPORTED_CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
         </label>
       </div>

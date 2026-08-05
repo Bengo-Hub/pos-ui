@@ -5,6 +5,7 @@ import { Loader2, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { useCreateFacility, useUpdateFacility, useInventoryServiceItems } from '@/hooks/useHotel';
 import { apiErrorMessage } from '@/lib/api/error-message';
+import { SUPPORTED_CURRENCIES } from '@/lib/utils';
 import type { Facility, CreateFacilityInput } from '@/lib/api/hotel';
 
 export const FACILITY_TYPES = [
@@ -167,7 +168,7 @@ export function FacilityFormModal({
             <label className="block">
               <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Currency</span>
               <select value={form.currency} onChange={(e) => set('currency', e.target.value)} className={inputCls}>
-                {['KES', 'USD', 'EUR', 'GBP', 'UGX', 'TZS'].map((c) => <option key={c} value={c}>{c}</option>)}
+                {SUPPORTED_CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
               </select>
             </label>
           </div>

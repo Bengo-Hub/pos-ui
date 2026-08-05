@@ -12,6 +12,8 @@ import {
   useUpdateEventBooking,
 } from '@/hooks/useHotel';
 import { usePermissions, P } from '@/hooks/usePermissions';
+import { usePOSSettings } from '@/hooks/usePOSSettings';
+import { formatCurrency } from '@/lib/utils';
 import type { EventBooking } from '@/lib/api/hotel';
 import { ArrowLeft, Loader2, Pencil, Presentation, Ticket, X } from 'lucide-react';
 import { toast } from 'sonner';
@@ -117,6 +119,8 @@ function EventDetailPageInner() {
   const canEdit = can(P.CONFERENCE_CHANGE) || canManage;
   const { data: event, isLoading } = useEventBooking(eventId);
   const { data: recon } = useEventReconciliation(eventId, true);
+  const { data: posSettings } = usePOSSettings();
+  const currency = (posSettings as any)?.currency ?? 'KES';
   const genMut = useGenerateMealCards(eventId);
   const redeemMut = useRedeemMealCard();
 
@@ -176,7 +180,7 @@ function EventDetailPageInner() {
             { label: 'Contact', value: event.contact_email || event.contact_phone || '—' },
             { label: 'Start', value: new Date(event.start_at).toLocaleString() },
             { label: 'End', value: new Date(event.end_at).toLocaleString() },
-            { label: 'Total', value: `KES ${(event.total_amount || 0).toLocaleString()}`, highlight: true },
+            { label: 'Total', value: formatCurrency(event.total_amount || 0, currency), highlight: true },
           ].map(({ label, value, highlight }) => (
             <div key={label}>
               <p className="text-muted-foreground">{label}</p>

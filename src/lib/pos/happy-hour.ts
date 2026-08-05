@@ -30,7 +30,7 @@ export interface HappyHourResult {
 const norm = (s?: string) => (s ?? '').trim().toLowerCase();
 const trimNum = (n: number) => (Number.isInteger(n) ? String(n) : String(n));
 
-function evalRule(rule: PromotionRule, lines: HHLine[]): { total: number; bySku: Record<string, HHLineResult> } {
+function evalRule(rule: PromotionRule, lines: HHLine[], currency = 'KES'): { total: number; bySku: Record<string, HHLineResult> } {
   if (rule.discount_type === 'bogo') return calcBogo(rule, lines);
 
   const ids = new Set((rule.scope_ids ?? []).map(norm));
@@ -50,8 +50,8 @@ function evalRule(rule: PromotionRule, lines: HHLine[]): { total: number; bySku:
   let label = '';
   switch (rule.discount_type) {
     case 'percentage': total = (base * val) / 100; label = `${trimNum(val)}% off`; break;
-    case 'fixed_amount': total = val; label = `KES ${trimNum(val)} off`; break;
-    case 'fixed_price': total = Math.max(0, base - val); label = `Fixed price KES ${trimNum(val)}`; break;
+    case 'fixed_amount': total = val; label = `${currency} ${trimNum(val)} off`; break;
+    case 'fixed_price': total = Math.max(0, base - val); label = `Fixed price ${currency} ${trimNum(val)}`; break;
     default: return { total: 0, bySku: {} };
   }
   if (rule.max_discount && rule.max_discount > 0 && total > rule.max_discount) total = rule.max_discount;
@@ -277,13 +277,13 @@ export function bogoFreeUnitsForSku(sku: string, paidQty: number, promos: HappyH
  * replaces the old "single best promo wins" behaviour that dropped every deal but the largest on an
  * order carrying items from two promotions (e.g. a cocktail deal + a pizza deal on one docket).
  */
-export function computeHappyHour(lines: HHLine[], promos: HappyHourPromotion[]): HappyHourResult {
+export function computeHappyHour(lines: HHLine[], promos: HappyHourPromotion[], currency = 'KES'): HappyHourResult {
   const combined: Record<string, HHLineResult> = {};
   const names: string[] = [];
   let storewide = 0;
   for (const p of promos) {
     if (!p.rule) continue;
-    const r = evalRule(p.rule, lines);
+    const r = evalRule(p.rule, lines, currency);
     if (r.total <= 0) continue;
     const skus = Object.keys(r.bySku);
     let contributed = false;

@@ -22,6 +22,7 @@ import { useModuleAccess } from '@/hooks/use-module-access';
 import { DateRangePicker, type DateRange } from '@/components/ui/date-range-picker';
 import { Card, CardContent } from '@/components/ui/base';
 import { cn } from '@/lib/utils';
+import { usePOSSettings } from '@/hooks/usePOSSettings';
 
 function isoDaysAgo(days: number): string {
   const d = new Date();
@@ -29,7 +30,8 @@ function isoDaysAgo(days: number): string {
   return d.toISOString().slice(0, 10);
 }
 const todayISO = () => new Date().toISOString().slice(0, 10);
-const fmt = (n: number) => `KES ${(n ?? 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+const fmtFor = (currency: string) => (n: number) =>
+  `${currency} ${(n ?? 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
 
 type TabId = 'staff' | 'hour' | 'category' | 'kds' | 'register' | 'products' | 'payments' | 'mix' | 'voids';
 
@@ -56,6 +58,9 @@ const REGISTER_TABS: TabDef[] = [
 export default function AnalyticsReportPage() {
   const [range, setRange] = useState<DateRange>({ from: isoDaysAgo(30), to: todayISO() });
   const [tab, setTab] = useState<TabId>('staff');
+  const { data: posSettings } = usePOSSettings();
+  const currency = (posSettings as any)?.currency ?? 'KES';
+  const fmt = fmtFor(currency);
 
   // Shared outlet filter — HQ/admin users only (OutletFilter itself hides for regular staff).
   const selectedOutlet = useOutletFilterStore((s) => s.selectedOutlet);
@@ -401,10 +406,10 @@ export default function AnalyticsReportPage() {
         <>
           <StatCards items={mixStats} />
           <div className={cn('grid grid-cols-1 gap-4', isKitchen && 'lg:grid-cols-2')}>
-            <MixBarChart title="Revenue by Category" icon={Tag} rows={mix.data?.byCategory ?? []} loading={mix.isLoading} />
+            <MixBarChart title="Revenue by Category" icon={Tag} rows={mix.data?.byCategory ?? []} loading={mix.isLoading} currency={currency} />
             {/* KDS-station chart/column/filter are kitchen concepts — hidden for retail/services/pharmacy. */}
             {isKitchen && (
-              <MixBarChart title="Revenue by KDS Station" icon={ChefHat} rows={mix.data?.byStation ?? []} loading={mix.isLoading} />
+              <MixBarChart title="Revenue by KDS Station" icon={ChefHat} rows={mix.data?.byStation ?? []} loading={mix.isLoading} currency={currency} />
             )}
           </div>
           <Section title="Product Mix" icon={Package} loading={mix.isLoading} error={mix.error} empty={!mixRows.length}
@@ -561,9 +566,10 @@ function MultiSelectChips({ label, options, selected, onChange }: {
 
 /** Single-hue magnitude bar chart (revenue by category/station) — one series, so no legend;
  *  rounded bar ends, recessive grid, hover tooltip. */
-function MixBarChart({ title, icon: Icon, rows, loading }: {
-  title: string; icon: React.ElementType; rows: ProductMixAggRow[]; loading: boolean;
+function MixBarChart({ title, icon: Icon, rows, loading, currency = 'KES' }: {
+  title: string; icon: React.ElementType; rows: ProductMixAggRow[]; loading: boolean; currency?: string;
 }) {
+  const fmt = fmtFor(currency);
   const data = [...rows].sort((a, b) => b.revenue - a.revenue).slice(0, 10);
   return (
     <div className="bg-card border border-border rounded-2xl overflow-hidden">

@@ -23,8 +23,15 @@ export function useTenantID() {
   return useAuthStore((s) => s.user?.tenant_id ?? '');
 }
 
-export function fmt(n: number): string {
-  return new Intl.NumberFormat('en-KE', { style: 'currency', currency: 'KES', maximumFractionDigits: 0 }).format(n);
+// currency defaults to KES only as a last resort (a tenant summary that hasn't loaded yet) —
+// every real call site now passes the tenant's actual currency, resolved server-side from
+// POSOrder.Currency (see GetSummary's "currency" field) rather than assuming KES.
+export function fmt(n: number, currency = 'KES'): string {
+  try {
+    return new Intl.NumberFormat('en-KE', { style: 'currency', currency, maximumFractionDigits: 0 }).format(n);
+  } catch {
+    return `${currency} ${n.toLocaleString('en-KE', { maximumFractionDigits: 0 })}`;
+  }
 }
 
 export function fmtNum(n: number): string {
@@ -250,7 +257,7 @@ export function RecentOrdersCard({ orgSlug }: { orgSlug: string }) {
                 {/* Right: total + status */}
                 <div className="text-right shrink-0 space-y-1">
                   <p className="text-sm font-bold tabular-nums text-foreground">
-                    {fmt(order.total_amount ?? 0)}
+                    {fmt(order.total_amount ?? 0, order.currency || 'KES')}
                   </p>
                   <span className={cn(
                     'text-[10px] font-semibold px-1.5 py-0.5 rounded',

@@ -10,7 +10,7 @@ export interface ExchangeLine {
   unitPrice: number;
 }
 
-const fmt = (n: number) => `KES ${n.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+const fmtFor = (currency: string) => (n: number) => `${currency} ${n.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
 
 export const exchangeTotal = (lines: ExchangeLine[]) =>
   lines.reduce((s, l) => s + l.unitPrice * l.quantity, 0);
@@ -20,12 +20,14 @@ export const exchangeTotal = (lines: ExchangeLine[]) =>
  * price difference against the returned goods' value: dearer → top-up the customer pays at
  * the till; cheaper → leftover refunded via the return's channel; equal → zero-cash swap.
  */
-export function ExchangeLinesPicker({ lines, onChange, returnedValue }: {
+export function ExchangeLinesPicker({ lines, onChange, returnedValue, currency = 'KES' }: {
   lines: ExchangeLine[];
   onChange: (lines: ExchangeLine[]) => void;
   returnedValue: number;
+  currency?: string;
 }) {
   const [search, setSearch] = useState('');
+  const fmt = fmtFor(currency);
   const { data: catalog, isFetching } = useMenuItems({ search: search || undefined, limit: 15 });
   const results: CatalogItem[] = search ? (catalog?.data ?? []) : [];
 
@@ -100,7 +102,7 @@ export function ExchangeLinesPicker({ lines, onChange, returnedValue }: {
           ) : delta < -0.009 ? (
             <><span className="font-bold text-success">Refund to customer</span><span className="tabular-nums font-bold text-success">{fmt(-delta)}</span></>
           ) : (
-            <><span className="font-bold">Even swap</span><span className="font-bold">KES 0</span></>
+            <><span className="font-bold">Even swap</span><span className="font-bold">{fmt(0)}</span></>
           )}
         </div>
       </div>

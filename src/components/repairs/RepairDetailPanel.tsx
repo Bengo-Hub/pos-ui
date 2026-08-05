@@ -5,6 +5,7 @@ import { Trash2, Wrench, Phone, Smartphone, CreditCard } from 'lucide-react';
 import { useAuthStore } from '@/store/auth';
 import { useParams } from 'next/navigation';
 import { useCreateOrder } from '@/hooks/usePOS';
+import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { SplitPaymentModal } from '@/components/pos/split-payment-modal';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import {
@@ -19,9 +20,7 @@ import {
 import { RepairPartsPicker } from './RepairPartsPicker';
 import { RepairStatusBadge } from './RepairStatusBadge';
 import { apiErrorMessage } from '@/lib/api/error-message';
-
-const fmt = (n: number) =>
-  new Intl.NumberFormat('en-KE', { style: 'currency', currency: 'KES' }).format(n);
+import { formatCurrency } from '@/lib/utils';
 
 interface RepairDetailPanelProps {
   jobID: string;
@@ -38,6 +37,9 @@ export function RepairDetailPanel({ jobID }: RepairDetailPanelProps) {
   const removePart = useRemoveRepairPart();
   const settleRepair = useSettleRepair();
   const createOrder = useCreateOrder();
+  const { data: posSettings } = usePOSSettings();
+  const currency = (posSettings as any)?.currency ?? 'KES';
+  const fmt = (n: number) => formatCurrency(n, currency);
 
   const [diagnosis, setDiagnosis] = useState<string | null>(null);
   const [removeTarget, setRemoveTarget] = useState<string | null>(null);

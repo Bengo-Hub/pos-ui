@@ -8,6 +8,7 @@ import {
   usePharmacyWorkflow, useUpdatePharmacyWorkflow,
 } from '@/hooks/useClinical';
 import { usePermissions } from '@/hooks/usePermissions';
+import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { P } from '@/lib/rbac/permissions';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { formatCurrency, cn } from '@/lib/utils';
@@ -22,6 +23,8 @@ import type { LabTest } from '@/lib/api/clinical';
 export function PharmacyWorkflowTab() {
   const { data: config, isLoading } = usePharmacyWorkflow();
   const updateWorkflow = useUpdatePharmacyWorkflow();
+  const { data: posSettings } = usePOSSettings();
+  const currency = (posSettings as any)?.currency ?? 'KES';
   const { can } = usePermissions();
   const canEdit = can(P.CONFIG_MANAGE) || can(P.CONFIG_CHANGE);
 
@@ -142,6 +145,8 @@ interface LabTestForm {
 
 function LabTestCatalog({ canEdit }: { canEdit: boolean }) {
   const { data, isLoading } = useLabTests({ include_inactive: true });
+  const { data: posSettings } = usePOSSettings();
+  const currency = (posSettings as any)?.currency ?? 'KES';
   const saveTest = useSaveLabTest();
   const deleteTest = useDeleteLabTest();
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -289,7 +294,7 @@ function LabTestCatalog({ canEdit }: { canEdit: boolean }) {
                     {!t.is_active && <span className="ml-2 text-[10px] uppercase text-muted-foreground">inactive</span>}
                   </td>
                   <td className="px-4 py-2.5 text-muted-foreground">{t.category || '—'}</td>
-                  <td className="px-4 py-2.5 text-right font-semibold">{formatCurrency(Number(t.price))}</td>
+                  <td className="px-4 py-2.5 text-right font-semibold">{formatCurrency(Number(t.price), currency)}</td>
                   <td className="px-4 py-2.5 text-right">
                     {canEdit && (
                       <div className="flex justify-end gap-2">

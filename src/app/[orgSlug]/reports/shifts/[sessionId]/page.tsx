@@ -4,6 +4,8 @@ import { ModuleGate } from '@/components/auth/module-gate';
 import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
 import { Card, CardContent } from '@/components/ui/base';
 import { useShiftReportDetail } from '@/hooks/useReports';
+import { usePOSSettings } from '@/hooks/usePOSSettings';
+import { formatCurrency } from '@/lib/utils';
 import { ReportDocumentButton } from '@/components/reports/report-document-button';
 import { ArrowLeft, Clock, DollarSign, Loader2, ShoppingCart, TrendingDown } from 'lucide-react';
 import Link from 'next/link';
@@ -33,6 +35,8 @@ function KPI({ label, value, icon: Icon, color }: { label: string; value: string
 function ShiftDetailContent() {
   const { orgSlug, sessionId } = useParams<{ orgSlug: string; sessionId: string }>();
   const { data: shift, isLoading, isError } = useShiftReportDetail(sessionId);
+  const { data: posSettings } = usePOSSettings();
+  const currency = (posSettings as any)?.currency ?? 'KES';
 
   if (isLoading) {
     return <div className="flex items-center justify-center h-64"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
@@ -78,9 +82,9 @@ function ShiftDetailContent() {
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <KPI label="Orders" value={shift.order_count.toString()} icon={ShoppingCart} color="text-blue-600 bg-blue-500/10" />
-        <KPI label="Net Sales" value={`KES ${shift.net_sales.toLocaleString(undefined, { minimumFractionDigits: 2 })}`} icon={DollarSign} color="text-green-600 bg-green-500/10" />
-        <KPI label="Tax Collected" value={`KES ${shift.total_tax.toLocaleString(undefined, { minimumFractionDigits: 2 })}`} icon={DollarSign} color="text-yellow-600 bg-yellow-500/10" />
-        <KPI label="Refunds" value={`KES ${shift.total_refunds.toLocaleString(undefined, { minimumFractionDigits: 2 })}`} icon={TrendingDown} color="text-red-600 bg-red-500/10" />
+        <KPI label="Net Sales" value={formatCurrency(shift.net_sales, currency)} icon={DollarSign} color="text-green-600 bg-green-500/10" />
+        <KPI label="Tax Collected" value={formatCurrency(shift.total_tax, currency)} icon={DollarSign} color="text-yellow-600 bg-yellow-500/10" />
+        <KPI label="Refunds" value={formatCurrency(shift.total_refunds, currency)} icon={TrendingDown} color="text-red-600 bg-red-500/10" />
       </div>
 
       <Card>
@@ -97,7 +101,7 @@ function ShiftDetailContent() {
             <div key={label} className="flex justify-between text-sm">
               <span className="text-muted-foreground">{label}</span>
               <span className={`font-medium ${value < 0 ? 'text-red-600' : ''}`}>
-                KES {Math.abs(value).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                {formatCurrency(Math.abs(value), currency)}
               </span>
             </div>
           ))}

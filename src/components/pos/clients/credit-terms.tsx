@@ -12,7 +12,7 @@
 
 import { useClientCredit, type ClientCredit } from '@/hooks/useClients';
 
-const fmt = (n: number) => `KES ${n.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+const fmt = (n: number, currency = 'KES') => `${currency} ${n.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
 const num = (s?: string) => Number(s ?? 0) || 0;
 
 function availableCredit(credit?: ClientCredit): number | null {
@@ -31,14 +31,15 @@ export function CustomerCreditHint({ accountId, saleTotal }: { accountId?: strin
   // different figure from "Available credit" above (which is borrowing headroom against the
   // credit limit). Never conflate the two labels.
   const storeCredit = num(credit.store_credit_balance);
+  const currency = credit.currency || 'KES';
   return (
     <p className={`text-xs px-1 ${overLimit ? 'text-destructive font-semibold' : 'text-muted-foreground'}`}>
-      Balance due: {fmt(num(credit.balance_due))}
-      {available != null && <> · Available credit: {fmt(available)}</>}
+      Balance due: {fmt(num(credit.balance_due), currency)}
+      {available != null && <> · Available credit: {fmt(available, currency)}</>}
       {credit.credit_period_days ? <> · due in {credit.credit_period_days} days</> : null}
       {overLimit && <> — this sale exceeds the available credit</>}
       {storeCredit > 0 && (
-        <span className="text-emerald-600 font-medium"> · Store credit available: {fmt(storeCredit)}</span>
+        <span className="text-emerald-600 font-medium"> · Store credit available: {fmt(storeCredit, currency)}</span>
       )}
     </p>
   );

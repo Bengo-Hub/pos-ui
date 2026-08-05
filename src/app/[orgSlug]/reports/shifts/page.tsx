@@ -4,7 +4,8 @@ import { ModuleGate } from '@/components/auth/module-gate';
 import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
 import { Card, CardContent } from '@/components/ui/base';
 import { useShiftReport } from '@/hooks/useReports';
-import { cn } from '@/lib/utils';
+import { usePOSSettings } from '@/hooks/usePOSSettings';
+import { cn, formatCurrency } from '@/lib/utils';
 import { Clock, DollarSign, Loader2, ShoppingCart, ChevronRight } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
@@ -23,6 +24,8 @@ function ShiftsReportContent() {
   const [period, setPeriod] = useState<'today' | 'week' | 'month'>('week');
   const { from, to } = periodRange(period);
   const { data: sessions = [], isLoading } = useShiftReport(from, to);
+  const { data: posSettings } = usePOSSettings();
+  const currency = (posSettings as any)?.currency ?? 'KES';
 
   const PERIODS = ['today', 'week', 'month'] as const;
   const LABELS = { today: 'Today', week: 'Last 7 days', month: 'This month' };
@@ -80,7 +83,7 @@ function ShiftsReportContent() {
                         <p className="text-xs text-muted-foreground">Orders</p>
                       </div>
                       <div className="text-right">
-                        <p className="text-sm font-bold">KES {s.total_revenue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+                        <p className="text-sm font-bold">{formatCurrency(s.total_revenue, currency)}</p>
                         <p className="text-xs text-muted-foreground">Revenue</p>
                       </div>
                       <ChevronRight className="h-4 w-4 text-muted-foreground" />

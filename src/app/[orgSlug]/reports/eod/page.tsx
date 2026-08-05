@@ -4,8 +4,9 @@ import { ModuleGate } from '@/components/auth/module-gate';
 import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
 import { Card, CardContent } from '@/components/ui/base';
 import { useEODList } from '@/hooks/useReports';
+import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { useAuthStore } from '@/store/auth';
-import { cn } from '@/lib/utils';
+import { cn, formatCurrency } from '@/lib/utils';
 import { Calendar, CheckCircle2, ChevronRight, Clock, DollarSign, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
@@ -25,6 +26,8 @@ function EODContent() {
   const to = now.toISOString().slice(0, 10);
 
   const { data: closings = [], isLoading } = useEODList(outletId, from, to);
+  const { data: posSettings } = usePOSSettings();
+  const currency = (posSettings as any)?.currency ?? 'KES';
 
   if (!outletId) {
     return (
@@ -67,7 +70,7 @@ function EODContent() {
                           </span>
                           {hasVariance && (
                             <span className={cn('text-xs font-medium', eod.variance < 0 ? 'text-red-600' : 'text-green-600')}>
-                              Variance: KES {Math.abs(eod.variance).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                              Variance: {formatCurrency(Math.abs(eod.variance), currency)}
                             </span>
                           )}
                         </div>
@@ -78,7 +81,7 @@ function EODContent() {
                           <p className="text-xs text-muted-foreground">Orders</p>
                         </div>
                         <div className="text-right">
-                          <p className="text-sm font-bold">KES {(eod.total_sales ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+                          <p className="text-sm font-bold">{formatCurrency(eod.total_sales ?? 0, currency)}</p>
                           <p className="text-xs text-muted-foreground">Total Sales</p>
                         </div>
                         <ChevronRight className="h-4 w-4 text-muted-foreground" />

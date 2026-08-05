@@ -53,11 +53,11 @@ const ON_ACCOUNT: TenderAction = { key: 'on_account', label: 'Credit Sale', subl
  * (inline-payment-bar.tsx / payment-modal.tsx) appends it conditionally once it knows the
  * selected customer's available balance, using this builder for a consistent label/sublabel.
  */
-export function customerCreditAction(availableAmount: number): TenderAction {
+export function customerCreditAction(availableAmount: number, currency = 'KES'): TenderAction {
   return {
     key: 'customer_credit',
     label: 'Apply Credit',
-    sublabel: `KES ${Math.max(0, availableAmount).toLocaleString()} available`,
+    sublabel: `${currency} ${Math.max(0, availableAmount).toLocaleString()} available`,
     tone: 'credit',
     online: true,
   };
@@ -104,12 +104,12 @@ export function loyaltyPointsToRedeem(amount: number, info: LoyaltyRedeemInfo): 
   return Math.min(info.pointsBalance, Math.max(loyaltyPointsNeeded(amount, info.redeemRate), info.minRedeemPoints || 0));
 }
 
-export function loyaltyRedeemAction(info: LoyaltyRedeemInfo): TenderAction {
+export function loyaltyRedeemAction(info: LoyaltyRedeemInfo, currency = 'KES'): TenderAction {
   const availableKES = Math.floor(info.pointsBalance * info.redeemRate);
   return {
     key: 'loyalty_points',
     label: 'Redeem Points',
-    sublabel: `${info.pointsBalance.toLocaleString()} pts · KES ${availableKES.toLocaleString()} available`,
+    sublabel: `${info.pointsBalance.toLocaleString()} pts · ${currency} ${availableKES.toLocaleString()} available`,
     tone: 'loyalty',
     online: true,
   };

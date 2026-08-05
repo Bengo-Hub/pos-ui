@@ -4,7 +4,9 @@ import { useState } from 'react';
 import { Search, Plus } from 'lucide-react';
 import { useMenuItems, type CatalogItem } from '@/hooks/usePOS';
 import { useAddRepairPart } from '@/hooks/useRepairs';
+import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { apiErrorMessage } from '@/lib/api/error-message';
+import { formatCurrency } from '@/lib/utils';
 
 interface RepairPartsPickerProps {
   jobID: string;
@@ -20,6 +22,8 @@ export function RepairPartsPicker({ jobID, disabled }: RepairPartsPickerProps) {
   const [search, setSearch] = useState('');
   const { data, isLoading } = useMenuItems({ search: search || undefined, limit: 20 });
   const addPart = useAddRepairPart();
+  const { data: posSettings } = usePOSSettings();
+  const currency = (posSettings as any)?.currency ?? 'KES';
 
   const items = data?.data ?? [];
 
@@ -82,9 +86,7 @@ export function RepairPartsPicker({ jobID, disabled }: RepairPartsPickerProps) {
                   <p className="text-xs text-muted-foreground">{item.sku}</p>
                 </div>
                 <span className="text-sm font-semibold tabular-nums shrink-0">
-                  {new Intl.NumberFormat('en-KE', { style: 'currency', currency: 'KES' }).format(
-                    item.price ?? 0,
-                  )}
+                  {formatCurrency(item.price ?? 0, currency)}
                 </span>
                 <Plus className="h-4 w-4 text-primary shrink-0" />
               </button>

@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useHotelRoom, useRoomFolio, useCheckIn, useCheckOut, useLateCheckout, usePostFolioCharge } from '@/hooks/useHotel';
 import { Card, CardContent } from '@/components/ui/base';
-import { cn } from '@/lib/utils';
+import { cn, formatCurrency } from '@/lib/utils';
 import {
   ArrowLeft,
   BedDouble,
@@ -42,6 +42,7 @@ function RoomDetailPageInner() {
   }
 
   const { data: room, isLoading: roomLoading } = useHotelRoom(roomId);
+  const currency = room?.currency ?? 'KES';
   const isOccupied = room?.status === 'occupied';
   const guest = room?.edges?.guests?.[0] ?? null;
   const { data: folio = [] } = useRoomFolio(roomId, isOccupied);
@@ -194,7 +195,7 @@ function RoomDetailPageInner() {
                 { label: 'Check-In', value: new Date(guest.expected_arrival_at || guest.check_in_date).toLocaleString() },
                 { label: 'Check-Out', value: new Date(guest.expected_departure_at || guest.check_out_date).toLocaleString() },
                 { label: 'Nights', value: String(guest.nights) },
-                { label: 'Room Total', value: `KES ${guest.total_room_charge.toLocaleString()}`, highlight: true },
+                { label: 'Room Total', value: formatCurrency(guest.total_room_charge, currency), highlight: true },
               ].map(({ label, value, highlight }) => (
                 <div key={label}>
                   <p className="text-muted-foreground">{label}</p>
@@ -229,13 +230,13 @@ function RoomDetailPageInner() {
                       {item.inventory_sku ? ` · ${item.inventory_sku}` : ''}
                     </p>
                   </div>
-                  <p className="font-semibold text-foreground">KES {item.amount.toLocaleString()}</p>
+                  <p className="font-semibold text-foreground">{formatCurrency(item.amount, currency)}</p>
                 </li>
               ))}
             </ul>
             <div className="flex items-center justify-between pt-2 border-t border-border font-bold text-foreground">
               <span>Total</span>
-              <span className="text-primary">KES {folio.reduce((s, i) => s + i.amount, 0).toLocaleString()}</span>
+              <span className="text-primary">{formatCurrency(folio.reduce((s, i) => s + i.amount, 0), currency)}</span>
             </div>
           </CardContent>
         </Card>
@@ -421,7 +422,7 @@ function RoomDetailPageInner() {
               </div>
               <div className="p-5 space-y-4">
                 <label className="block">
-                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Surcharge Amount ({room.currency ?? 'KES'})</span>
+                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Surcharge Amount ({currency})</span>
                   <input
                     type="number" min={0} step={0.01}
                     value={lateForm.surcharge_amount}

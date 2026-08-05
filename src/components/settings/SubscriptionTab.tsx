@@ -5,12 +5,11 @@ import { Clock, Gauge, Key, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useSubscription } from '@/hooks/use-subscription';
 import { useAuthStore } from '@/store/auth';
+import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { fetchOverageStatus, setOverageEnabled, type OverageStatus } from '@/lib/auth/subscription';
 import { Badge, Card, CardContent, CardHeader } from '@/components/ui/base';
 import { Button } from '@/components/ui/button';
-
-const fmtKes = (n: number) =>
-  new Intl.NumberFormat('en-KE', { style: 'currency', currency: 'KES', maximumFractionDigits: 0 }).format(n);
+import { formatCurrency } from '@/lib/utils';
 
 /**
  * SubscriptionTab is a READ-ONLY view of the outlet's POS subscription licence.
@@ -123,6 +122,9 @@ function ExtraUsageCard() {
   const { isPlatformOwner, isDemo, isServiceCharge } = useSubscription();
   const user = useAuthStore((s) => s.user);
   const tenantId = user?.tenant_id as string | undefined;
+  const { data: posSettings } = usePOSSettings();
+  const currency = (posSettings as any)?.currency ?? 'KES';
+  const fmtKes = (n: number) => formatCurrency(n, currency);
   const [data, setData] = useState<OverageStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);

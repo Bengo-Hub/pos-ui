@@ -10,6 +10,7 @@ import { usePharmacyBills } from '@/hooks/useClinical';
 import { useCheckoutPrescription, useDispensePrescription } from '@/hooks/usePharmacy';
 import { SplitPaymentModal } from '@/components/pos/split-payment-modal';
 import { useAuthStore } from '@/store/auth';
+import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { formatCurrency } from '@/lib/utils';
 import { CreditCard, Loader2, Receipt } from 'lucide-react';
 import { toast } from 'sonner';
@@ -36,6 +37,8 @@ function BillsPage() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const tenantSlug = useAuthStore((s) => s.user?.tenant_slug ?? orgSlug);
   const tenantId = useAuthStore((s) => s.user?.tenant_id ?? '');
+  const { data: posSettings } = usePOSSettings();
+  const currency = (posSettings as any)?.currency ?? 'KES';
 
   const handleCollect = async (bill: PharmacyBill) => {
     const rx = bill.prescription;
@@ -135,7 +138,7 @@ function BillsPage() {
                   <td className="px-4 py-3.5 text-muted-foreground">{b.prescription.prescriber_name || '—'}</td>
                   <td className="px-4 py-3.5 text-center text-muted-foreground">{b.line_count}</td>
                   <td className="px-4 py-3.5 text-right font-semibold">
-                    {formatCurrency(b.order_total ?? b.estimated_total)}
+                    {formatCurrency(b.order_total ?? b.estimated_total, currency)}
                   </td>
                   <td className="px-4 py-3.5 text-right">
                     <Can permission={P.PAYMENTS_ADD}>

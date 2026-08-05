@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/store/auth';
 import { usePermissions } from '@/hooks/usePermissions';
+import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { useCreateDiscount, useDiscounts } from '@/hooks/useDiscounts';
 import { useCategories } from '@/hooks/usePOS';
 import { useSubscription } from '@/hooks/use-subscription';
@@ -92,6 +93,8 @@ export function ApplyDiscountModal({ open, subtotal, currentAmount, currentReaso
   const [value, setValue] = useState<string>(currentAmount ? String(currentAmount) : '');
   const [reason, setReason] = useState(currentReason);
   const [createOpen, setCreateOpen] = useState(false);
+  const { data: posSettings } = usePOSSettings();
+  const currency = (posSettings as any)?.currency ?? 'KES';
 
   // FULL centralization: every use case sees ALL active discount kinds (code, automatic,
   // time-window) with kind badges — the old hospitality→happy_hour-only / retail→code+auto
@@ -192,7 +195,7 @@ export function ApplyDiscountModal({ open, subtotal, currentAmount, currentReaso
                         </span>
                       </span>
                       <span className="block text-[11px] text-muted-foreground">
-                        {describeDiscount(d)}{d.promo_code ? ` · code ${d.promo_code}` : ''}
+                        {describeDiscount(d, currency)}{d.promo_code ? ` · code ${d.promo_code}` : ''}
                       </span>
                     </span>
                     <span className="text-sm font-bold text-amber-600 tabular-nums shrink-0">− {amt.toLocaleString()}</span>

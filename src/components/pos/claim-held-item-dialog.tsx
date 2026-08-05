@@ -5,6 +5,8 @@ import { HandCoins, Loader2, Search, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { useOrders } from '@/hooks/usePOS';
 import { useClaimHeldItem, type HeldItem } from '@/hooks/useHeldItems';
+import { usePOSSettings } from '@/hooks/usePOSSettings';
+import { formatCurrency } from '@/lib/utils';
 
 /**
  * ClaimHeldItemDialog merges a set-aside (parked) item into an ACTIVE order: the waiter picks any
@@ -26,6 +28,8 @@ export function ClaimHeldItemDialog({
   // All OPEN orders at the outlet (not just "mine") — a parked item may be wanted at any table.
   const { data: ordersRes, isLoading } = useOrders({ status: 'open', limit: 50 });
   const claim = useClaimHeldItem();
+  const { data: posSettings } = usePOSSettings();
+  const currency = (posSettings as any)?.currency ?? 'KES';
 
   const orders = useMemo(() => {
     const list = ordersRes?.data ?? [];
@@ -69,7 +73,7 @@ export function ClaimHeldItemDialog({
               <HandCoins className="h-4 w-4 text-primary" /> Merge parked item into an order
             </h3>
             <p className="text-xs text-muted-foreground mt-1 truncate">
-              {item.quantity}× {item.name} · KSh {item.unit_price.toLocaleString()} — pick the bill
+              {item.quantity}× {item.name} · {formatCurrency(item.unit_price, currency)} — pick the bill
               of the customer who wants it.
             </p>
           </div>

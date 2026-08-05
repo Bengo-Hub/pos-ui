@@ -13,6 +13,7 @@ import { useSubscription } from '@/hooks/use-subscription';
 import { useModuleAccess } from '@/hooks/use-module-access';
 import { useAuthStore } from '@/store/auth';
 import { useOutletFilterStore } from '@/store/outlet-filter';
+import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { UpgradeDialog } from '@bengo-hub/shared-ui-lib/subscription';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import type { Discount, DiscountInput } from '@/lib/api/discounts';
@@ -59,6 +60,8 @@ export default function DiscountsPage() {
   const { can, canAny } = usePermissions();
   const canView = canAny([P.PROMOTIONS_VIEW, P.PROMOTIONS_ADD, P.PROMOTIONS_CHANGE, P.PROMOTIONS_MANAGE]);
   const canManage = canAny([P.PROMOTIONS_ADD, P.PROMOTIONS_MANAGE]);
+  const { data: posSettings } = usePOSSettings();
+  const currency = (posSettings as any)?.currency ?? 'KES';
 
   // Current outlet's use_case scopes which discount fields the form shows (Happy Hour + meal
   // period are hospitality-only); the outlet id lets the form offer "this outlet only" scoping.
@@ -228,7 +231,7 @@ export default function DiscountsPage() {
                           </span>
                         </td>
                         <td className="px-4 py-3 font-mono text-xs">{d.promo_kind === 'code' ? (d.promo_code || '—') : '—'}</td>
-                        <td className="px-4 py-3">{describeDiscount(d)}</td>
+                        <td className="px-4 py-3">{describeDiscount(d, currency)}</td>
                         <td className="px-4 py-3 text-xs text-muted-foreground">{describeScope(d)}</td>
                         <td className="px-4 py-3 text-xs text-muted-foreground">
                           {d.outlet_id ? (outletNameById.get(d.outlet_id) ?? 'This outlet') : 'All outlets'}

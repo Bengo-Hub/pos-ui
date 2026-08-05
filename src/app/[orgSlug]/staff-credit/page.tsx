@@ -5,7 +5,8 @@ import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
 import { useAuthStore } from '@/store/auth';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api/client';
-import { cn } from '@/lib/utils';
+import { cn, formatCurrency } from '@/lib/utils';
+import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { Loader2, Users } from 'lucide-react';
 import { FeatureLock } from '@bengo-hub/shared-ui-lib/subscription';
 
@@ -27,8 +28,6 @@ const SYNC_CLS: Record<string, string> = {
   pending: 'bg-warning/10 text-warning',
   failed: 'bg-destructive/10 text-destructive',
 };
-const money = (v: number) => `KES ${Number(v || 0).toLocaleString()}`;
-
 function useStaffCredit() {
   const tenantID = useAuthStore((s) => s.user?.tenant_id ?? '');
   return useQuery({
@@ -42,6 +41,9 @@ function useStaffCredit() {
 function StaffCreditPage() {
   const { data, isLoading, isError } = useStaffCredit();
   const rows = data?.data ?? [];
+  const { data: posSettings } = usePOSSettings();
+  const currency = (posSettings as any)?.currency ?? 'KES';
+  const money = (v: number) => formatCurrency(v, currency);
 
   return (
     <div className="p-6">

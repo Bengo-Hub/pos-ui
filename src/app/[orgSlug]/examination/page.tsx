@@ -11,6 +11,7 @@ import {
   usePrescribers, useLabTests, useDiagnoses, useCreateDiagnosis,
 } from '@/hooks/useClinical';
 import { MultiSelect, type MultiSelectOption } from '@/components/ui/multi-select';
+import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { formatCurrency } from '@/lib/utils';
 import { apiClient } from '@/lib/api/client';
 import { useAuthStore } from '@/store/auth';
@@ -39,6 +40,8 @@ function ExaminationModal({ visit, onClose, onLabRequested, onReadyToPrescribe }
 }) {
   const { data } = usePatient(visit.patient_id);
   const { data: visitDetail } = useVisit(visit.id);
+  const { data: posSettings } = usePOSSettings();
+  const currency = (posSettings as any)?.currency ?? 'KES';
   const recordExamination = useRecordExamination();
   const { data: labTestData } = useLabTests();
   const { data: diagnosisOptions } = useDiagnoses();
@@ -65,7 +68,7 @@ function ExaminationModal({ visit, onClose, onLabRequested, onReadyToPrescribe }
   const testOptions: MultiSelectOption[] = labTests.map((t) => ({
     value: t.id,
     label: t.name,
-    hint: formatCurrency(Number(t.price)),
+    hint: formatCurrency(Number(t.price), currency),
     category: t.category || 'Uncategorised',
   }));
   const diagOptions: MultiSelectOption[] = (diagnosisOptions ?? []).map((d) => ({
@@ -183,7 +186,7 @@ function ExaminationModal({ visit, onClose, onLabRequested, onReadyToPrescribe }
               {selectedTestIds.length > 0 && (
                 <div className="flex items-center justify-between rounded-xl border border-border bg-background/50 px-3 py-2 text-sm">
                   <span className="text-muted-foreground">{selectedTestIds.length} test(s) — patient pays before testing</span>
-                  <span className="font-bold">{formatCurrency(labTotal)}</span>
+                  <span className="font-bold">{formatCurrency(labTotal, currency)}</span>
                 </div>
               )}
             </div>

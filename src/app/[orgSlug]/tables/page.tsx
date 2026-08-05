@@ -62,8 +62,9 @@ function formatElapsed(minutes: number): string {
   return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
 }
 
-function fmt(amount: number): string {
-  return `KSh ${amount.toLocaleString('en-KE', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+function fmtFor(currency: string) {
+  return (amount: number): string =>
+    `${currency} ${amount.toLocaleString('en-KE', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 }
 
 // ─── Status config ─────────────────────────────────────────────────────────────
@@ -95,12 +96,14 @@ interface TableCardProps {
   maxOccupationMinutes?: number;
   occupiedTables: any[];
   availableTables: any[];
+  currency?: string;
 }
 
 function TableCard({
   table, orgSlug, onSeatGuests, onRelease, onChangeStatus, onMerge, onUnmerge,
-  releaseLoading, canChange, maxOccupationMinutes = 0, occupiedTables, availableTables,
+  releaseLoading, canChange, maxOccupationMinutes = 0, occupiedTables, availableTables, currency = 'KES',
 }: TableCardProps) {
+  const fmt = fmtFor(currency);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [mergeMode, setMergeMode] = useState(false);
   const [transferMode, setTransferMode] = useState(false);
@@ -466,6 +469,9 @@ function MyBillsTab({ orgSlug }: { orgSlug: string }) {
   const [category, setCategory] = useState('');
   const { data: kdsStations } = useKDSStations();
   const { data: categories } = useCategories();
+  const { data: posSettings } = usePOSSettings();
+  const currency = (posSettings as any)?.currency ?? 'KES';
+  const fmt = fmtFor(currency);
   const router = useRouter();
   const { can } = usePermissions();
   const user = useAuthStore((s) => s.user);
@@ -681,7 +687,7 @@ function MyBillsTab({ orgSlug }: { orgSlug: string }) {
               {(order.edges?.lines ?? order.lines ?? []).slice(0, 4).map((line: any) => (
                 <div key={line.id} className="flex justify-between text-xs text-muted-foreground py-0.5">
                   <span>{line.quantity}x {line.name}</span>
-                  <span>KSh {(line.total_price ?? 0).toLocaleString()}</span>
+                  <span>{fmt(line.total_price ?? 0)}</span>
                 </div>
               ))}
               {itemCount > 4 && (
@@ -1005,6 +1011,7 @@ function TablesPage() {
                     maxOccupationMinutes={maxOccupationMinutes}
                     occupiedTables={occupiedTables}
                     availableTables={availableTables}
+                    currency={(posSettings as any)?.currency ?? 'KES'}
                   />
                 ))}
               </div>

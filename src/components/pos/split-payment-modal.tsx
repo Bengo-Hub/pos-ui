@@ -11,6 +11,8 @@ import { renderReceiptHtml, buildReceiptDocument, printReceiptDocument } from '@
 import { paperForFormat, resolveReceiptFormat } from '@/lib/pos/receipt-format';
 import type { ReceiptData } from '@/components/pos/receipt-preview';
 import { useTenantBranding } from '@/providers/tenant-branding-provider';
+import { usePOSSettings } from '@/hooks/usePOSSettings';
+import { formatCurrency } from '@/lib/utils';
 import type { LoyaltyRedeemInfo } from '@/lib/pos/terminal-actions';
 
 // 'split_tender' = one bill paid across several tenders (e.g. part Cash + part M-Pesa).
@@ -74,6 +76,8 @@ export function SplitPaymentModal({
   onLinesChanged,
 }: SplitPaymentModalProps) {
   const { tenant } = useTenantBranding();
+  const { data: posSettings } = usePOSSettings();
+  const currency = (posSettings as any)?.currency ?? 'KES';
   const [mode, setMode] = useState<SplitMode>('full');
   const [peopleCount, setPeopleCount] = useState(2);
   const [currentPayer, setCurrentPayer] = useState<number | null>(null);
@@ -135,8 +139,7 @@ export function SplitPaymentModal({
     }
   }
 
-  const fmt = (n: number) =>
-    new Intl.NumberFormat('en-KE', { style: 'currency', currency: 'KES' }).format(n);
+  const fmt = (n: number) => formatCurrency(n, currency);
 
   const equalShare = Math.ceil((total / peopleCount) * 100) / 100;
 

@@ -3,7 +3,7 @@
 import { ModuleGate } from '@/components/auth/module-gate';
 import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
-import { cn } from '@/lib/utils';
+import { cn, formatCurrency, SUPPORTED_CURRENCIES } from '@/lib/utils';
 import { useHotelRooms, useCreateRoom, useUpdateRoom, useDeleteRoom, useInventoryServiceItems, useBatchCheckout } from '@/hooks/useHotel';
 import { usePermissions, P } from '@/hooks/usePermissions';
 import type { Room, CreateRoomInput } from '@/lib/api/hotel';
@@ -177,7 +177,7 @@ function RoomFormModal({ room, onClose }: RoomFormProps) {
                 onChange={(e) => setForm((f) => ({ ...f, currency: e.target.value }))}
                 className="mt-1.5 w-full px-3 py-2.5 rounded-xl border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
               >
-                {['KES', 'USD', 'EUR', 'GBP', 'UGX', 'TZS'].map((c) => (
+                {SUPPORTED_CURRENCIES.map((c) => (
                   <option key={c} value={c}>{c}</option>
                 ))}
               </select>

@@ -222,7 +222,7 @@ export function CustomerSearch({ value, onChange, requireRealCustomer = false, r
             <div className="shrink-0">
               <p className="text-[10px] uppercase tracking-wide text-muted-foreground leading-tight">Terms</p>
               <p className="text-xs text-muted-foreground leading-tight whitespace-nowrap">
-                {limit > 0 ? `${(credit.currency || 'KES')} ${limit.toLocaleString()} limit` : 'No limit'}
+                {limit > 0 ? `${currency} ${limit.toLocaleString()} limit` : 'No limit'}
                 {typeof credit.credit_period_days === 'number' && credit.credit_period_days > 0 && ` · ${credit.credit_period_days}d`}
               </p>
             </div>

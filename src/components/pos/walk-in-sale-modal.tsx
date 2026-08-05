@@ -6,6 +6,8 @@ import { useMenuItems, useCreateOrder } from '@/hooks/usePOS';
 import { SplitPaymentModal } from './split-payment-modal';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { useAuthStore } from '@/store/auth';
+import { usePOSSettings } from '@/hooks/usePOSSettings';
+import { formatCurrency } from '@/lib/utils';
 import { toast } from 'sonner';
 import type { CatalogItem } from '@/hooks/usePOS';
 
@@ -61,8 +63,10 @@ export function WalkInSaleModal({ open, onClose, tenantSlug }: WalkInSaleModalPr
     else setCart((prev) => prev.map((l, i) => i === idx ? { ...l, quantity: qty } : l));
   };
 
+  const { data: posSettings } = usePOSSettings();
+  const currency = (posSettings as any)?.currency ?? 'KES';
   const subtotal = cart.reduce((sum, l) => sum + (l.item.price ?? 0) * l.quantity, 0);
-  const fmt = (n: number) => new Intl.NumberFormat('en-KE', { style: 'currency', currency: 'KES' }).format(n);
+  const fmt = (n: number) => formatCurrency(n, currency);
 
   const handleCheckout = () => {
     if (cart.length === 0) return;

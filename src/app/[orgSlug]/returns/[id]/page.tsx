@@ -6,7 +6,7 @@ import { apiClient } from '@/lib/api/client';
 import { useAuthStore } from '@/store/auth';
 import { useState } from 'react';
 import { ArrowLeft, CheckCircle2, Info, Loader2, PackageCheck, RotateCcw, ShieldCheck, XCircle } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, formatCurrency } from '@/lib/utils';
 import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { usePermissions, P } from '@/hooks/usePermissions';
@@ -143,6 +143,7 @@ export default function ReturnDetailPage() {
   const approve = useApproveReturn(returnId);
   const complete = useCompleteReturn(returnId);
   const { data: posSettings } = usePOSSettings();
+  const currency = (posSettings as any)?.currency ?? 'KES';
   const { canManageOrders, canAny } = usePermissions();
   const [notes, setNotes] = useState('');
   // Approval-time refund channel override; seeded from the return once loaded (default cash).
@@ -226,7 +227,7 @@ export default function ReturnDetailPage() {
         </div>
         <div>
           <p className="text-xs text-muted-foreground">Refund Amount</p>
-          <p className="text-sm font-bold text-success mt-0.5">KES {ret.refund_amount.toLocaleString()}</p>
+          <p className="text-sm font-bold text-success mt-0.5">{formatCurrency(ret.refund_amount, currency)}</p>
         </div>
         <div>
           <p className="text-xs text-muted-foreground">Reason Code</p>
@@ -370,7 +371,7 @@ export default function ReturnDetailPage() {
             ) : (
               <>Completing will restock the returned items
                 {ret.refund_amount > 0 && (
-                  <> and settle a <span className="font-semibold">KES {ret.refund_amount.toLocaleString()}</span> {ret.return_type === 'store_credit' ? 'store credit' : 'refund'} via <span className="font-semibold">{channelLabel(effectiveCompleteChannel)}</span></>
+                  <> and settle a <span className="font-semibold">{formatCurrency(ret.refund_amount, currency)}</span> {ret.return_type === 'store_credit' ? 'store credit' : 'refund'} via <span className="font-semibold">{channelLabel(effectiveCompleteChannel)}</span></>
                 )}.
               </>
             )}
@@ -379,7 +380,7 @@ export default function ReturnDetailPage() {
             <div>
               <label className="text-xs font-semibold text-muted-foreground">Replacement Items</label>
               <div className="mt-1">
-                <ExchangeLinesPicker lines={exchangeLines} onChange={setExchangeLines} returnedValue={ret.refund_amount} />
+                <ExchangeLinesPicker lines={exchangeLines} onChange={setExchangeLines} returnedValue={ret.refund_amount} currency={currency} />
               </div>
             </div>
           )}
@@ -441,10 +442,10 @@ export default function ReturnDetailPage() {
                 onSuccess: (resp) => {
                   const ex = resp?.exchange;
                   if (ex && ex.amount_payable > 0.009) {
-                    toast.success(`Exchange raised ${ex.order_number} — collect the KES ${ex.amount_payable.toLocaleString()} top-up`);
+                    toast.success(`Exchange raised ${ex.order_number} — collect the ${formatCurrency(ex.amount_payable, currency)} top-up`);
                     setTopUpOrder({ id: ex.order_id, number: ex.order_number, total: ex.amount_payable });
                   } else if (ex && ex.leftover_refund > 0.009) {
-                    toast.success(`Exchange completed — refund KES ${ex.leftover_refund.toLocaleString()} to the customer (${channelLabel(effectiveCompleteChannel)})`);
+                    toast.success(`Exchange completed — refund ${formatCurrency(ex.leftover_refund, currency)} to the customer (${channelLabel(effectiveCompleteChannel)})`);
                   } else {
                     toast.success(isExchange ? 'Exchange completed' : 'Return completed');
                   }
@@ -524,8 +525,8 @@ export default function ReturnDetailPage() {
                     <td className="px-4 py-3">{l.name}</td>
                     <td className="px-4 py-3 text-muted-foreground text-xs font-mono">{l.sku ?? '—'}</td>
                     <td className="px-4 py-3 text-right">{l.quantity}</td>
-                    <td className="px-4 py-3 text-right">KES {l.unit_price.toLocaleString()}</td>
-                    <td className="px-4 py-3 text-right font-semibold">KES {l.total_price.toLocaleString()}</td>
+                    <td className="px-4 py-3 text-right">{formatCurrency(l.unit_price, currency)}</td>
+                    <td className="px-4 py-3 text-right font-semibold">{formatCurrency(l.total_price, currency)}</td>
                   </tr>
                 ))}
               </tbody>

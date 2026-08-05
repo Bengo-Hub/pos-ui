@@ -284,14 +284,15 @@ export function toPayload(f: FormState, currentOutletId?: string): DiscountInput
   };
 }
 
-/** One-line description of a stored discount's mechanism (list rows, pickers). */
-export function describeDiscount(d: Discount): string {
+/** One-line description of a stored discount's mechanism (list rows, pickers). `currency`
+ *  defaults to KES for callers that haven't threaded the tenant's real currency through yet. */
+export function describeDiscount(d: Discount, currency = 'KES'): string {
   const r = d.rule;
   if (!r) return '—';
   switch (r.discount_type) {
     case 'percentage': return `${r.discount_value}% off`;
-    case 'fixed_amount': return `KES ${r.discount_value} off`;
-    case 'fixed_price': return `Fixed price KES ${r.discount_value}`;
+    case 'fixed_amount': return `${currency} ${r.discount_value} off`;
+    case 'fixed_price': return `Fixed price ${currency} ${r.discount_value}`;
     case 'bogo': {
       const pct = r.get_discount_percent || 100;
       const pairCount = Object.keys(r.get_pair_map ?? {}).length;

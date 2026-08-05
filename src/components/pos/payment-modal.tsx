@@ -25,6 +25,8 @@ import {
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { useCreatePaymentIntent, useListC2BPayments, useClaimC2BPayment } from '@/hooks/usePOS';
+import { usePOSSettings } from '@/hooks/usePOSSettings';
+import { formatCurrency } from '@/lib/utils';
 import { useEffectiveOnline } from '@/lib/connectivity';
 import { usePaymentStream } from '@/hooks/usePaymentStream';
 import { savePendingPayment, getOfflineOrderByLocalId } from '@/lib/db/pos-db';
@@ -90,6 +92,9 @@ export function POSPaymentModal({
 }: POSPaymentModalProps) {
   const roundedTotal = Math.ceil(total);
   const redeemToOrder = useRedeemToOrder(loyaltyAccount?.accountId ?? '');
+  const { data: posSettings } = usePOSSettings();
+  const currency = (posSettings as any)?.currency ?? 'KES';
+  const fmt = (n: number) => formatCurrency(n, currency);
 
   const [step, setStep] = useState<ModalStep>('select');
   const [cashTendered, setCashTendered] = useState('');
@@ -184,7 +189,7 @@ export function POSPaymentModal({
         tender_id: tenderId,
         tender_method: method,
         amount: roundedTotal,
-        currency: 'KES',
+        currency,
         external_ref: externalRef,
         tenant_slug: tenantSlug,
         created_at: new Date().toISOString(),
@@ -453,7 +458,7 @@ export function POSPaymentModal({
         tenantSlug={tenantSlug}
         initiateUrl={initiateUrl}
         amount={roundedTotal}
-        currency="KES"
+        currency={currency}
         description={`Order ${orderNumber}`}
         customerEmail={customerEmail}
         allowedMethods={allowedMethods}
@@ -492,7 +497,7 @@ export function POSPaymentModal({
                step === 'failed' ? 'Payment Failed' : 'Payment'}
             </p>
             <p className="text-white text-4xl font-extrabold tabular-nums leading-none">
-              KES {roundedTotal.toLocaleString()}
+              {fmt(roundedTotal)}
             </p>
             <p className="text-white/60 text-xs mt-1">{orderNumber}</p>
           </div>
@@ -556,7 +561,7 @@ export function POSPaymentModal({
                         color="text-amber-600"
                         bg="bg-amber-500/10"
                         label="Apply Credit"
-                        sub={`KES ${(customerCreditAvailable ?? 0).toLocaleString()} available`}
+                        sub={`${fmt(customerCreditAvailable ?? 0)} available`}
                         disabled={!isOnline}
                         loading={createIntent.isPending}
                         offlineBadge={!isOnline}
@@ -677,7 +682,7 @@ export function POSPaymentModal({
             {step === 'cash' && (
               <div className="p-5 space-y-4">
                 <label className="block">
-                  <span className="text-sm font-medium text-foreground">Cash Tendered (KES)</span>
+                  <span className="text-sm font-medium text-foreground">Cash Tendered ({currency})</span>
                   <input
                     type="number"
                     value={cashTendered}
@@ -708,7 +713,7 @@ export function POSPaymentModal({
                 {change >= 0 && (
                   <div className="flex justify-between text-sm rounded-xl bg-green-500/10 px-4 py-3">
                     <span className="text-muted-foreground font-medium">Change</span>
-                    <span className="font-bold text-green-600 tabular-nums">KES {change.toLocaleString()}</span>
+                    <span className="font-bold text-green-600 tabular-nums">{fmt(change)}</span>
                   </div>
                 )}
                 {!isOnline && (
@@ -810,7 +815,7 @@ export function POSPaymentModal({
               <div className="p-5 space-y-4">
                 <p className="text-sm text-muted-foreground">
                   Match the customer&apos;s M-Pesa paybill/till payment to this sale. Showing unreconciled
-                  payments of KES {roundedTotal.toLocaleString()}.
+                  payments of {fmt(roundedTotal)}.
                 </p>
                 {c2bQuery.isLoading ? (
                   <div className="flex justify-center py-8">
@@ -838,7 +843,7 @@ export function POSPaymentModal({
                           </p>
                         </div>
                         <span className="font-bold text-sm tabular-nums shrink-0">
-                          KES {parseFloat(String(c.amount)).toLocaleString()}
+                          {fmt(parseFloat(String(c.amount)))}
                         </span>
                       </button>
                     ))}
@@ -928,7 +933,7 @@ export function POSPaymentModal({
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">Amount</span>
-                      <span className="font-bold text-base">KES {roundedTotal.toLocaleString()}</span>
+                      <span className="font-bold text-base">{fmt(roundedTotal)}</span>
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">Charge type</span>
@@ -964,7 +969,7 @@ export function POSPaymentModal({
                 <h3 className="text-xl font-bold mb-1">Payment Successful</h3>
                 <p className="text-sm text-muted-foreground">Order {orderNumber} has been settled.</p>
                 <p className="text-2xl font-bold text-foreground mt-2 tabular-nums">
-                  KES {roundedTotal.toLocaleString()}
+                  {fmt(roundedTotal)}
                 </p>
                 <button
                   onClick={onClose}
@@ -1019,7 +1024,7 @@ export function POSPaymentModal({
       {/* Credit-sale terms capture (due date default +30d, notes) — shared component. */}
       <CreditSaleDetailsModal
         open={creditDetailsOpen}
-        amountLabel={`KES ${roundedTotal.toLocaleString()}`}
+        amountLabel={fmt(roundedTotal)}
         amount={roundedTotal}
         availableStoreCredit={customerCreditAvailable ?? 0}
         loading={createIntent.isPending}
@@ -1031,7 +1036,7 @@ export function POSPaymentModal({
       <ComplimentarySaleModal
         open={complimentaryReasonOpen}
         orderNumber={orderNumber}
-        amountLabel={`KES ${roundedTotal.toLocaleString()}`}
+        amountLabel={fmt(roundedTotal)}
         onClose={() => setComplimentaryReasonOpen(false)}
         onConfirm={handleComplimentaryReasonConfirm}
       />

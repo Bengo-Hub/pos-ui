@@ -69,6 +69,7 @@ export function ReprintStationTicketsButton({ orderNumber, tableRef, lines, clas
         kdsStations: stations,
         stations: (posSettings as { printer_profiles?: unknown[] } | undefined)?.printer_profiles as never[] ?? [],
         includeCustomerBill: false,
+        currency: (posSettings as any)?.currency ?? 'KES',
         autoPrintKitchen: true,
         autoPrintBill: false,
         // Explicit manual action → never silently swallow a failure; fall back to the browser

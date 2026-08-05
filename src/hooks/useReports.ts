@@ -22,6 +22,9 @@ export interface SalesSummary {
   total_tax: number;
   total_discount: number;
   avg_order_value: number;
+  gross_profit: number;
+  gross_margin_pct: number;
+  currency: string;
 }
 
 export interface RefundSummary {

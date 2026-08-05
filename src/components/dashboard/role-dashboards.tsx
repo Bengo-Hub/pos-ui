@@ -10,7 +10,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import {
   ArrowRight, BarChart3, BedDouble, Calendar, ChefHat,
-  ClipboardList, Clock, CreditCard, Grid3x3, Package,
+  ClipboardList, Clock, Coins, Grid3x3, Package,
   Pill, Plus, RefreshCw, ShoppingBag, TrendingUp, Users,
   Wallet, Wine,
 } from 'lucide-react';
@@ -44,9 +44,9 @@ export function AdminDashboard({ orgSlug }: { orgSlug: string }) {
         </button>
       </div>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <KPICard label="Today's Revenue" value={fmt(s.total_revenue ?? 0)} sub="vs yesterday" icon={TrendingUp} trend={s.revenue_growth} loading={isLoading} />
+        <KPICard label="Today's Revenue" value={fmt(s.total_revenue ?? 0, s.currency)} sub="vs yesterday" icon={TrendingUp} trend={s.revenue_growth} loading={isLoading} />
         <KPICard label="Orders" value={fmtNum(s.total_orders ?? 0)} sub="today" icon={ClipboardList} trend={s.orders_growth} loading={isLoading} />
-        <KPICard label="Avg Ticket" value={fmt(s.avg_ticket ?? 0)} sub="per order" icon={CreditCard} loading={isLoading} />
+        <KPICard label="Gross Profit" value={fmt(s.gross_profit ?? 0, s.currency)} sub={`${(s.gross_margin_pct ?? 0).toFixed(1)}% margin`} icon={Coins} trend={s.gross_profit_growth} loading={isLoading} />
         <KPICard label="Active Staff" value={fmtNum(s.active_staff ?? 0)} sub="on shift" icon={Users} loading={isLoading} href={`/${orgSlug}/shifts?tab=team`} />
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -280,9 +280,9 @@ export function RetailDashboard({ orgSlug }: { orgSlug: string }) {
         </button>
       </div>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <KPICard label="Today's Revenue" value={fmt(s.total_revenue ?? 0)} sub="vs yesterday" icon={TrendingUp} trend={s.revenue_growth} loading={isLoading} />
+        <KPICard label="Today's Revenue" value={fmt(s.total_revenue ?? 0, s.currency)} sub="vs yesterday" icon={TrendingUp} trend={s.revenue_growth} loading={isLoading} />
         <KPICard label="Transactions" value={fmtNum(s.total_orders ?? 0)} sub="today" icon={ClipboardList} trend={s.orders_growth} loading={isLoading} />
-        <KPICard label="Avg Basket Value" value={fmt(s.avg_ticket ?? 0)} sub="per transaction" icon={ShoppingBag} loading={isLoading} />
+        <KPICard label="Gross Profit" value={fmt(s.gross_profit ?? 0, s.currency)} sub={`${(s.gross_margin_pct ?? 0).toFixed(1)}% margin`} icon={Coins} trend={s.gross_profit_growth} loading={isLoading} />
         <KPICard label="Items Sold" value={fmtNum(s.items_sold ?? 0)} sub="units today" icon={Package} loading={isLoading} />
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -327,8 +327,8 @@ export function QuickServiceDashboard({ orgSlug }: { orgSlug: string }) {
       </div>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <KPICard label="Orders Today" value={fmtNum(s.total_orders ?? 0)} sub="total" icon={ClipboardList} trend={s.orders_growth} loading={isLoading} />
-        <KPICard label="Revenue Today" value={fmt(s.total_revenue ?? 0)} sub="vs yesterday" icon={TrendingUp} trend={s.revenue_growth} loading={isLoading} />
-        <KPICard label="Avg Ticket" value={fmt(s.avg_ticket ?? 0)} sub="per order" icon={CreditCard} loading={isLoading} />
+        <KPICard label="Revenue Today" value={fmt(s.total_revenue ?? 0, s.currency)} sub="vs yesterday" icon={TrendingUp} trend={s.revenue_growth} loading={isLoading} />
+        <KPICard label="Gross Profit" value={fmt(s.gross_profit ?? 0, s.currency)} sub={`${(s.gross_margin_pct ?? 0).toFixed(1)}% margin`} icon={Coins} trend={s.gross_profit_growth} loading={isLoading} />
         <KPICard label="Kitchen Queue" value={fmtNum(queueDepth)} sub="pending tickets" icon={ChefHat} loading={isLoading} />
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -379,7 +379,7 @@ export function PharmacyDashboard({ orgSlug }: { orgSlug: string }) {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <KPICard label="Prescriptions Today" value={fmtNum(s.total_orders ?? 0)} sub="dispensed today" icon={Pill} trend={s.orders_growth} loading={isLoading} />
         <KPICard label="Pending Queue" value={fmtNum(pendingCount)} sub="awaiting dispensing" icon={ClipboardList} loading={pendingLoading} />
-        <KPICard label="Revenue Today" value={fmt(s.total_revenue ?? 0)} sub="vs yesterday" icon={TrendingUp} trend={s.revenue_growth} loading={isLoading} />
+        <KPICard label="Revenue Today" value={fmt(s.total_revenue ?? 0, s.currency)} sub="vs yesterday" icon={TrendingUp} trend={s.revenue_growth} loading={isLoading} />
         <KPICard label="Low Stock Drugs" value={fmtNum(lowDrugCount)} sub="below reorder level" icon={Package} loading={isLoading} />
       </div>
       {pendingList.length > 0 && (
@@ -447,8 +447,8 @@ export function ServicesDashboard({ orgSlug }: { orgSlug: string }) {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <KPICard label="Appointments Today" value={fmtNum(todayAppts.length)} sub="total booked" icon={Calendar} loading={apptLoading} />
         <KPICard label="Active / Confirmed" value={fmtNum(confirmedCount)} sub="in progress + confirmed" icon={Users} loading={apptLoading} />
-        <KPICard label="Revenue Today" value={fmt(s.total_revenue ?? 0)} sub="vs yesterday" icon={TrendingUp} trend={s.revenue_growth} loading={isLoading} />
-        <KPICard label="Avg Ticket" value={fmt(s.avg_ticket ?? 0)} sub="per service" icon={CreditCard} loading={isLoading} />
+        <KPICard label="Revenue Today" value={fmt(s.total_revenue ?? 0, s.currency)} sub="vs yesterday" icon={TrendingUp} trend={s.revenue_growth} loading={isLoading} />
+        <KPICard label="Gross Profit" value={fmt(s.gross_profit ?? 0, s.currency)} sub={`${(s.gross_margin_pct ?? 0).toFixed(1)}% margin`} icon={Coins} trend={s.gross_profit_growth} loading={isLoading} />
       </div>
       {(apptLoading || upcomingList.length > 0) && (
         <div className="bg-card border border-border rounded-2xl overflow-hidden">

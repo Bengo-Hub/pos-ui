@@ -1986,11 +1986,11 @@ export function useRecordPayment() {
   const tenantID = useTenantID();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ orderId, tenderId, amount }: { orderId: string; tenderId: string; amount: number }) =>
+    mutationFn: ({ orderId, tenderId, amount, currency }: { orderId: string; tenderId: string; amount: number; currency?: string }) =>
       apiClient.post(`${basePath(tenantID)}/orders/${orderId}/payments`, {
         tenderId,
         amount,
-        currency: 'KES',
+        currency: currency ?? 'KES',
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['pos-orders'] });
