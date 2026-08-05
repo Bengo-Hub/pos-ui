@@ -188,15 +188,18 @@ function ReportsPage() {
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
             {kpis.map(({ label, value, icon: Icon, color }) => (
               <Card key={label}>
-                <CardContent className="p-5 flex items-center gap-4">
-                  <div className={cn('size-11 rounded-xl flex items-center justify-center shrink-0', color)}>
-                    <Icon className="h-5 w-5" />
+                <CardContent className="p-3.5 sm:p-5 flex items-center gap-3 sm:gap-4">
+                  <div className={cn('size-9 sm:size-11 rounded-xl flex items-center justify-center shrink-0', color)}>
+                    <Icon className="h-4 w-4 sm:h-5 sm:w-5" />
                   </div>
                   <div className="min-w-0">
-                    <p className="text-xl font-bold truncate">{value}</p>
+                    {/* break-words, never truncate — these are financial figures; on a narrow
+                     *  phone card the value wraps to a second line instead of clipping with an
+                     *  ellipsis (was silently cutting off "KES 97,692.00 (40.1%)" mid-number). */}
+                    <p className="text-base sm:text-xl font-bold leading-tight break-words">{value}</p>
                     <p className="text-xs text-muted-foreground">{label}</p>
                   </div>
                 </CardContent>

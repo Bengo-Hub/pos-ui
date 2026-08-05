@@ -3,7 +3,7 @@
 import { apiClient } from '@/lib/api/client';
 import { useModuleAccess } from '@/hooks/use-module-access';
 import { cn } from '@/lib/utils';
-import { QuickAction, KPICard, RecentOrdersCard, useDashboardSummary, useTenantID, fmt, fmtNum } from './widgets';
+import { QuickAction, QuickActionTile, QuickActionGrid, KPICard, RecentOrdersCard, useDashboardSummary, useTenantID, fmt, fmtNum } from './widgets';
 import { CashierOverviewTab } from './cashier-overview-tab';
 import { CashierShiftTab } from './cashier-shift-tab';
 import { DashboardRangeFilter, useDashboardRange, type DashboardRange } from './range-filter';
@@ -71,32 +71,30 @@ export function AdminDashboard({ orgSlug }: { orgSlug: string }) {
         <KPICard label="Gross Profit" value={fmt(s.gross_profit ?? 0, s.currency)} sub={`${(s.gross_margin_pct ?? 0).toFixed(1)}% margin`} icon={Coins} trend={s.gross_profit_growth} loading={isLoading} />
         <KPICard label="Active Staff" value={fmtNum(s.active_staff ?? 0)} sub="on shift" icon={Users} loading={isLoading} href={`/${orgSlug}/shifts?tab=team`} />
       </div>
-      <DashboardCharts range={range} currency={s.currency} />
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2">
-          <RecentOrdersCard orgSlug={orgSlug} />
-        </div>
-        <div className="space-y-3">
-          <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Quick Actions</p>
-          <QuickAction icon={Plus} label="New Order" desc="Start order entry" href={`/${orgSlug}/order`} accent />
+      <div className="space-y-3">
+        <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Quick Actions</p>
+        <QuickActionGrid>
+          <QuickActionTile icon={Plus} label="New Order" href={`/${orgSlug}/order`} accent />
           {isPharmacy && hasModule('pharmacy') && (
-            <QuickAction icon={Pill} label="Prescriptions" desc="Fill & dispense" href={`/${orgSlug}/pharmacy`} />
+            <QuickActionTile icon={Pill} label="Prescriptions" href={`/${orgSlug}/pharmacy`} />
           )}
           {isServices && hasModule('appointments') && (
-            <QuickAction icon={Calendar} label="Appointments" desc="Manage bookings" href={`/${orgSlug}/appointments`} />
+            <QuickActionTile icon={Calendar} label="Appointments" href={`/${orgSlug}/appointments`} />
           )}
           {isRetail && (
-            <QuickAction icon={ShoppingBag} label="Layaway" desc="Manage layaway orders" href={`/${orgSlug}/layaway`} />
+            <QuickActionTile icon={ShoppingBag} label="Layaway" href={`/${orgSlug}/layaway`} />
           )}
           {!isPharmacy && !isServices && !isRetail && !isQuickService && hasModule('tables') && (
-            <QuickAction icon={Grid3x3} label="Tables" desc="View floor plan" href={`/${orgSlug}/tables`} />
+            <QuickActionTile icon={Grid3x3} label="Tables" href={`/${orgSlug}/tables`} />
           )}
           {hasModule('reports') && (
-            <QuickAction icon={BarChart3} label="Reports" desc="Sales & analytics" href={`/${orgSlug}/reports`} />
+            <QuickActionTile icon={BarChart3} label="Reports" href={`/${orgSlug}/reports`} />
           )}
-          <QuickAction icon={Wallet} label="Cash Drawer" desc="Open or close drawer" href={`/${orgSlug}/drawer`} />
-        </div>
+          <QuickActionTile icon={Wallet} label="Cash Drawer" href={`/${orgSlug}/drawer`} />
+        </QuickActionGrid>
       </div>
+      <DashboardCharts range={range} currency={s.currency} />
+      <RecentOrdersCard orgSlug={orgSlug} />
     </div>
   );
 }
@@ -313,18 +311,18 @@ export function RetailDashboard({ orgSlug }: { orgSlug: string }) {
         <KPICard label="Gross Profit" value={fmt(s.gross_profit ?? 0, s.currency)} sub={`${(s.gross_margin_pct ?? 0).toFixed(1)}% margin`} icon={Coins} trend={s.gross_profit_growth} loading={isLoading} />
         <KPICard label="Items Sold" value={fmtNum(s.items_sold ?? 0)} sub={`units ${periodSub}`} icon={Package} loading={isLoading} />
       </div>
-      <DashboardCharts range={range} currency={s.currency} />
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2"><RecentOrdersCard orgSlug={orgSlug} /></div>
-        <div className="space-y-3">
-          <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Quick Actions</p>
-          <QuickAction icon={Plus} label="New Sale" desc="Start a new transaction" href={`/${orgSlug}/order`} accent />
-          <QuickAction icon={ClipboardList} label="Orders" desc="View all transactions" href={`/${orgSlug}/orders`} />
+      <div className="space-y-3">
+        <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Quick Actions</p>
+        <QuickActionGrid>
+          <QuickActionTile icon={Plus} label="New Sale" href={`/${orgSlug}/order`} accent />
+          <QuickActionTile icon={ClipboardList} label="Orders" href={`/${orgSlug}/orders`} />
           {/* Purchase orders are owned by inventory-service — the POS duplicate page was removed. */}
-          <QuickAction icon={Package} label="Purchase Orders" desc="Receive stock (Inventory)" href={`${process.env.NEXT_PUBLIC_INVENTORY_UI_URL || 'https://inventory.codevertexafrica.com'}/${orgSlug}/purchase-orders`} />
-          <QuickAction icon={BarChart3} label="Reports" desc="Sales & inventory" href={`/${orgSlug}/reports`} />
-        </div>
+          <QuickActionTile icon={Package} label="Purchase Orders" href={`${process.env.NEXT_PUBLIC_INVENTORY_UI_URL || 'https://inventory.codevertexafrica.com'}/${orgSlug}/purchase-orders`} />
+          <QuickActionTile icon={BarChart3} label="Reports" href={`/${orgSlug}/reports`} />
+        </QuickActionGrid>
       </div>
+      <DashboardCharts range={range} currency={s.currency} />
+      <RecentOrdersCard orgSlug={orgSlug} />
     </div>
   );
 }
@@ -365,17 +363,17 @@ export function QuickServiceDashboard({ orgSlug }: { orgSlug: string }) {
         <KPICard label="Gross Profit" value={fmt(s.gross_profit ?? 0, s.currency)} sub={`${(s.gross_margin_pct ?? 0).toFixed(1)}% margin`} icon={Coins} trend={s.gross_profit_growth} loading={isLoading} />
         <KPICard label="Kitchen Queue" value={fmtNum(queueDepth)} sub="pending tickets" icon={ChefHat} loading={isLoading} />
       </div>
-      <DashboardCharts range={range} currency={s.currency} />
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2"><RecentOrdersCard orgSlug={orgSlug} /></div>
-        <div className="space-y-3">
-          <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Quick Actions</p>
-          <QuickAction icon={Plus} label="New Order" desc="Take a quick order" href={`/${orgSlug}/order`} accent />
-          {hasModule('kds') && <QuickAction icon={ChefHat} label="Kitchen Display" desc="View KDS queue" href={`/${orgSlug}/kds`} />}
-          <QuickAction icon={ShoppingBag} label="Order Queue" desc="Pickup & takeout" href={`/${orgSlug}/queue`} />
-          <QuickAction icon={BarChart3} label="Reports" desc="Sales & speed metrics" href={`/${orgSlug}/reports`} />
-        </div>
+      <div className="space-y-3">
+        <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Quick Actions</p>
+        <QuickActionGrid>
+          <QuickActionTile icon={Plus} label="New Order" href={`/${orgSlug}/order`} accent />
+          {hasModule('kds') && <QuickActionTile icon={ChefHat} label="Kitchen Display" href={`/${orgSlug}/kds`} />}
+          <QuickActionTile icon={ShoppingBag} label="Order Queue" href={`/${orgSlug}/queue`} />
+          <QuickActionTile icon={BarChart3} label="Reports" href={`/${orgSlug}/reports`} />
+        </QuickActionGrid>
       </div>
+      <DashboardCharts range={range} currency={s.currency} />
+      <RecentOrdersCard orgSlug={orgSlug} />
     </div>
   );
 }
@@ -423,6 +421,13 @@ export function PharmacyDashboard({ orgSlug }: { orgSlug: string }) {
         <KPICard label="Revenue" value={fmt(s.total_revenue ?? 0, s.currency)} sub={range.compareLabel} icon={TrendingUp} trend={s.revenue_growth} loading={isLoading} />
         <KPICard label="Low Stock Drugs" value={fmtNum(lowDrugCount)} sub="below reorder level" icon={Package} loading={isLoading} />
       </div>
+      <div className="space-y-3">
+        <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Quick Actions</p>
+        <QuickActionGrid>
+          <QuickActionTile icon={Plus} label="New Prescription" href={`/${orgSlug}/pharmacy`} accent />
+          <QuickActionTile icon={Pill} label="All Prescriptions" href={`/${orgSlug}/pharmacy`} />
+        </QuickActionGrid>
+      </div>
       <DashboardCharts range={range} currency={s.currency} />
       {pendingList.length > 0 && (
         <div className="bg-card border border-border rounded-2xl overflow-hidden">
@@ -451,10 +456,6 @@ export function PharmacyDashboard({ orgSlug }: { orgSlug: string }) {
           </div>
         </div>
       )}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <QuickAction icon={Plus} label="New Prescription" desc="Receive & queue Rx" href={`/${orgSlug}/pharmacy`} accent />
-        <QuickAction icon={Pill} label="All Prescriptions" desc="Fill & dispense" href={`/${orgSlug}/pharmacy`} />
-      </div>
     </div>
   );
 }
@@ -496,6 +497,14 @@ export function ServicesDashboard({ orgSlug }: { orgSlug: string }) {
         <KPICard label="Revenue" value={fmt(s.total_revenue ?? 0, s.currency)} sub={range.compareLabel} icon={TrendingUp} trend={s.revenue_growth} loading={isLoading} />
         <KPICard label="Gross Profit" value={fmt(s.gross_profit ?? 0, s.currency)} sub={`${(s.gross_margin_pct ?? 0).toFixed(1)}% margin`} icon={Coins} trend={s.gross_profit_growth} loading={isLoading} />
       </div>
+      <div className="space-y-3">
+        <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Quick Actions</p>
+        <QuickActionGrid>
+          <QuickActionTile icon={Calendar} label="New Appointment" href={`/${orgSlug}/appointments`} accent />
+          <QuickActionTile icon={Plus} label="New Sale" href={`/${orgSlug}/order`} />
+          <QuickActionTile icon={BarChart3} label="Reports" href={`/${orgSlug}/reports`} />
+        </QuickActionGrid>
+      </div>
       <DashboardCharts range={range} currency={s.currency} />
       {(apptLoading || upcomingList.length > 0) && (
         <div className="bg-card border border-border rounded-2xl overflow-hidden">
@@ -533,11 +542,6 @@ export function ServicesDashboard({ orgSlug }: { orgSlug: string }) {
           )}
         </div>
       )}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <QuickAction icon={Calendar} label="New Appointment" desc="Book a client" href={`/${orgSlug}/appointments`} accent />
-        <QuickAction icon={Plus} label="New Sale" desc="Walk-in or product sale" href={`/${orgSlug}/order`} />
-        <QuickAction icon={BarChart3} label="Reports" desc="Revenue & utilization" href={`/${orgSlug}/reports`} />
-      </div>
     </div>
   );
 }

@@ -95,6 +95,48 @@ export function QuickAction({
   );
 }
 
+// ── Quick action tile (compact, home-screen-icon style) ────────────────────────
+// A denser alternative to QuickAction for the top-of-dashboard 3-column grid — icon-over-label,
+// no description, so it stays legible at phone width without wrapping into a tall list.
+
+export function QuickActionTile({
+  icon: Icon,
+  label,
+  href,
+  accent = false,
+}: {
+  icon: React.ElementType;
+  label: string;
+  href: string;
+  accent?: boolean;
+}) {
+  return (
+    <Link
+      href={href}
+      className={cn(
+        'group flex flex-col items-center justify-center gap-1.5 sm:gap-2 p-3 sm:p-4 rounded-2xl border text-center transition-all duration-200',
+        accent
+          ? 'bg-primary text-primary-foreground border-primary shadow-lg shadow-primary/25 hover:shadow-primary/35'
+          : 'bg-card border-border hover:border-primary/30 hover:shadow-md hover:shadow-primary/8'
+      )}
+    >
+      <div className={cn(
+        'h-10 w-10 sm:h-11 sm:w-11 rounded-xl flex items-center justify-center shrink-0 transition-transform duration-200 group-hover:scale-105',
+        accent ? 'bg-primary-foreground/15' : 'bg-primary/8'
+      )}>
+        <Icon className={cn('h-4 w-4 sm:h-5 sm:w-5', accent ? 'text-primary-foreground' : 'text-primary')} />
+      </div>
+      <p className={cn('font-semibold text-xs sm:text-sm leading-tight', accent ? 'text-primary-foreground' : 'text-foreground')}>{label}</p>
+    </Link>
+  );
+}
+
+/** Fixed 3-column grid of QuickActionTile — the "home screen" action row every manager/admin
+ *  dashboard renders right below its KPI cards. */
+export function QuickActionGrid({ children }: { children: React.ReactNode }) {
+  return <div className="grid grid-cols-3 gap-2 sm:gap-3">{children}</div>;
+}
+
 // ── KPI card ──────────────────────────────────────────────────────────────────
 
 export function KPICard({
@@ -117,31 +159,33 @@ export function KPICard({
 }) {
   const content = (
     <div className={cn(
-      'bg-card border border-border rounded-2xl p-5 flex flex-col gap-3',
+      'bg-card border border-border rounded-2xl p-3.5 sm:p-5 flex flex-col gap-2 sm:gap-3 min-w-0',
       href && 'hover:border-primary/40 hover:shadow-sm transition-all cursor-pointer',
     )}>
-      <div className="flex items-center justify-between">
-        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{label}</p>
-        <div className="h-8 w-8 rounded-lg bg-primary/8 flex items-center justify-center">
-          <Icon className="h-4 w-4 text-primary" />
+      <div className="flex items-center justify-between gap-2 min-w-0">
+        <p className="text-[11px] sm:text-xs font-semibold text-muted-foreground uppercase tracking-wider truncate">{label}</p>
+        <div className="h-7 w-7 sm:h-8 sm:w-8 rounded-lg bg-primary/8 flex items-center justify-center shrink-0">
+          <Icon className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-primary" />
         </div>
       </div>
       {loading ? (
-        <div className="h-8 w-24 bg-muted rounded-lg animate-pulse" />
+        <div className="h-7 sm:h-8 w-24 bg-muted rounded-lg animate-pulse" />
       ) : (
-        <p className="text-2xl font-bold text-foreground tabular-nums font-display">{value}</p>
+        // break-words (never truncate) — these are financial figures; on a narrow phone card the
+        // value wraps to a second line instead of silently clipping with an ellipsis.
+        <p className="text-lg sm:text-2xl font-bold text-foreground tabular-nums font-display leading-tight break-words">{value}</p>
       )}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 flex-wrap min-w-0">
         {trend !== undefined && (
           <span className={cn(
-            'text-xs font-semibold flex items-center gap-0.5',
+            'text-xs font-semibold flex items-center gap-0.5 shrink-0',
             trend >= 0 ? 'text-emerald-500' : 'text-red-500'
           )}>
             <TrendingUp className={cn('h-3 w-3', trend < 0 && 'rotate-180')} />
             {Math.round(Math.abs(trend) * 100) / 100}%
           </span>
         )}
-        {sub && <span className="text-xs text-muted-foreground">{sub}</span>}
+        {sub && <span className="text-xs text-muted-foreground truncate">{sub}</span>}
       </div>
     </div>
   );

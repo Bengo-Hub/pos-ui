@@ -476,8 +476,8 @@ function StatCards({ items }: { items: { label: string; value: string }[] }) {
     <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
       {items.map((s) => (
         <Card key={s.label}>
-          <CardContent className="p-4">
-            <p className="text-lg font-bold tabular-nums truncate">{s.value}</p>
+          <CardContent className="p-3.5 sm:p-4 min-w-0">
+            <p className="text-base sm:text-lg font-bold tabular-nums leading-tight break-words">{s.value}</p>
             <p className="text-xs text-muted-foreground">{s.label}</p>
           </CardContent>
         </Card>

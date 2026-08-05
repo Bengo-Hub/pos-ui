@@ -110,8 +110,11 @@ export function DashboardRangeFilter({
   const [showCustom, setShowCustom] = useState(false);
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      <div className="flex flex-wrap gap-1 p-1 rounded-lg bg-accent/30 border border-border">
+    <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto min-w-0">
+      {/* Horizontal scroll (not wrap) on narrow phones — 8 pills wrapped into 3-4 rows ate too
+       *  much vertical space; a single scrollable row matches how filter chips behave in most
+       *  mobile apps. -mx-1 px-1 keeps the scroll edges from clipping the first/last pill's ring. */}
+      <div className="flex gap-1 p-1 rounded-lg bg-accent/30 border border-border overflow-x-auto -mx-1 px-1 sm:mx-0 sm:px-1 max-w-full [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {PRESET_LABELS.map((p) => (
           <button
             key={p.id}
@@ -121,7 +124,7 @@ export function DashboardRangeFilter({
               setShowCustom(p.id === 'custom');
             }}
             className={cn(
-              'px-3 py-1.5 rounded-md text-xs font-semibold whitespace-nowrap transition-all',
+              'px-3 py-1.5 rounded-md text-xs font-semibold whitespace-nowrap transition-all shrink-0',
               preset === p.id ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground',
             )}
           >
