@@ -41,7 +41,9 @@ export async function GET(
   const { orgSlug } = await params;
   const tenant = await fetchTenant(orgSlug);
 
-  const name = tenant?.name ?? 'Codevertex';
+  // Neutral fallback: the tenant's own slug, never a specific business's identity
+  // (matches the same fix applied to the client-side branding provider this session).
+  const name = tenant?.name ?? orgSlug;
   // Home-screen label = tenant's first word + service, e.g. "Urban POS", so a
   // tenant with several installed Bengo apps can tell them apart at a glance.
   const shortName = `${name.trim().split(/\s+/)[0] || 'Bengo'} POS`;
