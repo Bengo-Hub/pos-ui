@@ -1748,7 +1748,17 @@ export function useEditSale() {
   return useMutation({
     mutationFn: ({ orderId, reason, lines }: { orderId: string; reason: string; lines: EditSaleLine[] }) =>
       apiClient.post<EditSaleResult>(`${basePath(tenantID)}/orders/${orderId}/edit`, { reason, lines }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['pos-orders'] }),
+    // Invalidate every cache keyed on THIS order, not just the list — a Sell Details modal or
+    // the Edit Sale page itself may still be mounted with a cached useOrder(orderId)/returns
+    // query that this mutation just made stale. Found live: without this, a still-open Sell
+    // Details modal (or a quick re-entry into Edit Sale on the same order) could keep showing
+    // pre-edit lines/totals/returns until an unrelated full reload happened to refetch them.
+    onSuccess: (_result, variables) => {
+      qc.invalidateQueries({ queryKey: ['pos-orders'] });
+      qc.invalidateQueries({ queryKey: ['pos-order', tenantID, variables.orderId] });
+      qc.invalidateQueries({ queryKey: ['pos-order-returns', tenantID, variables.orderId] });
+      qc.invalidateQueries({ queryKey: ['pos-orders-summary'] });
+    },
   });
 }
 
