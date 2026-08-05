@@ -1,160 +1,42 @@
-import { fetchTenantBySlug, type TenantBrand } from '@/lib/tenant-api';
+import { getKV, setKV } from '@/lib/db/kv-cache';
 import { useParams } from 'next/navigation';
-import { createContext, ReactNode, useContext, useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { ReactNode } from 'react';
+import {
+  TenantBrandingProvider as SharedTenantBrandingProvider,
+  useTenantBranding as useSharedTenantBranding,
+  type TenantCacheAdapter,
+} from '@bengo-hub/shared-ui-lib/tenant';
 
-function hexToRgbTriplet(hex: string): string {
-  const t = hex.replace(/^#/, '').trim();
-  if (!/^[0-9a-fA-F]{6}$/.test(t)) return '107 42 27';
-  return `${parseInt(t.slice(0, 2), 16)} ${parseInt(t.slice(2, 4), 16)} ${parseInt(t.slice(4, 6), 16)}`;
-}
+/**
+ * pos-ui's own Dexie-backed kvCache table already caches many OTHER datasets besides tenant
+ * branding (POS settings, tenders, categories, outlet info, recent orders — see
+ * `@/lib/db/kv-cache.ts`), so we inject it here instead of letting the shared module spin up
+ * its own separate native-IndexedDB cache.
+ */
+const posKvCacheAdapter: TenantCacheAdapter = { getKV, setKV };
 
-function hexToDarkRgbTriplet(hex: string): string {
-  const raw = hex.replace(/^#/, '').trim();
-  if (!/^[0-9a-fA-F]{6}$/.test(raw)) return '44 26 2';
-  const r = parseInt(raw.slice(0, 2), 16) / 255;
-  const g = parseInt(raw.slice(2, 4), 16) / 255;
-  const b = parseInt(raw.slice(4, 6), 16) / 255;
-  const max = Math.max(r, g, b), mn = Math.min(r, g, b);
-  let h = 0;
-  if (max !== mn) {
-    const d = max - mn;
-    h = max === r ? ((g - b) / d + (g < b ? 6 : 0)) / 6
-      : max === g ? ((b - r) / d + 2) / 6
-      : ((r - g) / d + 4) / 6;
-  }
-  // Very dark variant: L=7%, S=38%
-  const s = 0.38, l = 0.07;
-  const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
-  const p = 2 * l - q;
-  const hue2rgb = (pp: number, qq: number, x: number) => {
-    if (x < 0) x += 1; if (x > 1) x -= 1;
-    if (x < 1 / 6) return pp + (qq - pp) * 6 * x;
-    if (x < 0.5) return qq;
-    if (x < 2 / 3) return pp + (qq - pp) * (2 / 3 - x) * 6;
-    return pp;
-  };
-  return `${Math.round(hue2rgb(p, q, h + 1 / 3) * 255)} ${Math.round(hue2rgb(p, q, h) * 255)} ${Math.round(hue2rgb(p, q, h - 1 / 3) * 255)}`;
-}
+const AUTH_API_BASE =
+  process.env.NEXT_PUBLIC_SSO_URL || process.env.NEXT_PUBLIC_AUTH_API_URL || 'https://sso.codevertexafrica.com';
 
-function hexToHslTriplet(hex: string): string {
-  const t = hex.replace(/^#/, '').trim();
-  if (!/^[0-9a-fA-F]{6}$/.test(t)) return '24 91% 50%';
-  const r = parseInt(t.slice(0, 2), 16) / 255;
-  const g = parseInt(t.slice(2, 4), 16) / 255;
-  const b = parseInt(t.slice(4, 6), 16) / 255;
-  const max = Math.max(r, g, b), min = Math.min(r, g, b);
-  let h = 0, s = 0;
-  const l = (max + min) / 2;
-  if (max !== min) {
-    const d = max - min;
-    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-    if (max === r) h = ((g - b) / d + (g < b ? 6 : 0)) / 6;
-    else if (max === g) h = ((b - r) / d + 2) / 6;
-    else h = ((r - g) / d + 4) / 6;
-  }
-  return `${Math.round(h * 360)} ${Math.round(s * 100)}% ${Math.round(l * 100)}%`;
-}
-
-type TenantBrandingContextType = {
-  slug: string;
-  tenant: TenantBrand | null;
-  isLoading: boolean;
-  error: Error | null;
-  getServiceTitle: (appName: string) => string;
-};
-
-const TenantBrandingContext = createContext<TenantBrandingContextType | undefined>(undefined);
-
-const DEFAULT_BRAND: TenantBrand = {
-  id: 'platform',
-  name: 'Codevertex',
-  slug: 'codevertex',
-  logoUrl: '/logo.jpeg',
-  primaryColor: '#ea8022',
-  secondaryColor: '#ae6221',
-  orgName: 'Codevertex Africa Limited',
-  useCase: 'other',
-  posScreensaverUrl: null,
-  contactEmail: null,
-};
+/** pos-ui's own default brand color (was the previous hardcoded "Codevertex Africa Limited" fallback's palette — kept only as a neutral color default, never as a claimed tenant identity). */
+const DEFAULT_PRIMARY_COLOR = '#ea8022';
+const DEFAULT_SECONDARY_COLOR = '#ae6221';
 
 export function TenantBrandingProvider({ children }: { children: ReactNode }) {
   const params = useParams();
   const slug = (params?.orgSlug as string) || '';
 
-  const { data: tenant, isLoading, error } = useQuery({
-    queryKey: ['tenant', slug],
-    queryFn: () => fetchTenantBySlug(slug),
-    staleTime: 6 * 60 * 60 * 1000, // 6 hours — aligned with JWT TTL
-    enabled: !!slug,
-  });
-
-  const effectiveBrand = useMemo(() => {
-    if (tenant) return tenant;
-    if (!isLoading && !tenant && slug) {
-      return { ...DEFAULT_BRAND, slug, name: slug, orgName: slug };
-    }
-    return DEFAULT_BRAND;
-  }, [tenant, isLoading, slug]);
-
-  useMemo(() => {
-    if (typeof window !== 'undefined') {
-      const primary = effectiveBrand?.primaryColor || DEFAULT_BRAND.primaryColor!;
-      const secondary = effectiveBrand?.secondaryColor || DEFAULT_BRAND.secondaryColor!;
-      const logo = effectiveBrand?.logoUrl || DEFAULT_BRAND.logoUrl!;
-      const root = document.documentElement;
-
-      root.style.setProperty('--tenant-primary', primary);
-      root.style.setProperty('--tenant-secondary', secondary);
-      root.style.setProperty('--tenant-logo-url', `url(${logo})`);
-      // Drive Tailwind semantic tokens from tenant brand color
-      root.style.setProperty('--primary', hexToHslTriplet(primary));
-      root.style.setProperty('--ring', hexToHslTriplet(primary));
-      // Drive brand RGB triplets for bg-brand-primary / bg-brand-emphasis
-      root.style.setProperty('--brand-primary', hexToRgbTriplet(primary));
-      root.style.setProperty('--brand-emphasis', hexToRgbTriplet(secondary));
-      // Derive dark terminal background and primary-dark accent from brand color
-      root.style.setProperty('--brand-dark', hexToDarkRgbTriplet(primary));
-      const hue = hexToHslTriplet(primary).split(' ')[0];
-      root.style.setProperty('--primary-dark', `${hue} 68% 40%`);
-    }
-  }, [effectiveBrand]);
-
-  const getServiceTitle = (appName: string) => {
-    const tenantName = effectiveBrand?.orgName || effectiveBrand?.name || '';
-    const firstWord = tenantName.split(' ')[0] || 'Codevertex';
-    return `${firstWord} ${appName}`;
-  };
-
-  const value = useMemo(
-    () => ({
-      slug,
-      tenant: effectiveBrand,
-      isLoading,
-      error: error as Error | null,
-      getServiceTitle,
-    }),
-    [slug, effectiveBrand, isLoading, error]
-  );
-
   return (
-    <TenantBrandingContext.Provider value={value}>
+    <SharedTenantBrandingProvider
+      slug={slug}
+      authApiBase={AUTH_API_BASE}
+      cache={posKvCacheAdapter}
+      defaultPrimaryColor={DEFAULT_PRIMARY_COLOR}
+      defaultSecondaryColor={DEFAULT_SECONDARY_COLOR}
+    >
       {children}
-    </TenantBrandingContext.Provider>
+    </SharedTenantBrandingProvider>
   );
 }
 
-export function useTenantBranding() {
-  const context = useContext(TenantBrandingContext);
-  if (!context) {
-    return {
-      slug: '',
-      tenant: null,
-      isLoading: false,
-      error: null,
-      getServiceTitle: (s: string) => s,
-    };
-  }
-  return context;
-}
+export const useTenantBranding = useSharedTenantBranding;
