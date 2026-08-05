@@ -466,6 +466,20 @@ async function fetchAllCatalogItems(
 
 export const FULL_CATALOG_QUERY_KEY = 'pos-catalog-full';
 
+// Every mutation that consumes or restocks inventory (creating a sale, recording its payment,
+// voiding/deleting a sale, or Edit Sale reducing/increasing a line) must invalidate BOTH catalog
+// caches — the paginated ['pos-catalog-items'] list AND FULL_CATALOG_QUERY_KEY (the terminal's
+// full in-memory catalog) — or the product grid's displayed stock_quantity silently goes stale
+// for up to the 5-minute staleTime. Found live 2026-08-05: none of useCreateOrder,
+// useRecordPayment, useVoidOrder, useVoidOrderLine, or useDeleteSale did this, so a sold item's
+// on-screen stock never visibly moved until an unrelated remount/staleTime lapse happened to
+// refetch it. Centralized here instead of duplicating the same two invalidateQueries calls at
+// each of those call sites.
+function invalidateCatalogCaches(qc: QueryClient) {
+  qc.invalidateQueries({ queryKey: ['pos-catalog-items'] });
+  qc.invalidateQueries({ queryKey: [FULL_CATALOG_QUERY_KEY] });
+}
+
 // Single-flight guard: at most ONE background catalog revalidation per tenant+outlet at a time
 // (mount + version-poll + reconnect can all ask for one in the same tick).
 const catalogRevalidateInflight = new Set<string>();
@@ -1466,7 +1480,10 @@ export function useCreateOrder() {
     // (write to IndexedDB). Without this, React Query pauses the mutation offline and the
     // sale is never queued.
     networkMode: 'always',
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['pos-orders'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['pos-orders'] });
+      invalidateCatalogCaches(qc);
+    },
   });
 }
 
@@ -1524,7 +1541,10 @@ export function useVoidOrder() {
       }
     },
     networkMode: 'always',
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['pos-orders'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['pos-orders'] });
+      invalidateCatalogCaches(qc);
+    },
   });
 }
 
@@ -1649,6 +1669,7 @@ export function useVoidOrderLine() {
       qc.invalidateQueries({ queryKey: ['pos-orders'] });
       qc.invalidateQueries({ queryKey: ['pos-order', tenantID, v.orderId] });
       qc.invalidateQueries({ queryKey: ['pos-tables'] });
+      invalidateCatalogCaches(qc);
     },
   });
 }
@@ -1700,7 +1721,10 @@ export function useDeleteSale() {
   return useMutation({
     mutationFn: ({ orderId, reason }: { orderId: string; reason: string }) =>
       apiClient.post<SaleDeleteResult>(`${basePath(tenantID)}/orders/${orderId}/delete`, { reason }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['pos-orders'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['pos-orders'] });
+      invalidateCatalogCaches(qc);
+    },
   });
 }
 
@@ -1758,6 +1782,7 @@ export function useEditSale() {
       qc.invalidateQueries({ queryKey: ['pos-order', tenantID, variables.orderId] });
       qc.invalidateQueries({ queryKey: ['pos-order-returns', tenantID, variables.orderId] });
       qc.invalidateQueries({ queryKey: ['pos-orders-summary'] });
+      invalidateCatalogCaches(qc); // a reduction/increase/removal changes stock too
     },
   });
 }
@@ -2004,6 +2029,7 @@ export function useRecordPayment() {
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['pos-orders'] });
+      invalidateCatalogCaches(qc);
     },
   });
 }
