@@ -4,7 +4,8 @@ import { ModuleGate } from '@/components/auth/module-gate';
 import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
 import { Card, CardContent } from '@/components/ui/base';
 import { useRefundSummary } from '@/hooks/useReports';
-import { cn } from '@/lib/utils';
+import { usePOSSettings } from '@/hooks/usePOSSettings';
+import { cn, formatCurrency } from '@/lib/utils';
 import { Loader2, TrendingDown } from 'lucide-react';
 import { useState } from 'react';
 
@@ -20,6 +21,8 @@ function ReturnsReportContent() {
   const [period, setPeriod] = useState<'today' | 'week' | 'month'>('month');
   const { from, to } = periodRange(period);
   const { data: summary, isLoading } = useRefundSummary(from, to);
+  const { data: posSettings } = usePOSSettings();
+  const currency = (posSettings as any)?.currency ?? 'KES';
 
   const LABELS = { today: 'Today', week: 'Last 7 days', month: 'This month' };
   const PERIODS = ['today', 'week', 'month'] as const;
@@ -52,7 +55,7 @@ function ReturnsReportContent() {
                 <TrendingDown className="h-5 w-5" />
               </div>
               <div>
-                <p className="text-xl font-bold">KES {(summary?.total_refunded ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+                <p className="text-xl font-bold">{formatCurrency(summary?.total_refunded ?? 0, currency)}</p>
                 <p className="text-xs text-muted-foreground">Total Refunded</p>
               </div>
             </CardContent>
@@ -86,14 +89,14 @@ function ReturnsReportContent() {
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Total Amount Refunded</span>
               <span className="font-medium text-red-600">
-                KES {summary.total_refunded.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                {formatCurrency(summary.total_refunded, currency)}
               </span>
             </div>
             {summary.refund_count > 0 && (
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Avg Refund Value</span>
                 <span className="font-medium">
-                  KES {(summary.total_refunded / summary.refund_count).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  {formatCurrency(summary.total_refunded / summary.refund_count, currency)}
                 </span>
               </div>
             )}

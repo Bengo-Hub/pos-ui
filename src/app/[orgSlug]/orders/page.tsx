@@ -13,7 +13,7 @@ import { useOrders, useReleaseTable } from '@/hooks/usePOS';
 import { P, usePermissions } from '@/hooks/usePermissions';
 import { orderSubtypeBadge } from '@/lib/pos/order-subtype-label';
 import { useOwnScope } from '@/lib/rbac/scope';
-import { cn } from '@/lib/utils';
+import { cn, formatCurrency } from '@/lib/utils';
 import { useAuthStore } from '@/store/auth';
 import { TrackingIframeModal } from '@bengo-hub/shared-ui-lib';
 import { DataTable, type DataTableColumn } from '@bengo-hub/shared-ui-lib/data-table';
@@ -70,6 +70,7 @@ export default function OrdersPage() {
   const [trackingOpen, setTrackingOpen] = useState(false);
   const [paymentOpen, setPaymentOpen] = useState(false);
   const releaseTable = useReleaseTable();
+  const selCurrency = selectedOrder?.currency ?? 'KES';
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedCustomer(customer.trim()), 350);
@@ -160,7 +161,7 @@ export default function OrdersPage() {
     {
       key: 'total', header: 'Total', align: 'right',
       accessor: (o) => o.total_amount ?? 0,
-      render: (o) => <span className="font-bold text-xs tabular-nums whitespace-nowrap">KES {(o.total_amount || 0).toLocaleString()}</span>,
+      render: (o) => <span className="font-bold text-xs tabular-nums whitespace-nowrap">{formatCurrency(o.total_amount || 0, o.currency ?? 'KES')}</span>,
     },
     {
       key: 'status', header: 'Status', align: 'center',
@@ -364,11 +365,11 @@ export default function OrdersPage() {
                             {fullyVoided && <span className="ml-1.5 no-underline text-[10px] font-semibold text-destructive">Voided</span>}
                             {partiallyVoided && <span className="ml-1.5 text-[10px] font-semibold text-amber-600">−{line.voided_qty} voided</span>}
                           </span>
-                          <span className={cn('font-medium shrink-0', fullyVoided && 'text-muted-foreground line-through')}>KES {lineTotal.toLocaleString()}</span>
+                          <span className={cn('font-medium shrink-0', fullyVoided && 'text-muted-foreground line-through')}>{formatCurrency(lineTotal, selCurrency)}</span>
                         </div>
                         <div className="flex items-center justify-between gap-2 pl-3">
                           {(line.unit_price ?? 0) > 0 ? (
-                            <p className="text-[11px] text-muted-foreground">@ KES {line.unit_price.toLocaleString()} each</p>
+                            <p className="text-[11px] text-muted-foreground">@ {formatCurrency(line.unit_price, selCurrency)} each</p>
                           ) : <span />}
                           {/* Partial voiding: drop just this item (e.g. an ingredient ran out) without
                               voiding the whole bill — same manager-approval flow as Void Bill. */}
@@ -408,21 +409,21 @@ export default function OrdersPage() {
                   <div className="border-t pt-2 space-y-1">
                     {(selectedOrder.subtotal ?? 0) > 0 && (
                       <div className="flex items-center justify-between text-xs text-muted-foreground">
-                        <span>Subtotal</span><span>KES {(selectedOrder.subtotal || 0).toLocaleString()}</span>
+                        <span>Subtotal</span><span>{formatCurrency(selectedOrder.subtotal || 0, selCurrency)}</span>
                       </div>
                     )}
                     {(selectedOrder.tax_total ?? 0) > 0 && (
                       <div className="flex items-center justify-between text-xs text-muted-foreground">
-                        <span>Tax (VAT)</span><span>KES {(selectedOrder.tax_total || 0).toLocaleString()}</span>
+                        <span>Tax (VAT)</span><span>{formatCurrency(selectedOrder.tax_total || 0, selCurrency)}</span>
                       </div>
                     )}
                     {(selectedOrder.discount_total ?? 0) > 0 && (
                       <div className="flex items-center justify-between text-xs text-green-600">
-                        <span>Discount</span><span>- KES {(selectedOrder.discount_total || 0).toLocaleString()}</span>
+                        <span>Discount</span><span>- {formatCurrency(selectedOrder.discount_total || 0, selCurrency)}</span>
                       </div>
                     )}
                     <div className="flex items-center justify-between text-xs font-bold border-t pt-1">
-                      <span>Total</span><span>KES {(selectedOrder.total_amount || 0).toLocaleString()}</span>
+                      <span>Total</span><span>{formatCurrency(selectedOrder.total_amount || 0, selCurrency)}</span>
                     </div>
                   </div>
                 </div>
@@ -455,7 +456,7 @@ export default function OrdersPage() {
                     <CreditCard className="h-4 w-4" />
                     Collect Payment
                     {(selectedOrder.total_amount ?? 0) > 0 && (
-                      <span className="ml-auto font-bold text-sm">KES {(selectedOrder.total_amount ?? 0).toLocaleString()}</span>
+                      <span className="ml-auto font-bold text-sm">{formatCurrency(selectedOrder.total_amount ?? 0, selCurrency)}</span>
                     )}
                   </Button>
                 </Can>

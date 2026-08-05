@@ -69,8 +69,8 @@ export function EditOrderLinesModal({ order: initialOrder, onClose }: { order: a
                     <td className="py-2 pr-3">{l.name}</td>
                     <td className="py-2 pr-3 text-xs font-mono">{l.sku || '—'}</td>
                     <td className="py-2 pr-3 text-right tabular-nums">{l.quantity}</td>
-                    <td className="py-2 pr-3 text-right tabular-nums">{money(l.unit_price)}</td>
-                    <td className="py-2 pr-3 text-right tabular-nums font-semibold">{money(l.total_price)}</td>
+                    <td className="py-2 pr-3 text-right tabular-nums">{money(l.unit_price, order.currency)}</td>
+                    <td className="py-2 pr-3 text-right tabular-nums font-semibold">{money(l.total_price, order.currency)}</td>
                     <td className="py-2">
                       {!l.voided_qty && (
                         <button title="Edit price/quantity" className="h-7 w-7 rounded-md flex items-center justify-center hover:bg-accent"
@@ -121,7 +121,7 @@ export function EditOrderLinesModal({ order: initialOrder, onClose }: { order: a
           )}
 
           <div className="text-xs text-muted-foreground pt-1 border-t border-border">
-            Total: <span className="font-semibold text-foreground">{money(order.total_amount)}</span>
+            Total: <span className="font-semibold text-foreground">{money(order.total_amount, order.currency)}</span>
             {' · '}Every change is written to the audit log with the before/after values and your reason.
           </div>
         </div>

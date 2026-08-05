@@ -12,7 +12,7 @@ import { apiErrorMessage } from '@/lib/api/error-message';
 import { useEffectiveOnline } from '@/lib/connectivity';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { allowedRefundChannels, defaultRefundChannel, refundChannelAdvisory } from '@/lib/returns-policy';
-import { cn } from '@/lib/utils';
+import { cn, formatCurrency } from '@/lib/utils';
 import { useAuthStore } from '@/store/auth';
 
 export interface ReturnLinePayload {
@@ -138,6 +138,7 @@ export function InitiateReturnModal({
   const tenantID = user?.tenant_id ?? '';
   const { data: posSettings } = usePOSSettings();
   const restrictOnAccount = posSettings?.restrict_credit_sale_refund_to_offset ?? true;
+  const currency = (posSettings as any)?.currency ?? 'KES';
 
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
   const [comboValue, setComboValue] = useState('');
@@ -202,7 +203,7 @@ export function InitiateReturnModal({
       return {
         value: o.id,
         label: o.order_number,
-        hint: `KES ${(o.total_amount ?? 0).toLocaleString()}`,
+        hint: formatCurrency(o.total_amount ?? 0, currency),
         description: `${o.customer_name || 'Walk-in customer'}${when ? ` · ${when}` : ''}`,
       };
     });
@@ -262,7 +263,7 @@ export function InitiateReturnModal({
     if (returnLines.length === 0) return;
     const topUp = returnType === 'exchange' ? parseFloat(topUpAmount) || 0 : 0;
     const reasonWithTopUp =
-      topUp > 0 ? `${reason} · Exchange top-up collected: KES ${topUp.toLocaleString()}` : reason;
+      topUp > 0 ? `${reason} · Exchange top-up collected: ${formatCurrency(topUp, currency)}` : reason;
     // The API still stores a distinct "store_credit" return_type for reporting — derive it from
     // the Refund Method choice rather than a separate Return Type button (see the RETURN_TYPES
     // comment above for why the two were merged).
@@ -330,7 +331,7 @@ export function InitiateReturnModal({
                 <div>
                   <p className="text-sm font-bold font-mono">{selectedOrder.order_number}</p>
                   <p className="text-xs text-muted-foreground">
-                    {new Date(selectedOrder.created_at).toLocaleDateString()} · KES {(selectedOrder.total_amount ?? 0).toLocaleString()}
+                    {new Date(selectedOrder.created_at).toLocaleDateString()} · {formatCurrency(selectedOrder.total_amount ?? 0, currency)}
                   </p>
                 </div>
                 <span className="text-xs bg-primary/10 text-primary font-semibold px-2 py-1 rounded-lg capitalize">
@@ -405,7 +406,7 @@ export function InitiateReturnModal({
                                 />
                               </td>
                               <td className="px-3 py-2.5 text-right font-medium">
-                                KES {(line.unit_price ?? 0).toLocaleString()}
+                                {formatCurrency(line.unit_price ?? 0, currency)}
                               </td>
                             </tr>
                           );
@@ -485,7 +486,7 @@ export function InitiateReturnModal({
                 Top-up to Collect <span className="font-normal">(optional — if replacement is pricier)</span>
               </label>
               <div className="relative mt-1">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">KES</span>
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">{currency}</span>
                 <input
                   type="number"
                   min={0}

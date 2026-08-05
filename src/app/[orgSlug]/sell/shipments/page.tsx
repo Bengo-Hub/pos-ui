@@ -166,9 +166,9 @@ export default function ShipmentsPage() {
                           </td>
                           <td className={`${td} text-xs max-w-56 truncate`} title={meta.shipping_address}>{meta.shipping_address || '—'}</td>
                           <td className={`${td} text-xs`}>{meta.delivery_person || '—'}</td>
-                          <td className={`${td} text-right tabular-nums`}>{meta.shipping_amount ? money(meta.shipping_amount) : '—'}</td>
+                          <td className={`${td} text-right tabular-nums`}>{meta.shipping_amount ? money(meta.shipping_amount, o.currency) : '—'}</td>
                           <td className={`${td} text-center`}>{payStatusBadge(o.payment_status)}</td>
-                          <td className={`${td} text-right font-semibold tabular-nums`}>{money(o.total_amount)}</td>
+                          <td className={`${td} text-right font-semibold tabular-nums`}>{money(o.total_amount, o.currency)}</td>
                         </tr>
                       );
                     })}

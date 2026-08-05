@@ -6,6 +6,8 @@ import { toast } from 'sonner';
 import { useFullCatalog, useAddOrderLines, type CatalogItem } from '@/hooks/usePOS';
 import { useSetAsideLine } from '@/hooks/useHeldItems';
 import { isFractionalUnit, parseQuantityInput } from '@/lib/pos/units';
+import { usePOSSettings } from '@/hooks/usePOSSettings';
+import { formatCurrency } from '@/lib/utils';
 
 export interface ReplaceableLine {
   id: string;
@@ -38,6 +40,8 @@ export function ReplaceItemDialog({
   onDone?: () => void;
 }) {
   const { data: catalog = [], isLoading } = useFullCatalog();
+  const { data: posSettings } = usePOSSettings();
+  const currency = (posSettings as any)?.currency ?? 'KES';
   const setAside = useSetAsideLine();
   const addLines = useAddOrderLines();
 
@@ -152,7 +156,7 @@ export function ReplaceItemDialog({
               <div className="min-w-0">
                 <p className="text-sm font-semibold truncate">{replacement.name}</p>
                 <p className="text-[11px] text-muted-foreground">
-                  KSh {(replacement.price ?? 0).toLocaleString()} · {replacement.sku}
+                  {formatCurrency(replacement.price ?? 0, currency)} · {replacement.sku}
                 </p>
               </div>
               <div className="flex items-center gap-2 shrink-0">
@@ -196,7 +200,7 @@ export function ReplaceItemDialog({
                       <p className="text-sm font-medium truncate">{c.name}</p>
                       <p className="text-[11px] text-muted-foreground truncate">{c.sku}{c.category ? ` · ${c.category}` : ''}</p>
                     </div>
-                    <span className="shrink-0 text-sm font-bold tabular-nums">KSh {(c.price ?? 0).toLocaleString()}</span>
+                    <span className="shrink-0 text-sm font-bold tabular-nums">{formatCurrency(c.price ?? 0, currency)}</span>
                   </button>
                 ))
               )}

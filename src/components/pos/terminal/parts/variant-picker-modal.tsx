@@ -10,9 +10,10 @@
 
 import { Button } from '@/components/ui/base';
 import type { ItemVariant, MenuItem } from '@/components/pos/terminal/terminal-context';
-import { cn } from '@/lib/utils';
+import { cn, formatCurrency } from '@/lib/utils';
 import { Check, Minus, Plus, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { usePOSSettings } from '@/hooks/usePOSSettings';
 
 interface VariantPickerModalProps {
   open: boolean;
@@ -28,6 +29,8 @@ function formatAttributes(attributes?: Record<string, string>): string {
 }
 
 export function VariantPickerModal({ open, onClose, item, onConfirm }: VariantPickerModalProps) {
+  const { data: posSettings } = usePOSSettings();
+  const currency = (posSettings as any)?.currency ?? 'KES';
   const variants = useMemo(() => item.variants ?? [], [item.variants]);
   const [selectedId, setSelectedId] = useState<string | null>(variants.length === 1 ? variants[0].id : null);
   const [quantity, setQuantity] = useState(1);
@@ -72,7 +75,7 @@ export function VariantPickerModal({ open, onClose, item, onConfirm }: VariantPi
                     {v.barcode && <p className="text-[10px] text-muted-foreground font-mono truncate">{v.barcode}</p>}
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
-                    <span className="text-xs text-muted-foreground font-mono">KES {v.price.toLocaleString()}</span>
+                    <span className="text-xs text-muted-foreground font-mono">{formatCurrency(v.price, currency)}</span>
                     {isSelected && <Check className="h-4 w-4 text-primary" />}
                   </div>
                 </button>
@@ -104,7 +107,7 @@ export function VariantPickerModal({ open, onClose, item, onConfirm }: VariantPi
             disabled={!selected}
             className={cn('w-full min-h-[52px] text-base font-bold gap-2', !selected && 'opacity-50 cursor-not-allowed')}
           >
-            {selected ? `Add to Order — KES ${totalPrice.toLocaleString()}` : 'Select a variant'}
+            {selected ? `Add to Order — ${formatCurrency(totalPrice, currency)}` : 'Select a variant'}
           </Button>
         </div>
       </div>

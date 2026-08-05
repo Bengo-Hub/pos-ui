@@ -1082,9 +1082,10 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
             toast.info(`${promo.name}: add ${remaining} more ${item.name} to unlock Buy ${r.buy_quantity} Get ${r.get_quantity} ${r.get_discount_percent >= 100 ? 'Free' : `${r.get_discount_percent}% off`}`, { id: `happy-hour-${item.sku}` });
           }
         } else if (r.discount_type !== 'bogo') {
+          const dealCurrency = (posSettings as any)?.currency ?? 'KES';
           const deal = r.discount_type === 'percentage' ? `${r.discount_value}% off`
-            : r.discount_type === 'fixed_price' ? `fixed price KES ${r.discount_value}`
-            : `KES ${r.discount_value} off`;
+            : r.discount_type === 'fixed_price' ? `fixed price ${dealCurrency} ${r.discount_value}`
+            : `${dealCurrency} ${r.discount_value} off`;
           toast.info(`${promo.name}: ${item.name} is ${deal}`, { id: `happy-hour-${item.sku}` });
         }
       }

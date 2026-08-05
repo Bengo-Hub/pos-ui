@@ -4,6 +4,8 @@ import { useState } from 'react';
 import { X, Loader2, Utensils } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAddOrderLines } from '@/hooks/usePOS';
+import { usePOSSettings } from '@/hooks/usePOSSettings';
+import { formatCurrency } from '@/lib/utils';
 
 // Common order accessories for takeaway/delivery. Each can be added free (charge off) or billed.
 const DEFAULT_ACCESSORIES: { name: string; price: number }[] = [
@@ -34,6 +36,8 @@ interface Row { name: string; price: number; qty: number; charge: boolean }
  */
 export function AccessoriesModal({ open, orderId, orderNumber, onClose, onAdded }: AccessoriesModalProps) {
   const addLines = useAddOrderLines();
+  const { data: posSettings } = usePOSSettings();
+  const currency = (posSettings as any)?.currency ?? 'KES';
   const [rows, setRows] = useState<Record<string, Row>>({});
 
   if (!open) return null;
@@ -99,7 +103,7 @@ export function AccessoriesModal({ open, orderId, orderNumber, onClose, onAdded 
                       {on && '✓'}
                     </span>
                     {a.name}
-                    <span className="text-xs text-muted-foreground">KSh {a.price}</span>
+                    <span className="text-xs text-muted-foreground">{formatCurrency(a.price, currency)}</span>
                   </button>
                   {on && (
                     <div className="flex items-center gap-2">
@@ -121,7 +125,7 @@ export function AccessoriesModal({ open, orderId, orderNumber, onClose, onAdded 
         </div>
 
         <div className="flex items-center justify-between pt-2 border-t border-border">
-          <span className="text-sm text-muted-foreground">{selected.length} selected · <span className="font-semibold text-foreground">KSh {total.toLocaleString()}</span></span>
+          <span className="text-sm text-muted-foreground">{selected.length} selected · <span className="font-semibold text-foreground">{formatCurrency(total, currency)}</span></span>
           <button
             onClick={handleAdd}
             disabled={selected.length === 0 || addLines.isPending}

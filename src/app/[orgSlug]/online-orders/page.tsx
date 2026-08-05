@@ -14,9 +14,10 @@ import { AccessoriesModal } from '@/components/pos/accessories-modal';
 import { Utensils, Wallet, History as HistoryIcon } from 'lucide-react';
 import { useParams } from 'next/navigation';
 import { usePermissions, P } from '@/hooks/usePermissions';
+import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { useAuthStore } from '@/store/auth';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { cn } from '@/lib/utils';
+import { cn, formatCurrency } from '@/lib/utils';
 import { Bike, CheckCircle2, Clock, Loader2, MapPin, Package, Phone, QrCode, UserCheck } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -92,6 +93,8 @@ function kitchenDone(order: PickupOrder): boolean {
 function OrderCard({ order, tenantID, orgSlug }: { order: PickupOrder; tenantID: string; orgSlug: string }) {
   const qc = useQueryClient();
   const { can, canAny } = usePermissions();
+  const { data: posSettings } = usePOSSettings();
+  const currency = (posSettings as any)?.currency ?? 'KES';
   const [payOpen, setPayOpen] = useState(false);
   const [accOpen, setAccOpen] = useState(false);
   const invalidate = () => {
@@ -117,7 +120,7 @@ function OrderCard({ order, tenantID, orgSlug }: { order: PickupOrder; tenantID:
     <div className="rounded-2xl border border-border bg-card p-4 space-y-3">
       <OrderHeader order={order} />
       <div className="flex items-center justify-between gap-2 flex-wrap">
-        <p className="text-sm font-semibold text-foreground">KES {order.total_amount.toLocaleString()}</p>
+        <p className="text-sm font-semibold text-foreground">{formatCurrency(order.total_amount, currency)}</p>
         <div className="flex gap-2 flex-wrap">
           {/* Accessories (spoon/knife/packaging) — while the bill is still open. */}
           {!paid && can(P.ORDERS_ADD) && (
@@ -163,6 +166,8 @@ function OrderCard({ order, tenantID, orgSlug }: { order: PickupOrder; tenantID:
 function DeliveryOrderCard({ order, tenantID, orgSlug, onAssign }: { order: DeliveryOrder; tenantID: string; orgSlug: string; onAssign: (o: DeliveryOrder) => void }) {
   const qc = useQueryClient();
   const { can, canAny } = usePermissions();
+  const { data: posSettings } = usePOSSettings();
+  const currency = (posSettings as any)?.currency ?? 'KES';
   const [payOpen, setPayOpen] = useState(false);
   const [accOpen, setAccOpen] = useState(false);
   const invalidate = () => {
@@ -192,7 +197,7 @@ function DeliveryOrderCard({ order, tenantID, orgSlug, onAssign }: { order: Deli
         </div>
       )}
       <div className="flex items-center justify-between gap-2 flex-wrap">
-        <p className="text-sm font-semibold text-foreground">KES {order.total_amount.toLocaleString()}</p>
+        <p className="text-sm font-semibold text-foreground">{formatCurrency(order.total_amount, currency)}</p>
         <div className="flex items-center gap-2 flex-wrap">
           {assignedRiderName && (
             <span className="flex items-center gap-1.5 text-xs font-medium text-green-700 dark:text-green-400"><UserCheck className="h-3.5 w-3.5" />{assignedRiderName}</span>
@@ -232,13 +237,15 @@ function DeliveryOrderCard({ order, tenantID, orgSlug, onAssign }: { order: Deli
 
 // A read-only card for the collection History tab.
 function HistoryCard({ order }: { order: DeliveryOrder }) {
+  const { data: posSettings } = usePOSSettings();
+  const currency = (posSettings as any)?.currency ?? 'KES';
   const collected = order.metadata?.collected === true;
   const subtype = (order as any).order_subtype as string | undefined;
   return (
     <div className="rounded-2xl border border-border bg-card p-4 space-y-2">
       <OrderHeader order={order} />
       <div className="flex items-center justify-between">
-        <p className="text-sm font-semibold text-foreground">KES {order.total_amount.toLocaleString()}</p>
+        <p className="text-sm font-semibold text-foreground">{formatCurrency(order.total_amount, currency)}</p>
         <span className={`text-xs px-2.5 py-1 rounded-full font-semibold ${collected ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400' : 'bg-red-500/10 text-red-700 dark:text-red-400'}`}>
           {collected ? 'Collected' : 'Not collected'}{subtype ? ` · ${subtype}` : ''}
         </span>

@@ -42,7 +42,7 @@ import { CostHeaderToggle, MaskedCost } from '@/components/pos/cost-price';
 import { InlineDiscountCell, InlineMarginCell, InlinePriceCell, InlineTotalCell } from '@/components/pos/inline-line-cells';
 import { searchPlaceholderFor } from '@/lib/use-case-config';
 import { isFractionalUnit, parseQuantityInput } from '@/lib/pos/units';
-import { cn } from '@/lib/utils';
+import { cn, formatCurrency } from '@/lib/utils';
 import {
   Ban, ChefHat, ChevronLeft, Flame, Grid3x3, Image as ImageIcon, LayoutGrid, LayoutList, Loader2,
   Minus, Plus, Search, ShoppingCart, Trash2, User, X,
@@ -52,6 +52,8 @@ export function TerminalShell() {
   const t = useTerminal();
   const { cfg, cart } = t;
   const router = useRouter();
+  const currency = (t.posSettings as any)?.currency ?? 'KES';
+  const fmt = (n: number) => formatCurrency(n, currency);
   // Full-screen category/brand picker drawer (godigital-style "browse").
   const [browseOpen, setBrowseOpen] = useState(false);
   // REQ-006: management roles see a Cost column on the cart (pos-api only serializes
@@ -208,7 +210,7 @@ export function TerminalShell() {
         {t.isAddToBill && (
           <div className="px-3 py-2 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 flex items-center gap-2 text-sm">
             <span className="text-blue-600 dark:text-blue-400 font-bold">Current bill:</span>
-            <span className="text-blue-700 dark:text-blue-300">KSh {t.billOrderTotal.toLocaleString()}</span>
+            <span className="text-blue-700 dark:text-blue-300">{fmt(t.billOrderTotal)}</span>
           </div>
         )}
       </div>
@@ -233,7 +235,7 @@ export function TerminalShell() {
         <div className="flex items-center gap-3 shrink-0">
           {cart.length > 0 && (
             <span className="text-sm font-extrabold tabular-nums text-primary">
-              KES {t.total.toLocaleString()}
+              {fmt(t.total)}
             </span>
           )}
           {cart.length > 0 && (
@@ -354,6 +356,7 @@ export function TerminalShell() {
                     quantity={item.quantity}
                     editable={!item.nonBillable && !item.promoFree}
                     onCommitDiscount={(ud) => t.setLineDiscount(idx, ud)}
+                    currency={currency}
                   />
                 </span>
               )}
@@ -364,6 +367,7 @@ export function TerminalShell() {
                   canDiscount={canManagePrices}
                   disabled={!priceEditAllowed || item.nonBillable || item.promoFree}
                   onCommit={(p) => t.setLinePrice(idx, p, 'price edit')}
+                  currency={currency}
                 />
               </span>
               <div className="flex items-center justify-end gap-1.5">
@@ -455,6 +459,7 @@ export function TerminalShell() {
                       canDiscount={canManagePrices}
                       disabled={!priceEditAllowed || item.nonBillable || item.promoFree}
                       onCommit={(p) => t.setLinePrice(idx, p, 'price edit')}
+                      currency={currency}
                     /> ea
                   </span>
                   <span className="text-sm font-extrabold tabular-nums">
@@ -496,6 +501,7 @@ export function TerminalShell() {
                         quantity={item.quantity}
                         editable={!item.nonBillable && !item.promoFree}
                         onCommitDiscount={(ud) => t.setLineDiscount(idx, ud)}
+                        currency={currency}
                       />
                     </span>
                   )}
@@ -510,11 +516,11 @@ export function TerminalShell() {
       <div className="shrink-0 border-t border-border bg-card px-4 py-2.5 space-y-1">
         <div className="flex items-center justify-between text-xs">
           <span className="text-muted-foreground">Items: <b className="text-foreground">{t.cartItemCount}</b></span>
-          <span className="text-muted-foreground">Subtotal: <b className="text-foreground tabular-nums">KES {t.subtotal.toLocaleString()}</b></span>
+          <span className="text-muted-foreground">Subtotal: <b className="text-foreground tabular-nums">{fmt(t.subtotal)}</b></span>
         </div>
         <div className="flex items-center justify-between text-xs">
-          <span className="text-muted-foreground">Order Tax(+): <b className="text-foreground tabular-nums">KES {t.tax.toLocaleString()}</b></span>
-          {t.loyaltyDiscount > 0 && <span className="text-emerald-600">Discount: -KES {t.loyaltyDiscount.toLocaleString()}</span>}
+          <span className="text-muted-foreground">Order Tax(+): <b className="text-foreground tabular-nums">{fmt(t.tax)}</b></span>
+          {t.loyaltyDiscount > 0 && <span className="text-emerald-600">Discount: -{fmt(t.loyaltyDiscount)}</span>}
         </div>
         {/* Void + fire-courses (hospitality), preserved from the cart panel */}
         {t.currentOrderId && t.can('pos.orders.void') && (
@@ -545,7 +551,7 @@ export function TerminalShell() {
   // footer. The Add-to-Bill button is its own compact variant (hospitality bill-adding flow). ───
   const renderAddToBill = () => (
     <div className="p-3 flex items-center justify-between gap-3">
-      <span className="text-sm font-bold">Total Payable: <span className="text-primary tabular-nums">KES {t.total.toLocaleString()}</span></span>
+      <span className="text-sm font-bold">Total Payable: <span className="text-primary tabular-nums">{fmt(t.total)}</span></span>
       <button onClick={t.handlePlaceOrder} disabled={cart.length === 0 || t.addOrderLinesPending}
         className="min-h-12 px-6 rounded-xl bg-primary text-primary-foreground font-bold flex items-center gap-2 disabled:opacity-50">
         {t.addOrderLinesPending ? <Loader2 className="h-5 w-5 animate-spin" /> : <ChefHat className="h-5 w-5" />} Add to Bill →

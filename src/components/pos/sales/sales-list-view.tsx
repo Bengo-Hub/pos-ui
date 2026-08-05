@@ -248,7 +248,7 @@ export function SalesListView({ orgSlug, fixedSource, title, subtitle }: {
           {o.order_number}
           {(o.return_count ?? 0) > 0 && (
             <Link href={`/${orgSlug}/returns`} onClick={(e) => e.stopPropagation()}
-              title={`${o.return_count} sell return${o.return_count > 1 ? 's' : ''} (${o.return_status}) — ${money(o.return_total)}`}
+              title={`${o.return_count} sell return${o.return_count > 1 ? 's' : ''} (${o.return_status}) — ${money(o.return_total, o.currency)}`}
               aria-label="View sell returns for this sale"
               className="inline-flex h-4.5 w-4.5 items-center justify-center rounded-full bg-red-500/15 text-red-600 hover:bg-red-500/25">
               <Undo2 className="h-3 w-3" />
@@ -316,20 +316,20 @@ export function SalesListView({ orgSlug, fixedSource, title, subtitle }: {
     },
     {
       key: 'total', header: 'Total', align: 'right', sortable: true, accessor: (o) => o.total_amount ?? 0,
-      render: (o) => <span className="font-semibold tabular-nums whitespace-nowrap">{money(o.total_amount)}</span>,
+      render: (o) => <span className="font-semibold tabular-nums whitespace-nowrap">{money(o.total_amount, o.currency)}</span>,
     },
     {
       key: 'paid', header: 'Paid', align: 'right', accessor: (o) => o.total_paid ?? 0,
-      render: (o) => <span className="tabular-nums whitespace-nowrap">{money(o.total_paid)}</span>,
+      render: (o) => <span className="tabular-nums whitespace-nowrap">{money(o.total_paid, o.currency)}</span>,
     },
     {
       key: 'due', header: 'Sell Due', align: 'right', accessor: (o) => o.amount_due ?? 0,
-      render: (o) => <span className="tabular-nums whitespace-nowrap">{o.amount_due > 0.01 ? money(o.amount_due) : '—'}</span>,
+      render: (o) => <span className="tabular-nums whitespace-nowrap">{o.amount_due > 0.01 ? money(o.amount_due, o.currency) : '—'}</span>,
     },
     {
       key: 'return', header: 'Sell Return', align: 'right', accessor: (o) => o.return_total ?? 0,
       render: (o) => (o.return_count ?? 0) > 0
-        ? <span className="text-red-600 font-medium tabular-nums whitespace-nowrap">{money(o.return_total)}</span>
+        ? <span className="text-red-600 font-medium tabular-nums whitespace-nowrap">{money(o.return_total, o.currency)}</span>
         : <span className="tabular-nums">—</span>,
     },
     {
@@ -420,7 +420,7 @@ export function SalesListView({ orgSlug, fixedSource, title, subtitle }: {
         confirmLabel="Delete permanently" variant="danger" onConfirm={handleDeleteSale} loading={deleteSale.isPending} />
       <ConfirmDialog open={!!putOnAccountOrder} onOpenChange={(o) => !o && setPutOnAccountOrder(null)}
         title="Put balance on account?"
-        description={`This books the ${money(putOnAccountOrder?.amount_due ?? 0)} still owed on ${putOnAccountOrder?.order_number} to ${putOnAccountOrder?.customer_name || 'the customer'}'s account (treasury AR) and finalizes the sale. The customer's credit limit is enforced.`}
+        description={`This books the ${money(putOnAccountOrder?.amount_due ?? 0, putOnAccountOrder?.currency)} still owed on ${putOnAccountOrder?.order_number} to ${putOnAccountOrder?.customer_name || 'the customer'}'s account (treasury AR) and finalizes the sale. The customer's credit limit is enforced.`}
         confirmLabel="Put on account" onConfirm={handlePutOnAccount} loading={closeOnAccount.isPending} />
       {bulkVoidKeys && (
         <BulkVoidReasonDialog

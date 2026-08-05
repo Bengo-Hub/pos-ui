@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/base';
 import { cn } from '@/lib/utils';
+import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { money, prettyMethod, ModalFrame } from './sales-shared';
 import type { BulkOrderSkip, OrdersSummary } from '@/hooks/usePOS';
 
@@ -44,8 +45,8 @@ export function OrderLinesPanel({ order, noun }: { order: any; noun: 'sale' | 'd
             <td className={c}>{l.name}</td>
             <td className={`${c} font-mono`}>{l.sku || '—'}</td>
             <td className={`${c} text-right tabular-nums`}>{l.quantity}</td>
-            <td className={`${c} text-right tabular-nums`}>{money(l.unit_price)}</td>
-            <td className={`${c} text-right tabular-nums font-semibold`}>{money(l.total_price)}</td>
+            <td className={`${c} text-right tabular-nums`}>{money(l.unit_price, order.currency)}</td>
+            <td className={`${c} text-right tabular-nums font-semibold`}>{money(l.total_price, order.currency)}</td>
           </tr>
         ))}
       </tbody>
@@ -138,6 +139,10 @@ const NON_COMMITTED_STATUSES = new Set(['voided', 'cancelled', 'draft']);
  * so the figures stay put while the user pages through rows.
  */
 export function SalesSummaryFooter({ summary }: { summary: OrdersSummary }) {
+  // Aggregate across the whole filtered set (potentially multiple orders/outlets) — no single
+  // order to read .currency off, so this is the one spot that needs the tenant-wide setting.
+  const { data: posSettings } = usePOSSettings();
+  const currency = (posSettings as any)?.currency ?? 'KES';
   const stat = (label: string, value: React.ReactNode) => (
     <div className="min-w-24">
       <div className="text-[11px] uppercase tracking-wider text-muted-foreground">{label}</div>
@@ -149,12 +154,12 @@ export function SalesSummaryFooter({ summary }: { summary: OrdersSummary }) {
       <div className="flex flex-wrap items-end gap-x-8 gap-y-2">
         {stat('Total Sales', summary.total_matching.toLocaleString())}
         {stat('Items', summary.item_count.toLocaleString())}
-        {stat('Total', money(summary.sum_total))}
-        {stat('Paid', money(summary.sum_paid))}
-        {stat('Sell Due', money(summary.sum_due))}
+        {stat('Total', money(summary.sum_total, currency))}
+        {stat('Paid', money(summary.sum_paid, currency))}
+        {stat('Sell Due', money(summary.sum_due, currency))}
         {stat('Sell Return', summary.sum_return > 0.01
-          ? <span className="text-red-600">{money(summary.sum_return)}</span>
-          : money(0))}
+          ? <span className="text-red-600">{money(summary.sum_return, currency)}</span>
+          : money(0, currency))}
       </div>
       <div className="flex flex-wrap gap-x-6 gap-y-1.5 text-xs text-muted-foreground">
         {STATUS_ORDER.some((s) => summary.status_counts?.[s]) && (
@@ -165,7 +170,7 @@ export function SalesSummaryFooter({ summary }: { summary: OrdersSummary }) {
                 className={cn('whitespace-nowrap', NON_COMMITTED_STATUSES.has(s) && 'text-amber-600')}
                 title={NON_COMMITTED_STATUSES.has(s) ? 'Not counted in Total/Paid/Sell Due above' : undefined}
               >
-                {STATUS_LABELS[s]} - {summary.status_counts[s]} ({money(summary.status_amounts?.[s] ?? 0)})
+                {STATUS_LABELS[s]} - {summary.status_counts[s]} ({money(summary.status_amounts?.[s] ?? 0, currency)})
               </span>
             ))}
           </span>
@@ -176,7 +181,7 @@ export function SalesSummaryFooter({ summary }: { summary: OrdersSummary }) {
               .sort((a, b) => b[1] - a[1])
               .map(([m, n]) => (
                 <span key={m} className="whitespace-nowrap">
-                  {prettyMethod(m)} - {n} ({money(summary.method_amounts?.[m] ?? 0)})
+                  {prettyMethod(m)} - {n} ({money(summary.method_amounts?.[m] ?? 0, currency)})
                 </span>
               ))}
           </span>

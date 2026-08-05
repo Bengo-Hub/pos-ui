@@ -164,7 +164,7 @@ export function DraftsListView({ orgSlug }: { orgSlug: string }) {
     },
     {
       key: 'total', header: 'Total', align: 'right', sortable: true, accessor: (o) => o.total_amount ?? 0,
-      render: (o) => <span className="font-semibold tabular-nums whitespace-nowrap">{money(o.total_amount)}</span>,
+      render: (o) => <span className="font-semibold tabular-nums whitespace-nowrap">{money(o.total_amount, o.currency)}</span>,
     },
     {
       key: 'cashier', header: 'Created By', sortable: true,

@@ -2,6 +2,8 @@
 
 import { useState } from 'react';
 import { Percent, ReceiptText, X } from 'lucide-react';
+import { usePOSSettings } from '@/hooks/usePOSSettings';
+import { formatCurrency } from '@/lib/utils';
 
 interface OrderTaxModalProps {
   open: boolean;
@@ -18,6 +20,8 @@ interface OrderTaxModalProps {
  * + audited server-side).
  */
 export function OrderTaxModal({ open, subtotal, currentAmount, onApply, onClose }: OrderTaxModalProps) {
+  const { data: posSettings } = usePOSSettings();
+  const currency = (posSettings as any)?.currency ?? 'KES';
   const [mode, setMode] = useState<'percent' | 'amount'>('percent');
   const [value, setValue] = useState<string>(currentAmount ? String(currentAmount) : '');
 
@@ -50,12 +54,12 @@ export function OrderTaxModal({ open, subtotal, currentAmount, onApply, onClose 
         <input
           type="number" min={0} autoFocus inputMode="decimal"
           value={value} onChange={(e) => setValue(e.target.value)}
-          placeholder={mode === 'percent' ? 'e.g. 16 (%)' : 'e.g. 320 (KES)'}
+          placeholder={mode === 'percent' ? 'e.g. 16 (%)' : `e.g. 320 (${currency})`}
           className="w-full bg-accent/10 border border-border rounded-lg py-2.5 px-3 text-lg font-bold text-center focus:ring-1 focus:ring-primary outline-none"
         />
 
         <div className="text-xs text-muted-foreground text-center">
-          Order tax: <span className="font-bold text-foreground">KES {amount.toLocaleString()}</span> ({pct.toFixed(1)}% of subtotal) — added on top of item tax
+          Order tax: <span className="font-bold text-foreground">{formatCurrency(amount, currency)}</span> ({pct.toFixed(1)}% of subtotal) — added on top of item tax
         </div>
 
         <div className="flex gap-2">

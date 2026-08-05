@@ -13,6 +13,7 @@ import { useSetAsideLine } from '@/hooks/useHeldItems';
 import { Loader2, Plus, PackageOpen } from 'lucide-react';
 import { toast } from 'sonner';
 import { useParams, useRouter } from 'next/navigation';
+import { formatCurrency } from '@/lib/utils';
 
 export default function OrderDetailPage() {
   const params = useParams();
@@ -59,6 +60,8 @@ export default function OrderDetailPage() {
 
   const lines = order.edges?.lines ?? [];
   const payments = order.edges?.payments ?? [];
+  const currency = order.currency ?? 'KES';
+  const fmt = (n: number) => formatCurrency(n, currency);
 
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-6">
@@ -146,15 +149,15 @@ export default function OrderDetailPage() {
                         </td>
                         <td className="px-4 py-3 text-center">{line.quantity}</td>
                         <td className="px-4 py-3 text-right font-mono">
-                          KES {(line.unit_price ?? 0).toLocaleString()}
+                          {fmt(line.unit_price ?? 0)}
                         </td>
                         <td className={cn('px-4 py-3 text-right font-mono font-semibold', fullyVoided && 'line-through')}>
-                          KES {(
+                          {fmt(
                             line.total_price ??
                             line.line_total ??
                             line.total ??
                             (line.unit_price ?? 0) * (line.quantity ?? 0)
-                          ).toLocaleString()}
+                          )}
                         </td>
                         {['open', 'pending_payment'].includes(order.status) && (
                           <td className="px-4 py-3">
@@ -204,15 +207,15 @@ export default function OrderDetailPage() {
                   arrives as a missing field, so every money read must default to 0. */}
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Subtotal</span>
-                <span className="font-mono font-semibold">KES {(order.subtotal ?? 0).toLocaleString()}</span>
+                <span className="font-mono font-semibold">{fmt(order.subtotal ?? 0)}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Tax</span>
-                <span className="font-mono font-semibold">KES {(order.tax_total ?? 0).toLocaleString()}</span>
+                <span className="font-mono font-semibold">{fmt(order.tax_total ?? 0)}</span>
               </div>
               <div className="flex justify-between border-t border-border pt-2.5 mt-1">
                 <span className="font-bold">Total</span>
-                <span className="font-mono font-bold text-primary text-base">KES {(order.total_amount ?? 0).toLocaleString()}</span>
+                <span className="font-mono font-bold text-primary text-base">{fmt(order.total_amount ?? 0)}</span>
               </div>
             </div>
           </div>
@@ -232,7 +235,7 @@ export default function OrderDetailPage() {
                       </p>
                     </div>
                     <span className="font-mono font-semibold text-green-600 shrink-0">
-                      KES {(p.amount ?? 0).toLocaleString()}
+                      {fmt(p.amount ?? 0)}
                     </span>
                   </div>
                 ))}

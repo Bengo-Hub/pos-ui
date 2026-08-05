@@ -7,6 +7,8 @@ import { usePermissions, P } from '@/hooks/usePermissions';
 import { useHeldItems, useVoidHeldItem, type HeldItem } from '@/hooks/useHeldItems';
 import { ClaimHeldItemDialog } from '@/components/pos/claim-held-item-dialog';
 import { ManagerPinDialog } from '@/components/pos/manager-pin-dialog';
+import { usePOSSettings } from '@/hooks/usePOSSettings';
+import { formatCurrency } from '@/lib/utils';
 
 /**
  * HeldItemsPanel lists the outlet's set-aside (parked/upsell) items — wrongly-ordered but already
@@ -17,6 +19,8 @@ import { ManagerPinDialog } from '@/components/pos/manager-pin-dialog';
  */
 export function HeldItemsPanel({ compact = false }: { compact?: boolean }) {
   const { data: held = [], isLoading } = useHeldItems('held');
+  const { data: posSettings } = usePOSSettings();
+  const currency = (posSettings as any)?.currency ?? 'KES';
   const voidItem = useVoidHeldItem();
   const { can } = usePermissions();
   const selfApprove = can(P.ORDERS_VOID_SELF);
@@ -70,7 +74,7 @@ export function HeldItemsPanel({ compact = false }: { compact?: boolean }) {
           <div className="min-w-0">
             <p className="text-sm font-medium truncate">{h.quantity}× {h.name}</p>
             <p className="text-[11px] text-muted-foreground truncate">
-              KSh {h.unit_price.toLocaleString()}{h.reason ? ` · ${h.reason}` : ''}
+              {formatCurrency(h.unit_price, currency)}{h.reason ? ` · ${h.reason}` : ''}
             </p>
           </div>
           <div className="flex items-center gap-1.5 shrink-0">

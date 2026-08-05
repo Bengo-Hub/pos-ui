@@ -22,6 +22,8 @@ import type { LoyaltyAccount } from '@/lib/api/clients';
 import { usePermissions } from '@/hooks/usePermissions';
 import { P } from '@/lib/rbac/permissions';
 import { normalizeKePhone } from '@/lib/phone';
+import { usePOSSettings } from '@/hooks/usePOSSettings';
+import { formatCurrency } from '@/lib/utils';
 
 export interface LoyaltyState {
   accountId: string;
@@ -48,6 +50,8 @@ export function LoyaltyPanel({ onStateChange, orderId, layout = 'stack', initial
   const { can } = usePermissions();
   const canLoyalty = can(P.LOYALTY_VIEW);
   const canAdd = can(P.LOYALTY_ADD);
+  const { data: posSettings } = usePOSSettings();
+  const currency = (posSettings as any)?.currency ?? 'KES';
 
   const [selected, setSelected] = useState<SelectedCustomer>(
     initialSelected && !initialSelected.isWalkIn ? initialSelected : WALK_IN_CUSTOMER,
@@ -133,7 +137,7 @@ export function LoyaltyPanel({ onStateChange, orderId, layout = 'stack', initial
         onSuccess: () => {
           setRedeemed(true);
           emit(selected, account, discountKSh);
-          toast.success(`Redeemed ${pointsToRedeem} pts — KSh ${discountKSh} off`);
+          toast.success(`Redeemed ${pointsToRedeem} pts — ${formatCurrency(discountKSh, currency)} off`);
         },
         onError: async (e) => toast.error(await apiErrorMessage(e, 'Failed to redeem points')),
       },
@@ -167,7 +171,7 @@ export function LoyaltyPanel({ onStateChange, orderId, layout = 'stack', initial
               className="inline-flex items-center gap-1 rounded-lg bg-primary px-2 py-1 font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
             >
               {redeemPoints.isPending && <Loader2 className="h-3 w-3 animate-spin" />}
-              Redeem KSh {Math.floor((account?.points_balance ?? 0) * (program?.redeem_rate ?? 0.01)).toLocaleString()}
+              Redeem {formatCurrency(Math.floor((account?.points_balance ?? 0) * (program?.redeem_rate ?? 0.01)), currency)}
             </button>
           ) : (
             <span className="text-muted-foreground">

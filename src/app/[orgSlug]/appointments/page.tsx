@@ -13,7 +13,9 @@ import {
 } from '@/hooks/useAppointments';
 import type { Appointment, AppointmentStatus, CreateAppointmentInput } from '@/hooks/useAppointments';
 import { useMenuItems } from '@/hooks/usePOS';
+import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { usePermissions, P } from '@/hooks/usePermissions';
+import { formatCurrency } from '@/lib/utils';
 import {
   Calendar,
   Loader2,
@@ -65,6 +67,8 @@ function BookingForm({
   onSuccess: () => void;
 }) {
   const create = useCreateAppointment();
+  const { data: posSettings } = usePOSSettings();
+  const currency = (posSettings as any)?.currency ?? 'KES';
   const { data: staffData } = useStaffList();
   const staffList = staffData?.data ?? [];
 
@@ -189,7 +193,7 @@ function BookingForm({
                       >
                         <span className="font-medium truncate">{svc.name}</span>
                         <span className="text-xs text-muted-foreground shrink-0">
-                          {svc.duration_minutes ? `${svc.duration_minutes}min` : ''}{svc.price ? ` · KES ${svc.price.toLocaleString()}` : ''}
+                          {svc.duration_minutes ? `${svc.duration_minutes}min` : ''}{svc.price ? ` · ${formatCurrency(svc.price, currency)}` : ''}
                         </span>
                       </button>
                     ))}
@@ -212,7 +216,7 @@ function BookingForm({
                 <input type="number" value={form.duration_minutes ?? 30} onChange={(e) => set('duration_minutes', parseInt(e.target.value, 10) || 30)} min={5} step={5} className={inputClass} />
               </div>
               <div>
-                <label className="text-xs font-bold text-muted-foreground mb-1 block">Deposit (KES)</label>
+                <label className="text-xs font-bold text-muted-foreground mb-1 block">Deposit ({currency})</label>
                 <input type="number" value={form.deposit_amount ?? ''} onChange={(e) => set('deposit_amount', e.target.value ? parseFloat(e.target.value) : undefined)} min={0} step={50} placeholder="0" className={inputClass} />
               </div>
             </div>

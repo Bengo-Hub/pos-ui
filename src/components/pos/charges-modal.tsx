@@ -2,6 +2,8 @@
 
 import { useState } from 'react';
 import { PackagePlus, X } from 'lucide-react';
+import { usePOSSettings } from '@/hooks/usePOSSettings';
+import { formatCurrency } from '@/lib/utils';
 
 interface ChargesModalProps {
   open: boolean;
@@ -23,6 +25,8 @@ const CHARGE_FIELDS: Array<{ key: string; label: string; hint: string }> = [
  * audited server-side).
  */
 export function ChargesModal({ open, current, onApply, onClose }: ChargesModalProps) {
+  const { data: posSettings } = usePOSSettings();
+  const currency = (posSettings as any)?.currency ?? 'KES';
   const [values, setValues] = useState<Record<string, string>>(() =>
     Object.fromEntries(CHARGE_FIELDS.map((f) => [f.key, current[f.key] ? String(current[f.key]) : '']))
   );
@@ -51,7 +55,7 @@ export function ChargesModal({ open, current, onApply, onClose }: ChargesModalPr
         <div className="space-y-3">
           {CHARGE_FIELDS.map((f) => (
             <label key={f.key} className="block">
-              <span className="text-xs font-semibold text-muted-foreground">{f.label} (KES)</span>
+              <span className="text-xs font-semibold text-muted-foreground">{f.label} ({currency})</span>
               <input
                 type="number" min={0} inputMode="decimal"
                 value={values[f.key]}
@@ -64,7 +68,7 @@ export function ChargesModal({ open, current, onApply, onClose }: ChargesModalPr
         </div>
 
         <div className="text-xs text-muted-foreground text-center">
-          Total charges: <span className="font-bold text-foreground">KES {sum.toLocaleString()}</span>
+          Total charges: <span className="font-bold text-foreground">{formatCurrency(sum, currency)}</span>
         </div>
 
         <div className="flex gap-2">

@@ -28,7 +28,8 @@ import { apiErrorMessage } from '@/lib/api/error-message';
 import { rbacApi } from '@/lib/api/rbac';
 import { applyRoundOff, computeCartTax } from '@/lib/pos/cart-tax';
 import { isFractionalUnit, parseQuantityInput } from '@/lib/pos/units';
-import { cn } from '@/lib/utils';
+import { isLineActive, remainingLineQty } from '@/lib/pos/order-lines';
+import { cn, formatCurrency } from '@/lib/utils';
 import { useAuthStore } from '@/store/auth';
 import { FeatureLock, useFeatureUpgrade } from '@bengo-hub/shared-ui-lib/subscription';
 import { Check, Loader2, Minus, Plus, Search, ShoppingCart, Tag, Trash2, Truck, User, Users, X } from 'lucide-react';
@@ -68,8 +69,6 @@ function tierPrice(item: any, profile: string): number {
   return item?.price ?? 0;
 }
 
-const fmt = (n: number) => `KES ${n.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
-
 export default function AddSalePage() {
   const params = useParams();
   const router = useRouter();
@@ -84,6 +83,8 @@ export default function AddSalePage() {
   // so the preview must not show VAT either); otherwise the configured rate. Items that DO carry
   // treasury tax info (tax_rate/tax_inclusive) always use their own per-line values instead.
   const taxRate = (posSettings?.vat_enabled === false ? 0 : (posSettings?.vat_rate ?? 16)) / 100;
+  const currency = (posSettings as any)?.currency ?? 'KES';
+  const fmt = (n: number) => formatCurrency(n, currency);
 
   // ── Customer ── (rich phone search; defaults to the seeded Walk-in Customer)
   const [customer, setCustomer] = useState<SelectedCustomer | null>(WALK_IN_CUSTOMER);
@@ -330,16 +331,20 @@ export default function AddSalePage() {
   useEffect(() => {
     const o: any = editInplaceQ.data;
     if (!o || !editInplaceId || (editInplace && editInplace.id === editInplaceId)) return;
-    const activeLines = (o.edges?.lines ?? []).filter((l: any) => !l.voided_qty);
+    // isLineActive/remainingLineQty (not a raw `!voided_qty` check) — a PARTIALLY reduced line
+    // still has a real remaining quantity and must stay editable; only a FULLY voided line
+    // (remaining <= 0) drops out of the cart. Getting this wrong is what silently deleted a
+    // never-touched unit live on order #000141 — see order-lines.ts's doc comment.
+    const activeLines = (o.edges?.lines ?? []).filter((l: any) => isLineActive(l));
     setLines(activeLines.map((l: any) => ({
       item: { id: l.catalog_item_id, sku: l.sku, name: l.name, price: l.unit_price, category: '' } as CatalogItem,
-      quantity: l.quantity,
+      quantity: remainingLineQty(l),
       unitPrice: l.unit_price,
       preset: l.unit_price,
       priceEdited: true,
       lineId: l.id,
       savedPrice: l.unit_price,
-      savedQty: l.quantity,
+      savedQty: remainingLineQty(l),
     })));
     if (o.customer_name || o.customer_phone) {
       setCustomer({ name: o.customer_name ?? '', phone: o.customer_phone ?? '', isWalkIn: !o.customer_phone } as SelectedCustomer);
@@ -1070,6 +1075,7 @@ export default function AddSalePage() {
                           canDiscount={canPrivileged}
                           disabled={!canPrivileged && !(posSettings?.allow_price_above_base ?? true)}
                           onCommit={(p) => setPrice(i, p)}
+                          currency={currency}
                         />
                       </td>
                       {canApplyDiscount && (
@@ -1080,6 +1086,7 @@ export default function AddSalePage() {
                             quantity={l.quantity}
                             editable={canApplyDiscount}
                             onCommitDiscount={(ud) => setLineDiscount(i, ud)}
+                            currency={currency}
                           />
                         </td>
                       )}
@@ -1335,6 +1342,7 @@ export default function AddSalePage() {
           line={lines[savingLineIdx]}
           orderNumber={resume.number}
           saving={editLine.isPending}
+          currency={currency}
           onClose={() => setSavingLineIdx(null)}
           onConfirm={(reason, updateCatalog) => confirmSaveLine(savingLineIdx, reason, updateCatalog)}
         />
@@ -1348,13 +1356,15 @@ export default function AddSalePage() {
  * change, captures the (required) audit reason, and offers to propagate a price change
  * to the inventory catalog so future sales pick it up too.
  */
-function SaveLineModal({ line, orderNumber, saving, onConfirm, onClose }: {
+function SaveLineModal({ line, orderNumber, saving, onConfirm, onClose, currency = 'KES' }: {
   line: SaleLine;
   orderNumber: string;
   saving: boolean;
   onConfirm: (reason: string, updateCatalog: boolean) => void;
   onClose: () => void;
+  currency?: string;
 }) {
+  const fmt = (n: number) => formatCurrency(n, currency);
   const priceChanged = line.unitPrice !== line.savedPrice;
   const qtyChanged = line.quantity !== line.savedQty;
   const [reason, setReason] = useState('Price correction at order edit');

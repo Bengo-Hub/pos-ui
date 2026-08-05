@@ -10,12 +10,13 @@ import { PosToolbar } from '@/components/pos/terminal/pos-toolbar';
 import { CategoryNav } from '@/components/pos/category-nav';
 import { ScaleDisplay } from '@/components/retail/ScaleDisplay';
 import { useTerminal } from '@/components/pos/terminal/terminal-context';
-import { cn } from '@/lib/utils';
+import { cn, formatCurrency } from '@/lib/utils';
 import { Grid3x3, Image as ImageIcon, LayoutList, Search, X } from 'lucide-react';
 
 export function TerminalHeader() {
   const t = useTerminal();
   const { cfg } = t;
+  const currency = (t.posSettings as any)?.currency ?? 'KES';
 
   return (
     <>
@@ -106,7 +107,7 @@ export function TerminalHeader() {
         <div className="mx-4 mb-3 px-4 py-2.5 rounded-xl bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 shrink-0 flex items-center gap-2">
           <span className="text-blue-600 dark:text-blue-400 font-bold text-sm">Current bill:</span>
           <span className="text-sm text-blue-700 dark:text-blue-300">
-            KSh {t.billOrderTotal.toLocaleString()}
+            {formatCurrency(t.billOrderTotal, currency)}
           </span>
         </div>
       )}

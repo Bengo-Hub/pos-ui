@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import { Tag, X } from 'lucide-react';
 import type { CartItem } from '@/components/pos/terminal/terminal-context';
+import { usePOSSettings } from '@/hooks/usePOSSettings';
+import { formatCurrency } from '@/lib/utils';
 
 interface LinePriceModalProps {
   open: boolean;
@@ -24,6 +26,8 @@ interface LinePriceModalProps {
  * server-side as price.override (manager step-up for non-managers).
  */
 export function LinePriceModal({ open, item, canDiscount = false, requireApprovalBelowBase = true, onApply, onClose }: LinePriceModalProps) {
+  const { data: posSettings } = usePOSSettings();
+  const currency = (posSettings as any)?.currency ?? 'KES';
   const original = item?.originalPrice ?? item?.price ?? 0;
   const [value, setValue] = useState<string>(item ? String(item.price) : '');
   const [reason, setReason] = useState(item?.overrideReason ?? '');
@@ -54,14 +58,14 @@ export function LinePriceModal({ open, item, canDiscount = false, requireApprova
         </div>
 
         <div className="text-xs text-muted-foreground">
-          {item.name} — preset price <span className="font-semibold text-foreground">KES {original.toLocaleString()}</span>
-          {maxPrice != null && <span> · ceiling KES {maxPrice.toLocaleString()}</span>}
+          {item.name} — preset price <span className="font-semibold text-foreground">{formatCurrency(original, currency)}</span>
+          {maxPrice != null && <span> · ceiling {formatCurrency(maxPrice, currency)}</span>}
         </div>
 
         <input
           type="number" min={0} autoFocus inputMode="decimal"
           value={value} onChange={(e) => setValue(e.target.value)}
-          placeholder="New unit price (KES)"
+          placeholder={`New unit price (${currency})`}
           className="w-full bg-accent/10 border border-border rounded-lg py-2.5 px-3 text-lg font-bold text-center focus:ring-1 focus:ring-primary outline-none"
         />
         {!canDiscount && belowPreset && requireApprovalBelowBase && (

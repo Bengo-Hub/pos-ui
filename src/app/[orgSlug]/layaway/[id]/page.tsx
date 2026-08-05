@@ -10,7 +10,8 @@ import {
   type LayawayPlan,
   type RecordPaymentInput,
 } from '@/hooks/useLayaway';
-import { cn } from '@/lib/utils';
+import { cn, formatCurrency } from '@/lib/utils';
+import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { AlertTriangle, Loader2, X } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
 import { useState } from 'react';
@@ -34,6 +35,8 @@ function LayawayDetailPage() {
   const { data: plan, isLoading } = useLayawayPlan(id);
   const recordPayment = useRecordLayawayPayment(id);
   const cancelPlan = useCancelLayaway();
+  const { data: posSettings } = usePOSSettings();
+  const currency = (posSettings as any)?.currency ?? 'KES';
 
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [paymentForm, setPaymentForm] = useState<RecordPaymentInput>({
@@ -141,7 +144,7 @@ function LayawayDetailPage() {
         <div className="grid grid-cols-3 gap-4 text-center">
           <div>
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Total</p>
-            <p className="text-xl font-bold font-mono">KES {plan.total_amount.toLocaleString()}</p>
+            <p className="text-xl font-bold font-mono">{formatCurrency(plan.total_amount, currency)}</p>
           </div>
           <div>
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Paid</p>
@@ -191,7 +194,7 @@ function LayawayDetailPage() {
             <tbody className="divide-y divide-border">
               {plan.payments.map((p) => (
                 <tr key={p.id}>
-                  <td className="px-4 py-3 font-mono font-semibold text-green-600">KES {p.amount.toLocaleString()}</td>
+                  <td className="px-4 py-3 font-mono font-semibold text-green-600">{formatCurrency(p.amount, currency)}</td>
                   <td className="px-4 py-3 capitalize">{p.payment_method}</td>
                   <td className="px-4 py-3 text-muted-foreground">{p.reference ?? '—'}</td>
                   <td className="px-4 py-3 text-muted-foreground">{new Date(p.created_at).toLocaleString()}</td>
@@ -215,7 +218,7 @@ function LayawayDetailPage() {
             <form onSubmit={handleRecordPayment} className="space-y-4">
               <div>
                 <label className="text-xs font-semibold text-muted-foreground mb-1.5 block">
-                  Amount (KES) <span className="text-destructive">*</span>
+                  Amount ({currency}) <span className="text-destructive">*</span>
                 </label>
                 <input
                   required

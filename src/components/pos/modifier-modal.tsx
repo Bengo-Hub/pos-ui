@@ -1,7 +1,8 @@
 'use client';
 
 import { Button } from '@/components/ui/base';
-import { cn } from '@/lib/utils';
+import { cn, formatCurrency } from '@/lib/utils';
+import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { Check, Minus, Plus, X } from 'lucide-react';
 import { useState, useMemo } from 'react';
 
@@ -42,6 +43,8 @@ export function ModifierModal({
   modifierGroups,
   onConfirm,
 }: ModifierModalProps) {
+  const { data: posSettings } = usePOSSettings();
+  const currency = (posSettings as any)?.currency ?? 'KES';
   const [selections, setSelections] = useState<Record<string, string[]>>(() => {
     const defaults: Record<string, string[]> = {};
     for (const group of modifierGroups) {
@@ -95,7 +98,7 @@ export function ModifierModal({
         <div className="px-5 py-4 border-b border-border flex items-center justify-between">
           <div>
             <h3 className="font-bold text-lg">{itemName}</h3>
-            <p className="text-sm text-muted-foreground font-mono">KES {basePrice.toLocaleString()}</p>
+            <p className="text-sm text-muted-foreground font-mono">{formatCurrency(basePrice, currency)}</p>
           </div>
           <button onClick={onClose} className="h-10 w-10 rounded-xl flex items-center justify-center hover:bg-accent">
             <X className="h-5 w-5" />
@@ -129,7 +132,7 @@ export function ModifierModal({
                       <span className="text-sm font-medium">{opt.name}</span>
                       <div className="flex items-center gap-2">
                         {opt.price > 0 && (
-                          <span className="text-xs text-muted-foreground font-mono">+KES {opt.price.toLocaleString()}</span>
+                          <span className="text-xs text-muted-foreground font-mono">+{formatCurrency(opt.price, currency)}</span>
                         )}
                         {isSelected && <Check className="h-4 w-4 text-primary" />}
                       </div>
@@ -164,7 +167,7 @@ export function ModifierModal({
             disabled={!isValid}
             className={cn('w-full min-h-[52px] text-base font-bold gap-2', !isValid && 'opacity-50 cursor-not-allowed')}
           >
-            Add to Order — KES {totalPrice.toLocaleString()}
+            Add to Order — {formatCurrency(totalPrice, currency)}
           </Button>
         </div>
       </div>

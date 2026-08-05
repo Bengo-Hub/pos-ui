@@ -55,7 +55,7 @@ export function ViewPaymentsModal({ order, onClose }: { order: any; onClose: () 
       `<tr><td>${p.occurred_at ? new Date(p.occurred_at).toLocaleDateString('en-KE') : '—'}</td>` +
       `<td>${p.external_reference || String(p.id ?? '').slice(0, 10)}</td>` +
       `<td>${prettyMethod(p.tender_type || '')}</td><td>${p.note || ''}</td>` +
-      `<td style="text-align:right">${money(p.amount)}</td><td>${p.status}</td></tr>`).join('');
+      `<td style="text-align:right">${money(p.amount, order.currency)}</td><td>${p.status}</td></tr>`).join('');
     const w = window.open('', '_blank', 'width=720,height=560');
     if (!w) { toast.error('Pop-up blocked — allow pop-ups to print'); return; }
     w.document.write(
@@ -96,7 +96,7 @@ export function ViewPaymentsModal({ order, onClose }: { order: any; onClose: () 
                     <td className="py-2 pr-3 text-xs font-mono">{p.external_reference || String(p.id ?? '').slice(0, 10)}</td>
                     <td className="py-2 pr-3 text-xs">{p.tender_name || prettyMethod(p.tender_type || '')}</td>
                     <td className="py-2 pr-3 text-xs max-w-[160px] truncate" title={p.note}>{p.note || '—'}</td>
-                    <td className="py-2 pr-3 text-right tabular-nums">{money(p.amount)}</td>
+                    <td className="py-2 pr-3 text-right tabular-nums">{money(p.amount, order.currency)}</td>
                     <td className="py-2 pr-3">
                       {p.status === 'completed' ? <Badge variant="success">Completed</Badge>
                         : p.status === 'voided' ? <Badge variant="error">Voided</Badge>
@@ -163,8 +163,8 @@ export function ViewPaymentsModal({ order, onClose }: { order: any; onClose: () 
 
           <div className="flex items-center justify-between pt-1 border-t border-border">
             <div className="text-xs text-muted-foreground">
-              Total: <span className="font-semibold text-foreground">{money(order.total_amount)}</span>
-              {' · '}Paid: <span className="font-semibold text-foreground">{money(order.total_paid ?? order.paid_total ?? 0)}</span>
+              Total: <span className="font-semibold text-foreground">{money(order.total_amount, order.currency)}</span>
+              {' · '}Paid: <span className="font-semibold text-foreground">{money(order.total_paid ?? order.paid_total ?? 0, order.currency)}</span>
             </div>
             <Button variant="outline" size="sm" className="gap-1.5" onClick={printPayments}>
               <Printer className="h-3.5 w-3.5" /> Print
@@ -174,7 +174,7 @@ export function ViewPaymentsModal({ order, onClose }: { order: any; onClose: () 
       )}
 
       <ConfirmDialog open={!!voiding} onOpenChange={(o) => !o && setVoiding(null)} title="Void payment?"
-        description={`This voids ${money(voiding?.amount ?? 0)} on ${order.order_number}: the paid total is recomputed, a fully-paid sale reopens, and the reversal is posted to treasury.`}
+        description={`This voids ${money(voiding?.amount ?? 0, order.currency)} on ${order.order_number}: the paid total is recomputed, a fully-paid sale reopens, and the reversal is posted to treasury.`}
         confirmLabel="Void payment" variant="danger" onConfirm={handleVoid} />
     </ModalFrame>
   );

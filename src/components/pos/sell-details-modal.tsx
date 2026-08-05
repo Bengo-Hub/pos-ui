@@ -11,14 +11,15 @@ import { prettyMethod } from '@/components/pos/sales/sales-shared';
 import { P, usePermissions } from '@/hooks/usePermissions';
 import { useOrder } from '@/hooks/usePOS';
 import { apiClient } from '@/lib/api/client';
+import { isLineVoided, remainingLineQty } from '@/lib/pos/order-lines';
+import { cn, formatCurrency } from '@/lib/utils';
 import { useAuthStore } from '@/store/auth';
 import { useQuery } from '@tanstack/react-query';
 import { Banknote, Loader2, Pencil, RotateCcw, Undo2, X } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
 
-const money = (n: number | undefined | null) =>
-  `KSh ${Number(n ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const round2 = (n: number) => Math.round(n * 100) / 100;
 
 const STATUS_LABEL: Record<string, string> = {
   completed: 'Final', pending_payment: 'Ready for Payment', open: 'Open',
@@ -53,6 +54,8 @@ interface OrderReturn {
  */
 export function SellDetailsModal({ orderId, orgSlug, onClose }: { orderId: string; orgSlug: string; onClose: () => void }) {
   const { data: order, isLoading } = useOrder(orderId);
+  const currency = (order as any)?.currency ?? 'KES';
+  const money = (n: number | undefined | null) => formatCurrency(n ?? 0, currency);
   const tenantID = useAuthStore((s) => s.user?.tenant_id ?? '');
   const { can, canAny } = usePermissions();
   const canReturn = canAny([P.ORDERS_CHANGE_OWN, P.ORDERS_CHANGE, P.ORDERS_MANAGE]);
@@ -181,26 +184,43 @@ export function SellDetailsModal({ orderId, orgSlug, onClose }: { orderId: strin
                 </thead>
                 <tbody className="divide-y divide-border">
                   {lines.map((l: any, i: number) => {
-                    const sub = l.total_price ?? (l.unit_price ?? 0) * (l.quantity ?? 0);
+                    // remainingLineQty/isLineVoided (not raw l.quantity/l.total_price) — a line
+                    // reduced or fully removed by Edit Sale/a reversal keeps its ORIGINAL
+                    // quantity/total_price on the row (voided_qty tracks the reduction
+                    // separately), so showing those raw fields made this table's sum disagree
+                    // with "Total Payable" below it (which already correctly derives from the
+                    // server's voided_qty-adjusted order.total_amount). Fully-voided lines stay
+                    // visible — struck through with a Voided badge — since Sell Details is the
+                    // audit view of what happened to this sale, not just its current state.
+                    const remaining = remainingLineQty(l);
+                    const voided = isLineVoided(l);
+                    const ratio = l.quantity > 0 ? remaining / l.quantity : 1;
+                    const sub = remaining <= 0.009 ? 0 : round2((l.total_price ?? (l.unit_price ?? 0) * l.quantity) * ratio);
                     // Per-line happy-hour discount is stamped into line metadata by pos-api
                     // (discount_amount + a happy_hour {label} for the deal name).
                     const hh = l.metadata?.happy_hour;
-                    const lineDiscount = l.discount_amount ?? l.metadata?.discount_amount ?? hh?.discount_amount ?? 0;
+                    const lineDiscount = round2((l.discount_amount ?? l.metadata?.discount_amount ?? hh?.discount_amount ?? 0) * ratio);
+                    const lineTax = round2((l.tax_amount ?? 0) * ratio);
                     return (
-                      <tr key={l.id ?? i}>
+                      <tr key={l.id ?? i} className={remaining <= 0.009 ? 'opacity-60' : undefined}>
                         <td className="px-3 py-2 text-muted-foreground">{i + 1}</td>
-                        <td className="px-3 py-2">
+                        <td className={cn('px-3 py-2', remaining <= 0.009 && 'line-through')}>
                           {l.name}{l.sku ? <span className="text-muted-foreground"> {l.sku}</span> : ''}
                           {hh?.label && (
                             <span className="ml-2 text-[10px] font-semibold text-emerald-700 bg-emerald-100 rounded px-1.5 py-0.5 whitespace-nowrap">
                               {hh.label}
                             </span>
                           )}
+                          {voided && (
+                            <span className="ml-2 text-[10px] font-semibold text-red-700 bg-red-100 rounded px-1.5 py-0.5 whitespace-nowrap">
+                              {remaining <= 0.009 ? 'Voided' : `${l.voided_qty} of ${l.quantity} removed`}
+                            </span>
+                          )}
                         </td>
-                        <td className="px-3 py-2 text-right tabular-nums">{Number(l.quantity ?? 0).toLocaleString()}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">{remaining.toLocaleString()}</td>
                         <td className="px-3 py-2 text-right tabular-nums">{money(l.unit_price)}</td>
                         <td className="px-3 py-2 text-right tabular-nums">{money(lineDiscount)}</td>
-                        <td className="px-3 py-2 text-right tabular-nums">{money(l.tax_amount)}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">{money(lineTax)}</td>
                         <td className="px-3 py-2 text-right tabular-nums">{money(sub)}</td>
                       </tr>
                     );

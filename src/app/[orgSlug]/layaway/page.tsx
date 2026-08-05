@@ -6,7 +6,8 @@ import { Badge, Button } from '@/components/ui/base';
 import { CreateLayawayModal } from '@/components/pos/layaway/create-layaway-modal';
 import { useLayawayPlans, type LayawayPlan } from '@/hooks/useLayaway';
 import { useOutletFilterStore } from '@/store/outlet-filter';
-import { cn } from '@/lib/utils';
+import { usePOSSettings } from '@/hooks/usePOSSettings';
+import { cn, formatCurrency } from '@/lib/utils';
 import { Loader2, Plus } from 'lucide-react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
@@ -35,6 +36,8 @@ function LayawayListPage() {
 
   const { data: plans = [], isLoading, isError } = useLayawayPlans('active', outletFilter || undefined);
   const [createOpen, setCreateOpen] = useState(false);
+  const { data: posSettings } = usePOSSettings();
+  const currency = (posSettings as any)?.currency ?? 'KES';
 
   // ?new=1 from redirect (e.g. navigating to /layaway/new)
   useEffect(() => {
@@ -117,7 +120,7 @@ function LayawayListPage() {
                   <td className="px-4 py-3.5 font-medium">{plan.customer_name}</td>
                   <td className="px-4 py-3.5 text-muted-foreground">{plan.customer_phone ?? '—'}</td>
                   <td className="px-4 py-3.5 text-muted-foreground">{(plan.outlet_id && outletNameById[plan.outlet_id]) || '—'}</td>
-                  <td className="px-4 py-3.5 text-right font-mono">KES {plan.total_amount.toLocaleString()}</td>
+                  <td className="px-4 py-3.5 text-right font-mono">{formatCurrency(plan.total_amount, currency)}</td>
                   <td className="px-4 py-3.5 text-right font-mono text-green-600">{plan.paid_amount.toLocaleString()}</td>
                   <td className="px-4 py-3.5 text-right font-mono text-amber-600">{plan.remaining_amount.toLocaleString()}</td>
                   <td className="px-4 py-3.5">

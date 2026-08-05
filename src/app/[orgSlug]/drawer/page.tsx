@@ -2,8 +2,10 @@
 
 import { Badge, Button, Card, CardContent } from '@/components/ui/base';
 import { useCurrentDrawer, useOpenDrawer, useCloseDrawer, useDrawerHistory, useShiftSummary } from '@/hooks/usePOS';
+import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { usePermissions, P } from '@/hooks/usePermissions';
 import { useAuthStore } from '@/store/auth';
+import { formatCurrency } from '@/lib/utils';
 import {
   Banknote,
   DollarSign,
@@ -28,6 +30,8 @@ export default function DrawerPage() {
   const { data: currentData, isLoading } = useCurrentDrawer();
   const { data: historyData } = useDrawerHistory();
   const { data: shiftSummary } = useShiftSummary();
+  const { data: posSettings } = usePOSSettings();
+  const currency = (posSettings as any)?.currency ?? 'KES';
   const openDrawer = useOpenDrawer();
   const closeDrawer = useCloseDrawer();
 
@@ -103,11 +107,11 @@ export default function DrawerPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="p-4 rounded-xl bg-accent/30">
                   <p className="text-xs text-muted-foreground font-bold uppercase tracking-wider">Opening Balance</p>
-                  <p className="text-2xl font-bold mt-1">KES {(drawer.starting_cash || 0).toLocaleString()}</p>
+                  <p className="text-2xl font-bold mt-1">{formatCurrency(drawer.starting_cash || 0, currency)}</p>
                 </div>
                 <div className="p-4 rounded-xl bg-accent/30">
                   <p className="text-xs text-muted-foreground font-bold uppercase tracking-wider">Expected Balance</p>
-                  <p className="text-2xl font-bold mt-1">KES {((drawer.starting_cash || 0) + (shiftSummary?.cash_in_total || 0)).toLocaleString()}</p>
+                  <p className="text-2xl font-bold mt-1">{formatCurrency((drawer.starting_cash || 0) + (shiftSummary?.cash_in_total || 0), currency)}</p>
                 </div>
               </div>
               {canClose && (
@@ -141,7 +145,7 @@ export default function DrawerPage() {
                       <Banknote className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                       <input
                         type="number"
-                        placeholder="Opening float (KES)"
+                        placeholder={`Opening float (${currency})`}
                         value={openingAmount}
                         onChange={(e) => setOpeningAmount(e.target.value)}
                         className="w-full bg-accent/30 border-none rounded-lg py-3 pl-10 pr-4 text-sm focus:ring-1 focus:ring-primary"
@@ -177,7 +181,7 @@ export default function DrawerPage() {
                   </p>
                 </div>
                 <div className="text-right">
-                  <p className="text-sm font-bold">KES {(d.starting_cash || 0).toLocaleString()}</p>
+                  <p className="text-sm font-bold">{formatCurrency(d.starting_cash || 0, currency)}</p>
                   <p className="text-xs text-muted-foreground">opening float</p>
                 </div>
                 <Badge variant={d.status === 'open' ? 'success' : 'default'}>{d.status}</Badge>

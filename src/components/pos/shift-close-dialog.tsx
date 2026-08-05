@@ -6,6 +6,8 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { usePOSSettings } from '@/hooks/usePOSSettings';
+import { formatCurrency } from '@/lib/utils';
 
 const KE_DENOMINATIONS = [
   { label: '1,000', value: 1000 },
@@ -32,6 +34,8 @@ interface Props {
 }
 
 export function ShiftCloseDialog({ open, onOpenChange, expectedCash, onConfirm, isLoading, blindClose = true }: Props) {
+  const { data: posSettings } = usePOSSettings();
+  const currency = (posSettings as any)?.currency ?? 'KES';
   const [step, setStep] = useState<1 | 2>(1);
   const [counts, setCounts] = useState<Record<number, number>>({});
   const [notes, setNotes] = useState('');
@@ -82,7 +86,7 @@ export function ShiftCloseDialog({ open, onOpenChange, expectedCash, onConfirm, 
                 return (
                   <div key={d.value} className="flex items-center gap-3">
                     <span className="w-16 text-sm font-medium text-right">
-                      KES {d.label}
+                      {currency} {d.label}
                     </span>
                     <div className="flex items-center gap-2 flex-1">
                       <button
@@ -106,7 +110,7 @@ export function ShiftCloseDialog({ open, onOpenChange, expectedCash, onConfirm, 
                       </button>
                     </div>
                     <span className="w-20 text-sm text-right text-muted-foreground">
-                      {count > 0 ? `KES ${(d.value * count).toLocaleString()}` : '—'}
+                      {count > 0 ? formatCurrency(d.value * count, currency) : '—'}
                     </span>
                   </div>
                 );
@@ -115,7 +119,7 @@ export function ShiftCloseDialog({ open, onOpenChange, expectedCash, onConfirm, 
 
             <div className="flex items-center justify-between rounded-xl bg-muted px-4 py-3 font-bold">
               <span>Total Cash</span>
-              <span className="text-primary text-lg">KES {closingFloat.toLocaleString()}</span>
+              <span className="text-primary text-lg">{formatCurrency(closingFloat, currency)}</span>
             </div>
           </div>
         )}
@@ -125,12 +129,12 @@ export function ShiftCloseDialog({ open, onOpenChange, expectedCash, onConfirm, 
             <div className={blindClose ? '' : 'grid grid-cols-2 gap-3 text-sm'}>
               <div className="rounded-xl bg-muted px-4 py-3">
                 <p className="text-muted-foreground text-xs mb-1">Cash Counted</p>
-                <p className="font-bold">KES {closingFloat.toLocaleString()}</p>
+                <p className="font-bold">{formatCurrency(closingFloat, currency)}</p>
               </div>
               {!blindClose && (
                 <div className="rounded-xl bg-muted px-4 py-3">
                   <p className="text-muted-foreground text-xs mb-1">Expected Cash</p>
-                  <p className="font-bold">KES {expectedCash.toLocaleString()}</p>
+                  <p className="font-bold">{formatCurrency(expectedCash, currency)}</p>
                 </div>
               )}
             </div>
@@ -150,7 +154,7 @@ export function ShiftCloseDialog({ open, onOpenChange, expectedCash, onConfirm, 
                   <p className="text-xs font-medium text-muted-foreground">Variance</p>
                 </div>
                 <p className={`text-lg font-bold mt-1 ${varianceColor}`}>
-                  {variance >= 0 ? '+' : ''}KES {variance.toLocaleString()}
+                  {variance >= 0 ? '+' : ''}{formatCurrency(variance, currency)}
                 </p>
                 {absVariance > 200 && (
                   <p className="text-xs text-red-600 mt-1">

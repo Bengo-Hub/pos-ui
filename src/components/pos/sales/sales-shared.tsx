@@ -3,10 +3,12 @@
 import { X } from 'lucide-react';
 import { Badge } from '@/components/ui/base';
 
-/** Shared helpers/constants for the All-Sales / POS-Sales surfaces (list, filters, modals). */
+/** Shared helpers/constants for the All-Sales / POS-Sales surfaces (list, filters, modals).
+ *  `currency` defaults to KES for callers that haven't threaded the tenant's real currency
+ *  through yet (see usePOSSettings()). */
 
-export const money = (n: number) =>
-  `KSh ${Number(n ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+export const money = (n: number, currency = 'KES') =>
+  `${currency} ${Number(n ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export const PAYMENT_METHOD_LABELS: Record<string, string> = {
   cash: 'Cash', card: 'Card', card_manual: 'Card / PDQ', pdq: 'Card / PDQ',

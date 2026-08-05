@@ -14,6 +14,8 @@ import Link from 'next/link';
 import { Clock, Loader2, RefreshCw, ShoppingCart, Wallet, ExternalLink } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/base';
 import { useShiftReport } from '@/hooks/useReports';
+import { usePOSSettings } from '@/hooks/usePOSSettings';
+import { formatCurrency } from '@/lib/utils';
 
 function ymdLocal(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -31,6 +33,8 @@ export function TeamOnShiftPanel() {
   const [refreshTick, setRefreshTick] = useState(0);
   const today = ymdLocal(new Date());
   const { data: rows = [], isLoading, refetch, isFetching } = useShiftReport(today, today);
+  const { data: posSettings } = usePOSSettings();
+  const currency = (posSettings as any)?.currency ?? 'KES';
 
   const { onShift, closedToday } = useMemo(() => {
     const on: typeof rows = [];
@@ -99,7 +103,7 @@ export function TeamOnShiftPanel() {
                   </div>
                   <div className="flex items-center gap-1">
                     <Wallet className="h-3.5 w-3.5 text-muted-foreground" />
-                    <span className="font-semibold">KES {r.total_revenue.toLocaleString()}</span>
+                    <span className="font-semibold">{formatCurrency(r.total_revenue, currency)}</span>
                   </div>
                 </div>
                 <Link
@@ -132,7 +136,7 @@ export function TeamOnShiftPanel() {
                   {' – '}
                   {r.closed_at ? new Date(r.closed_at).toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' }) : ''}
                 </span>
-                <span className="text-xs font-semibold shrink-0">KES {r.total_revenue.toLocaleString()}</span>
+                <span className="text-xs font-semibold shrink-0">{formatCurrency(r.total_revenue, currency)}</span>
               </Link>
             ))}
           </div>

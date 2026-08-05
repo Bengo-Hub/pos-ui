@@ -18,11 +18,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { ChevronUp, ShoppingCart } from 'lucide-react';
 import { useTerminal } from '@/components/pos/terminal/terminal-context';
-import { cn } from '@/lib/utils';
+import { cn, formatCurrency } from '@/lib/utils';
 
 export function MobileCartBar() {
   const t = useTerminal();
   const { cart, cartItemCount, total } = t;
+  const currency = (t.posSettings as any)?.currency ?? 'KES';
   // Brief pulse when a new line lands, so an added item is confirmed without forcing navigation
   // away from the catalog. Tracks cartItemCount (not cart.length) so a quantity bump on an
   // existing line also pulses, not just a brand-new SKU.
@@ -49,7 +50,7 @@ export function MobileCartBar() {
         'bottom-[calc(0.75rem_+_env(safe-area-inset-bottom))]',
         pulse && 'scale-[1.02]',
       )}
-      aria-label={`View cart, ${cartItemCount} item${cartItemCount === 1 ? '' : 's'}, total KES ${total.toLocaleString()}`}
+      aria-label={`View cart, ${cartItemCount} item${cartItemCount === 1 ? '' : 's'}, total ${formatCurrency(total, currency)}`}
     >
       <span className="flex items-center gap-2 min-w-0">
         <span className="relative shrink-0">
@@ -61,7 +62,7 @@ export function MobileCartBar() {
         <span className="text-sm font-bold truncate">View Cart</span>
       </span>
       <span className="flex items-center gap-1.5 shrink-0">
-        <span className="text-sm font-extrabold tabular-nums">KES {total.toLocaleString()}</span>
+        <span className="text-sm font-extrabold tabular-nums">{formatCurrency(total, currency)}</span>
         <ChevronUp className="h-4 w-4" />
       </span>
     </button>

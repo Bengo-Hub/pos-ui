@@ -4,8 +4,9 @@ import { ModuleGate } from '@/components/auth/module-gate';
 import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
 import { Card, CardContent } from '@/components/ui/base';
 import { useTaxReport } from '@/hooks/useReports';
+import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { ReportDocumentButton } from '@/components/reports/report-document-button';
-import { cn } from '@/lib/utils';
+import { cn, formatCurrency } from '@/lib/utils';
 import { Download, Loader2, Receipt } from 'lucide-react';
 import { useState } from 'react';
 import { useAuthStore } from '@/store/auth';
@@ -23,6 +24,8 @@ function TaxReportContent() {
   const [period, setPeriod] = useState<'today' | 'week' | 'month'>('month');
   const { from, to } = periodRange(period);
   const { data: rows = [], isLoading, isError, refetch } = useTaxReport(from, to);
+  const { data: posSettings } = usePOSSettings();
+  const currency = (posSettings as any)?.currency ?? 'KES';
 
   const totalTax = rows.reduce((sum, r) => sum + r.tax_collected, 0);
   const totalTaxable = rows.reduce((sum, r) => sum + r.taxable_amount, 0);
@@ -68,7 +71,7 @@ function TaxReportContent() {
                 <Receipt className="h-5 w-5" />
               </div>
               <div>
-                <p className="text-xl font-bold">KES {totalTax.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+                <p className="text-xl font-bold">{formatCurrency(totalTax, currency)}</p>
                 <p className="text-xs text-muted-foreground">Total Tax Collected</p>
               </div>
             </CardContent>
@@ -79,7 +82,7 @@ function TaxReportContent() {
                 <Receipt className="h-5 w-5" />
               </div>
               <div>
-                <p className="text-xl font-bold">KES {totalTaxable.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+                <p className="text-xl font-bold">{formatCurrency(totalTaxable, currency)}</p>
                 <p className="text-xs text-muted-foreground">Total Taxable Amount</p>
               </div>
             </CardContent>
@@ -108,14 +111,14 @@ function TaxReportContent() {
                   <tr key={r.tax_name} className="border-b last:border-0">
                     <td className="p-4 font-medium">{r.tax_name}</td>
                     <td className="p-4 text-right text-muted-foreground">{r.rate}%</td>
-                    <td className="p-4 text-right">KES {r.taxable_amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                    <td className="p-4 text-right font-semibold text-yellow-700">KES {r.tax_collected.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                    <td className="p-4 text-right">{formatCurrency(r.taxable_amount, currency)}</td>
+                    <td className="p-4 text-right font-semibold text-yellow-700">{formatCurrency(r.tax_collected, currency)}</td>
                   </tr>
                 ))}
                 <tr className="bg-muted/40">
                   <td colSpan={2} className="p-4 font-semibold">Total</td>
-                  <td className="p-4 text-right font-semibold">KES {totalTaxable.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                  <td className="p-4 text-right font-semibold text-yellow-700">KES {totalTax.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                  <td className="p-4 text-right font-semibold">{formatCurrency(totalTaxable, currency)}</td>
+                  <td className="p-4 text-right font-semibold text-yellow-700">{formatCurrency(totalTax, currency)}</td>
                 </tr>
               </tbody>
             </table>

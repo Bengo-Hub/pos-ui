@@ -4,7 +4,8 @@ import { ModuleGate } from '@/components/auth/module-gate';
 import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
 import { Card, CardContent } from '@/components/ui/base';
 import { useTopItems } from '@/hooks/useReports';
-import { cn } from '@/lib/utils';
+import { usePOSSettings } from '@/hooks/usePOSSettings';
+import { cn, formatCurrency } from '@/lib/utils';
 import { Loader2, Package, TrendingUp } from 'lucide-react';
 import { useState } from 'react';
 
@@ -20,6 +21,8 @@ function StockReportContent() {
   const [period, setPeriod] = useState<'today' | 'week' | 'month'>('week');
   const { from, to } = periodRange(period);
   const { data: items = [], isLoading } = useTopItems(from, to, 50);
+  const { data: posSettings } = usePOSSettings();
+  const currency = (posSettings as any)?.currency ?? 'KES';
 
   const totalQty = items.reduce((s, i) => s + i.quantity_sold, 0);
   const totalRevenue = items.reduce((s, i) => s + i.revenue, 0);
@@ -65,7 +68,7 @@ function StockReportContent() {
                 <TrendingUp className="h-5 w-5" />
               </div>
               <div>
-                <p className="text-xl font-bold">KES {totalRevenue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+                <p className="text-xl font-bold">{formatCurrency(totalRevenue, currency)}</p>
                 <p className="text-xs text-muted-foreground">Revenue from Listed Items</p>
               </div>
             </CardContent>

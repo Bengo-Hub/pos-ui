@@ -7,12 +7,13 @@
 
 import { StockBadge } from '@/components/retail/StockBadge';
 import { useTerminal } from '@/components/pos/terminal/terminal-context';
-import { cn } from '@/lib/utils';
+import { cn, formatCurrency } from '@/lib/utils';
 import { Image as ImageIcon, Loader2, Plus, Search } from 'lucide-react';
 
 export function TerminalProductGrid() {
   const t = useTerminal();
   const { cfg, cart, filteredItems, displayMode, handleItemTap, menuLoading, searchQuery } = t;
+  const currency = (t.posSettings as any)?.currency ?? 'KES';
   // MobileCartBar floats via `position: fixed` (see its own file for why), so it no longer
   // reserves its own space in this panel's flex flow — whichever element ends up last at the
   // bottom of this panel (pagination row when there's more than one page, otherwise the scroll
@@ -110,7 +111,7 @@ export function TerminalProductGrid() {
                       <span className="text-emerald-600" title="Non-billable — never charged; stock still deducts">FREE</span>
                     ) : (
                       <>
-                        KES {item.price.toLocaleString()}
+                        {formatCurrency(item.price, currency)}
                         {item.priceIsFallback && (
                           <span className="block text-[9px] font-normal text-amber-500" title="No price set for the selected pricing profile — showing default price">default price</span>
                         )}
@@ -175,7 +176,7 @@ export function TerminalProductGrid() {
                           <span className="text-emerald-600" title="Non-billable — never charged; stock still deducts">FREE</span>
                         ) : (
                           <>
-                            KES {item.price.toLocaleString()}
+                            {formatCurrency(item.price, currency)}
                             {item.priceIsFallback && (
                               <span className="ml-1 text-[9px] font-normal text-amber-500" title="No price set for the selected pricing profile — showing default price">(default)</span>
                             )}
@@ -234,7 +235,7 @@ export function TerminalProductGrid() {
                         <span className="text-emerald-600" title="Non-billable — never charged; stock still deducts">FREE</span>
                       ) : (
                         <>
-                          KES {item.price.toLocaleString()}
+                          {formatCurrency(item.price, currency)}
                           {item.priceIsFallback && (
                             <span className="ml-1 text-[9px] font-normal text-amber-500" title="No price set for the selected pricing profile — showing default price">(default)</span>
                           )}

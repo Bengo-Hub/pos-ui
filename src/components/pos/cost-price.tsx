@@ -1,7 +1,8 @@
 'use client';
 
 import { Eye, EyeOff } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, formatCurrency } from '@/lib/utils';
+import { usePOSSettings } from '@/hooks/usePOSSettings';
 
 /**
  * Cost-price display for management roles (REQ-006). Cost is SENSITIVE — customers can see
@@ -39,6 +40,8 @@ export function MaskedMargin({ cost, sell, revealed, className }: {
   revealed: boolean;
   className?: string;
 }) {
+  const { data: posSettings } = usePOSSettings();
+  const currency = (posSettings as any)?.currency ?? 'KES';
   if (typeof cost !== 'number' || cost <= 0 || typeof sell !== 'number' || sell <= 0) {
     return <span className={cn('text-muted-foreground', className)}>—</span>;
   }
@@ -46,11 +49,11 @@ export function MaskedMargin({ cost, sell, revealed, className }: {
     return <span className={cn('font-mono text-muted-foreground tracking-widest', className)}>••</span>;
   }
   const margin = ((sell - cost) / sell) * 100;
-  const profit = sell - cost; // absolute profit per unit (KES)
+  const profit = sell - cost; // absolute profit per unit
   const tone = margin < 0 ? 'text-destructive' : margin < 15 ? 'text-amber-600' : 'text-emerald-600';
   return (
     <span
-      title={`Margin ${margin.toFixed(0)}% · Profit KES ${profit.toLocaleString(undefined, { maximumFractionDigits: 2 })}/unit`}
+      title={`Margin ${margin.toFixed(0)}% · Profit ${formatCurrency(profit, currency)}/unit`}
       className={cn('font-mono tabular-nums font-semibold inline-flex flex-col leading-tight', tone, className)}
     >
       <span>{margin.toFixed(0)}%</span>

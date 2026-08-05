@@ -105,20 +105,21 @@ function InlineEditCell({ display, initial, onCommit, disabled, title, className
  * Emits the clamped new EFFECTIVE unit price; the stored line discount is retained by the
  * caller (terminal-context setLinePrice), and the server gates markdowns via price.override.
  */
-export function InlinePriceCell({ price, preset, canDiscount, onCommit, disabled, className }: {
+export function InlinePriceCell({ price, preset, canDiscount, onCommit, disabled, className, currency = 'KES' }: {
   price: number;
   preset: number;
   canDiscount: boolean;
   onCommit: (newPrice: number) => void;
   disabled?: boolean;
   className?: string;
+  currency?: string;
 }) {
   const overridden = Math.abs(price - preset) > 0.004;
   return (
     <span className={cn('inline-flex flex-col items-end leading-tight', className)}>
       <InlineEditCell
         disabled={disabled}
-        title={canDiscount ? 'Edit unit price (any value — markdown or markup)' : `Edit unit price (below KES ${preset.toLocaleString()} needs manager approval at save)`}
+        title={canDiscount ? 'Edit unit price (any value — markdown or markup)' : `Edit unit price (below ${currency} ${preset.toLocaleString()} needs manager approval at save)`}
         display={
           <span className={cn('text-xs font-mono', overridden ? (price < preset ? 'text-amber-600 font-semibold' : 'text-emerald-600 font-semibold') : 'text-muted-foreground')}>
             {price.toLocaleString(undefined, { maximumFractionDigits: 2 })}
@@ -185,7 +186,7 @@ export function InlineMarginCell({ cost, sell, unitDiscount = 0, revealed, edita
  * (terminal-context setLineDiscount) keeps the base and lowers the effective price, so the
  * value survives later margin/price edits. Clear the input to remove the discount.
  */
-export function InlineDiscountCell({ price, unitDiscount = 0, quantity, editable, onCommitDiscount, className }: {
+export function InlineDiscountCell({ price, unitDiscount = 0, quantity, editable, onCommitDiscount, className, currency = 'KES' }: {
   /** Current EFFECTIVE unit price (after discount). */
   price: number;
   unitDiscount?: number;
@@ -193,13 +194,14 @@ export function InlineDiscountCell({ price, unitDiscount = 0, quantity, editable
   editable: boolean;
   onCommitDiscount: (newUnitDiscount: number) => void;
   className?: string;
+  currency?: string;
 }) {
   const lineDiscount = unitDiscount * quantity;
   const base = price + unitDiscount;
   return (
     <InlineEditCell
       disabled={!editable}
-      title='Line discount — KES off this line, or "5%" off the price'
+      title={`Line discount — ${currency} off this line, or "5%" off the price`}
       display={
         lineDiscount > 0.004 ? (
           <span className="text-xs font-mono font-semibold text-amber-600">

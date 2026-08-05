@@ -3,6 +3,7 @@
 import { Loader2, PauseCircle } from 'lucide-react';
 
 import { useOrders } from '@/hooks/usePOS';
+import { formatCurrency } from '@/lib/utils';
 
 // ParkedSalesModal lists suspended (draft) sales for this tenant so the cashier can resume one and
 // take payment. Parking persists the cart as a draft order; resuming opens its payment modal.
@@ -56,7 +57,7 @@ export function ParkedSalesModal({ onClose, onResume }: { onClose: () => void; o
                     </p>
                   </div>
                   <span className="font-bold text-sm tabular-nums shrink-0">
-                    KES {(o.total_amount ?? 0).toLocaleString()}
+                    {formatCurrency(o.total_amount ?? 0, o.currency ?? 'KES')}
                   </span>
                 </button>
               );

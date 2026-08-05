@@ -4,7 +4,8 @@ import { ModuleGate } from '@/components/auth/module-gate';
 import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
 import { Card, CardContent } from '@/components/ui/base';
 import { useShiftReport } from '@/hooks/useReports';
-import { cn } from '@/lib/utils';
+import { usePOSSettings } from '@/hooks/usePOSSettings';
+import { cn, formatCurrency } from '@/lib/utils';
 import { Calendar, Clock, DollarSign, Loader2, ShoppingCart } from 'lucide-react';
 import { useState } from 'react';
 
@@ -34,6 +35,8 @@ function SessionsContent() {
   const [period, setPeriod] = useState<Period>('week');
   const { from, to } = periodRange(period);
   const { data: sessions = [], isLoading } = useShiftReport(from, to);
+  const { data: posSettings } = usePOSSettings();
+  const currency = (posSettings as any)?.currency ?? 'KES';
 
   return (
     <div className="p-6 space-y-6">
@@ -104,7 +107,7 @@ function SessionsContent() {
                       <div className="flex items-center gap-1.5 justify-end">
                         <DollarSign className="h-3.5 w-3.5 text-muted-foreground" />
                         <span className="text-sm font-bold">
-                          KES {s.total_revenue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                          {formatCurrency(s.total_revenue, currency)}
                         </span>
                       </div>
                       <p className="text-xs text-muted-foreground">Revenue</p>

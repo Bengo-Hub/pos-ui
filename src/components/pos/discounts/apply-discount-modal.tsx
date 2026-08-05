@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import { BadgePercent, Loader2, Percent, Plus, Tag, X } from 'lucide-react';
 import { toast } from 'sonner';
-import { cn } from '@/lib/utils';
+import { cn, formatCurrency } from '@/lib/utils';
 import { useAuthStore } from '@/store/auth';
 import { usePermissions } from '@/hooks/usePermissions';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
@@ -245,7 +245,7 @@ export function ApplyDiscountModal({ open, subtotal, currentAmount, currentReaso
             />
 
             <div className="text-xs text-muted-foreground text-center">
-              Discount: <span className="font-bold text-foreground">KES {amount.toLocaleString()}</span> ({pct.toFixed(1)}% of subtotal)
+              Discount: <span className="font-bold text-foreground">{formatCurrency(amount, currency)}</span> ({pct.toFixed(1)}% of subtotal)
             </div>
           </>
         )}
