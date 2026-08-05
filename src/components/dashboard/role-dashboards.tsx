@@ -6,6 +6,8 @@ import { cn } from '@/lib/utils';
 import { QuickAction, KPICard, RecentOrdersCard, useDashboardSummary, useTenantID, fmt, fmtNum } from './widgets';
 import { CashierOverviewTab } from './cashier-overview-tab';
 import { CashierShiftTab } from './cashier-shift-tab';
+import { DashboardRangeFilter, useDashboardRange, type DashboardRange } from './range-filter';
+import { CategoryBreakdownChart, RevenueTrendChart, TopItemsChart } from './charts';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import {
@@ -25,30 +27,51 @@ function greeting(): string {
   return 'evening';
 }
 
+/** Shared analytics block (trend + category + top items) — every manager/admin-facing role
+ *  dashboard below renders the same three charts against whatever range its own filter picked,
+ *  so this stays a single place to add/reorder dashboard BI widgets. */
+function DashboardCharts({ range, currency }: { range: DashboardRange; currency?: string }) {
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="lg:col-span-2"><RevenueTrendChart range={range} currency={currency} /></div>
+        <CategoryBreakdownChart range={range} currency={currency} />
+      </div>
+      <TopItemsChart range={range} currency={currency} />
+    </div>
+  );
+}
+
 export function AdminDashboard({ orgSlug }: { orgSlug: string }) {
-  const { data: summary, isLoading, refetch, isFetching } = useDashboardSummary();
+  const { range, preset, setPreset, custom, setCustom } = useDashboardRange();
+  const { data: summary, isLoading, refetch, isFetching } = useDashboardSummary(range);
   const { hasModule, isPharmacy, isServices, isRetail, isQuickService } = useModuleAccess();
   const s = summary ?? {};
+  const periodSub = range.isSingleDay ? 'today' : 'in range';
 
   return (
     <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold text-foreground font-display">Today&apos;s Overview</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
             {new Date().toLocaleDateString('en-KE', { weekday: 'long', day: 'numeric', month: 'long' })}
           </p>
         </div>
-        <button onClick={() => refetch()} className="h-9 w-9 rounded-xl border border-border flex items-center justify-center hover:bg-accent transition-colors">
-          <RefreshCw className={cn('h-4 w-4 text-muted-foreground', isFetching && 'animate-spin')} />
-        </button>
+        <div className="flex items-center gap-2">
+          <DashboardRangeFilter preset={preset} setPreset={setPreset} custom={custom} setCustom={setCustom} />
+          <button onClick={() => refetch()} className="h-9 w-9 shrink-0 rounded-xl border border-border flex items-center justify-center hover:bg-accent transition-colors">
+            <RefreshCw className={cn('h-4 w-4 text-muted-foreground', isFetching && 'animate-spin')} />
+          </button>
+        </div>
       </div>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <KPICard label="Today's Revenue" value={fmt(s.total_revenue ?? 0, s.currency)} sub="vs yesterday" icon={TrendingUp} trend={s.revenue_growth} loading={isLoading} />
-        <KPICard label="Orders" value={fmtNum(s.total_orders ?? 0)} sub="today" icon={ClipboardList} trend={s.orders_growth} loading={isLoading} />
+        <KPICard label="Revenue" value={fmt(s.total_revenue ?? 0, s.currency)} sub={range.compareLabel} icon={TrendingUp} trend={s.revenue_growth} loading={isLoading} />
+        <KPICard label="Orders" value={fmtNum(s.total_orders ?? 0)} sub={periodSub} icon={ClipboardList} trend={s.orders_growth} loading={isLoading} />
         <KPICard label="Gross Profit" value={fmt(s.gross_profit ?? 0, s.currency)} sub={`${(s.gross_margin_pct ?? 0).toFixed(1)}% margin`} icon={Coins} trend={s.gross_profit_growth} loading={isLoading} />
         <KPICard label="Active Staff" value={fmtNum(s.active_staff ?? 0)} sub="on shift" icon={Users} loading={isLoading} href={`/${orgSlug}/shifts?tab=team`} />
       </div>
+      <DashboardCharts range={range} currency={s.currency} />
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2">
           <RecentOrdersCard orgSlug={orgSlug} />
@@ -263,28 +286,34 @@ export function ReceptionistDashboard({ orgSlug }: { orgSlug: string }) {
 }
 
 export function RetailDashboard({ orgSlug }: { orgSlug: string }) {
-  const { data: summary, isLoading, refetch, isFetching } = useDashboardSummary();
+  const { range, preset, setPreset, custom, setCustom } = useDashboardRange();
+  const { data: summary, isLoading, refetch, isFetching } = useDashboardSummary(range);
   const s = summary ?? {};
+  const periodSub = range.isSingleDay ? 'today' : 'in range';
 
   return (
     <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold text-foreground font-display">Retail Overview</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
             {new Date().toLocaleDateString('en-KE', { weekday: 'long', day: 'numeric', month: 'long' })}
           </p>
         </div>
-        <button onClick={() => refetch()} className="h-9 w-9 rounded-xl border border-border flex items-center justify-center hover:bg-accent transition-colors">
-          <RefreshCw className={cn('h-4 w-4 text-muted-foreground', isFetching && 'animate-spin')} />
-        </button>
+        <div className="flex items-center gap-2">
+          <DashboardRangeFilter preset={preset} setPreset={setPreset} custom={custom} setCustom={setCustom} />
+          <button onClick={() => refetch()} className="h-9 w-9 shrink-0 rounded-xl border border-border flex items-center justify-center hover:bg-accent transition-colors">
+            <RefreshCw className={cn('h-4 w-4 text-muted-foreground', isFetching && 'animate-spin')} />
+          </button>
+        </div>
       </div>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <KPICard label="Today's Revenue" value={fmt(s.total_revenue ?? 0, s.currency)} sub="vs yesterday" icon={TrendingUp} trend={s.revenue_growth} loading={isLoading} />
-        <KPICard label="Transactions" value={fmtNum(s.total_orders ?? 0)} sub="today" icon={ClipboardList} trend={s.orders_growth} loading={isLoading} />
+        <KPICard label="Revenue" value={fmt(s.total_revenue ?? 0, s.currency)} sub={range.compareLabel} icon={TrendingUp} trend={s.revenue_growth} loading={isLoading} />
+        <KPICard label="Transactions" value={fmtNum(s.total_orders ?? 0)} sub={periodSub} icon={ClipboardList} trend={s.orders_growth} loading={isLoading} />
         <KPICard label="Gross Profit" value={fmt(s.gross_profit ?? 0, s.currency)} sub={`${(s.gross_margin_pct ?? 0).toFixed(1)}% margin`} icon={Coins} trend={s.gross_profit_growth} loading={isLoading} />
-        <KPICard label="Items Sold" value={fmtNum(s.items_sold ?? 0)} sub="units today" icon={Package} loading={isLoading} />
+        <KPICard label="Items Sold" value={fmtNum(s.items_sold ?? 0)} sub={`units ${periodSub}`} icon={Package} loading={isLoading} />
       </div>
+      <DashboardCharts range={range} currency={s.currency} />
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2"><RecentOrdersCard orgSlug={orgSlug} /></div>
         <div className="space-y-3">
@@ -303,8 +332,10 @@ export function RetailDashboard({ orgSlug }: { orgSlug: string }) {
 export function QuickServiceDashboard({ orgSlug }: { orgSlug: string }) {
   const tenantID = useTenantID();
   const { hasModule } = useModuleAccess();
-  const { data: summary, isLoading, refetch, isFetching } = useDashboardSummary();
+  const { range, preset, setPreset, custom, setCustom } = useDashboardRange();
+  const { data: summary, isLoading, refetch, isFetching } = useDashboardSummary(range);
   const s = summary ?? {};
+  const periodSub = range.isSingleDay ? 'today' : 'in range';
   const { data: kdsData } = useQuery({
     queryKey: ['dashboard-kds-queue', tenantID],
     queryFn: () => apiClient.get<any>(`/api/v1/${tenantID}/pos/kds/tickets?status=pending`),
@@ -314,23 +345,27 @@ export function QuickServiceDashboard({ orgSlug }: { orgSlug: string }) {
 
   return (
     <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold text-foreground font-display">Quick Service Overview</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
             {new Date().toLocaleDateString('en-KE', { weekday: 'long', day: 'numeric', month: 'long' })}
           </p>
         </div>
-        <button onClick={() => refetch()} className="h-9 w-9 rounded-xl border border-border flex items-center justify-center hover:bg-accent transition-colors">
-          <RefreshCw className={cn('h-4 w-4 text-muted-foreground', isFetching && 'animate-spin')} />
-        </button>
+        <div className="flex items-center gap-2">
+          <DashboardRangeFilter preset={preset} setPreset={setPreset} custom={custom} setCustom={setCustom} />
+          <button onClick={() => refetch()} className="h-9 w-9 shrink-0 rounded-xl border border-border flex items-center justify-center hover:bg-accent transition-colors">
+            <RefreshCw className={cn('h-4 w-4 text-muted-foreground', isFetching && 'animate-spin')} />
+          </button>
+        </div>
       </div>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <KPICard label="Orders Today" value={fmtNum(s.total_orders ?? 0)} sub="total" icon={ClipboardList} trend={s.orders_growth} loading={isLoading} />
-        <KPICard label="Revenue Today" value={fmt(s.total_revenue ?? 0, s.currency)} sub="vs yesterday" icon={TrendingUp} trend={s.revenue_growth} loading={isLoading} />
+        <KPICard label="Orders" value={fmtNum(s.total_orders ?? 0)} sub={periodSub} icon={ClipboardList} trend={s.orders_growth} loading={isLoading} />
+        <KPICard label="Revenue" value={fmt(s.total_revenue ?? 0, s.currency)} sub={range.compareLabel} icon={TrendingUp} trend={s.revenue_growth} loading={isLoading} />
         <KPICard label="Gross Profit" value={fmt(s.gross_profit ?? 0, s.currency)} sub={`${(s.gross_margin_pct ?? 0).toFixed(1)}% margin`} icon={Coins} trend={s.gross_profit_growth} loading={isLoading} />
         <KPICard label="Kitchen Queue" value={fmtNum(queueDepth)} sub="pending tickets" icon={ChefHat} loading={isLoading} />
       </div>
+      <DashboardCharts range={range} currency={s.currency} />
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2"><RecentOrdersCard orgSlug={orgSlug} /></div>
         <div className="space-y-3">
@@ -347,7 +382,8 @@ export function QuickServiceDashboard({ orgSlug }: { orgSlug: string }) {
 
 export function PharmacyDashboard({ orgSlug }: { orgSlug: string }) {
   const tenantID = useTenantID();
-  const { data: summary, isLoading, refetch, isFetching } = useDashboardSummary();
+  const { range, preset, setPreset, custom, setCustom } = useDashboardRange();
+  const { data: summary, isLoading, refetch, isFetching } = useDashboardSummary(range);
   const s = summary ?? {};
   const { data: pendingData, isLoading: pendingLoading } = useQuery({
     queryKey: ['dashboard-rx-pending', tenantID],
@@ -363,25 +399,31 @@ export function PharmacyDashboard({ orgSlug }: { orgSlug: string }) {
   });
   const lowDrugCount = lowStockData?.meta?.total ?? lowStockData?.data?.length ?? 0;
 
+  const periodSub = range.isSingleDay ? 'dispensed today' : 'dispensed in range';
+
   return (
     <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold text-foreground font-display">Pharmacy Overview</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
             {new Date().toLocaleDateString('en-KE', { weekday: 'long', day: 'numeric', month: 'long' })}
           </p>
         </div>
-        <button onClick={() => refetch()} className="h-9 w-9 rounded-xl border border-border flex items-center justify-center hover:bg-accent transition-colors">
-          <RefreshCw className={cn('h-4 w-4 text-muted-foreground', isFetching && 'animate-spin')} />
-        </button>
+        <div className="flex items-center gap-2">
+          <DashboardRangeFilter preset={preset} setPreset={setPreset} custom={custom} setCustom={setCustom} />
+          <button onClick={() => refetch()} className="h-9 w-9 shrink-0 rounded-xl border border-border flex items-center justify-center hover:bg-accent transition-colors">
+            <RefreshCw className={cn('h-4 w-4 text-muted-foreground', isFetching && 'animate-spin')} />
+          </button>
+        </div>
       </div>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <KPICard label="Prescriptions Today" value={fmtNum(s.total_orders ?? 0)} sub="dispensed today" icon={Pill} trend={s.orders_growth} loading={isLoading} />
+        <KPICard label="Prescriptions" value={fmtNum(s.total_orders ?? 0)} sub={periodSub} icon={Pill} trend={s.orders_growth} loading={isLoading} />
         <KPICard label="Pending Queue" value={fmtNum(pendingCount)} sub="awaiting dispensing" icon={ClipboardList} loading={pendingLoading} />
-        <KPICard label="Revenue Today" value={fmt(s.total_revenue ?? 0, s.currency)} sub="vs yesterday" icon={TrendingUp} trend={s.revenue_growth} loading={isLoading} />
+        <KPICard label="Revenue" value={fmt(s.total_revenue ?? 0, s.currency)} sub={range.compareLabel} icon={TrendingUp} trend={s.revenue_growth} loading={isLoading} />
         <KPICard label="Low Stock Drugs" value={fmtNum(lowDrugCount)} sub="below reorder level" icon={Package} loading={isLoading} />
       </div>
+      <DashboardCharts range={range} currency={s.currency} />
       {pendingList.length > 0 && (
         <div className="bg-card border border-border rounded-2xl overflow-hidden">
           <div className="flex items-center justify-between px-5 py-4 border-b border-border">
@@ -419,7 +461,8 @@ export function PharmacyDashboard({ orgSlug }: { orgSlug: string }) {
 
 export function ServicesDashboard({ orgSlug }: { orgSlug: string }) {
   const tenantID = useTenantID();
-  const { data: summary, isLoading, refetch, isFetching } = useDashboardSummary();
+  const { range, preset, setPreset, custom, setCustom } = useDashboardRange();
+  const { data: summary, isLoading, refetch, isFetching } = useDashboardSummary(range);
   const s = summary ?? {};
   const today = new Date().toISOString().split('T')[0];
   const { data: apptData, isLoading: apptLoading } = useQuery({
@@ -433,23 +476,27 @@ export function ServicesDashboard({ orgSlug }: { orgSlug: string }) {
 
   return (
     <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold text-foreground font-display">Services Overview</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
             {new Date().toLocaleDateString('en-KE', { weekday: 'long', day: 'numeric', month: 'long' })}
           </p>
         </div>
-        <button onClick={() => refetch()} className="h-9 w-9 rounded-xl border border-border flex items-center justify-center hover:bg-accent transition-colors">
-          <RefreshCw className={cn('h-4 w-4 text-muted-foreground', isFetching && 'animate-spin')} />
-        </button>
+        <div className="flex items-center gap-2">
+          <DashboardRangeFilter preset={preset} setPreset={setPreset} custom={custom} setCustom={setCustom} />
+          <button onClick={() => refetch()} className="h-9 w-9 shrink-0 rounded-xl border border-border flex items-center justify-center hover:bg-accent transition-colors">
+            <RefreshCw className={cn('h-4 w-4 text-muted-foreground', isFetching && 'animate-spin')} />
+          </button>
+        </div>
       </div>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <KPICard label="Appointments Today" value={fmtNum(todayAppts.length)} sub="total booked" icon={Calendar} loading={apptLoading} />
         <KPICard label="Active / Confirmed" value={fmtNum(confirmedCount)} sub="in progress + confirmed" icon={Users} loading={apptLoading} />
-        <KPICard label="Revenue Today" value={fmt(s.total_revenue ?? 0, s.currency)} sub="vs yesterday" icon={TrendingUp} trend={s.revenue_growth} loading={isLoading} />
+        <KPICard label="Revenue" value={fmt(s.total_revenue ?? 0, s.currency)} sub={range.compareLabel} icon={TrendingUp} trend={s.revenue_growth} loading={isLoading} />
         <KPICard label="Gross Profit" value={fmt(s.gross_profit ?? 0, s.currency)} sub={`${(s.gross_margin_pct ?? 0).toFixed(1)}% margin`} icon={Coins} trend={s.gross_profit_growth} loading={isLoading} />
       </div>
+      <DashboardCharts range={range} currency={s.currency} />
       {(apptLoading || upcomingList.length > 0) && (
         <div className="bg-card border border-border rounded-2xl overflow-hidden">
           <div className="flex items-center justify-between px-5 py-4 border-b border-border">

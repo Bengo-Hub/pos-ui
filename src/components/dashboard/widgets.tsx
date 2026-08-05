@@ -40,11 +40,15 @@ export function fmtNum(n: number): string {
 
 // ── Dashboard summary hook ────────────────────────────────────────────────────
 
-export function useDashboardSummary() {
+// Omitting from/to preserves GetSummary's original today-vs-yesterday default — every caller
+// that doesn't pass a range (cashier tab, any dashboard not wired to the range filter yet) keeps
+// behaving exactly as before.
+export function useDashboardSummary(range?: { from?: string; to?: string }) {
   const tenantID = useTenantID();
+  const { from, to } = range ?? {};
   return useQuery({
-    queryKey: ['dashboard-summary', tenantID],
-    queryFn: () => apiClient.get<any>(`/api/v1/${tenantID}/pos/reports/summary`),
+    queryKey: ['dashboard-summary', tenantID, from, to],
+    queryFn: () => apiClient.get<any>(`/api/v1/${tenantID}/pos/reports/summary`, from && to ? { from, to } : undefined),
     enabled: !!tenantID,
     staleTime: 2 * 60_000,
     retry: false,
