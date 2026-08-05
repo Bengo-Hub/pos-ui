@@ -7,12 +7,12 @@ import { cn, formatCurrency } from '@/lib/utils';
 import { useAuthStore } from '@/store/auth';
 import { usePermissions } from '@/hooks/usePermissions';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
-import { useCreateDiscount, useDiscounts } from '@/hooks/useDiscounts';
+import { useApplyPromoCode, useCreateDiscount, useDiscounts } from '@/hooks/useDiscounts';
 import { useCategories } from '@/hooks/usePOS';
 import { useSubscription } from '@/hooks/use-subscription';
 import { UpgradeDialog } from '@bengo-hub/shared-ui-lib/subscription';
 import { apiErrorMessage } from '@/lib/api/error-message';
-import type { Discount, DiscountInput } from '@/lib/api/discounts';
+import type { ApplyPromoLine, Discount, DiscountInput } from '@/lib/api/discounts';
 import { DiscountFormModal, describeDiscount, type DiscountItemRef } from './discount-form-modal';
 
 interface ApplyDiscountModalProps {
@@ -22,6 +22,11 @@ interface ApplyDiscountModalProps {
   currentReason: string;
   onApply: (amount: number, reason: string) => void;
   onClose: () => void;
+  /** The sale's real cart lines — required so a typed/scanned promo code is evaluated against
+   *  the actual items (schedule/meal_period/item-or-category scope/BOGO), not a flat amount. */
+  lines: ApplyPromoLine[];
+  /** Scopes an outlet-restricted code; omit for a tenant-wide/"All outlets" code. */
+  outletId?: string;
 }
 
 const round2 = (v: number) => Math.round(v * 100) / 100;
@@ -88,11 +93,13 @@ function definedDiscountAmount(d: Discount, subtotal: number): number | null {
  * Whatever the path, an over-limit discount still triggers the manager step-up at order
  * create (order.discount_override — enforced + audited server-side), same as the terminal.
  */
-export function ApplyDiscountModal({ open, subtotal, currentAmount, currentReason, onApply, onClose }: ApplyDiscountModalProps) {
+export function ApplyDiscountModal({ open, subtotal, currentAmount, currentReason, onApply, onClose, lines, outletId }: ApplyDiscountModalProps) {
   const [mode, setMode] = useState<'percent' | 'amount'>('percent');
   const [value, setValue] = useState<string>(currentAmount ? String(currentAmount) : '');
   const [reason, setReason] = useState(currentReason);
   const [createOpen, setCreateOpen] = useState(false);
+  const [code, setCode] = useState('');
+  const applyCode = useApplyPromoCode();
   const { data: posSettings } = usePOSSettings();
   const currency = (posSettings as any)?.currency ?? 'KES';
 
@@ -124,7 +131,7 @@ export function ApplyDiscountModal({ open, subtotal, currentAmount, currentReaso
       .filter((x): x is { d: Discount; amount: number } => x.amount != null && x.amount > 0);
   }, [discountsResp, subtotal]);
 
-  const [tab, setTab] = useState<'defined' | 'quick'>('defined');
+  const [tab, setTab] = useState<'defined' | 'code' | 'quick'>('defined');
   const activeTab = defined.length > 0 || canDefine ? tab : 'quick';
 
   if (!open) return null;
@@ -149,6 +156,31 @@ export function ApplyDiscountModal({ open, subtotal, currentAmount, currentReaso
     }
   }
 
+  // Redeem a typed/scanned promo code against the sale's REAL cart lines — the same rule-based
+  // evaluator (schedule/meal_period/scope/BOGO) auto-apply discounts use, via the fixed
+  // /pos/promotions/apply endpoint (see promotions.Service.ApplyPromoCode's doc comment for why
+  // this replaced a dead flat-amount calculator).
+  async function handleApplyCode() {
+    const trimmed = code.trim();
+    if (!trimmed) return;
+    try {
+      const res = await applyCode.mutateAsync({ promoCode: trimmed, lines, outletId });
+      if (!res?.valid) {
+        toast.error(res?.reason || 'Invalid or expired code');
+        return;
+      }
+      const amt = round2(Number(res.discountAmount) || 0);
+      if (amt <= 0) {
+        toast.error('This code has no eligible items in the current sale');
+        return;
+      }
+      toast.success(`Code ${trimmed} applied`);
+      onApply(amt, `Code: ${trimmed}`);
+    } catch (e) {
+      toast.error(await apiErrorMessage(e, 'Failed to apply code'));
+    }
+  }
+
   return (
     <div className="fixed inset-0 z-[55] flex items-center justify-center">
       <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
@@ -164,6 +196,11 @@ export function ApplyDiscountModal({ open, subtotal, currentAmount, currentReaso
               className={cn('flex-1 flex items-center justify-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-md',
                 activeTab === 'defined' ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground')}>
               <BadgePercent className="h-3.5 w-3.5" /> Defined
+            </button>
+            <button onClick={() => setTab('code')}
+              className={cn('flex-1 px-3 py-1.5 text-xs font-semibold rounded-md',
+                activeTab === 'code' ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground')}>
+              Code
             </button>
             <button onClick={() => setTab('quick')}
               className={cn('flex-1 px-3 py-1.5 text-xs font-semibold rounded-md',
@@ -218,6 +255,19 @@ export function ApplyDiscountModal({ open, subtotal, currentAmount, currentReaso
               </button>
             )}
           </div>
+        ) : activeTab === 'code' ? (
+          <div className="space-y-2">
+            <input
+              type="text" autoFocus autoCapitalize="characters"
+              value={code} onChange={(e) => setCode(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleApplyCode(); }}
+              placeholder="Type or scan a promo code"
+              className="w-full bg-accent/10 border border-border rounded-lg py-2.5 px-3 text-lg font-bold text-center tracking-wide uppercase focus:ring-1 focus:ring-primary outline-none"
+            />
+            <p className="text-[11px] text-muted-foreground text-center">
+              Checked against this sale's actual items — schedule, item/category scope and BOGO all apply.
+            </p>
+          </div>
         ) : (
           <>
             <div className="flex gap-1 bg-accent/10 p-1 rounded-lg">
@@ -258,6 +308,12 @@ export function ApplyDiscountModal({ open, subtotal, currentAmount, currentReaso
             <button onClick={() => onApply(amount, reason)} disabled={amount <= 0}
               className="flex-1 px-3 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-50 hover:bg-primary/90">
               Apply
+            </button>
+          )}
+          {activeTab === 'code' && (
+            <button onClick={handleApplyCode} disabled={!code.trim() || applyCode.isPending}
+              className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-50 hover:bg-primary/90">
+              {applyCode.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Apply Code'}
             </button>
           )}
         </div>

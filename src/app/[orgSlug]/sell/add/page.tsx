@@ -26,6 +26,9 @@ import { useStaffAdmin } from '@/hooks/useStaff';
 import { apiClient } from '@/lib/api/client';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { rbacApi } from '@/lib/api/rbac';
+import { useActiveHappyHours } from '@/hooks/useDiscounts';
+import { computeHappyHour, bogoFreeUnitsForSku, type HHLine } from '@/lib/pos/happy-hour';
+import { computePairAutoAdd, describeAutoApplyAnnouncement } from '@/lib/pos/auto-apply-discounts';
 import { applyRoundOff, computeCartTax } from '@/lib/pos/cart-tax';
 import { isFractionalUnit, parseQuantityInput } from '@/lib/pos/units';
 import { isLineActive, remainingLineQty } from '@/lib/pos/order-lines';
@@ -34,7 +37,7 @@ import { useAuthStore } from '@/store/auth';
 import { FeatureLock, useFeatureUpgrade } from '@bengo-hub/shared-ui-lib/subscription';
 import { Check, Loader2, Minus, Plus, Search, ShoppingCart, Tag, Trash2, Truck, User, Users, X } from 'lucide-react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
 // Premium: staff credit funded from salary (ERP payroll deduction). Shown + upgrade-gated below top tier.
@@ -59,6 +62,10 @@ interface SaleLine {
    *  marks the line dirty and surfaces the per-line ✓ save / ✕ revert actions. */
   savedPrice?: number;
   savedQty?: number;
+  /** True for a line auto-added by a corresponding-pair BOGO deal (the free "get" item) — same
+   *  meaning as the POS terminal's CartItem.promoFree. Its quantity is kept in lockstep with the
+   *  triggering buy line and the cashier never adds it manually. */
+  promoFree?: boolean;
 }
 
 // Resolve an item's price for the selected pricing profile (tier). Falls back to the item's default
@@ -85,6 +92,12 @@ export default function AddSalePage() {
   const taxRate = (posSettings?.vat_enabled === false ? 0 : (posSettings?.vat_rate ?? 16)) / 100;
   const currency = (posSettings as any)?.currency ?? 'KES';
   const fmt = (n: number) => formatCurrency(n, currency);
+
+  // Live happy-hour/auto promotions — same auto-apply engine the POS terminal uses (shared via
+  // lib/pos/auto-apply-discounts + lib/pos/happy-hour), brought here so a back-office sale gets
+  // the SAME discounts/toasts as ringing the identical items up at the terminal, instead of only
+  // the terminal getting the deal.
+  const { data: activeHappyHours = [] } = useActiveHappyHours();
 
   // ── Customer ── (rich phone search; defaults to the seeded Walk-in Customer)
   const [customer, setCustomer] = useState<SelectedCustomer | null>(WALK_IN_CUSTOMER);
@@ -444,17 +457,22 @@ export default function AddSalePage() {
   const addLine = useCallback((item: CatalogItem) => {
     let newQty = 1;
     setStructuralDirty(true);
+    let updatedLines: SaleLine[] = [];
     setLines((prev) => {
       const idx = prev.findIndex((l) => l.item.id === item.id);
-      if (idx >= 0) {
-        newQty = prev[idx].quantity + 1;
-        return prev.map((l, i) => (i === idx ? { ...l, quantity: newQty } : l));
-      }
-      // Non-billable items (free accompaniments / supplies) are never charged — force 0
-      // regardless of tier pricing (the server zeroes the line as a belt anyway).
-      const free = item.non_billable === true || item.is_complimentary === true;
-      const preset = free ? 0 : tierPrice(item, pricingProfile);
-      return [...prev, { item, quantity: 1, unitPrice: preset, preset }];
+      const next = (() => {
+        if (idx >= 0) {
+          newQty = prev[idx].quantity + 1;
+          return prev.map((l, i) => (i === idx ? { ...l, quantity: newQty } : l));
+        }
+        // Non-billable items (free accompaniments / supplies) are never charged — force 0
+        // regardless of tier pricing (the server zeroes the line as a belt anyway).
+        const free = item.non_billable === true || item.is_complimentary === true;
+        const preset = free ? 0 : tierPrice(item, pricingProfile);
+        return [...prev, { item, quantity: 1, unitPrice: preset, preset }];
+      })();
+      updatedLines = next;
+      return next;
     });
     // Confirm the profile price from inventory-api (mirrors the terminal). Skips if the user already
     // hand-edited this line's price.
@@ -463,7 +481,46 @@ export default function AddSalePage() {
         if (p != null) setLines((cur) => cur.map((l) => (l.item.id === item.id && !l.priceEdited ? { ...l, unitPrice: p, preset: p } : l)));
       });
     }
-  }, [pricingProfile, resolvePrice]);
+
+    // Same happy-hour/BOGO alert the POS terminal shows the cashier on add — shared via
+    // lib/pos/auto-apply-discounts so both surfaces announce identically.
+    const totalQtyForSku = updatedLines.filter((l) => l.item.sku === item.sku).reduce((s, l) => s + l.quantity, 0);
+    const announcement = describeAutoApplyAnnouncement(
+      { sku: item.sku, name: item.name },
+      updatedLines.map((l) => ({ sku: l.item.sku, quantity: l.quantity })),
+      totalQtyForSku,
+      activeHappyHours,
+      currency,
+    );
+    if (announcement) {
+      const toastFn = announcement.type === 'success' ? toast.success : toast.info;
+      toastFn(announcement.message, { id: announcement.toastId });
+    }
+  }, [pricingProfile, resolvePrice, activeHappyHours, currency]);
+
+  // Corresponding-pair BOGO auto-add + sync — same computation the POS terminal runs
+  // (lib/pos/auto-apply-discounts.computePairAutoAdd), adapted to SaleLine's shape (sku/name
+  // live under `.item`, not top-level) via a thin adapter that's stripped back off before the
+  // result is stored. Kept centrally here so no manual step is needed and a free line can't be
+  // stranded, exactly like the terminal.
+  useEffect(() => {
+    type BogoAdapterLine = SaleLine & { sku: string; name: string };
+    const adapted: BogoAdapterLine[] = lines.map((l) => ({ ...l, sku: l.item.sku, name: l.item.name }));
+    const { changed, next, announcements } = computePairAutoAdd<BogoAdapterLine>(adapted, activeHappyHours, (sku) => {
+      const match = fullCatalog?.find((c) => c.sku.toLowerCase() === sku);
+      if (!match) return undefined;
+      const p = tierPrice(match, pricingProfile);
+      return { item: match, unitPrice: p, preset: p, sku: match.sku, name: match.name };
+    });
+    if (changed) {
+      setLines(next.map(({ sku: _sku, name: _name, ...rest }) => rest));
+      for (const a of announcements) {
+        toast.success(`🎉 Free ${a.name}${a.qty > 1 ? ` ×${a.qty}` : ''} added`, { id: `hh-free-${a.sku}` });
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lines, activeHappyHours, fullCatalog, pricingProfile]);
+
   const applyQty = (i: number, q: number) => {
     if (q <= 0) {
       // Removing a line is structural — it can only persist via the replacement-order path.
@@ -567,21 +624,55 @@ export default function AddSalePage() {
     );
   };
 
+  // Effective quantity (paid + same-SKU BOGO free units) — same derivation as the POS terminal's
+  // effectiveQtyFor, folded into gross/tax/happy-hour math AND the persisted order line so stock
+  // deducts every physical unit and pos-api's calculateBOGODiscount prices the free units.
+  const effectiveQty = useCallback(
+    (l: SaleLine) => l.quantity + bogoFreeUnitsForSku(l.item.sku, l.quantity, activeHappyHours),
+    [activeHappyHours],
+  );
+
   // Per-line inclusive-aware tax + a single order-level ceiling round-off — the SAME model the
   // POS terminal and pos-api use (see src/lib/pos/cart-tax.ts), so this preview equals the
   // server's stored totals instead of stacking a flat VAT over the whole (discounted) cart.
   const { subtotal, tax } = useMemo(() => {
     const r = computeCartTax(
       lines.map((l) => ({
-        gross: l.unitPrice * l.quantity,
+        gross: l.unitPrice * effectiveQty(l),
         taxRate: typeof l.item.tax_rate === 'number' ? l.item.tax_rate : undefined,
         taxInclusive: l.item.tax_inclusive ?? undefined,
       })),
       taxRate * 100,
     );
     return { subtotal: r.subtotal, tax: r.tax };
-  }, [lines, taxRate]);
-  const { roundOff, total } = applyRoundOff(subtotal + tax - discount + shippingAmount);
+  }, [lines, taxRate, effectiveQty]);
+
+  // Live happy-hour/auto auto-apply discount — mirrors pos-api's checkout evaluator (and the POS
+  // terminal's identical computation) so this preview matches what the server applies at save.
+  const happyHour = useMemo(() => {
+    const hhLines: HHLine[] = lines.map((l) => {
+      const qty = effectiveQty(l);
+      return { sku: l.item.sku, category: l.item.category, unitPrice: l.unitPrice, quantity: qty, total: l.unitPrice * qty };
+    });
+    return computeHappyHour(hhLines, activeHappyHours, currency);
+  }, [lines, activeHappyHours, currency, effectiveQty]);
+  const happyHourDiscount = happyHour.total;
+  // Alert when a discount window opens/closes while a sale is already in progress — same cue the
+  // POS terminal gives, since Add Sale carts can sit open just as long.
+  const prevHappyHourDiscountRef = useRef(0);
+  useEffect(() => {
+    const prev = prevHappyHourDiscountRef.current;
+    if (lines.length > 0) {
+      if (prev <= 0 && happyHourDiscount > 0) {
+        toast.success(`🎉 ${happyHour.promoName || 'A discount'} is now active on this sale!`, { id: 'happy-hour-window' });
+      } else if (prev > 0 && happyHourDiscount <= 0) {
+        toast.info('The active discount window has ended for this sale.', { id: 'happy-hour-window' });
+      }
+    }
+    prevHappyHourDiscountRef.current = happyHourDiscount;
+  }, [lines.length, happyHourDiscount, happyHour.promoName]);
+
+  const { roundOff, total } = applyRoundOff(subtotal + tax - discount - happyHourDiscount + shippingAmount);
 
   // Per-line request shape — shared by buildPayload (the whole cart) and the edit_inplace
   // addendum save (just the added/increased lines), so both send identical tax/price-guardrail
@@ -610,14 +701,18 @@ export default function AddSalePage() {
     if (!free && typeof l.item.max_selling_price === 'number' && l.item.max_selling_price > 0) {
       lineMeta.max_price = l.item.max_selling_price;
     }
+    // BOGO: send the EFFECTIVE quantity (paid + free) so stock deducts every physical unit and
+    // pos-api's calculateBOGODiscount prices the free/discounted "get" units — same contract the
+    // POS terminal's orderLines payload uses.
+    const qty = effectiveQty(l);
     return {
       catalog_item_id: l.item.id,
       sku: l.item.sku,
       name: l.item.name,
       category: l.item.category,
-      quantity: l.quantity,
+      quantity: qty,
       unit_price: free ? 0 : l.unitPrice,
-      total_price: free ? 0 : l.unitPrice * l.quantity,
+      total_price: free ? 0 : l.unitPrice * qty,
       metadata: Object.keys(lineMeta).length > 0 ? lineMeta : undefined,
       // Tax as priced in the catalog — keeps the server payable equal to what is charged here.
       ...(l.item.tax_code_id ? { tax_code_id: l.item.tax_code_id } : {}),
@@ -1238,6 +1333,12 @@ export default function AddSalePage() {
               <p className="text-[11px] text-muted-foreground text-right -mt-1.5">{discountReason}</p>
             )}
             <div className="flex justify-between text-sm"><span className="text-muted-foreground">VAT ({Math.round(taxRate * 100)}%)</span><span className="tabular-nums font-medium">{fmt(tax)}</span></div>
+            {happyHourDiscount > 0 && (
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">{happyHour.promoName || 'Auto discount'}</span>
+                <span className="tabular-nums font-medium text-emerald-600">− {fmt(happyHourDiscount)}</span>
+              </div>
+            )}
             {shippingAmount > 0 && (
               <div className="flex justify-between text-sm"><span className="text-muted-foreground">Shipping (+)</span><span className="tabular-nums font-medium">{fmt(shippingAmount)}</span></div>
             )}
@@ -1289,6 +1390,8 @@ export default function AddSalePage() {
         currentReason={discountReason}
         onApply={(amount, reason) => { setDiscount(amount); setDiscountReason(reason); setDiscountOpen(false); }}
         onClose={() => setDiscountOpen(false)}
+        lines={lines.map((l) => ({ sku: l.item.sku, category: l.item.category, quantity: l.quantity, unit_price: l.unitPrice }))}
+        outletId={outletId}
       />
 
       {/* Manager step-up for an over-limit discount / non-manager order adjustment — the

@@ -45,7 +45,7 @@ import { isFractionalUnit, parseQuantityInput } from '@/lib/pos/units';
 import { cn, formatCurrency } from '@/lib/utils';
 import {
   Ban, ChefHat, ChevronLeft, Flame, Grid3x3, Image as ImageIcon, LayoutGrid, LayoutList, Loader2,
-  Minus, Plus, Search, ShoppingCart, Trash2, User, X,
+  Minus, Plus, Search, ShoppingCart, Tag, Trash2, User, X,
 } from 'lucide-react';
 
 export function TerminalShell() {
@@ -522,6 +522,32 @@ export function TerminalShell() {
           <span className="text-muted-foreground">Order Tax(+): <b className="text-foreground tabular-nums">{fmt(t.tax)}</b></span>
           {t.loyaltyDiscount > 0 && <span className="text-emerald-600">Discount: -{fmt(t.loyaltyDiscount)}</span>}
         </div>
+        {t.happyHourDiscount > 0 && (
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-muted-foreground truncate">{t.happyHour.promoName || 'Auto discount'}</span>
+            <span className="text-emerald-600 font-semibold tabular-nums">- {fmt(t.happyHourDiscount)}</span>
+          </div>
+        )}
+        {/* Order-level discount — predefined / promo-code / one-time (ApplyDiscountModal). This
+            was the ONLY trigger for t.discountOpen anywhere in the app before this fix; the
+            modal existed and worked, but nothing on the terminal ever opened it. */}
+        {canApplyDiscount && (
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-muted-foreground">Order discount</span>
+            <button
+              type="button"
+              onClick={() => t.setDiscountOpen(true)}
+              disabled={cart.length === 0}
+              className={cn(
+                'flex items-center gap-1 font-semibold disabled:opacity-40 disabled:cursor-not-allowed',
+                t.manualDiscount > 0 ? 'text-amber-600' : 'text-primary hover:underline',
+              )}
+            >
+              <Tag className="h-3 w-3" />
+              {t.manualDiscount > 0 ? `- ${fmt(t.manualDiscount)}` : 'Add discount'}
+            </button>
+          </div>
+        )}
         {/* Void + fire-courses (hospitality), preserved from the cart panel */}
         {t.currentOrderId && t.can('pos.orders.void') && (
           <button onClick={() => t.setVoidOpen(true)} className="w-full mt-1 flex items-center justify-center gap-2 py-1.5 rounded-lg border border-destructive/40 text-destructive text-xs font-semibold hover:bg-destructive/5">

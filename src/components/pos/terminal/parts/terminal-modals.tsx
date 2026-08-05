@@ -155,6 +155,8 @@ export function TerminalModals() {
         currentReason={t.discountReason}
         onApply={t.applyDiscount}
         onClose={() => t.setDiscountOpen(false)}
+        lines={t.cart.map((c) => ({ sku: c.sku, category: c.category, quantity: c.quantity, unit_price: c.price + (c.modifierTotal ?? 0) }))}
+        outletId={t.outlet?.id}
       />
 
       <OrderTaxModal

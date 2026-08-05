@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '@/store/auth';
-import { discountsApi, type DiscountInput, type DiscountListOpts } from '@/lib/api/discounts';
+import { discountsApi, type ApplyPromoLine, type DiscountInput, type DiscountListOpts } from '@/lib/api/discounts';
 
 // Matches useHotel's resolution: the tenant path segment is the tenant UUID (httpware
 // resolves both, but every existing promotions call sends the id — stay consistent).
@@ -38,6 +38,16 @@ export function useActiveHappyHours() {
     refetchInterval: 60_000,
     refetchIntervalInBackground: true,
     refetchOnWindowFocus: true,
+  });
+}
+
+/** Redeem a typed/scanned promo code against the sale's real cart lines — the ApplyDiscountModal
+ *  code tab. Centralizes tenant-slug resolution the same way every other hook here does. */
+export function useApplyPromoCode() {
+  const slug = useTenantSlug();
+  return useMutation({
+    mutationFn: ({ promoCode, lines, outletId }: { promoCode: string; lines: ApplyPromoLine[]; outletId?: string }) =>
+      discountsApi.apply(slug, promoCode, lines, outletId),
   });
 }
 

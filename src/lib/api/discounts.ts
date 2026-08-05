@@ -158,10 +158,32 @@ export const discountsApi = {
   remove: (tenantSlug: string, id: string) =>
     apiClient.delete(`/api/v1/${tenantSlug}/pos/promotions/${id}`),
 
-  /** Validate a promo code against an amount (same evaluation the terminal uses). */
-  apply: (tenantSlug: string, promoCode: string, amount: number) =>
-    apiClient.post<{ valid: boolean; reason?: string; discountAmount?: string }>(
+  /**
+   * Validate a promo code against the sale's REAL cart lines — the exact rule-based evaluator
+   * (schedule/meal_period/item-or-category scope/BOGO) auto-apply discounts use, so a typed/
+   * scanned code behaves identically to a happy-hour deal instead of a separate flat calculator.
+   * `outletId` scopes an outlet-restricted code; omit for a tenant-wide/"All outlets" code.
+   */
+  apply: (tenantSlug: string, promoCode: string, lines: ApplyPromoLine[], outletId?: string) =>
+    apiClient.post<{ valid: boolean; reason?: string; discountAmount?: string; perSku?: Record<string, PerSkuDiscount> }>(
       `/api/v1/${tenantSlug}/pos/promotions/apply`,
-      { promoCode, amount },
+      { promoCode, outlet_id: outletId, lines },
     ),
 };
+
+/** One cart line sent to discountsApi.apply — mirrors pos-api's applyPromoLineInput. */
+export interface ApplyPromoLine {
+  sku: string;
+  category?: string;
+  quantity: number;
+  unit_price: number;
+  added_at?: string;
+}
+
+export interface PerSkuDiscount {
+  sku: string;
+  amount: number;
+  free_qty: number;
+  type: string;
+  label: string;
+}

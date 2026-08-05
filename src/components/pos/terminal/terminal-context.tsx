@@ -38,6 +38,7 @@ import { useLoyaltyPrograms, useLoyaltyAccount } from '@/hooks/useLoyalty';
 import type { LoyaltyRedeemInfo } from '@/lib/pos/terminal-actions';
 import { useActiveHappyHours } from '@/hooks/useDiscounts';
 import { computeHappyHour, bogoFreeUnitsForSku, type HHLine, type HappyHourResult } from '@/lib/pos/happy-hour';
+import { computePairAutoAdd, describeAutoApplyAnnouncement } from '@/lib/pos/auto-apply-discounts';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useClientCredit } from '@/hooks/useClients';
 import { useAuthStore } from '@/store/auth';
@@ -522,20 +523,6 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
   // Live happy-hour/BOGO promotions — used to alert the waiter/cashier at the moment a covered
   // item is added, e.g. "Add 1 more Burger to unlock Buy 1 Get 1 Free" (see addItemToCart).
   const { data: activeHappyHours = [] } = useActiveHappyHours();
-  const happyHourForSku = useCallback(
-    (sku: string) =>
-      activeHappyHours.find((p) => {
-        const r = p.rule;
-        if (!r) return false;
-        if (r.scope_type === 'all') return true;
-        if (r.scope_type !== 'item') return false;
-        // For cross-item BOGO (get_scope_ids set), a SKU on EITHER side of the pairing
-        // qualifies — a Small pizza (the "get" item) must also find its promo, not just the
-        // Large pizza (the "buy" item), so the terminal can nudge/celebrate on either add.
-        return (r.scope_ids ?? []).includes(sku) || (r.get_scope_ids ?? []).includes(sku);
-      }),
-    [activeHappyHours],
-  );
   // Pricing profile (Retail/Wholesale) — switching it re-prices the cart via inventory tier prices.
   const [pricingProfile, setPricingProfile] = useState<string>('');
   const [repricing, setRepricing] = useState(false);
@@ -834,86 +821,10 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
   // "get" item counts toward the earned free units so we never double it. Managed centrally here so
   // no manual step is needed and a free line can't be stranded.
   useEffect(() => {
-    const pairRules = activeHappyHours
-      .map((p) => p.rule)
-      .filter((r): r is NonNullable<typeof r> =>
-        !!r && r.discount_type === 'bogo' && r.scope_type === 'item'
-        && !!r.get_pair_map && Object.keys(r.get_pair_map).length > 0);
-
-    if (pairRules.length === 0) {
-      if (cart.some((c) => c.promoFree)) setCart((prev) => prev.filter((c) => !c.promoFree));
-      return;
-    }
-
-    // lower(buySku) -> { getSku, buy, get }; first active rule wins on a conflicting key.
-    const pair = new Map<string, { getSku: string; buy: number; get: number }>();
-    for (const r of pairRules) {
-      const buy = Math.max(1, r.buy_quantity ?? 1);
-      const get = Math.max(1, r.get_quantity ?? 1);
-      for (const [bk, gk] of Object.entries(r.get_pair_map ?? {})) {
-        const key = bk.toLowerCase();
-        if (!pair.has(key)) pair.set(key, { getSku: gk, buy, get });
-      }
-    }
-
-    // Earned free units per get SKU, from buy-line quantities (real lines only, not free lines).
-    const buyQtyBySku = new Map<string, number>();
-    for (const c of cart) {
-      if (c.promoFree) continue;
-      const k = (c.sku ?? '').toLowerCase();
-      if (pair.has(k)) buyQtyBySku.set(k, (buyQtyBySku.get(k) ?? 0) + c.quantity);
-    }
-    const earnedByGetSku = new Map<string, number>();
-    for (const [bk, q] of buyQtyBySku) {
-      const info = pair.get(bk)!;
-      const earned = Math.floor(q / info.buy) * info.get;
-      if (earned <= 0) continue;
-      const gk = info.getSku.toLowerCase();
-      earnedByGetSku.set(gk, (earnedByGetSku.get(gk) ?? 0) + earned);
-    }
-    // Manually-present (non-free) quantity of each earned get SKU — don't auto-add on top of it.
-    const manualByGetSku = new Map<string, number>();
-    for (const c of cart) {
-      if (c.promoFree) continue;
-      const k = (c.sku ?? '').toLowerCase();
-      if (earnedByGetSku.has(k)) manualByGetSku.set(k, (manualByGetSku.get(k) ?? 0) + c.quantity);
-    }
-    const targetAuto = new Map<string, number>();
-    for (const [gk, earned] of earnedByGetSku) {
-      targetAuto.set(gk, Math.max(0, earned - (manualByGetSku.get(gk) ?? 0)));
-    }
-
-    // Rebuild: keep real lines; set each free line to its target (drop at 0); add missing free lines.
-    const next: CartItem[] = [];
-    const seen = new Set<string>();
-    const announce: { sku: string; name: string; qty: number }[] = [];
-    let changed = false;
-    for (const c of cart) {
-      if (!c.promoFree) { next.push(c); continue; }
-      const gk = (c.sku ?? '').toLowerCase();
-      const want = targetAuto.get(gk) ?? 0;
-      seen.add(gk);
-      if (want <= 0) { changed = true; continue; }
-      if (c.quantity !== want) {
-        if (want > c.quantity) announce.push({ sku: gk, name: c.name, qty: want });
-        next.push({ ...c, quantity: want });
-        changed = true;
-      } else {
-        next.push(c);
-      }
-    }
-    for (const [gk, want] of targetAuto) {
-      if (want <= 0 || seen.has(gk)) continue;
-      const mi = menuBySku.get(gk);
-      if (!mi) continue; // not in catalog — can't auto-add
-      next.push({ ...mi, quantity: want, promoFree: true });
-      announce.push({ sku: gk, name: mi.name, qty: want });
-      changed = true;
-    }
-
+    const { changed, next, announcements } = computePairAutoAdd(cart, activeHappyHours, (sku) => menuBySku.get(sku));
     if (changed) {
       setCart(next);
-      for (const a of announce) {
+      for (const a of announcements) {
         toast.success(`🎉 Free ${a.name}${a.qty > 1 ? ` ×${a.qty}` : ''} added`, { id: `hh-free-${a.sku}` });
       }
     }
@@ -1034,60 +945,15 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
       // give a concrete "add N more" nudge (or celebrate a completed cycle) instead of just
       // naming the deal — e.g. "Add 1 more Burger to unlock Buy 1 Get 1 Free" then, once they
       // do, "Buy 1 Get 1 Free applied on Burger!". Keyed by sku so re-adding the same item
-      // replaces the toast instead of stacking duplicates.
-      const promo = happyHourForSku(item.sku);
-      if (promo?.rule) {
-        const r = promo.rule;
-        // Corresponding-pair BOGO (get_pair_map set) auto-adds the matching free item and toasts
-        // from the reconcile effect, so suppress the manual "add N more / add a qualifying item"
-        // nudges here — they'd contradict the auto-add.
-        const hasPairMap = r.discount_type === 'bogo' && !!r.get_pair_map && Object.keys(r.get_pair_map).length > 0;
-        const crossItem = !hasPairMap && r.discount_type === 'bogo' && (r.get_scope_ids ?? []).length > 0;
-        if (hasPairMap) {
-          // no-op: the reconcile effect announces the auto-added free item.
-        } else if (crossItem) {
-          // Cross-item: "buy Large, get Small free" — the buy_quantity/get_quantity pairing
-          // spans TWO DIFFERENT scopes, not one SKU's own quantity, so tally each scope
-          // separately from the just-updated cart rather than reusing the same-SKU cycle math.
-          const buyIds = new Set((r.scope_ids ?? []).map((s) => s.toLowerCase()));
-          const getIds = new Set((r.get_scope_ids ?? []).map((s) => s.toLowerCase()));
-          const buyQtyInCart = updatedCart.filter((c) => buyIds.has(c.sku.toLowerCase())).reduce((s, c) => s + c.quantity, 0);
-          const getQtyInCart = updatedCart.filter((c) => getIds.has(c.sku.toLowerCase())).reduce((s, c) => s + c.quantity, 0);
-          const buy = r.buy_quantity || 1;
-          const get = r.get_quantity || 1;
-          const freeEarned = Math.floor(buyQtyInCart / buy) * get;
-          const dealLabel = r.get_discount_percent >= 100 ? 'Free' : `${r.get_discount_percent}% off`;
-          if (buyIds.has(item.sku.toLowerCase())) {
-            // Just added a "buy" item.
-            if (getQtyInCart > 0 && freeEarned > 0) {
-              toast.success(`🎉 ${promo.name}: ${dealLabel} item applied!`, { id: `happy-hour-${item.sku}` });
-            } else {
-              toast.info(`${promo.name}: add a qualifying item to get one ${dealLabel.toLowerCase()}`, { id: `happy-hour-${item.sku}` });
-            }
-          } else if (getIds.has(item.sku.toLowerCase())) {
-            // Just added a "get" item.
-            if (freeEarned >= getQtyInCart) {
-              toast.success(`🎉 ${promo.name}: ${item.name} is ${dealLabel.toLowerCase()}!`, { id: `happy-hour-${item.sku}` });
-            } else {
-              toast.info(`${promo.name}: buy a qualifying item to unlock ${dealLabel.toLowerCase()} on ${item.name}`, { id: `happy-hour-${item.sku}` });
-            }
-          }
-        } else if (r.discount_type === 'bogo' && r.scope_type === 'item') {
-          const cycle = (r.buy_quantity || 1) + (r.get_quantity || 1);
-          const intoCycle = totalQtyForSku % cycle;
-          if (intoCycle === 0) {
-            toast.success(`🎉 ${promo.name}: Buy ${r.buy_quantity} Get ${r.get_quantity} ${r.get_discount_percent >= 100 ? 'Free' : `${r.get_discount_percent}% off`} applied on ${item.name}!`, { id: `happy-hour-${item.sku}` });
-          } else {
-            const remaining = cycle - intoCycle;
-            toast.info(`${promo.name}: add ${remaining} more ${item.name} to unlock Buy ${r.buy_quantity} Get ${r.get_quantity} ${r.get_discount_percent >= 100 ? 'Free' : `${r.get_discount_percent}% off`}`, { id: `happy-hour-${item.sku}` });
-          }
-        } else if (r.discount_type !== 'bogo') {
-          const dealCurrency = (posSettings as any)?.currency ?? 'KES';
-          const deal = r.discount_type === 'percentage' ? `${r.discount_value}% off`
-            : r.discount_type === 'fixed_price' ? `fixed price ${dealCurrency} ${r.discount_value}`
-            : `${dealCurrency} ${r.discount_value} off`;
-          toast.info(`${promo.name}: ${item.name} is ${deal}`, { id: `happy-hour-${item.sku}` });
-        }
+      // replaces the toast instead of stacking duplicates. Shared with Add Sale via
+      // lib/pos/auto-apply-discounts (a corresponding-pair BOGO returns null here — the reconcile
+      // effect above announces its own auto-added free line instead).
+      const announcement = describeAutoApplyAnnouncement(
+        item, updatedCart, totalQtyForSku, activeHappyHours, (posSettings as any)?.currency ?? 'KES',
+      );
+      if (announcement) {
+        const toastFn = announcement.type === 'success' ? toast.success : toast.info;
+        toastFn(announcement.message, { id: announcement.toastId });
       }
 
       // The grid price already reflects the selected profile (menuItems carries every tier's price).
@@ -1114,7 +980,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
           });
       }
     },
-    [pricingProfile, pricingTiers, user, happyHourForSku],
+    [pricingProfile, pricingTiers, user, activeHappyHours, posSettings],
   );
 
   const proceedWithItem = useCallback(
@@ -1452,6 +1318,22 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
     return computeHappyHour(lines, activeHappyHours, (posSettings as any)?.currency ?? 'KES');
   }, [cart, activeHappyHours, posSettings]);
   const happyHourDiscount = happyHour.total;
+  // Alert the cashier when a happy-hour/auto discount opens or closes WHILE items already sit in
+  // the cart (e.g. the clock crosses into/out of a window on an open tab) — addItemToCart's toast
+  // only fires at the moment of adding, so a standing cart would otherwise change its total
+  // silently on the next activeHappyHours poll with no visible cue.
+  const prevHappyHourDiscountRef = useRef(0);
+  useEffect(() => {
+    const prev = prevHappyHourDiscountRef.current;
+    if (cart.length > 0) {
+      if (prev <= 0 && happyHourDiscount > 0) {
+        toast.success(`🎉 ${happyHour.promoName || 'A discount'} is now active on this order!`, { id: 'happy-hour-window' });
+      } else if (prev > 0 && happyHourDiscount <= 0) {
+        toast.info('The active discount window has ended for this order.', { id: 'happy-hour-window' });
+      }
+    }
+    prevHappyHourDiscountRef.current = happyHourDiscount;
+  }, [cart.length, happyHourDiscount, happyHour.promoName]);
   // Whole-number payable (QA req 5): ceiling round-off applied ONCE at the order level —
   // the same math pos-api's finalizeTotals runs, so till total == stored total.
   const { roundOff, total } = applyRoundOff(
