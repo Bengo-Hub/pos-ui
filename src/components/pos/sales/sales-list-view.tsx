@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useSearchParams, useRouter } from 'next/navigation';
+import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import { Search, Undo2, XCircle } from 'lucide-react';
 import { DataTable, type DataTableColumn } from '@bengo-hub/shared-ui-lib/data-table';
 import { useOrders, useOrdersSummary, useBulkVoidOrders, useDeleteSale, type OrderListFilters } from '@/hooks/usePOS';
@@ -64,6 +64,7 @@ export function SalesListView({ orgSlug, fixedSource, title, subtitle }: {
   const effectiveSubtitle = ownOnly ? 'Sales you rang up. Managers can see all sales.' : subtitle;
 
   const router = useRouter();
+  const pathname = usePathname();
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   // ?invoice= deep-links a specific sale here (e.g. from a return's "Original Order").
@@ -188,7 +189,10 @@ export function SalesListView({ orgSlug, fixedSource, title, subtitle }: {
   // Edit a FINALIZED sale: opens the true in-place editor directly — nothing is reversed just
   // to open it (only Save actually reduces/reverses whatever was actually removed/lowered).
   const handleEditFinalizedSale = (order: any) => {
-    router.push(`/${orgSlug}/sell/add?edit_inplace=${order.id}`);
+    // Carry this list's own route back so Add Sale can return here (All Sales vs POS-only
+    // Sales both render this component) once the edit is saved, instead of always landing on
+    // a blank Add Sale screen.
+    router.push(`/${orgSlug}/sell/add?edit_inplace=${order.id}&return_to=${encodeURIComponent(pathname)}`);
   };
 
   const handlePutOnAccount = () => {

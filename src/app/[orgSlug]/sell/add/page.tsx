@@ -324,6 +324,10 @@ export default function AddSalePage() {
   // ("reducing qty of a line item does nothing"): a second Edit-Sale entry in the same browser
   // tab silently re-diffed against pre-edit quantities instead of the just-saved state.
   const editInplaceId = searchParams.get('edit_inplace') || '';
+  // Where to land after a successful in-place edit save — the sales list the "Edit Sale" action
+  // was launched from (All Sales / POS-only Sales both link here), falling back to a blank Add
+  // Sale screen when absent (e.g. this page opened directly, not via the sales list).
+  const editInplaceReturnTo = searchParams.get('return_to') || `/${orgSlug}/sell/add`;
   const editInplaceQ = useOrder(editInplaceId);
   const [editInplace, setEditInplace] = useState<{ id: string; number: string } | null>(null);
   const editSale = useEditSale();
@@ -390,13 +394,13 @@ export default function AddSalePage() {
           toast.success(`${editInplace.number} updated — open ${editInplace.number}'s linked sale to collect payment.`);
           setEditInplace(null);
           reset();
-          router.replace(`/${orgSlug}/sell/add`);
+          router.replace(editInplaceReturnTo);
         }
       } else {
         toast.success(`${editInplace.number} updated`);
         setEditInplace(null);
         reset();
-        router.replace(`/${orgSlug}/sell/add`);
+        router.replace(editInplaceReturnTo);
       }
     } catch (e) {
       toast.error(await apiErrorMessage(e, 'Failed to save the edit.'));
