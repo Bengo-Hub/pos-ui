@@ -156,10 +156,26 @@ export function SalesActionsMenu({ order, orgSlug, onView, onEditShipping, onVie
             className={`${item} text-destructive`}
             onVoided={close}
           />
+          {/* Delete Sale ("shred") refuses ANY sale that already has a return, refund, or
+              reversal on record — a deliberate, unchanged policy distinct from Edit Sale's
+              (which allows repeat corrections). Disabling here — instead of only learning
+              this after confirming a dialog that promises unconditional deletion — is the fix
+              for a live report where an admin couldn't tell why Delete kept failing on sales
+              they'd already corrected via Edit Sale/a return. */}
           {isFinal && canDeleteSale && onDeleteSale && (
-            <button className={item} onClick={() => { onDeleteSale(order); close(); }}>
-              <Trash2 className="h-4 w-4 text-destructive" /> Delete Sale
-            </button>
+            order.has_correction_history ? (
+              <button
+                className={`${item} opacity-50 cursor-not-allowed`}
+                disabled
+                title="This sale already has a return, refund, or reversal on record — Delete Sale is disabled. Use the Edit Sale or Sell Return tool instead."
+              >
+                <Trash2 className="h-4 w-4 text-muted-foreground" /> Delete Sale
+              </button>
+            ) : (
+              <button className={item} onClick={() => { onDeleteSale(order); close(); }}>
+                <Trash2 className="h-4 w-4 text-destructive" /> Delete Sale
+              </button>
+            )
           )}
           {canChange && <button className={item} onClick={() => { onEditShipping(order); close(); }}><Truck className="h-4 w-4 text-muted-foreground" /> Edit Shipping</button>}
 
