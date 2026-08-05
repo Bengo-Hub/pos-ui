@@ -1770,8 +1770,17 @@ export function useEditSale() {
   const tenantID = useTenantID();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ orderId, reason, lines }: { orderId: string; reason: string; lines: EditSaleLine[] }) =>
-      apiClient.post<EditSaleResult>(`${basePath(tenantID)}/orders/${orderId}/edit`, { reason, lines }),
+    // customerName/customerIdentifier let the caller attach a real customer to an order that
+    // doesn't have one — required by pos-api when the edit includes an increase (it always
+    // posts as an AR receivable, and refuses to do that against a walk-in with no phone; see
+    // orders.RequireIdentifiableCustomer). Without sending these, an admin adding an item to a
+    // walk-in's sale via this page had no way to satisfy that guard at all.
+    mutationFn: ({ orderId, reason, lines, customerName, customerIdentifier }: {
+      orderId: string; reason: string; lines: EditSaleLine[]; customerName?: string; customerIdentifier?: string;
+    }) =>
+      apiClient.post<EditSaleResult>(`${basePath(tenantID)}/orders/${orderId}/edit`, {
+        reason, lines, customer_name: customerName, customer_identifier: customerIdentifier,
+      }),
     // Invalidate every cache keyed on THIS order, not just the list — a Sell Details modal or
     // the Edit Sale page itself may still be mounted with a cached useOrder(orderId)/returns
     // query that this mutation just made stale. Found live: without this, a still-open Sell

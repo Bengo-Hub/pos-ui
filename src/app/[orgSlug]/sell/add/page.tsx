@@ -379,7 +379,16 @@ export default function AddSalePage() {
 
     setEditInplaceSaving(true);
     try {
-      const result = await editSale.mutateAsync({ orderId: editInplace.id, reason: 'Edited from Sales list', lines: editLines });
+      // customer is already shown/editable on this page via CustomerSearch above — send it so
+      // an increase (which always posts as AR) has a real customer to attach to when the order
+      // itself has none yet (e.g. adding an item to a walk-in's completed sale). pos-api refuses
+      // the increase otherwise; realCustomer excludes the walk-in placeholder so an unresolved
+      // walk-in still lets a pure-reduction edit through unaffected.
+      const result = await editSale.mutateAsync({
+        orderId: editInplace.id, reason: 'Edited from Sales list', lines: editLines,
+        customerName: realCustomer ? customer?.name : undefined,
+        customerIdentifier: realCustomer ? customer?.phone : undefined,
+      });
       if (result.price_only_lines_skipped?.length) {
         toast.warning("A price change on an unchanged quantity isn't saved by Edit Sale — remove the line and re-add it at the new price instead.");
       }
