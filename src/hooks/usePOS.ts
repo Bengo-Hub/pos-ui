@@ -1704,54 +1704,50 @@ export function useDeleteSale() {
   });
 }
 
-export interface PrepareEditResult {
+// EditSaleLine is one line of the FULL desired final state sent to POST /orders/{id}/edit —
+// the server diffs this against the order's live lines itself (line_id omitted = new line).
+export interface EditSaleLine {
+  line_id?: string;
+  catalog_item_id?: string;
+  sku: string;
+  name: string;
+  quantity: number;
+  unit_price: number;
+  tax_code_id?: string;
+  price_includes_tax?: boolean;
+  tax_rate?: number;
+}
+
+export interface EditSaleResult {
   order_id: string;
-  reversal_id: string;
-  reversal_number: string;
+  sale_edit_id: string;
+  kind: 'reduction' | 'increase' | 'mixed' | 'price_only';
+  fiscalized: boolean;
+  linked_reversal_id?: string;
+  linked_return_id?: string;
+  linked_addendum_order_id?: string;
+  price_only_lines_skipped?: string[];
 }
 
 /**
- * usePrepareEditSale runs the "prepare" half of the Edit-Sale tool
- * (POST /orders/{id}/prepare-edit — pos.orders.edit_finalized, admin by default): reverses the
- * original FINALIZED sale's GL/inventory/eTIMS via the same engine the platform Txn Reversal
- * tool uses. On success the caller navigates to Add Sale (`?edit_from={id}`) to create the
- * replacement through the normal, already-proven checkout pipeline.
+ * useEditSale is the SINGLE centralized entry point for editing a finalized sale
+ * (POST /orders/{id}/edit — pos.orders.edit_finalized, admin by default). Send the FULL
+ * desired line set (not a pre-diffed reductions/increases split) — the backend loads the
+ * live order and diffs server-side, then branches per-line by the order's ACTUAL
+ * fiscalization status: non-fiscalized edits (any mix of add/reduce/increase/remove) are
+ * applied truly in place on the SAME order (no new order, no new receipt); fiscalized
+ * reductions become a real auto-completed return + credit note, fiscalized increases keep
+ * the existing linked-addendum-order behavior. Replaces the old two-call
+ * useApplyEditSale + useCreateOrder(metadata.related_order_id) split — that diff used to be
+ * computed client-side against a snapshot that could go stale across repeated edits (the
+ * exact bug behind "reducing qty does nothing"); the server now owns the diff.
  */
-export function usePrepareEditSale() {
+export function useEditSale() {
   const tenantID = useTenantID();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ orderId, reason }: { orderId: string; reason: string }) =>
-      apiClient.post<PrepareEditResult>(`${basePath(tenantID)}/orders/${orderId}/prepare-edit`, { reason }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['pos-orders'] }),
-  });
-}
-
-export interface EditReduceLine {
-  line_id: string;
-  quantity?: number; // 0/omitted = whole line
-}
-
-export interface EditReduceResult {
-  order_id: string;
-  reversal_id?: string;
-  reversal_number?: string;
-}
-
-/**
- * useApplyEditSale is the TRUE in-place half of Edit Sale
- * (POST /orders/{id}/edit-reduce — pos.orders.edit_finalized, admin by default): removes/reduces
- * the given lines via a partial reversal — inventory add-back, treasury GL refund, an eTIMS
- * credit note only if the tenant is actually fiscalized, and loyalty/commission clawback are all
- * prorated to the reduced value. The order's status and number are UNCHANGED — this never creates
- * a replacement order. Pass an empty `lines` array for a pure-increase edit (nothing to reduce).
- */
-export function useApplyEditSale() {
-  const tenantID = useTenantID();
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ orderId, reason, lines }: { orderId: string; reason: string; lines: EditReduceLine[] }) =>
-      apiClient.post<EditReduceResult>(`${basePath(tenantID)}/orders/${orderId}/edit-reduce`, { reason, lines }),
+    mutationFn: ({ orderId, reason, lines }: { orderId: string; reason: string; lines: EditSaleLine[] }) =>
+      apiClient.post<EditSaleResult>(`${basePath(tenantID)}/orders/${orderId}/edit`, { reason, lines }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['pos-orders'] }),
   });
 }

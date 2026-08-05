@@ -20,7 +20,7 @@ import { StockCell, isStockTracked } from '@/components/pos/stock-cell';
 import { Button } from '@/components/ui/base';
 import { useClientCredit } from '@/hooks/useClients';
 import { usePermissions } from '@/hooks/usePermissions';
-import { useApplyEditSale, useCreateOrder, useCreatePaymentIntent, useEditOrderLine, useFullCatalog, useMenuItems, useOrder, usePricingTiers, useSetOrderDiscount, useVoidOrder, type CatalogItem, type EditReduceLine } from '@/hooks/usePOS';
+import { useCreateOrder, useCreatePaymentIntent, useEditOrderLine, useEditSale, useFullCatalog, useMenuItems, useOrder, usePricingTiers, useSetOrderDiscount, useVoidOrder, type CatalogItem, type EditSaleLine } from '@/hooks/usePOS';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { useStaffAdmin } from '@/hooks/useStaff';
 import { apiClient } from '@/lib/api/client';
@@ -69,7 +69,6 @@ function tierPrice(item: any, profile: string): number {
 }
 
 const fmt = (n: number) => `KES ${n.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
-const round2 = (n: number) => Math.round(n * 100) / 100;
 
 export default function AddSalePage() {
   const params = useParams();
@@ -310,54 +309,27 @@ export default function AddSalePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resumeQ.data, resumeId]);
 
-  // ── Edit a FINALIZED sale ── ?edit_from= comes from the admin "Edit Sale" action
-  // (SalesActionsMenu), after it has already called POST /orders/{id}/prepare-edit (which
-  // reverses the original sale's GL/inventory/eTIMS via the same engine the platform Txn
-  // Reversal tool uses). Unlike `resume` above, this is NOT a resumable draft — it prefills the
-  // cart from the now-reversed original as a starting point for a genuinely NEW replacement
-  // order; submitting here always creates a fresh sale (no supersede/void call, the original was
-  // already handled server-side) tagged with metadata.edited_from_order_id for lineage.
-  const editFromId = searchParams.get('edit_from') || '';
-  const editFromQ = useOrder(editFromId);
-  const [editPrefilled, setEditPrefilled] = useState(false);
-  useEffect(() => {
-    const o: any = editFromQ.data;
-    if (!o || !editFromId || editPrefilled) return;
-    setLines((o.edges?.lines ?? []).map((l: any) => ({
-      item: { id: l.catalog_item_id, sku: l.sku, name: l.name, price: l.unit_price, category: '' } as CatalogItem,
-      quantity: l.quantity,
-      unitPrice: l.unit_price,
-      preset: l.unit_price,
-      priceEdited: true,
-    })));
-    if (o.customer_name || o.customer_phone) {
-      setCustomer({ name: o.customer_name ?? '', phone: o.customer_phone ?? '', isWalkIn: !o.customer_phone } as SelectedCustomer);
-    }
-    setEditPrefilled(true);
-     
-  }, [editFromQ.data, editFromId, editPrefilled]);
-
   // ── Edit a FINALIZED sale IN PLACE ── ?edit_inplace= comes from the admin "Edit Sale" action.
-  // Unlike edit_from above, nothing is reversed just to open this — the original order is
-  // prefilled AS-IS, tagged with its lineIds, and a snapshot of the original lines is kept for
-  // diffing at save time. Save then does the minimum necessary: lines removed or reduced in
-  // quantity go through a PARTIAL reversal (POST /edit-reduce — inventory/GL/eTIMS/loyalty/
-  // commission all adjusted proportionally, the original order's status/number never change);
-  // brand-new lines or quantity increases on existing lines are billed as a small linked
-  // addendum sale through the normal create-order pipeline (fresh inventory consumption, GL,
-  // and — only if the tenant is actually eTIMS-integrated — a fresh KRA invoice, all for free).
+  // Nothing is reversed just to open this — the original order is prefilled AS-IS, tagged with
+  // its lineIds. Save sends the FULL desired line set to the single centralized POST
+  // /orders/{id}/edit endpoint; the SERVER diffs against the live order and decides in-place
+  // vs return vs addendum internally based on the order's actual fiscalization status — the
+  // client no longer computes or ships a reductions/increases split itself.
+  //
+  // editInplace is keyed by order id specifically (not just "is it set") — the previous guard
+  // (`|| editInplace`) blocked this effect from ever re-running once set, even for a DIFFERENT
+  // order or a fresh navigation back into edit mode for the SAME order after `reset()` failed
+  // to clear it. That stale snapshot is the confirmed root cause of a real production report
+  // ("reducing qty of a line item does nothing"): a second Edit-Sale entry in the same browser
+  // tab silently re-diffed against pre-edit quantities instead of the just-saved state.
   const editInplaceId = searchParams.get('edit_inplace') || '';
   const editInplaceQ = useOrder(editInplaceId);
-  const [editInplace, setEditInplace] = useState<{
-    id: string;
-    number: string;
-    originalLines: { lineId: string; quantity: number; unitPrice: number }[];
-  } | null>(null);
-  const applyEditSale = useApplyEditSale();
+  const [editInplace, setEditInplace] = useState<{ id: string; number: string } | null>(null);
+  const editSale = useEditSale();
   const [editInplaceSaving, setEditInplaceSaving] = useState(false);
   useEffect(() => {
     const o: any = editInplaceQ.data;
-    if (!o || !editInplaceId || editInplace) return;
+    if (!o || !editInplaceId || (editInplace && editInplace.id === editInplaceId)) return;
     const activeLines = (o.edges?.lines ?? []).filter((l: any) => !l.voided_qty);
     setLines(activeLines.map((l: any) => ({
       item: { id: l.catalog_item_id, sku: l.sku, name: l.name, price: l.unit_price, category: '' } as CatalogItem,
@@ -372,74 +344,52 @@ export default function AddSalePage() {
     if (o.customer_name || o.customer_phone) {
       setCustomer({ name: o.customer_name ?? '', phone: o.customer_phone ?? '', isWalkIn: !o.customer_phone } as SelectedCustomer);
     }
-    setEditInplace({
-      id: o.id,
-      number: o.order_number,
-      originalLines: activeLines.map((l: any) => ({ lineId: l.id, quantity: l.quantity, unitPrice: l.unit_price })),
-    });
-     
+    setEditInplace({ id: o.id, number: o.order_number });
+
   }, [editInplaceQ.data, editInplaceId, editInplace]);
 
-  // Diffs the live cart against editInplace.originalLines and saves the minimum necessary:
-  // removed/reduced original lines -> edit-reduce (partial reversal); new lines or quantity
-  // increases on an original line -> a linked addendum sale at the CURRENT price. A same-quantity
-  // price-only change on an original line is NOT captured here (the reduce endpoint is qty-based,
-  // and re-billing it as an addendum would double-consume inventory for units already sold) — the
-  // user is warned so the change isn't silently dropped.
+  // Sends the live cart as the FULL desired line set for editInplace.id — the backend computes
+  // the removed/reduced/increased/added diff itself and routes each part appropriately.
   async function saveEditInplace() {
     if (!editInplace) return;
-    const currentByLineId = new Map<string, SaleLine>();
-    for (const l of lines) if (l.lineId) currentByLineId.set(l.lineId, l);
-
-    const reductions: EditReduceLine[] = [];
-    const increaseLines: SaleLine[] = [];
-    let priceOnlyChanged = false;
-
-    for (const orig of editInplace.originalLines) {
-      const cur = currentByLineId.get(orig.lineId);
-      if (!cur) {
-        reductions.push({ line_id: orig.lineId }); // whole line removed
-        continue;
-      }
-      if (cur.quantity < orig.quantity) {
-        reductions.push({ line_id: orig.lineId, quantity: round2(orig.quantity - cur.quantity) });
-      } else if (cur.quantity > orig.quantity) {
-        increaseLines.push({ ...cur, quantity: round2(cur.quantity - orig.quantity) });
-      } else if (Math.abs(cur.unitPrice - orig.unitPrice) > 0.004) {
-        priceOnlyChanged = true;
-      }
-    }
-    for (const l of lines) {
-      if (!l.lineId) increaseLines.push(l); // brand-new line
-    }
-
-    if (priceOnlyChanged) {
-      toast.warning("A price change on an unchanged quantity isn't saved by Edit Sale — remove the line and re-add it at the new price instead.");
-    }
-    if (reductions.length === 0 && increaseLines.length === 0) {
+    if (lines.length === 0) {
       toast.info('Nothing to save.');
       return;
     }
+    const editLines: EditSaleLine[] = lines.map((l) => ({
+      line_id: l.lineId,
+      catalog_item_id: l.item.id,
+      sku: l.item.sku,
+      name: l.item.name,
+      quantity: l.quantity,
+      unit_price: l.unitPrice,
+      tax_code_id: l.item.tax_code_id,
+      price_includes_tax: l.item.tax_inclusive,
+      tax_rate: typeof l.item.tax_rate === 'number' ? l.item.tax_rate : undefined,
+    }));
 
     setEditInplaceSaving(true);
     try {
-      if (reductions.length > 0) {
-        await applyEditSale.mutateAsync({ orderId: editInplace.id, reason: 'Edited from Sales list', lines: reductions });
+      const result = await editSale.mutateAsync({ orderId: editInplace.id, reason: 'Edited from Sales list', lines: editLines });
+      if (result.price_only_lines_skipped?.length) {
+        toast.warning("A price change on an unchanged quantity isn't saved by Edit Sale — remove the line and re-add it at the new price instead.");
       }
-      if (increaseLines.length > 0) {
-        const payload: any = buildPayload();
-        payload.lines = increaseLines.map(lineToPayload);
-        payload.metadata = { ...(payload.metadata ?? {}), related_order_id: editInplace.id, edit_addendum: true };
-        createOrder.mutate(payload, {
-          onSuccess: (o: any) => {
-            const total = increaseLines.reduce((sum, l) => sum + l.unitPrice * l.quantity, 0);
-            toast.success(`${editInplace.number} updated — collect payment for the added item(s).`);
-            setPayOrder({ id: o.id || o.order_id || '', number: o.order_number || '', total });
-          },
-          onError: async (e: any) => toast.error(await apiErrorMessage(e, 'Reduction saved, but the addendum sale for the added item(s) failed.')),
-        });
+      if (result.linked_addendum_order_id) {
+        // Fiscalized increase: a real linked sub-order was created with its own docket —
+        // open the payment sheet for it immediately, same as before this rework.
+        try {
+          const addendum: any = await apiClient.get(`/api/v1/${tenantId}/pos/orders/${result.linked_addendum_order_id}`);
+          toast.success(`${editInplace.number} updated — collect payment for the added item(s).`);
+          setPayOrder({ id: addendum.id, number: addendum.order_number ?? '', total: addendum.total_amount ?? 0 });
+        } catch {
+          toast.success(`${editInplace.number} updated — open ${editInplace.number}'s linked sale to collect payment.`);
+          setEditInplace(null);
+          reset();
+          router.replace(`/${orgSlug}/sell/add`);
+        }
       } else {
         toast.success(`${editInplace.number} updated`);
+        setEditInplace(null);
         reset();
         router.replace(`/${orgSlug}/sell/add`);
       }
@@ -684,7 +634,6 @@ export default function AddSalePage() {
       ...(shippingAmount > 0 ? { charges: { shipping: shippingAmount } } : {}),
       metadata: (() => {
         const md: Record<string, any> = {};
-        if (editFromId) md.edited_from_order_id = editFromId;
         if (pricingProfile) md.pricing_profile = pricingProfile;
         if (shippingOpen && (shipping.address || shipping.details || shipping.deliveredTo || shipping.deliveryPerson || shippingAmount > 0)) {
           md.shipping_status = shipping.status || 'ordered';
@@ -817,6 +766,11 @@ export default function AddSalePage() {
       // Drop ?order_id= so the resume effect can't re-prefill the finished draft.
       router.replace(`/${orgSlug}/sell/add`);
     }
+    // Belt-and-braces: saveEditInplace's own success paths already clear this and drop
+    // ?edit_inplace=, but reset() is called from other flows too (e.g. saveQuotation) — never
+    // leave a stale snapshot behind for a later Edit-Sale entry to silently reuse (the root
+    // cause of the "reducing qty does nothing" bug).
+    setEditInplace(null);
   }
 
   // Save as Quotation: forward the cart to treasury via the pos-api proxy (treasury owns quotations;
@@ -866,10 +820,10 @@ export default function AddSalePage() {
       <div className="flex flex-wrap items-center gap-3">
         <ShoppingCart className="h-6 w-6 text-primary" />
         <h1 className="text-2xl font-bold tracking-tight">
-          {editInplace ? `Edit Sale — ${editInplace.number}` : editFromId ? `Edit Sale — replacing ${editFromQ.data?.order_number ?? '…'}` : resume ? `Resume Sale — ${resume.number}` : creditSale ? 'Credit Sale' : 'Add Sale'}
+          {editInplace ? `Edit Sale — ${editInplace.number}` : resume ? `Resume Sale — ${resume.number}` : creditSale ? 'Credit Sale' : 'Add Sale'}
         </h1>
         <span className="text-sm text-muted-foreground">
-          {editInplace ? 'Add, remove or reduce items — nothing is reversed until you save, and only for what actually changed' : editFromId ? 'Original sale reversed — complete this replacement to finish the edit' : resume ? 'Draft prefilled — collect payment to complete it' : creditSale ? 'Sell on account — posts to customer AR' : 'Back-office sale entry'}
+          {editInplace ? 'Add, remove or reduce items — nothing is reversed until you save, and only for what actually changed' : resume ? 'Draft prefilled — collect payment to complete it' : creditSale ? 'Sell on account — posts to customer AR' : 'Back-office sale entry'}
         </span>
         <span className="ml-auto text-xs text-muted-foreground">
           Sale date: <b className="text-foreground">{new Date().toLocaleString('en-KE')}</b> · Invoice No. auto-generated
@@ -1282,8 +1236,8 @@ export default function AddSalePage() {
 
           <div className="space-y-2">
             {editInplace ? (
-              <Button onClick={saveEditInplace} disabled={editInplaceSaving || applyEditSale.isPending || createOrder.isPending} className="w-full min-h-12 font-bold rounded-xl gap-2">
-                {(editInplaceSaving || applyEditSale.isPending || createOrder.isPending) ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+              <Button onClick={saveEditInplace} disabled={editInplaceSaving || editSale.isPending} className="w-full min-h-12 font-bold rounded-xl gap-2">
+                {(editInplaceSaving || editSale.isPending) ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
                 Save Changes
               </Button>
             ) : (
