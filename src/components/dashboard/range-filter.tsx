@@ -110,11 +110,16 @@ export function DashboardRangeFilter({
   const [showCustom, setShowCustom] = useState(false);
 
   return (
-    <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto min-w-0">
+    // min-w-0 + flex-1 (not w-full/w-auto) — this sits next to a shrink-0 refresh button inside a
+    // flex row; without min-w-0 a flex item's default min-width:auto lets its content push the
+    // WHOLE ROW (and with it the page) wider than the viewport instead of the inner pill strip
+    // scrolling. flex-1 lets it claim the remaining row width so the scroller has something
+    // bounded to actually scroll within.
+    <div className="flex flex-wrap items-center gap-2 min-w-0 flex-1 sm:flex-initial">
       {/* Horizontal scroll (not wrap) on narrow phones — 8 pills wrapped into 3-4 rows ate too
        *  much vertical space; a single scrollable row matches how filter chips behave in most
        *  mobile apps. -mx-1 px-1 keeps the scroll edges from clipping the first/last pill's ring. */}
-      <div className="flex gap-1 p-1 rounded-lg bg-accent/30 border border-border overflow-x-auto -mx-1 px-1 sm:mx-0 sm:px-1 max-w-full [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div className="flex gap-1 p-1 rounded-lg bg-accent/30 border border-border overflow-x-auto min-w-0 -mx-1 px-1 sm:mx-0 sm:px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {PRESET_LABELS.map((p) => (
           <button
             key={p.id}

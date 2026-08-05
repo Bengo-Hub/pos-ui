@@ -50,15 +50,15 @@ export function AdminDashboard({ orgSlug }: { orgSlug: string }) {
   const periodSub = range.isSingleDay ? 'today' : 'in range';
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="p-6 space-y-6 overflow-x-hidden">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold text-foreground font-display">Today&apos;s Overview</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
             {new Date().toLocaleDateString('en-KE', { weekday: 'long', day: 'numeric', month: 'long' })}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 w-full sm:w-auto min-w-0">
           <DashboardRangeFilter preset={preset} setPreset={setPreset} custom={custom} setCustom={setCustom} />
           <button onClick={() => refetch()} className="h-9 w-9 shrink-0 rounded-xl border border-border flex items-center justify-center hover:bg-accent transition-colors">
             <RefreshCw className={cn('h-4 w-4 text-muted-foreground', isFetching && 'animate-spin')} />
@@ -76,21 +76,21 @@ export function AdminDashboard({ orgSlug }: { orgSlug: string }) {
         <QuickActionGrid>
           <QuickActionTile icon={Plus} label="New Order" href={`/${orgSlug}/order`} accent />
           {isPharmacy && hasModule('pharmacy') && (
-            <QuickActionTile icon={Pill} label="Prescriptions" href={`/${orgSlug}/pharmacy`} />
+            <QuickActionTile icon={Pill} label="Prescriptions" href={`/${orgSlug}/pharmacy`} tint="teal" />
           )}
           {isServices && hasModule('appointments') && (
-            <QuickActionTile icon={Calendar} label="Appointments" href={`/${orgSlug}/appointments`} />
+            <QuickActionTile icon={Calendar} label="Appointments" href={`/${orgSlug}/appointments`} tint="rose" />
           )}
           {isRetail && (
-            <QuickActionTile icon={ShoppingBag} label="Layaway" href={`/${orgSlug}/layaway`} />
+            <QuickActionTile icon={ShoppingBag} label="Layaway" href={`/${orgSlug}/layaway`} tint="purple" />
           )}
           {!isPharmacy && !isServices && !isRetail && !isQuickService && hasModule('tables') && (
-            <QuickActionTile icon={Grid3x3} label="Tables" href={`/${orgSlug}/tables`} />
+            <QuickActionTile icon={Grid3x3} label="Tables" href={`/${orgSlug}/tables`} tint="blue" />
           )}
           {hasModule('reports') && (
-            <QuickActionTile icon={BarChart3} label="Reports" href={`/${orgSlug}/reports`} />
+            <QuickActionTile icon={BarChart3} label="Reports" href={`/${orgSlug}/reports`} tint="emerald" />
           )}
-          <QuickActionTile icon={Wallet} label="Cash Drawer" href={`/${orgSlug}/drawer`} />
+          <QuickActionTile icon={Wallet} label="Cash Drawer" href={`/${orgSlug}/drawer`} tint="amber" />
         </QuickActionGrid>
       </div>
       <DashboardCharts range={range} currency={s.currency} />
@@ -290,15 +290,15 @@ export function RetailDashboard({ orgSlug }: { orgSlug: string }) {
   const periodSub = range.isSingleDay ? 'today' : 'in range';
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="p-6 space-y-6 overflow-x-hidden">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold text-foreground font-display">Retail Overview</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
             {new Date().toLocaleDateString('en-KE', { weekday: 'long', day: 'numeric', month: 'long' })}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 w-full sm:w-auto min-w-0">
           <DashboardRangeFilter preset={preset} setPreset={setPreset} custom={custom} setCustom={setCustom} />
           <button onClick={() => refetch()} className="h-9 w-9 shrink-0 rounded-xl border border-border flex items-center justify-center hover:bg-accent transition-colors">
             <RefreshCw className={cn('h-4 w-4 text-muted-foreground', isFetching && 'animate-spin')} />
@@ -315,10 +315,10 @@ export function RetailDashboard({ orgSlug }: { orgSlug: string }) {
         <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Quick Actions</p>
         <QuickActionGrid>
           <QuickActionTile icon={Plus} label="New Sale" href={`/${orgSlug}/order`} accent />
-          <QuickActionTile icon={ClipboardList} label="Orders" href={`/${orgSlug}/orders`} />
+          <QuickActionTile icon={ClipboardList} label="Orders" href={`/${orgSlug}/orders`} tint="blue" />
           {/* Purchase orders are owned by inventory-service — the POS duplicate page was removed. */}
-          <QuickActionTile icon={Package} label="Purchase Orders" href={`${process.env.NEXT_PUBLIC_INVENTORY_UI_URL || 'https://inventory.codevertexafrica.com'}/${orgSlug}/purchase-orders`} />
-          <QuickActionTile icon={BarChart3} label="Reports" href={`/${orgSlug}/reports`} />
+          <QuickActionTile icon={Package} label="Purchase Orders" href={`${process.env.NEXT_PUBLIC_INVENTORY_UI_URL || 'https://inventory.codevertexafrica.com'}/${orgSlug}/purchase-orders`} tint="purple" />
+          <QuickActionTile icon={BarChart3} label="Reports" href={`/${orgSlug}/reports`} tint="emerald" />
         </QuickActionGrid>
       </div>
       <DashboardCharts range={range} currency={s.currency} />
@@ -342,15 +342,15 @@ export function QuickServiceDashboard({ orgSlug }: { orgSlug: string }) {
   const queueDepth = kdsData?.meta?.total ?? kdsData?.data?.length ?? 0;
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="p-6 space-y-6 overflow-x-hidden">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold text-foreground font-display">Quick Service Overview</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
             {new Date().toLocaleDateString('en-KE', { weekday: 'long', day: 'numeric', month: 'long' })}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 w-full sm:w-auto min-w-0">
           <DashboardRangeFilter preset={preset} setPreset={setPreset} custom={custom} setCustom={setCustom} />
           <button onClick={() => refetch()} className="h-9 w-9 shrink-0 rounded-xl border border-border flex items-center justify-center hover:bg-accent transition-colors">
             <RefreshCw className={cn('h-4 w-4 text-muted-foreground', isFetching && 'animate-spin')} />
@@ -367,9 +367,9 @@ export function QuickServiceDashboard({ orgSlug }: { orgSlug: string }) {
         <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Quick Actions</p>
         <QuickActionGrid>
           <QuickActionTile icon={Plus} label="New Order" href={`/${orgSlug}/order`} accent />
-          {hasModule('kds') && <QuickActionTile icon={ChefHat} label="Kitchen Display" href={`/${orgSlug}/kds`} />}
-          <QuickActionTile icon={ShoppingBag} label="Order Queue" href={`/${orgSlug}/queue`} />
-          <QuickActionTile icon={BarChart3} label="Reports" href={`/${orgSlug}/reports`} />
+          {hasModule('kds') && <QuickActionTile icon={ChefHat} label="Kitchen Display" href={`/${orgSlug}/kds`} tint="amber" />}
+          <QuickActionTile icon={ShoppingBag} label="Order Queue" href={`/${orgSlug}/queue`} tint="blue" />
+          <QuickActionTile icon={BarChart3} label="Reports" href={`/${orgSlug}/reports`} tint="emerald" />
         </QuickActionGrid>
       </div>
       <DashboardCharts range={range} currency={s.currency} />
@@ -400,15 +400,15 @@ export function PharmacyDashboard({ orgSlug }: { orgSlug: string }) {
   const periodSub = range.isSingleDay ? 'dispensed today' : 'dispensed in range';
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="p-6 space-y-6 overflow-x-hidden">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold text-foreground font-display">Pharmacy Overview</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
             {new Date().toLocaleDateString('en-KE', { weekday: 'long', day: 'numeric', month: 'long' })}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 w-full sm:w-auto min-w-0">
           <DashboardRangeFilter preset={preset} setPreset={setPreset} custom={custom} setCustom={setCustom} />
           <button onClick={() => refetch()} className="h-9 w-9 shrink-0 rounded-xl border border-border flex items-center justify-center hover:bg-accent transition-colors">
             <RefreshCw className={cn('h-4 w-4 text-muted-foreground', isFetching && 'animate-spin')} />
@@ -425,7 +425,7 @@ export function PharmacyDashboard({ orgSlug }: { orgSlug: string }) {
         <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Quick Actions</p>
         <QuickActionGrid>
           <QuickActionTile icon={Plus} label="New Prescription" href={`/${orgSlug}/pharmacy`} accent />
-          <QuickActionTile icon={Pill} label="All Prescriptions" href={`/${orgSlug}/pharmacy`} />
+          <QuickActionTile icon={Pill} label="All Prescriptions" href={`/${orgSlug}/pharmacy`} tint="teal" />
         </QuickActionGrid>
       </div>
       <DashboardCharts range={range} currency={s.currency} />
@@ -476,15 +476,15 @@ export function ServicesDashboard({ orgSlug }: { orgSlug: string }) {
   const upcomingList = todayAppts.filter((a: any) => ['scheduled', 'confirmed'].includes(a.status)).slice(0, 5);
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="p-6 space-y-6 overflow-x-hidden">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold text-foreground font-display">Services Overview</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
             {new Date().toLocaleDateString('en-KE', { weekday: 'long', day: 'numeric', month: 'long' })}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 w-full sm:w-auto min-w-0">
           <DashboardRangeFilter preset={preset} setPreset={setPreset} custom={custom} setCustom={setCustom} />
           <button onClick={() => refetch()} className="h-9 w-9 shrink-0 rounded-xl border border-border flex items-center justify-center hover:bg-accent transition-colors">
             <RefreshCw className={cn('h-4 w-4 text-muted-foreground', isFetching && 'animate-spin')} />
@@ -501,8 +501,8 @@ export function ServicesDashboard({ orgSlug }: { orgSlug: string }) {
         <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Quick Actions</p>
         <QuickActionGrid>
           <QuickActionTile icon={Calendar} label="New Appointment" href={`/${orgSlug}/appointments`} accent />
-          <QuickActionTile icon={Plus} label="New Sale" href={`/${orgSlug}/order`} />
-          <QuickActionTile icon={BarChart3} label="Reports" href={`/${orgSlug}/reports`} />
+          <QuickActionTile icon={Plus} label="New Sale" href={`/${orgSlug}/order`} tint="blue" />
+          <QuickActionTile icon={BarChart3} label="Reports" href={`/${orgSlug}/reports`} tint="emerald" />
         </QuickActionGrid>
       </div>
       <DashboardCharts range={range} currency={s.currency} />

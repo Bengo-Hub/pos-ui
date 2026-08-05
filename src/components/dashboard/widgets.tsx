@@ -96,45 +96,62 @@ export function QuickAction({
 }
 
 // ── Quick action tile (compact, home-screen-icon style) ────────────────────────
-// A denser alternative to QuickAction for the top-of-dashboard 3-column grid — icon-over-label,
+// A denser alternative to QuickAction for the top-of-dashboard 4-column grid — icon-over-label,
 // no description, so it stays legible at phone width without wrapping into a tall list.
+
+/** Icon tint palette — gives each tile its own color instead of every non-primary action reading
+ *  as the same flat pink, the way a real app's home-screen action row varies icon color by
+ *  function (sales=primary, lists=blue, inventory=purple, analytics=emerald, cash=amber…). */
+const TILE_TINTS = {
+  primary: 'bg-primary/10 text-primary',
+  blue: 'bg-blue-500/10 text-blue-600',
+  purple: 'bg-purple-500/10 text-purple-600',
+  emerald: 'bg-emerald-500/10 text-emerald-600',
+  amber: 'bg-amber-500/10 text-amber-600',
+  rose: 'bg-rose-500/10 text-rose-600',
+  teal: 'bg-teal-500/10 text-teal-600',
+} as const;
+export type QuickActionTint = keyof typeof TILE_TINTS;
 
 export function QuickActionTile({
   icon: Icon,
   label,
   href,
   accent = false,
+  tint = 'primary',
 }: {
   icon: React.ElementType;
   label: string;
   href: string;
   accent?: boolean;
+  /** Icon tint when not `accent` — ignored for the accent (solid primary) tile. */
+  tint?: QuickActionTint;
 }) {
   return (
     <Link
       href={href}
       className={cn(
-        'group flex flex-col items-center justify-center gap-1.5 sm:gap-2 p-3 sm:p-4 rounded-2xl border text-center transition-all duration-200',
+        'group relative flex flex-col items-center justify-center gap-2 sm:gap-2.5 p-3.5 sm:p-5 rounded-2xl border overflow-hidden text-center transition-all duration-200',
         accent
-          ? 'bg-primary text-primary-foreground border-primary shadow-lg shadow-primary/25 hover:shadow-primary/35'
-          : 'bg-card border-border hover:border-primary/30 hover:shadow-md hover:shadow-primary/8'
+          ? 'bg-gradient-to-br from-primary to-primary/80 text-primary-foreground border-primary shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/35 hover:-translate-y-0.5'
+          : 'bg-card border-border hover:border-primary/30 hover:shadow-lg hover:shadow-primary/8 hover:-translate-y-0.5'
       )}
     >
       <div className={cn(
-        'h-10 w-10 sm:h-11 sm:w-11 rounded-xl flex items-center justify-center shrink-0 transition-transform duration-200 group-hover:scale-105',
-        accent ? 'bg-primary-foreground/15' : 'bg-primary/8'
+        'h-11 w-11 sm:h-14 sm:w-14 rounded-2xl flex items-center justify-center shrink-0 transition-transform duration-200 group-hover:scale-110',
+        accent ? 'bg-primary-foreground/15' : TILE_TINTS[tint],
       )}>
-        <Icon className={cn('h-4 w-4 sm:h-5 sm:w-5', accent ? 'text-primary-foreground' : 'text-primary')} />
+        <Icon className={cn('h-5 w-5 sm:h-6 sm:w-6', accent && 'text-primary-foreground')} />
       </div>
       <p className={cn('font-semibold text-xs sm:text-sm leading-tight', accent ? 'text-primary-foreground' : 'text-foreground')}>{label}</p>
     </Link>
   );
 }
 
-/** Fixed 3-column grid of QuickActionTile — the "home screen" action row every manager/admin
- *  dashboard renders right below its KPI cards. */
+/** Quick-action "home screen" row — 2 columns on the narrowest phones, 4 across from small-tablet
+ *  width up, so up to 4 actions always land in a single row and a 5th/6th simply wraps below. */
 export function QuickActionGrid({ children }: { children: React.ReactNode }) {
-  return <div className="grid grid-cols-3 gap-2 sm:gap-3">{children}</div>;
+  return <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">{children}</div>;
 }
 
 // ── KPI card ──────────────────────────────────────────────────────────────────
