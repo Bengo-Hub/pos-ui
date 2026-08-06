@@ -14,6 +14,9 @@ export interface SubscriptionInfo {
   limits: Record<string, number>;
   trialEndsAt?: string;
   currentPeriodEnd?: string;
+  /** product_code of every currently-active per-product subscription line — drives which
+   *  apps the shared-ui-lib app-switcher shows (see useVisibleServices' activeServiceTags). */
+  activeProducts?: string[];
 }
 
 /**
@@ -53,6 +56,7 @@ export async function fetchSubscriptionInfo(
       limits: sub.limits ?? {},
       trialEndsAt: sub.trial_ends_at ?? sub.trialEndsAt,
       currentPeriodEnd: sub.current_period_end ?? sub.currentPeriodEnd,
+      activeProducts: sub.active_products ?? sub.activeProducts ?? [],
     };
   } catch {
     return null;

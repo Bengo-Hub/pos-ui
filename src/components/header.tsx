@@ -8,6 +8,7 @@ import { canAccessAllOutlets } from '@/lib/auth/outlet-access';
 import { P } from '@/lib/rbac/permissions';
 import { cn } from '@/lib/utils';
 import { useTenantBranding } from '@/providers/tenant-branding-provider';
+import { useSubscription } from '@/hooks/use-subscription';
 import { useAuthStore } from '@/store/auth';
 import { useOutletFilterStore } from '@/store/outlet-filter';
 import { useQuery } from '@tanstack/react-query';
@@ -329,9 +330,16 @@ export function Header({ onMenuClick, onToggleSidebar, sidebarCollapsed }: Heade
     ['admin', 'pos_admin', 'manager', 'store_manager', 'superuser', 'super_admin'].includes(r)
   );
   const showSettings = isHQUser || can(P.CONFIG_VIEW) || can(P.CONFIG_CHANGE) || can(P.CONFIG_MANAGE);
-  // activeServiceTags omitted: no browser-safe endpoint returns active subscription SERVICE TAGS
-  // yet (only feature codes) — fails open (shows everything), matching current behavior.
-  const services = useVisibleServices({ orgSlug, urls: SERVICE_URLS, canManageLinks: isHQUser });
+  // activeProducts is undefined while the subscription lookup is in flight/unknown — fails open
+  // (shows everything) until it resolves, matching this codebase's existing "never block the UI
+  // on a subscription-fetch failure" convention.
+  const { activeProducts } = useSubscription();
+  const services = useVisibleServices({
+    orgSlug,
+    urls: SERVICE_URLS,
+    canManageLinks: isHQUser,
+    activeServiceTags: activeProducts,
+  });
 
   const { data: currentShift } = useCurrentShift();
   const closeShift = useCloseShift();

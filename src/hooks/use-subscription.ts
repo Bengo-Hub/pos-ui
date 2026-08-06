@@ -184,6 +184,10 @@ export function useSubscription() {
     daysUntilExpiry: subStore.daysUntilExpiry,
     isInGracePeriod: subStore.isInGracePeriod,
     gracePeriodEndsAt: subStore.gracePeriodEndsAt,
+    // Product codes the tenant has actually self-activated (distinct from `features`, which is
+    // plan entitlement — a tenant can be entitled to a product and still have turned it off).
+    // Exempt tenants (platform owner/demo/service-charge) see every app.
+    activeProducts: isExempt ? undefined : (info?.activeProducts ?? []),
     store: subStore,
   };
 }
