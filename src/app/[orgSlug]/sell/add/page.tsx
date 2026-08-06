@@ -20,7 +20,7 @@ import { StockCell, isStockTracked } from '@/components/pos/stock-cell';
 import { Button } from '@/components/ui/base';
 import { useClientCredit } from '@/hooks/useClients';
 import { usePermissions } from '@/hooks/usePermissions';
-import { useCreateOrder, useCreatePaymentIntent, useEditOrderLine, useEditSale, useFullCatalog, useMenuItems, useOrder, usePricingTiers, useSetOrderDiscount, useVoidOrder, type CatalogItem, type EditSaleLine } from '@/hooks/usePOS';
+import { useAddOrderLines, useCreateOrder, useCreatePaymentIntent, useEditOrderLine, useEditSale, useFullCatalog, useMenuItems, useOrder, usePricingTiers, useSetOrderDiscount, useVoidOrderLine, type CatalogItem, type EditSaleLine } from '@/hooks/usePOS';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { useStaffAdmin } from '@/hooks/useStaff';
 import { apiClient } from '@/lib/api/client';
@@ -246,7 +246,6 @@ export default function AddSalePage() {
 
   const createOrder = useCreateOrder();
   const createIntent = useCreatePaymentIntent();
-  const voidOrder = useVoidOrder();
   const [payOrder, setPayOrder] = useState<{ id: string; number: string; total: number } | null>(null);
   // Manager step-up required by the server (422 approval_required): an over-limit discount
   // (order.discount_override) or a non-manager shipping charge (order.adjustment). The
@@ -264,10 +263,14 @@ export default function AddSalePage() {
   const resumeId = searchParams.get('order_id') || searchParams.get('draft_id') || '';
   const resumeQ = useOrder(resumeId);
   const [resume, setResume] = useState<{ id: string; number: string; total?: number } | null>(null);
-  // Structural changes (lines added/removed) force the replacement-order path on save;
-  // price/qty edits on persisted lines are tracked per line (savedPrice/savedQty) so a
-  // per-line ✓ save can clear them without touching the rest of the sale.
+  // Structural changes (lines added/removed) route through applyResumedLineEdits below —
+  // still an in-place edit of the SAME order, never a replacement; price/qty edits on
+  // persisted lines are tracked per line (savedPrice/savedQty) so a per-line ✓ save can
+  // clear them without touching the rest of the sale.
   const [structuralDirty, setStructuralDirty] = useState(false);
+  // The draft's ORIGINAL persisted line ids (captured at resume time) — diffed against the
+  // current lines' ids on save to find which lines were removed (see applyResumedLineEdits).
+  const originalLineIdsRef = useRef<Set<string>>(new Set());
 
   // ── Served by ── who is credited with serving this sale (audit/accountability — distinct from
   // the credit-sale "bill-to" staff party above). Reuses the SAME staff list already loaded for
@@ -308,6 +311,7 @@ export default function AddSalePage() {
       savedPrice: l.unit_price,
       savedQty: l.quantity,
     })));
+    originalLineIdsRef.current = new Set((o.edges?.lines ?? []).map((l: any) => l.id));
     setDiscount(Number(o.discount_total) || 0);
     setSavedDiscount(Number(o.discount_total) || 0);
     if (o.customer_name || o.customer_phone) {
@@ -576,6 +580,12 @@ export default function AddSalePage() {
 
   const editLine = useEditOrderLine();
   const [savingLineIdx, setSavingLineIdx] = useState<number | null>(null);
+  // In-place batch application of a resumed draft's structural changes (added/removed lines)
+  // on Save — see applyResumedLineEdits. Reuses the SAME persisted-line primitives the manual
+  // per-line ✓ save above already uses, so a modified draft is never voided/recreated.
+  const addLines = useAddOrderLines();
+  const voidLine = useVoidOrderLine();
+  const [applyingEdits, setApplyingEdits] = useState(false);
 
   // Order-discount ✓ save / ✕ cancel (resumed sales): PATCH the discount onto the SAME
   // order — the server recomputes totals — so settling charges the discounted amount.
@@ -622,6 +632,52 @@ export default function AddSalePage() {
         onError: async (e) => toast.error(await apiErrorMessage(e, 'Failed to save the line change.')),
       },
     );
+  };
+
+  // Applies EVERY outstanding change to a resumed draft — new lines, removed lines, and any
+  // qty/price edit not already saved via the per-line ✓ — directly onto the SAME persisted
+  // order, reusing the exact primitives the per-line ✓ save ("editLine") and "Add to Bill"
+  // ("addLines") already use, plus VoidOrderLine (the same audited/anti-sweethearting-gated
+  // removal path a sent/persisted line already requires elsewhere in this codebase). Nothing
+  // here creates a new order or voids the original draft. Returns the order's fresh
+  // total_amount once every change has landed, or null if a step failed (the caller must not
+  // proceed to settle/save against a half-applied edit).
+  const applyResumedLineEdits = async (): Promise<number | null> => {
+    if (!resume) return null;
+    const currentIds = new Set(lines.filter((l) => l.lineId).map((l) => l.lineId as string));
+    const removedIds = [...originalLineIdsRef.current].filter((id) => !currentIds.has(id));
+    const changedLines = lines.filter((l) => l.lineId && lineDirty(l));
+    const newLines = lines.filter((l) => !l.lineId);
+
+    try {
+      for (const lineId of removedIds) {
+        await voidLine.mutateAsync({ orderId: resume.id, lineId, reason: 'Removed while editing draft' });
+      }
+      for (const l of changedLines) {
+        await editLine.mutateAsync({
+          orderId: resume.id, lineId: l.lineId as string, unitPrice: l.unitPrice, quantity: l.quantity,
+          reason: 'Line edited while editing draft',
+        });
+      }
+      if (newLines.length > 0) {
+        await addLines.mutateAsync({ orderId: resume.id, lines: newLines.map(lineToPayload) });
+      }
+      // Re-sync from the server so a second Save (e.g. Save as Draft, then Save & Pay) diffs
+      // against what's now actually persisted instead of re-creating/re-removing the same lines.
+      const fresh = await apiClient.get<any>(`/api/v1/${tenantId}/pos/orders/${resume.id}`);
+      const freshLines: any[] = fresh?.edges?.lines ?? [];
+      originalLineIdsRef.current = new Set(freshLines.map((l) => l.id));
+      setLines((prev) => prev.map((l) => {
+        const match = freshLines.find((fl) => fl.catalog_item_id === l.item.id);
+        return match ? { ...l, lineId: match.id, savedPrice: match.unit_price, savedQty: match.quantity } : l;
+      }));
+      setStructuralDirty(false);
+      const freshTotal = Number(fresh?.total_amount);
+      return Number.isFinite(freshTotal) && freshTotal > 0 ? freshTotal : null;
+    } catch (e) {
+      toast.error(await apiErrorMessage(e, 'Failed to save changes to the draft.'));
+      return null;
+    }
   };
 
   // Effective quantity (paid + same-SKU BOGO free units) — same derivation as the POS terminal's
@@ -797,18 +853,19 @@ export default function AddSalePage() {
           applyStoreCredit: creditDetails.applyStoreCredit,
         }
       : {};
+    // An UNSAVED discount change must never reach settlement: completing a resume charges
+    // either the server's stored total (unmodified) or the freshly-recomputed one (edited)
+    // below, and either way a typed-but-unsaved discount would be silently dropped (the
+    // 2026-07-14 over-collection) and a retry would duplicate the sale.
+    if (resume && discountDirty) {
+      toast.error('The discount change is not saved — press ✓ next to the discount to apply it (or ✕ to discard) before completing the sale.');
+      return;
+    }
     // Resuming an UNMODIFIED draft → settle the SAME order (REQ-003: the draft is
     // reclassified to completed by the payment, never duplicated). Charge the SERVER's
     // stored total — the client preview re-derives tax from the fallback VAT rate and can
     // overshoot an order that stored no/inclusive tax (a real over-collection source).
     if (resume && !linesDirty) {
-      // An UNSAVED discount change must never reach settlement: completing an unmodified
-      // resume charges the SERVER's stored total, so the typed discount would be silently
-      // ignored (the 2026-07-14 over-collection) and a retry would duplicate the sale.
-      if (discountDirty) {
-        toast.error('The discount change is not saved — press ✓ next to the discount to apply it (or ✕ to discard) before completing the sale.');
-        return;
-      }
       const settleTotal = resume.total ?? total;
       if (mode === 'draft') { toast.info('Draft unchanged.'); return; }
       if (creditSale) {
@@ -825,17 +882,34 @@ export default function AddSalePage() {
       return;
     }
 
+    // Resuming a MODIFIED draft (lines added/removed/changed) → apply every change in place
+    // onto the SAME order (applyResumedLineEdits), then settle/save that SAME order — never a
+    // replacement order, never a void of the original (see feedback_edit_sale_inplace_not_reversal
+    // memory: a draft has no financial effect yet, so there is nothing to reverse).
+    if (resume) {
+      setApplyingEdits(true);
+      applyResumedLineEdits().then((freshTotal) => {
+        setApplyingEdits(false);
+        if (freshTotal == null) return; // error already toasted; leave the cart as-is to retry
+        if (mode === 'draft') { toast.success('Draft updated'); reset(); return; }
+        if (creditSale) {
+          createIntent.mutate(
+            { orderId: resume.id, tenderMethod: 'on_account', amount: freshTotal, ...creditExtras },
+            {
+              onSuccess: () => { setCreditModalOpen(false); toast.success(`Sale posted on account · ${fmt(freshTotal)}`); reset(); },
+              onError: async (e) => { setCreditModalOpen(false); toast.error(await apiErrorMessage(e, 'Failed to post credit sale to AR.')); },
+            },
+          );
+        } else {
+          setPayOrder({ id: resume.id, number: resume.number, total: freshTotal });
+        }
+      });
+      return;
+    }
+
     createOrder.mutate(buildPayload(approval), {
       onSuccess: (o: any) => {
         const id = o.id || o.order_id || '';
-        // A MODIFIED resumed draft becomes a fresh order; the stale draft is voided as
-        // superseded (best-effort — if the void needs manager approval it stays visible).
-        if (resume && id && id !== resume.id) {
-          voidOrder.mutate(
-            { orderId: resume.id, reason: `Superseded by resumed sale ${o.order_number || id}` },
-            { onError: () => toast.warning(`Could not void the original draft ${resume.number} — remove it manually.`) },
-          );
-        }
         if (mode === 'draft') {
           toast.success('Saved as draft');
           reset();
@@ -874,6 +948,7 @@ export default function AddSalePage() {
     setPartyType('customer'); setStaffId(''); setFundFromSalary(false); setMonths(1);
     setShippingOpen(false); setShipping(emptyShippingForm());
     setStructuralDirty(false); setSavingLineIdx(null);
+    originalLineIdsRef.current = new Set();
     if (resume) {
       setResume(null);
       // Drop ?order_id= so the resume effect can't re-prefill the finished draft.
@@ -1363,11 +1438,11 @@ export default function AddSalePage() {
               </Button>
             ) : (
               <>
-                <Button onClick={() => save('pay')} disabled={lines.length === 0 || createOrder.isPending} className="w-full min-h-12 font-bold rounded-xl gap-2">
-                  {createOrder.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShoppingCart className="h-4 w-4" />}
+                <Button onClick={() => save('pay')} disabled={lines.length === 0 || createOrder.isPending || applyingEdits} className="w-full min-h-12 font-bold rounded-xl gap-2">
+                  {(createOrder.isPending || applyingEdits) ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShoppingCart className="h-4 w-4" />}
                   {resume && !linesDirty ? 'Complete Sale' : creditSale ? 'Save — On Account' : 'Save & Pay'} · {fmt(total)}
                 </Button>
-                <Button variant="outline" onClick={() => save('draft')} disabled={lines.length === 0 || createOrder.isPending} className="w-full rounded-xl">
+                <Button variant="outline" onClick={() => save('draft')} disabled={lines.length === 0 || createOrder.isPending || applyingEdits} className="w-full rounded-xl">
                   Save as Draft
                 </Button>
                 {canPrivileged && (
