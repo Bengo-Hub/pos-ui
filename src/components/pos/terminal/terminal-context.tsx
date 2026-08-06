@@ -40,6 +40,7 @@ import { useActiveHappyHours } from '@/hooks/useDiscounts';
 import { computeHappyHour, bogoFreeUnitsForSku, type HHLine, type HappyHourResult } from '@/lib/pos/happy-hour';
 import { computePairAutoAdd, describeAutoApplyAnnouncement } from '@/lib/pos/auto-apply-discounts';
 import { usePermissions } from '@/hooks/usePermissions';
+import { P } from '@/lib/rbac/permissions';
 import { useClientCredit } from '@/hooks/useClients';
 import { useAuthStore } from '@/store/auth';
 import { apiClient } from '@/lib/api/client';
@@ -508,13 +509,14 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
   // Shared-terminal auto-logout after a completed sale (auto_logout_after_sale policy). Applies to
   // operational floor staff (cashier/waiter/floor roles) but NEVER managers/admins/HQ, who stay
   // signed in for oversight. Consumed by OrderPlacedDialog (dine-in) and the post-payment flow.
+  // Reuses pos.sessions.manage — the same manager-tier boundary start-shift-gate.tsx already
+  // established — instead of a second hardcoded role-name list (frontend-only UX, no backend
+  // counterpart to stay in sync with, so this is a safe permission-code conversion).
   const autoLogoutAfterSale = useMemo(() => {
     if (!posSettings?.auto_logout_after_sale) return false;
-    const roles = user?.roles ?? [];
-    const MANAGER_ROLES = ['manager', 'store_manager', 'outlet_manager', 'admin', 'pos_admin', 'superuser', 'super_admin', 'owner'];
-    if (isSuperuser || roles.some((r) => MANAGER_ROLES.includes(r))) return false;
+    if (isSuperuser || can(P.SESSIONS_MANAGE)) return false;
     return true;
-  }, [posSettings?.auto_logout_after_sale, user?.roles, isSuperuser]);
+  }, [posSettings?.auto_logout_after_sale, isSuperuser, can]);
   const [activeCategory, setActiveCategory] = useState('All');
   const [pickerMode, setPickerModeState] = useState<'category' | 'brand'>('category');
   const [activeBrand, setActiveBrand] = useState('All');

@@ -75,25 +75,12 @@ export function useMe() {
 
   const user = query.data ?? useAuthStore.getState().user;
 
-  const hasRole = (role: string) => {
-    if (!user?.roles) return false;
-    return user.roles.includes(role) || user.roles.includes('super_admin') || user.roles.includes('admin');
-  };
-
-  const hasPermission = (permission: string) => {
-    if (!user) return false;
-    if (user.roles?.includes('super_admin') || user.roles?.includes('admin')) return true;
-    return (user as MeProfile).permissions?.includes(permission) ?? false;
-  };
-
   return {
     user,
     isLoading: query.isLoading,
     isError: query.isError,
     error: query.error,
     refetch: query.refetch,
-    hasRole,
-    hasPermission,
     isAuthenticated: !!user,
   };
 }
