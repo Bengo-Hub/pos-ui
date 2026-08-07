@@ -5,15 +5,15 @@ import { useOrder } from '@/hooks/usePOS';
 import { PrintReceiptButton } from '@/components/pos/print-receipt-button';
 import { ReprintStationTicketsButton } from '@/components/pos/reprint-station-tickets-button';
 import { VoidBillButton } from '@/components/pos/void-bill-button';
-import { VoidLineButton } from '@/components/pos/void-line-button';
 import { GenerateVoidCodeButton } from '@/components/pos/generate-void-code-button';
-import { cn } from '@/lib/utils';
 import { GenerateComplimentaryCodeButton } from '@/components/pos/generate-complimentary-code-button';
 import { useSetAsideLine } from '@/hooks/useHeldItems';
-import { Loader2, Plus, PackageOpen } from 'lucide-react';
+import { Loader2, Plus } from 'lucide-react';
 import { toast } from 'sonner';
 import { useParams, useRouter } from 'next/navigation';
 import { formatCurrency } from '@/lib/utils';
+import { DataTable } from '@bengo-hub/shared-ui-lib/data-table';
+import { buildOrderLineColumns } from './order-line-columns';
 
 export default function OrderDetailPage() {
   const params = useParams();
@@ -62,6 +62,15 @@ export default function OrderDetailPage() {
   const payments = order.edges?.payments ?? [];
   const currency = order.currency ?? 'KES';
   const fmt = (n: number) => formatCurrency(n, currency);
+  const lineColumns = buildOrderLineColumns({
+    orderId: id,
+    orderNumber: order.order_number,
+    orderStatus: order.status,
+    fmt,
+    onSetAside: handleSetAside,
+    setAsidePending: setAside.isPending,
+    onVoided: () => refetch(),
+  });
 
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-6">
@@ -124,75 +133,14 @@ export default function OrderDetailPage() {
               <h2 className="font-bold text-base">Line Items</h2>
             </div>
             {lines.length > 0 ? (
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border bg-accent/20">
-                    <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Item</th>
-                    <th className="text-center px-4 py-3 font-semibold text-muted-foreground">Qty</th>
-                    <th className="text-right px-4 py-3 font-semibold text-muted-foreground">Unit</th>
-                    <th className="text-right px-4 py-3 font-semibold text-muted-foreground">Total</th>
-                    {['open', 'pending_payment'].includes(order.status) && (
-                      <th className="text-right px-4 py-3 font-semibold text-muted-foreground"></th>
-                    )}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {lines.map((line: any, i: number) => {
-                    const fullyVoided = line.voided_qty != null && line.voided_qty >= (line.quantity ?? 0);
-                    const partiallyVoided = line.voided_qty != null && line.voided_qty < (line.quantity ?? 0);
-                    return (
-                      <tr key={line.id ?? i} className={cn(fullyVoided && 'text-muted-foreground')}>
-                        <td className="px-4 py-3">
-                          <span className={cn(fullyVoided && 'line-through')}>{line.name ?? line.item_name ?? 'Item'}</span>
-                          {fullyVoided && <span className="ml-2 text-[10px] font-semibold text-destructive">Voided</span>}
-                          {partiallyVoided && <span className="ml-2 text-[10px] font-semibold text-amber-600">−{line.voided_qty} voided</span>}
-                        </td>
-                        <td className="px-4 py-3 text-center">{line.quantity}</td>
-                        <td className="px-4 py-3 text-right font-mono">
-                          {fmt(line.unit_price ?? 0)}
-                        </td>
-                        <td className={cn('px-4 py-3 text-right font-mono font-semibold', fullyVoided && 'line-through')}>
-                          {fmt(
-                            line.total_price ??
-                            line.line_total ??
-                            line.total ??
-                            (line.unit_price ?? 0) * (line.quantity ?? 0)
-                          )}
-                        </td>
-                        {['open', 'pending_payment'].includes(order.status) && (
-                          <td className="px-4 py-3">
-                            {line.id && !line.voided_qty && (
-                              <div className="flex items-center justify-end gap-3">
-                                <button
-                                  onClick={() => handleSetAside(line.id, line.name ?? line.item_name ?? 'Item')}
-                                  disabled={setAside.isPending}
-                                  title="Set aside for resale (wrong order, already made)"
-                                  className="inline-flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400 hover:underline disabled:opacity-50"
-                                >
-                                  <PackageOpen className="h-3.5 w-3.5" /> Set aside
-                                </button>
-                                {/* Void just this item (e.g. an ingredient is out of stock) while the
-                                    rest of the bill stands — same manager-approval flow as Void Bill. */}
-                                <VoidLineButton
-                                  orderId={id}
-                                  orderNumber={order.order_number}
-                                  lineId={line.id}
-                                  name={line.name ?? line.item_name ?? 'Item'}
-                                  quantity={line.quantity ?? 1}
-                                  status={order.status}
-                                  voidedQty={line.voided_qty}
-                                  compact
-                                  onVoided={() => refetch()}
-                                />
-                              </div>
-                            )}
-                          </td>
-                        )}
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+              <div className="px-2 pb-2">
+                <DataTable
+                  columns={lineColumns}
+                  rows={lines.map((l: any, i: number) => ({ ...l, _rowKey: l.id ?? `line-${i}` }))}
+                  rowKey={(l) => l._rowKey}
+                  storageKey="order-lines-col-prefs"
+                />
+              </div>
             ) : (
               <p className="px-5 py-10 text-center text-sm text-muted-foreground">No line items on this order.</p>
             )}

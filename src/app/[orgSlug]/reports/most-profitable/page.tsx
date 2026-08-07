@@ -111,15 +111,6 @@ function MostProfitableContent() {
             emptyText="No sales data for this period."
           />
         </CardContent>
-        {items.length > 0 && (
-          <div className="flex items-center justify-between border-t border-border px-6 py-3 bg-muted/40 text-sm">
-            <span className="font-semibold">Total</span>
-            <div className="flex items-center gap-6">
-              <span className="font-semibold">{money(totalRevenue)}</span>
-              <span className="font-semibold text-green-700">{money(totalProfit)}</span>
-            </div>
-          </div>
-        )}
       </Card>
     </div>
   );

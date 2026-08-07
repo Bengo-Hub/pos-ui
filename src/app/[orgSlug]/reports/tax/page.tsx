@@ -106,15 +106,6 @@ function TaxReportContent() {
             emptyText="No tax data for this period."
           />
         </CardContent>
-        {rows.length > 0 && (
-          <div className="flex items-center justify-between border-t border-border px-6 py-3 bg-muted/40 text-sm">
-            <span className="font-semibold">Total</span>
-            <div className="flex items-center gap-6">
-              <span className="font-semibold">{formatCurrency(totalTaxable, currency)}</span>
-              <span className="font-semibold text-yellow-700">{formatCurrency(totalTax, currency)}</span>
-            </div>
-          </div>
-        )}
       </Card>
     </div>
   );

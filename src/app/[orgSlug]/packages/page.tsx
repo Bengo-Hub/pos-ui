@@ -6,9 +6,11 @@ import { Button } from '@/components/ui/base';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { usePackages, useCreatePackage, useDeactivatePackage, type CreatePackageInput } from '@/hooks/usePackages';
 import { Loader2, Package, Plus, X } from 'lucide-react';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api/error-message';
+import { DataTable } from '@bengo-hub/shared-ui-lib/data-table';
+import { buildPackagesColumns } from './packages-columns';
 
 const EMPTY_FORM: CreatePackageInput = {
   name: '',
@@ -55,6 +57,10 @@ function PackagesPage() {
   };
 
   const handleDeactivate = (id: string, name: string) => setDeactivateTarget({ id, name });
+  const columns = useMemo(
+    () => buildPackagesColumns({ deactivatingId: deactivate.isPending ? deactivateTarget?.id ?? null : null, onDeactivate: handleDeactivate }),
+    [deactivate.isPending, deactivateTarget?.id],
+  );
 
   const confirmDeactivate = () => {
     if (!deactivateTarget) return;
@@ -97,68 +103,21 @@ function PackagesPage() {
         <p className="text-sm text-destructive mb-4">Failed to load packages.</p>
       )}
 
-      {packages.length === 0 ? (
-        <div className="flex flex-col items-center justify-center h-48 text-muted-foreground gap-2">
-          <Package className="h-10 w-10 opacity-30" />
-          <p className="font-medium">No service packages</p>
-          <button onClick={() => setCreateOpen(true)} className="text-sm text-primary underline">
-            Create one
-          </button>
-        </div>
-      ) : (
-        <div className="rounded-2xl border border-border overflow-hidden bg-card">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border bg-accent/30">
-                <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Name</th>
-                <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Description</th>
-                <th className="text-right px-4 py-3 font-semibold text-muted-foreground">Price (KES)</th>
-                <th className="text-center px-4 py-3 font-semibold text-muted-foreground">Sessions</th>
-                <th className="text-center px-4 py-3 font-semibold text-muted-foreground">Validity</th>
-                <th className="text-center px-4 py-3 font-semibold text-muted-foreground">Status</th>
-                <th className="px-4 py-3"></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {packages.map((pkg) => (
-                <tr key={pkg.id} className="hover:bg-accent/20 transition-colors">
-                  <td className="px-4 py-3.5 font-medium">{pkg.name}</td>
-                  <td className="px-4 py-3.5 text-muted-foreground max-w-[200px] truncate">
-                    {pkg.description ?? '—'}
-                  </td>
-                  <td className="px-4 py-3.5 text-right font-mono">{pkg.price.toLocaleString()}</td>
-                  <td className="px-4 py-3.5 text-center">{pkg.session_count}</td>
-                  <td className="px-4 py-3.5 text-center text-muted-foreground">
-                    {pkg.validity_days ? `${pkg.validity_days}d` : '—'}
-                  </td>
-                  <td className="px-4 py-3.5 text-center">
-                    <span
-                      className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${
-                        pkg.is_active
-                          ? 'bg-green-500/10 text-green-700 border border-green-400/30'
-                          : 'bg-muted text-muted-foreground border border-border'
-                      }`}
-                    >
-                      {pkg.is_active ? 'Active' : 'Inactive'}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3.5 text-right">
-                    {pkg.is_active && (
-                      <button
-                        onClick={() => handleDeactivate(pkg.id, pkg.name)}
-                        disabled={deactivate.isPending}
-                        className="text-xs text-muted-foreground hover:text-destructive transition-colors disabled:opacity-50"
-                      >
-                        Deactivate
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <DataTable
+        columns={columns}
+        rows={packages}
+        rowKey={(pkg) => pkg.id}
+        storageKey="packages-col-prefs"
+        emptyState={
+          <div className="flex flex-col items-center justify-center gap-2 text-muted-foreground">
+            <Package className="h-10 w-10 opacity-30" />
+            <p className="font-medium">No service packages</p>
+            <button onClick={() => setCreateOpen(true)} className="text-sm text-primary underline">
+              Create one
+            </button>
+          </div>
+        }
+      />
 
       {/* Create Package Modal */}
       {createOpen && (

@@ -3,18 +3,16 @@
 import { ModuleGate } from '@/components/auth/module-gate';
 import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
 
-import { useCommissions, type CommissionRecord } from '@/hooks/useCommissions';
+import { useCommissions } from '@/hooks/useCommissions';
 import { usePermissions, P } from '@/hooks/usePermissions';
 import { useAuthStore } from '@/store/auth';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
-import { cn, formatCurrency } from '@/lib/utils';
-import { Loader2, TrendingUp } from 'lucide-react';
+import { formatCurrency } from '@/lib/utils';
+import { TrendingUp } from 'lucide-react';
 import { useState, useMemo } from 'react';
 import { toast } from 'sonner';
-
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
-}
+import { DataTable } from '@bengo-hub/shared-ui-lib/data-table';
+import { buildCommissionsColumns } from './commissions-columns';
 
 function CommissionsPage() {
   const { can } = usePermissions();
@@ -38,6 +36,7 @@ function CommissionsPage() {
   }
 
   const totalAmount = records.reduce((sum, r) => sum + (r.commission_amount ?? 0), 0);
+  const columns = useMemo(() => buildCommissionsColumns(currency), [currency]);
 
   return (
     <div className="p-6">
@@ -54,71 +53,20 @@ function CommissionsPage() {
         )}
       </div>
 
-      {isLoading ? (
-        <div className="flex items-center justify-center h-48 gap-3">
-          <Loader2 className="h-6 w-6 animate-spin text-primary" />
-          <span className="text-sm text-muted-foreground">Loading…</span>
-        </div>
-      ) : records.length === 0 ? (
-        <div className="flex flex-col items-center justify-center h-48 text-muted-foreground gap-3">
-          <TrendingUp className="h-10 w-10 opacity-30" />
-          <p className="font-medium">No commission records found</p>
-          <p className="text-xs">Commissions are recorded automatically when orders are completed.</p>
-        </div>
-      ) : (
-        <div className="rounded-2xl border border-border overflow-hidden bg-card">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border bg-accent/30">
-                <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Staff ID</th>
-                <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Order ID</th>
-                <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Service</th>
-                <th className="text-right px-4 py-3 font-semibold text-muted-foreground">Sale Amount</th>
-                <th className="text-right px-4 py-3 font-semibold text-muted-foreground">Rate</th>
-                <th className="text-right px-4 py-3 font-semibold text-muted-foreground">Commission</th>
-                <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Status</th>
-                <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Date</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {records.map((rec) => (
-                <tr key={rec.id} className="hover:bg-accent/20 transition-colors">
-                  <td className="px-4 py-3 font-mono text-xs text-muted-foreground">
-                    {rec.staff_member_id.slice(0, 8)}…
-                  </td>
-                  <td className="px-4 py-3 font-mono text-xs text-muted-foreground">
-                    {rec.order_id ? rec.order_id.slice(0, 8) + '…' : '—'}
-                  </td>
-                  <td className="px-4 py-3 text-muted-foreground">{rec.service_sku || '—'}</td>
-                  <td className="px-4 py-3 text-right">{formatCurrency(rec.sale_amount, currency)}</td>
-                  <td className="px-4 py-3 text-right text-muted-foreground">
-                    {(rec.commission_rate ?? 0).toFixed(1)}%
-                  </td>
-                  <td className="px-4 py-3 text-right font-semibold text-primary">
-                    {formatCurrency(rec.commission_amount, currency)}
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className={cn(
-                      'inline-flex rounded-full px-2 py-0.5 text-xs font-medium capitalize',
-                      rec.status === 'paid' && 'bg-green-100 text-green-700',
-                      rec.status === 'pending' && 'bg-amber-100 text-amber-700',
-                      rec.status === 'voided' && 'bg-red-100 text-red-700',
-                    )}>{rec.status}</span>
-                  </td>
-                  <td className="px-4 py-3 text-muted-foreground">{formatDate(rec.created_at)}</td>
-                </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr className="border-t border-border bg-accent/30">
-                <td colSpan={5} className="px-4 py-3 font-semibold text-muted-foreground">Total</td>
-                <td className="px-4 py-3 text-right font-bold text-primary">{formatCurrency(totalAmount, currency)}</td>
-                <td colSpan={2} />
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-      )}
+      <DataTable
+        columns={columns}
+        rows={records}
+        rowKey={(rec) => rec.id}
+        loading={isLoading}
+        storageKey="commissions-col-prefs"
+        emptyState={
+          <div className="flex flex-col items-center justify-center gap-2 text-muted-foreground">
+            <TrendingUp className="h-10 w-10 opacity-30" />
+            <p className="font-medium">No commission records found</p>
+            <p className="text-xs">Commissions are recorded automatically when orders are completed.</p>
+          </div>
+        }
+      />
     </div>
   );
 }

@@ -20,6 +20,8 @@ import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { ModuleGate } from '@/components/auth/module-gate';
 import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
+import { DataTable } from '@bengo-hub/shared-ui-lib/data-table';
+import { buildReconciliationColumns } from '../reconciliation-columns';
 
 const MEAL_PERIODS = [
   { v: 'breakfast', l: 'Breakfast' },
@@ -127,6 +129,7 @@ function EventDetailPageInner() {
   const [periods, setPeriods] = useState<string[]>(['breakfast', 'lunch']);
   const [redeemCode, setRedeemCode] = useState('');
   const [editing, setEditing] = useState(false);
+  const reconColumns = buildReconciliationColumns();
 
   function togglePeriod(p: string) {
     setPeriods((prev) => prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p]);
@@ -240,19 +243,12 @@ function EventDetailPageInner() {
       {recon && recon.rows.length > 0 && (
         <Card><CardContent className="p-5 space-y-1">
           <p className="text-sm font-semibold">Reconciliation</p>
-          <table className="w-full text-sm">
-            <thead><tr className="text-left text-xs text-muted-foreground"><th className="py-1">Day</th><th>Meal</th><th className="text-right">Issued</th><th className="text-right">Redeemed</th></tr></thead>
-            <tbody>
-              {recon.rows.map((r, i) => (
-                <tr key={i} className="border-t border-border">
-                  <td className="py-1">{r.conference_day}</td>
-                  <td className="capitalize">{r.meal_period.replace('_', ' ')}</td>
-                  <td className="text-right">{r.issued}</td>
-                  <td className="text-right">{r.redeemed}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <DataTable
+            columns={reconColumns}
+            rows={recon.rows}
+            rowKey={(r) => `${r.conference_day}-${r.meal_period}`}
+            storageKey="event-reconciliation-col-prefs"
+          />
         </CardContent></Card>
       )}
 
