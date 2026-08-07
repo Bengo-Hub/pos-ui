@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { CalendarDays, Check, Loader2, Pencil, Plus, QrCode, ShieldPlus, Trash2, Users, X } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { CalendarDays, Check, Loader2, Pencil, Plus, QrCode, ShieldPlus, Store, Trash2, Users, X } from 'lucide-react';
 import { Button, Card, CardContent, CardHeader } from '@/components/ui/base';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import {
@@ -10,6 +11,7 @@ import {
 import { usePermissions } from '@/hooks/usePermissions';
 import { useRbacRoles } from '@/hooks/useRbac';
 import { useAuthStore } from '@/store/auth';
+import { fetchOutlets } from '@/lib/api/outlets';
 import type { StaffMember, UpdateStaffInput, CreateStaffInput } from '@/lib/api/staff';
 import { StaffShiftDrawer } from '@/components/pos/staff-shift-drawer';
 import { RolesPanel } from './RolesPanel';
@@ -75,6 +77,20 @@ export function TeamTab() {
   const outlet = useAuthStore((s) => s.outlet);
   const outletId = selectedOutletId || outlet?.id || '';
 
+  // Full outlet list — lets an admin/manager see AND switch which outlet a team member is
+  // assigned to. Shares the ['outlet_list', tenantId] cache key with OutletFilter (no duplicate
+  // fetch when both are mounted, e.g. the header switcher alongside this settings tab).
+  const { data: outlets = [] } = useQuery({
+    queryKey: ['outlet_list', tenantId],
+    queryFn: () => fetchOutlets(tenantId),
+    enabled: !!tenantId,
+    staleTime: 5 * 60_000,
+  });
+  const outletName = (id?: string) => {
+    if (!id) return '—';
+    return outlets.find((o) => o.id === id)?.name ?? `${id.slice(0, 8)}…`;
+  };
+
   const [view, setView] = useState<'members' | 'roles'>('members');
   const [showAdd, setShowAdd] = useState(false);
   const [addForm, setAddForm] = useState({
@@ -92,7 +108,7 @@ export function TeamTab() {
 
   function startEdit(m: StaffMember) {
     setEditingId(m.id);
-    setEditForm({ name: m.name, role: m.role, employment_type: m.employment_type, mpesa_phone: m.mpesa_phone });
+    setEditForm({ name: m.name, role: m.role, outlet_id: m.outlet_id, employment_type: m.employment_type, mpesa_phone: m.mpesa_phone });
   }
 
   async function saveEdit(m: StaffMember) {
@@ -204,6 +220,7 @@ export function TeamTab() {
                   <tr className="border-b bg-accent/5 text-xs text-muted-foreground uppercase tracking-wider">
                     <th className="text-left px-4 py-3">Name</th>
                     <th className="text-left px-4 py-3">Role</th>
+                    <th className="text-left px-4 py-3">Outlet</th>
                     <th className="text-left px-4 py-3">Type</th>
                     <th className="text-center px-4 py-3">Status</th>
                     <th className="text-center px-4 py-3">PIN</th>
@@ -239,6 +256,30 @@ export function TeamTab() {
                               </select>
                             )
                             : <span className="text-xs">{roleLabel(m.role)}</span>
+                          }
+                        </td>
+                        <td className="px-4 py-3">
+                          {isEditing
+                            ? (
+                              <select
+                                className={inputClass}
+                                value={editForm.outlet_id ?? m.outlet_id}
+                                onChange={(e) => setEditForm((f) => ({ ...f, outlet_id: e.target.value }))}
+                              >
+                                {outlets.length === 0 && (
+                                  <option value={m.outlet_id}>{outletName(m.outlet_id)}</option>
+                                )}
+                                {outlets.map((o) => (
+                                  <option key={o.id} value={o.id}>{o.name}</option>
+                                ))}
+                              </select>
+                            )
+                            : (
+                              <span className="text-xs flex items-center gap-1.5">
+                                <Store className="h-3 w-3 text-muted-foreground shrink-0" />
+                                {outletName(m.outlet_id)}
+                              </span>
+                            )
                           }
                         </td>
                         <td className="px-4 py-3 text-xs text-muted-foreground">

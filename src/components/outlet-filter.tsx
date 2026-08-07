@@ -2,6 +2,7 @@
 
 import { useAuthStore } from '@/store/auth';
 import { useOutletFilterStore, type OutletOption } from '@/store/outlet-filter';
+import { fetchOutlets, type OutletListItem } from '@/lib/api/outlets';
 import { apiClient } from '@/lib/api/client';
 import { canAccessAllOutlets } from '@/lib/auth/outlet-access';
 import { useQuery } from '@tanstack/react-query';
@@ -9,23 +10,6 @@ import { Check, ChevronDown, Store, X } from 'lucide-react';
 import { useParams } from 'next/navigation';
 import { useRef, useState, useEffect } from 'react';
 import { cn } from '@/lib/utils';
-
-interface OutletListItem {
-  id: string;
-  code: string;
-  name: string;
-  use_case?: string;
-  is_hq?: boolean;
-  status?: string;
-}
-
-async function fetchOutlets(tenantId: string): Promise<OutletListItem[]> {
-  const data = await apiClient.get<OutletListItem[] | { outlets?: OutletListItem[]; data?: OutletListItem[] }>(
-    `/api/v1/${tenantId}/pos/outlets`,
-  );
-  const outlets: OutletListItem[] = Array.isArray(data) ? data : (data as any).outlets ?? (data as any).data ?? [];
-  return outlets.filter((o) => o.status !== 'archived');
-}
 
 /**
  * OutletFilter — single-select dropdown for HQ/admin users to drill into a specific outlet/branch.
