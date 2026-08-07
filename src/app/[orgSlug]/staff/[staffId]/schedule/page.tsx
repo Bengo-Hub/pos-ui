@@ -7,19 +7,13 @@ import {
   type StaffScheduleEntry,
   type UpsertScheduleEntry,
 } from '@/hooks/useStaffSchedule';
-import { cn } from '@/lib/utils';
 import { Loader2, Save } from 'lucide-react';
 import { useParams } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api/error-message';
-
-interface DayRow {
-  day: number;
-  startTime: string;
-  endTime: string;
-  isAvailable: boolean;
-}
+import { DataTable } from '@bengo-hub/shared-ui-lib/data-table';
+import { buildScheduleColumns, type DayRow } from './schedule-columns';
 
 const DEFAULT_ROWS: DayRow[] = DAY_NAMES.map((_, i) => ({
   day: i,
@@ -59,6 +53,7 @@ export default function StaffSchedulePage() {
   function updateRow(day: number, patch: Partial<DayRow>) {
     setRows((prev) => prev.map((r) => (r.day === day ? { ...r, ...patch } : r)));
   }
+  const columns = useMemo(() => buildScheduleColumns({ onUpdate: updateRow }), []);
 
   async function handleSave() {
     const entries: UpsertScheduleEntry[] = rows.map((r) => ({
@@ -107,65 +102,13 @@ export default function StaffSchedulePage() {
         </button>
       </div>
 
-      <div className="rounded-2xl border border-border overflow-hidden bg-card">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-border bg-accent/30">
-              <th className="text-left px-4 py-3 font-semibold text-muted-foreground w-32">Day</th>
-              <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Start</th>
-              <th className="text-left px-4 py-3 font-semibold text-muted-foreground">End</th>
-              <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Available</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border">
-            {rows.map((row) => (
-              <tr
-                key={row.day}
-                className={cn('transition-colors', !row.isAvailable && 'opacity-50')}
-              >
-                <td className="px-4 py-3 font-medium">{DAY_NAMES[row.day]}</td>
-                <td className="px-4 py-3">
-                  <input
-                    type="time"
-                    value={row.startTime}
-                    onChange={(e) => updateRow(row.day, { startTime: e.target.value })}
-                    disabled={!row.isAvailable}
-                    className="rounded-lg border border-border bg-background px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-40"
-                  />
-                </td>
-                <td className="px-4 py-3">
-                  <input
-                    type="time"
-                    value={row.endTime}
-                    onChange={(e) => updateRow(row.day, { endTime: e.target.value })}
-                    disabled={!row.isAvailable}
-                    className="rounded-lg border border-border bg-background px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-40"
-                  />
-                </td>
-                <td className="px-4 py-3">
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={row.isAvailable}
-                    onClick={() => updateRow(row.day, { isAvailable: !row.isAvailable })}
-                    className={cn(
-                      'relative inline-flex h-5 w-9 items-center rounded-full transition-colors',
-                      row.isAvailable ? 'bg-primary' : 'bg-muted',
-                    )}
-                  >
-                    <span
-                      className={cn(
-                        'inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform',
-                        row.isAvailable ? 'translate-x-5' : 'translate-x-0.5',
-                      )}
-                    />
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <DataTable
+        columns={columns}
+        rows={rows}
+        rowKey={(row) => String(row.day)}
+        rowClassName={(row) => (!row.isAvailable ? 'opacity-50' : undefined)}
+        storageKey="staff-schedule-col-prefs"
+      />
     </div>
   );
 }
