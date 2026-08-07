@@ -7,36 +7,12 @@ import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
 import { useAuthStore } from '@/store/auth';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api/client';
-import { useState, useEffect } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { Loader2, Plus, RefreshCw, RotateCcw } from 'lucide-react';
+import { Plus, RefreshCw, RotateCcw } from 'lucide-react';
 import { cn } from '@/lib/utils';
-
-interface ReturnItem {
-  id: string;
-  return_number: string;
-  original_order_id?: string;
-  original_receipt_number?: string;
-  customer_name?: string;
-  customer_phone?: string;
-  reason: string;
-  status: 'pending' | 'approved' | 'rejected' | 'completed';
-  refund_amount?: number;
-  currency?: string;
-  // refund_channel is the backend field (cash|mpesa|bank|cheque|store_credit|offset_invoice);
-  // refund_method is kept as a fallback for any legacy serialization.
-  refund_channel?: string;
-  refund_method?: string;
-  created_at: string;
-  line_items?: { name: string; qty: number; unit_price: number }[];
-}
-
-const STATUS_CONFIG: Record<ReturnItem['status'], { label: string; className: string }> = {
-  pending:   { label: 'Pending',   className: 'bg-warning/10 text-warning' },
-  approved:  { label: 'Approved',  className: 'bg-primary/10 text-primary' },
-  completed: { label: 'Completed', className: 'bg-success/10 text-success' },
-  rejected:  { label: 'Rejected',  className: 'bg-destructive/10 text-destructive' },
-};
+import { DataTable } from '@bengo-hub/shared-ui-lib/data-table';
+import { buildReturnsColumns, type ReturnItem } from './returns-columns';
 
 function useReturns(status: string) {
   const user = useAuthStore((s) => s.user);
@@ -89,6 +65,8 @@ function ReturnsPage() {
     setShowModal(true);
     router.replace(`/${orgSlug}/returns`);
   }, [invoiceParam, orgSlug, router]);
+
+  const columns = useMemo(() => buildReturnsColumns({ onOpenCustomer: setCustomerModal }), []);
 
   return (
     <div className="p-6">
@@ -148,73 +126,20 @@ function ReturnsPage() {
         ))}
       </div>
 
-      {isLoading ? (
-        <div className="flex items-center justify-center h-48 gap-3">
-          <Loader2 className="h-6 w-6 animate-spin text-primary" />
-          <span className="text-sm text-muted-foreground">Loading returns…</span>
-        </div>
-      ) : returns.length === 0 ? (
-        <div className="flex flex-col items-center justify-center h-48 text-muted-foreground gap-2">
-          <RotateCcw className="h-10 w-10 opacity-30" />
-          <p className="font-medium">No return requests found</p>
-        </div>
-      ) : (
-        <div className="rounded-2xl border border-border overflow-hidden bg-card">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border bg-accent/30">
-                <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Return #</th>
-                <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Customer</th>
-                <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Reason</th>
-                <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Status</th>
-                <th className="text-right px-4 py-3 font-semibold text-muted-foreground">Refund</th>
-                <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Method</th>
-                <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Date</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {returns.map((ret) => {
-                const cfg = STATUS_CONFIG[ret.status] ?? { label: ret.status, className: 'bg-muted text-muted-foreground' };
-                return (
-                  <tr
-                    key={ret.id}
-                    className="hover:bg-accent/20 transition-colors cursor-pointer"
-                    onClick={() => router.push(`/${orgSlug}/returns/${ret.id}`)}
-                  >
-                    <td className="px-4 py-3.5 font-mono text-xs font-semibold text-primary underline-offset-2 hover:underline">{ret.return_number}</td>
-                    <td className="px-4 py-3.5" onClick={(e) => e.stopPropagation()}>
-                      {ret.customer_phone ? (
-                        <button type="button"
-                          onClick={() => setCustomerModal({ name: ret.customer_name, phone: ret.customer_phone as string })}
-                          className="text-primary hover:underline" title="Open customer profile">
-                          {ret.customer_name || ret.customer_phone}
-                        </button>
-                      ) : (ret.customer_name ?? '—')}
-                    </td>
-                    <td className="px-4 py-3.5 text-muted-foreground max-w-[180px] truncate">{ret.reason}</td>
-                    <td className="px-4 py-3.5">
-                      <span className={cn('text-[10px] font-bold px-2 py-0.5 rounded-full border border-transparent', cfg.className)}>
-                        {cfg.label}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3.5 text-right font-semibold">
-                      {ret.refund_amount != null
-                        ? `${ret.currency ?? 'KES'} ${ret.refund_amount.toLocaleString()}`
-                        : '—'}
-                    </td>
-                    <td className="px-4 py-3.5 text-muted-foreground text-xs capitalize">
-                      {(ret.refund_channel ?? ret.refund_method)?.replace('_', ' ') ?? '—'}
-                    </td>
-                    <td className="px-4 py-3.5 text-muted-foreground text-xs">
-                      {new Date(ret.created_at).toLocaleDateString()}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <DataTable<ReturnItem>
+        columns={columns}
+        rows={returns}
+        rowKey={(ret) => ret.id}
+        loading={isLoading}
+        onRowClick={(ret) => router.push(`/${orgSlug}/returns/${ret.id}`)}
+        storageKey="returns-col-prefs"
+        emptyState={
+          <div className="flex flex-col items-center justify-center gap-2 text-muted-foreground">
+            <RotateCcw className="h-10 w-10 opacity-30" />
+            <p className="font-medium">No return requests found</p>
+          </div>
+        }
+      />
       {customerModal && (
         <CustomerDetailsModal
           customerName={customerModal.name}

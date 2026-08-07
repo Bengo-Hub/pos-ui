@@ -3,24 +3,15 @@
 import { ModuleGate } from '@/components/auth/module-gate';
 import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
 
-import { useLoyaltyAccount, useEarnPoints, useRedeemPoints, useReferrals, useCreateReferral, type LoyaltyTransaction } from '@/hooks/useLoyalty';
-import { cn } from '@/lib/utils';
+import { useLoyaltyAccount, useEarnPoints, useRedeemPoints, useReferrals, useCreateReferral } from '@/hooks/useLoyalty';
 import { ArrowLeft, Gift, Loader2, Minus, Plus, Users } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api/error-message';
-
-function txColor(type: string) {
-  if (type === 'earn') return 'text-green-400';
-  if (type === 'redeem') return 'text-red-400';
-  return 'text-muted-foreground';
-}
-
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-}
+import { DataTable } from '@bengo-hub/shared-ui-lib/data-table';
+import { buildLoyaltyTransactionColumns, buildReferralColumns } from './loyalty-detail-columns';
 
 function LoyaltyAccountDetailPage() {
   const params = useParams();
@@ -37,6 +28,8 @@ function LoyaltyAccountDetailPage() {
   const { data: referrals = [] } = useReferrals(id);
   const createReferral = useCreateReferral(id);
   const [referredPhone, setReferredPhone] = useState('');
+  const transactionColumns = useMemo(() => buildLoyaltyTransactionColumns(), []);
+  const referralColumns = useMemo(() => buildReferralColumns(), []);
 
   async function handleRefer(e: React.FormEvent) {
     e.preventDefault();
@@ -177,38 +170,15 @@ function LoyaltyAccountDetailPage() {
         <div className="px-4 py-3 border-b border-border">
           <p className="text-sm font-semibold">Recent Transactions</p>
         </div>
-        {transactions.length === 0 ? (
-          <div className="flex items-center justify-center h-24 text-sm text-muted-foreground">
-            No transactions yet
-          </div>
-        ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border bg-accent/20">
-                <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground">Type</th>
-                <th className="text-right px-4 py-2.5 text-xs font-semibold text-muted-foreground">Points</th>
-                <th className="text-right px-4 py-2.5 text-xs font-semibold text-muted-foreground">Balance After</th>
-                <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground">Date</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {transactions.map((tx) => (
-                <tr key={tx.id} className="hover:bg-accent/20 transition-colors">
-                  <td className={cn('px-4 py-2.5 font-medium capitalize', txColor(tx.type_field))}>
-                    {tx.type_field}
-                  </td>
-                  <td className={cn('px-4 py-2.5 text-right font-semibold', tx.points > 0 ? 'text-green-400' : 'text-red-400')}>
-                    {tx.points > 0 ? '+' : ''}{tx.points}
-                  </td>
-                  <td className="px-4 py-2.5 text-right text-muted-foreground">
-                    {tx.balance_after.toLocaleString()}
-                  </td>
-                  <td className="px-4 py-2.5 text-muted-foreground">{formatDate(tx.created_at)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+        <div className="px-2 pb-2">
+          <DataTable
+            columns={transactionColumns}
+            rows={transactions}
+            rowKey={(tx) => tx.id}
+            storageKey="loyalty-transactions-col-prefs"
+            emptyText="No transactions yet"
+          />
+        </div>
       </div>
 
       {/* Referrals (refer-a-friend) */}
@@ -233,39 +203,15 @@ function LoyaltyAccountDetailPage() {
             {createReferral.isPending ? '…' : 'Refer'}
           </button>
         </form>
-        {referrals.length === 0 ? (
-          <div className="flex items-center justify-center h-20 text-sm text-muted-foreground">
-            No referrals yet
-          </div>
-        ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border bg-accent/20">
-                <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground">Friend</th>
-                <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground">Code</th>
-                <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground">Status</th>
-                <th className="text-right px-4 py-2.5 text-xs font-semibold text-muted-foreground">Bonus</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {referrals.map((r) => (
-                <tr key={r.id} className="hover:bg-accent/20 transition-colors">
-                  <td className="px-4 py-2.5">{r.referred_phone}</td>
-                  <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground">{r.code}</td>
-                  <td className="px-4 py-2.5">
-                    <span className={cn('px-2 py-0.5 rounded-full text-xs font-medium capitalize',
-                      r.status === 'earned' ? 'bg-green-500/15 text-green-500'
-                        : r.status === 'pending' ? 'bg-amber-500/15 text-amber-500'
-                        : 'bg-muted text-muted-foreground')}>
-                      {r.status}
-                    </span>
-                  </td>
-                  <td className="px-4 py-2.5 text-right font-semibold text-primary">{r.bonus_points}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+        <div className="px-2 pb-2">
+          <DataTable
+            columns={referralColumns}
+            rows={referrals}
+            rowKey={(r) => r.id}
+            storageKey="loyalty-referrals-col-prefs"
+            emptyText="No referrals yet"
+          />
+        </div>
       </div>
     </div>
   );

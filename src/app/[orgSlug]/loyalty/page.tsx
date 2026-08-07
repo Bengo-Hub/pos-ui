@@ -3,14 +3,14 @@
 import { ModuleGate } from '@/components/auth/module-gate';
 import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
 
-import { useLoyaltyAccounts, useCreateLoyaltyAccount, type LoyaltyAccount } from '@/hooks/useLoyalty';
-import { cn } from '@/lib/utils';
-import { Gift, Loader2, Plus, Search } from 'lucide-react';
-import Link from 'next/link';
+import { useLoyaltyAccounts, useCreateLoyaltyAccount } from '@/hooks/useLoyalty';
+import { Gift, Plus, Search } from 'lucide-react';
 import { useParams } from 'next/navigation';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api/error-message';
+import { DataTable } from '@bengo-hub/shared-ui-lib/data-table';
+import { buildLoyaltyColumns } from './loyalty-columns';
 
 function LoyaltyPage() {
   const params = useParams();
@@ -21,6 +21,7 @@ function LoyaltyPage() {
 
   const { data: accounts = [], isLoading } = useLoyaltyAccounts(search || undefined);
   const createMutation = useCreateLoyaltyAccount();
+  const columns = useMemo(() => buildLoyaltyColumns({ orgSlug }), [orgSlug]);
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -106,53 +107,19 @@ function LoyaltyPage() {
         </form>
       )}
 
-      {isLoading ? (
-        <div className="flex items-center justify-center h-48 gap-3">
-          <Loader2 className="h-6 w-6 animate-spin text-primary" />
-          <span className="text-sm text-muted-foreground">Loading…</span>
-        </div>
-      ) : accounts.length === 0 ? (
-        <div className="flex flex-col items-center justify-center h-48 text-muted-foreground gap-3">
-          <Gift className="h-10 w-10 opacity-30" />
-          <p className="font-medium">No loyalty accounts found</p>
-        </div>
-      ) : (
-        <div className="rounded-2xl border border-border overflow-hidden bg-card">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border bg-accent/30">
-                <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Customer</th>
-                <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Phone</th>
-                <th className="text-right px-4 py-3 font-semibold text-muted-foreground">Balance</th>
-                <th className="text-right px-4 py-3 font-semibold text-muted-foreground">Lifetime</th>
-                <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {accounts.map((acc) => (
-                <tr key={acc.id} className="hover:bg-accent/20 transition-colors">
-                  <td className="px-4 py-3 font-medium">{acc.customer_name}</td>
-                  <td className="px-4 py-3 text-muted-foreground">{acc.customer_phone}</td>
-                  <td className="px-4 py-3 text-right font-semibold text-primary">
-                    {acc.points_balance.toLocaleString()} pts
-                  </td>
-                  <td className="px-4 py-3 text-right text-muted-foreground">
-                    {acc.lifetime_points.toLocaleString()} pts
-                  </td>
-                  <td className="px-4 py-3">
-                    <Link
-                      href={`/${orgSlug}/loyalty/${acc.id}`}
-                      className="text-xs text-primary hover:underline"
-                    >
-                      View
-                    </Link>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <DataTable
+        columns={columns}
+        rows={accounts}
+        rowKey={(acc) => acc.id}
+        loading={isLoading}
+        storageKey="loyalty-col-prefs"
+        emptyState={
+          <div className="flex flex-col items-center justify-center gap-2 text-muted-foreground">
+            <Gift className="h-10 w-10 opacity-30" />
+            <p className="font-medium">No loyalty accounts found</p>
+          </div>
+        }
+      />
     </div>
   );
 }

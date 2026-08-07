@@ -4,7 +4,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api/client';
 import { useAuthStore } from '@/store/auth';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { ArrowLeft, CheckCircle2, Info, Loader2, PackageCheck, RotateCcw, ShieldCheck, XCircle } from 'lucide-react';
 import { cn, formatCurrency } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -15,16 +15,8 @@ import { allowedRefundChannels, defaultRefundChannel, refundChannelAdvisory, REF
 import { ExchangeLinesPicker, exchangeTotal, type ExchangeLine } from '@/components/pos/returns/exchange-lines-picker';
 import { SplitPaymentModal } from '@/components/pos/split-payment-modal';
 import { CustomerDetailsModal } from '@/components/pos/customers/customer-details-modal';
-
-interface ReturnLine {
-  id: string;
-  sku?: string;
-  name: string;
-  quantity: number;
-  unit_price: number;
-  total_price: number;
-  reason?: string;
-}
+import { DataTable } from '@bengo-hub/shared-ui-lib/data-table';
+import { buildReturnLineColumns, type ReturnLine } from './return-lines-columns';
 
 interface ReturnDetail {
   id: string;
@@ -155,6 +147,7 @@ export default function ReturnDetailPage() {
   // Exchange completion: replacement items + the top-up payment flow for a dearer swap.
   const [exchangeLines, setExchangeLines] = useState<ExchangeLine[]>([]);
   const [topUpOrder, setTopUpOrder] = useState<{ id: string; number: string; total: number } | null>(null);
+  const lineColumns = useMemo(() => buildReturnLineColumns(currency), [currency]);
 
   if (isLoading) {
     return (
@@ -508,29 +501,13 @@ export default function ReturnDetailPage() {
           <div className="px-4 py-3 border-b border-border bg-accent/20">
             <p className="text-sm font-bold">Returned Items</p>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border">
-                  <th className="text-left px-4 py-2.5 font-semibold text-muted-foreground text-xs">Item</th>
-                  <th className="text-left px-4 py-2.5 font-semibold text-muted-foreground text-xs">SKU</th>
-                  <th className="text-right px-4 py-2.5 font-semibold text-muted-foreground text-xs">Qty</th>
-                  <th className="text-right px-4 py-2.5 font-semibold text-muted-foreground text-xs">Unit Price</th>
-                  <th className="text-right px-4 py-2.5 font-semibold text-muted-foreground text-xs">Total</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {lines.map((l) => (
-                  <tr key={l.id}>
-                    <td className="px-4 py-3">{l.name}</td>
-                    <td className="px-4 py-3 text-muted-foreground text-xs font-mono">{l.sku ?? '—'}</td>
-                    <td className="px-4 py-3 text-right">{l.quantity}</td>
-                    <td className="px-4 py-3 text-right">{formatCurrency(l.unit_price, currency)}</td>
-                    <td className="px-4 py-3 text-right font-semibold">{formatCurrency(l.total_price, currency)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="px-2 pb-2">
+            <DataTable<ReturnLine>
+              columns={lineColumns}
+              rows={lines}
+              rowKey={(l) => l.id}
+              storageKey="return-lines-col-prefs"
+            />
           </div>
         </div>
       )}
