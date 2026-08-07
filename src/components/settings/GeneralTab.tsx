@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Globe, Loader2, Lock, Palette, RotateCcw, Save } from 'lucide-react';
+import { Globe, Loader2, Lock, Palette, Percent, RotateCcw, Save, Tag } from 'lucide-react';
 import { Button, Card, CardContent, CardHeader } from '@/components/ui/base';
 import { useTenantBranding } from '@/providers/tenant-branding-provider';
 import { usePOSSettings, useUpdatePOSSettings } from '@/hooks/usePOSSettings';
@@ -141,7 +141,9 @@ export function GeneralTab() {
         </div>
       ) : (
         <>
-          {/* Currency & VAT + Returns side-by-side */}
+          {/* 4 evenly-weighted cards, 2x2 — split by topic (currency / discount limits /
+              cashier price edits / returns) instead of the old lopsided Currency-vs-everything-
+              else split, so the left and right columns carry roughly the same amount of content. */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <Card>
               <CardHeader>
@@ -179,12 +181,105 @@ export function GeneralTab() {
             <Card>
               <CardHeader>
                 <div className="flex items-center gap-2">
-                  <RotateCcw className="h-4 w-4 text-primary" />
-                  <span className="font-bold text-sm">{showReturnWindow ? 'Returns & Discounts' : 'Discounts'}</span>
+                  <Percent className="h-4 w-4 text-primary" />
+                  <span className="font-bold text-sm">Discount Limits</span>
                 </div>
               </CardHeader>
-              <CardContent className="space-y-4">
-                {showReturnWindow && (
+              <CardContent className="space-y-2">
+                <label className={labelClass}>Max discount without approval</label>
+                <div className="flex rounded-lg border border-border p-0.5 w-fit">
+                  {(['percent', 'amount'] as const).map((mode) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      disabled={!canEdit}
+                      onClick={() => {
+                        setDiscountLimitType(mode);
+                        // Reset to that mode's no-limit sentinel when switching, so the
+                        // input doesn't carry over a value that meant something in the
+                        // other mode (e.g. a percent of "20" showing up as "20" currency).
+                        setDiscountLimitValue(mode === 'amount' ? '0' : '100');
+                      }}
+                      className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${
+                        discountLimitType === mode ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      {mode === 'percent' ? 'Percentage' : 'Fixed Amount'}
+                    </button>
+                  ))}
+                </div>
+                <div className="max-w-50 space-y-1">
+                  <input
+                    type="number"
+                    min={0}
+                    max={discountLimitType === 'percent' ? 100 : undefined}
+                    step={1}
+                    value={discountLimitValue}
+                    onChange={(e) => setDiscountLimitValue(e.target.value)}
+                    disabled={!canEdit}
+                    placeholder={discountLimitType === 'percent' ? '100' : '0'}
+                    className={`${inputClass} font-mono`}
+                  />
+                  <p className="text-[10px] text-muted-foreground">
+                    {discountLimitType === 'percent'
+                      ? '% of order (100 = no limit)'
+                      : `amount in ${currency} (0 = no limit)`}
+                  </p>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  A cashier discount above this limit requires manager approval (PIN or QR card) — the approval
+                  dialog triggers on the terminal and in back-office Add Sale.
+                </p>
+              </CardContent>
+            </Card>
+
+            {/* Pricing policy — cashier line-price rules (server-enforced on order create). */}
+            <Card>
+              <CardHeader>
+                <div className="flex items-center gap-2">
+                  <Tag className="h-4 w-4 text-primary" />
+                  <span className="font-bold text-sm">Cashier Price Edits</span>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <label className="flex items-start gap-2.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={allowPriceAboveBase}
+                    onChange={(e) => setAllowPriceAboveBase(e.target.checked)}
+                    disabled={!canEdit}
+                    className="mt-0.5 h-4 w-4 rounded border-border accent-primary"
+                  />
+                  <span className="text-xs">
+                    <span className="font-medium text-foreground">Allow selling above the catalog price.</span>{' '}
+                    <span className="text-muted-foreground">Cashiers may raise a line&apos;s price above the base (negotiated up-sell) without approval.</span>
+                  </span>
+                </label>
+                <label className="flex items-start gap-2.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={requireApprovalBelowBase}
+                    onChange={(e) => setRequireApprovalBelowBase(e.target.checked)}
+                    disabled={!canEdit}
+                    className="mt-0.5 h-4 w-4 rounded border-border accent-primary"
+                  />
+                  <span className="text-xs">
+                    <span className="font-medium text-foreground">Require manager approval below the catalog price.</span>{' '}
+                    <span className="text-muted-foreground">Selling under the base price (markdown or price-lowering discount) prompts the manager approval dialog at checkout.</span>
+                  </span>
+                </label>
+              </CardContent>
+            </Card>
+
+            {showReturnWindow && (
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center gap-2">
+                    <RotateCcw className="h-4 w-4 text-primary" />
+                    <span className="font-bold text-sm">Returns & Refunds</span>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
                   <div className="space-y-2">
                     <label className={labelClass}>Return Window (days)</label>
                     <input
@@ -202,84 +297,6 @@ export function GeneralTab() {
                       Maximum days after purchase to accept a return. Set 0 for no limit.
                     </p>
                   </div>
-                )}
-                <div className="space-y-2">
-                  <label className={labelClass}>Max discount without approval</label>
-                  <div className="flex rounded-lg border border-border p-0.5 w-fit">
-                    {(['percent', 'amount'] as const).map((mode) => (
-                      <button
-                        key={mode}
-                        type="button"
-                        disabled={!canEdit}
-                        onClick={() => {
-                          setDiscountLimitType(mode);
-                          // Reset to that mode's no-limit sentinel when switching, so the
-                          // input doesn't carry over a value that meant something in the
-                          // other mode (e.g. a percent of "20" showing up as "20" currency).
-                          setDiscountLimitValue(mode === 'amount' ? '0' : '100');
-                        }}
-                        className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${
-                          discountLimitType === mode ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
-                        }`}
-                      >
-                        {mode === 'percent' ? 'Percentage' : 'Fixed Amount'}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="max-w-50 space-y-1">
-                    <input
-                      type="number"
-                      min={0}
-                      max={discountLimitType === 'percent' ? 100 : undefined}
-                      step={1}
-                      value={discountLimitValue}
-                      onChange={(e) => setDiscountLimitValue(e.target.value)}
-                      disabled={!canEdit}
-                      placeholder={discountLimitType === 'percent' ? '100' : '0'}
-                      className={`${inputClass} font-mono`}
-                    />
-                    <p className="text-[10px] text-muted-foreground">
-                      {discountLimitType === 'percent'
-                        ? '% of order (100 = no limit)'
-                        : `amount in ${currency} (0 = no limit)`}
-                    </p>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    A cashier discount above this limit requires manager approval (PIN or QR card) — the approval
-                    dialog triggers on the terminal and in back-office Add Sale.
-                  </p>
-                </div>
-                {/* Pricing policy — cashier line-price rules (server-enforced on order create). */}
-                <div className="space-y-3 pt-2 border-t border-border">
-                  <label className={labelClass}>Cashier price edits</label>
-                  <label className="flex items-start gap-2.5 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={allowPriceAboveBase}
-                      onChange={(e) => setAllowPriceAboveBase(e.target.checked)}
-                      disabled={!canEdit}
-                      className="mt-0.5 h-4 w-4 rounded border-border accent-primary"
-                    />
-                    <span className="text-xs">
-                      <span className="font-medium text-foreground">Allow selling above the catalog price.</span>{' '}
-                      <span className="text-muted-foreground">Cashiers may raise a line&apos;s price above the base (negotiated up-sell) without approval.</span>
-                    </span>
-                  </label>
-                  <label className="flex items-start gap-2.5 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={requireApprovalBelowBase}
-                      onChange={(e) => setRequireApprovalBelowBase(e.target.checked)}
-                      disabled={!canEdit}
-                      className="mt-0.5 h-4 w-4 rounded border-border accent-primary"
-                    />
-                    <span className="text-xs">
-                      <span className="font-medium text-foreground">Require manager approval below the catalog price.</span>{' '}
-                      <span className="text-muted-foreground">Selling under the base price (markdown or price-lowering discount) prompts the manager approval dialog at checkout.</span>
-                    </span>
-                  </label>
-                </div>
-                {showReturnWindow && (
                   <div className="space-y-3 pt-2 border-t border-border">
                     <label className={labelClass}>Sell-return refund method</label>
                     <label className="flex items-start gap-2.5 cursor-pointer">
@@ -300,9 +317,9 @@ export function GeneralTab() {
                       </span>
                     </label>
                   </div>
-                )}
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            )}
           </div>
 
           <div className="flex items-center justify-end gap-3 pt-1">
