@@ -9,11 +9,11 @@ export function useStaffList(tenantId: string, outletId?: string) {
   });
 }
 
-export function useStaffAdmin(tenantId: string) {
+export function useStaffAdmin(tenantId: string, opts?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ['staff-admin', tenantId],
     queryFn: () => staffApi.listAdmin(tenantId),
-    enabled: !!tenantId,
+    enabled: !!tenantId && (opts?.enabled ?? true),
     staleTime: 30_000,
   });
 }

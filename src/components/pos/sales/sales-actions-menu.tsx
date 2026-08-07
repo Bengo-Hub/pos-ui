@@ -43,6 +43,11 @@ interface SalesActionsMenuProps {
   onPutOnAccount?: (order: any) => void;
   /** Correct served-by/customer on a COMPLETED sale — line items/totals stay locked. */
   onEditSaleInfo?: (order: any) => void;
+  /** Warms this order's ['pos-order', tenantId, id] cache before the menu is even opened, so
+   *  whichever edit path the user picks (resume-into-terminal or in-place Edit Sale — both load
+   *  via `useOrder`) can paint from cache instead of a cold fetch. Fired on hover/focus of the
+   *  Actions trigger, not on row render, so it never fans out across an entire visible page. */
+  onPrefetchEdit?: (order: any) => void;
 }
 
 // Tenant admin/owner tier — deliberately narrower than P.ORDERS_MANAGE (which a plain
@@ -52,7 +57,7 @@ interface SalesActionsMenuProps {
 // the backend enforces the real boundary.
 const DATE_MOVE_ADMIN_ROLES = new Set(['admin', 'owner', 'pos_admin', 'super_admin', 'superuser']);
 
-export function SalesActionsMenu({ order, orgSlug, onView, onEditShipping, onViewPayments, onEditLines, onMoveDate, onDeleteSale, onEditFinalizedSale, onRecordPayment, onPutOnAccount, onEditSaleInfo }: SalesActionsMenuProps) {
+export function SalesActionsMenu({ order, orgSlug, onView, onEditShipping, onViewPayments, onEditLines, onMoveDate, onDeleteSale, onEditFinalizedSale, onRecordPayment, onPutOnAccount, onEditSaleInfo, onPrefetchEdit }: SalesActionsMenuProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -114,6 +119,8 @@ export function SalesActionsMenu({ order, orgSlug, onView, onEditShipping, onVie
     <div className="relative" ref={ref} onClick={(e) => e.stopPropagation()}>
       <button
         onClick={() => setOpen((o) => !o)}
+        onMouseEnter={() => onPrefetchEdit?.(order)}
+        onFocus={() => onPrefetchEdit?.(order)}
         className="flex items-center gap-1 h-8 px-3 rounded-md border border-primary/40 text-primary text-xs font-bold hover:bg-primary/5"
       >
         Actions <ChevronDown className="h-3.5 w-3.5" />

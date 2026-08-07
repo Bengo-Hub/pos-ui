@@ -29,6 +29,7 @@ export type NotificationStreamMessage =
   | { type: 'waiter_called'; payload: { order_id: string; order_number: string } }
   | { type: 'etims_fiscalized'; payload: EtimsFiscalizedPayload }
   | { type: 'catalog_changed'; payload: { tenant_id: string } }
+  | { type: 'customer_balance_changed'; payload: { tenant_id: string; contact_id?: string; customer_identifier?: string } }
   | { type: 'ping' | 'pong'; payload: { ts: number } };
 
 interface UseNotificationStreamOptions {
@@ -108,6 +109,14 @@ export function useNotificationStream({ tenantID, userID, onMessage }: UseNotifi
       if (msg.type === 'catalog_changed') {
         qc.invalidateQueries({ queryKey: ['pos-catalog-full'] }); // = FULL_CATALOG_QUERY_KEY (usePOS)
         qc.invalidateQueries({ queryKey: ['pos-catalog-version'] });
+      }
+
+      // A customer's AR/credit balance changed from another till or from treasury-ui directly —
+      // refresh any open Add-Sale/payment view reading that figure (useClientCredit /
+      // useClientCreditByIdentifier both key on this same prefix) instead of leaving it stale
+      // until the page is reopened.
+      if (msg.type === 'customer_balance_changed') {
+        qc.invalidateQueries({ queryKey: ['pos-client-credit', tenantID] });
       }
 
       onMessage?.(msg);

@@ -2,10 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useQueryClient } from '@tanstack/react-query';
 import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import { Search, Undo2, XCircle } from 'lucide-react';
 import { DataTable, type DataTableColumn } from '@bengo-hub/shared-ui-lib/data-table';
-import { useOrders, useOrdersSummary, useBulkVoidOrders, useDeleteSale, type OrderListFilters } from '@/hooks/usePOS';
+import { useOrders, useOrdersSummary, useBulkVoidOrders, useDeleteSale, prefetchOrder, type OrderListFilters } from '@/hooks/usePOS';
 import { useCloseOnAccount } from '@/hooks/use-close-on-account';
 import { useStaffList } from '@/hooks/useStaff';
 import { usePermissions, P } from '@/hooks/usePermissions';
@@ -50,6 +51,11 @@ export function SalesListView({ orgSlug, fixedSource, title, subtitle }: {
 }) {
   const user = useAuthStore((s) => s.user);
   const tenantId = user?.tenant_id ?? '';
+  const qc = useQueryClient();
+  // Warms the ['pos-order', tenantId, id] cache the moment a row's actions menu is hovered/opened —
+  // by the time Edit Sale is actually clicked, the order detail fetch is often already resolved,
+  // so /sell/add?edit_inplace=<id> paints the cart immediately instead of blanking on a cold fetch.
+  const handlePrefetchOrder = useCallback((o: any) => prefetchOrder(qc, tenantId, o.id), [qc, tenantId]);
   const outlets = useOutletFilterStore((s) => s.outlets);
   const selectedOutlet = useOutletFilterStore((s) => s.selectedOutlet);
   const outletNameById = useMemo(() => Object.fromEntries(outlets.map((o) => [o.id, o.name])), [outlets]);
@@ -237,6 +243,7 @@ export function SalesListView({ orgSlug, fixedSource, title, subtitle }: {
           onEditShipping={setShippingOrder} onViewPayments={setPaymentsOrder} onEditLines={setEditLinesOrder}
           onMoveDate={setMoveDateOrder} onDeleteSale={setDeleteSaleOrder}
           onEditFinalizedSale={handleEditFinalizedSale}
+          onPrefetchEdit={handlePrefetchOrder}
           onRecordPayment={setRecordPayOrder}
           onPutOnAccount={setPutOnAccountOrder} onEditSaleInfo={setEditSaleInfoOrder} />
       ),

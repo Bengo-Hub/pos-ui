@@ -113,12 +113,17 @@ export default function AddSalePage() {
   const [staffId, setStaffId] = useState('');
   const [fundFromSalary, setFundFromSalary] = useState(false);
   const [months, setMonths] = useState(1);
-  const { data: staffResp } = useStaffAdmin(tenantId);
+  const staffParty = partyType === 'staff';
+  // Only fetched once the Staff-credit party is actually selected — the party-type toggle (and
+  // therefore staffParty ever becoming true) only renders behind Credit Sale being on (see the
+  // `{creditSale && (...)}` toggle further down), so gating on staffParty alone is sufficient and
+  // avoids referencing `creditSale` before its own declaration below. Most sales never touch
+  // this, so this avoids an unconditional S2S round trip on every Add Sale mount.
+  const { data: staffResp } = useStaffAdmin(tenantId, { enabled: staffParty });
   const staff: any[] = Array.isArray(staffResp) ? staffResp : ((staffResp as any)?.data ?? []);
   const selectedStaff = staff.find((s: any) => s.id === staffId);
   const staffCredit = useFeatureUpgrade(STAFF_CREDIT_FEATURE);
 
-  const staffParty = partyType === 'staff';
   const custPhone = !staffParty && customer && !customer.isWalkIn ? customer.phone : '';
   const custName = staffParty ? (selectedStaff?.name ?? '') : (customer?.name ?? '');
 

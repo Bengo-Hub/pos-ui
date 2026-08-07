@@ -1060,13 +1060,28 @@ interface POSOrder {
   edges?: { lines?: any[]; payments?: any[] };
 }
 
+function orderQueryOptions(tenantID: string, id: string) {
+  return {
+    queryKey: ['pos-order', tenantID, id],
+    queryFn: () => apiClient.get<POSOrder>(`${basePath(tenantID)}/orders/${id}`),
+  };
+}
+
 export function useOrder(id: string) {
   const tenantID = useTenantID();
   return useQuery({
-    queryKey: ['pos-order', tenantID, id],
-    queryFn: () => apiClient.get<POSOrder>(`${basePath(tenantID)}/orders/${id}`),
+    ...orderQueryOptions(tenantID, id),
     enabled: !!tenantID && !!id,
   });
+}
+
+/** Warms the ['pos-order', tenantID, id] cache BEFORE navigating to Edit Sale / Resume Sale — by
+ * the time the target page's own `useOrder(id)` mounts, the query is often already resolved, so
+ * the cart populates immediately instead of blanking while a cold `GET /orders/{id}` round-trips.
+ * Call from a hover/pointerdown handler on the triggering row/button (see sales-list-view.tsx). */
+export function prefetchOrder(qc: QueryClient, tenantID: string, id: string) {
+  if (!tenantID || !id) return;
+  void qc.prefetchQuery(orderQueryOptions(tenantID, id));
 }
 
 /** Advanced All-Sales filters. All optional; omitted values are not sent. */
