@@ -57,49 +57,6 @@ export function useSubscription() {
       return;
     }
 
-    // Quick-init from JWT tenant claims if available
-    const tenant = (user as any).tenant as Record<string, any> | undefined;
-    if (tenant?.subscription_status) {
-      const quickInfo: SubscriptionInfo = {
-        status: (tenant.subscription_status as string).toLowerCase(),
-        planCode: (tenant.subscription_plan as string) ?? '',
-        planName: (tenant.subscription_plan as string) ?? '',
-        tierOrder: (tenant.tier_order as number) ?? (tenant.subscription_tier_order as number) ?? undefined,
-        features: (tenant.subscription_features as string[]) ?? [],
-        limits: (tenant.tier_limits as Record<string, number>) ?? {},
-        trialEndsAt: tenant.subscription_expires_at as string | undefined,
-        currentPeriodEnd: tenant.subscription_expires_at as string | undefined,
-      };
-      setSubscriptionInfo(quickInfo as any);
-      useSubscriptionStore.getState().setFromRaw(
-        {
-          plan: quickInfo.planCode || null,
-          status: quickInfo.status || null,
-          tierOrder: quickInfo.tierOrder ?? null,
-          expiresAt: (tenant.subscription_grace_ends_at as string) ?? quickInfo.currentPeriodEnd ?? null,
-          features: quickInfo.features,
-          limits: quickInfo.limits,
-        },
-        slug,
-      );
-
-      fetchSubscriptionInfo(tenantId, slug, session.accessToken)
-        .then((info) => {
-          if (!info) return;
-          setSubscriptionInfo(info as any);
-          useSubscriptionStore.getState().setFromRaw(
-            {
-              plan: info.planCode, status: info.status, tierOrder: info.tierOrder ?? null,
-              expiresAt: info.currentPeriodEnd ?? info.trialEndsAt ?? null,
-              features: info.features, limits: info.limits,
-            },
-            slug,
-          );
-        })
-        .catch(() => {});
-      return;
-    }
-
     // A FAILED lookup (network/5xx/timeout) is NOT the same as "no subscription".
     // fetchSubscriptionInfo returns null ONLY on failure — never collapse that to
     // status:'none', which would trigger the full-page "Subscription Required" lockout for
