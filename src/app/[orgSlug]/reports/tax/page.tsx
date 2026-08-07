@@ -7,9 +7,11 @@ import { useTaxReport } from '@/hooks/useReports';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { ReportDocumentButton } from '@/components/reports/report-document-button';
 import { cn, formatCurrency } from '@/lib/utils';
-import { Download, Loader2, Receipt } from 'lucide-react';
-import { useState } from 'react';
+import { Download, Receipt } from 'lucide-react';
+import { useMemo, useState } from 'react';
 import { useAuthStore } from '@/store/auth';
+import { DataTable } from '@bengo-hub/shared-ui-lib/data-table';
+import { buildTaxReportColumns } from './tax-report-columns';
 
 function periodRange(p: 'today' | 'week' | 'month') {
   const now = new Date();
@@ -32,6 +34,7 @@ function TaxReportContent() {
 
   const exportUrl = `/api/v1/${tenantID}/pos/reports/export?from=${from}&to=${to}&type=tax`;
   const LABELS = { today: 'Today', week: 'Last 7 days', month: 'This month' };
+  const columns = useMemo(() => buildTaxReportColumns(currency), [currency]);
   const PERIODS = ['today', 'week', 'month'] as const;
 
   return (
@@ -90,41 +93,29 @@ function TaxReportContent() {
         </div>
       )}
 
-      {isLoading ? (
-        <div className="flex items-center justify-center h-48"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
-      ) : rows.length === 0 ? (
-        <Card><CardContent className="p-10 text-center text-muted-foreground">No tax data for this period.</CardContent></Card>
-      ) : (
-        <Card>
-          <CardContent className="p-0">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b">
-                  <th className="text-left p-4 text-muted-foreground font-medium">Tax Type</th>
-                  <th className="text-right p-4 text-muted-foreground font-medium">Rate</th>
-                  <th className="text-right p-4 text-muted-foreground font-medium">Taxable Amount</th>
-                  <th className="text-right p-4 text-muted-foreground font-medium">Tax Collected</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((r) => (
-                  <tr key={r.tax_name} className="border-b last:border-0">
-                    <td className="p-4 font-medium">{r.tax_name}</td>
-                    <td className="p-4 text-right text-muted-foreground">{r.rate}%</td>
-                    <td className="p-4 text-right">{formatCurrency(r.taxable_amount, currency)}</td>
-                    <td className="p-4 text-right font-semibold text-yellow-700">{formatCurrency(r.tax_collected, currency)}</td>
-                  </tr>
-                ))}
-                <tr className="bg-muted/40">
-                  <td colSpan={2} className="p-4 font-semibold">Total</td>
-                  <td className="p-4 text-right font-semibold">{formatCurrency(totalTaxable, currency)}</td>
-                  <td className="p-4 text-right font-semibold text-yellow-700">{formatCurrency(totalTax, currency)}</td>
-                </tr>
-              </tbody>
-            </table>
-          </CardContent>
-        </Card>
-      )}
+      <Card>
+        <CardContent className="p-2">
+          <DataTable
+            columns={columns}
+            rows={rows}
+            rowKey={(r) => r.tax_name}
+            loading={isLoading}
+            error={isError}
+            onRetry={refetch}
+            storageKey="tax-report-col-prefs"
+            emptyText="No tax data for this period."
+          />
+        </CardContent>
+        {rows.length > 0 && (
+          <div className="flex items-center justify-between border-t border-border px-6 py-3 bg-muted/40 text-sm">
+            <span className="font-semibold">Total</span>
+            <div className="flex items-center gap-6">
+              <span className="font-semibold">{formatCurrency(totalTaxable, currency)}</span>
+              <span className="font-semibold text-yellow-700">{formatCurrency(totalTax, currency)}</span>
+            </div>
+          </div>
+        )}
+      </Card>
     </div>
   );
 }

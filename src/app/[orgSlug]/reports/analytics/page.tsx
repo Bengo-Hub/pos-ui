@@ -23,6 +23,7 @@ import { DateRangePicker, type DateRange } from '@/components/ui/date-range-pick
 import { Card, CardContent } from '@/components/ui/base';
 import { cn } from '@/lib/utils';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
+import { DataTable, type DataTableColumn } from '@bengo-hub/shared-ui-lib/data-table';
 
 function isoDaysAgo(days: number): string {
   const d = new Date();
@@ -260,7 +261,7 @@ export default function AnalyticsReportPage() {
       {tab === 'staff' && (
         <>
           <StatCards items={staffStats} />
-          <Section title="Sales by Staff" icon={Users} loading={staff.isLoading} error={staff.error} empty={!staffRows.length}
+          <Section title="Sales by Staff" icon={Users} loading={staff.isLoading} error={staff.error}
             head={['Staff', 'Orders', 'Revenue']}
             rows={staffRows.map((r) => [r.staff_name || `${r.user_id.slice(0, 8)}…`, String(r.order_count), fmt(r.revenue)])}
             filters={<SearchBox value={staffSearch} onChange={setStaffSearch} placeholder="Search staff…" />}
@@ -276,7 +277,7 @@ export default function AnalyticsReportPage() {
       {tab === 'hour' && (
         <>
           <StatCards items={hourStats} />
-          <Section title="Sales by Hour" icon={Clock} loading={hours.isLoading} error={hours.error} empty={!hours.data?.length}
+          <Section title="Sales by Hour" icon={Clock} loading={hours.isLoading} error={hours.error}
             head={['Hour', 'Orders', 'Revenue', 'Profit', 'Margin']}
             rows={(hours.data ?? []).map((r) => [
               `${String(r.hour).padStart(2, '0')}:00`, String(r.order_count), fmt(r.revenue),
@@ -301,7 +302,7 @@ export default function AnalyticsReportPage() {
       {tab === 'category' && (
         <>
           <StatCards items={categoryStats} />
-          <Section title="Sales by Category" icon={Tag} loading={cats.isLoading} error={cats.error} empty={!categoryRows.length}
+          <Section title="Sales by Category" icon={Tag} loading={cats.isLoading} error={cats.error}
             head={['Category', 'Qty Sold', 'Revenue']}
             rows={categoryRows.map((r) => [r.category_name, String(r.quantity_sold), fmt(r.revenue)])}
             filters={<SearchBox value={categorySearch} onChange={setCategorySearch} placeholder="Search categories…" />}
@@ -317,7 +318,7 @@ export default function AnalyticsReportPage() {
       {tab === 'kds' && (
         <>
           <StatCards items={kdsStats} />
-          <Section title="Sales by KDS Station" icon={ChefHat} loading={kdsStations.isLoading} error={kdsStations.error} empty={!kdsRows.length}
+          <Section title="Sales by KDS Station" icon={ChefHat} loading={kdsStations.isLoading} error={kdsStations.error}
             head={['Station', 'Orders', 'Items', 'Revenue']}
             rows={kdsRows.map((r) => [
               r.station_type ? `${r.station_name} (${r.station_type})` : r.station_name,
@@ -348,7 +349,7 @@ export default function AnalyticsReportPage() {
             { label: 'Orders', value: (register.data?.order_count ?? 0).toLocaleString() },
           ]} />
           <Section title="Register Performance" icon={Monitor} loading={register.isLoading} error={register.error}
-            empty={!register.data?.payment_methods?.length}
+           
             head={['Payment Method', 'Amount Collected']}
             rows={(register.data?.payment_methods ?? []).map((m) => [m.method.replace(/_/g, ' '), fmt(m.sell_amount)])}
             actions={
@@ -368,7 +369,7 @@ export default function AnalyticsReportPage() {
             { label: 'Revenue', value: fmt((register.data?.products_sold ?? []).reduce((s, p) => s + p.total_amount, 0)) },
           ]} />
           <Section title="Sales by Product" icon={Package} loading={register.isLoading} error={register.error}
-            empty={!register.data?.products_sold?.length}
+           
             head={['Product', 'SKU', 'Qty', 'Revenue']}
             rows={(register.data?.products_sold ?? []).map((p) => [p.name, p.sku || '—', String(p.quantity), fmt(p.total_amount)])}
             actions={
@@ -378,7 +379,7 @@ export default function AnalyticsReportPage() {
               />
             } />
           <Section title="Sales by Brand" icon={Tag} loading={register.isLoading} error={register.error}
-            empty={!register.data?.products_by_brand?.length}
+           
             head={['Brand', 'Qty', 'Revenue']}
             rows={(register.data?.products_by_brand ?? []).map((b) => [b.brand, String(b.quantity), fmt(b.total_amount)])} />
         </>
@@ -392,11 +393,11 @@ export default function AnalyticsReportPage() {
             { label: 'Refunded', value: fmt(register.data?.total_refund ?? 0) },
           ]} />
           <Section title="Sales by Payment Method" icon={Wallet} loading={register.isLoading} error={register.error}
-            empty={!register.data?.payment_methods?.length}
+           
             head={['Method', 'Amount Collected']}
             rows={(register.data?.payment_methods ?? []).map((m) => [m.method.replace(/_/g, ' '), fmt(m.sell_amount)])} />
           <Section title="Refunds by Payment Method" icon={Ban} loading={register.isLoading} error={register.error}
-            empty={!register.data?.refund_by_method?.length}
+           
             head={['Method', 'Amount Refunded']}
             rows={(register.data?.refund_by_method ?? []).map((m) => [m.method.replace(/_/g, ' '), fmt(m.sell_amount)])} />
         </>
@@ -412,7 +413,7 @@ export default function AnalyticsReportPage() {
               <MixBarChart title="Revenue by KDS Station" icon={ChefHat} rows={mix.data?.byStation ?? []} loading={mix.isLoading} currency={currency} />
             )}
           </div>
-          <Section title="Product Mix" icon={Package} loading={mix.isLoading} error={mix.error} empty={!mixRows.length}
+          <Section title="Product Mix" icon={Package} loading={mix.isLoading} error={mix.error}
             head={isKitchen ? ['Product', 'Category', 'Station', 'Qty', 'Orders', 'Revenue'] : ['Product', 'Category', 'Qty', 'Orders', 'Revenue']}
             rows={mixRows.map((r) => (isKitchen
               ? [r.label, r.category || '—', r.station_name || 'Unassigned', String(r.quantity), String(r.order_count), fmt(r.revenue)]
@@ -444,7 +445,7 @@ export default function AnalyticsReportPage() {
       {tab === 'voids' && (
         <>
           <StatCards items={voidStats} />
-          <Section title="Voids" icon={Ban} loading={voids.isLoading} error={voids.error} empty={!voidRows.length}
+          <Section title="Voids" icon={Ban} loading={voids.isLoading} error={voids.error}
             head={['Staff', 'Voids', 'Amount', 'Reasons']}
             rows={voidRows.map((r) => [
               r.staff_name || `${(r.voided_by || '').slice(0, 8)}…`, String(r.void_count), fmt(r.total_voided_amount),
@@ -602,10 +603,31 @@ function MixBarChart({ title, icon: Icon, rows, loading, currency = 'KES' }: {
   );
 }
 
-function Section({ title, icon: Icon, loading, error, empty, head, rows, actions, filters }: {
-  title: string; icon: React.ElementType; loading: boolean; error?: unknown; empty: boolean; head: string[]; rows: string[][];
+/** A Section's rows are plain formatted-string cells (each tab pre-formats currency/percent
+ *  text before handing rows to Section) — keyed by original array index for a stable rowKey. */
+interface SectionRow {
+  key: string;
+  cells: string[];
+}
+
+function Section({ title, icon: Icon, loading, error, head, rows, actions, filters }: {
+  title: string; icon: React.ElementType; loading: boolean; error?: unknown; head: string[]; rows: string[][];
   actions?: React.ReactNode; filters?: React.ReactNode;
 }) {
+  const columns = useMemo<DataTableColumn<SectionRow>[]>(
+    () =>
+      head.map((h, i) => ({
+        key: `col-${i}`,
+        header: h,
+        primary: i === 0,
+        align: i === 0 ? 'left' as const : 'right' as const,
+        accessor: (r: SectionRow) => r.cells[i],
+        render: (r: SectionRow) => (i === 0 ? <span>{r.cells[i]}</span> : <span className="tabular-nums">{r.cells[i]}</span>),
+      })),
+    [head],
+  );
+  const keyedRows = useMemo<SectionRow[]>(() => rows.map((cells, i) => ({ key: String(i), cells })), [rows]);
+
   return (
     <div className="bg-card border border-border rounded-2xl overflow-hidden">
       <div className="flex flex-wrap items-center gap-2 px-5 py-3 border-b border-border">
@@ -614,9 +636,7 @@ function Section({ title, icon: Icon, loading, error, empty, head, rows, actions
         {filters && <div className="ml-auto flex items-center gap-2">{filters}</div>}
         {actions && <div className={cn('flex items-center gap-2', !filters && 'ml-auto')}>{actions}</div>}
       </div>
-      {loading ? (
-        <div className="p-6 text-center text-sm text-muted-foreground">Loading…</div>
-      ) : error ? (
+      {error ? (
         // A failed request must never render as "No data" — that reads as "the range is
         // genuinely empty" when it's actually a 401/500/etc the report silently swallowed
         // (this exact confusion already happened once with the Hour tab's stale range param).
@@ -624,27 +644,16 @@ function Section({ title, icon: Icon, loading, error, empty, head, rows, actions
           Failed to load: {(error as { response?: { data?: { error?: string } }; message?: string })?.response?.data?.error
             || (error as Error)?.message || 'unknown error'}
         </div>
-      ) : empty ? (
-        <div className="p-6 text-center text-sm text-muted-foreground">No data for this range</div>
       ) : (
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-muted-foreground border-b border-border bg-muted/30">
-              {head.map((h, i) => (
-                <th key={h} className={i === 0 ? 'text-left px-5 py-2 font-medium' : 'text-right px-5 py-2 font-medium'}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border">
-            {rows.map((r, i) => (
-              <tr key={i}>
-                {r.map((c, j) => (
-                  <td key={j} className={j === 0 ? 'px-5 py-2.5' : 'px-5 py-2.5 text-right tabular-nums'}>{c}</td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <div className="px-2 pb-2">
+          <DataTable<SectionRow>
+            columns={columns}
+            rows={keyedRows}
+            rowKey={(r) => r.key}
+            loading={loading}
+            emptyText="No data for this range"
+          />
+        </div>
       )}
     </div>
   );

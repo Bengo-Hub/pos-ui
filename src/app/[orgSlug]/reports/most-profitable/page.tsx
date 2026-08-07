@@ -5,8 +5,10 @@ import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
 import { Card, CardContent } from '@/components/ui/base';
 import { useMostProfitable } from '@/hooks/useReports';
 import { ReportDocumentButton } from '@/components/reports/report-document-button';
-import { Coins, Loader2, TrendingUp } from 'lucide-react';
-import { useState } from 'react';
+import { Coins, TrendingUp } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { DataTable } from '@bengo-hub/shared-ui-lib/data-table';
+import { buildMostProfitableColumns } from './most-profitable-columns';
 
 function defaultRange() {
   const now = new Date();
@@ -29,6 +31,7 @@ function MostProfitableContent() {
 
   const money = (n: number) =>
     `${currency} ${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const columns = useMemo(() => buildMostProfitableColumns(money), [currency]);
 
   return (
     <div className="p-6 space-y-6">
@@ -97,60 +100,27 @@ function MostProfitableContent() {
         </Card>
       </div>
 
-      {isLoading ? (
-        <div className="flex items-center justify-center h-48">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </div>
-      ) : items.length === 0 ? (
-        <Card>
-          <CardContent className="p-10 text-center text-muted-foreground">
-            No sales data for this period.
-          </CardContent>
-        </Card>
-      ) : (
-        <Card>
-          <CardContent className="p-0">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b">
-                  <th className="text-left p-4 text-muted-foreground font-medium">Item</th>
-                  <th className="text-right p-4 text-muted-foreground font-medium">Units Sold</th>
-                  <th className="text-right p-4 text-muted-foreground font-medium">Revenue</th>
-                  <th className="text-right p-4 text-muted-foreground font-medium">Unit Cost</th>
-                  <th className="text-right p-4 text-muted-foreground font-medium">Profit</th>
-                  <th className="text-right p-4 text-muted-foreground font-medium">Margin</th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((it) => (
-                  <tr key={it.sku} className="border-b last:border-0">
-                    <td className="p-4">
-                      <div className="font-medium">{it.name || it.sku}</div>
-                      <div className="text-xs text-muted-foreground">{it.sku}</div>
-                    </td>
-                    <td className="p-4 text-right">
-                      {it.units_sold.toLocaleString(undefined, { maximumFractionDigits: 2 })}
-                    </td>
-                    <td className="p-4 text-right">{money(it.revenue)}</td>
-                    <td className="p-4 text-right text-muted-foreground">{money(it.unit_cost)}</td>
-                    <td className="p-4 text-right font-semibold text-green-700">{money(it.profit)}</td>
-                    <td className="p-4 text-right">
-                      {it.margin_pct.toLocaleString(undefined, { maximumFractionDigits: 1 })}%
-                    </td>
-                  </tr>
-                ))}
-                <tr className="bg-muted/40">
-                  <td colSpan={2} className="p-4 font-semibold">Total</td>
-                  <td className="p-4 text-right font-semibold">{money(totalRevenue)}</td>
-                  <td className="p-4" />
-                  <td className="p-4 text-right font-semibold text-green-700">{money(totalProfit)}</td>
-                  <td className="p-4" />
-                </tr>
-              </tbody>
-            </table>
-          </CardContent>
-        </Card>
-      )}
+      <Card>
+        <CardContent className="p-2">
+          <DataTable
+            columns={columns}
+            rows={items}
+            rowKey={(it) => it.sku}
+            loading={isLoading}
+            storageKey="most-profitable-col-prefs"
+            emptyText="No sales data for this period."
+          />
+        </CardContent>
+        {items.length > 0 && (
+          <div className="flex items-center justify-between border-t border-border px-6 py-3 bg-muted/40 text-sm">
+            <span className="font-semibold">Total</span>
+            <div className="flex items-center gap-6">
+              <span className="font-semibold">{money(totalRevenue)}</span>
+              <span className="font-semibold text-green-700">{money(totalProfit)}</span>
+            </div>
+          </div>
+        )}
+      </Card>
     </div>
   );
 }
