@@ -3,6 +3,7 @@
 import { ModuleGate } from '@/components/auth/module-gate';
 import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
 import { Button } from '@/components/ui/base';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { usePackages, useCreatePackage, useDeactivatePackage, type CreatePackageInput } from '@/hooks/usePackages';
 import { Loader2, Package, Plus, X } from 'lucide-react';
 import { useState } from 'react';
@@ -24,6 +25,7 @@ function PackagesPage() {
 
   const [createOpen, setCreateOpen] = useState(false);
   const [form, setForm] = useState<CreatePackageInput>(EMPTY_FORM);
+  const [deactivateTarget, setDeactivateTarget] = useState<{ id: string; name: string } | null>(null);
 
   const setField = <K extends keyof CreatePackageInput>(key: K, value: CreatePackageInput[K]) =>
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -52,11 +54,20 @@ function PackagesPage() {
     });
   };
 
-  const handleDeactivate = (id: string, name: string) => {
-    if (!window.confirm(`Deactivate package "${name}"?\n\nExisting subscribers will keep their access until expiry, but no new subscriptions can be started.`)) return;
+  const handleDeactivate = (id: string, name: string) => setDeactivateTarget({ id, name });
+
+  const confirmDeactivate = () => {
+    if (!deactivateTarget) return;
+    const { id, name } = deactivateTarget;
     deactivate.mutate(id, {
-      onSuccess: () => toast.success(`Package "${name}" deactivated`),
-      onError: async (e) => toast.error(await apiErrorMessage(e, 'Failed to deactivate package')),
+      onSuccess: () => {
+        toast.success(`Package "${name}" deactivated`);
+        setDeactivateTarget(null);
+      },
+      onError: async (e) => {
+        toast.error(await apiErrorMessage(e, 'Failed to deactivate package'));
+        setDeactivateTarget(null);
+      },
     });
   };
 
@@ -250,6 +261,17 @@ function PackagesPage() {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={!!deactivateTarget}
+        onOpenChange={(open) => { if (!open) setDeactivateTarget(null); }}
+        title={`Deactivate package "${deactivateTarget?.name ?? ''}"?`}
+        description="Existing subscribers will keep their access until expiry, but no new subscriptions can be started."
+        confirmLabel="Deactivate"
+        variant="warning"
+        loading={deactivate.isPending}
+        onConfirm={confirmDeactivate}
+      />
     </div>
   );
 }
