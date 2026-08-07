@@ -25,8 +25,8 @@ function fmtFor(currency: string) {
   return (n: number) => `${currency} ${(n ?? 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
 }
 
-function ChartCard({ title, icon: Icon, loading, empty, children }: {
-  title: string; icon: React.ElementType; loading: boolean; empty: boolean; children: React.ReactNode;
+function ChartCard({ title, icon: Icon, loading, empty, height = 'h-64', children }: {
+  title: string; icon: React.ElementType; loading: boolean; empty: boolean; height?: string; children: React.ReactNode;
 }) {
   return (
     <div className="bg-card border border-border rounded-2xl overflow-hidden">
@@ -39,7 +39,7 @@ function ChartCard({ title, icon: Icon, loading, empty, children }: {
       ) : empty ? (
         <div className="p-6 text-center text-sm text-muted-foreground">No data for this range</div>
       ) : (
-        <div className="p-4 h-64">{children}</div>
+        <div className={`p-4 ${height}`}>{children}</div>
       )}
     </div>
   );
@@ -47,6 +47,15 @@ function ChartCard({ title, icon: Icon, loading, empty, children }: {
 
 const axisTick = { fontSize: 11, fill: 'hsl(var(--muted-foreground))' };
 const tooltipStyle = { background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8, fontSize: 12 };
+
+/** Shortens a category-axis label to a single line — recharts wraps a category tick's text
+ *  across multiple tspans when it doesn't fit the axis width, and with 6-8 rows sharing a fixed
+ *  chart height that wrapped 2nd line bleeds into the row above/below it (the overlapping labels
+ *  bug). Truncating up front keeps every label one line; the untruncated name still shows in the
+ *  tooltip via its own formatter, so nothing is actually lost. */
+function truncateLabel(name: string, max = 14): string {
+  return name.length > max ? `${name.slice(0, max - 1).trimEnd()}…` : name;
+}
 
 /** Revenue over time — hour-of-day bars for the "Day" preset (a single day has no meaningful
  *  daily trend), otherwise a bucketed area chart sized to the selected range's granularity. */
@@ -137,17 +146,26 @@ export function CategoryBreakdownChart({ range, currency = 'KES' }: { range: Das
 export function TopItemsChart({ range, currency = 'KES' }: { range: DashboardRange; currency?: string }) {
   const fmt = fmtFor(currency);
   const query = useTopItems(range.chartFrom, range.chartTo, 8);
-  const data = [...(query.data ?? [])].sort((a, b) => b.revenue - a.revenue).slice(0, 8);
+  const data = [...(query.data ?? [])]
+    .sort((a, b) => b.revenue - a.revenue)
+    .slice(0, 8)
+    .map((d) => ({ ...d, shortName: truncateLabel(d.name) }));
 
   return (
-    <ChartCard title="Top Selling Items" icon={Package} loading={query.isLoading} empty={!data.length}>
+    <ChartCard title="Top Selling Items" icon={Package} loading={query.isLoading} empty={!data.length} height="h-72">
       <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={data} layout="vertical" margin={{ left: 8, right: 16, top: 4, bottom: 4 }}>
+        <BarChart data={data} layout="vertical" margin={{ left: 8, right: 16, top: 4, bottom: 4 }} barCategoryGap="22%">
           <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="hsl(var(--border))" />
           <XAxis type="number" tickFormatter={(v) => fmt(v)} tick={axisTick} axisLine={false} tickLine={false} />
-          <YAxis type="category" dataKey="name" width={110} tick={axisTick} axisLine={false} tickLine={false} />
-          <Tooltip cursor={{ fill: 'hsl(var(--accent))' }} contentStyle={tooltipStyle} formatter={(v) => [fmt(Number(v ?? 0)), 'Revenue']} />
-          <Bar dataKey="revenue" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} maxBarSize={22} />
+          <YAxis type="category" dataKey="shortName" width={92} interval={0} tick={axisTick} axisLine={false} tickLine={false} />
+          <Tooltip
+            cursor={{ fill: 'hsl(var(--accent))' }}
+            contentStyle={tooltipStyle}
+            // Show the FULL (untruncated) item name in the tooltip — the axis label is shortened
+            // to keep every row on one line, but nothing is actually lost.
+            formatter={(v, _n, item: any) => [fmt(Number(v ?? 0)), item?.payload?.name ?? 'Revenue']}
+          />
+          <Bar dataKey="revenue" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} maxBarSize={20} />
         </BarChart>
       </ResponsiveContainer>
     </ChartCard>
