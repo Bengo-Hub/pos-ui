@@ -90,6 +90,7 @@ export function ReceiptTab() {
     receiptFormat: 'auto',
     showLogoOnReceipt: true,
     showTenantEmailOnReceipt: false,
+    showTenantNameOnReceipt: true,
     autoPrintOrder: false,
     autoPrintKitchen: false,
     cashDrawerEnabled: false,
@@ -222,6 +223,7 @@ export function ReceiptTab() {
         receiptFormat: settings.receipt_format || 'auto',
         showLogoOnReceipt: settings.show_logo_on_receipt ?? true,
         showTenantEmailOnReceipt: settings.show_tenant_email_on_receipt ?? false,
+        showTenantNameOnReceipt: settings.show_tenant_name_on_receipt ?? true,
         autoPrintOrder: settings.auto_print_order ?? false,
         autoPrintKitchen: settings.auto_print_kitchen ?? false,
         cashDrawerEnabled: settings.cash_drawer_enabled ?? false,
@@ -282,6 +284,7 @@ export function ReceiptTab() {
       receipt_format: form.receiptFormat || 'auto',
       show_logo_on_receipt: form.showLogoOnReceipt,
       show_tenant_email_on_receipt: form.showTenantEmailOnReceipt,
+      show_tenant_name_on_receipt: form.showTenantNameOnReceipt,
       auto_print_order: form.autoPrintOrder,
       auto_print_kitchen: form.autoPrintKitchen,
       cash_drawer_enabled: form.cashDrawerEnabled,
@@ -369,6 +372,21 @@ export function ReceiptTab() {
             <Toggle
               checked={form.showTenantEmailOnReceipt}
               onChange={(v) => set('showTenantEmailOnReceipt', v)}
+              disabled={!canEdit}
+            />
+          </div>
+          <div className="flex items-center justify-between p-4 rounded-xl bg-accent/10 border border-border gap-4">
+            <div className="min-w-0">
+              <h4 className="text-sm font-bold">Show Business Name on Receipt</h4>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Default: this outlet&apos;s receipts print the TENANT&apos;s name. Turn off on a
+                non-HQ/branch outlet (multi-outlet tenants) to print this outlet&apos;s own name
+                instead — the HQ/default outlet always shows the tenant name regardless.
+              </p>
+            </div>
+            <Toggle
+              checked={form.showTenantNameOnReceipt}
+              onChange={(v) => set('showTenantNameOnReceipt', v)}
               disabled={!canEdit}
             />
           </div>

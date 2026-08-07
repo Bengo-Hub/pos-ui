@@ -8,6 +8,10 @@ import { usePOSSettings, useUpdatePOSSettings } from '@/hooks/usePOSSettings';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useModuleAccess } from '@/hooks/use-module-access';
 import { P } from '@/lib/rbac/permissions';
+import { SUPPORTED_CURRENCIES, CURRENCY_META } from '@/lib/utils';
+import { convertCurrency } from '@/lib/api/currency';
+import { useAuthStore } from '@/store/auth';
+import { CurrencyChangeConfirmModal } from '@bengo-hub/shared-ui-lib';
 import { inputClass, labelClass } from './shared';
 
 export function GeneralTab() {
@@ -21,7 +25,15 @@ export function GeneralTab() {
   // accept returns of consumed food/drinks, so the return-window field is irrelevant there.
   const showReturnWindow = isRetail || isPharmacy;
 
+  const tenantID = useAuthStore((s) => s.user?.tenant_id ?? '');
   const [currency, setCurrency] = useState('KES');
+  // Currency-change confirmation: selecting a new currency never applies immediately — it stages
+  // the pick, fetches the live rate from treasury (via pos-api's currency proxy), and only commits
+  // (setCurrency + an immediate partial save) once the client explicitly confirms the modal.
+  const [pendingCurrency, setPendingCurrency] = useState<string | null>(null);
+  const [rate, setRate] = useState<number | null>(null);
+  const [rateLoading, setRateLoading] = useState(false);
+  const [rateError, setRateError] = useState<string | null>(null);
   const [returnWindowDays, setReturnWindowDays] = useState('30');
   // Discount limit: ONE active mode at a time (percent XOR amount, never both) — the
   // inactive field is always saved at its no-limit sentinel (100% / 0).
@@ -43,6 +55,30 @@ export function GeneralTab() {
       setRestrictCreditSaleRefund(settings.restrict_credit_sale_refund_to_offset ?? true);
     }
   }, [settings]);
+
+  const handleCurrencySelect = (next: string) => {
+    if (!next || next === currency) return;
+    setPendingCurrency(next);
+    setRate(null);
+    setRateError(null);
+    setRateLoading(true);
+    convertCurrency(tenantID, currency, next, 1)
+      .then((res) => {
+        const parsed = parseFloat(res.converted);
+        setRate(Number.isFinite(parsed) ? parsed : null);
+      })
+      .catch(() => setRateError('No exchange rate is available for this pair yet.'))
+      .finally(() => setRateLoading(false));
+  };
+
+  const handleConfirmCurrencyChange = () => {
+    if (!pendingCurrency) return;
+    setCurrency(pendingCurrency);
+    // Commit immediately (not gated behind the general Save button below) — per the "confirm to
+    // store" requirement, the client's confirmation IS the save action for a currency change.
+    updateSettings.mutate({ currency: pendingCurrency });
+    setPendingCurrency(null);
+  };
 
   const handleSave = () => {
     const value = parseFloat(discountLimitValue) || 0;
@@ -119,18 +155,19 @@ export function GeneralTab() {
                   <label className={labelClass}>Currency</label>
                   <select
                     value={currency}
-                    onChange={(e) => setCurrency(e.target.value)}
+                    onChange={(e) => handleCurrencySelect(e.target.value)}
                     disabled={!canEdit}
                     className={inputClass}
                   >
-                    <option value="KES">KES — Kenyan Shilling</option>
-                    <option value="USD">USD — US Dollar</option>
-                    <option value="TZS">TZS — Tanzanian Shilling</option>
-                    <option value="UGX">UGX — Ugandan Shilling</option>
-                    <option value="ZAR">ZAR — South African Rand</option>
-                    <option value="NGN">NGN — Nigerian Naira</option>
-                    <option value="GHS">GHS — Ghanaian Cedi</option>
+                    {SUPPORTED_CURRENCIES.map((code) => (
+                      <option key={code} value={code}>
+                        {code} — {CURRENCY_META[code]?.name ?? code}
+                      </option>
+                    ))}
                   </select>
+                  <p className="text-[11px] text-muted-foreground">
+                    Changing currency shows a confirmation with the live exchange rate before it applies.
+                  </p>
                 </div>
                 <p className="text-xs text-muted-foreground pt-1">
                   Tax rates are managed in the <span className="font-medium text-foreground">Tax</span> tab
@@ -286,6 +323,20 @@ export function GeneralTab() {
             </Button>
           </div>
         </>
+      )}
+      {pendingCurrency && (
+        <CurrencyChangeConfirmModal
+          open={!!pendingCurrency}
+          fromCurrency={currency}
+          toCurrency={pendingCurrency}
+          rate={rate}
+          rateSource={rateLoading ? undefined : rate != null ? 'Live rate (treasury)' : undefined}
+          error={rateError}
+          loading={rateLoading || updateSettings.isPending}
+          exampleAmounts={[{ label: 'Example amount', originalAmount: 1000 }]}
+          onConfirm={handleConfirmCurrencyChange}
+          onCancel={() => { setPendingCurrency(null); setRate(null); setRateError(null); }}
+        />
       )}
     </div>
   );

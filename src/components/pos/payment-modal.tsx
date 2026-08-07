@@ -610,7 +610,7 @@ export function POSPaymentModal({
                 </div>
 
                 {/* ── Online gateways (treasury-synced) ────────────────── */}
-                {isOnline && (gateways?.mpesa || gateways?.paystack || gateways?.wallet) && (
+                {isOnline && (gateways?.mpesa || gateways?.paystack || gateways?.wallet || gateways?.mtn_momo || gateways?.airtel_money || gateways?.bank_transfer) && (
                   <div>
                     <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2.5 flex items-center gap-1.5">
                       <Zap className="h-3 w-3 text-primary" />
@@ -663,6 +663,42 @@ export function POSPaymentModal({
                           disabled={false}
                           loading={createIntent.isPending}
                           onClick={() => handleDigital('wallet')}
+                        />
+                      )}
+                      {gateways?.mtn_momo && (
+                        <PayBadge
+                          icon={<Smartphone className="h-4 w-4" />}
+                          color="text-amber-600"
+                          bg="bg-amber-500/10"
+                          label="MTN Mobile Money"
+                          sub="Prompt to phone"
+                          disabled={false}
+                          loading={createIntent.isPending}
+                          onClick={() => handleDigital('mtn_momo')}
+                        />
+                      )}
+                      {gateways?.airtel_money && (
+                        <PayBadge
+                          icon={<Smartphone className="h-4 w-4" />}
+                          color="text-red-600"
+                          bg="bg-red-500/10"
+                          label="Airtel Money"
+                          sub="Prompt to phone"
+                          disabled={false}
+                          loading={createIntent.isPending}
+                          onClick={() => handleDigital('airtel_money')}
+                        />
+                      )}
+                      {gateways?.bank_transfer && (
+                        <PayBadge
+                          icon={<Building2 className="h-4 w-4" />}
+                          color="text-indigo-600"
+                          bg="bg-indigo-500/10"
+                          label="Bank Transfer"
+                          sub="e.g. Equity Bank Uganda"
+                          disabled={false}
+                          loading={createIntent.isPending}
+                          onClick={() => handleDigital('bank_transfer')}
                         />
                       )}
                     </div>

@@ -2,6 +2,7 @@
 
 import { X } from 'lucide-react';
 import { Badge } from '@/components/ui/base';
+import { PAYMENT_METHOD_LABELS, getPaymentMethodLabel } from '@bengo-hub/shared-ui-lib';
 
 /** Shared helpers/constants for the All-Sales / POS-Sales surfaces (list, filters, modals).
  *  `currency` defaults to KES for callers that haven't threaded the tenant's real currency
@@ -10,20 +11,14 @@ import { Badge } from '@/components/ui/base';
 export const money = (n: number, currency = 'KES') =>
   `${currency} ${Number(n ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-export const PAYMENT_METHOD_LABELS: Record<string, string> = {
-  cash: 'Cash', card: 'Card', card_manual: 'Card / PDQ', pdq: 'Card / PDQ',
-  card_terminal: 'Card / PDQ', cheque: 'Cheque', bank_transfer: 'Bank Transfer',
-  mpesa: 'M-Pesa', mpesa_manual: 'M-Pesa (Code)',
-  // Legacy alias: rows captured before 2026-07-13 stored the M-Pesa-Code tender as bare
-  // "manual" (backfilled server-side, but keep the label so any straggler still reads right).
-  manual: 'M-Pesa (Code)',
-  wallet: 'Wallet', cod: 'Cash on Delivery',
-  on_account: 'On Account', room_charge: 'Room Charge', complimentary: 'Complimentary',
-  loyalty: 'Loyalty Points',
-};
+// Re-exported from shared-ui-lib — was previously a local dict (kept mtn_momo/airtel_money out
+// of sync with treasury-ui's own copy until centralized). Provider-name traceability (e.g.
+// "Bank Transfer (Equity Bank Uganda)") is available via getPaymentMethodLabel(method, providerName)
+// for callers that have a gateway/provider name to show; prettyMethod below stays name-less for the
+// simple list-column case.
+export { PAYMENT_METHOD_LABELS };
 
-export const prettyMethod = (m: string) =>
-  PAYMENT_METHOD_LABELS[m] ?? (m === 'multiple' ? 'Multiple' : m ? m.replace(/_/g, ' ') : '—');
+export const prettyMethod = (m: string) => getPaymentMethodLabel(m);
 
 // The Payment Method filter options — the real `payment_data.method` values the POS terminal
 // stamps (see terminal-actions.tenderMethodFor + payment-modal), NOT tender rows. The POS reuses one
@@ -36,6 +31,9 @@ export const PAYMENT_METHOD_OPTIONS: { value: string; label: string }[] = [
   { value: 'card', label: 'Card' },
   { value: 'card_manual', label: 'Card / PDQ' },
   { value: 'wallet', label: 'Wallet' },
+  { value: 'mtn_momo', label: 'MTN Mobile Money' },
+  { value: 'airtel_money', label: 'Airtel Money' },
+  { value: 'bank_transfer', label: 'Bank Transfer' },
   { value: 'cod', label: 'Cash on Delivery' },
   { value: 'on_account', label: 'On Account' },
   { value: 'room_charge', label: 'Room Charge' },

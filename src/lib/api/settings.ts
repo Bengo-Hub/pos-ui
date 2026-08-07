@@ -51,6 +51,10 @@ export interface POSSettings {
   show_logo_on_receipt?: boolean;
   /** Print the tenant/outlet contact email on generated receipts (Receipt & Printing; default false). */
   show_tenant_email_on_receipt?: boolean;
+  /** Print the TENANT's name as this outlet's receipt header (default true). Turning this off on a
+   *  non-HQ outlet prints that outlet's own name instead — the HQ/default outlet always shows the
+   *  tenant name regardless (multi-outlet tenants, e.g. BOI Enterprises). */
+  show_tenant_name_on_receipt?: boolean;
   currency: string;
   vat_enabled: boolean;
   vat_rate: number;
@@ -120,6 +124,7 @@ export interface POSSettings {
   mpesa_paybill?: string | null;
   mpesa_account_reference?: string | null;
   airtel_money_number?: string | null;
+  mtn_momo_number?: string | null;
   mpesa_till?: string | null;
   mpesa_pochi?: string | null;
   bank_name?: string | null;
@@ -157,6 +162,7 @@ export interface UpdatePOSSettingsInput {
   receipt_footer?: string | null;
   show_logo_on_receipt?: boolean;
   show_tenant_email_on_receipt?: boolean;
+  show_tenant_name_on_receipt?: boolean;
   currency?: string;
   vat_enabled?: boolean;
   vat_rate?: number;
@@ -192,6 +198,7 @@ export interface UpdatePOSSettingsInput {
   mpesa_paybill?: string | null;
   mpesa_account_reference?: string | null;
   airtel_money_number?: string | null;
+  mtn_momo_number?: string | null;
   mpesa_till?: string | null;
   mpesa_pochi?: string | null;
   bank_name?: string | null;

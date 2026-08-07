@@ -21,6 +21,8 @@ export function PaymentDisplayTab() {
     mpesaAccountRef: '',
     mpesaTill: '',
     mpesaPochi: '',
+    airtelMoneyNumber: '',
+    mtnMomoNumber: '',
     bankName: '',
     bankAccountNumber: '',
     bankAccountName: '',
@@ -34,6 +36,8 @@ export function PaymentDisplayTab() {
         mpesaAccountRef:    settings.mpesa_account_reference ?? '',
         mpesaTill:          settings.mpesa_till ?? '',
         mpesaPochi:         settings.mpesa_pochi ?? '',
+        airtelMoneyNumber:  settings.airtel_money_number ?? '',
+        mtnMomoNumber:      settings.mtn_momo_number ?? '',
         bankName:           settings.bank_name ?? '',
         bankAccountNumber:  settings.bank_account_number ?? '',
         bankAccountName:    settings.bank_account_name ?? '',
@@ -84,6 +88,8 @@ export function PaymentDisplayTab() {
       mpesa_account_reference:   form.mpesaAccountRef || null,
       mpesa_till:                form.mpesaTill       || null,
       mpesa_pochi:               form.mpesaPochi      || null,
+      airtel_money_number:       form.airtelMoneyNumber || null,
+      mtn_momo_number:           form.mtnMomoNumber   || null,
       bank_name:                 form.bankName        || null,
       bank_account_number:       form.bankAccountNumber || null,
       bank_account_name:         form.bankAccountName  || null,
@@ -158,6 +164,39 @@ export function PaymentDisplayTab() {
               <p className="text-[11px] text-muted-foreground mt-1">
                 Pochi la Biashara number
               </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center gap-2">
+            <CreditCard className="h-4 w-4 text-muted-foreground" />
+            <span className="font-semibold text-sm">Mobile Money (Uganda &amp; more)</span>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className={labelClass}>MTN Mobile Money Number</label>
+              <input
+                className={inputClass}
+                value={form.mtnMomoNumber}
+                onChange={(e) => set('mtnMomoNumber', e.target.value)}
+                placeholder="e.g. 0771234567"
+                disabled={!canEdit}
+              />
+            </div>
+            <div>
+              <label className={labelClass}>Airtel Money Number</label>
+              <input
+                className={inputClass}
+                value={form.airtelMoneyNumber}
+                onChange={(e) => set('airtelMoneyNumber', e.target.value)}
+                placeholder="e.g. 0701234567"
+                disabled={!canEdit}
+              />
             </div>
           </div>
         </CardContent>

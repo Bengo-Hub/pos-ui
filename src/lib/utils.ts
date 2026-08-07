@@ -23,23 +23,9 @@ export function formatElapsed(ms: number): string {
   return `${secs}s`;
 }
 
-/**
- * Currency codes offered by the hotel/facility rate + booking-policy currency pickers
- * (facility-form-modal, hotel/rooms, BookingPolicyTab) — centralised here so the three
- * previously-duplicated `<select>` option lists can never drift out of sync.
- */
-export const SUPPORTED_CURRENCIES = ['KES', 'USD', 'EUR', 'GBP', 'UGX', 'TZS'] as const;
-
-/**
- * Format a money amount as the tenant currency (KES by default). Centralised here because the
- * codebase had ~9 separate inline Intl.NumberFormat definitions plus a divergent `money()` helper
- * that emitted "KSh" instead of "KES" — new code should always use this one.
- */
-export function formatCurrency(amount: number | null | undefined, currency = 'KES'): string {
-  return new Intl.NumberFormat('en-KE', {
-    style: 'currency',
-    currency,
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(Number(amount ?? 0));
-}
+// Re-exported from @bengo-hub/shared-ui-lib — the single cross-app source of truth (was
+// previously duplicated here, in GeneralTab.tsx's own hardcoded <select> list, and again in
+// shared-ui-lib's own hotel/facility picker; all three had drifted out of sync with each other).
+// The old local `formatCurrency` also hardcoded minimumFractionDigits:2, which is wrong for
+// 0-decimal currencies like UGX/RWF/JPY — the shared version fixes that.
+export { SUPPORTED_CURRENCIES, CURRENCY_META, formatCurrency, formatCompactCurrency } from '@bengo-hub/shared-ui-lib';
