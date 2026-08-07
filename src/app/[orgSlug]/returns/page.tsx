@@ -9,7 +9,7 @@ import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api/client';
 import { useState, useEffect } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { Loader2, Plus, RotateCcw } from 'lucide-react';
+import { Loader2, Plus, RefreshCw, RotateCcw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface ReturnItem {
@@ -71,7 +71,7 @@ function ReturnsPage() {
   // sale in the SAME InitiateReturnModal every other entry point uses.
   const [deepLinkOrderNumber, setDeepLinkOrderNumber] = useState('');
   const [customerModal, setCustomerModal] = useState<{ name?: string | null; phone: string } | null>(null);
-  const { data, isLoading } = useReturns(statusFilter);
+  const { data, isLoading, refetch, isFetching } = useReturns(statusFilter);
   const returns = data?.data ?? [];
   const params = useParams<{ orgSlug: string }>();
   const router = useRouter();
@@ -111,6 +111,15 @@ function ReturnsPage() {
           </div>
         </div>
         <div className="flex gap-3">
+          <button
+            type="button"
+            onClick={() => refetch()}
+            disabled={isFetching}
+            title="Refresh — pulls in returns filed from another till"
+            className="h-10 w-10 rounded-xl border border-border flex items-center justify-center hover:bg-accent transition-colors disabled:opacity-50"
+          >
+            <RefreshCw className={cn('h-4 w-4', isFetching && 'animate-spin')} />
+          </button>
           <button
             onClick={() => setShowModal(true)}
             className="inline-flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-primary/90 transition-colors"

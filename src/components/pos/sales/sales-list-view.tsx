@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useQueryClient } from '@tanstack/react-query';
 import { useSearchParams, useRouter, usePathname } from 'next/navigation';
-import { Search, Undo2, XCircle } from 'lucide-react';
+import { RefreshCw, Search, Undo2, XCircle } from 'lucide-react';
 import { DataTable, type DataTableColumn } from '@bengo-hub/shared-ui-lib/data-table';
 import { useOrders, useOrdersSummary, useBulkVoidOrders, useDeleteSale, prefetchOrder, type OrderListFilters } from '@/hooks/usePOS';
 import { useCloseOnAccount } from '@/hooks/use-close-on-account';
@@ -136,10 +136,14 @@ export function SalesListView({ orgSlug, fixedSource, title, subtitle }: {
     limit: pageSize,
   }), [filterState, fixedSource, search, page, pageSize]);
 
-  const { data, isLoading } = useOrders(filters);
+  const { data, isLoading, refetch, isFetching } = useOrders(filters);
   // Grand totals across the whole filtered set (all pages), fetched independently of the
   // paginated list so the footer stays put while the user pages through rows.
-  const { data: summary } = useOrdersSummary(filters);
+  const { data: summary, refetch: refetchSummary } = useOrdersSummary(filters);
+  // Manual fallback: no push event invalidates ['pos-orders']/['pos-orders-summary'] today (the
+  // notifications WS only nudges catalog/credit/KDS caches), so a sale rung up on another till —
+  // or a payment confirmed from treasury — won't appear here until this is clicked or re-navigated to.
+  const refreshAll = useCallback(() => { void refetch(); void refetchSummary(); }, [refetch, refetchSummary]);
   const rows: any[] = data?.data ?? [];
   const total = data?.meta?.total ?? (data as any)?.total ?? rows.length;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
@@ -361,6 +365,15 @@ export function SalesListView({ orgSlug, fixedSource, title, subtitle }: {
           <h1 className="text-3xl font-bold tracking-tight">{effectiveTitle}</h1>
           <p className="text-muted-foreground mt-1">{effectiveSubtitle}</p>
         </div>
+        <button
+          type="button"
+          onClick={refreshAll}
+          disabled={isFetching}
+          title="Refresh — pulls in sales rung up on another till or just confirmed by treasury"
+          className="h-9 w-9 rounded-xl border border-border flex items-center justify-center hover:bg-accent transition-colors disabled:opacity-50"
+        >
+          <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
+        </button>
       </div>
 
       <SalesFilters state={filterState} onChange={patchFilters} outlets={outlets} staff={staff} fixedSource={fixedSource} hideUserFilter={ownOnly} />

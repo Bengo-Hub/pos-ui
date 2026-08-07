@@ -7,7 +7,7 @@ import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api/client';
 import { cn, formatCurrency } from '@/lib/utils';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
-import { Loader2, Users } from 'lucide-react';
+import { Loader2, RefreshCw, Users } from 'lucide-react';
 import { FeatureLock } from '@bengo-hub/shared-ui-lib/subscription';
 
 const FEATURE = 'staff_fund_from_salary';
@@ -39,7 +39,7 @@ function useStaffCredit() {
 }
 
 function StaffCreditPage() {
-  const { data, isLoading, isError } = useStaffCredit();
+  const { data, isLoading, isError, refetch, isFetching } = useStaffCredit();
   const rows = data?.data ?? [];
   const { data: posSettings } = usePOSSettings();
   const currency = (posSettings as any)?.currency ?? 'KES';
@@ -51,12 +51,21 @@ function StaffCreditPage() {
         <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
           <Users className="h-5 w-5 text-primary" />
         </div>
-        <div>
+        <div className="flex-1">
           <h1 className="text-2xl font-bold">Staff Credit</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
             Staff purchases funded from salary — synced to ERP payroll for recovery.
           </p>
         </div>
+        <button
+          type="button"
+          onClick={() => refetch()}
+          disabled={isFetching}
+          title="Refresh — pulls in newly recovered/settled amounts"
+          className="h-9 w-9 rounded-xl border border-border flex items-center justify-center hover:bg-accent transition-colors disabled:opacity-50"
+        >
+          <RefreshCw className={cn('h-4 w-4', isFetching && 'animate-spin')} />
+        </button>
       </div>
 
       {/* Premium — visible + upgrade-gated (never hidden) */}

@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Search, FileText, ArrowRight, Trash2, Filter } from 'lucide-react';
+import { Search, FileText, ArrowRight, RefreshCw, Trash2, Filter } from 'lucide-react';
 import { Button, Card, CardContent, CardHeader } from '@/components/ui/base';
 import { DataTable, type DataTableColumn } from '@bengo-hub/shared-ui-lib/data-table';
 import { useOrders, useDeleteDraft, useBulkDeleteDrafts, type OrderListFilters } from '@/hooks/usePOS';
@@ -94,7 +94,7 @@ export function DraftsListView({ orgSlug }: { orgSlug: string }) {
     limit: pageSize,
   }), [selectedOutlet?.id, filterState, search, page, pageSize]);
 
-  const { data, isLoading } = useOrders(filters);
+  const { data, isLoading, refetch, isFetching } = useOrders(filters);
   const rows: any[] = data?.data ?? [];
   const total = data?.meta?.total ?? (data as any)?.total ?? rows.length;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
@@ -197,10 +197,19 @@ export function DraftsListView({ orgSlug }: { orgSlug: string }) {
     <div className="p-6 space-y-6">
       <div className="flex items-center gap-3">
         <FileText className="h-6 w-6 text-primary" />
-        <div>
+        <div className="flex-1">
           <h1 className="text-3xl font-bold tracking-tight">Drafts</h1>
           <p className="text-muted-foreground mt-1">Saved, unpaid sales — resume, print a pro-forma, or delete.</p>
         </div>
+        <button
+          type="button"
+          onClick={() => refetch()}
+          disabled={isFetching}
+          title="Refresh — pulls in drafts parked on another till"
+          className="h-9 w-9 rounded-xl border border-border flex items-center justify-center hover:bg-accent transition-colors disabled:opacity-50"
+        >
+          <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
+        </button>
       </div>
 
       {/* Filters — the same Card + control styling as the All-Sales filter bar. */}

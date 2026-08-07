@@ -8,7 +8,7 @@ import { useLayawayPlans, type LayawayPlan } from '@/hooks/useLayaway';
 import { useOutletFilterStore } from '@/store/outlet-filter';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { cn, formatCurrency } from '@/lib/utils';
-import { Loader2, Plus } from 'lucide-react';
+import { Loader2, Plus, RefreshCw } from 'lucide-react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 
@@ -34,7 +34,7 @@ function LayawayListPage() {
   }, [selectedOutlet?.id]);
   const outletNameById = useMemo(() => Object.fromEntries(outlets.map((o) => [o.id, o.name])), [outlets]);
 
-  const { data: plans = [], isLoading, isError } = useLayawayPlans('active', outletFilter || undefined);
+  const { data: plans = [], isLoading, isError, refetch, isFetching } = useLayawayPlans('active', outletFilter || undefined);
   const [createOpen, setCreateOpen] = useState(false);
   const { data: posSettings } = usePOSSettings();
   const currency = (posSettings as any)?.currency ?? 'KES';
@@ -77,6 +77,15 @@ function LayawayListPage() {
               ))}
             </select>
           )}
+          <button
+            type="button"
+            onClick={() => refetch()}
+            disabled={isFetching}
+            title="Refresh — pulls in installments paid from another till"
+            className="h-10 w-10 rounded-xl border border-border flex items-center justify-center hover:bg-accent transition-colors disabled:opacity-50"
+          >
+            <RefreshCw className={cn('h-4 w-4', isFetching && 'animate-spin')} />
+          </button>
           <Button onClick={() => setCreateOpen(true)} className="inline-flex items-center gap-2 px-4 py-2.5">
             <Plus className="h-4 w-4" />
             New Layaway
