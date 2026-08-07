@@ -9,6 +9,8 @@ import { useFullCatalog } from '@/hooks/usePOS';
 import { usePermissions, P } from '@/hooks/usePermissions';
 import { apiClient } from '@/lib/api/client';
 import { apiErrorMessage } from '@/lib/api/error-message';
+import { DataTable } from '@bengo-hub/shared-ui-lib/data-table';
+import { buildImportPreviewColumns, buildImportResultColumns, type GroupedSale } from './import-columns';
 
 /**
  * Sell → Import Sales — bulk-import HISTORICAL sales from a CSV (migration from another
@@ -30,17 +32,6 @@ interface CsvLine {
   sku: string;
   quantity: number;
   unitPrice: number;
-}
-
-interface GroupedSale {
-  external_ref: string;
-  date?: string;
-  customer_name?: string;
-  customer_phone?: string;
-  payment_method?: string;
-  discount?: number;
-  note?: string;
-  lines: { catalog_item_id?: string; sku: string; name: string; quantity: number; unit_price: number; matched: boolean }[];
 }
 
 const TEMPLATE_HEADERS = [
@@ -121,6 +112,8 @@ export default function ImportSalesPage() {
   }, [parsed, itemBySku]);
 
   const unmatchedCount = sales.reduce((n, s) => n + s.lines.filter((l) => !l.matched).length, 0);
+  const previewColumns = useMemo(() => buildImportPreviewColumns(), []);
+  const resultColumns = useMemo(() => buildImportResultColumns(), []);
 
   function downloadTemplate() {
     const csv = [TEMPLATE_HEADERS, ...TEMPLATE_SAMPLE].map((r) => r.join(',')).join('\n');
@@ -263,36 +256,13 @@ export default function ImportSalesPage() {
                   </span>
                 )}
               </div>
-              <div className="overflow-x-auto rounded-xl border border-border max-h-96 overflow-y-auto">
-                <table className="w-full text-xs whitespace-nowrap">
-                  <thead className="sticky top-0 bg-card">
-                    <tr className="border-b border-border text-muted-foreground uppercase tracking-wider text-left">
-                      <th className="px-3 py-2 font-semibold">Invoice</th>
-                      <th className="px-3 py-2 font-semibold">Date</th>
-                      <th className="px-3 py-2 font-semibold">Customer</th>
-                      <th className="px-3 py-2 font-semibold">Payment</th>
-                      <th className="px-3 py-2 font-semibold">Lines</th>
-                      <th className="px-3 py-2 font-semibold text-right">Total (pre-tax/disc)</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {sales.map((s) => (
-                      <tr key={s.external_ref} className={s.lines.some((l) => !l.matched) ? 'bg-amber-50/50 dark:bg-amber-950/20' : ''}>
-                        <td className="px-3 py-2 font-mono">{s.external_ref}</td>
-                        <td className="px-3 py-2">{s.date || '—'}</td>
-                        <td className="px-3 py-2">{s.customer_name || 'Walk-In'}</td>
-                        <td className="px-3 py-2 capitalize">{s.payment_method || 'due'}</td>
-                        <td className="px-3 py-2">
-                          {s.lines.map((l) => `${l.quantity}× ${l.name}${l.matched ? '' : ' ⚠'}`).join(', ')}
-                        </td>
-                        <td className="px-3 py-2 text-right tabular-nums">
-                          {s.lines.reduce((t, l) => t + l.quantity * l.unit_price, 0).toLocaleString()}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <DataTable<GroupedSale>
+                columns={previewColumns}
+                rows={sales}
+                rowKey={(s) => s.external_ref}
+                storageKey="sell-import-preview-col-prefs"
+                rowClassName={(s) => (s.lines.some((l) => !l.matched) ? 'bg-amber-50/50 dark:bg-amber-950/20' : undefined)}
+              />
               <button onClick={runImport} disabled={importing || !outlet?.id}
                 className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-primary-foreground font-semibold hover:bg-primary/90 disabled:opacity-50">
                 {importing ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileUp className="h-4 w-4" />}
@@ -312,21 +282,12 @@ export default function ImportSalesPage() {
                 {result.failed > 0 && <span className="text-destructive font-semibold">{result.failed} failed</span>}
               </div>
               {result.failed > 0 && (
-                <div className="overflow-x-auto rounded-xl border border-border max-h-64 overflow-y-auto">
-                  <table className="w-full text-xs">
-                    <thead><tr className="border-b border-border text-left text-muted-foreground">
-                      <th className="px-3 py-2">Invoice</th><th className="px-3 py-2">Error</th>
-                    </tr></thead>
-                    <tbody className="divide-y divide-border">
-                      {result.results.filter((r: any) => r.status === 'failed').map((r: any) => (
-                        <tr key={r.external_ref}>
-                          <td className="px-3 py-2 font-mono">{r.external_ref}</td>
-                          <td className="px-3 py-2 text-destructive">{r.error}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <DataTable
+                  columns={resultColumns}
+                  rows={result.results.filter((r: any) => r.status === 'failed')}
+                  rowKey={(r: any) => r.external_ref}
+                  storageKey="sell-import-failed-col-prefs"
+                />
               )}
               <button onClick={() => { setParsed([]); setResult(null); setFileName(''); setParseErrors([]); }}
                 className="px-4 py-2 rounded-xl border border-input text-sm font-medium hover:bg-muted">

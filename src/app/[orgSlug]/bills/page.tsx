@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { PageGuard } from '@/components/auth/page-guard';
 import { Can } from '@/components/auth/can';
 import { P } from '@/lib/rbac/permissions';
@@ -11,13 +11,14 @@ import { useCheckoutPrescription, useDispensePrescription } from '@/hooks/usePha
 import { SplitPaymentModal } from '@/components/pos/split-payment-modal';
 import { useAuthStore } from '@/store/auth';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
-import { formatCurrency } from '@/lib/utils';
-import { CreditCard, Loader2, Receipt } from 'lucide-react';
+import { Receipt } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import type { PharmacyBill } from '@/lib/api/clinical';
+import { DataTable } from '@bengo-hub/shared-ui-lib/data-table';
+import { buildBillsColumns } from './bills-columns';
 
 /**
  * Cashier-facing bills queue — the "billing" pharmacy workflow mode.
@@ -83,6 +84,10 @@ function BillsPage() {
   };
 
   const rows = bills ?? [];
+  const columns = useMemo(
+    () => buildBillsColumns({ orgSlug, currency, busyId, onCollect: handleCollect }),
+    [orgSlug, currency, busyId],
+  );
 
   return (
     <div className="p-6">
@@ -102,66 +107,20 @@ function BillsPage() {
         }
       />
 
-      {isLoading ? (
-        <div className="flex items-center justify-center h-48 gap-3">
-          <Loader2 className="h-6 w-6 animate-spin text-primary" />
-          <span className="text-sm text-muted-foreground">Loading bills…</span>
-        </div>
-      ) : rows.length === 0 ? (
-        <EmptyState
-          icon={Receipt}
-          title="No bills waiting"
-          description="Approved prescriptions appear here for the cashier to settle."
-        />
-      ) : (
-        <div className="rounded-2xl border border-border overflow-hidden bg-card">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border bg-accent/30">
-                <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Rx #</th>
-                <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Patient</th>
-                <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Prescriber</th>
-                <th className="text-center px-4 py-3 font-semibold text-muted-foreground">Items</th>
-                <th className="text-right px-4 py-3 font-semibold text-muted-foreground">Amount</th>
-                <th className="text-right px-4 py-3 font-semibold text-muted-foreground">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {rows.map((b) => (
-                <tr key={b.prescription.id} className="hover:bg-accent/20 transition-colors">
-                  <td className="px-4 py-3.5 font-mono text-xs">
-                    <Link href={`/${orgSlug}/pharmacy/${b.prescription.id}`} className="hover:text-primary hover:underline">
-                      {b.prescription.prescription_number}
-                    </Link>
-                  </td>
-                  <td className="px-4 py-3.5 font-medium">{b.prescription.patient_name}</td>
-                  <td className="px-4 py-3.5 text-muted-foreground">{b.prescription.prescriber_name || '—'}</td>
-                  <td className="px-4 py-3.5 text-center text-muted-foreground">{b.line_count}</td>
-                  <td className="px-4 py-3.5 text-right font-semibold">
-                    {formatCurrency(b.order_total ?? b.estimated_total, currency)}
-                  </td>
-                  <td className="px-4 py-3.5 text-right">
-                    <Can permission={P.PAYMENTS_ADD}>
-                      <button
-                        onClick={() => handleCollect(b)}
-                        disabled={busyId === b.prescription.id}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
-                      >
-                        {busyId === b.prescription.id ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        ) : (
-                          <CreditCard className="h-3.5 w-3.5" />
-                        )}
-                        Collect Payment
-                      </button>
-                    </Can>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <DataTable
+        columns={columns}
+        rows={rows}
+        rowKey={(b) => b.prescription.id}
+        loading={isLoading}
+        storageKey="pharmacy-bills-col-prefs"
+        emptyState={
+          <EmptyState
+            icon={Receipt}
+            title="No bills waiting"
+            description="Approved prescriptions appear here for the cashier to settle."
+          />
+        }
+      />
 
       {paymentOrder && (
         <SplitPaymentModal

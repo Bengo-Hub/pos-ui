@@ -14,9 +14,11 @@ import { cn, formatCurrency } from '@/lib/utils';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { AlertTriangle, Loader2, X } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api/error-message';
+import { DataTable } from '@bengo-hub/shared-ui-lib/data-table';
+import { buildLayawayPaymentColumns } from './payment-columns';
 
 function statusVariant(status: LayawayPlan['status']): 'default' | 'success' | 'outline' {
   if (status === 'completed') return 'success';
@@ -37,6 +39,7 @@ function LayawayDetailPage() {
   const cancelPlan = useCancelLayaway();
   const { data: posSettings } = usePOSSettings();
   const currency = (posSettings as any)?.currency ?? 'KES';
+  const paymentColumns = useMemo(() => buildLayawayPaymentColumns(currency), [currency]);
 
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [paymentForm, setPaymentForm] = useState<RecordPaymentInput>({
@@ -179,30 +182,15 @@ function LayawayDetailPage() {
         <div className="px-5 py-4 border-b border-border">
           <h2 className="font-bold text-base">Payment History</h2>
         </div>
-        {!plan.payments?.length ? (
-          <p className="text-sm text-muted-foreground px-5 py-6">No payments recorded yet.</p>
-        ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border bg-accent/20">
-                <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Amount</th>
-                <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Method</th>
-                <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Reference</th>
-                <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Date</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {plan.payments.map((p) => (
-                <tr key={p.id}>
-                  <td className="px-4 py-3 font-mono font-semibold text-green-600">{formatCurrency(p.amount, currency)}</td>
-                  <td className="px-4 py-3 capitalize">{p.payment_method}</td>
-                  <td className="px-4 py-3 text-muted-foreground">{p.reference ?? '—'}</td>
-                  <td className="px-4 py-3 text-muted-foreground">{new Date(p.created_at).toLocaleString()}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+        <div className="px-2 pb-2">
+          <DataTable
+            columns={paymentColumns}
+            rows={plan.payments ?? []}
+            rowKey={(p) => p.id}
+            storageKey="layaway-payments-col-prefs"
+            emptyText="No payments recorded yet."
+          />
+        </div>
       </div>
 
       {/* Record Payment Modal */}

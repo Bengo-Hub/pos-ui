@@ -1,11 +1,9 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Loader2, Percent, Plus, Pencil, Trash2, Ticket, Zap, Clock3, Search } from 'lucide-react';
+import { Percent, Plus, Search } from 'lucide-react';
 import { toast } from 'sonner';
-import { Card, CardContent } from '@/components/ui/base';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
-import { Pagination } from '@/components/ui/pagination';
 import { usePermissions, P } from '@/hooks/usePermissions';
 import { useDiscounts, useCreateDiscount, useUpdateDiscount, useDeleteDiscount } from '@/hooks/useDiscounts';
 import { useFullCatalog, useCategories } from '@/hooks/usePOS';
@@ -17,36 +15,12 @@ import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { UpgradeDialog } from '@bengo-hub/shared-ui-lib/subscription';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import type { Discount, DiscountInput } from '@/lib/api/discounts';
-import { DiscountFormModal, describeDiscount, describeScope } from '@/components/pos/discounts/discount-form-modal';
+import { DiscountFormModal } from '@/components/pos/discounts/discount-form-modal';
 import { searchCatalogItemsAdapter, fetchCategoryItemsAdapter } from '@/components/pos/discounts/apply-discount-modal';
-import { cn } from '@/lib/utils';
+import { DataTable } from '@bengo-hub/shared-ui-lib/data-table';
+import { buildDiscountColumns } from './discounts-columns';
 
-const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const PAGE_SIZE = 20;
-
-const KIND_META: Record<string, { label: string; icon: typeof Ticket; cls: string }> = {
-  code: { label: 'Promo Code', icon: Ticket, cls: 'bg-blue-500/10 text-blue-600' },
-  auto: { label: 'Automatic', icon: Zap, cls: 'bg-amber-500/10 text-amber-600' },
-  happy_hour: { label: 'Time Window', icon: Clock3, cls: 'bg-purple-500/10 text-purple-600' },
-};
-
-function scheduleText(d: Discount): string {
-  if (d.promo_kind === 'happy_hour') {
-    if (d.start_at && !d.days_of_week?.length) {
-      // One-time window: an explicit start → end occurrence.
-      const from = new Date(d.start_at).toLocaleString('en-KE');
-      const to = d.end_at ? new Date(d.end_at).toLocaleString('en-KE') : '—';
-      return `${from} → ${to}`;
-    }
-    const days = (d.days_of_week ?? []).map((v) => DAY_LABELS[v]).join(', ') || 'Daily';
-    return `${days} · ${d.window_start || '—'}–${d.window_end || '—'}`;
-  }
-  const from = d.start_at ? new Date(d.start_at).toLocaleDateString('en-KE') : null;
-  const to = d.end_at ? new Date(d.end_at).toLocaleDateString('en-KE') : null;
-  if (from && to) return `${from} → ${to}`;
-  if (to) return `until ${to}`;
-  return 'Always';
-}
 
 /**
  * Sell → Discounts — management surface for the platform's discount source of truth
@@ -150,6 +124,18 @@ export default function DiscountsPage() {
     }
   }
 
+  const columns = useMemo(
+    () => buildDiscountColumns({
+      currency,
+      outletNameById,
+      canManage,
+      canDeactivate: can(P.PROMOTIONS_MANAGE),
+      onEdit: (d) => { setEditing(d); setModalOpen(true); },
+      onDeactivate: (d) => setDeleteTarget(d),
+    }),
+    [currency, outletNameById, canManage, can],
+  );
+
   if (!canView) {
     return <div className="p-12 text-center text-muted-foreground">You don&apos;t have permission to view discounts.</div>;
   }
@@ -177,101 +163,32 @@ export default function DiscountsPage() {
         )}
       </div>
 
-      <div className="relative max-w-sm">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <input
-          value={search}
-          onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-          placeholder="Search discounts by name…"
-          className="w-full pl-9 pr-3 py-2 rounded-xl border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-        />
-      </div>
-
-      <Card>
-        <CardContent className="p-0">
-          {isLoading ? (
-            <div className="flex justify-center py-16"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
-          ) : isError ? (
-            <div className="py-12 text-center">
-              <p className="text-sm text-destructive">Could not load discounts.</p>
-              <button onClick={() => refetch()} className="mt-3 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium">Retry</button>
-            </div>
-          ) : discounts.length === 0 ? (
-            <div className="py-16 text-center text-sm text-muted-foreground">
-              {debouncedSearch
-                ? <>No discounts match &ldquo;{debouncedSearch}&rdquo;.</>
-                : <>No discounts yet. Create one to start discounting sales across all channels.</>}
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm whitespace-nowrap">
-                <thead>
-                  <tr className="border-b border-border bg-accent/5 text-xs uppercase tracking-wider text-muted-foreground text-left">
-                    <th className="px-4 py-3 font-bold">Name</th>
-                    <th className="px-4 py-3 font-bold">Type</th>
-                    <th className="px-4 py-3 font-bold">Code</th>
-                    <th className="px-4 py-3 font-bold">Deal</th>
-                    <th className="px-4 py-3 font-bold">Scope</th>
-                    <th className="px-4 py-3 font-bold">Outlet</th>
-                    <th className="px-4 py-3 font-bold">Schedule / Validity</th>
-                    <th className="px-4 py-3 font-bold text-center">Status</th>
-                    {canManage && <th className="px-4 py-3 font-bold text-right">Actions</th>}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {discounts.map((d) => {
-                    const meta = KIND_META[d.promo_kind] ?? KIND_META.code;
-                    const KindIcon = meta.icon;
-                    return (
-                      <tr key={d.id} className="hover:bg-accent/5">
-                        <td className="px-4 py-3 font-medium">{d.name}</td>
-                        <td className="px-4 py-3">
-                          <span className={cn('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold', meta.cls)}>
-                            <KindIcon className="h-3 w-3" /> {meta.label}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 font-mono text-xs">{d.promo_kind === 'code' ? (d.promo_code || '—') : '—'}</td>
-                        <td className="px-4 py-3">{describeDiscount(d, currency)}</td>
-                        <td className="px-4 py-3 text-xs text-muted-foreground">{describeScope(d)}</td>
-                        <td className="px-4 py-3 text-xs text-muted-foreground">
-                          {d.outlet_id ? (outletNameById.get(d.outlet_id) ?? 'This outlet') : 'All outlets'}
-                        </td>
-                        <td className="px-4 py-3 text-xs text-muted-foreground">{scheduleText(d)}</td>
-                        <td className="px-4 py-3 text-center">
-                          <span className={cn('text-xs px-2 py-1 rounded-full font-medium',
-                            d.status === 'active' ? 'bg-green-500/10 text-green-600' : 'bg-muted text-muted-foreground')}>
-                            {d.status}
-                          </span>
-                        </td>
-                        {canManage && (
-                          <td className="px-4 py-3">
-                            <div className="flex items-center justify-end gap-1.5">
-                              <button title="Edit" onClick={() => { setEditing(d); setModalOpen(true); }}
-                                className="h-7 w-7 rounded-md flex items-center justify-center hover:bg-accent">
-                                <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
-                              </button>
-                              {can(P.PROMOTIONS_MANAGE) && d.status === 'active' && (
-                                <button title="Deactivate" onClick={() => setDeleteTarget(d)}
-                                  className="h-7 w-7 rounded-md flex items-center justify-center hover:bg-accent">
-                                  <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                                </button>
-                              )}
-                            </div>
-                          </td>
-                        )}
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {totalPages > 1 && (
-        <Pagination page={page} totalPages={totalPages} total={total} onPageChange={setPage} itemLabel="discounts" />
-      )}
+      <DataTable<Discount>
+        columns={columns}
+        rows={discounts}
+        rowKey={(d) => d.id}
+        loading={isLoading}
+        error={isError}
+        onRetry={() => refetch()}
+        storageKey="sell-discounts-col-prefs"
+        emptyText={debouncedSearch ? `No discounts match "${debouncedSearch}".` : 'No discounts yet. Create one to start discounting sales across all channels.'}
+        toolbar={(
+          <div className="relative w-full max-w-sm">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <input
+              value={search}
+              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+              placeholder="Search discounts by name…"
+              className="w-full pl-9 pr-3 py-2 rounded-xl border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+          </div>
+        )}
+        page={page}
+        totalPages={totalPages}
+        onPageChange={setPage}
+        total={total}
+        pageSize={PAGE_SIZE}
+      />
 
       <DiscountFormModal
         open={modalOpen}

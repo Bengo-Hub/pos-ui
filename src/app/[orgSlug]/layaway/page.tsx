@@ -2,21 +2,17 @@
 
 import { ModuleGate } from '@/components/auth/module-gate';
 import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
-import { Badge, Button } from '@/components/ui/base';
+import { Button } from '@/components/ui/base';
 import { CreateLayawayModal } from '@/components/pos/layaway/create-layaway-modal';
-import { useLayawayPlans, type LayawayPlan } from '@/hooks/useLayaway';
+import { useLayawayPlans } from '@/hooks/useLayaway';
 import { useOutletFilterStore } from '@/store/outlet-filter';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
-import { cn, formatCurrency } from '@/lib/utils';
+import { cn } from '@/lib/utils';
 import { Loader2, Plus, RefreshCw } from 'lucide-react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
-
-function statusVariant(status: LayawayPlan['status']): 'default' | 'success' | 'outline' {
-  if (status === 'completed') return 'success';
-  if (status === 'cancelled') return 'outline';
-  return 'default';
-}
+import { DataTable } from '@bengo-hub/shared-ui-lib/data-table';
+import { buildLayawayColumns } from './layaway-columns';
 
 function LayawayListPage() {
   const params = useParams();
@@ -38,6 +34,7 @@ function LayawayListPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const { data: posSettings } = usePOSSettings();
   const currency = (posSettings as any)?.currency ?? 'KES';
+  const columns = useMemo(() => buildLayawayColumns(currency, outletNameById), [currency, outletNameById]);
 
   // ?new=1 from redirect (e.g. navigating to /layaway/new)
   useEffect(() => {
@@ -93,62 +90,23 @@ function LayawayListPage() {
         </div>
       </div>
 
-      {isError && (
-        <p className="text-sm text-destructive mb-4">Failed to load layaway plans.</p>
-      )}
-
-      {plans.length === 0 ? (
-        <div className="flex flex-col items-center justify-center h-48 text-muted-foreground gap-2">
-          <p className="font-medium">No active layaway plans</p>
-          <button onClick={() => setCreateOpen(true)} className="text-sm text-primary underline">
-            Create one
-          </button>
-        </div>
-      ) : (
-        <div className="rounded-2xl border border-border overflow-hidden bg-card">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border bg-accent/30">
-                <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Customer</th>
-                <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Phone</th>
-                <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Branch</th>
-                <th className="text-right px-4 py-3 font-semibold text-muted-foreground">Total</th>
-                <th className="text-right px-4 py-3 font-semibold text-muted-foreground">Paid</th>
-                <th className="text-right px-4 py-3 font-semibold text-muted-foreground">Remaining</th>
-                <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Status</th>
-                <th className="text-left px-4 py-3 font-semibold text-muted-foreground">Due Date</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {plans.map((plan) => (
-                <tr
-                  key={plan.id}
-                  onClick={() => router.push(`/${orgSlug}/layaway/${plan.id}`)}
-                  className="hover:bg-accent/30 cursor-pointer transition-colors"
-                >
-                  <td className="px-4 py-3.5 font-medium">{plan.customer_name}</td>
-                  <td className="px-4 py-3.5 text-muted-foreground">{plan.customer_phone ?? '—'}</td>
-                  <td className="px-4 py-3.5 text-muted-foreground">{(plan.outlet_id && outletNameById[plan.outlet_id]) || '—'}</td>
-                  <td className="px-4 py-3.5 text-right font-mono">{formatCurrency(plan.total_amount, currency)}</td>
-                  <td className="px-4 py-3.5 text-right font-mono text-green-600">{plan.paid_amount.toLocaleString()}</td>
-                  <td className="px-4 py-3.5 text-right font-mono text-amber-600">{plan.remaining_amount.toLocaleString()}</td>
-                  <td className="px-4 py-3.5">
-                    <Badge
-                      variant={statusVariant(plan.status)}
-                      className={cn(plan.status === 'active' && 'bg-blue-500/10 text-blue-600 border-blue-500/20')}
-                    >
-                      {plan.status}
-                    </Badge>
-                  </td>
-                  <td className="px-4 py-3.5 text-muted-foreground">
-                    {plan.due_date ? new Date(plan.due_date).toLocaleDateString() : '—'}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <DataTable
+        columns={columns}
+        rows={plans}
+        rowKey={(plan) => plan.id}
+        error={isError}
+        onRetry={() => refetch()}
+        onRowClick={(plan) => router.push(`/${orgSlug}/layaway/${plan.id}`)}
+        storageKey="layaway-col-prefs"
+        emptyState={
+          <div className="flex flex-col items-center justify-center gap-2 text-muted-foreground">
+            <p className="font-medium">No active layaway plans</p>
+            <button onClick={() => setCreateOpen(true)} className="text-sm text-primary underline">
+              Create one
+            </button>
+          </div>
+        }
+      />
 
       <CreateLayawayModal
         open={createOpen}
