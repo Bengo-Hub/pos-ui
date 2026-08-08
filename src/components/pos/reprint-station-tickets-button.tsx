@@ -17,6 +17,10 @@ interface OrderLineLike {
   notes?: string;
   unit_price?: number;
   total_price?: number;
+  /** Station this line was actually resolved to at order-creation time (pos-api
+   *  resolveStationForLine) — authoritative, so a reprint lands on the SAME station the KDS
+   *  screen ticket used, regardless of any later category/override changes. */
+  kds_station_id?: string;
 }
 
 interface ReprintStationTicketsButtonProps {
@@ -61,6 +65,7 @@ export function ReprintStationTicketsButton({ orderNumber, tableRef, lines, clas
         notes: l.notes,
         unitPrice: l.unit_price,
         totalPrice: l.total_price,
+        kdsStationId: l.kds_station_id,
       }));
       const res = await printKitchenBarTickets({
         orderNumber,

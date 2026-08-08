@@ -111,6 +111,10 @@ export interface MenuItem {
   taxRate?: number;         // VAT % for this item (e.g. 16). undefined → no treasury info (legacy fallback)
   netPrice?: number;        // unit price excluding tax (informational)
   taxAmount?: number;       // tax portion of the unit price (informational)
+  /** Explicit per-item KDS routing pin (POSCatalogOverride.kds_station_id) — wins over
+   *  category_filter/hot-beverage matching in printKitchenBarTickets' client-side router,
+   *  mirroring pos-api's resolveStationForLine Priority 1. Undefined = no override. */
+  kdsStationId?: string;
 }
 
 /** A single chosen modifier, resolved to the exact catalog data at the moment it was
@@ -766,6 +770,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
       // stock_quantity is only populated if the backend projects it on the catalog list (see note).
       stockQuantity: item.stock_quantity,
       unit: item.unit,
+      kdsStationId: item.kds_station_id || undefined,
       // Per-item tax from treasury (via inventory-api enrichment → pos-api catalog passthrough).
       taxCodeId: item.tax_code_id ?? undefined,
       taxInclusive: item.tax_inclusive ?? undefined,
@@ -1431,6 +1436,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
           notes: c.notes,
           unitPrice: c.price + (c.modifierTotal ?? 0),
           totalPrice: (c.price + (c.modifierTotal ?? 0)) * eff,
+          kdsStationId: c.kdsStationId,
         };
       }),
       kdsStations: kdsStationsData?.data ?? [],

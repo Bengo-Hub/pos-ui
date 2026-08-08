@@ -2,9 +2,9 @@
  * Kitchen/Bar ticket printing for the POS — routed by the SAME KDS stations the kitchen displays use.
  *
  * "Send to kitchen" splits the order lines across the outlet's live KDS stations by their
- * `category_filter` (an exact mirror of the pos-api `routeLinesToStations` rule), then prints each
- * station's ticket to that station's assigned printer (OutletSetting.printer_profiles, keyed by the
- * station id). The priced Customer Bill prints to the fixed 'customer' profile.
+ * `category_filter` (mirroring the pos-api `resolveStationForLine`/`routeLinesToStations` rule),
+ * then prints each station's ticket to that station's assigned printer (OutletSetting.printer_profiles,
+ * keyed by the station id). The priced Customer Bill prints to the fixed 'customer' profile.
  *
  *   - MULTIPLE printers (a real printer assigned to any station) → one silent job per station.
  *   - SINGLE / no printer → one combined "3-in-1" browser job (Bill + each station section).
@@ -25,9 +25,18 @@ export interface TicketLine {
   notes?: string;
   unitPrice?: number;
   totalPrice?: number;
+  /** Explicit per-item KDS routing pin (POSCatalogOverride.kds_station_id, surfaced on the
+   *  catalog item as kds_station_id) — Priority 1, wins over category_filter/hot-beverage
+   *  matching below. E.g. an ice-cream scoop living in a mixed "Kids Corner" category but
+   *  explicitly pinned to Bar. Undefined when the item has no override. */
+  kdsStationId?: string;
 }
 
-// Hot beverages are kitchen items (never bar), mirroring the pos-api isHotBeverage rule.
+// 2026-08 urban-loft bug (see pos-api resolveStationForLine): this list used to be checked
+// BEFORE category_filter and could force-route a tenant's own Bar-owned hot drinks (a café's
+// barista/espresso bar commonly claims Coffees/Teas) to Kitchen, second-guessing the tenant's
+// explicit configuration. Kept only as the LAST-RESORT fallback below, for legacy/uncategorized
+// items that no station's category_filter claims at all — never checked ahead of category_filter.
 const HOT_BEVERAGES = [
   'coffee', 'tea', 'espresso', 'cappuccino', 'latte', 'americano', 'macchiato',
   'mocha', 'hot chocolate', 'chai', 'flat white', 'cortado', 'affogato', 'hot beverage', 'hot drink',
@@ -46,12 +55,16 @@ function isHotBeverage(name: string, category: string): boolean {
 }
 
 /**
- * Route lines to KDS stations, mirroring pos-api `routeLinesToStations` exactly:
- *  - hot beverages → the kitchen station (when one exists), before category matching;
- *  - else STRICT category match: the line's category must equal one of a station's category_filter
- *    entries (case-insensitive); when the line has no category, fall back to a name-substring match;
- *  - unrouted lines → every expo/all station, else the first active station.
- * Returns a Map of stationId → lines. Bar stations are skipped for hot beverages.
+ * Route lines to KDS stations, mirroring pos-api `resolveStationForLine` exactly:
+ *  1. an explicit per-item station pin (`kdsStationId`) always wins — the tenant's admin-assigned
+ *     override, regardless of category or keywords;
+ *  2. else STRICT category match: the line's category must equal one of a station's category_filter
+ *     entries (case-insensitive) — the tenant's OWN station configuration always wins here, even for
+ *     hot beverages (a café's "Bar" station commonly owns Coffees/Teas as a barista bar);
+ *  3. only when NOTHING claimed the item's category (or it has none) does a hot-beverage name guess
+ *     fall back to the kitchen station, as a last resort for genuinely unconfigured tenants;
+ *  4. still unrouted → every expo/all station, else the first active station.
+ * Returns a Map of stationId → lines.
  */
 export function routeLinesToStations(lines: TicketLine[], stations: KDSStation[]): Map<string, TicketLine[]> {
   const active = stations.filter((s) => s.is_active !== false);
@@ -66,15 +79,17 @@ export function routeLinesToStations(lines: TicketLine[], stations: KDSStation[]
   for (const l of lines) {
     const cat = (l.category ?? '').trim().toLowerCase();
     const name = (l.name ?? '').toLowerCase();
-    const hot = isHotBeverage(name, cat);
     let routed: string | null = null;
 
-    if (hot && kitchen) routed = kitchen.id;
+    // Priority 1: explicit override, only if it still names a live active station.
+    if (l.kdsStationId && active.some((s) => s.id === l.kdsStationId)) {
+      routed = l.kdsStationId;
+    }
 
+    // Priority 2: strict category_filter match — never second-guessed by the hot-beverage guess.
     if (!routed) {
       for (const s of active) {
         if (s.station_type === 'expo' || s.station_type === 'all') continue;
-        if (hot && s.station_type === 'bar') continue;
         for (const c of s.category_filter ?? []) {
           const needle = c.trim().toLowerCase();
           if (!needle) continue;
@@ -83,6 +98,11 @@ export function routeLinesToStations(lines: TicketLine[], stations: KDSStation[]
         }
         if (routed) break;
       }
+    }
+
+    // Priority 3: nothing claimed this item's category at all — last-resort hot-beverage guess.
+    if (!routed && kitchen && isHotBeverage(name, cat)) {
+      routed = kitchen.id;
     }
 
     if (routed) { push(routed, l); continue; }

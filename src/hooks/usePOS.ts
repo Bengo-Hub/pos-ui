@@ -319,6 +319,9 @@ export interface CatalogItem {
    *  whole-number-only (discretely counted items) — see lib/pos/units.ts isFractionalUnit(). */
   unit?: string;
   metadata?: Record<string, any>;
+  /** Explicit per-item KDS routing pin (POSCatalogOverride.kds_station_id via the "Assign KDS
+   *  Station" admin panel) — wins over category_filter/hot-beverage matching. Empty when unset. */
+  kds_station_id?: string;
 }
 
 export interface PaginatedResponse<T> {
@@ -356,6 +359,7 @@ export function toOfflineCatalogRows(tenantID: string, outletID: string, items: 
     non_billable: i.non_billable,
     stock_quantity: i.stock_quantity,
     unit: i.unit,
+    kds_station_id: i.kds_station_id,
     cached_at: now,
   }));
 }
@@ -424,6 +428,7 @@ export function offlineToCatalogItem(c: OfflineCatalogItem): CatalogItem {
     non_billable: c.non_billable,
     stock_quantity: c.stock_quantity,
     unit: c.unit,
+    kds_station_id: c.kds_station_id,
   };
 }
 

@@ -37,6 +37,9 @@ export interface OfflineCatalogItem {
   // Stock unit abbreviation (ml/kg/pc/...) — see CatalogItem.unit in usePOS.ts. Carried offline
   // so decimal-qty entry stays correct on the cache-first/offline path too.
   unit?: string;
+  // Explicit per-item KDS routing pin (see CatalogItem.kds_station_id in usePOS.ts) — carried
+  // offline so cache-first/offline ticket print routing honors the same override as online.
+  kds_station_id?: string;
   cached_at: string;
 }
 
