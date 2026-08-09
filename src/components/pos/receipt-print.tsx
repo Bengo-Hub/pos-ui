@@ -5,6 +5,7 @@ import type { ReceiptData } from './receipt-preview';
 import { RetailReceiptPrint } from './receipt-retail-print';
 import { buildReceiptRows } from '@/lib/pos/receipt-rows';
 import { resolveReceiptFormat } from '@/lib/pos/receipt-format';
+import { resolveReceiptDisplayName, resolveReceiptOutletLine } from '@/lib/pos/receipt-branding';
 
 interface ReceiptPrintProps {
   receipt: ReceiptData;
@@ -63,13 +64,18 @@ export function ReceiptPrint({
   const currency = receipt.currency || 'KES';
   const fmt = (n: number) => `${currency} ${n.toFixed(2)}`;
   const norm = (s?: string) => (s ?? '').trim().toLowerCase();
+  // headerName is pos-api's resolved business name (BuildReceiptView.DisplayName) — tenant name
+  // by default, or this outlet's own name when "Show Business Name on Receipt" is off for a
+  // non-HQ outlet. THE single source; tenantName is only the legacy fallback for offline-cached
+  // receipts predating this field. See lib/pos/receipt-branding.ts.
+  const headerName = resolveReceiptDisplayName(receipt, tenantName);
   const resolvedOutletRaw = outletName || receipt.outlet_name;
-  // De-duplicate the branding block: hide the outlet line when it repeats the tenant name, and the
+  // De-duplicate the branding block: hide the outlet line when it repeats the header, and the
   // address when it repeats either (fixes the same name printing 2-3 times).
-  const resolvedOutlet = norm(resolvedOutletRaw) === norm(tenantName) ? undefined : resolvedOutletRaw;
+  const resolvedOutlet = resolveReceiptOutletLine(resolvedOutletRaw, headerName);
   const resolvedAddressRaw = tenantAddress || receipt.outlet_address;
   const resolvedAddress =
-    norm(resolvedAddressRaw) === norm(resolvedOutletRaw) || norm(resolvedAddressRaw) === norm(tenantName)
+    norm(resolvedAddressRaw) === norm(resolvedOutletRaw) || norm(resolvedAddressRaw) === norm(headerName)
       ? undefined
       : resolvedAddressRaw;
   const fmtDate = (s: string) =>
@@ -88,9 +94,9 @@ export function ReceiptPrint({
         // eslint-disable-next-line @next/next/no-img-element
         <img src={logoUrl} alt="logo" className="receipt-logo" />
       )}
-      {tenantName && (
+      {headerName && (
         <p className="receipt-center receipt-bold" style={{ fontSize: 13, marginBottom: 2 }}>
-          {tenantName}
+          {headerName}
         </p>
       )}
       {resolvedOutlet && (

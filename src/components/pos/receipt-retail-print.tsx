@@ -15,6 +15,7 @@
 import type { CSSProperties } from 'react';
 import type { ReceiptData } from './receipt-preview';
 import { buildReceiptRows } from '@/lib/pos/receipt-rows';
+import { resolveReceiptDisplayName } from '@/lib/pos/receipt-branding';
 
 interface RetailReceiptPrintProps {
   receipt: ReceiptData;
@@ -49,7 +50,12 @@ const trowStyle: CSSProperties = { display: 'flex', justifyContent: 'space-betwe
 
 export function RetailReceiptPrint({ receipt, tenantName, outletName, logoUrl }: RetailReceiptPrintProps) {
   const currency = receipt.currency || 'KES';
-  const bizName = (outletName || receipt.outlet_name || tenantName || 'RECEIPT').toUpperCase();
+  // bizName is pos-api's resolved business name (BuildReceiptView.DisplayName) — tenant name by
+  // default, or this outlet's own name when "Show Business Name on Receipt" is off for a non-HQ
+  // outlet. THE single source; tenantName/outletName are only legacy fallbacks for offline-
+  // cached receipts predating the field. See lib/pos/receipt-branding.ts.
+  const bizName = resolveReceiptDisplayName(receipt, tenantName || outletName) || 'RECEIPT';
+  const bizNameUpper = bizName.toUpperCase();
   const billLabel = receipt.bill_to_label || 'Customer';
   const totalQty = receipt.lines.reduce((s, l) => s + l.quantity, 0);
   const methodLabel = (() => {
@@ -75,7 +81,7 @@ export function RetailReceiptPrint({ receipt, tenantName, outletName, logoUrl }:
           // eslint-disable-next-line @next/next/no-img-element
           <img src={logoUrl} alt="logo" style={{ display: 'block', margin: '2px auto', maxHeight: '20mm', maxWidth: '55mm', objectFit: 'contain' }} />
         )}
-        <div style={{ fontSize: 22, fontWeight: 700, letterSpacing: 0.5 }}>{bizName}</div>
+        <div style={{ fontSize: 22, fontWeight: 700, letterSpacing: 0.5 }}>{bizNameUpper}</div>
         {receipt.outlet_address && <div style={{ fontSize: 12, whiteSpace: 'pre-wrap' }}>{receipt.outlet_address.toUpperCase()}</div>}
         {receipt.outlet_phones && (
           <div style={{ fontSize: 12 }}><b>Mobile:</b> {receipt.outlet_phones}</div>

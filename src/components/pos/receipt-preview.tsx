@@ -12,6 +12,7 @@ import { hasRealPrinter } from '@/lib/pos/printer-stations';
 import { buildReceiptRows } from '@/lib/pos/receipt-rows';
 import { buildReceiptDocument, printReceiptDocument } from '@/lib/pos/receipt-html';
 import { paperForFormat, resolveReceiptFormat } from '@/lib/pos/receipt-format';
+import { resolveReceiptDisplayName, resolveReceiptOutletLine } from '@/lib/pos/receipt-branding';
 import { apiClient } from '@/lib/api/client';
 import type { PrinterProfile } from '@/lib/api/settings';
 import { useTenantBranding } from '@/providers/tenant-branding-provider';
@@ -98,6 +99,11 @@ export interface ReceiptData {
   etims_kra_pin?: string;
   // outlet + configurable receipt settings (populated by the pos-api receipt endpoint from OutletSetting)
   outlet_name?: string;
+  /** Server-resolved business name for the receipt header (BuildReceiptView's DisplayName) —
+   *  tenant name by default, or this outlet's own name when a non-HQ outlet has turned off
+   *  "Show Business Name on Receipt". THE single source for what prints as the header; see
+   *  lib/pos/receipt-branding.ts — never re-derive this from tenant branding client-side. */
+  display_name?: string;
   outlet_address?: string;
   /** Formatted labeled phones ("AIRTEL +2547… · MTN +2567…") — printed as "Mobile: …". */
   outlet_phones?: string;
@@ -351,14 +357,19 @@ export function ReceiptPreview({
               // eslint-disable-next-line @next/next/no-img-element
               <img src={logoUrl} alt="logo" className="mx-auto mb-2 max-h-16 object-contain grayscale" />
             )}
-            {tenantName && (
-              <p className="text-center font-semibold text-sm mb-1">{tenantName}</p>
-            )}
             {(() => {
-              const outlet = outletName || receipt.outlet_name;
-              // Hide the outlet line when it just repeats the tenant name (avoids the duplicate).
-              if (!outlet || outlet.trim().toLowerCase() === (tenantName ?? '').trim().toLowerCase()) return null;
-              return <p className="text-center text-muted-foreground mb-1">{outlet}</p>;
+              // display_name is pos-api's resolved header (tenant name by default, or this
+              // outlet's own name when the "Show Business Name on Receipt" toggle is off) — the
+              // ONLY correct source; tenantName here is just the legacy fallback for offline-
+              // cached receipts predating the field. See lib/pos/receipt-branding.ts.
+              const headerName = resolveReceiptDisplayName(receipt, tenantName);
+              const outletLine = resolveReceiptOutletLine(outletName || receipt.outlet_name, headerName);
+              return (
+                <>
+                  {headerName && <p className="text-center font-semibold text-sm mb-1">{headerName}</p>}
+                  {outletLine && <p className="text-center text-muted-foreground mb-1">{outletLine}</p>}
+                </>
+              );
             })()}
             {receipt.outlet_phones && (
               <p className="text-center text-muted-foreground mb-1">Mobile: {receipt.outlet_phones}</p>
