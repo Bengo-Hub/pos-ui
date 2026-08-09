@@ -6,9 +6,58 @@
  */
 
 import { StockBadge } from '@/components/retail/StockBadge';
+import { ProductImage } from '@/components/ui/product-image';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useTerminal } from '@/components/pos/terminal/terminal-context';
 import { cn, formatCurrency } from '@/lib/utils';
-import { Image as ImageIcon, Loader2, Plus, Search } from 'lucide-react';
+import { Plus, Search } from 'lucide-react';
+
+/**
+ * Facebook/Uber-Eats-style loading skeleton — mirrors whichever display mode is active so the
+ * grid/list shape never jumps once real items arrive. Replaces the old full-panel spinner, which
+ * blocked the whole picker on the catalog fetch instead of just letting individual card
+ * images resolve independently (that part is handled by ProductImage's own skeleton).
+ */
+function TerminalGridSkeleton({ displayMode }: { displayMode: 'card' | 'list' | 'image_grid' }) {
+  if (displayMode === 'list') {
+    return (
+      <div className="rounded-2xl border border-border overflow-hidden bg-card">
+        {Array.from({ length: 8 }, (_, i) => (
+          <div key={i} className={cn('flex items-center gap-3 px-3 py-2', i !== 0 && 'border-t border-border')}>
+            <Skeleton className="h-9 flex-1" />
+            <Skeleton className="h-4 w-14" />
+          </div>
+        ))}
+      </div>
+    );
+  }
+  if (displayMode === 'image_grid') {
+    return (
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+        {Array.from({ length: 8 }, (_, i) => (
+          <div key={i} className="rounded-2xl border-2 border-border overflow-hidden">
+            <Skeleton className="aspect-square rounded-none" />
+            <div className="p-3 space-y-2 bg-card">
+              <Skeleton className="h-4 w-3/4" />
+              <Skeleton className="h-3 w-1/2" />
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+      {Array.from({ length: 8 }, (_, i) => (
+        <div key={i} className="flex flex-col gap-3 p-4 rounded-2xl border-2 border-border min-h-30">
+          <Skeleton className="h-4 w-3/4" />
+          <Skeleton className="h-3 w-1/2" />
+          <Skeleton className="mt-auto h-4 w-16" />
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export function TerminalProductGrid() {
   const t = useTerminal();
@@ -31,10 +80,7 @@ export function TerminalProductGrid() {
         )}
       >
         {menuLoading ? (
-          <div className="flex flex-col items-center justify-center h-48 gap-3">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            <p className="text-sm text-muted-foreground">Loading menu…</p>
-          </div>
+          <TerminalGridSkeleton displayMode={displayMode} />
         ) : filteredItems.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-48 text-muted-foreground gap-3">
             <Search className="h-10 w-10 opacity-20" />
@@ -146,12 +192,15 @@ export function TerminalProductGrid() {
                     inCart ? 'border-primary shadow-md shadow-primary/10' : 'border-border hover:border-primary/40'
                   )}
                 >
-                  <div className="aspect-square bg-muted flex items-center justify-center">
-                    {item.image ? (
-                      <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
-                    ) : (
-                      <ImageIcon className="h-10 w-10 text-muted-foreground/20" />
-                    )}
+                  <div className="relative aspect-square bg-muted">
+                    <ProductImage
+                      src={item.image}
+                      alt={item.name}
+                      fill
+                      className="object-cover"
+                      sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+                      loading="lazy"
+                    />
                   </div>
                   {/* Availability dot */}
                   <span className="absolute top-2 left-2 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-background" />

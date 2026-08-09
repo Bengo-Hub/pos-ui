@@ -39,7 +39,9 @@ export interface ScreensaverMedia {
 }
 
 /** pos-api stores managed screensavers as RELATIVE `/media/...` paths (resolve-at-read
- *  convention) — they are served by pos-api, not the UI origin, so prefix the API base. */
+ *  convention) — they are served by pos-api, not the UI origin, so prefix the API base.
+ *  Also reused by ProductImage (components/ui/product-image.tsx) as a defensive fallback
+ *  for the rare catalog image_url that arrives relative instead of pre-resolved. */
 export function resolveMediaUrl(url: string): string {
   if (!url.startsWith('/media/')) return url;
   const base = process.env.NEXT_PUBLIC_API_URL || 'https://posapi.codevertexafrica.com';

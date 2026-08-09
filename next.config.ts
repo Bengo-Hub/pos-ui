@@ -59,7 +59,22 @@ const nextConfig: NextConfig = {
         protocol: "https",
         hostname: "sso.codevertexafrica.com",
       },
+      // Catalog item images: pos-api's catalog sync passes through inventory-api's
+      // already-fully-resolved image_url as-is (see [[inventory-media-image-convention]]).
+      // Both live hostnames are whitelisted since some pre-existing rows were stored
+      // against codevertexitsolutions.com (a real second Codevertex domain, not a typo).
+      { protocol: "https", hostname: "inventoryapi.codevertexafrica.com", pathname: "/media/**" },
+      { protocol: "https", hostname: "inventoryapi.codevertexitsolutions.com", pathname: "/media/**" },
+      { protocol: "http", hostname: "localhost", port: "4001", pathname: "/media/**" },
+      { protocol: "http", hostname: "127.0.0.1", port: "4001", pathname: "/media/**" },
     ],
+    // Modern formats + a size ladder tuned for small POS grid thumbnails (not full-bleed
+    // hero photos like the customer-facing ordering app) so cards resolve fast on
+    // constrained in-store wifi — see [[project_pos_load_speed]].
+    formats: ["image/avif", "image/webp"],
+    minimumCacheTTL: 86400,
+    deviceSizes: [384, 640, 750],
+    imageSizes: [48, 64, 96, 128, 192],
   },
   turbopack: {},
 };
