@@ -20,6 +20,7 @@ import { useOutletFilterStore } from '@/store/outlet-filter';
 import { cn } from '@/lib/utils';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { FeatureLock, useFeatureUpgrade } from '@bengo-hub/shared-ui-lib/subscription';
+import { SearchableCombobox } from '@bengo-hub/shared-ui-lib/combobox';
 import { Loader2, User, Users, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
@@ -154,12 +155,12 @@ export function CreateLayawayModal({ open, onClose, onCreated }: CreateLayawayMo
             <label className="text-xs font-semibold text-muted-foreground mb-1.5 block">
               Branch / Outlet <span className="text-destructive">*</span>
             </label>
-            <select value={outletId} onChange={(e) => setOutletId(e.target.value)} className={inputCls}>
-              {outletOptions.length === 0 && <option value="">— No outlet —</option>}
-              {outletOptions.map((o) => (
-                <option key={o.id} value={o.id}>{o.name}</option>
-              ))}
-            </select>
+            <SearchableCombobox
+              options={outletOptions.map((o) => ({ value: o.id, label: o.name }))}
+              value={outletId}
+              onChange={(value) => setOutletId(value)}
+              placeholder="— No outlet —"
+            />
           </div>
 
           {/* Party: existing customer vs staff member (funded from salary) */}

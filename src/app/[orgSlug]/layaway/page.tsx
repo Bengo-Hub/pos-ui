@@ -7,6 +7,7 @@ import { CreateLayawayModal } from '@/components/pos/layaway/create-layaway-moda
 import { useLayawayPlans } from '@/hooks/useLayaway';
 import { useOutletFilterStore } from '@/store/outlet-filter';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
+import { SearchableCombobox } from '@bengo-hub/shared-ui-lib/combobox';
 import { cn } from '@/lib/utils';
 import { Loader2, Plus, RefreshCw } from 'lucide-react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
@@ -62,17 +63,15 @@ function LayawayListPage() {
         </div>
         <div className="flex items-center gap-2">
           {outlets.length > 1 && (
-            <select
-              value={outletFilter}
-              onChange={(e) => setOutletFilter(e.target.value)}
-              className="bg-background border border-border rounded-xl py-2 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
-              aria-label="Filter by branch"
-            >
-              <option value="">All branches</option>
-              {outlets.map((o) => (
-                <option key={o.id} value={o.id}>{o.name}</option>
-              ))}
-            </select>
+            <div className="w-48">
+              <SearchableCombobox
+                options={outlets.map((o) => ({ value: o.id, label: o.name }))}
+                value={outletFilter}
+                onChange={(value) => setOutletFilter(value)}
+                placeholder="All branches"
+                clearable
+              />
+            </div>
           )}
           <button
             type="button"

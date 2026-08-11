@@ -12,6 +12,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { useRbacRoles } from '@/hooks/useRbac';
 import { useAuthStore } from '@/store/auth';
 import { fetchOutlets } from '@/lib/api/outlets';
+import { SearchableCombobox } from '@bengo-hub/shared-ui-lib/combobox';
 import type { StaffMember, UpdateStaffInput, CreateStaffInput } from '@/lib/api/staff';
 import { StaffShiftDrawer } from '@/components/pos/staff-shift-drawer';
 import { RolesPanel } from './RolesPanel';
@@ -261,18 +262,15 @@ export function TeamTab() {
                         <td className="px-4 py-3">
                           {isEditing
                             ? (
-                              <select
-                                className={inputClass}
+                              <SearchableCombobox
+                                options={
+                                  outlets.length === 0
+                                    ? [{ value: m.outlet_id, label: outletName(m.outlet_id) }]
+                                    : outlets.map((o) => ({ value: o.id, label: o.name }))
+                                }
                                 value={editForm.outlet_id ?? m.outlet_id}
-                                onChange={(e) => setEditForm((f) => ({ ...f, outlet_id: e.target.value }))}
-                              >
-                                {outlets.length === 0 && (
-                                  <option value={m.outlet_id}>{outletName(m.outlet_id)}</option>
-                                )}
-                                {outlets.map((o) => (
-                                  <option key={o.id} value={o.id}>{o.name}</option>
-                                ))}
-                              </select>
+                                onChange={(value) => setEditForm((f) => ({ ...f, outlet_id: value }))}
+                              />
                             )
                             : (
                               <span className="text-xs flex items-center gap-1.5">

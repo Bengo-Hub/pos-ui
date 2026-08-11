@@ -4,6 +4,7 @@ import { ModuleGate } from '@/components/auth/module-gate';
 import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
 import { Card, CardContent } from '@/components/ui/base';
 import { useMostProfitable } from '@/hooks/useReports';
+import { useEffectiveOutletID } from '@/hooks/usePOS';
 import { ReportDocumentButton } from '@/components/reports/report-document-button';
 import { Coins, TrendingUp } from 'lucide-react';
 import { useMemo, useState } from 'react';
@@ -23,7 +24,8 @@ function MostProfitableContent() {
   const [from, setFrom] = useState(initial.from);
   const [to, setTo] = useState(initial.to);
 
-  const { data, isLoading } = useMostProfitable(from, to, 20);
+  const outletId = useEffectiveOutletID() || undefined;
+  const { data, isLoading } = useMostProfitable(from, to, 20, outletId);
   const currency = data?.currency ?? 'KES';
   const items = data?.items ?? [];
   const totalRevenue = data?.total_revenue ?? 0;

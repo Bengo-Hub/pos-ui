@@ -42,9 +42,12 @@ const listLen = (d: unknown): string => {
 
 export const OFFLINE_DATASETS: OfflineDataset[] = [
   {
+    // Outlet-scoped: POSSettings carries an outlet_id and pos-api resolves it from the
+    // ambient X-Outlet-ID header, so a switch between outlets must be a genuine refetch, not
+    // a stale cache hit from whatever outlet was active when this was last fetched.
     name: 'pos-settings',
-    scope: 'tenant',
-    queryKey: (t) => ['pos-settings', t] as const,
+    scope: 'outlet',
+    queryKey: (t, o) => ['pos-settings', t, o ?? ''] as const,
     fetch: (t) => apiClient.get(`${pos(t)}/settings`, undefined, quiet),
   },
   {

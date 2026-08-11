@@ -14,6 +14,7 @@ import Link from 'next/link';
 import { Clock, Loader2, RefreshCw, ShoppingCart, Wallet, ExternalLink } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/base';
 import { useShiftReport } from '@/hooks/useReports';
+import { useEffectiveOutletID } from '@/hooks/usePOS';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { formatCurrency } from '@/lib/utils';
 
@@ -32,7 +33,8 @@ export function TeamOnShiftPanel() {
   const { orgSlug } = useParams<{ orgSlug: string }>();
   const [refreshTick, setRefreshTick] = useState(0);
   const today = ymdLocal(new Date());
-  const { data: rows = [], isLoading, refetch, isFetching } = useShiftReport(today, today);
+  const outletId = useEffectiveOutletID() || undefined;
+  const { data: rows = [], isLoading, refetch, isFetching } = useShiftReport(today, today, outletId);
   const { data: posSettings } = usePOSSettings();
   const currency = (posSettings as any)?.currency ?? 'KES';
 

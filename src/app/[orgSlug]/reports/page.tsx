@@ -14,6 +14,7 @@ import {
   type Granularity,
 } from '@/hooks/useReports';
 import { useAuthStore } from '@/store/auth';
+import { useEffectiveOutletID } from '@/hooks/usePOS';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
@@ -75,16 +76,17 @@ function bucketLabel(dateISO: string, gran: Granularity): string {
 function ReportsPage() {
   const tenantID = useAuthStore((s) => s.user?.tenant_id ?? '');
   const orgSlug = (useParams()?.orgSlug as string) || '';
+  const outletId = useEffectiveOutletID() || undefined;
   const [gran, setGran] = useState<Granularity>('day');
   const [exporting, setExporting] = useState(false);
   const buckets = GRAN_OPTIONS.find((g) => g.key === gran)?.buckets ?? 30;
   const { from, to } = granularityToRange(gran, buckets);
 
-  const { data: sales, isLoading: salesLoading, isError: salesError, refetch: refetchSales } = useSalesSummary(from, to);
-  const { data: refunds } = useRefundSummary(from, to);
-  const { data: daily = [] } = useDailyBreakdown(from, to, true, gran);
-  const { data: topItems = [] } = useTopItems(from, to);
-  const { data: staffSales = [] } = useSalesByStaff(from, to);
+  const { data: sales, isLoading: salesLoading, isError: salesError, refetch: refetchSales } = useSalesSummary(from, to, outletId);
+  const { data: refunds } = useRefundSummary(from, to, outletId);
+  const { data: daily = [] } = useDailyBreakdown(from, to, true, gran, outletId);
+  const { data: topItems = [] } = useTopItems(from, to, 10, outletId);
+  const { data: staffSales = [] } = useSalesByStaff(from, to, outletId);
 
   async function handleExport() {
     setExporting(true);

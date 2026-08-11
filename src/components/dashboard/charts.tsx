@@ -14,6 +14,7 @@ import {
 } from 'recharts';
 import { BarChart3, Clock, Package, Tag } from 'lucide-react';
 import { useDailyBreakdown, useSalesByCategory, useSalesByHour, useTopItems } from '@/hooks/useReports';
+import { useEffectiveOutletID } from '@/hooks/usePOS';
 import type { DashboardRange } from './range-filter';
 
 const CHART_COLORS = [
@@ -61,8 +62,9 @@ function truncateLabel(name: string, max = 14): string {
  *  daily trend), otherwise a bucketed area chart sized to the selected range's granularity. */
 export function RevenueTrendChart({ range, currency = 'KES' }: { range: DashboardRange; currency?: string }) {
   const fmt = fmtFor(currency);
-  const hourQuery = useSalesByHour(range.chartTo, undefined);
-  const dailyQuery = useDailyBreakdown(range.chartFrom, range.chartTo, !range.isSingleDay, range.granularity);
+  const outletId = useEffectiveOutletID() || undefined;
+  const hourQuery = useSalesByHour(range.chartTo, outletId);
+  const dailyQuery = useDailyBreakdown(range.chartFrom, range.chartTo, !range.isSingleDay, range.granularity, outletId);
 
   if (range.isSingleDay) {
     const data = (hourQuery.data ?? []).map((r) => ({ label: `${String(r.hour).padStart(2, '0')}:00`, revenue: r.revenue }));
@@ -107,7 +109,8 @@ export function RevenueTrendChart({ range, currency = 'KES' }: { range: Dashboar
  *  categories never renders as an unreadable 20-slice donut. */
 export function CategoryBreakdownChart({ range, currency = 'KES' }: { range: DashboardRange; currency?: string }) {
   const fmt = fmtFor(currency);
-  const query = useSalesByCategory(range.chartFrom, range.chartTo);
+  const outletId = useEffectiveOutletID() || undefined;
+  const query = useSalesByCategory(range.chartFrom, range.chartTo, outletId);
   const rows = [...(query.data ?? [])].sort((a, b) => b.revenue - a.revenue);
   const top = rows.slice(0, 5);
   const otherRevenue = rows.slice(5).reduce((s, r) => s + r.revenue, 0);
@@ -145,7 +148,8 @@ export function CategoryBreakdownChart({ range, currency = 'KES' }: { range: Das
  *  the Reports > Product Mix tab's category/station charts. */
 export function TopItemsChart({ range, currency = 'KES' }: { range: DashboardRange; currency?: string }) {
   const fmt = fmtFor(currency);
-  const query = useTopItems(range.chartFrom, range.chartTo, 8);
+  const outletId = useEffectiveOutletID() || undefined;
+  const query = useTopItems(range.chartFrom, range.chartTo, 8, outletId);
   const data = [...(query.data ?? [])]
     .sort((a, b) => b.revenue - a.revenue)
     .slice(0, 8)

@@ -5,7 +5,8 @@ import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
 import { Card, CardContent } from '@/components/ui/base';
 import { useEODList } from '@/hooks/useReports';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
-import { useAuthStore } from '@/store/auth';
+import { useEffectiveOutletID } from '@/hooks/usePOS';
+import { OutletFilter } from '@/components/outlet-filter';
 import { cn, formatCurrency } from '@/lib/utils';
 import { Calendar, CheckCircle2, ChevronRight, Clock, DollarSign, Loader2 } from 'lucide-react';
 import Link from 'next/link';
@@ -19,7 +20,10 @@ const STATUS_STYLES: Record<string, string> = {
 
 function EODContent() {
   const { orgSlug } = useParams<{ orgSlug: string }>();
-  const outletId = useAuthStore((s) => s.outlet?.id ?? '');
+  // EOD reconciliation is inherently per-outlet (one cash drawer, one register), so unlike
+  // most reports there is no sensible "All Outlets" view — but it must still follow an HQ
+  // drill-down switch rather than being pinned to the session's home outlet forever.
+  const outletId = useEffectiveOutletID();
 
   const now = new Date();
   const from = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
@@ -29,22 +33,19 @@ function EODContent() {
   const { data: posSettings } = usePOSSettings();
   const currency = (posSettings as any)?.currency ?? 'KES';
 
-  if (!outletId) {
-    return (
-      <div className="p-6">
-        <Card><CardContent className="p-10 text-center text-muted-foreground">Select an outlet to view EOD reports.</CardContent></Card>
-      </div>
-    );
-  }
-
   return (
     <div className="p-6 space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">End-of-Day Reports</h1>
-        <p className="text-sm text-muted-foreground mt-1">Daily reconciliation and cash variance summary</p>
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h1 className="text-2xl font-bold">End-of-Day Reports</h1>
+          <p className="text-sm text-muted-foreground mt-1">Daily reconciliation and cash variance summary</p>
+        </div>
+        <OutletFilter />
       </div>
 
-      {isLoading ? (
+      {!outletId ? (
+        <Card><CardContent className="p-10 text-center text-muted-foreground">Select an outlet to view EOD reports.</CardContent></Card>
+      ) : isLoading ? (
         <div className="flex items-center justify-center h-48"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
       ) : closings.length === 0 ? (
         <Card><CardContent className="p-10 text-center text-muted-foreground">No daily closings found this month.</CardContent></Card>

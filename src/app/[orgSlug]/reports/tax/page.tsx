@@ -4,6 +4,7 @@ import { ModuleGate } from '@/components/auth/module-gate';
 import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
 import { Card, CardContent } from '@/components/ui/base';
 import { useTaxReport } from '@/hooks/useReports';
+import { useEffectiveOutletID } from '@/hooks/usePOS';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { ReportDocumentButton } from '@/components/reports/report-document-button';
 import { cn, formatCurrency } from '@/lib/utils';
@@ -25,7 +26,8 @@ function TaxReportContent() {
   const tenantID = useAuthStore((s) => s.user?.tenant_id ?? '');
   const [period, setPeriod] = useState<'today' | 'week' | 'month'>('month');
   const { from, to } = periodRange(period);
-  const { data: rows = [], isLoading, isError, refetch } = useTaxReport(from, to);
+  const outletId = useEffectiveOutletID() || undefined;
+  const { data: rows = [], isLoading, isError, refetch } = useTaxReport(from, to, outletId);
   const { data: posSettings } = usePOSSettings();
   const currency = (posSettings as any)?.currency ?? 'KES';
 

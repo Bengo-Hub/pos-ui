@@ -3,6 +3,7 @@
 import { Filter } from 'lucide-react';
 import { Card, CardContent, CardHeader } from '@/components/ui/base';
 import { DateRangePicker, type DateRange } from '@/components/ui/date-range-picker';
+import { SearchableCombobox } from '@bengo-hub/shared-ui-lib/combobox';
 import { PAYMENT_STATUSES, SHIPPING_STATUSES, SOURCES, PAYMENT_METHOD_OPTIONS } from './sales-shared';
 
 export interface SalesFilterState {
@@ -116,10 +117,14 @@ export function SalesFilters({ state, onChange, outlets, staff, fixedSource, hid
       </CardHeader>
       <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <label className="text-[11px] font-semibold text-muted-foreground">Outlets
-          <select className={selectCls} value={state.outletId} onChange={(e) => onChange({ outletId: e.target.value })}>
-            <option value="">All</option>
-            {outlets.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
-          </select>
+          <SearchableCombobox
+            className="mt-0.5"
+            options={outlets.map((o) => ({ value: o.id, label: o.name }))}
+            value={state.outletId}
+            onChange={(value) => onChange({ outletId: value })}
+            placeholder="All"
+            clearable
+          />
         </label>
         <label className="text-[11px] font-semibold text-muted-foreground">Customer
           <input className={selectCls} placeholder="Name or phone" value={state.customer} onChange={(e) => onChange({ customer: e.target.value })} />

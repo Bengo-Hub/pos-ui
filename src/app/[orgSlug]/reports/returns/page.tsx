@@ -4,6 +4,7 @@ import { ModuleGate } from '@/components/auth/module-gate';
 import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
 import { Card, CardContent } from '@/components/ui/base';
 import { useRefundSummary } from '@/hooks/useReports';
+import { useEffectiveOutletID } from '@/hooks/usePOS';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { cn, formatCurrency } from '@/lib/utils';
 import { Loader2, TrendingDown } from 'lucide-react';
@@ -20,7 +21,8 @@ function periodRange(p: 'today' | 'week' | 'month') {
 function ReturnsReportContent() {
   const [period, setPeriod] = useState<'today' | 'week' | 'month'>('month');
   const { from, to } = periodRange(period);
-  const { data: summary, isLoading } = useRefundSummary(from, to);
+  const outletId = useEffectiveOutletID() || undefined;
+  const { data: summary, isLoading } = useRefundSummary(from, to, outletId);
   const { data: posSettings } = usePOSSettings();
   const currency = (posSettings as any)?.currency ?? 'KES';
 

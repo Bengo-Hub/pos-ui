@@ -4,6 +4,7 @@ import { ModuleGate } from '@/components/auth/module-gate';
 import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
 import { Card, CardContent } from '@/components/ui/base';
 import { useShiftReport } from '@/hooks/useReports';
+import { useEffectiveOutletID } from '@/hooks/usePOS';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { cn, formatCurrency } from '@/lib/utils';
 import { Calendar, Clock, DollarSign, Loader2, ShoppingCart } from 'lucide-react';
@@ -34,7 +35,8 @@ function formatDate(iso: string) {
 function SessionsContent() {
   const [period, setPeriod] = useState<Period>('week');
   const { from, to } = periodRange(period);
-  const { data: sessions = [], isLoading } = useShiftReport(from, to);
+  const outletId = useEffectiveOutletID() || undefined;
+  const { data: sessions = [], isLoading } = useShiftReport(from, to, outletId);
   const { data: posSettings } = usePOSSettings();
   const currency = (posSettings as any)?.currency ?? 'KES';
 

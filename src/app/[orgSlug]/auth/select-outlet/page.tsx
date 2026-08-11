@@ -15,6 +15,7 @@
 
 import { apiClient } from '@/lib/api/client';
 import { getStoredOutletId, setStoredOutletId } from '@/lib/auth/outlet-storage';
+import { canAccessAllOutlets } from '@/lib/auth/outlet-access';
 import { useAuthStore, type OutletInfo } from '@/store/auth';
 import { Building2, CheckCircle2, ChevronRight, Crown, MapPin } from 'lucide-react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
@@ -52,11 +53,7 @@ function SelectOutletContent() {
   const tenantID = user?.tenant_id ?? '';
 
   // HQ users (admin/manager) get the full outlet picker; other roles auto-select.
-  const userRoles = user?.roles ?? [];
-  const isHQUser =
-    user?.isPlatformOwner ||
-    user?.isSuperUser ||
-    userRoles.some((r) => ['admin', 'pos_admin', 'manager', 'store_manager', 'superuser', 'super_admin'].includes(r));
+  const isHQUser = canAccessAllOutlets(user);
 
   const [outlets, setOutlets] = useState<OutletInfo[]>([]);
   const [loading, setLoading] = useState(true);

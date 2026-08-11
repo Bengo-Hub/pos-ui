@@ -208,63 +208,63 @@ export interface VoidRow {
 // ─── Query keys ───────────────────────────────────────────────────────────────
 
 export const reportKeys = {
-  sales: (tid: string, from: string, to: string) => ['reports', tid, 'sales', from, to] as const,
-  refunds: (tid: string, from: string, to: string) => ['reports', tid, 'refunds', from, to] as const,
-  daily: (tid: string, from: string, to: string) => ['reports', tid, 'daily', from, to] as const,
-  topItems: (tid: string, from: string, to: string) => ['reports', tid, 'top-items', from, to] as const,
+  sales: (tid: string, from: string, to: string, outletId?: string) => ['reports', tid, 'sales', from, to, outletId] as const,
+  refunds: (tid: string, from: string, to: string, outletId?: string) => ['reports', tid, 'refunds', from, to, outletId] as const,
+  daily: (tid: string, from: string, to: string, outletId?: string) => ['reports', tid, 'daily', from, to, outletId] as const,
+  topItems: (tid: string, from: string, to: string, outletId?: string) => ['reports', tid, 'top-items', from, to, outletId] as const,
   staffSales: (tid: string, from: string, to: string, outletId?: string) => ['reports', tid, 'staff-sales', from, to, outletId] as const,
-  shifts: (tid: string, from: string, to: string) => ['reports', tid, 'shifts', from, to] as const,
+  shifts: (tid: string, from: string, to: string, outletId?: string) => ['reports', tid, 'shifts', from, to, outletId] as const,
   shiftDetail: (tid: string, sessionId: string) => ['reports', tid, 'shift-detail', sessionId] as const,
-  commissions: (tid: string, from: string, to: string) => ['reports', tid, 'commissions', from, to] as const,
-  tax: (tid: string, from: string, to: string) => ['reports', tid, 'tax', from, to] as const,
+  commissions: (tid: string, from: string, to: string, outletId?: string) => ['reports', tid, 'commissions', from, to, outletId] as const,
+  tax: (tid: string, from: string, to: string, outletId?: string) => ['reports', tid, 'tax', from, to, outletId] as const,
   salesByHour: (tid: string, date: string, outletId?: string) => ['reports', tid, 'sales-by-hour', date, outletId] as const,
   salesByCategory: (tid: string, from: string, to: string, outletId?: string) => ['reports', tid, 'sales-by-category', from, to, outletId] as const,
   salesByKDSStation: (tid: string, from: string, to: string, outletId?: string) => ['reports', tid, 'sales-by-kds-station', from, to, outletId] as const,
   productMix: (tid: string, from: string, to: string, outletId?: string) => ['reports', tid, 'product-mix', from, to, outletId] as const,
   voidSummary: (tid: string, from: string, to: string, outletId?: string) => ['reports', tid, 'void-summary', from, to, outletId] as const,
   eodList: (tid: string, outletId: string, from: string, to: string) => ['reports', tid, 'eod', outletId, from, to] as const,
-  stockConsumption: (tid: string, from: string, to: string) => ['reports', tid, 'stock-consumption', from, to] as const,
-  returnsDetail: (tid: string, from: string, to: string) => ['reports', tid, 'returns-detail', from, to] as const,
-  mostProfitable: (tid: string, from: string, to: string, limit: number) => ['reports', tid, 'most-profitable', from, to, limit] as const,
+  stockConsumption: (tid: string, from: string, to: string, outletId?: string) => ['reports', tid, 'stock-consumption', from, to, outletId] as const,
+  returnsDetail: (tid: string, from: string, to: string, outletId?: string) => ['reports', tid, 'returns-detail', from, to, outletId] as const,
+  mostProfitable: (tid: string, from: string, to: string, limit: number, outletId?: string) => ['reports', tid, 'most-profitable', from, to, limit, outletId] as const,
 };
 
 // ─── Hooks ────────────────────────────────────────────────────────────────────
 
-export function useSalesSummary(from: string, to: string) {
+export function useSalesSummary(from: string, to: string, outletId?: string) {
   const tenantID = useTenantID();
   return useQuery({
-    queryKey: reportKeys.sales(tenantID, from, to),
-    queryFn: () => apiClient.get<SalesSummary>(`${basePath(tenantID)}/sales-summary`, { from, to }),
+    queryKey: reportKeys.sales(tenantID, from, to, outletId),
+    queryFn: () => apiClient.get<SalesSummary>(`${basePath(tenantID)}/sales-summary`, { from, to, outlet_id: outletId }),
     enabled: !!tenantID && !!from && !!to,
   });
 }
 
-export function useRefundSummary(from: string, to: string) {
+export function useRefundSummary(from: string, to: string, outletId?: string) {
   const tenantID = useTenantID();
   return useQuery({
-    queryKey: reportKeys.refunds(tenantID, from, to),
-    queryFn: () => apiClient.get<RefundSummary>(`${basePath(tenantID)}/refund-summary`, { from, to }),
+    queryKey: reportKeys.refunds(tenantID, from, to, outletId),
+    queryFn: () => apiClient.get<RefundSummary>(`${basePath(tenantID)}/refund-summary`, { from, to, outlet_id: outletId }),
     enabled: !!tenantID && !!from && !!to,
   });
 }
 
-export function useDailyBreakdown(from: string, to: string, enabled = true, granularity: Granularity = 'day') {
+export function useDailyBreakdown(from: string, to: string, enabled = true, granularity: Granularity = 'day', outletId?: string) {
   const tenantID = useTenantID();
   return useQuery({
-    queryKey: [...reportKeys.daily(tenantID, from, to), granularity],
+    queryKey: [...reportKeys.daily(tenantID, from, to, outletId), granularity],
     queryFn: async () => {
-      const res = await apiClient.get<DayRow[] | { data?: DayRow[] }>(`${basePath(tenantID)}/daily-breakdown`, { from, to, granularity });
+      const res = await apiClient.get<DayRow[] | { data?: DayRow[] }>(`${basePath(tenantID)}/daily-breakdown`, { from, to, granularity, outlet_id: outletId });
       return Array.isArray(res) ? res : res?.data ?? [];
     },
     enabled: !!tenantID && !!from && !!to && enabled,
   });
 }
 
-export function useTopItems(from: string, to: string, limit = 10) {
+export function useTopItems(from: string, to: string, limit = 10, outletId?: string) {
   const tenantID = useTenantID();
   return useQuery({
-    queryKey: reportKeys.topItems(tenantID, from, to),
-    queryFn: () => apiClient.get<TopItem[]>(`${basePath(tenantID)}/top-items`, { from, to, limit }),
+    queryKey: reportKeys.topItems(tenantID, from, to, outletId),
+    queryFn: () => apiClient.get<TopItem[]>(`${basePath(tenantID)}/top-items`, { from, to, limit, outlet_id: outletId }),
     enabled: !!tenantID && !!from && !!to,
     staleTime: 2 * 60_000,
   });
@@ -280,16 +280,16 @@ export function useSalesByStaff(from: string, to: string, outletId?: string) {
   });
 }
 
-export function useShiftReport(from: string, to: string) {
+export function useShiftReport(from: string, to: string, outletId?: string) {
   const tenantID = useTenantID();
   return useQuery({
-    queryKey: reportKeys.shifts(tenantID, from, to),
+    queryKey: reportKeys.shifts(tenantID, from, to, outletId),
     // The backend wraps this list in a `{data, total}` envelope (ShiftReportList), not a bare
     // array — every caller here destructures `data: rows = []` expecting a real array, so an
     // un-unwrapped envelope object silently became `rows` itself: iterating/mapping it then threw
     // "is not iterable"/"map is not a function" (hit live on the Shifts "Team" tab).
     queryFn: async () => {
-      const res = await apiClient.get<{ data?: ShiftRow[] } | ShiftRow[]>(`${basePath(tenantID)}/shifts`, { from, to });
+      const res = await apiClient.get<{ data?: ShiftRow[] } | ShiftRow[]>(`${basePath(tenantID)}/shifts`, { from, to, outlet_id: outletId });
       return Array.isArray(res) ? res : res.data ?? [];
     },
     enabled: !!tenantID && !!from && !!to,
@@ -297,21 +297,21 @@ export function useShiftReport(from: string, to: string) {
   });
 }
 
-export function useCommissionReport(from: string, to: string) {
+export function useCommissionReport(from: string, to: string, outletId?: string) {
   const tenantID = useTenantID();
   return useQuery({
-    queryKey: reportKeys.commissions(tenantID, from, to),
-    queryFn: () => apiClient.get<CommissionRow[]>(`${basePath(tenantID)}/commissions`, { from, to }),
+    queryKey: reportKeys.commissions(tenantID, from, to, outletId),
+    queryFn: () => apiClient.get<CommissionRow[]>(`${basePath(tenantID)}/commissions`, { from, to, outlet_id: outletId }),
     enabled: !!tenantID && !!from && !!to,
     staleTime: 2 * 60_000,
   });
 }
 
-export function useTaxReport(from: string, to: string) {
+export function useTaxReport(from: string, to: string, outletId?: string) {
   const tenantID = useTenantID();
   return useQuery({
-    queryKey: reportKeys.tax(tenantID, from, to),
-    queryFn: () => apiClient.get<TaxRow[]>(`${basePath(tenantID)}/tax`, { from, to }),
+    queryKey: reportKeys.tax(tenantID, from, to, outletId),
+    queryFn: () => apiClient.get<TaxRow[]>(`${basePath(tenantID)}/tax`, { from, to, outlet_id: outletId }),
     enabled: !!tenantID && !!from && !!to,
     staleTime: 2 * 60_000,
   });
@@ -498,31 +498,31 @@ export function useEODList(outletId: string, from: string, to: string) {
   });
 }
 
-export function useStockConsumptionReport(from: string, to: string) {
+export function useStockConsumptionReport(from: string, to: string, outletId?: string) {
   const tenantID = useTenantID();
   return useQuery({
-    queryKey: reportKeys.stockConsumption(tenantID, from, to),
-    queryFn: () => apiClient.get<StockConsumptionRow[]>(`${basePath(tenantID)}/stock-consumption`, { from, to }),
+    queryKey: reportKeys.stockConsumption(tenantID, from, to, outletId),
+    queryFn: () => apiClient.get<StockConsumptionRow[]>(`${basePath(tenantID)}/stock-consumption`, { from, to, outlet_id: outletId }),
     enabled: !!tenantID && !!from && !!to,
     staleTime: 2 * 60_000,
   });
 }
 
-export function useMostProfitable(from: string, to: string, limit = 20) {
+export function useMostProfitable(from: string, to: string, limit = 20, outletId?: string) {
   const tenantID = useTenantID();
   return useQuery({
-    queryKey: reportKeys.mostProfitable(tenantID, from, to, limit),
-    queryFn: () => apiClient.get<MostProfitableReport>(`${basePath(tenantID)}/most-profitable`, { from, to, limit }),
+    queryKey: reportKeys.mostProfitable(tenantID, from, to, limit, outletId),
+    queryFn: () => apiClient.get<MostProfitableReport>(`${basePath(tenantID)}/most-profitable`, { from, to, limit, outlet_id: outletId }),
     enabled: !!tenantID && !!from && !!to,
     staleTime: 2 * 60_000,
   });
 }
 
-export function useReturnsDetail(from: string, to: string) {
+export function useReturnsDetail(from: string, to: string, outletId?: string) {
   const tenantID = useTenantID();
   return useQuery({
-    queryKey: reportKeys.returnsDetail(tenantID, from, to),
-    queryFn: () => apiClient.get<ReturnsRow[]>(`${basePath(tenantID)}/returns`, { from, to }),
+    queryKey: reportKeys.returnsDetail(tenantID, from, to, outletId),
+    queryFn: () => apiClient.get<ReturnsRow[]>(`${basePath(tenantID)}/returns`, { from, to, outlet_id: outletId }),
     enabled: !!tenantID && !!from && !!to,
     staleTime: 2 * 60_000,
   });

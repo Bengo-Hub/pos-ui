@@ -137,8 +137,16 @@ export const useAuthStore = create<AuthState>()(
 
       setSelectedOutletId: (id) => {
         set({ selectedOutletId: id });
-        // Drill-down takes precedence over the home outlet header
-        apiClient.setOutletID(id ?? get().outlet?.id ?? null);
+        // A real outlet id overrides the home-outlet header. An explicit null is the "All
+        // Outlets" choice — BUG FIX (live-reported): this used to fall back to
+        // get().outlet?.id, so choosing "All Outlets" silently kept scoping every ambient-
+        // header-scoped GET (catalog, reports) to the admin's own home outlet — the header
+        // never actually cleared, it just never LOOKED cleared because the UI label said "All
+        // Outlets" while the data underneath was one outlet's. Order-booking is unaffected:
+        // useEffectiveOutletID() reads selectedOutletId (already correctly null here before
+        // this fix too) and separately falls back to the home outlet for anything that must
+        // target a real outlet — this only changes the raw X-Outlet-ID header.
+        apiClient.setOutletID(id);
       },
 
       initialize: async () => {

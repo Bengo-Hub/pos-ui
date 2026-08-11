@@ -326,9 +326,7 @@ export function Header({ onMenuClick, onToggleSidebar, sidebarCollapsed }: Heade
   const role = user?.roles?.[0];
 
   const { can, isSuperuser } = usePermissions();
-  const isHQUser = isSuperuser || (user?.roles ?? []).some((r) =>
-    ['admin', 'pos_admin', 'manager', 'store_manager', 'superuser', 'super_admin'].includes(r)
-  );
+  const isHQUser = isSuperuser || canAccessAllOutlets(user);
   const showSettings = isHQUser || can(P.CONFIG_VIEW) || can(P.CONFIG_CHANGE) || can(P.CONFIG_MANAGE);
   // activeProducts is undefined while the subscription lookup is in flight/unknown — fails open
   // (shows everything) until it resolves, matching this codebase's existing "never block the UI
