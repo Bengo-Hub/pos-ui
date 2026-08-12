@@ -6,12 +6,13 @@ import {
   useShiftRotations, useShiftRotationDetail,
   useCreateShiftRotation, useUpdateShiftRotation, useUpsertRotationSlots,
 } from '@/hooks/useShiftRotations';
-import { useStaffAdmin } from '@/hooks/useStaff';
+import { useStaffAdmin, useStaffSearch } from '@/hooks/useStaff';
 import { useAuthStore } from '@/store/auth';
 import { Card, CardContent } from '@/components/ui/base';
 import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import type { ShiftRotation, ShiftRotationSlot } from '@/lib/api/shift-rotations';
+import { SearchableCombobox } from '@bengo-hub/shared-ui-lib/combobox';
 
 function todayStr() {
   return new Date().toISOString().slice(0, 10);
@@ -30,6 +31,8 @@ interface SlotManagerProps {
 function SlotManager({ rotation, staffNames, staffIds }: SlotManagerProps) {
   const { data, isLoading } = useShiftRotationDetail(rotation.id);
   const upsert = useUpsertRotationSlots(rotation.id);
+  const tenantId = useAuthStore((s) => s.user?.tenant_id) ?? '';
+  const searchStaff = useStaffSearch(tenantId);
 
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({
@@ -160,17 +163,24 @@ function SlotManager({ rotation, staffNames, staffIds }: SlotManagerProps) {
           <div className="grid grid-cols-2 gap-2">
             <div className="col-span-2">
               <label className="text-[10px] font-medium text-muted-foreground">Staff Member</label>
-              <select
-                value={form.staff_member_id}
-                onChange={(e) => setForm((f) => ({ ...f, staff_member_id: e.target.value }))}
-                required
-                className={inputCls}
-              >
-                <option value="">— select staff —</option>
-                {staffIds.map((id) => (
-                  <option key={id} value={id}>{staffNames[id] ?? id.slice(0, 8)}</option>
-                ))}
-              </select>
+              <div className="relative">
+                <SearchableCombobox
+                  options={staffIds.map((id) => ({ value: id, label: staffNames[id] ?? id.slice(0, 8) }))}
+                  value={form.staff_member_id}
+                  onChange={(id) => setForm((f) => ({ ...f, staff_member_id: id }))}
+                  placeholder="— select staff —"
+                  onRemoteSearch={searchStaff}
+                />
+                {/* Participates in native form validation the way the old <select required> did. */}
+                <input
+                  tabIndex={-1}
+                  aria-hidden
+                  required
+                  value={form.staff_member_id}
+                  onChange={() => {}}
+                  className="pointer-events-none absolute inset-0 h-full w-full opacity-0"
+                />
+              </div>
             </div>
             <div>
               <label className="text-[10px] font-medium text-muted-foreground">From Day</label>

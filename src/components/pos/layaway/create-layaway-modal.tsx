@@ -14,7 +14,7 @@
 import { Button } from '@/components/ui/base';
 import { CustomerSearch, type SelectedCustomer } from '@/components/pos/customer-search';
 import { useCreateLayaway, type CreateLayawayInput, type LayawayPlan } from '@/hooks/useLayaway';
-import { useStaffAdmin } from '@/hooks/useStaff';
+import { useStaffAdmin, useStaffSearch } from '@/hooks/useStaff';
 import { useAuthStore } from '@/store/auth';
 import { useOutletFilterStore } from '@/store/outlet-filter';
 import { cn } from '@/lib/utils';
@@ -58,6 +58,7 @@ export function CreateLayawayModal({ open, onClose, onCreated }: CreateLayawayMo
 
   const { data: staffResp } = useStaffAdmin(tenantId);
   const staff: any[] = Array.isArray(staffResp) ? staffResp : ((staffResp as any)?.data ?? []);
+  const searchStaff = useStaffSearch(tenantId);
   const staffCredit = useFeatureUpgrade(STAFF_CREDIT_FEATURE);
 
   if (!open) return null;
@@ -186,12 +187,13 @@ export function CreateLayawayModal({ open, onClose, onCreated }: CreateLayawayMo
                 <label className="text-xs font-semibold text-muted-foreground mb-1.5 block">
                   Staff Member <span className="text-destructive">*</span>
                 </label>
-                <select value={staffId} onChange={(e) => setStaffId(e.target.value)} className={inputCls}>
-                  <option value="">— Select staff —</option>
-                  {staff.map((s: any) => (
-                    <option key={s.id} value={s.id}>{s.name}{s.role ? ` · ${s.role}` : ''}</option>
-                  ))}
-                </select>
+                <SearchableCombobox
+                  options={staff.map((s: any) => ({ value: s.id, label: s.name, hint: s.role || undefined }))}
+                  value={staffId}
+                  onChange={setStaffId}
+                  placeholder="— Select staff —"
+                  onRemoteSearch={searchStaff}
+                />
               </div>
               {/* Staff: fund the balance from salary (premium — visible + upgrade-gated, never hidden) */}
               <FeatureLock feature={STAFF_CREDIT_FEATURE} mode="overlay">

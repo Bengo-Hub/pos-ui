@@ -68,8 +68,8 @@ export const staffApi = {
     return apiClient.get<{ data: StaffProfile[] }>(`${staffBase(tenantId)}/staff${params}`);
   },
 
-  listAdmin: (tenantId: string) =>
-    apiClient.get<{ data: StaffMember[]; total: number }>(`${staffBase(tenantId)}/staff/admin`),
+  listAdmin: (tenantId: string, search?: string) =>
+    apiClient.get<{ data: StaffMember[]; total: number }>(`${staffBase(tenantId)}/staff/admin`, search ? { search } : undefined),
 
   create: (tenantId: string, input: CreateStaffInput) =>
     apiClient.post<{ id: string; name: string }>(`${staffBase(tenantId)}/staff`, input),

@@ -22,7 +22,8 @@ import { useClientCredit } from '@/hooks/useClients';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useAddOrderLines, useCreateOrder, useCreatePaymentIntent, useEditOrderLine, useEditSale, useFullCatalog, useMenuItems, useOrder, usePricingTiers, useSetOrderDiscount, useVoidOrderLine, type CatalogItem, type EditSaleLine } from '@/hooks/usePOS';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
-import { useStaffAdmin } from '@/hooks/useStaff';
+import { useStaffAdmin, useStaffSearch } from '@/hooks/useStaff';
+import { SearchableCombobox } from '@bengo-hub/shared-ui-lib/combobox';
 import { apiClient } from '@/lib/api/client';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { rbacApi } from '@/lib/api/rbac';
@@ -121,6 +122,7 @@ export default function AddSalePage() {
   // this, so this avoids an unconditional S2S round trip on every Add Sale mount.
   const { data: staffResp } = useStaffAdmin(tenantId, { enabled: staffParty });
   const staff: any[] = Array.isArray(staffResp) ? staffResp : ((staffResp as any)?.data ?? []);
+  const searchStaff = useStaffSearch(tenantId);
   const selectedStaff = staff.find((s: any) => s.id === staffId);
   const staffCredit = useFeatureUpgrade(STAFF_CREDIT_FEATURE);
 
@@ -1053,16 +1055,13 @@ export default function AddSalePage() {
               <label className="text-xs font-semibold text-muted-foreground">
                 Staff Member <span className="text-destructive">*</span>
               </label>
-              <select
+              <SearchableCombobox
+                options={staff.map((s: any) => ({ value: s.id, label: s.name, hint: s.role || undefined }))}
                 value={staffId}
-                onChange={(e) => setStaffId(e.target.value)}
-                className="w-full bg-background border border-border rounded-xl py-2.5 px-3.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
-              >
-                <option value="">— Select staff —</option>
-                {staff.map((s: any) => (
-                  <option key={s.id} value={s.id}>{s.name}{s.role ? ` · ${s.role}` : ''}</option>
-                ))}
-              </select>
+                onChange={setStaffId}
+                placeholder="— Select staff —"
+                onRemoteSearch={searchStaff}
+              />
             </div>
             {/* Fund from salary (premium — visible + upgrade-gated, never hidden) */}
             <FeatureLock feature={STAFF_CREDIT_FEATURE} mode="overlay">

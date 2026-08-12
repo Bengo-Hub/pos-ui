@@ -57,7 +57,15 @@ export function AddExpenseModal({ open, onClose }: AddExpenseModalProps) {
   const addExpense = useAddExpense();
   const categories = useExpenseCategories();
   const accounts = useExpenseAccounts();
-  const suppliers = useExpenseSuppliers();
+  // Debounce "expense for" into the supplier search so suggestions come from the backend's
+  // filtered match rather than only ever the first unfiltered page — a supplier whose name
+  // sorts past that first page previously never showed up in the typeahead at all.
+  const [expenseForDebounced, setExpenseForDebounced] = useState('');
+  useEffect(() => {
+    const t = setTimeout(() => setExpenseForDebounced(expenseFor.trim()), 300);
+    return () => clearTimeout(t);
+  }, [expenseFor]);
+  const suppliers = useExpenseSuppliers(expenseForDebounced || undefined);
   const nextNumberPreview = useExpenseNumberPreview();
   const supplierOptions = useMemo(
     () => (suppliers.data ?? []).map((s) => ({ value: s.id, label: s.name, hint: s.code })),
