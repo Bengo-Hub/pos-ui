@@ -348,6 +348,18 @@ export function SalesListView({ orgSlug, fixedSource, title, subtitle }: {
         : <span className="tabular-nums">—</span>,
     },
     {
+      // This IS the Profitability page's "Invoice" tab — it reuses this same list (with these two
+      // columns) rather than a separate fetch, so Profit/Margin are visible by default here, not
+      // tucked behind the column-visibility picker (matching report_all_sales.go's PDF/CSV export,
+      // which carries the same two columns).
+      key: 'profit', header: 'Profit', align: 'right', accessor: (o) => o.profit ?? 0,
+      render: (o) => <span className="tabular-nums whitespace-nowrap">{money(o.profit, o.currency)}</span>,
+    },
+    {
+      key: 'margin', header: 'Margin', align: 'right', accessor: (o) => o.margin_pct ?? 0,
+      render: (o) => <span className="tabular-nums whitespace-nowrap">{(o.margin_pct ?? 0).toFixed(1)}%</span>,
+    },
+    {
       key: 'shipping', header: 'Shipping', accessor: (o) => o.metadata?.shipping_status ?? '',
       render: (o) => <span className="text-xs capitalize">{o.metadata?.shipping_status || '—'}</span>,
     },

@@ -158,6 +158,26 @@ export interface MostProfitableReport {
   items: ProfitableItem[];
 }
 
+/** One row of a ?group_by= rollup — manufacturer/category/brand/outlet/staff/day/customer all
+ *  share this shape (see pos-api's computeProfitabilityGroups). */
+export interface ProfitabilityGroupRow {
+  group: string;
+  units_sold: number;
+  revenue: number;
+  profit: number;
+  margin_pct: number;
+}
+
+export interface ProfitabilityGroupedReport {
+  currency: string;
+  from: string;
+  to: string;
+  group_by: string;
+  groups: ProfitabilityGroupRow[];
+}
+
+export type ProfitabilityGroupBy = 'category' | 'brand' | 'outlet' | 'day' | 'customer' | 'staff';
+
 export interface HourRow {
   hour: number;
   order_count: number;
@@ -226,6 +246,7 @@ export const reportKeys = {
   stockConsumption: (tid: string, from: string, to: string, outletId?: string) => ['reports', tid, 'stock-consumption', from, to, outletId] as const,
   returnsDetail: (tid: string, from: string, to: string, outletId?: string) => ['reports', tid, 'returns-detail', from, to, outletId] as const,
   mostProfitable: (tid: string, from: string, to: string, limit: number, outletId?: string) => ['reports', tid, 'most-profitable', from, to, limit, outletId] as const,
+  profitabilityGrouped: (tid: string, from: string, to: string, groupBy: string, outletId?: string) => ['reports', tid, 'most-profitable', 'grouped', groupBy, from, to, outletId] as const,
 };
 
 // ─── Hooks ────────────────────────────────────────────────────────────────────
@@ -513,6 +534,19 @@ export function useMostProfitable(from: string, to: string, limit = 20, outletId
   return useQuery({
     queryKey: reportKeys.mostProfitable(tenantID, from, to, limit, outletId),
     queryFn: () => apiClient.get<MostProfitableReport>(`${basePath(tenantID)}/most-profitable`, { from, to, limit, outlet_id: outletId }),
+    enabled: !!tenantID && !!from && !!to,
+    staleTime: 2 * 60_000,
+  });
+}
+
+/** Backs every non-Products tab of the Profitability page — SAME endpoint as useMostProfitable,
+ *  just with ?group_by= set, so it can never disagree with the Products ranking for the same
+ *  date range (both read the identical AttributeOrderLines/cost machinery server-side). */
+export function useProfitabilityGrouped(from: string, to: string, groupBy: ProfitabilityGroupBy, outletId?: string) {
+  const tenantID = useTenantID();
+  return useQuery({
+    queryKey: reportKeys.profitabilityGrouped(tenantID, from, to, groupBy, outletId),
+    queryFn: () => apiClient.get<ProfitabilityGroupedReport>(`${basePath(tenantID)}/most-profitable`, { from, to, group_by: groupBy, outlet_id: outletId }),
     enabled: !!tenantID && !!from && !!to,
     staleTime: 2 * 60_000,
   });

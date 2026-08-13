@@ -1,10 +1,11 @@
 'use client';
 
-// DataTable column definitions for the Most Profitable Items report — split out of page.tsx to
-// mirror the platform's <page>-columns.tsx convention.
+// DataTable column definitions for the Profitability page — one builder per tab shape: the
+// Products tab (per-item ranking) and every other tab (a group_by rollup, all 7 non-Products
+// dimensions share the same {group, units_sold, revenue, profit, margin_pct} row).
 
 import type { DataTableColumn } from '@bengo-hub/shared-ui-lib/data-table';
-import type { ProfitableItem } from '@/hooks/useReports';
+import type { ProfitableItem, ProfitabilityGroupRow } from '@/hooks/useReports';
 
 export function buildMostProfitableColumns(money: (n: number) => string): DataTableColumn<ProfitableItem>[] {
   return [
@@ -55,6 +56,47 @@ export function buildMostProfitableColumns(money: (n: number) => string): DataTa
       align: 'right',
       accessor: (it) => it.margin_pct,
       render: (it) => <span>{it.margin_pct.toLocaleString(undefined, { maximumFractionDigits: 1 })}%</span>,
+    },
+  ];
+}
+
+export function buildGroupColumns(groupLabel: string, money: (n: number) => string): DataTableColumn<ProfitabilityGroupRow>[] {
+  return [
+    {
+      key: 'group',
+      header: groupLabel,
+      primary: true,
+      accessor: (g) => g.group,
+      render: (g) => <span className="font-medium">{g.group}</span>,
+    },
+    {
+      key: 'units_sold',
+      header: 'Units Sold',
+      align: 'right',
+      accessor: (g) => g.units_sold,
+      render: (g) => <span>{g.units_sold.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>,
+    },
+    {
+      key: 'revenue',
+      header: 'Revenue',
+      align: 'right',
+      accessor: (g) => g.revenue,
+      render: (g) => <span>{money(g.revenue)}</span>,
+    },
+    {
+      key: 'profit',
+      header: 'Profit',
+      align: 'right',
+      mobileAction: true,
+      accessor: (g) => g.profit,
+      render: (g) => <span className="font-semibold text-green-700">{money(g.profit)}</span>,
+    },
+    {
+      key: 'margin_pct',
+      header: 'Margin',
+      align: 'right',
+      accessor: (g) => g.margin_pct,
+      render: (g) => <span>{g.margin_pct.toLocaleString(undefined, { maximumFractionDigits: 1 })}%</span>,
     },
   ];
 }
