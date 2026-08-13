@@ -17,7 +17,7 @@ import { useOutletFilterStore } from '@/store/outlet-filter';
 import { P } from '@/lib/rbac/permissions';
 import type { PrinterProfile, PrinterConnType } from '@/lib/api/settings';
 import {
-  discoverPrinters, openCashDrawerProfile, requestUSBPrinter, requestBluetoothPrinter,
+  AGENT_BASE, discoverPrinters, openCashDrawerProfile, requestUSBPrinter, requestBluetoothPrinter,
   printProfileHtml, agentAvailable, pingNetworkPrinter, fetchTestTicketEscposHex,
   type DrawerKickCode, type DiscoveredDevice,
 } from '@/lib/pos/printer-discovery';
@@ -453,12 +453,32 @@ export function ReceiptTab() {
             routed to a station, its ticket prints on that station&apos;s printer. Pick a connection type
             per printer — the fields change to match.
           </p>
-          <div className="mt-1.5 flex items-center gap-2 text-[11px]">
+          <div className="mt-1.5 flex items-center gap-2 text-[11px] flex-wrap">
             <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 font-semibold ${agentUp ? 'bg-emerald-500/15 text-emerald-600' : 'bg-muted text-muted-foreground'}`}>
               <span className={`h-1.5 w-1.5 rounded-full ${agentUp ? 'bg-emerald-500' : 'bg-muted-foreground/50'}`} />
               {agentUp == null ? 'Checking print agent…' : agentUp ? 'Local print agent running' : 'Local print agent not detected'}
             </span>
+            {agentUp === false && (
+              <a
+                href={`${AGENT_BASE}/health`}
+                target="_blank"
+                rel="noreferrer"
+                className="text-primary hover:underline font-medium"
+              >
+                Open agent directly (diagnostic) ↗
+              </a>
+            )}
           </div>
+          {agentUp === false && (
+            <p className="text-[11px] text-muted-foreground mt-1">
+              If the diagnostic link above loads JSON (e.g. <code className="text-[10px]">{'{"ok":true,...}'}</code>) but this
+              still says &quot;not detected&quot;, the agent is fine — your browser is blocking this site&apos;s local
+              network access. Click the padlock icon in the address bar → Site permissions → set{' '}
+              <span className="font-medium text-foreground">Local network</span> to Allow, reload, then Detect Printers
+              again. If the link doesn&apos;t load at all, the agent isn&apos;t running — check the &quot;Codevertex POS
+              Print Agent&quot; Windows service.
+            </p>
+          )}
           {discoverNotes.length > 0 && (
             <ul className="text-[11px] mt-1.5 rounded-lg bg-accent/30 px-3 py-2 text-muted-foreground space-y-1 list-disc list-inside">
               {discoverNotes.map((n, i) => <li key={i}>{n}</li>)}

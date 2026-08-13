@@ -1,12 +1,13 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { CheckCircle2, Download, Link2, Loader2, RadioTower, XCircle } from 'lucide-react';
+import { CheckCircle2, Download, ExternalLink, Link2, Loader2, RadioTower, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Button, Card, CardContent, CardHeader } from '@/components/ui/base';
 import { useAuthStore } from '@/store/auth';
 import { useOutletFilterStore } from '@/store/outlet-filter';
+import { AGENT_BASE } from '@/lib/pos/printer-discovery';
 import {
   createPrintAgentPairing, listPrintAgents, localAgentStatus, pairLocalAgent,
   type PrintAgentInfo,
@@ -112,7 +113,26 @@ export function PrintAgentCard({ canEdit }: { canEdit: boolean }) {
           >
             <Download className="h-3.5 w-3.5" /> Download print agent
           </a>
+          {!local?.reachable && (
+            <a
+              className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground underline underline-offset-2"
+              href={`${AGENT_BASE}/health`}
+              target="_blank"
+              rel="noreferrer"
+            >
+              <ExternalLink className="h-3.5 w-3.5" /> Open agent directly (diagnostic)
+            </a>
+          )}
         </div>
+        {!local?.reachable && (
+          <p className="text-xs text-muted-foreground bg-accent/30 rounded-lg px-2 py-1.5">
+            If the diagnostic link above loads JSON but this still says &quot;Agent not detected&quot;, the
+            agent is fine — your browser is blocking this site&apos;s local network access. Click the
+            padlock icon in the address bar → Site permissions → set{' '}
+            <span className="font-medium text-foreground">Local network</span> to Allow, reload, then
+            try &quot;Pair this terminal&quot; again.
+          </p>
+        )}
         {manualKey && (
           <div className="rounded-md border border-amber-500/40 bg-amber-500/5 p-2 text-xs">
             <div className="font-medium mb-1">One-time pairing key (shown once):</div>
