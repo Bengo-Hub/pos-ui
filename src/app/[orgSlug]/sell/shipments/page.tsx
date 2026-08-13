@@ -13,8 +13,6 @@ import { DataTable } from '@bengo-hub/shared-ui-lib/data-table';
 import { DateRangePicker, type DateRange } from '@/components/ui/date-range-picker';
 import { buildShipmentColumns } from './shipments-columns';
 
-const PAGE_SIZE = 25;
-
 const STATUS_TABS = [
   { value: 'any', label: 'All Shipments' },
   { value: 'ordered', label: 'Ordered' },
@@ -44,6 +42,7 @@ export default function ShipmentsPage() {
   const [tab, setTab] = useState('any');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
   const [detailId, setDetailId] = useState<string | null>(null);
   const [shippingOrder, setShippingOrder] = useState<any>(null);
   const [range, setRange] = useState<DateRange>({ from: '', to: '' });
@@ -55,13 +54,13 @@ export default function ShipmentsPage() {
     from: range.from || undefined,
     to: range.to || undefined,
     page,
-    limit: PAGE_SIZE,
-  }), [selectedOutlet?.id, tab, search, range, page]);
+    limit: pageSize,
+  }), [selectedOutlet?.id, tab, search, range, page, pageSize]);
 
   const { data, isLoading, isError, refetch } = useOrders(filters);
   const rows: any[] = data?.data ?? [];
   const total = data?.meta?.total ?? (data as any)?.total ?? rows.length;
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   const columns = useMemo(
     () => buildShipmentColumns({ outletNameById, canEdit, onEditShipping: setShippingOrder }),
@@ -117,7 +116,8 @@ export default function ShipmentsPage() {
         totalPages={totalPages}
         onPageChange={setPage}
         total={total}
-        pageSize={PAGE_SIZE}
+        pageSize={pageSize}
+        onPageSizeChange={(n) => { setPageSize(n); setPage(1); }}
       />
 
       {detailId && <SellDetailsModal orderId={detailId} orgSlug={orgSlug} onClose={() => setDetailId(null)} />}

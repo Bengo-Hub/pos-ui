@@ -20,8 +20,6 @@ import { searchCatalogItemsAdapter, fetchCategoryItemsAdapter } from '@/componen
 import { DataTable } from '@bengo-hub/shared-ui-lib/data-table';
 import { buildDiscountColumns } from './discounts-columns';
 
-const PAGE_SIZE = 20;
-
 /**
  * Sell → Discounts — management surface for the platform's discount source of truth
  * (pos-api promotions). Lists ALL discounts (promo codes, automatic, time-windowed
@@ -60,12 +58,13 @@ export default function DiscountsPage() {
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
   useEffect(() => { const t = setTimeout(() => setDebouncedSearch(search), 300); return () => clearTimeout(t); }, [search]);
 
-  const { data, isLoading, isError, refetch } = useDiscounts('all', { q: debouncedSearch, page, limit: PAGE_SIZE });
+  const { data, isLoading, isError, refetch } = useDiscounts('all', { q: debouncedSearch, page, limit: pageSize });
   const discounts: Discount[] = (data as any)?.data ?? [];
   const total: number = (data as any)?.total ?? (data as any)?.meta?.total ?? discounts.length;
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   const createMut = useCreateDiscount();
   const updateMut = useUpdateDiscount();
@@ -187,7 +186,8 @@ export default function DiscountsPage() {
         totalPages={totalPages}
         onPageChange={setPage}
         total={total}
-        pageSize={PAGE_SIZE}
+        pageSize={pageSize}
+        onPageSizeChange={(n) => { setPageSize(n); setPage(1); }}
       />
 
       <DiscountFormModal

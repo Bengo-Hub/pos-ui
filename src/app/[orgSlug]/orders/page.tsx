@@ -31,8 +31,6 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 
-const PAGE_SIZE = 20;
-
 const STATUS_FILTERS = [
   { value: 'all', label: 'All' },
   { value: 'pending_payment', label: 'Ready for Payment' },
@@ -66,6 +64,7 @@ export default function OrdersPage() {
   const [customer, setCustomer] = useState('');
   const [debouncedCustomer, setDebouncedCustomer] = useState('');
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
   const [trackingOpen, setTrackingOpen] = useState(false);
   const [paymentOpen, setPaymentOpen] = useState(false);
@@ -84,7 +83,7 @@ export default function OrdersPage() {
   // Any change to a server-side filter → back to page 1.
   useEffect(() => {
     setPage(1);
-  }, [statusFilter, dateFrom, dateTo, paymentMethod, source, debouncedCustomer, debouncedSearch]);
+  }, [statusFilter, dateFrom, dateTo, paymentMethod, source, debouncedCustomer, debouncedSearch, pageSize]);
 
   const activeFilterCount =
     (dateFrom ? 1 : 0) + (dateTo ? 1 : 0) + (paymentMethod !== 'all' ? 1 : 0) + (source !== 'all' ? 1 : 0) + (debouncedCustomer ? 1 : 0);
@@ -106,13 +105,13 @@ export default function OrdersPage() {
       customer: debouncedCustomer || undefined,
       orderNumber: debouncedSearch || undefined,
       page,
-      limit: PAGE_SIZE,
-    }), [statusFilter, staffId, dateFrom, dateTo, paymentMethod, source, debouncedCustomer, debouncedSearch, page])
+      limit: pageSize,
+    }), [statusFilter, staffId, dateFrom, dateTo, paymentMethod, source, debouncedCustomer, debouncedSearch, page, pageSize])
   );
 
   const orders = ordersData?.data ?? [];
   const total = ordersData?.meta?.total ?? ordersData?.total ?? orders.length;
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   const clearFilters = () => {
     setDateFrom(''); setDateTo(''); setPaymentMethod('all'); setSource('all'); setCustomer('');
@@ -318,7 +317,8 @@ export default function OrdersPage() {
               totalPages={totalPages}
               onPageChange={handlePageChange}
               total={total}
-              pageSize={PAGE_SIZE}
+              pageSize={pageSize}
+              onPageSizeChange={setPageSize}
             />
           </CardContent>
         </Card>
