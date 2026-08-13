@@ -155,6 +155,7 @@ export interface MostProfitableReport {
   to: string;
   total_revenue: number;
   total_profit: number;
+  skus_missing_cost: number;
   items: ProfitableItem[];
 }
 
@@ -174,6 +175,13 @@ export interface ProfitabilityGroupedReport {
   to: string;
   group_by: string;
   groups: ProfitabilityGroupRow[];
+  // Whole-filtered-set totals (NOT just the returned/possibly-truncated `groups` rows) — computed
+  // server-side from every attributed order line before any group_by rollup or limit is applied,
+  // so these agree with the Products tab's totals for the same date range regardless of which
+  // dimension is selected.
+  total_revenue: number;
+  total_profit: number;
+  skus_missing_cost: number;
 }
 
 export type ProfitabilityGroupBy = 'category' | 'brand' | 'outlet' | 'day' | 'customer' | 'staff';

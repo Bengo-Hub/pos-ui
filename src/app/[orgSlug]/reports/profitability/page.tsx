@@ -23,6 +23,43 @@ function defaultRange(): DateRange {
   return { from: fmt(from), to: fmt(now) };
 }
 
+/**
+ * ProfitabilitySummaryFooter — a stat strip under the table, same convention as All-Sales'
+ * SalesSummaryFooter (sales-table-shared.tsx): whole-filtered-set totals, not just the visible/
+ * possibly-truncated rows. totalRevenue/totalProfit come straight from the API response's
+ * top-level fields (computed server-side from every attributed order line BEFORE any group_by
+ * rollup or row limit — see reports_profitability.go), so this agrees with the Products tab's
+ * totals no matter which tab is active.
+ */
+function ProfitabilitySummaryFooter({ currency, totalRevenue, totalProfit, skusMissingCost }: {
+  currency: string; totalRevenue: number; totalProfit: number; skusMissingCost?: number;
+}) {
+  const marginPct = totalRevenue !== 0 ? (totalProfit / totalRevenue) * 100 : 0;
+  const money = (n: number) =>
+    `${currency} ${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const stat = (label: string, value: React.ReactNode) => (
+    <div className="min-w-24">
+      <div className="text-[11px] uppercase tracking-wider text-muted-foreground">{label}</div>
+      <div className="text-sm font-semibold tabular-nums">{value}</div>
+    </div>
+  );
+  return (
+    <div className="rounded-lg border border-border bg-accent/20 px-4 py-3">
+      <div className="flex flex-wrap items-end gap-x-8 gap-y-2">
+        {stat('Total Revenue', money(totalRevenue))}
+        {stat('Gross Profit', <span className="text-green-700">{money(totalProfit)}</span>)}
+        {stat('Margin', `${marginPct.toLocaleString(undefined, { maximumFractionDigits: 1 })}%`)}
+        {!!skusMissingCost && stat(
+          'SKUs Missing Cost',
+          <span className="text-amber-600" title="These items have no cost on file yet — their profit reads as 100% margin until costed.">
+            {skusMissingCost.toLocaleString()}
+          </span>,
+        )}
+      </div>
+    </div>
+  );
+}
+
 // One entry per Profitability tab. "products" and "invoice" are special-cased below (different
 // data shape / a fully separate embedded view); everything else is a plain group_by value that
 // shares the exact same {group, units_sold, revenue, profit, margin_pct} rollup shape.
@@ -44,18 +81,28 @@ function GroupTabPanel({ groupBy, label, from, to, outletId, money }: {
   const groups = data?.groups ?? [];
   const columns = useMemo(() => buildGroupColumns(label, money), [label, money]);
   return (
-    <Card>
-      <CardContent className="p-2">
-        <DataTable
-          columns={columns}
-          rows={groups}
-          rowKey={(g) => g.group}
-          loading={isLoading}
-          storageKey={`profitability-${groupBy}-col-prefs`}
-          emptyText="No sales data for this period."
+    <div className="space-y-3">
+      <Card>
+        <CardContent className="p-2">
+          <DataTable
+            columns={columns}
+            rows={groups}
+            rowKey={(g) => g.group}
+            loading={isLoading}
+            storageKey={`profitability-${groupBy}-col-prefs`}
+            emptyText="No sales data for this period."
+          />
+        </CardContent>
+      </Card>
+      {!isLoading && data && (
+        <ProfitabilitySummaryFooter
+          currency={data.currency}
+          totalRevenue={data.total_revenue}
+          totalProfit={data.total_profit}
+          skusMissingCost={data.skus_missing_cost}
         />
-      </CardContent>
-    </Card>
+      )}
+    </div>
   );
 }
 
@@ -144,18 +191,28 @@ function ProfitabilityContent() {
       </div>
 
       {tab === 'products' && (
-        <Card>
-          <CardContent className="p-2">
-            <DataTable
-              columns={columns}
-              rows={items}
-              rowKey={(it) => it.sku}
-              loading={isLoading}
-              storageKey="profitability-products-col-prefs"
-              emptyText="No sales data for this period."
+        <div className="space-y-3">
+          <Card>
+            <CardContent className="p-2">
+              <DataTable
+                columns={columns}
+                rows={items}
+                rowKey={(it) => it.sku}
+                loading={isLoading}
+                storageKey="profitability-products-col-prefs"
+                emptyText="No sales data for this period."
+              />
+            </CardContent>
+          </Card>
+          {!isLoading && data && (
+            <ProfitabilitySummaryFooter
+              currency={currency}
+              totalRevenue={totalRevenue}
+              totalProfit={totalProfit}
+              skusMissingCost={data.skus_missing_cost}
             />
-          </CardContent>
-        </Card>
+          )}
+        </div>
       )}
 
       {activeGroupTab && (
