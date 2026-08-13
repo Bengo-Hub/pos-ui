@@ -10,6 +10,7 @@ import { SellDetailsModal } from '@/components/pos/sell-details-modal';
 import { EditShippingModal } from '@/components/pos/sales/edit-shipping-modal';
 import { cn } from '@/lib/utils';
 import { DataTable } from '@bengo-hub/shared-ui-lib/data-table';
+import { DateRangePicker, type DateRange } from '@/components/ui/date-range-picker';
 import { buildShipmentColumns } from './shipments-columns';
 
 const PAGE_SIZE = 25;
@@ -45,14 +46,17 @@ export default function ShipmentsPage() {
   const [page, setPage] = useState(1);
   const [detailId, setDetailId] = useState<string | null>(null);
   const [shippingOrder, setShippingOrder] = useState<any>(null);
+  const [range, setRange] = useState<DateRange>({ from: '', to: '' });
 
   const filters: OrderListFilters = useMemo(() => ({
     outletId: selectedOutlet?.id || 'all',
     shippingStatus: tab,
     orderNumber: search.trim() || undefined,
+    from: range.from || undefined,
+    to: range.to || undefined,
     page,
     limit: PAGE_SIZE,
-  }), [selectedOutlet?.id, tab, search, page]);
+  }), [selectedOutlet?.id, tab, search, range, page]);
 
   const { data, isLoading, isError, refetch } = useOrders(filters);
   const rows: any[] = data?.data ?? [];
@@ -79,14 +83,17 @@ export default function ShipmentsPage() {
       </div>
 
       {/* Status tabs (capsule) */}
-      <div className="flex flex-wrap gap-2">
-        {STATUS_TABS.map((t) => (
-          <button key={t.value} onClick={() => { setTab(t.value); setPage(1); }}
-            className={cn('px-3.5 py-1.5 rounded-full text-sm font-medium border transition-colors',
-              tab === t.value ? 'bg-primary text-primary-foreground border-primary' : 'border-input hover:bg-muted')}>
-            {t.label}
-          </button>
-        ))}
+      <div className="flex flex-wrap items-center gap-2 justify-between">
+        <div className="flex flex-wrap gap-2">
+          {STATUS_TABS.map((t) => (
+            <button key={t.value} onClick={() => { setTab(t.value); setPage(1); }}
+              className={cn('px-3.5 py-1.5 rounded-full text-sm font-medium border transition-colors',
+                tab === t.value ? 'bg-primary text-primary-foreground border-primary' : 'border-input hover:bg-muted')}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+        <DateRangePicker value={range} onChange={(r) => { setRange(r); setPage(1); }} className="w-60" />
       </div>
 
       <DataTable

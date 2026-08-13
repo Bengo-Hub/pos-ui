@@ -12,17 +12,20 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { Plus, RefreshCw, RotateCcw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { DataTable } from '@bengo-hub/shared-ui-lib/data-table';
+import { DateRangePicker, type DateRange } from '@/components/ui/date-range-picker';
 import { buildReturnsColumns, type ReturnItem } from './returns-columns';
 
-function useReturns(status: string) {
+function useReturns(status: string, from?: string, to?: string) {
   const user = useAuthStore((s) => s.user);
   const tenantID = user?.tenant_id ?? '';
   return useQuery({
-    queryKey: ['returns', tenantID, status],
+    queryKey: ['returns', tenantID, status, from, to],
     queryFn: () =>
-      apiClient.get<{ data: ReturnItem[] }>(
-        `/api/v1/${tenantID}/pos/returns${status ? `?status=${status}` : ''}`
-      ),
+      apiClient.get<{ data: ReturnItem[] }>(`/api/v1/${tenantID}/pos/returns`, {
+        ...(status ? { status } : {}),
+        ...(from ? { from } : {}),
+        ...(to ? { to } : {}),
+      }),
     enabled: !!tenantID,
     staleTime: 60_000,
   });
@@ -47,7 +50,8 @@ function ReturnsPage() {
   // sale in the SAME InitiateReturnModal every other entry point uses.
   const [deepLinkOrderNumber, setDeepLinkOrderNumber] = useState('');
   const [customerModal, setCustomerModal] = useState<{ name?: string | null; phone: string } | null>(null);
-  const { data, isLoading, refetch, isFetching } = useReturns(statusFilter);
+  const [range, setRange] = useState<DateRange>({ from: '', to: '' });
+  const { data, isLoading, refetch, isFetching } = useReturns(statusFilter, range.from || undefined, range.to || undefined);
   const returns = data?.data ?? [];
   const params = useParams<{ orgSlug: string }>();
   const router = useRouter();
@@ -109,21 +113,24 @@ function ReturnsPage() {
       </div>
 
       {/* Filters */}
-      <div className="flex gap-2 flex-wrap mb-5">
-        {FILTERS.map((f) => (
-          <button
-            key={f.key}
-            onClick={() => setStatusFilter(f.key)}
-            className={cn(
-              'px-4 py-2 rounded-xl text-sm font-semibold transition-colors',
-              statusFilter === f.key
-                ? 'bg-primary text-primary-foreground'
-                : 'bg-card border border-border text-muted-foreground hover:text-foreground'
-            )}
-          >
-            {f.label}
-          </button>
-        ))}
+      <div className="flex gap-2 flex-wrap mb-5 items-center justify-between">
+        <div className="flex gap-2 flex-wrap">
+          {FILTERS.map((f) => (
+            <button
+              key={f.key}
+              onClick={() => setStatusFilter(f.key)}
+              className={cn(
+                'px-4 py-2 rounded-xl text-sm font-semibold transition-colors',
+                statusFilter === f.key
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-card border border-border text-muted-foreground hover:text-foreground'
+              )}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+        <DateRangePicker value={range} onChange={setRange} className="w-60" />
       </div>
 
       <DataTable<ReturnItem>

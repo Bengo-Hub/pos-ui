@@ -20,6 +20,7 @@ import { useModuleAccess } from '@/hooks/use-module-access';
 import { usePermissions, P } from '@/hooks/usePermissions';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { formatCurrency } from '@/lib/utils';
+import { DateRangePicker } from '@/components/ui/date-range-picker';
 import { ShiftCloseDialog } from '@/components/pos/shift-close-dialog';
 import { ShiftPlannerPanel } from '@/components/pos/shift-planner-panel';
 import { LeaveApprovalPanel } from '@/components/pos/leave-approval-panel';
@@ -540,25 +541,11 @@ function ShiftsPage() {
             </div>
 
             {historyPeriod === 'custom' && (
-              <div className="flex items-center gap-1">
-                <input
-                  type="date"
-                  value={historyCustomFrom}
-                  max={historyCustomTo || undefined}
-                  onChange={(e) => { setHistoryCustomFrom(e.target.value); resetHistoryPage(); }}
-                  className="rounded-lg border border-border bg-card px-2 py-1 text-xs font-medium"
-                  aria-label="From date"
-                />
-                <span className="text-xs text-muted-foreground">→</span>
-                <input
-                  type="date"
-                  value={historyCustomTo}
-                  min={historyCustomFrom || undefined}
-                  onChange={(e) => { setHistoryCustomTo(e.target.value); resetHistoryPage(); }}
-                  className="rounded-lg border border-border bg-card px-2 py-1 text-xs font-medium"
-                  aria-label="To date"
-                />
-              </div>
+              <DateRangePicker
+                value={{ from: historyCustomFrom, to: historyCustomTo }}
+                onChange={(r) => { setHistoryCustomFrom(r.from); setHistoryCustomTo(r.to); resetHistoryPage(); }}
+                className="w-56"
+              />
             )}
 
             <select

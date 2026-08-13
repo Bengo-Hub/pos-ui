@@ -12,6 +12,7 @@ import { TrendingUp } from 'lucide-react';
 import { useState, useMemo } from 'react';
 import { toast } from 'sonner';
 import { DataTable } from '@bengo-hub/shared-ui-lib/data-table';
+import { DateRangePicker, type DateRange } from '@/components/ui/date-range-picker';
 import { buildCommissionsColumns } from './commissions-columns';
 
 function CommissionsPage() {
@@ -23,11 +24,13 @@ function CommissionsPage() {
   // Roles with view_own only (stylist, therapist, technician) see their own commissions.
   const viewOwnOnly = can(P.COMMISSIONS_VIEW_OWN) && !can(P.COMMISSIONS_VIEW);
   const [staffFilter, setStaffFilter] = useState('');
+  const [range, setRange] = useState<DateRange>({ from: '', to: '' });
 
   const effectiveFilter = useMemo(() => {
-    if (viewOwnOnly) return { staff_member_id: (user as any)?.staffId ?? (user as any)?.id ?? '' };
-    return staffFilter ? { staff_member_id: staffFilter } : undefined;
-  }, [viewOwnOnly, staffFilter, user]);
+    const dateBounds = { from: range.from || undefined, to: range.to || undefined };
+    if (viewOwnOnly) return { staff_member_id: (user as any)?.staffId ?? (user as any)?.id ?? '', ...dateBounds };
+    return { ...(staffFilter ? { staff_member_id: staffFilter } : {}), ...dateBounds };
+  }, [viewOwnOnly, staffFilter, user, range]);
 
   const { data: records = [], isLoading, error } = useCommissions(effectiveFilter);
 
@@ -40,11 +43,12 @@ function CommissionsPage() {
 
   return (
     <div className="p-6">
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-6 gap-3 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold">Commissions</h1>
           <p className="text-sm text-muted-foreground mt-0.5">{viewOwnOnly ? 'Your commission records' : 'Staff sales commission records'}</p>
         </div>
+        <DateRangePicker value={range} onChange={setRange} className="w-60" />
         {records.length > 0 && (
           <div className="text-right">
             <p className="text-xs text-muted-foreground">Total shown</p>

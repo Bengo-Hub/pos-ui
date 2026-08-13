@@ -13,6 +13,7 @@ import { Loader2, Plus, RefreshCw } from 'lucide-react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import { DataTable } from '@bengo-hub/shared-ui-lib/data-table';
+import { DateRangePicker, type DateRange } from '@/components/ui/date-range-picker';
 import { buildLayawayColumns } from './layaway-columns';
 
 function LayawayListPage() {
@@ -31,7 +32,8 @@ function LayawayListPage() {
   }, [selectedOutlet?.id]);
   const outletNameById = useMemo(() => Object.fromEntries(outlets.map((o) => [o.id, o.name])), [outlets]);
 
-  const { data: plans = [], isLoading, isError, refetch, isFetching } = useLayawayPlans('active', outletFilter || undefined);
+  const [range, setRange] = useState<DateRange>({ from: '', to: '' });
+  const { data: plans = [], isLoading, isError, refetch, isFetching } = useLayawayPlans('active', outletFilter || undefined, range.from || undefined, range.to || undefined);
   const [createOpen, setCreateOpen] = useState(false);
   const { data: posSettings } = usePOSSettings();
   const currency = (posSettings as any)?.currency ?? 'KES';
@@ -73,6 +75,7 @@ function LayawayListPage() {
               />
             </div>
           )}
+          <DateRangePicker value={range} onChange={setRange} className="w-60" />
           <button
             type="button"
             onClick={() => refetch()}

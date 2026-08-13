@@ -10,23 +10,28 @@ import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { RefreshCw, Users } from 'lucide-react';
 import { FeatureLock } from '@bengo-hub/shared-ui-lib/subscription';
 import { DataTable } from '@bengo-hub/shared-ui-lib/data-table';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
+import { DateRangePicker, type DateRange } from '@/components/ui/date-range-picker';
 import { buildStaffCreditColumns, type StaffCreditLink } from './staff-credit-columns';
 
 const FEATURE = 'staff_fund_from_salary';
 
-function useStaffCredit() {
+function useStaffCredit(from?: string, to?: string) {
   const tenantID = useAuthStore((s) => s.user?.tenant_id ?? '');
   return useQuery({
-    queryKey: ['staff-credit', tenantID],
-    queryFn: () => apiClient.get<{ data: StaffCreditLink[] }>(`/api/v1/${tenantID}/pos/staff-credit`),
+    queryKey: ['staff-credit', tenantID, from, to],
+    queryFn: () => apiClient.get<{ data: StaffCreditLink[] }>(`/api/v1/${tenantID}/pos/staff-credit`, {
+      ...(from ? { from } : {}),
+      ...(to ? { to } : {}),
+    }),
     enabled: !!tenantID,
     staleTime: 30_000,
   });
 }
 
 function StaffCreditPage() {
-  const { data, isLoading, isError, refetch, isFetching } = useStaffCredit();
+  const [range, setRange] = useState<DateRange>({ from: '', to: '' });
+  const { data, isLoading, isError, refetch, isFetching } = useStaffCredit(range.from || undefined, range.to || undefined);
   const rows: StaffCreditLink[] = data?.data ?? [];
   const { data: posSettings } = usePOSSettings();
   const currency = (posSettings as any)?.currency ?? 'KES';
@@ -45,6 +50,7 @@ function StaffCreditPage() {
             Staff purchases funded from salary — synced to ERP payroll for recovery.
           </p>
         </div>
+        <DateRangePicker value={range} onChange={setRange} className="w-60" />
         <button
           type="button"
           onClick={() => refetch()}

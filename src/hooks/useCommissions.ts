@@ -95,7 +95,7 @@ export function useDeleteCommissionRule() {
 
 // ─── Commission Records ────────────────────────────────────────────────────────
 
-export function useCommissions(filters?: { staff_member_id?: string; order_id?: string }) {
+export function useCommissions(filters?: { staff_member_id?: string; order_id?: string; from?: string; to?: string }) {
   const tenantID = useTenantID();
   return useQuery({
     queryKey: ['commissions', tenantID, filters],
@@ -103,6 +103,8 @@ export function useCommissions(filters?: { staff_member_id?: string; order_id?: 
       apiClient.get<{ data: CommissionRecord[] }>(basePath(tenantID), {
         staff_member_id: filters?.staff_member_id,
         order_id: filters?.order_id,
+        from: filters?.from,
+        to: filters?.to,
       }),
     enabled: !!tenantID,
     staleTime: 30_000,
