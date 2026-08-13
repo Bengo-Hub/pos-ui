@@ -64,26 +64,30 @@ export interface RecordPaymentInput {
   payment_method: 'cash' | 'mpesa' | 'card';
   reference?: string;
   notes?: string;
+  /** ISO 8601 — when the money actually changed hands; omit to default to now (backdating support). */
+  paid_at?: string;
 }
 
 // ─── Query keys ──────────────────────────────────────────────────────────────
 
 export const layawayKeys = {
   all: (tid: string) => ['layaways', tid] as const,
-  list: (tid: string, status?: string, outletId?: string) => ['layaways', tid, 'list', status, outletId] as const,
+  list: (tid: string, status?: string, outletId?: string, from?: string, to?: string) => ['layaways', tid, 'list', status, outletId, from, to] as const,
   detail: (tid: string, id: string) => ['layaways', tid, id] as const,
 };
 
 // ─── Hooks ───────────────────────────────────────────────────────────────────
 
-export function useLayawayPlans(status?: string, outletId?: string) {
+export function useLayawayPlans(status?: string, outletId?: string, from?: string, to?: string) {
   const tenantID = useTenantID();
   return useQuery({
-    queryKey: layawayKeys.list(tenantID, status, outletId),
+    queryKey: layawayKeys.list(tenantID, status, outletId, from, to),
     queryFn: () =>
       apiClient.get<{ data: LayawayPlan[]; total: number }>(basePath(tenantID), {
         ...(status ? { status } : {}),
         ...(outletId ? { outlet_id: outletId } : {}),
+        ...(from ? { from } : {}),
+        ...(to ? { to } : {}),
       }),
     enabled: !!tenantID,
     select: (res) => res.data ?? [],

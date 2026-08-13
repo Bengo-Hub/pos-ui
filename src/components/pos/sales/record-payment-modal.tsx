@@ -52,7 +52,7 @@ export function RecordPaymentModal({
   }, [tendersData]);
 
   const mutation = useMutation({
-    mutationFn: (input: { amount: number; method?: string; reference?: string }) =>
+    mutationFn: (input: { amount: number; method?: string; reference?: string; effectiveAt?: string }) =>
       apiClient.post<SettleCreditResult>(
         `/api/v1/${tenantID}/pos/orders/${order.id}/payments/settle-credit`,
         {
@@ -60,6 +60,7 @@ export function RecordPaymentModal({
           tenderMethod: input.method,
           amount: input.amount,
           externalRef: input.reference,
+          occurredAt: input.effectiveAt,
         },
       ),
     onSuccess: (res) => {

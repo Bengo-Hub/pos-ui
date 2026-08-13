@@ -18,6 +18,7 @@ import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { DataTable } from '@bengo-hub/shared-ui-lib/data-table';
+import { nowDatetimeLocal, datetimeLocalToISO } from '@bengo-hub/shared-ui-lib/payments';
 import { buildLayawayPaymentColumns } from './payment-columns';
 
 function statusVariant(status: LayawayPlan['status']): 'default' | 'success' | 'outline' {
@@ -42,12 +43,14 @@ function LayawayDetailPage() {
   const paymentColumns = useMemo(() => buildLayawayPaymentColumns(currency), [currency]);
 
   const [paymentOpen, setPaymentOpen] = useState(false);
-  const [paymentForm, setPaymentForm] = useState<RecordPaymentInput>({
+  const emptyPaymentForm = (): RecordPaymentInput & { paidAtLocal: string } => ({
     amount: 0,
     payment_method: 'cash',
     reference: '',
     notes: '',
+    paidAtLocal: nowDatetimeLocal(),
   });
+  const [paymentForm, setPaymentForm] = useState<RecordPaymentInput & { paidAtLocal: string }>(emptyPaymentForm);
   const [cancelOpen, setCancelOpen] = useState(false);
 
   const handleRecordPayment = (e: React.FormEvent) => {
@@ -62,12 +65,13 @@ function LayawayDetailPage() {
         payment_method: paymentForm.payment_method,
         reference: paymentForm.reference || undefined,
         notes: paymentForm.notes || undefined,
+        paid_at: datetimeLocalToISO(paymentForm.paidAtLocal),
       },
       {
         onSuccess: () => {
           toast.success('Payment recorded');
           setPaymentOpen(false);
-          setPaymentForm({ amount: 0, payment_method: 'cash', reference: '', notes: '' });
+          setPaymentForm(emptyPaymentForm());
         },
         onError: async (e) => toast.error(await apiErrorMessage(e, 'Failed to record payment')),
       }
@@ -240,6 +244,19 @@ function LayawayDetailPage() {
                     </button>
                   ))}
                 </div>
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-muted-foreground mb-1.5 block">
+                  Payment date &amp; time <span className="text-destructive">*</span>
+                </label>
+                <input
+                  required
+                  type="datetime-local"
+                  value={paymentForm.paidAtLocal}
+                  max={nowDatetimeLocal()}
+                  onChange={(e) => setPaymentForm((p) => ({ ...p, paidAtLocal: e.target.value }))}
+                  className="w-full bg-background border border-border rounded-xl py-2.5 px-3.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+                />
               </div>
               <div>
                 <label className="text-xs font-semibold text-muted-foreground mb-1.5 block">Reference</label>
