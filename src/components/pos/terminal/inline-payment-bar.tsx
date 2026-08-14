@@ -80,6 +80,9 @@ export interface InlinePaymentBarProps {
   onDraft: () => void;
   onQuotation: () => void;
   onCancel: () => void;
+  /** True while onDraft/onQuotation's underlying save is in flight — disables both buttons so a
+   *  rapid double-click can't fire two saves before the first one's response clears the cart. */
+  draftPending?: boolean;
   /** Opens the page's Multiple-Pay (split) modal for the given order. */
   onSplit: (order: CreatedOrder) => void;
 }
@@ -119,7 +122,7 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
     total, tenantSlug, profile, isHospitality, allowCOD = false, customerEmail,
     tenderId = NIL_TENDER, disabled = false, mode = 'pay', layout = 'panel', hasCustomer = true,
     customerCreditAvailable = 0, loyaltyAccount = null,
-    createOrderAsync, onSettled, onDraft, onQuotation, onCancel, onSplit,
+    createOrderAsync, onSettled, onDraft, onQuotation, onCancel, onSplit, draftPending = false,
   } = props;
 
   // Credit Sale and Quotation are back-office/manager actions — same permission that approves sale
@@ -405,6 +408,10 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
 
   const fmt = (n: number) => formatCurrency(n, currency);
   const anyBusy = busyKey !== null || createIntent.isPending;
+  // Draft/Quotation save separately from the tender flow (anyBusy), so they need their own
+  // pending flag — otherwise a rapid double-click fires two independent draft-create requests
+  // before the first one's response clears the cart (see handlePark's own re-entrancy guard).
+  const draftBusy = anyBusy || draftPending;
 
   return (
     <div className="border-t border-border bg-card/95 backdrop-blur">
@@ -507,8 +514,8 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
            — so this whole row is free for tender buttons instead of splitting space with a redundant
            number. */
         <div className="flex flex-wrap items-center gap-2 px-3 py-2.5">
-          {isBackOffice && <BadgeBtn icon={FileText} label="Draft" onClick={onDraft} disabled={disabled || anyBusy} />}
-          {showQuotation && <BadgeBtn icon={FileText} label="Quotation" onClick={onQuotation} disabled={anyBusy} />}
+          {isBackOffice && <BadgeBtn icon={FileText} label="Draft" onClick={onDraft} disabled={disabled || draftBusy} />}
+          {showQuotation && <BadgeBtn icon={FileText} label="Quotation" onClick={onQuotation} disabled={draftBusy} />}
           {actions.map((a) => {
             const Icon = tenderIcon(a.key);
             const tone = TONES[a.tone];
@@ -575,8 +582,8 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
             <div className={cn('grid gap-2 pt-1',
               // columns = Cancel (always) + Draft (back-office) + Quotation (manager-gated)
               [null, 'grid-cols-1', 'grid-cols-2', 'grid-cols-3'][1 + (isBackOffice ? 1 : 0) + (showQuotation ? 1 : 0)])}>
-              {isBackOffice && <SecondaryBtn icon={FileText} label="Draft" onClick={onDraft} disabled={disabled || anyBusy} />}
-              {showQuotation && <SecondaryBtn icon={FileText} label="Quotation" onClick={onQuotation} disabled={anyBusy} />}
+              {isBackOffice && <SecondaryBtn icon={FileText} label="Draft" onClick={onDraft} disabled={disabled || draftBusy} />}
+              {showQuotation && <SecondaryBtn icon={FileText} label="Quotation" onClick={onQuotation} disabled={draftBusy} />}
               <SecondaryBtn icon={X} label="Cancel" tone="danger" onClick={onCancel} disabled={anyBusy} />
             </div>
           </div>

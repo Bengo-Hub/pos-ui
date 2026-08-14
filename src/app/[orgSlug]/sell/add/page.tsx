@@ -225,6 +225,11 @@ export default function AddSalePage() {
   const [creditSale, setCreditSale] = useState(searchParams.get('credit') === '1');
   const [creditModalOpen, setCreditModalOpen] = useState(false);
   const [notes, setNotes] = useState('');
+  // Admin/manager backdate-at-entry: ring this sale up as if it happened on an earlier day
+  // (a missed sale, an offline recovery) instead of using the separate retroactive "move sale
+  // date" tool on All Sales afterward. Blank = today (field omitted from the payload). Gated
+  // below by canPrivileged (pos.orders.manage) — the server enforces the same gate.
+  const [saleDate, setSaleDate] = useState('');
   // ── Shipping (optional) ── the shared ShippingDetailsFields form writes the same
   // metadata keys the Edit Shipping action manages, so the All-Sales Shipping column/
   // filter, the Shipments page, and the details modal all read create-time shipping too.
@@ -806,6 +811,9 @@ export default function AddSalePage() {
       // path (a fresh order is created for the edited draft); harmless to send unconditionally
       // for a brand-new sale too, since it then just equals the creating user.
       servedByUserId: servedByUserId || undefined,
+      // Admin/manager-only backdate; server re-checks pos.orders.manage regardless of this
+      // client-side gate.
+      businessDate: (canPrivileged && saleDate) || undefined,
       // Shipping charge rides the real order-level charges cost so the server total includes it.
       ...(shippingAmount > 0 ? { charges: { shipping: shippingAmount } } : {}),
       metadata: (() => {
@@ -1431,6 +1439,26 @@ export default function AddSalePage() {
             <label className="flex items-center gap-2 text-sm px-1">
               <input type="checkbox" checked={creditSale} onChange={(e) => setCreditSale(e.target.checked)} className="rounded" />
               <span>Credit sale (on account → AR)</span>
+            </label>
+          )}
+
+          {!editInplace && canPrivileged && (
+            <label className="flex items-center gap-2 text-sm px-1">
+              <span className="text-muted-foreground whitespace-nowrap">Sale date</span>
+              <input
+                type="date"
+                value={saleDate}
+                max={new Date().toISOString().slice(0, 10)}
+                onChange={(e) => setSaleDate(e.target.value)}
+                placeholder="Today"
+                className="flex-1 min-w-0 bg-background border border-border rounded-md py-1 px-2 text-sm"
+                title="Backdate this sale — reports under the picked date instead of today. Admin/manager only."
+              />
+              {saleDate && (
+                <button type="button" onClick={() => setSaleDate('')} className="text-xs text-muted-foreground hover:text-foreground">
+                  Clear
+                </button>
+              )}
             </label>
           )}
 

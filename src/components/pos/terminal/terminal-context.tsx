@@ -282,6 +282,11 @@ export interface TerminalContextValue {
   tableId: string;
   tableName: string;
 
+  // ── admin/manager backdate-at-entry ── "YYYY-MM-DD", blank = today. Gated in the UI on
+  // pos.orders.manage (see SaleDateButton); the server re-checks the same permission.
+  saleDate: string;
+  setSaleDate: (d: string) => void;
+
   // ── add-to-bill ──
   billOrderTotal: number;
 
@@ -562,6 +567,10 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
   const [orderSubtype, setOrderSubtype] = useState<OrderSubtype | null>(
     tableId ? 'dine_in' : null
   );
+
+  // Admin/manager backdate-at-entry. Resets to blank (today) after every successful order
+  // creation so it never silently carries over to the next, unrelated sale.
+  const [saleDate, setSaleDate] = useState('');
 
   // Delivery dropoff details — captured for delivery orders so a logistics rider can be dispatched.
   const [deliveryInfo, setDeliveryInfo] = useState<{ address: string; notes: string }>({ address: '', notes: '' });
@@ -1510,6 +1519,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
         customerPhone: loyaltyState?.customerPhone || undefined,
         customerName: loyaltyState?.customerName || undefined,
         ageVerified: ageVerifiedRef.current || undefined,
+        businessDate: saleDate || undefined,
         // Delivery orders carry the dropoff details so pos-api can build a logistics delivery task
         // when a rider is dispatched. Address/notes come from the customer capture step.
         metadata: orderSubtype === 'delivery'
@@ -1527,6 +1537,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
           setCurrentOrderNumber(data.order_number || '');
           setFiredCourses(0);
           setCurrentOrderCourses(courses);
+          setSaleDate('');
           {
             // Prefer the SERVER lines from the create response (real POSOrderLine ids — required
             // by per-line set-aside/replace); the cart mapping is only an offline/legacy fallback.
@@ -1668,6 +1679,12 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
   // `opts`; a MouseEvent has no `onDone`, so the optional call is a safe no-op there.)
   const handlePark = (opts?: { onDone?: () => void }) => {
     if (cart.length === 0) return;
+    // Guard at the source, not just the caller: a caller's button may forget to disable itself
+    // while this mutation is in flight (the terminal's inline Draft/Quotation buttons did), and a
+    // rapid double-click would otherwise fire two independent createOrder calls — each mints its
+    // own client_reference/Idempotency-Key, so neither existing idempotency mechanism can dedupe
+    // them. This one check protects every current and future caller of handlePark.
+    if (createOrder.isPending) return;
     createOrder.mutate(
       {
         outletId: orderOutletID,
@@ -1679,11 +1696,13 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
         discountReason: discountReason || undefined,
         customerPhone: loyaltyState?.customerPhone || undefined,
         customerName: loyaltyState?.customerName || undefined,
+        businessDate: saleDate || undefined,
         lines: orderLines,
       },
       {
         onSuccess: () => {
           clearCart();
+          setSaleDate('');
           toast.success('Sale saved to Drafts — resume it any time.');
           opts?.onDone?.();
         },
@@ -1855,6 +1874,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
         ageVerified: ageVerifiedRef.current || undefined,
         approvalToken: approval?.approvalToken,
         approvalCode: approval?.code,
+        businessDate: saleDate || undefined,
         metadata: orderSubtype === 'delivery'
           ? {
               ...(deliveryInfo.address ? { delivery_address: deliveryInfo.address } : {}),
@@ -1868,6 +1888,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
       setCurrentOrderId(orderId);
       setCurrentOrderNumber(orderNumber);
       setFiredCourses(0);
+      setSaleDate('');
       setCurrentOrderCourses(courses);
       {
         // Same as handlePlaceOrder: server line ids when present, cart mapping as fallback.
@@ -1894,7 +1915,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
       toast.error(await apiErrorMessage(e, 'Failed to create order. Please try again.'));
       return null;
     }
-  }, [cart, isHospitality, orderSubtype, tableId, coversParam, loyaltyDiscount, loyaltyState, orderLines, outlet, createOrder, assignTable, router, orgSlug]);
+  }, [cart, isHospitality, orderSubtype, tableId, coversParam, loyaltyDiscount, loyaltyState, orderLines, outlet, createOrder, assignTable, router, orgSlug, saleDate]);
 
   // unpaid=true → dine-in send-to-kitchen or COD: show the order-placed dialog (no receipt yet).
   // unpaid=false → tender settled: reuse handlePaymentConfirmed (receipt + table release + reset).
@@ -1953,6 +1974,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
     pricingProfile, pricingTiers, repricing, repriceCart,
     loyaltyState, setLoyaltyState, customerResetSeq, scaleDeviceId, customerCreditAvailable, loyaltyRedeemInfo,
     orderSubtype, setOrderSubtype, deliveryInfo, setDeliveryInfo, tableId, tableName,
+    saleDate, setSaleDate,
     billOrderTotal,
     handlePlaceOrder, handlePark, handleResumeParked, createOrderAsync,
     handleInlineSettled, handleInlineSplit,

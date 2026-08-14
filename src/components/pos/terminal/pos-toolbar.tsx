@@ -18,6 +18,7 @@ import type { TerminalProfile } from '@/lib/use-case-config';
 import { useCashDrawer } from '@/hooks/useCashDrawer';
 import { useHeldItems } from '@/hooks/useHeldItems';
 import { GenerateApprovalCodeButton } from '@/components/pos/generate-approval-code-button';
+import { SaleDateButton } from './sale-date-button';
 
 export interface PosToolbarProps {
   orgSlug: string;
@@ -112,6 +113,8 @@ export function PosToolbar({
           </button>
         );
       })}
+      {/* Admin/manager-only: backdate the NEXT sale rung up on this terminal. Self-gated. */}
+      <SaleDateButton />
       {/* Manager-only: mint a one-time approval code (discount/price/adjustment/OOS override) to
           share with a cashier — the generate side of the ApprovalDialog "Code" tab. Self-gated. */}
       <GenerateApprovalCodeButton className="flex items-center gap-1.5 shrink-0 px-2.5 py-1.5 rounded-lg border border-amber-500/40 text-xs font-semibold text-amber-600 dark:text-amber-400 hover:bg-amber-500/5 transition-colors whitespace-nowrap" />

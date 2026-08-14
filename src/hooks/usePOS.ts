@@ -1392,6 +1392,9 @@ interface CreateOrderInput {
   metadata?: Record<string, unknown>;
   /** Origin of the sale: "pos_terminal" (default) or "back_office" (the Add Sale flow). */
   source?: 'pos_terminal' | 'back_office';
+  /** Admin/manager backdate-at-entry ("YYYY-MM-DD"). Requires pos.orders.manage server-side —
+   *  callers gate the UI control on the same permission so a non-privileged user never sends one. */
+  businessDate?: string;
   lines: Array<{
     catalog_item_id: string;
     sku: string;
@@ -1481,6 +1484,7 @@ export function useCreateOrder() {
             lines: data.lines,
             client_reference: localId,
             source: data.source,
+            business_date: data.businessDate,
           },
           idemHeaders(localId),
         );

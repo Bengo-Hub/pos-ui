@@ -628,6 +628,7 @@ export function TerminalShell() {
       onQuotation={t.handlePark}
       onCancel={t.clearCart}
       onSplit={t.handleInlineSplit}
+      draftPending={t.createOrderPending}
     />
   );
 
