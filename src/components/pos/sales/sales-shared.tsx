@@ -63,6 +63,11 @@ export function payStatusBadge(s: string) {
   if (s === 'partial') return <Badge variant="warning">Partial</Badge>;
   if (s === 'overdue') return <Badge variant="error">Overdue</Badge>;
   if (s === 'refunded' || s === 'voided' || s === 'cancelled') return <Badge variant="error">{s}</Badge>;
+  // "draft" is a not-yet-checked-out cart, not a real sale — showing it as "Due" made an
+  // unfinished cart look like an outstanding invoice (the order-000278/boi-enterprises
+  // confusion). It falls through to here because it isn't "due"/"partial"/"overdue"; give it its
+  // own neutral label instead of the generic due-sale fallback below.
+  if (s === 'draft') return <Badge variant="outline">Draft</Badge>;
   return <Badge variant="default">Due</Badge>;
 }
 
