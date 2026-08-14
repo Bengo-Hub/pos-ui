@@ -200,8 +200,13 @@ export function SalesActionsMenu({ order, orgSlug, onView, onEditShipping, onVie
           <div className="my-1 border-t border-border" />
 
           {canViewPayments && <button className={item} onClick={() => { onViewPayments(order); close(); }}><CreditCard className="h-4 w-4 text-muted-foreground" /> View Payments</button>}
-          {/* Settle an on-account (credit) sale — money still owed on it. */}
-          {onRecordPayment && canTakePayment &&
+          {/* Settle an on-account (credit) sale — money still owed on it. Requires the order to
+              actually be `completed` (not just carrying a due/partial/overdue label): a genuine
+              credit sale is always completed the instant it's recorded (extending credit IS the
+              settlement act — see payments.recordCreditSale), so this excludes nothing real, only
+              a still-open/draft/pending_payment order that a status-transition bug left wrongly
+              labeled "due" — the exact confusion behind order 000278 (boi-enterprises). */}
+          {onRecordPayment && canTakePayment && order.status === 'completed' &&
             ['due', 'partial', 'overdue'].includes(order.payment_status) && (order.amount_due ?? 0) > 0.01 && (
             <button className={item} onClick={() => { onRecordPayment(order); close(); }}>
               <Banknote className="h-4 w-4 text-emerald-600" /> Record Payment

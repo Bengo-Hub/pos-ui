@@ -1464,6 +1464,13 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
 
   const handlePlaceOrder = () => {
     if (cart.length === 0) return;
+    // Re-entrancy guard: this is reachable both from a button (whose disabled state a caller may
+    // forget to wire — see handlePark's identical fix today) AND from the retail keyboard-first
+    // checkout shortcut (Enter key, below), which bypasses every button's disabled state entirely.
+    // Without this, a fast cashier pressing Enter twice fires two independent create/add-lines
+    // requests, each with its own client_reference — the exact mechanism behind the duplicate
+    // orders found live (000237/000238, 000135/000137).
+    if (isAddToBill && billOrderId ? addOrderLines.isPending : createOrder.isPending) return;
 
     // Add-to-bill mode: append lines to existing order
     if (isAddToBill && billOrderId) {
@@ -1852,6 +1859,11 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
   // waiting (busy spinner) and continues automatically once a manager approves.
   const createOrderAsync = useCallback(async (approval?: { approvalToken?: string; code?: string }): Promise<CreatedOrder | null> => {
     if (cart.length === 0) return null;
+    // Re-entrancy guard, matching handlePlaceOrder's fix above — this is the second, separate
+    // order-creation path (used by every inline-bar tender). Its current callers already gate on
+    // `busyKey`/`anyBusy` at the button level, but guarding at the source too means a future
+    // caller can't reintroduce this class of bug by forgetting to wire that.
+    if (createOrder.isPending) return null;
     if (isHospitality && !orderSubtype) {
       toast.error('Please select Dine-In or Takeaway before placing the order.');
       return null;
