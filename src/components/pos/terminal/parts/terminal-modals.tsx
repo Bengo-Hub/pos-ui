@@ -260,6 +260,9 @@ export function TerminalModals() {
               } catch { toast.error('Invalid or expired approval code'); return; }
             }
             t.setPendingOverride(null);
+            // Remember this item is cleared to oversell for the rest of the order, so bumping its
+            // qty afterwards (stepper or typed) doesn't re-prompt for manager PIN every time.
+            t.markOversoldApproved(item.id);
             // Override approved — continue the normal add flow (serial/modifier/age still apply).
             if (item.requiresAgeVerification || item.trackSerialNumber || item.modifierGroups?.length) {
               t.proceedWithItem(item);

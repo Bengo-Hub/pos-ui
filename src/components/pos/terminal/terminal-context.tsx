@@ -363,6 +363,10 @@ export interface TerminalContextValue {
 
   pendingOverride: MenuItem | null;
   setPendingOverride: (i: MenuItem | null) => void;
+  /** Marks an item's out-of-stock override as approved for the rest of this order, so further
+   *  qty bumps on the SAME cart line (stepper/typed qty) don't re-prompt for manager PIN — only
+   *  the initial add did. Self-clears once the item's qty drops back to 0 (see handleItemTap). */
+  markOversoldApproved: (itemId: string) => void;
 
   serialPrompt: { item: MenuItem; callback: (sn: string) => void } | null;
   setSerialPrompt: (v: { item: MenuItem; callback: (sn: string) => void } | null) => void;
@@ -479,6 +483,13 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
   const [scaleDeviceId, setScaleDeviceId] = useState('');
   // Out-of-stock add interception → manager PIN override (retail/pharmacy, gated on cfg.managerOverride).
   const [pendingOverride, setPendingOverride] = useState<MenuItem | null>(null);
+  // Item ids approved for oversell this order — checked (alongside inCartQty > 0, so a removed-
+  // then-re-added item still re-prompts) by handleItemTap/incrementCartLine/setLineQuantity to
+  // avoid re-asking for the manager PIN on every subsequent qty change of an already-approved line.
+  const [oversoldApprovedIds, setOversoldApprovedIds] = useState<Set<string>>(new Set());
+  const markOversoldApproved = useCallback((itemId: string) => {
+    setOversoldApprovedIds((prev) => new Set(prev).add(itemId));
+  }, []);
   const { can, isSuperuser } = usePermissions();
   const { data: posSettings } = usePOSSettings();
   // Legacy-fallback VAT for lines with NO inventory/treasury tax info. Mirrors pos-api's
@@ -1067,7 +1078,11 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
       const inCartQty = cart
         .filter((c) => c.id === item.id && !c.selectedModifiers && !c.promoFree)
         .reduce((s, c) => s + c.quantity, 0);
-      if (inCartQty + 1 > item.stockQuantity) {
+      // Already approved for oversell earlier in this order AND still on the cart (inCartQty > 0)
+      // — don't re-prompt. If it was fully removed since, inCartQty is back to 0 and this is
+      // treated as a fresh add, correctly re-prompting.
+      const alreadyApproved = oversoldApprovedIds.has(item.id) && inCartQty > 0;
+      if (!alreadyApproved && inCartQty + 1 > item.stockQuantity) {
         setPendingOverride(item);
         return;
       }
@@ -1086,7 +1101,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
       return;
     }
     proceedWithItem(item);
-  }, [cart, proceedWithItem, handleSearchChange]);
+  }, [cart, proceedWithItem, handleSearchChange, oversoldApprovedIds]);
 
   // Weighed-goods add: the scale returns grams; we add a generic line priced by weight (kg as qty),
   // mirroring the legacy /retail scale flow. Operators set the unit price from the cart afterwards.
@@ -1175,7 +1190,10 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
       setCart((prev) => prev.filter((_, i) => i !== index));
       return;
     }
-    if (!item.selectedModifiers && !item.promoFree && isStockTracked(item.item_type) && item.stockQuantity !== undefined) {
+    if (
+      !item.selectedModifiers && !item.promoFree && isStockTracked(item.item_type) && item.stockQuantity !== undefined &&
+      !oversoldApprovedIds.has(item.id)
+    ) {
       const otherLinesQty = cart
         .filter((c, i) => i !== index && c.id === item.id && !c.selectedModifiers && !c.promoFree)
         .reduce((s, c) => s + c.quantity, 0);
@@ -1194,7 +1212,10 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
   const incrementCartLine = (index: number) => {
     const item = cart[index];
     if (!item) return;
-    if (!item.selectedModifiers && !item.promoFree && isStockTracked(item.item_type) && item.stockQuantity !== undefined) {
+    if (
+      !item.selectedModifiers && !item.promoFree && isStockTracked(item.item_type) && item.stockQuantity !== undefined &&
+      !oversoldApprovedIds.has(item.id)
+    ) {
       const inCartQty = cart
         .filter((c) => c.id === item.id && !c.selectedModifiers && !c.promoFree)
         .reduce((s, c) => s + c.quantity, 0);
@@ -2007,7 +2028,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
     voidOpen, setVoidOpen, voidOrderMutateAsync: voidOrder.mutateAsync, setCurrentOrderId, setCurrentOrderNumber,
     receiptData, receiptOpen, setReceiptOpen, setReceiptData, receiptOrderId,
     orderPlacedOpen, setOrderPlacedOpen, orderPlacedId, orderPlacedNumber,
-    pendingOverride, setPendingOverride,
+    pendingOverride, setPendingOverride, markOversoldApproved,
     serialPrompt, setSerialPrompt, serialInput, setSerialInput,
     agePrompt, setAgePrompt,
     posSettings,

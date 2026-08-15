@@ -246,6 +246,9 @@ export default function AddSalePage() {
   const [pendingApproval, setPendingApproval] = useState<{ action: string; mode: 'pay' | 'draft'; creditDetails?: CreditSaleDetails } | null>(null);
   // Out-of-stock ("oversell") override for a line whose qty exceeds on-hand stock.
   const [pendingOversell, setPendingOversell] = useState<{ index: number; qty: number } | null>(null);
+  // Item ids approved for oversell on this sale — once a line is approved, further qty bumps on
+  // it don't re-prompt for manager PIN every time (same behavior as the POS terminal).
+  const [oversoldApprovedIds, setOversoldApprovedIds] = useState<Set<string>>(new Set());
 
   // ── Resume / edit an existing draft (REQ-003) ── ?order_id= comes from the Drafts page
   // "Resume Sale" action and the All-Sales "Edit" action. The draft's lines, customer and
@@ -563,7 +566,10 @@ export default function AddSalePage() {
     const line = lines[i];
     const stockQty = line ? (line.item as CatalogItem).stock_quantity : undefined;
     const itemType = line ? (line.item as CatalogItem).item_type : undefined;
-    if (line && q > line.quantity && isStockTracked(itemType) && typeof stockQty === 'number' && q > stockQty) {
+    if (
+      line && q > line.quantity && isStockTracked(itemType) && typeof stockQty === 'number' && q > stockQty &&
+      !oversoldApprovedIds.has(line.item.id)
+    ) {
       setPendingOversell({ index: i, qty: q });
       return;
     }
@@ -1540,6 +1546,8 @@ export default function AddSalePage() {
             }
             const { index, qty } = pendingOversell;
             setPendingOversell(null);
+            const approvedItemId = lines[index]?.item.id;
+            if (approvedItemId) setOversoldApprovedIds((prev) => new Set(prev).add(approvedItemId));
             applyQty(index, qty);
           }}
           onClose={() => setPendingOversell(null)}

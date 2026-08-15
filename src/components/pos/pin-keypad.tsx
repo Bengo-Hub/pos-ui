@@ -56,6 +56,21 @@ export function PINKeypad({ onConfirm, loading, error, maxLength = 4 }: PINKeypa
     setDigits([]);
   }, [loading, shaking]);
 
+  // Physical-keyboard support — mirrors the PIN-login screen so a manager stepping up an
+  // approval (out-of-stock override, void, etc.) can type the PIN instead of clicking the pad.
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key === 'Backspace') { e.preventDefault(); handleBackspace(); return; }
+      if (e.key === 'Escape') { handleClear(); return; }
+      if (/^[0-9]$/.test(e.key)) { e.preventDefault(); handleDigit(e.key); }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [handleDigit, handleBackspace, handleClear]);
+
   return (
     <div className="flex w-full flex-col items-center gap-4 select-none">
       {/* PIN progress dots */}
