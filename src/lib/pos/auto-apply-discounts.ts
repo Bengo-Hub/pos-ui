@@ -65,13 +65,18 @@ export function computePairAutoAdd<T extends PairAutoAddLine>(
     return { changed: hasFree, next: hasFree ? cart.filter((c) => !c.promoFree) : cart, announcements: [] };
   }
 
-  // lower(buySku) -> { getSku, buy, get }; first active rule wins on a conflicting key.
+  // lower(buySku) -> { getSku, buy, get }; first active rule wins on a conflicting key. A
+  // self-mapped entry (buySku === getSku) is skipped — the backend rejects this shape on write
+  // (handlers.validateGetPairMap) and its evaluator skips it too, but this mirrors that guard
+  // client-side so a pre-existing bad row can't also make the terminal auto-add/announce a
+  // "free" line for the very item that earned the credit (the Urban Loft "BURGER DAY" bug).
   const pair = new Map<string, { getSku: string; buy: number; get: number }>();
   for (const r of pairRules) {
     const buy = Math.max(1, r.buy_quantity ?? 1);
     const get = Math.max(1, r.get_quantity ?? 1);
     for (const [bk, gk] of Object.entries(r.get_pair_map ?? {})) {
       const key = bk.toLowerCase();
+      if (key === norm(gk)) continue;
       if (!pair.has(key)) pair.set(key, { getSku: gk, buy, get });
     }
   }
