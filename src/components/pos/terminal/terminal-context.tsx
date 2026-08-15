@@ -1056,6 +1056,10 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
   );
 
   const handleItemTap = useCallback((item: MenuItem) => {
+    // Clicking any search result — a grid tile, a scanned/typed exact match — clears the search
+    // box immediately, ready for the next lookup, instead of leaving the stale query sitting there
+    // (same "search → pick → clears" contract as the shared SearchAddTable component/Add Sale page).
+    handleSearchChange('');
     // Oversell guard (ALL use-cases/roles now): if the item is stock-tracked and adding this unit
     // would push the balance below zero, intercept for the manager out-of-stock override. Uses the
     // TOTAL in-cart qty for the item so topping up a partly-allocated line also trips it.
@@ -1082,7 +1086,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
       return;
     }
     proceedWithItem(item);
-  }, [cart, proceedWithItem]);
+  }, [cart, proceedWithItem, handleSearchChange]);
 
   // Weighed-goods add: the scale returns grams; we add a generic line priced by weight (kg as qty),
   // mirroring the legacy /retail scale flow. Operators set the unit price from the cart afterwards.
@@ -1143,13 +1147,13 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
       // Scan/type-to-cart: exact SKU or barcode match adds the item straight to the cart.
       const match = findByScanCode(menuItems, searchQuery);
       if (match) {
+        // handleItemTap already clears the search box on any successful pick.
         handleItemTap(match);
-        handleSearchChange('');
         toast.success(`Scanned: ${match.name}`);
         e.preventDefault();
       }
     }
-  }, [searchQuery, menuItems, handleItemTap, handleSearchChange]);
+  }, [searchQuery, menuItems, handleItemTap]);
 
   // ─── Cart Operations ────────────────────────────────────────────────────
 

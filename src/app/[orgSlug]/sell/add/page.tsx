@@ -20,10 +20,11 @@ import { StockCell, isStockTracked } from '@/components/pos/stock-cell';
 import { Button } from '@/components/ui/base';
 import { useClientCredit } from '@/hooks/useClients';
 import { usePermissions } from '@/hooks/usePermissions';
-import { useAddOrderLines, useCreateOrder, useCreatePaymentIntent, useEditOrderLine, useEditSale, useFullCatalog, useMenuItems, useOrder, usePricingTiers, useSetOrderDiscount, useVoidOrderLine, type CatalogItem, type EditSaleLine } from '@/hooks/usePOS';
+import { useAddOrderLines, useCreateOrder, useCreatePaymentIntent, useEditOrderLine, useEditSale, useFullCatalog, useOrder, usePricingTiers, searchMenuItems, useSetOrderDiscount, useVoidOrderLine, type CatalogItem, type EditSaleLine } from '@/hooks/usePOS';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { useStaffAdmin, useStaffSearch } from '@/hooks/useStaff';
 import { SearchableCombobox } from '@bengo-hub/shared-ui-lib/combobox';
+import { SearchAddTable, type SearchAddOption } from '@bengo-hub/shared-ui-lib/search-add-table';
 import { apiClient } from '@/lib/api/client';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { rbacApi } from '@/lib/api/rbac';
@@ -36,7 +37,7 @@ import { isLineActive, remainingLineQty } from '@/lib/pos/order-lines';
 import { cn, formatCurrency } from '@/lib/utils';
 import { useAuthStore } from '@/store/auth';
 import { FeatureLock, useFeatureUpgrade } from '@bengo-hub/shared-ui-lib/subscription';
-import { Check, Loader2, Minus, Plus, Search, ShoppingCart, Tag, Trash2, Truck, User, Users, X } from 'lucide-react';
+import { Check, Loader2, Minus, Plus, ShoppingCart, Tag, Trash2, Truck, User, Users, X } from 'lucide-react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
@@ -67,6 +68,12 @@ interface SaleLine {
    *  meaning as the POS terminal's CartItem.promoFree. Its quantity is kept in lockstep with the
    *  triggering buy line and the cashier never adds it manually. */
   promoFree?: boolean;
+}
+
+// SearchAddTable result shape: the required id/label/hint/description fields for the dropdown
+// row, plus the original CatalogItem so onAdd can hand it straight to addLine.
+interface CatalogSearchOption extends SearchAddOption {
+  item: CatalogItem;
 }
 
 // Resolve an item's price for the selected pricing profile (tier). Falls back to the item's default
@@ -136,41 +143,14 @@ export default function AddSalePage() {
   const [pricingProfile, setPricingProfile] = useState<string>('');
 
   // ── Line items ──
-  const [search, setSearch] = useState('');
   const [lines, setLines] = useState<SaleLine[]>([]);
   // Lightning search: filter the FULL catalog client-side — IndexedDB answers instantly and
   // the background revalidation keeps it fresh (same cache-first source the terminal uses).
-  // The per-keystroke SERVER search only runs as a cold-start fallback until the cached
-  // catalog is available. Items already on the sale are dropped from the dropdown.
+  // The per-keystroke SERVER search (searchMenuItems) only runs as a cold-start fallback until
+  // the cached catalog is available. Already-added items are excluded via SearchAddTable's
+  // `excludeIds`, not filtered in here.
   const { data: fullCatalog } = useFullCatalog();
   const catalogReady = (fullCatalog?.length ?? 0) > 0;
-  const { data: catalog, isFetching: serverSearching } = useMenuItems({
-    search: search || undefined,
-    limit: 25,
-    enabled: !catalogReady && !!search,
-  });
-  const results: CatalogItem[] = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return [];
-    const inSale = new Set(lines.map((l) => l.item.id));
-    if (catalogReady) {
-      const out: CatalogItem[] = [];
-      for (const it of fullCatalog ?? []) {
-        if (inSale.has(it.id)) continue;
-        if (
-          (it.name ?? '').toLowerCase().includes(q) ||
-          (it.sku ?? '').toLowerCase().includes(q) ||
-          ((it as any).barcode ?? '').toLowerCase().includes(q)
-        ) {
-          out.push(it);
-          if (out.length >= 25) break;
-        }
-      }
-      return out;
-    }
-    return (catalog?.data ?? []).filter((it) => !inSale.has(it.id));
-  }, [search, fullCatalog, catalogReady, catalog, lines]);
-  const isFetching = !catalogReady && serverSearching;
 
   // Authoritative tier price from inventory-api (same endpoint the POS terminal uses). Returns the
   // resolved unit price for a profile, or null to fall back to the local/default price.
@@ -513,6 +493,37 @@ export default function AddSalePage() {
       toastFn(announcement.message, { id: announcement.toastId });
     }
   }, [pricingProfile, resolvePrice, activeHappyHours, currency]);
+
+  // SearchAddTable's onSearch: instant client-side match against the cached full catalog (same
+  // source the POS terminal uses) once it's ready; cold-start-only fallback hits the server via
+  // searchMenuItems. Already-added items are excluded via SearchAddTable's `excludeIds` below,
+  // not here, so a re-search after removing a line can surface it again.
+  const searchCatalog = useCallback(async (q: string): Promise<CatalogSearchOption[]> => {
+    const query = q.trim().toLowerCase();
+    const toOption = (it: CatalogItem): CatalogSearchOption => ({
+      id: it.id,
+      label: it.name,
+      hint: it.sku,
+      description: fmt(tierPrice(it, pricingProfile)),
+      item: it,
+    });
+    if (catalogReady) {
+      const out: CatalogSearchOption[] = [];
+      for (const it of fullCatalog ?? []) {
+        if (
+          (it.name ?? '').toLowerCase().includes(query) ||
+          (it.sku ?? '').toLowerCase().includes(query) ||
+          ((it as any).barcode ?? '').toLowerCase().includes(query)
+        ) {
+          out.push(toOption(it));
+          if (out.length >= 25) break;
+        }
+      }
+      return out;
+    }
+    const items = await searchMenuItems(tenantId, outletId, query, 25);
+    return items.map(toOption);
+  }, [fullCatalog, catalogReady, pricingProfile, currency, tenantId, outletId]);
 
   // Corresponding-pair BOGO auto-add + sync — same computation the POS terminal runs
   // (lib/pos/auto-apply-discounts.computePairAutoAdd), adapted to SaleLine's shape (sku/name
@@ -1160,28 +1171,17 @@ export default function AddSalePage() {
         </div>
       </div>
 
-      {/* Item search + lines — FULL page width so the product table has room to breathe. */}
+      {/* Item search + lines — FULL page width so the product table has room to breathe.
+          SearchAddTable is the shared "search → click a result → clear, ready for the next
+          pick" component (also used by the POS terminal's own clear-on-tap behavior). */}
       <div className="space-y-4">
-          <div className="relative">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search product name / SKU to add…"
-              className="w-full bg-card border border-border rounded-xl py-3 pl-11 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" />
-            {isFetching && <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />}
-          </div>
-          {search && (
-            <div className="bg-card border border-border rounded-xl divide-y divide-border max-h-56 overflow-y-auto">
-              {results.length === 0 ? <div className="p-4 text-center text-sm text-muted-foreground">No products</div> :
-                results.map((it) => (
-                  <button key={it.id} type="button" onClick={() => { addLine(it); }}
-                    className="w-full text-left flex items-center gap-3 px-4 py-2.5 hover:bg-accent transition-colors">
-                    <Plus className="h-4 w-4 text-primary" />
-                    <span className="flex-1 text-sm font-medium truncate">{it.name}</span>
-                    <span className="text-xs text-muted-foreground font-mono">{it.sku}</span>
-                    <span className="text-sm font-bold text-primary">{fmt(tierPrice(it, pricingProfile))}</span>
-                  </button>
-                ))}
-            </div>
-          )}
+          <SearchAddTable<CatalogSearchOption>
+            onSearch={searchCatalog}
+            onAdd={(opt) => addLine(opt.item)}
+            excludeIds={lines.map((l) => l.item.id)}
+            placeholder="Search product name / SKU to add…"
+            emptyText="No products"
+          />
 
           <div className="bg-card border border-border rounded-2xl overflow-hidden overflow-x-auto">
             <table className="w-full text-sm">

@@ -405,6 +405,17 @@ export function useMenuItems(filters?: {
   });
 }
 
+/** Cold-start server search fallback — the same request `useMenuItems` fires, factored out as a
+ *  plain async function for callers that can't use a hook (e.g. SearchAddTable's `onSearch`,
+ *  which is invoked from a debounced effect, not render). Used only until the offline full
+ *  catalog (useFullCatalog) is ready; once it is, callers filter that client-side instead. */
+export async function searchMenuItems(tenantID: string, outletID: string, search: string, limit = 25): Promise<CatalogItem[]> {
+  if (!tenantID || !search.trim()) return [];
+  const res = await apiClient.get<PaginatedResponse<CatalogItem>>(`${basePath(tenantID)}/catalog/items`, { search, limit });
+  cacheCatalogPage(tenantID, outletID, res?.data);
+  return res?.data ?? [];
+}
+
 /** Map a lean offline-cache row back to the rich catalog DTO the terminal renders. */
 export function offlineToCatalogItem(c: OfflineCatalogItem): CatalogItem {
   return {
