@@ -66,17 +66,15 @@ export function computePairAutoAdd<T extends PairAutoAddLine>(
   }
 
   // lower(buySku) -> { getSku, buy, get }; first active rule wins on a conflicting key. A
-  // self-mapped entry (buySku === getSku) is skipped — the backend rejects this shape on write
-  // (handlers.validateGetPairMap) and its evaluator skips it too, but this mirrors that guard
-  // client-side so a pre-existing bad row can't also make the terminal auto-add/announce a
-  // "free" line for the very item that earned the credit (the Urban Loft "BURGER DAY" bug).
+  // self-mapped entry (buySku === getSku, e.g. "buy 1 Vege Burger get 1 more free") is a
+  // legitimate deal shape — kept in the map, but earned below is computed on a buy+get cycle
+  // for it, never buy alone (see the denom comment).
   const pair = new Map<string, { getSku: string; buy: number; get: number }>();
   for (const r of pairRules) {
     const buy = Math.max(1, r.buy_quantity ?? 1);
     const get = Math.max(1, r.get_quantity ?? 1);
     for (const [bk, gk] of Object.entries(r.get_pair_map ?? {})) {
       const key = bk.toLowerCase();
-      if (key === norm(gk)) continue;
       if (!pair.has(key)) pair.set(key, { getSku: gk, buy, get });
     }
   }
@@ -91,9 +89,15 @@ export function computePairAutoAdd<T extends PairAutoAddLine>(
   const earnedByGetSku = new Map<string, number>();
   for (const [bk, q] of buyQtyBySku) {
     const info = pair.get(bk)!;
-    const earned = Math.floor(q / info.buy) * info.get;
-    if (earned <= 0) continue;
     const gk = norm(info.getSku);
+    // A self-pair (gk === bk) draws its "buy" and "get" units from the exact same physical
+    // stack, so the earning cycle must be buy+get (mirroring the same-SKU BOGO math), never
+    // buy alone — with buy alone, every unit bought would earn a free credit against itself,
+    // zeroing the item's own price outright regardless of quantity (the Urban Loft "BURGER
+    // DAY" bug, 2026-08-15).
+    const denom = gk === bk ? info.buy + info.get : info.buy;
+    const earned = Math.floor(q / denom) * info.get;
+    if (earned <= 0) continue;
     earnedByGetSku.set(gk, (earnedByGetSku.get(gk) ?? 0) + earned);
   }
   // Manually-present (non-free) quantity of each earned get SKU — don't auto-add on top of it.

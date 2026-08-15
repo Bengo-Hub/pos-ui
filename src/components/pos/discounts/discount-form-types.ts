@@ -231,15 +231,6 @@ export function toPayload(f: FormState, currentOutletId?: string): DiscountInput
     toast.error('Every pair needs both a bought item and its free item');
     return null;
   }
-  // A self-mapped pair (buy X, get X free) would earn the item a free credit for itself the
-  // moment it's bought, zeroing its own price outright — never a valid "get a DIFFERENT item"
-  // deal. Caught here (root cause of the Urban Loft "BURGER DAY" bug) instead of only server-side
-  // so the mistake is obvious immediately, not after a round trip.
-  const selfPaired = completePairs.find((p) => p.buySku.trim().toLowerCase() === p.getSku.trim().toLowerCase());
-  if (crossItem && selfPaired) {
-    toast.error(`"${selfPaired.buyName || selfPaired.buySku}" can't be paired with itself — the free item must be a different SKU`);
-    return null;
-  }
   if (f.banner.showOnStorefront && !f.banner.bannerTitle.trim()) {
     toast.error('Banner title is required when "Show on storefront" is on');
     return null;
