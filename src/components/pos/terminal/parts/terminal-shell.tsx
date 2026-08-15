@@ -28,6 +28,7 @@ import { CategoryBrandDrawer } from '@/components/pos/terminal/parts/category-br
 import { MobileCartBar } from '@/components/pos/terminal/parts/mobile-cart-bar';
 import { SaleSessionTabs } from '@/components/pos/terminal/parts/sale-session-tabs';
 import { PosToolbar } from '@/components/pos/terminal/pos-toolbar';
+import { SaleDateButton } from '@/components/pos/terminal/sale-date-button';
 import { OrderTypeSelector } from '@/components/pos/order-type-selector';
 import { LoyaltyPanel } from '@/components/retail/LoyaltyPanel';
 import { ScaleDisplay } from '@/components/retail/ScaleDisplay';
@@ -152,9 +153,13 @@ export function TerminalShell() {
           (hospitality/quick_service use Dine-In/Takeaway/Delivery as the equivalent, so showing
           both would duplicate). */}
       <div className="shrink-0 p-2.5 sm:p-3 space-y-1.5 sm:space-y-2 border-b border-border bg-card/40">
-        {/* Row 1: product search (flexes) + pricing profile (right, same line). */}
+        {/* Row 1: product search (flexes) + pricing profile + sale date (right, same line). */}
         <div className="flex items-center gap-2">
           {renderSearchInput(true)}
+          {/* Admin/manager-only: backdate the NEXT sale rung up on this terminal. Self-gated
+              (renders nothing for a cashier) — moved here from the top toolbar so it sits next
+              to the pricing profile, matching the Add Sale page's placement next to checkout. */}
+          <SaleDateButton />
           {cfg.showPricingProfile && (
             <div className="flex items-center gap-1.5 shrink-0">
               <span className="hidden sm:inline text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Price</span>
