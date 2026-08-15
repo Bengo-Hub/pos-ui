@@ -1,6 +1,7 @@
 'use client';
 
 import { Badge } from '@/components/ui/base';
+import { isBackdatedOrder, orderDisplayDate } from '@/components/pos/sales/sales-shared';
 import { useOrder } from '@/hooks/usePOS';
 import { PrintReceiptButton } from '@/components/pos/print-receipt-button';
 import { ReprintStationTicketsButton } from '@/components/pos/reprint-station-tickets-button';
@@ -80,7 +81,12 @@ export default function OrderDetailPage() {
           <div className="flex items-center gap-3 mt-1.5">
             <Badge variant={statusVariant(order.status)}>{order.status}</Badge>
             <span className="text-sm text-muted-foreground">
-              {new Date(order.created_at).toLocaleString()}
+              {orderDisplayDate(order)}
+              {isBackdatedOrder(order) && (
+                <span className="ml-1.5 text-xs text-amber-600">
+                  (backdated — entered {new Date(order.created_at).toLocaleString()})
+                </span>
+              )}
             </span>
           </div>
         </div>

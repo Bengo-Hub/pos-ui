@@ -25,7 +25,7 @@ import { ViewPaymentsModal } from './view-payments-modal';
 import { EditOrderLinesModal } from './edit-order-lines-modal';
 import { MoveOrderDateModal } from './move-order-date-modal';
 import { EditSaleInfoModal } from './edit-sale-info-modal';
-import { money, payStatusBadge, prettyMethod, PAYMENT_STATUSES, SOURCES } from './sales-shared';
+import { money, payStatusBadge, prettyMethod, PAYMENT_STATUSES, SOURCES, isBackdatedOrder, orderDisplayDate } from './sales-shared';
 import { cashierNameOf, OrderLinesPanel, SalesSummaryFooter, BulkVoidReasonDialog, skippedSummary } from './sales-table-shared';
 import { ReportExportButtons } from '@/components/reports/report-document-button';
 import { toast } from 'sonner';
@@ -253,8 +253,18 @@ export function SalesListView({ orgSlug, fixedSource, title, subtitle }: {
       ),
     },
     {
-      key: 'date', header: 'Date', sortable: true, accessor: (o) => o.created_at,
-      render: (o) => <span className="text-xs text-muted-foreground whitespace-nowrap">{new Date(o.created_at).toLocaleString('en-KE')}</span>,
+      key: 'date', header: 'Date', sortable: true, accessor: (o) => o.business_date || o.created_at,
+      render: (o) => (
+        <span className="text-xs text-muted-foreground whitespace-nowrap">
+          {orderDisplayDate(o)}
+          {isBackdatedOrder(o) && (
+            <span className="block text-[10px] text-amber-600"
+              title={`Backdated sale — actually entered ${new Date(o.created_at).toLocaleString('en-KE')}`}>
+              backdated
+            </span>
+          )}
+        </span>
+      ),
     },
     {
       key: 'invoice', header: 'Invoice No.', primary: true, accessor: (o) => o.order_number,

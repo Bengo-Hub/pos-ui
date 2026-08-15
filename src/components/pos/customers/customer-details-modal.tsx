@@ -10,6 +10,7 @@ import { clientsApi, type LoyaltyAccount } from '@/lib/api/clients';
 import { useClientCreditByIdentifier } from '@/hooks/useClients';
 import { useAuthStore } from '@/store/auth';
 import { RecordPaymentModal } from '@/components/pos/sales/record-payment-modal';
+import { orderDisplayDate } from '@/components/pos/sales/sales-shared';
 
 const PAYMENT_STATUS_STYLES: Record<string, string> = {
   paid: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300',
@@ -151,7 +152,7 @@ export function CustomerDetailsModal({
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold truncate">{o.order_number}</p>
                       <p className="text-[11px] text-muted-foreground">
-                        {new Date(o.created_at).toLocaleDateString()} · {(o.item_count ?? 0)} item{(o.item_count ?? 0) === 1 ? '' : 's'}
+                        {orderDisplayDate(o, false)} · {(o.item_count ?? 0)} item{(o.item_count ?? 0) === 1 ? '' : 's'}
                       </p>
                     </div>
                     <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-bold capitalize shrink-0', PAYMENT_STATUS_STYLES[o.payment_status] ?? 'bg-muted text-muted-foreground')}>

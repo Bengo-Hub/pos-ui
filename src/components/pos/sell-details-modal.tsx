@@ -7,7 +7,7 @@ import { InitiateReturnModal } from '@/components/pos/returns/initiate-return-mo
 import { EditSaleInfoModal } from '@/components/pos/sales/edit-sale-info-modal';
 import { ReceiptShareButtons } from '@/components/pos/sales/receipt-share-actions';
 import { RecordPaymentModal } from '@/components/pos/sales/record-payment-modal';
-import { prettyMethod } from '@/components/pos/sales/sales-shared';
+import { prettyMethod, isBackdatedOrder, orderDisplayDate } from '@/components/pos/sales/sales-shared';
 import { P, usePermissions } from '@/hooks/usePermissions';
 import { useOrder } from '@/hooks/usePOS';
 import { apiClient } from '@/lib/api/client';
@@ -165,7 +165,13 @@ export function SellDetailsModal({ orderId, orgSlug, onClose }: { orderId: strin
                 {meta.shipping_address && <p><b>Address:</b> {meta.shipping_address}</p>}
               </div>
               <div className="sm:text-right">
-                <p><b>Date:</b> {new Date((order as any).created_at).toLocaleString('en-KE')}</p>
+                <p><b>Date:</b> {orderDisplayDate(order)}
+                  {isBackdatedOrder(order) && (
+                    <span className="block text-xs text-amber-600">
+                      Backdated — entered {new Date((order as any).created_at).toLocaleString('en-KE')}
+                    </span>
+                  )}
+                </p>
                 <p><b>Served by:</b> {(order as any).served_by_name || (order as any).cashier_name || '—'}</p>
                 {meta.shipping_status && <p><b>Shipping:</b> {meta.shipping_status}</p>}
               </div>

@@ -13,6 +13,7 @@ import { useEffectiveOnline } from '@/lib/connectivity';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { allowedRefundChannels, defaultRefundChannel, refundChannelAdvisory } from '@/lib/returns-policy';
 import { cn, formatCurrency } from '@/lib/utils';
+import { orderDisplayDate } from '@/components/pos/sales/sales-shared';
 import { useAuthStore } from '@/store/auth';
 
 export interface ReturnLinePayload {
@@ -199,7 +200,7 @@ export function InitiateReturnModal({
     const rows: any[] = (res as any)?.data ?? [];
     return rows.map((o) => {
       foundOrdersRef.current.set(o.id, o);
-      const when = o.created_at ? new Date(o.created_at).toLocaleDateString() : '';
+      const when = o.created_at ? orderDisplayDate(o, false) : '';
       return {
         value: o.id,
         label: o.order_number,
@@ -331,7 +332,7 @@ export function InitiateReturnModal({
                 <div>
                   <p className="text-sm font-bold font-mono">{selectedOrder.order_number}</p>
                   <p className="text-xs text-muted-foreground">
-                    {new Date(selectedOrder.created_at).toLocaleDateString()} · {formatCurrency(selectedOrder.total_amount ?? 0, currency)}
+                    {orderDisplayDate(selectedOrder, false)} · {formatCurrency(selectedOrder.total_amount ?? 0, currency)}
                   </p>
                 </div>
                 <span className="text-xs bg-primary/10 text-primary font-semibold px-2 py-1 rounded-lg capitalize">

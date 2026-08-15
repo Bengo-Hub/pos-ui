@@ -11,6 +11,23 @@ import { PAYMENT_METHOD_LABELS, getPaymentMethodLabel } from '@bengo-hub/shared-
 export const money = (n: number, currency = 'KES') =>
   `${currency} ${Number(n ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
+// True when an admin/manager backdated this sale — either at entry (the "Sale date" field on
+// the POS terminal / Add Sale, pos.orders.manage) or afterward (Move Sale Date). Mirrors
+// pos-api's orders.EffectiveOrderDate precedence exactly (business_date wins over created_at)
+// so this list/modal never disagrees with the date-range filter or exported reports for the
+// same order — see move-order-date-modal.tsx's identical `business_date ?? created_at` read.
+export const isBackdatedOrder = (o: any): boolean => !!o?.business_date;
+
+/** The order's displayed "Date": the effective/reported day (business_date) when backdated —
+ *  shown DATE ONLY since a backdate carries no real ring-up time — else the full created_at
+ *  date+time as before. Pass includeTime=true to also format a normal order's time (the default,
+ *  matching every existing "Date" column/field this replaces). */
+export const orderDisplayDate = (o: any, includeTime = true): string => {
+  if (o?.business_date) return new Date(o.business_date).toLocaleDateString('en-KE');
+  if (!o?.created_at) return '—';
+  return includeTime ? new Date(o.created_at).toLocaleString('en-KE') : new Date(o.created_at).toLocaleDateString('en-KE');
+};
+
 // Re-exported from shared-ui-lib — was previously a local dict (kept mtn_momo/airtel_money out
 // of sync with treasury-ui's own copy until centralized). Provider-name traceability (e.g.
 // "Bank Transfer (Equity Bank Uganda)") is available via getPaymentMethodLabel(method, providerName)

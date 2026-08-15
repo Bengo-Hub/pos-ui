@@ -14,7 +14,7 @@ import { usePermissions, P } from '@/hooks/usePermissions';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { PrintReceiptButton } from '@/components/pos/print-receipt-button';
 import { DateRangePicker, rangeBound, type DateRange } from '@/components/ui/date-range-picker';
-import { money } from '@/components/pos/sales/sales-shared';
+import { money, isBackdatedOrder, orderDisplayDate } from '@/components/pos/sales/sales-shared';
 import { cashierNameOf, OrderLinesPanel, skippedSummary } from '@/components/pos/sales/sales-table-shared';
 import { toast } from 'sonner';
 
@@ -150,10 +150,16 @@ export function DraftsListView({ orgSlug }: { orgSlug: string }) {
       ),
     },
     {
-      key: 'date', header: 'Date / Time', sortable: true, accessor: (o) => o.created_at ?? '',
+      key: 'date', header: 'Date / Time', sortable: true, accessor: (o) => o.business_date || o.created_at || '',
       render: (o) => (
         <span className="text-xs text-muted-foreground whitespace-nowrap">
-          {o.created_at ? new Date(o.created_at).toLocaleString('en-KE') : '—'}
+          {orderDisplayDate(o)}
+          {isBackdatedOrder(o) && (
+            <span className="block text-[10px] text-amber-600"
+              title={`Backdated sale — actually entered ${new Date(o.created_at).toLocaleString('en-KE')}`}>
+              backdated
+            </span>
+          )}
         </span>
       ),
     },

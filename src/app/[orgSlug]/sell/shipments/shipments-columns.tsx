@@ -4,7 +4,7 @@
 // mirror the platform's <page>-columns.tsx convention.
 
 import { PrintReceiptButton } from '@/components/pos/print-receipt-button';
-import { money, payStatusBadge } from '@/components/pos/sales/sales-shared';
+import { money, payStatusBadge, isBackdatedOrder, orderDisplayDate } from '@/components/pos/sales/sales-shared';
 import { cn } from '@/lib/utils';
 import type { DataTableColumn } from '@bengo-hub/shared-ui-lib/data-table';
 
@@ -39,8 +39,13 @@ export function buildShipmentColumns(cb: ShipmentColumnCallbacks): DataTableColu
       ),
     },
     {
-      key: 'date', header: 'Date', sortable: true, accessor: (o) => o.created_at,
-      render: (o) => <span className="text-xs text-muted-foreground whitespace-nowrap">{new Date(o.created_at).toLocaleString('en-KE')}</span>,
+      key: 'date', header: 'Date', sortable: true, accessor: (o) => o.business_date || o.created_at,
+      render: (o) => (
+        <span className="text-xs text-muted-foreground whitespace-nowrap">
+          {orderDisplayDate(o)}
+          {isBackdatedOrder(o) && <span className="block text-[10px] text-amber-600">backdated</span>}
+        </span>
+      ),
     },
     {
       key: 'invoice', header: 'Invoice No.', primary: true, accessor: (o) => o.order_number,

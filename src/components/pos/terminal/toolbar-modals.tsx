@@ -19,6 +19,7 @@ import { format, startOfDay } from 'date-fns';
 import { Pagination } from '@/components/ui/pagination';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { PrintReceiptButton } from '@/components/pos/print-receipt-button';
+import { isBackdatedOrder, orderDisplayDate } from '@/components/pos/sales/sales-shared';
 import { toast } from 'sonner';
 
 function ModalShell({ title, icon: Icon, onClose, children, wide, size }: {
@@ -398,7 +399,10 @@ export function RecentTransactionsModal({ open, onClose, orgSlug }: { open: bool
                   {o.order_number}
                   {o.customer_name ? <span className="text-muted-foreground font-normal"> ({o.customer_name})</span> : null}
                 </p>
-                <p className="text-[11px] text-muted-foreground">{new Date(o.created_at).toLocaleString('en-KE')}</p>
+                <p className="text-[11px] text-muted-foreground">
+                  {orderDisplayDate(o)}
+                  {isBackdatedOrder(o) && <span className="text-amber-600"> (backdated)</span>}
+                </p>
               </button>
               <span className="font-bold text-sm tabular-nums shrink-0 w-24 text-right">{fmt(o.total_amount)}</span>
               <div className="flex items-center gap-1 shrink-0">
