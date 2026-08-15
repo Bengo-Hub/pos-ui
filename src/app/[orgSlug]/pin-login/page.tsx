@@ -349,22 +349,27 @@ export default function PINLoginPage() {
   const loginMutation = useMutation({
     mutationFn: (pin: string) => {
       const outletId = outletInfo?.id ?? storedOutletId;
-      // Bounded timeout: on weak wifi we fail fast and fall back to the cached-bcrypt
-      // offline branch in submitPasscode instead of hanging on the axios 15s default.
+      // Bounded timeout: generous enough to absorb a slow subscriptions-api/DB round trip
+      // during login (observed up to ~4.9s under load) without falsely tripping the offline
+      // fallback in submitPasscode — 5s was cutting it too close and intermittently fired
+      // the fallback on an otherwise-healthy connection. Still fails well short of hanging
+      // on the axios 15s default.
       return apiClient.post<PINLoginResponse>(
         `/api/v1/${effectiveTenantID}/pos/auth/pin/identify`,
         { pin, outlet_id: outletId },
-        { timeout: 5000, suppressErrorToast: true },
+        { timeout: 12000, suppressErrorToast: true },
       );
     },
     networkMode: 'always',
     onSuccess: handleLoginSuccess,
     onError: async (err: any) => {
-      const { isNetworkShapedError } = await import('@/lib/connectivity');
-      if (isNetworkShapedError(err)) return; // submitPasscode falls back to the offline branch
+      const { isNetworkShapedError, isEffectivelyOnline } = await import('@/lib/connectivity');
+      if (isNetworkShapedError(err) && !isEffectivelyOnline()) return; // submitPasscode falls back to the offline branch
       const msg = err?.status === 429
         ? 'Too many attempts. Please wait.'
-        : 'Incorrect PIN. Please try again.';
+        : isNetworkShapedError(err)
+          ? 'Login is taking longer than usual. Please try again.'
+          : 'Incorrect PIN. Please try again.';
       triggerPinError(msg);
     },
   });
@@ -394,8 +399,14 @@ export default function PINLoginPage() {
         await loginMutation.mutateAsync(pin); // onSuccess handles the session + redirect
         return;
       } catch (err) {
-        const { isNetworkShapedError } = await import('@/lib/connectivity');
-        if (!isNetworkShapedError(err)) return; // real rejection — onError already showed it
+        const { isNetworkShapedError, isEffectivelyOnline } = await import('@/lib/connectivity');
+        // Only fall back to the offline bcrypt branch when we're ACTUALLY offline. A lone
+        // client-side timeout on an otherwise-healthy connection (e.g. a slow subscriptions-api
+        // round trip during login — observed up to ~4.9s under load) must never silently mint
+        // the placeholder 'offline-terminal-session' token while the rest of the app still
+        // believes it's online: every subsequent authenticated call then 401s (it's not a real
+        // JWT), which is what forced the login->nothing-loads->auto-logout loop live in prod.
+        if (!isNetworkShapedError(err) || isEffectivelyOnline()) return; // real rejection or a one-off blip — onError already showed it
         // fall through to the offline bcrypt branch
       }
     }
