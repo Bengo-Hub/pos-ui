@@ -10,8 +10,13 @@
  *
  *  - `navigator.onLine === false`  → effectively offline immediately.
  *  - N consecutive network-shaped request failures (timeout / DNS / connection reset /
- *    502-504 gateway errors) → effectively offline even though the OS says online.
- *  - Any successful transport (ANY HTTP response, including 4xx/500 — the server was
+ *    any 5xx server error) → effectively offline even though the OS says online. A 5xx
+ *    means the server itself is malfunctioning (crash-looping, a downstream dependency
+ *    down, etc.) — functionally identical to unreachable from the cashier's perspective,
+ *    and the till needs the same offline-queue safety net. 4xx is deliberately excluded:
+ *    those are business/validation rejections (bad PIN, insufficient stock, duplicate
+ *    idempotency key) that must NOT be silently queued and retried later.
+ *  - Any successful transport (ANY HTTP response, including 4xx — the server was
  *    reached) → effectively online again.
  *  - While offline-by-failures, a lightweight `/healthz` probe (4s timeout) runs every
  *    20s so we recover without waiting for user-triggered traffic.
@@ -45,9 +50,13 @@ export const useConnectivityStore = create<ConnectivityState>(() => ({
   lastFailureAt: null,
 }));
 
-/** True when the request could not reach the server (vs. a business/server-side error).
+/** True when the request could not reach a WORKING server (vs. a client/business error).
  *  Covers axios timeouts (ECONNABORTED), fetch/DNS failures (TypeError / ERR_NETWORK /
- *  no response), and gateway errors (502/503/504) that mean "the API is unreachable". */
+ *  no response), and ANY 5xx server error — a crash-looping pod, a downstream dependency
+ *  outage, an unhandled panic, etc. all mean "the API can't currently serve this request",
+ *  which is exactly the condition the offline queue exists for. Deliberately excludes 4xx:
+ *  those are the server correctly rejecting the request (bad PIN, insufficient stock, a
+ *  duplicate idempotency key) and must surface as real errors, never silently queued. */
 export function isNetworkShapedError(error: unknown): boolean {
   if (!error || typeof error !== 'object') return false;
   const e = error as {
@@ -62,7 +71,7 @@ export function isNetworkShapedError(error: unknown): boolean {
   if (e.name === 'TypeError') return true;
   if (e.code === 'ECONNABORTED' || e.code === 'ERR_NETWORK' || e.code === 'ETIMEDOUT') return true;
   const status = e.response?.status ?? e.status;
-  if (status === 502 || status === 503 || status === 504) return true;
+  if (status !== undefined && status >= 500) return true;
   // Axios shape: request made, no response at all (network layer failure).
   if (e.request !== undefined && e.response === undefined && e.code !== undefined) return true;
   return false;
