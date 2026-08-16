@@ -15,6 +15,9 @@ import { allowedRefundChannels, defaultRefundChannel, refundChannelAdvisory, REF
 import { ExchangeLinesPicker, exchangeTotal, type ExchangeLine } from '@/components/pos/returns/exchange-lines-picker';
 import { SplitPaymentModal } from '@/components/pos/split-payment-modal';
 import { CustomerDetailsModal } from '@/components/pos/customers/customer-details-modal';
+import { ReceiptPreview } from '@/components/pos/receipt-preview';
+import { useReceiptAfterSale } from '@/hooks/use-receipt-after-sale';
+import { resolveBillProfile } from '@/lib/pos/printer-stations';
 import { DataTable } from '@bengo-hub/shared-ui-lib/data-table';
 import { buildReturnLineColumns, type ReturnLine } from './return-lines-columns';
 
@@ -148,6 +151,16 @@ export default function ReturnDetailPage() {
   const [exchangeLines, setExchangeLines] = useState<ExchangeLine[]>([]);
   const [topUpOrder, setTopUpOrder] = useState<{ id: string; number: string; total: number } | null>(null);
   const lineColumns = useMemo(() => buildReturnLineColumns(currency), [currency]);
+  // Completion receipt. A refund/store-credit return is its own document (pos-api's returns
+  // receipt endpoint renders it with the REFUND framing) and is NOT a fiscalised sale, so it
+  // uses showReceiptFromEndpoint. An exchange instead raises a normal fully-paid replacement
+  // order, which the ordinary order receipt already renders correctly — showReceiptForOrder.
+  const tenantId = useAuthStore((s) => s.user?.tenant_id ?? '');
+  const authUser = useAuthStore((s) => s.user);
+  const {
+    receiptData, receiptOpen, receiptOrderId,
+    showReceiptForOrder, showReceiptFromEndpoint, closeReceipt,
+  } = useReceiptAfterSale(tenantId, authUser?.fullName || authUser?.email);
 
   if (isLoading) {
     return (
@@ -442,6 +455,14 @@ export default function ReturnDetailPage() {
                   } else {
                     toast.success(isExchange ? 'Exchange completed' : 'Return completed');
                   }
+                  // Print the customer's copy. An exchange with a top-up still owing waits for
+                  // the top-up payment (the SplitPaymentModal below raises the receipt then), so
+                  // the replacement order's receipt is never printed as "paid" before it is.
+                  if (isExchange) {
+                    if (ex?.order_id && !(ex.amount_payable > 0.009)) void showReceiptForOrder(ex.order_id);
+                  } else {
+                    void showReceiptFromEndpoint(`/api/v1/${tenantId}/pos/returns/${returnId}/receipt`);
+                  }
                 },
                 onError: async (e) => toast.error(await apiErrorMessage(e, 'Failed to complete return')),
               },
@@ -465,7 +486,13 @@ export default function ReturnDetailPage() {
         <SplitPaymentModal
           open
           onClose={() => setTopUpOrder(null)}
-          onPaymentConfirmed={() => { setTopUpOrder(null); toast.success('Top-up collected — exchange settled'); }}
+          onPaymentConfirmed={() => {
+            const settledId = topUpOrder.id;
+            setTopUpOrder(null);
+            toast.success('Top-up collected — exchange settled');
+            // NOW the replacement order is fully paid — print its receipt.
+            void showReceiptForOrder(settledId);
+          }}
           orderId={topUpOrder.id}
           orderNumber={topUpOrder.number}
           total={topUpOrder.total}
@@ -518,6 +545,18 @@ export default function ReturnDetailPage() {
           onClose={() => setCustomerOpen(false)}
         />
       )}
+
+      {/* Refund / exchange receipt — mounted exactly like the POS terminal's. orderId is only
+          set for the exchange's replacement order; a refund document has no order of its own. */}
+      <ReceiptPreview
+        receipt={receiptData}
+        open={receiptOpen}
+        onClose={closeReceipt}
+        printerProfile={resolveBillProfile((posSettings as any)?.printer_profiles)}
+        tenantId={tenantId}
+        orderId={receiptOrderId}
+        autoPrint={Boolean((posSettings as any)?.auto_print_order) && !(posSettings as any)?.print_agent_online}
+      />
     </div>
   );
 }

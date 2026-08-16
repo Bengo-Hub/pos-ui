@@ -31,7 +31,7 @@ import {
   useAssignTable, useReleaseTable, usePricingTiers, useEffectiveOutletID, type OrderSubtype,
 } from '@/hooks/usePOS';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
-import { ETIMS_FISCALIZED_EVENT, type EtimsFiscalizedPayload } from '@/hooks/use-notification-stream';
+import { useReceiptAfterSale } from '@/hooks/use-receipt-after-sale';
 import { isStockTracked } from '@/components/pos/stock-cell';
 import { useKDSStations } from '@/hooks/useKDS';
 import { useLoyaltyPrograms, useLoyaltyAccount } from '@/hooks/useLoyalty';
@@ -610,10 +610,12 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
   const assignTable = useAssignTable();
   const releaseTable = useReleaseTable();
 
-  // Receipt
-  const [receiptData, setReceiptData] = useState<ReceiptData | null>(null);
-  const [receiptOpen, setReceiptOpen] = useState(false);
-  const [receiptOrderId, setReceiptOrderId] = useState('');
+  // Receipt — the fetch/open/eTIMS-merge flow lives in the shared useReceiptAfterSale hook so
+  // Add Sale, Tables, Layaway and Returns raise the identical receipt instead of re-implementing it.
+  const {
+    receiptData, receiptOpen, receiptOrderId,
+    showReceiptForOrder, closeReceipt, setReceiptData, setReceiptOpen,
+  } = useReceiptAfterSale(user?.tenant_id ?? '', user?.fullName || user?.email);
 
   // Order placed dialog (dine-in + add-to-bill success)
   const [orderPlacedOpen, setOrderPlacedOpen] = useState(false);
@@ -1802,73 +1804,10 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
     }
 
     // Fetch receipt data and show the receipt preview (the terminal's after-payment print surface).
-    const tenantId = user?.tenant_id ?? '';
-    if (tenantId && settledOrderId) {
-      try {
-        const data = await apiClient.get<ReceiptData>(
-          `/api/v1/${tenantId}/pos/orders/${settledOrderId}/receipt`
-        );
-        // "Served by" — fall back to the logged-in user when the API omits it.
-        setReceiptData({ ...data, served_by: data.served_by || user?.fullName || user?.email });
-        setReceiptOrderId(settledOrderId);
-        setReceiptOpen(true);
-        // eTIMS fiscalisation lands asynchronously to the on-screen receipt (the sale signs on the
-        // post-settlement fan-out). PRIMARY path: pos-api PUSHES `etims_fiscalized` over the
-        // notification WebSocket the instant it signs — use-notification-stream re-broadcasts it as
-        // the ETIMS_FISCALIZED_EVENT window event, so we refetch ONCE and merge the KRA TIMS block
-        // immediately (no 30-50s poll). FALLBACK: a few slow polls in case the socket was momentarily
-        // down; then give up (the receipt endpoint still backfills on any later manual view/reprint).
-        if (!data.etims_cu_inv_no && !data.etims_invoice_number) {
-          let done = false;
-          const applyFresh = (fresh: ReceiptData) => {
-            if (done || !(fresh.etims_cu_inv_no || fresh.etims_invoice_number)) return;
-            done = true;
-            setReceiptData((prev) =>
-              prev && prev.order_number === data.order_number
-                ? {
-                    ...prev,
-                    etims_invoice_number: fresh.etims_invoice_number,
-                    etims_qr_code_url: fresh.etims_qr_code_url,
-                    etims_qr_png: fresh.etims_qr_png,
-                    etims_scu_id: fresh.etims_scu_id,
-                    etims_cu_inv_no: fresh.etims_cu_inv_no,
-                    etims_rcpt_sign: fresh.etims_rcpt_sign,
-                    etims_kra_pin: fresh.etims_kra_pin,
-                    // Fiscalisation just landed — the barcode switches from the plain order
-                    // number to the eTIMS CU invoice number (FiscalBarcodeValue on the server).
-                    barcode_png: fresh.barcode_png,
-                    barcode_value: fresh.barcode_value,
-                  }
-                : prev,
-            );
-          };
-          const refetchOnce = async () => {
-            try {
-              applyFresh(
-                await apiClient.get<ReceiptData>(`/api/v1/${tenantId}/pos/orders/${settledOrderId}/receipt`),
-              );
-            } catch {
-              // transient — the push/fallback will retry
-            }
-          };
-          const onPush = (e: Event) => {
-            const detail = (e as CustomEvent<EtimsFiscalizedPayload>).detail;
-            if (detail?.order_id === settledOrderId) void refetchOnce();
-          };
-          window.addEventListener(ETIMS_FISCALIZED_EVENT, onPush as EventListener);
-          void (async () => {
-            for (let attempt = 0; attempt < 3 && !done; attempt++) {
-              await new Promise((r) => setTimeout(r, 5000));
-              if (!done) await refetchOnce();
-            }
-            window.removeEventListener(ETIMS_FISCALIZED_EVENT, onPush as EventListener);
-          })();
-        }
-      } catch {
-        // Receipt fetch failed — not critical, payment already confirmed
-      }
-    }
-  }, [currentOrderNumber, currentOrderId, user, tableId, releaseTable, total, loyaltyState, loyaltyPrograms]);
+    // Fetch + open + the async eTIMS merge all live in useReceiptAfterSale now — shared verbatim
+    // with every other settle surface (Add Sale, Tables, Layaway completion, Returns).
+    await showReceiptForOrder(settledOrderId);
+  }, [currentOrderNumber, currentOrderId, tableId, releaseTable, total, loyaltyState, loyaltyPrograms, showReceiptForOrder]);
 
   // ─── Inline GoDigital payment bar orchestration ─────────────────────────
   // createOrderAsync creates (and returns) the order so the inline bar can settle against it,
@@ -1985,12 +1924,11 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
   // immediate-payment (retail/QSR) flow — the dine-in "placed an order" logout is handled earlier
   // by OrderPlacedDialog.
   const handleReceiptClose = useCallback(() => {
-    setReceiptOpen(false);
-    setReceiptData(null);
+    closeReceipt();
     if (autoLogoutAfterSale) {
       router.replace(`/${orgSlug}/pin-login`);
     }
-  }, [autoLogoutAfterSale, orgSlug, router]);
+  }, [closeReceipt, autoLogoutAfterSale, orgSlug, router]);
 
   const value: TerminalContextValue = {
     orgSlug, cfg, isHospitality, isAddToBill, user, outlet, can, taxRate,

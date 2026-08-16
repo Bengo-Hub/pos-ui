@@ -8,6 +8,7 @@ import { VoidBillButton } from '@/components/pos/void-bill-button';
 import { SplitPaymentModal } from '@/components/pos/split-payment-modal';
 import { PrintReceiptButton } from '@/components/pos/print-receipt-button';
 import { POSPaymentModal } from '@/components/pos/payment-modal';
+import { ReceiptPreview } from '@/components/pos/receipt-preview';
 import { Badge, Button } from '@/components/ui/base';
 import { cn } from '@/lib/utils';
 import { useTables, useSections, useUpdateTableStatus, useReleaseTable, useMergeTables, useUnmergeTables, useOrders, useCategories } from '@/hooks/usePOS';
@@ -17,6 +18,8 @@ import { useOwnScope } from '@/lib/rbac/scope';
 import { Can } from '@/components/auth/can';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { useAuthStore } from '@/store/auth';
+import { useReceiptAfterSale } from '@/hooks/use-receipt-after-sale';
+import { resolveBillProfile } from '@/lib/pos/printer-stations';
 import { apiClient } from '@/lib/api/client';
 import {
   Calendar,
@@ -480,6 +483,11 @@ function MyBillsTab({ orgSlug }: { orgSlug: string }) {
   const releaseTable = useReleaseTable();
   const [payOrder, setPayOrder] = useState<any | null>(null);
   const [splitOrder, setSplitOrder] = useState<any | null>(null);
+  // After-settlement receipt — the SAME fetch/open/eTIMS-merge flow the POS terminal runs
+  // (useReceiptAfterSale), so a bill settled from this tab prints an identical receipt.
+  const {
+    receiptData, receiptOpen, receiptOrderId, showReceiptForOrder, closeReceipt,
+  } = useReceiptAfterSale(user?.tenant_id ?? '', user?.fullName || user?.email);
   const isHospitality = ['hospitality', 'quick_service', 'hotel'].includes(
     (outlet?.use_case ?? (user as any)?.outlet_use_case ?? '').toLowerCase()
   );
@@ -793,7 +801,10 @@ function MyBillsTab({ orgSlug }: { orgSlug: string }) {
           isHospitality={isHospitality}
           onPaymentConfirmed={() => {
             const tableId = payOrder?.table_id ?? payOrder?.metadata?.table_id;
+            const settledId = payOrder?.id;
             setPayOrder(null);
+            // Raise the printable receipt (independent overlay, mounted below).
+            if (settledId) void showReceiptForOrder(settledId);
             queryClient.invalidateQueries({ queryKey: ['pos-orders'] });
             queryClient.invalidateQueries({ queryKey: ['dashboard-recent-orders'] });
             // pos-api releases the table on order completion; refresh the grid to
@@ -828,7 +839,9 @@ function MyBillsTab({ orgSlug }: { orgSlug: string }) {
               seat: l.metadata?.seat, // pre-populate split from seat tagged at order-entry
             }))}
           onPaymentConfirmed={() => {
+            const settledId = splitOrder?.id;
             setSplitOrder(null);
+            if (settledId) void showReceiptForOrder(settledId);
             queryClient.invalidateQueries({ queryKey: ['pos-orders'] });
             queryClient.invalidateQueries({ queryKey: ['pos-tables'] });
           }}
@@ -847,6 +860,17 @@ function MyBillsTab({ orgSlug }: { orgSlug: string }) {
           }}
         />
       )}
+
+      {/* After-settlement receipt — mounted exactly like the POS terminal's (terminal-modals.tsx). */}
+      <ReceiptPreview
+        receipt={receiptData}
+        open={receiptOpen}
+        onClose={closeReceipt}
+        printerProfile={resolveBillProfile((posSettings as any)?.printer_profiles)}
+        tenantId={user?.tenant_id ?? ''}
+        orderId={receiptOrderId}
+        autoPrint={Boolean((posSettings as any)?.auto_print_order) && !(posSettings as any)?.print_agent_online}
+      />
     </div>
   );
 }

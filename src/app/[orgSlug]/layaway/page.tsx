@@ -115,7 +115,10 @@ function LayawayListPage() {
         onClose={() => setCreateOpen(false)}
         onCreated={(plan) => {
           setCreateOpen(false);
-          router.push(`/${orgSlug}/layaway/${plan.id}`);
+          // ?deposit_receipt=1 → the detail page raises the opening-deposit slip on arrival
+          // (the receipt belongs to the plan, so it prints on the plan's own page rather than
+          // over this list). The detail page clears the flag once it has fired.
+          router.push(`/${orgSlug}/layaway/${plan.id}?deposit_receipt=1`);
         }}
       />
     </div>

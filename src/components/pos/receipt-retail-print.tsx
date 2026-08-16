@@ -65,6 +65,15 @@ export function RetailReceiptPrint({ receipt, tenantName, outletName, logoUrl }:
     return receipt.payment_date ? `${cap} (${ddmmyyyy(receipt.payment_date)})` : cap;
   })();
   const chargeEntries = Object.entries(receipt.charges ?? {}).filter(([, v]) => v > 0).sort(([a], [b]) => a.localeCompare(b));
+  // A refund document has no order number of its own — the boxed number cell carries the
+  // return/credit-note number, and the sale it reverses is named on the line below. Mirrors
+  // pos-api's a4_html layout exactly so client-printed and server-rendered A4 stay identical.
+  const docLabel = receipt.is_return ? 'REFUND NO' : 'INVOICE.NO';
+  const docNumber = receipt.is_return ? receipt.receipt_number : receipt.order_number;
+  const returnAgainstLine =
+    receipt.is_return && receipt.original_order_number
+      ? `Return against Order #${receipt.original_order_number}`
+      : '';
 
   const trow = (label: string, value: string, bold = false, key?: string) => (
     <div key={key ?? label} style={{ ...trowStyle, fontWeight: bold ? 700 : 500 }}>
@@ -101,16 +110,17 @@ export function RetailReceiptPrint({ receipt, tenantName, outletName, logoUrl }:
         <tbody>
           <tr>
             <th style={{ ...th, width: '45%' }}>{billLabel}</th>
-            <th style={{ ...th, width: '22%', textAlign: 'center' }}>INVOICE.NO</th>
+            <th style={{ ...th, width: '22%', textAlign: 'center' }}>{docLabel}</th>
             <th style={{ ...th, textAlign: 'center' }}>DATE</th>
           </tr>
           <tr>
             <td style={{ ...td, fontWeight: 700 }}>{(receipt.bill_to || 'Walk-in customer').toUpperCase()}</td>
-            <td style={{ ...td, textAlign: 'center' }}>{receipt.order_number}</td>
+            <td style={{ ...td, textAlign: 'center' }}>{docNumber}</td>
             <td style={{ ...td, textAlign: 'center' }}>{ddmmyyyy(receipt.issued_at, true)}</td>
           </tr>
         </tbody>
       </table>
+      {returnAgainstLine && <div style={{ fontSize: 12, fontWeight: 700, marginTop: 3 }}>{returnAgainstLine}</div>}
 
       {/* SERVED BY */}
       {receipt.served_by && (
@@ -151,7 +161,7 @@ export function RetailReceiptPrint({ receipt, tenantName, outletName, logoUrl }:
         {chargeEntries.map(([k, v]) => trow(`${k.charAt(0).toUpperCase()}${k.slice(1)}(+):`, money(currency, v), false, `charge-${k}`))}
         {chargeEntries.length === 0 && (receipt.charges_total ?? 0) > 0 && trow('Charges(+):', money(currency, receipt.charges_total ?? 0))}
         {(receipt.round_off ?? 0) > 0 && trow('Round Off:', money(currency, receipt.round_off ?? 0))}
-        {trow('TOTAL:', money(currency, receipt.total_amount), true)}
+        {trow(receipt.is_return ? 'REFUND TOTAL:' : 'TOTAL:', money(currency, receipt.total_amount), true)}
         {methodLabel && (receipt.amount_paid ?? receipt.amount_tendered) > 0 &&
           trow(methodLabel, money(currency, receipt.amount_paid ?? receipt.amount_tendered))}
         {trow('AMOUNT PAID', money(currency, receipt.amount_paid ?? receipt.amount_tendered))}

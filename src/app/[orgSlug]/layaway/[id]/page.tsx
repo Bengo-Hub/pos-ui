@@ -3,18 +3,24 @@
 import { ModuleGate } from '@/components/auth/module-gate';
 import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
 import { Badge, Button } from '@/components/ui/base';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { ReceiptPreview } from '@/components/pos/receipt-preview';
 import {
   useLayawayPlan,
   useRecordLayawayPayment,
   useCancelLayaway,
+  useCompleteLayaway,
   type LayawayPlan,
   type RecordPaymentInput,
 } from '@/hooks/useLayaway';
+import { useReceiptAfterSale } from '@/hooks/use-receipt-after-sale';
+import { resolveBillProfile } from '@/lib/pos/printer-stations';
 import { cn, formatCurrency } from '@/lib/utils';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
-import { AlertTriangle, Loader2, X } from 'lucide-react';
-import { useParams, useRouter } from 'next/navigation';
-import { useMemo, useState } from 'react';
+import { useAuthStore } from '@/store/auth';
+import { AlertTriangle, Loader2, PackageCheck, X } from 'lucide-react';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { DataTable } from '@bengo-hub/shared-ui-lib/data-table';
@@ -38,9 +44,38 @@ function LayawayDetailPage() {
   const { data: plan, isLoading } = useLayawayPlan(id);
   const recordPayment = useRecordLayawayPayment(id);
   const cancelPlan = useCancelLayaway();
+  const completePlan = useCompleteLayaway(id);
   const { data: posSettings } = usePOSSettings();
   const currency = (posSettings as any)?.currency ?? 'KES';
   const paymentColumns = useMemo(() => buildLayawayPaymentColumns(currency), [currency]);
+
+  // ── Printable receipts ──────────────────────────────────────────────────────
+  // Three documents come off a layaway, all rendered by the SHARED ReceiptPreview:
+  //  · the opening DEPOSIT slip (plan-level endpoint), raised right after Create — the list
+  //    page navigates here with ?deposit_receipt=1 so the slip prints on the plan it belongs to;
+  //  · one INSTALMENT slip per recorded payment (payment-level endpoint);
+  //  · the ordinary SALE receipt for the POSOrder that Complete / Hand Over raises.
+  // Only the last is a fiscalised sale, so only it goes through showReceiptForOrder (which runs
+  // the eTIMS merge); the two plan slips use the generic showReceiptFromEndpoint.
+  const tenantId = useAuthStore((s) => s.user?.tenant_id ?? '');
+  const authUser = useAuthStore((s) => s.user);
+  const {
+    receiptData, receiptOpen, receiptOrderId,
+    showReceiptForOrder, showReceiptFromEndpoint, closeReceipt,
+  } = useReceiptAfterSale(tenantId, authUser?.fullName || authUser?.email);
+
+  const searchParams = useSearchParams();
+  const depositReceiptRequested = searchParams.get('deposit_receipt') === '1';
+  const depositReceiptFiredRef = useRef(false);
+  useEffect(() => {
+    if (!depositReceiptRequested || depositReceiptFiredRef.current || !tenantId || !id) return;
+    depositReceiptFiredRef.current = true;
+    void showReceiptFromEndpoint(`/api/v1/${tenantId}/pos/layaways/${id}/receipt`);
+    // Drop the flag so a refresh (or a later visit) doesn't re-raise the deposit slip.
+    router.replace(`/${orgSlug}/layaway/${id}`);
+  }, [depositReceiptRequested, tenantId, id, orgSlug, router, showReceiptFromEndpoint]);
+
+  const [completeOpen, setCompleteOpen] = useState(false);
 
   const [paymentOpen, setPaymentOpen] = useState(false);
   const emptyPaymentForm = (): RecordPaymentInput & { paidAtLocal: string } => ({
@@ -68,14 +103,36 @@ function LayawayDetailPage() {
         paid_at: datetimeLocalToISO(paymentForm.paidAtLocal),
       },
       {
-        onSuccess: () => {
+        onSuccess: (res) => {
           toast.success('Payment recorded');
           setPaymentOpen(false);
           setPaymentForm(emptyPaymentForm());
+          // Instalment slip for the payment just taken (not a fiscalised sale — no eTIMS merge).
+          const paymentId = res?.payment?.id;
+          if (paymentId) {
+            void showReceiptFromEndpoint(`/api/v1/${tenantId}/pos/layaways/${id}/payments/${paymentId}/receipt`);
+          }
         },
         onError: async (e) => toast.error(await apiErrorMessage(e, 'Failed to record payment')),
       }
     );
+  };
+
+  // Complete / Hand Over — the goods physically leave with the customer. pos-api raises the
+  // POSOrder here (GL + stock + eTIMS all fire off it), so this is a real financial action and
+  // gets a ConfirmDialog like every other sensitive action in the codebase.
+  const handleComplete = () => {
+    completePlan.mutate(undefined, {
+      onSuccess: (res) => {
+        setCompleteOpen(false);
+        toast.success(res?.order_number ? `Layaway completed · ${res.order_number}` : 'Layaway completed');
+        if (res?.order_id) void showReceiptForOrder(res.order_id);
+      },
+      onError: async (e) => {
+        setCompleteOpen(false);
+        toast.error(await apiErrorMessage(e, 'Failed to complete the layaway'));
+      },
+    });
   };
 
   const handleCancel = () => {
@@ -143,6 +200,16 @@ function LayawayDetailPage() {
                 Cancel Plan
               </Button>
             </>
+          )}
+          {/* Paid off in full (status flips to completed once remaining hits 0) but no order
+              raised yet — the goods are still on the shelf awaiting hand-over. */}
+          {plan.status === 'completed' && !plan.order_id && (
+            <Button className="min-h-10 px-4" onClick={() => setCompleteOpen(true)} disabled={completePlan.isPending}>
+              {completePlan.isPending
+                ? <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                : <PackageCheck className="h-4 w-4 mr-2" />}
+              Complete / Hand Over
+            </Button>
           )}
         </div>
       </div>
@@ -313,6 +380,32 @@ function LayawayDetailPage() {
           </div>
         </div>
       )}
+
+      {/* Complete / Hand Over confirm — raising the sale posts to the GL, moves stock and
+          fiscalises with KRA, so it gets the standard confirmation step. */}
+      <ConfirmDialog
+        open={completeOpen}
+        onOpenChange={setCompleteOpen}
+        title="Hand over the goods?"
+        description={`${plan.customer_name} has paid this plan off in full. Completing raises the sale (stock, accounts and KRA eTIMS all post against it) and prints the receipt. This cannot be undone.`}
+        confirmLabel="Complete & Print"
+        variant="warning"
+        loading={completePlan.isPending}
+        onConfirm={handleComplete}
+      />
+
+      {/* One preview for all three layaway documents (deposit slip, instalment slip, and the
+          completion sale receipt) — mounted exactly like the POS terminal's. orderId is only
+          set for the completion receipt; the plan slips have no order to print ESC/POS from. */}
+      <ReceiptPreview
+        receipt={receiptData}
+        open={receiptOpen}
+        onClose={closeReceipt}
+        printerProfile={resolveBillProfile((posSettings as any)?.printer_profiles)}
+        tenantId={tenantId}
+        orderId={receiptOrderId}
+        autoPrint={Boolean((posSettings as any)?.auto_print_order) && !(posSettings as any)?.print_agent_online}
+      />
     </div>
   );
 }

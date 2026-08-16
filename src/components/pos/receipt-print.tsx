@@ -78,6 +78,12 @@ export function ReceiptPrint({
     norm(resolvedAddressRaw) === norm(resolvedOutletRaw) || norm(resolvedAddressRaw) === norm(headerName)
       ? undefined
       : resolvedAddressRaw;
+  // "Return against Order #1234" — a refund document carries no order number of its own, so the
+  // meta block names the sale it reverses instead (mirrors pos-api layouts.returnAgainstLine).
+  const returnAgainstLine =
+    receipt.is_return && receipt.original_order_number
+      ? `Return against Order #${receipt.original_order_number}`
+      : '';
   const fmtDate = (s: string) =>
     new Date(s).toLocaleString('en-KE', {
       day: '2-digit',
@@ -153,6 +159,7 @@ export function ReceiptPrint({
             </tbody>
           </table>
           <p className="receipt-center receipt-small">{fmtDate(receipt.issued_at)}</p>
+          {returnAgainstLine && <p className="receipt-center receipt-small">{returnAgainstLine}</p>}
           {receipt.served_by && (
             <div className="grid-served"><b>SERVED BY</b><span>{receipt.served_by}</span></div>
           )}
@@ -186,6 +193,7 @@ export function ReceiptPrint({
             <span className="receipt-bold">Receipt #{receipt.receipt_number}</span>
           </p>
           <p className="receipt-center receipt-small">{fmtDate(receipt.issued_at)}</p>
+          {returnAgainstLine && <p className="receipt-center receipt-small">{returnAgainstLine}</p>}
           <hr className="receipt-divider" />
         </>
       )}

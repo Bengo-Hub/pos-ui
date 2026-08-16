@@ -1,6 +1,7 @@
 'use client';
 
 import { apiClient } from '@/lib/api/client';
+import { completeLayawayPlan } from '@/lib/api/layaway';
 import { useAuthStore } from '@/store/auth';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
@@ -26,6 +27,9 @@ export interface LayawayPayment {
 export interface LayawayPlan {
   id: string;
   outlet_id?: string;
+  /** Set once the plan has been completed/handed over — the POSOrder raised for the goods.
+   *  `status === 'completed' && !order_id` means "paid off but not yet handed over". */
+  order_id?: string;
   customer_name: string;
   customer_phone?: string;
   customer_email?: string;
@@ -98,7 +102,17 @@ export function useLayawayPlan(id: string) {
   const tenantID = useTenantID();
   return useQuery({
     queryKey: layawayKeys.detail(tenantID, id),
-    queryFn: () => apiClient.get<LayawayPlan>(`${basePath(tenantID)}/${id}`),
+    // pos-api's LayawayHandler.Get answers `{plan, payments}` (the payments are a separate
+    // query server-side, so they can't ride on the plan row). Flatten it to the plan the whole
+    // UI expects, with `payments` folded in. The `?? res` branch keeps any flat payload working.
+    queryFn: async () => {
+      const res = await apiClient.get<LayawayPlan | { plan: LayawayPlan; payments?: LayawayPayment[] }>(
+        `${basePath(tenantID)}/${id}`,
+      );
+      const wrapped = res as { plan?: LayawayPlan; payments?: LayawayPayment[] };
+      if (wrapped?.plan) return { ...wrapped.plan, payments: wrapped.payments ?? wrapped.plan.payments ?? [] };
+      return res as LayawayPlan;
+    },
     enabled: !!tenantID && !!id,
   });
 }
@@ -113,15 +127,39 @@ export function useCreateLayaway() {
   });
 }
 
+/** pos-api's RecordPayment answers `{payment, plan}` — the created instalment row plus the
+ *  re-balanced plan. `payment.id` is what addresses that instalment's printable receipt. */
+export interface RecordLayawayPaymentResponse {
+  payment: LayawayPayment;
+  plan: LayawayPlan;
+}
+
 export function useRecordLayawayPayment(planId: string) {
   const tenantID = useTenantID();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (data: RecordPaymentInput) =>
-      apiClient.post<LayawayPayment>(`${basePath(tenantID)}/${planId}/payments`, data),
+      apiClient.post<RecordLayawayPaymentResponse>(`${basePath(tenantID)}/${planId}/payments`, data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: layawayKeys.detail(tenantID, planId) });
       qc.invalidateQueries({ queryKey: layawayKeys.all(tenantID) });
+    },
+  });
+}
+
+/** Finalise a fully-paid plan — raises the POSOrder for the handed-over goods (GL/stock/eTIMS
+ *  all fire off that order). Server requires remaining_amount <= 0 (409 otherwise) and is
+ *  idempotent, so a re-tap returns the same order ids instead of a second sale. */
+export function useCompleteLayaway(planId: string) {
+  const tenantID = useTenantID();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => completeLayawayPlan(tenantID, planId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: layawayKeys.detail(tenantID, planId) });
+      qc.invalidateQueries({ queryKey: layawayKeys.all(tenantID) });
+      // The completion raises a real sale — the sales lists must pick it up.
+      qc.invalidateQueries({ queryKey: ['pos-orders'] });
     },
   });
 }

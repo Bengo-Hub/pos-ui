@@ -14,6 +14,7 @@ import { CreditSaleDetailsModal, type CreditSaleDetails } from '@/components/pos
 import { CustomerSearch, WALK_IN_CUSTOMER, type SelectedCustomer } from '@/components/pos/customer-search';
 import { ApplyDiscountModal } from '@/components/pos/discounts/apply-discount-modal';
 import { InlineDiscountCell, InlineMarginCell, InlinePriceCell, InlineTotalCell } from '@/components/pos/inline-line-cells';
+import { ReceiptPreview } from '@/components/pos/receipt-preview';
 import { ShippingDetailsFields, emptyShippingForm, shippingFormFromMetadata, type ShippingFormValue } from '@/components/pos/shipping/shipping-details-fields';
 import { SplitPaymentModal } from '@/components/pos/split-payment-modal';
 import { StockCell, isStockTracked } from '@/components/pos/stock-cell';
@@ -34,6 +35,8 @@ import { computePairAutoAdd, describeAutoApplyAnnouncement } from '@/lib/pos/aut
 import { applyRoundOff, computeCartTax } from '@/lib/pos/cart-tax';
 import { isFractionalUnit, parseQuantityInput } from '@/lib/pos/units';
 import { isLineActive, remainingLineQty } from '@/lib/pos/order-lines';
+import { resolveBillProfile } from '@/lib/pos/printer-stations';
+import { useReceiptAfterSale } from '@/hooks/use-receipt-after-sale';
 import { cn, formatCurrency } from '@/lib/utils';
 import { useAuthStore } from '@/store/auth';
 import { FeatureLock, useFeatureUpgrade } from '@bengo-hub/shared-ui-lib/subscription';
@@ -274,6 +277,11 @@ export default function AddSalePage() {
   // name arrives as served_by_name) so a resumed AND modified sale still credits the original
   // drafter instead of whoever finishes it.
   const authUser = useAuthStore((s) => s.user);
+  // After-sale receipt — the SAME fetch/open/eTIMS-merge flow the POS terminal runs
+  // (useReceiptAfterSale), so a sale rung up here raises an identical printable receipt.
+  const {
+    receiptData, receiptOpen, receiptOrderId, showReceiptForOrder, closeReceipt,
+  } = useReceiptAfterSale(tenantId, authUser?.fullName || authUser?.email);
   const [servedByUserId, setServedByUserId] = useState('');
   const [servedByName, setServedByName] = useState('');
   useEffect(() => {
@@ -904,7 +912,14 @@ export default function AddSalePage() {
         createIntent.mutate(
           { orderId: resume.id, tenderMethod: 'on_account', amount: settleTotal, ...creditExtras },
           {
-            onSuccess: () => { setCreditModalOpen(false); toast.success(`Sale posted on account · ${fmt(settleTotal)}`); reset(); },
+            onSuccess: () => {
+              setCreditModalOpen(false);
+              toast.success(`Sale posted on account · ${fmt(settleTotal)}`);
+              // Receipt first — reset() only clears the cart form; the preview is an independent
+              // overlay (same ordering the POS terminal's handlePaymentConfirmed uses).
+              void showReceiptForOrder(resume.id);
+              reset();
+            },
             onError: async (e) => { setCreditModalOpen(false); toast.error(await apiErrorMessage(e, 'Failed to post credit sale to AR.')); },
           },
         );
@@ -928,7 +943,12 @@ export default function AddSalePage() {
           createIntent.mutate(
             { orderId: resume.id, tenderMethod: 'on_account', amount: freshTotal, ...creditExtras },
             {
-              onSuccess: () => { setCreditModalOpen(false); toast.success(`Sale posted on account · ${fmt(freshTotal)}`); reset(); },
+              onSuccess: () => {
+                setCreditModalOpen(false);
+                toast.success(`Sale posted on account · ${fmt(freshTotal)}`);
+                void showReceiptForOrder(resume.id);
+                reset();
+              },
               onError: async (e) => { setCreditModalOpen(false); toast.error(await apiErrorMessage(e, 'Failed to post credit sale to AR.')); },
             },
           );
@@ -953,7 +973,12 @@ export default function AddSalePage() {
           createIntent.mutate(
             { orderId: id, tenderMethod: 'on_account', amount: arAmount, ...creditExtras },
             {
-              onSuccess: () => { setCreditModalOpen(false); toast.success(`Sale posted on account · ${fmt(arAmount)}`); reset(); },
+              onSuccess: () => {
+                setCreditModalOpen(false);
+                toast.success(`Sale posted on account · ${fmt(arAmount)}`);
+                void showReceiptForOrder(id);
+                reset();
+              },
               onError: async (e) => { setCreditModalOpen(false); toast.error(await apiErrorMessage(e, 'Failed to post credit sale to AR.')); },
             },
           );
@@ -1022,11 +1047,21 @@ export default function AddSalePage() {
   }
 
   if (payOrder) {
+    const settledId = payOrder.id;
     return (
       <SplitPaymentModal
         open
         onClose={() => { setPayOrder(null); reset(); }}
-        onPaymentConfirmed={() => { setPayOrder(null); reset(); toast.success('Sale completed'); }}
+        onPaymentConfirmed={() => {
+          setPayOrder(null);
+          // Raise the printable receipt BEFORE reset() — reset only clears the cart form state,
+          // and the preview is an independent overlay (same ordering the POS terminal uses in
+          // handlePaymentConfirmed). Mounted in the main return below, which renders again the
+          // moment payOrder clears.
+          void showReceiptForOrder(settledId);
+          reset();
+          toast.success('Sale completed');
+        }}
         orderId={payOrder.id}
         orderNumber={payOrder.number}
         total={payOrder.total}
@@ -1578,6 +1613,19 @@ export default function AddSalePage() {
           onConfirm={(reason, updateCatalog) => confirmSaveLine(savingLineIdx, reason, updateCatalog)}
         />
       )}
+
+      {/* After-sale receipt — mounted exactly like the POS terminal's (terminal-modals.tsx):
+          same resolved bill-printer profile, same tenant/order ids for silent ESC/POS printing,
+          and auto-print suppressed when a Local Print Agent already queued it server-side. */}
+      <ReceiptPreview
+        receipt={receiptData}
+        open={receiptOpen}
+        onClose={closeReceipt}
+        printerProfile={resolveBillProfile((posSettings as any)?.printer_profiles)}
+        tenantId={tenantId}
+        orderId={receiptOrderId}
+        autoPrint={Boolean((posSettings as any)?.auto_print_order) && !(posSettings as any)?.print_agent_online}
+      />
     </div>
   );
 }

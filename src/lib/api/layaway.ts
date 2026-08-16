@@ -50,6 +50,13 @@ export interface RecordPaymentInput {
   notes?: string;
 }
 
+/** POST /layaways/{id}/complete — the POSOrder raised for the handed-over goods. */
+export interface CompleteLayawayResponse {
+  order_id: string;
+  /** Present whenever pos-api could resolve it (always on a fresh completion, and on re-taps). */
+  order_number?: string;
+}
+
 // ─── API functions ────────────────────────────────────────────────────────────
 
 export function getCatalogItemByBarcode(tenantSlug: string, barcode: string) {
@@ -77,4 +84,14 @@ export function recordLayawayPayment(tenantSlug: string, id: string, data: Recor
 
 export function cancelLayawayPlan(tenantSlug: string, id: string) {
   return apiClient.post<{ ok: boolean }>(`${base(tenantSlug)}/layaways/${id}/cancel`);
+}
+
+/**
+ * Finalise a fully-paid plan: pos-api raises the POSOrder for the goods (GL + stock + eTIMS all
+ * fire off that order) and stamps its id back on the plan. Requires remaining_amount <= 0 —
+ * a plan with a balance 409s. Idempotent: a re-tap returns the SAME order_id/order_number,
+ * so a double-click can never create a second sale.
+ */
+export function completeLayawayPlan(tenantSlug: string, id: string) {
+  return apiClient.post<CompleteLayawayResponse>(`${base(tenantSlug)}/layaways/${id}/complete`);
 }

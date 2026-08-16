@@ -125,6 +125,13 @@ export interface ReceiptData {
     bank_account_number?: string;
     bank_account_name?: string;
   } | null;
+  /** This is a REFUND/return document, not a sale — pos-api's returns receipt endpoint sets it.
+   *  Every renderer swaps the grand-total label to "REFUND TOTAL" and names the reversed sale
+   *  through original_order_number instead of the (empty) order_number. Mirrors the server
+   *  layouts registry (printing/layouts/types.go totalLabel + returnAgainstLine). */
+  is_return?: boolean;
+  /** The sale this return reverses (only set when is_return). */
+  original_order_number?: string;
 }
 
 interface ReceiptPreviewProps {
@@ -387,9 +394,19 @@ export function ReceiptPreview({
             <p className="text-center text-muted-foreground mb-3">{formatDate(receipt.issued_at)}</p>
 
             <div className="border-t border-dashed border-border my-2" />
-            <p className="text-center mb-2">
-              Order: <span className="font-semibold">{receipt.order_number}</span>
-            </p>
+            {/* A refund document has no order number of its own — name the sale it reverses,
+                exactly like the server-rendered HTML/PDF (layouts returnAgainstLine). */}
+            {receipt.is_return ? (
+              receipt.original_order_number && (
+                <p className="text-center mb-2">
+                  Return against Order <span className="font-semibold">#{receipt.original_order_number}</span>
+                </p>
+              )
+            ) : (
+              <p className="text-center mb-2">
+                Order: <span className="font-semibold">{receipt.order_number}</span>
+              </p>
+            )}
             <div className="border-t border-dashed border-border my-2" />
 
             {/* Line items + totals + payment + eTIMS + HOW TO PAY + footer — one shared row list

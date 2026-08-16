@@ -111,7 +111,9 @@ export function buildReceiptRows(receipt: ReceiptData): ReceiptRow[] {
   if ((receipt.round_off ?? 0) > 0) {
     rows.push({ kind: 'money', label: 'Round Off', amount: receipt.round_off ?? 0 });
   }
-  rows.push({ kind: 'total', label: 'TOTAL', amount: receipt.total_amount });
+  // "REFUND TOTAL" on a return/refund document, "TOTAL" on a sale — mirrors pos-api's
+  // layouts.totalLabel so the client-printed slip matches the server HTML/PDF exactly.
+  rows.push({ kind: 'total', label: receipt.is_return ? 'REFUND TOTAL' : 'TOTAL', amount: receipt.total_amount });
   // Payment method — with the settle date beside it ("cash (14-07-2026)") when known.
   const methodLabel = (receipt.payment_method ?? 'cash').replace(/_/g, ' ');
   const paymentDate = receipt.payment_date
