@@ -5,6 +5,7 @@ import { useEffectiveOnline, isEffectivelyOnline } from '@/lib/connectivity';
 import { useAuthStore } from '@/store/auth';
 import { useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api/client';
+import { reportAuthSyncBlocked, reportAuthSyncCleared } from '@/lib/sync/auth-sync-state';
 import {
   getPendingSyncOrders,
   markOrderSynced,
@@ -61,6 +62,9 @@ export function useSyncOfflineOrders() {
     if (!tenantID || syncingRef.current || !isEffectivelyOnline() || isBackgroundSyncPaused()) return;
     syncingRef.current = true;
     try {
+      // Optimistic clear — re-set by isTerminal() below if this pass still hits a 401/403.
+      // A fresh pass re-evaluates from scratch rather than latching on a stale block forever.
+      reportAuthSyncCleared();
       // Each syncX returns how many queued items it attempted. Queues are usually empty
       // (nothing offline happened recently), so the common case is a handful of cheap Dexie
       // reads with ZERO network calls — only invalidate (forcing a drawer/orders refetch)
@@ -130,9 +134,20 @@ function idem(key: string) {
   return { headers: { 'Idempotency-Key': key } };
 }
 
-/** A 4xx (except 408/429) is a terminal validation error — replaying won't help; dead-letter it. */
+/**
+ * A 4xx (except 408/429/401/403) is a terminal validation error — replaying won't help;
+ * dead-letter it. 401/403 are deliberately NOT terminal: an expired terminal JWT (or the
+ * offline-PIN-login placeholder token) is retryable — it resolves the instant a human
+ * re-authenticates, unlike a real validation rejection. Dead-lettering a legitimately-completed
+ * sale on the first 401 after a long outage would silently drop real revenue; this must back
+ * off and retry instead (see nextRetryState in pos-db.ts), same as a network/5xx failure.
+ */
 function isTerminal(err: any): boolean {
   const s = err?.response?.status;
+  if (s === 401 || s === 403) {
+    reportAuthSyncBlocked();
+    return false;
+  }
   return typeof s === 'number' && s >= 400 && s < 500 && s !== 408 && s !== 429;
 }
 

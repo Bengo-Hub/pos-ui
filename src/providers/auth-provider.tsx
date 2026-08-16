@@ -49,7 +49,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (lastAuthenticatedAt && Date.now() - lastAuthenticatedAt < 15_000) return;
       queryClient.clear();
       if (isTerm) {
-        // Terminal JWT expired — send back to PIN login, not SSO
+        // Terminal JWT expired — send back to PIN login, not SSO. If there's a pending
+        // offline-sync queue (e.g. the background drain hit this same 401), reassure the
+        // cashier their sales are safe in IndexedDB and will sync automatically post-login —
+        // this redirect can otherwise land with no warning mid-reconnect, right when the
+        // sync-monitor is quietly retrying queued sales in the background.
+        void import('@/lib/db/pos-db').then(({ getSyncStatusCounts }) => getSyncStatusCounts()).then((counts) => {
+          if (counts.pending > 0) {
+            toast.info('Session expired', {
+              description: `${counts.pending} sale${counts.pending === 1 ? '' : 's'} saved offline — they'll sync automatically once you log back in.`,
+              duration: 10_000,
+            });
+          }
+        }).catch(() => {});
         void useAuthStore.getState().logout().then(() => {
           if (orgSlug) router.replace(`/${orgSlug}/pin-login`);
         });

@@ -10,6 +10,7 @@ import {
   getCachedCatalog,
   replaceCachedCatalog,
   saveDraftOrder,
+  decrementCachedStock,
   saveDraftDrawerSession,
   saveDraftDrawerClose,
   type OfflineCatalogItem,
@@ -1466,6 +1467,11 @@ export function useCreateOrder() {
           created_at: new Date().toISOString(),
           synced: false,
         });
+        // Correct the local oversell guard's stock snapshot immediately — otherwise the SAME
+        // terminal can sell the last cached unit of a SKU twice in a row for the rest of the
+        // outage, since offline sales never touched stock_quantity before this. Best-effort:
+        // never let a cache-consistency slip block/duplicate the sale itself.
+        void decrementCachedStock(lines.map((l) => ({ catalog_item_id: l.catalog_item_id, quantity: l.quantity }))).catch(() => {});
         // Shape mirrors the server order enough for the place-order → payment handoff;
         // id === local_id so downstream offline payment can attach via isLocalOrder.
         return { id: localId, order_id: localId, local_id: localId, offline: true, status: 'open' };
@@ -1543,7 +1549,7 @@ export function useVoidOrder() {
       const queueOffline = async () => {
         // If voiding an offline (not-yet-synced) order, key by local_order_id so the void
         // syncs after the order resolves a server id.
-        const { getOfflineOrderByLocalId, saveDraftVoid } = await import('@/lib/db/pos-db');
+        const { getOfflineOrderByLocalId, saveDraftVoid, restoreCachedStock } = await import('@/lib/db/pos-db');
         const localOrder = await getOfflineOrderByLocalId(orderId);
         await saveDraftVoid({
           local_id: localId,
@@ -1556,6 +1562,14 @@ export function useVoidOrder() {
           created_at: new Date().toISOString(),
           synced: false,
         });
+        // Voiding a still-local (not-yet-synced) offline order reverses the stock decrement
+        // applied when it was queued — otherwise the void leaves the cached on-hand snapshot
+        // permanently short, blocking legitimate further offline sales of the same SKU.
+        if (localOrder) {
+          void restoreCachedStock(
+            localOrder.lines.map((l) => ({ catalog_item_id: l.catalog_item_id, quantity: l.quantity })),
+          ).catch(() => {});
+        }
         return { offline: true };
       };
       if (!isOnline) return queueOffline();

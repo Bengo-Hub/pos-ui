@@ -7,6 +7,7 @@ import {
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/store/auth';
 import { useConnectivityStore } from '@/lib/connectivity';
+import { useAuthSyncBlocked } from '@/lib/sync/auth-sync-state';
 import { triggerSyncNow } from '@/hooks/use-sync-offline-orders';
 import { triggerCacheRefreshNow } from '@/lib/sync/background-sync';
 import {
@@ -62,6 +63,7 @@ export function SyncMonitorView() {
   const isPlatformOwner = checkPlatformOwner(user);
   const outletID = useEffectiveOutletID();
   const conn = useConnectivityStore();
+  const authSyncBlocked = useAuthSyncBlocked();
 
   const [queues, setQueues] = useState<QueueBreakdownRow[]>([]);
   const [deadLetters, setDeadLetters] = useState<DeadLetterItem[]>([]);
@@ -232,6 +234,11 @@ export function SyncMonitorView() {
         {/* ── Outbound queues ── */}
         <section className="rounded-2xl border border-border bg-card overflow-hidden">
           <h2 className="px-4 py-3 border-b border-border text-sm font-bold">Outbound queues (device → server)</h2>
+          {authSyncBlocked && (
+            <div className="mx-4 mt-3 rounded-xl border border-amber-300 bg-amber-50 p-2.5 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
+              <span className="font-semibold">Waiting for re-login.</span> Pending items above are saved safely and will sync automatically once someone logs back in — this is not a failure.
+            </div>
+          )}
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-xs uppercase tracking-wide text-muted-foreground">

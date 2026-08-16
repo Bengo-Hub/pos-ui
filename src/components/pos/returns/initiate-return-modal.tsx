@@ -137,6 +137,8 @@ export function InitiateReturnModal({
 }) {
   const user = useAuthStore((s) => s.user);
   const tenantID = user?.tenant_id ?? '';
+  const outletID = (user as (typeof user & { outlet_id?: string }) | null)?.outlet_id ?? '';
+  const isOnline = useEffectiveOnline();
   const { data: posSettings } = usePOSSettings();
   const restrictOnAccount = posSettings?.restrict_credit_sale_refund_to_offset ?? true;
   const currency = (posSettings as any)?.currency ?? 'KES';
@@ -191,23 +193,39 @@ export function InitiateReturnModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialOrderNumber, tenantID]);
 
+  function toOption(o: any): ComboboxOption {
+    foundOrdersRef.current.set(o.id, o);
+    const when = o.created_at ? orderDisplayDate(o, false) : '';
+    return {
+      value: o.id,
+      label: o.order_number,
+      hint: formatCurrency(o.total_amount ?? 0, currency),
+      description: `${o.customer_name || 'Walk-in customer'}${when ? ` · ${when}` : ''}`,
+    };
+  }
+
   async function searchOrders(query: string): Promise<ComboboxOption[]> {
     if (!tenantID || query.trim().length < 2) return [];
+    if (!isOnline) {
+      // Offline fallback: search the last 20 synced orders already cached for this outlet
+      // (same 'recent-orders' cache-first dataset every other read in this codebase uses)
+      // instead of hard-failing on a live-only call — a return can still be initiated
+      // offline as long as the original sale is recent enough to be in that window.
+      const { getKV, kvKey } = await import('@/lib/db/kv-cache');
+      const key = kvKey('recent-orders', tenantID, outletID || undefined);
+      const cached = await getKV<{ data: any[] }>(key);
+      const q = query.trim().toLowerCase();
+      const rows = (cached?.data ?? []).filter((o: any) =>
+        String(o.order_number ?? '').toLowerCase().includes(q),
+      );
+      return rows.slice(0, 8).map(toOption);
+    }
     const res = await apiClient.get<{ data: any[] }>(
       `/api/v1/${tenantID}/pos/orders`,
       { order_number: query, limit: 8 } as any,
     );
     const rows: any[] = (res as any)?.data ?? [];
-    return rows.map((o) => {
-      foundOrdersRef.current.set(o.id, o);
-      const when = o.created_at ? orderDisplayDate(o, false) : '';
-      return {
-        value: o.id,
-        label: o.order_number,
-        hint: formatCurrency(o.total_amount ?? 0, currency),
-        description: `${o.customer_name || 'Walk-in customer'}${when ? ` · ${when}` : ''}`,
-      };
-    });
+    return rows.map(toOption);
   }
 
   function handleComboChange(value: string) {

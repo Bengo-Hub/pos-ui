@@ -398,6 +398,41 @@ export async function getCachedCatalog(tenantId: string, outletId?: string): Pro
  * items removed/re-scoped server-side actually disappear from the terminal instead of
  * accumulating forever (the old bulkPut-only write built a union of every outlet's menu).
  */
+/**
+ * Decrement cached on-hand stock for each stock-tracked line of a just-queued offline sale.
+ * Closes a real gap: without this, an offline terminal's oversell guard (terminal-context.tsx,
+ * `item.stockQuantity`) keeps reading the stale pre-outage snapshot for the rest of the outage,
+ * so the SAME terminal can sell "the last unit" of a SKU twice in a row while offline — not just
+ * a cross-terminal race, a same-device one. Reversed via restoreCachedStock if the queued order
+ * is voided/rejected before it syncs. Best-effort: a line whose item was never cached, or isn't
+ * stock-tracked (stock_quantity undefined), is silently skipped — nothing to correct locally,
+ * same latitude the oversell guard itself already takes.
+ */
+export async function decrementCachedStock(lines: { catalog_item_id: string; quantity: number }[]): Promise<void> {
+  await posDB.transaction('rw', posDB.catalogItems, async () => {
+    for (const line of lines) {
+      const item = await posDB.catalogItems.get(line.catalog_item_id);
+      if (!item || item.stock_quantity === undefined) continue;
+      await posDB.catalogItems.update(line.catalog_item_id, {
+        stock_quantity: Math.max(0, item.stock_quantity - line.quantity),
+      });
+    }
+  });
+}
+
+/** Reverses decrementCachedStock — restores stock when a queued-but-not-yet-synced offline order is voided. */
+export async function restoreCachedStock(lines: { catalog_item_id: string; quantity: number }[]): Promise<void> {
+  await posDB.transaction('rw', posDB.catalogItems, async () => {
+    for (const line of lines) {
+      const item = await posDB.catalogItems.get(line.catalog_item_id);
+      if (!item || item.stock_quantity === undefined) continue;
+      await posDB.catalogItems.update(line.catalog_item_id, {
+        stock_quantity: item.stock_quantity + line.quantity,
+      });
+    }
+  });
+}
+
 export async function replaceCachedCatalog(
   tenantId: string,
   outletId: string,
