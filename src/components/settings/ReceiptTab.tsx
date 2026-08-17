@@ -156,10 +156,16 @@ export function ReceiptTab() {
       const [res, up, localNames] = await Promise.all([discoverPrinters(), agentAvailable(), localAgentPrinters()]);
       setAgentUp(up);
       // Local-agent OS printers included so a USB profile can be bound to its exact spooler name.
-      setDiscovered((prev) => Array.from(new Set([...res.printers, ...localNames, ...prev])));
+      const merged = Array.from(new Set([...res.printers, ...localNames]));
+      setDiscovered((prev) => Array.from(new Set([...merged, ...prev])));
       setDiscoveredDevices(res.devices ?? []);
       setDiscoverNotes(res.notes ?? (res.note ? [res.note] : []));
-      if (res.printers.length) toast.success(`Detected ${res.printers.length} printer(s).`);
+      // Count from the MERGED list, not res.printers alone — res.printers only covers the LAN/QZ/
+      // WebUSB/Bluetooth sources inside discoverPrinters(), which can never see a USB printer (like
+      // the Xprinter) that's only installed locally and found via the agent's /printers OS-spooler
+      // enumeration. Checking res.printers alone reported "No printers detected" even when the
+      // Xprinter was correctly found and listed.
+      if (merged.length) toast.success(`Detected ${merged.length} printer(s).`);
       else {
         toast.info('No printers detected — see the setup steps below.');
         setShowPrinterHelp(true);

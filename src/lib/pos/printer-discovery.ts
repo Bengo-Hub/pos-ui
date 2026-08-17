@@ -233,7 +233,12 @@ async function detectAgent(): Promise<{ devices: DiscoveredDevice[]; note?: stri
   if (typeof window === 'undefined') return { devices: [], ok: false };
   try {
     const ctrl = new AbortController();
-    const t = setTimeout(() => ctrl.abort(), 5000);
+    // The agent's own /discover budget defaults to (per-scan timeout 4s) + 6s = 10s worst case (see
+    // print-agent's main.go handleDiscover). This MUST stay comfortably above that, or the client
+    // aborts a legitimate in-progress LAN scan before the agent can finish — which shows up in
+    // DevTools as a failed /discover request even though the agent is healthy, and silently zeroes
+    // out this source's contribution to the printer count.
+    const t = setTimeout(() => ctrl.abort(), 12000);
     const res = await fetch(`${AGENT_BASE}/discover`, { signal: ctrl.signal, mode: 'cors' });
     clearTimeout(t);
     if (!res.ok) return { devices: [], ok: true, note: 'Local print agent: reachable but returned an error.' };
