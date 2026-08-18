@@ -40,6 +40,7 @@ import { useActiveHappyHours } from '@/hooks/useDiscounts';
 import { computeHappyHour, bogoFreeUnitsForSku, type HHLine, type HappyHourResult } from '@/lib/pos/happy-hour';
 import { computePairAutoAdd, describeAutoApplyAnnouncement } from '@/lib/pos/auto-apply-discounts';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useSubscription } from '@/hooks/use-subscription';
 import { P } from '@/lib/rbac/permissions';
 import { useClientCredit } from '@/hooks/useClients';
 import { useAuthStore } from '@/store/auth';
@@ -450,6 +451,13 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
   const orderOutletID = effectiveOutletID || outlet?.id || '';
   // Terminal adapts to the outlet use_case (display mode, scan-first, pricing profile, courses…).
   const cfg = terminalConfigFor(outlet?.use_case);
+  // Use-case gates for the KDS/loyalty background fetches below, mirroring pos-api's own
+  // RequireUseCase route gates exactly (hospitality/quick_service for KDS; retail/services/
+  // pharmacy for loyalty) so a mismatched outlet never even attempts a call it's guaranteed
+  // to be rejected on.
+  const kdsUseCaseOk = cfg.profile === 'hospitality' || cfg.profile === 'quick_service';
+  const loyaltyUseCaseOk = cfg.profile === 'retail' || cfg.profile === 'services' || cfg.profile === 'pharmacy';
+  const { hasFeature } = useSubscription();
   const scanInputRef = useRef<HTMLInputElement>(null);
   // Retail/pharmacy: focus the scan field on load for fast keyboard-first checkout.
   useEffect(() => {
@@ -497,11 +505,15 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
   // preview must match); otherwise the configured rate. Per-item treasury tax always wins.
   const taxRate = (posSettings?.vat_enabled === false ? 0 : (posSettings?.vat_rate ?? 16)) / 100;
   // Live KDS stations — drive per-station ticket routing/printing (same category_filter routing the
-  // kitchen displays use), so a ticket prints on the printer of the station it was routed to.
-  const { data: kdsStationsData } = useKDSStations();
+  // kitchen displays use), so a ticket prints on the printer of the station it was routed to. Only
+  // fetched for outlets whose use-case AND plan can actually reach pos-api's /kds/stations route —
+  // otherwise this is a guaranteed 403 on every terminal load (see kdsUseCaseOk above).
+  const { data: kdsStationsData } = useKDSStations(kdsUseCaseOk && hasFeature('kds'));
   // Active loyalty program — used to tell the cashier how many points the customer just earned,
-  // and (paired with loyaltyAccountData above) to gate/settle the "Redeem Points" tender.
-  const { data: loyaltyPrograms } = useLoyaltyPrograms();
+  // and (paired with loyaltyAccountData above) to gate/settle the "Redeem Points" tender. Loyalty
+  // is deliberately a retail/services/pharmacy concept (see loyaltyUseCaseOk above) — hospitality/
+  // quick_service outlets settle per table/bill, not customer loyalty balances.
+  const { data: loyaltyPrograms } = useLoyaltyPrograms(loyaltyUseCaseOk && hasFeature('loyalty_program'));
   const loyaltyRedeemInfo: LoyaltyRedeemInfo | null = loyaltyAccountData?.account && loyaltyPrograms?.[0]
     ? {
         accountId: loyaltyAccountData.account.id,

@@ -75,13 +75,17 @@ export interface UpdateKDSStationInput {
 }
 
 /** Active stations only (for KDS display). */
-export function useKDSStations() {
+// `enabled` lets callers skip the fetch entirely when the outlet's use-case/plan can never satisfy
+// the backend's RequireUseCase("hospitality","quick_service")/RequireFeature("kds") gate (e.g. a
+// retail-only plan) — calling it anyway is a guaranteed 403, and every failed attempt independently
+// fires the app's subscription-403 toast, not just the first.
+export function useKDSStations(enabled = true) {
   const tenantID = useTenantID();
   return useQuery({
     queryKey: ['kds-stations', tenantID],
     queryFn: () =>
       apiClient.get<{ data: KDSStation[] }>(`${basePath(tenantID)}/stations`),
-    enabled: !!tenantID,
+    enabled: !!tenantID && enabled,
     staleTime: 60_000,
   });
 }

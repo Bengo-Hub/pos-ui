@@ -229,7 +229,16 @@ export function OrgShell({ children }: { children: ReactNode }) {
           queries: {
             staleTime: 5 * 60 * 1000,
             gcTime: 10 * 60 * 1000,
-            retry: 2,
+            // Never retry an auth/entitlement rejection — it will never succeed on retry, and each
+            // attempt independently re-triggers the apiClient 401/403 interceptors (session logout /
+            // "Subscription limit reached" toast), so a single missing-feature 403 used to surface as
+            // 3 stacked toasts (1 initial + 2 retries) instead of one. Real transient/network/5xx
+            // errors still get the original 2 retries.
+            retry: (failureCount, error: any) => {
+              const status = error?.response?.status;
+              if (status === 401 || status === 402 || status === 403) return false;
+              return failureCount < 2;
+            },
             refetchOnWindowFocus: false,
           },
         },
