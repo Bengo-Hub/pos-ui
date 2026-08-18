@@ -12,7 +12,7 @@ import { useSubscription } from '@/hooks/use-subscription';
 import { useAuthStore } from '@/store/auth';
 import { useOutletFilterStore } from '@/store/outlet-filter';
 import { useQuery } from '@tanstack/react-query';
-import { BookOpen, Building2, Check, ChevronDown, ExternalLink, Loader2, LogOut, MapPin, Menu, PanelLeft, Search, Settings, Square, User } from 'lucide-react';
+import { Building2, Check, ChevronDown, Loader2, LogOut, MapPin, Menu, PanelLeft, Search, Settings, Square, User } from 'lucide-react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
@@ -20,13 +20,13 @@ import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
 import { NotificationBell } from './notifications/NotificationBell';
 import { ThemeToggle } from './theme-toggle';
-import { useVisibleServices, type ServiceKey } from '@bengo-hub/shared-ui-lib/app-switcher';
+import { useVisibleServices, AppSwitcherGrid, type ServiceKey } from '@bengo-hub/shared-ui-lib/app-switcher';
+import { AccountPanel } from '@bengo-hub/shared-ui-lib/account-panel';
 
 // Canonical service list (labels/icons/coverage, incl. 'coming-soon' entries) lives in
-// shared-ui-lib's app-switcher now — see useVisibleServices below. Treasury isn't in that
-// registry (pos-ui links OUT to treasury, but treasury doesn't list itself), so it's kept here.
-const TREASURY_URL = process.env.NEXT_PUBLIC_TREASURY_UI_URL ?? 'https://books.codevertexafrica.com';
+// shared-ui-lib's app-switcher now — see useVisibleServices below.
 const SERVICE_URLS: Partial<Record<ServiceKey, string>> = {
+  treasury: process.env.NEXT_PUBLIC_TREASURY_UI_URL ?? 'https://books.codevertexafrica.com',
   inventory: process.env.NEXT_PUBLIC_INVENTORY_UI_URL ?? 'https://inventory.codevertexafrica.com',
   marketflow: process.env.NEXT_PUBLIC_CRM_UI_URL ?? process.env.NEXT_PUBLIC_MARKETFLOW_UI_URL ?? 'https://marketflow.codevertexafrica.com',
   logistics: process.env.NEXT_PUBLIC_LOGISTICS_UI_URL ?? 'https://logistics.codevertexafrica.com',
@@ -315,7 +315,6 @@ export function Header({ onMenuClick, onToggleSidebar, sidebarCollapsed }: Heade
   const logout = useAuthStore((s) => s.logout);
   const { getServiceTitle } = useTenantBranding();
   const [profileOpen, setProfileOpen] = useState(false);
-  const profileRef = useRef<HTMLDivElement>(null);
   // Gate only on !!user — _hasHydrated was causing permanent unauthenticated
   // state when the onRehydrateStorage callback failed to fire (e.g. invalid
   // persisted JSON, private browsing restrictions). !!user is safe here because
@@ -426,7 +425,7 @@ export function Header({ onMenuClick, onToggleSidebar, sidebarCollapsed }: Heade
 
         <div className="h-8 w-[1px] bg-slate-200 dark:bg-white/10 mx-1 hidden sm:block"></div>
 
-        <div className="relative" ref={profileRef}>
+        <div className="relative">
           {isAuthenticated ? (
             <button
               type="button"
@@ -446,108 +445,34 @@ export function Header({ onMenuClick, onToggleSidebar, sidebarCollapsed }: Heade
               <ChevronDown className={`h-4 w-4 text-slate-400 transition-transform duration-300 ${profileOpen ? 'rotate-180' : ''}`} />
             </button>
           ) : null}
-          {isAuthenticated && profileOpen && (
-            <>
-              <div className="fixed inset-0 z-40" aria-hidden="true" onClick={() => setProfileOpen(false)} />
-              {/* Wide enough for full service titles; panel scrolls internally only when
-                  taller than the viewport, so all items stay reachable. */}
-              <div className="absolute right-0 top-full mt-2 z-50 w-80 max-w-[calc(100vw-1.5rem)] max-h-[calc(100vh-5rem)] overflow-y-auto rounded-[1.5rem] p-3 shadow-2xl border border-border bg-popover">
-                <div className="mb-2 px-3 py-2">
-                  <p className="text-sm font-black text-foreground">{name}</p>
-                  <p className="text-[10px] text-slate-400 truncate font-bold uppercase tracking-widest mt-0.5">{role || 'Member'}</p>
-                </div>
-
-                <div className="h-px bg-slate-100 dark:bg-white/5 my-2 mx-1" />
-
+          {isAuthenticated && (
+            <AccountPanel
+              open={profileOpen}
+              onClose={() => setProfileOpen(false)}
+              user={{ name, email: user?.email ?? '' }}
+              onSignOut={() => {
+                setProfileOpen(false);
+                void logout();
+              }}
+            >
+              <div className="flex flex-col gap-3">
+                <p className="text-center text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                  {role || 'Member'}
+                </p>
                 {showSettings && (
-                  <div className="grid gap-1">
-                    <Link
-                      href={`/${orgSlug}/settings`}
-                      onClick={() => setProfileOpen(false)}
-                      className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5 transition-all group"
-                    >
-                      <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-white/10 flex items-center justify-center group-hover:text-primary transition-colors">
-                        <Settings className="h-4 w-4" />
-                      </div>
-                      Settings
-                    </Link>
-                  </div>
+                  <Link
+                    href={`/${orgSlug}/settings`}
+                    onClick={() => setProfileOpen(false)}
+                    className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-foreground hover:bg-secondary"
+                  >
+                    <Settings className="h-4 w-4" /> Settings
+                  </Link>
                 )}
-
-                {(showSettings || isHQUser) && (
-                  <div className="h-px bg-slate-100 dark:bg-white/5 my-2 mx-1" />
-                )}
-
                 {isHQUser && (
-                  <>
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 px-3 mb-1.5">Services</p>
-                    {/* No inner scroll cap — full titles, all items visible; the panel itself
-                        scrolls only when taller than the viewport. */}
-                    <div className="grid gap-1">
-                      <a
-                        href={`${TREASURY_URL}/${orgSlug}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={() => setProfileOpen(false)}
-                        className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5 transition-all group"
-                      >
-                        <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-white/10 flex items-center justify-center group-hover:text-primary transition-colors">
-                          <BookOpen className="h-4 w-4" />
-                        </div>
-                        <span className="flex-1">Treasury</span>
-                        <ExternalLink className="h-3 w-3 text-slate-400 opacity-60" />
-                      </a>
-                      {services.map(({ key, label, href, Icon }) =>
-                        href ? (
-                          <a
-                            key={key}
-                            href={href}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            onClick={() => setProfileOpen(false)}
-                            className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5 transition-all group"
-                          >
-                            <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-white/10 flex items-center justify-center group-hover:text-primary transition-colors">
-                              <Icon className="h-4 w-4" />
-                            </div>
-                            <span className="flex-1">{label}</span>
-                            <ExternalLink className="h-3 w-3 text-slate-400 opacity-60" />
-                          </a>
-                        ) : (
-                          <div
-                            key={key}
-                            className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold text-slate-400 dark:text-slate-500 cursor-default"
-                            title={`${label} — coming soon`}
-                          >
-                            <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-white/10 flex items-center justify-center">
-                              <Icon className="h-4 w-4" />
-                            </div>
-                            <span className="flex-1">{label}</span>
-                            <span className="text-[9px] font-bold uppercase tracking-wider bg-slate-100 dark:bg-white/10 px-1.5 py-0.5 rounded-full">Soon</span>
-                          </div>
-                        ),
-                      )}
-                    </div>
-                  </>
+                  <AppSwitcherGrid services={services} onNavigate={() => setProfileOpen(false)} />
                 )}
-
-                <div className="h-px bg-slate-100 dark:bg-white/5 my-2 mx-1" />
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setProfileOpen(false);
-                    void logout();
-                  }}
-                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition-all group"
-                >
-                  <div className="w-8 h-8 rounded-lg bg-rose-50 dark:bg-rose-500/10 flex items-center justify-center transition-colors">
-                    <LogOut className="h-4 w-4" />
-                  </div>
-                  Logout
-                </button>
               </div>
-            </>
+            </AccountPanel>
           )}
         </div>
       </div>
