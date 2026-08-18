@@ -45,7 +45,6 @@ export type ModuleKey =
   | 'triage'
   | 'examination'
   | 'lab'
-  | 'inventory'
   | 'returns'
   | 'clients'
   | 'staff_schedule'
@@ -53,11 +52,7 @@ export type ModuleKey =
   | 'queue'
   | 'repairs'
   | 'reservations'
-  | 'packages'
-  | 'accounting'
-  | 'crm'
-  | 'erp'
-  | 'logistics';
+  | 'packages';
 
 // ─── Use-case types ─────────────────────────────────────────────────────────
 export type UseCaseType =
@@ -68,6 +63,9 @@ export type UseCaseType =
   | 'pharmacy';
 
 // ─── Per use-case module configs ────────────────────────────────────────────
+// Cross-service "switch to another service" shortcuts (Inventory/Accounting/CRM/ERP/Logistics)
+// used to be their own sidebar groups gated by these module keys — removed in favor of the shared
+// AppSwitcherGrid/AppSwitcherTrigger (see header.tsx), so they no longer need a module key at all.
 const COMMON_MODULES: ModuleKey[] = [
   'dashboard',
   'orders',
@@ -75,15 +73,6 @@ const COMMON_MODULES: ModuleKey[] = [
   'cash_drawer',
   'settings',
   'platform',
-  'inventory',
-  // Cross-service link groups (Accounting→treasury-ui, CRM→marketflow-ui, ERP→erp-ui,
-  // Logistics→logistics-ui) — available to every use case but gated by a manager permission on
-  // each item (ERP additionally carries the hr_management subscription lock); the target service
-  // enforces its own RBAC + subscription gating on arrival.
-  'accounting',
-  'crm',
-  'erp',
-  'logistics',
 ];
 
 const USE_CASE_MODULES: Record<UseCaseType, ModuleKey[]> = {

@@ -20,7 +20,7 @@ import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
 import { NotificationBell } from './notifications/NotificationBell';
 import { ThemeToggle } from './theme-toggle';
-import { useVisibleServices, AppSwitcherGrid, type ServiceKey } from '@bengo-hub/shared-ui-lib/app-switcher';
+import { useVisibleServices, AppSwitcherGrid, AppSwitcherTrigger, type ServiceKey } from '@bengo-hub/shared-ui-lib/app-switcher';
 import { AccountPanel } from '@bengo-hub/shared-ui-lib/account-panel';
 
 // Canonical service list (labels/icons/coverage, incl. 'coming-soon' entries) lives in
@@ -422,6 +422,8 @@ export function Header({ onMenuClick, onToggleSidebar, sidebarCollapsed }: Heade
         <NotificationBell />
 
         <ThemeToggle />
+
+        {isHQUser && <AppSwitcherTrigger services={services} />}
 
         <div className="h-8 w-[1px] bg-slate-200 dark:bg-white/10 mx-1 hidden sm:block"></div>
 

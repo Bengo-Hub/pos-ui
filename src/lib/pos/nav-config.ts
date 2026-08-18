@@ -17,13 +17,11 @@ import {
 import type { Permission } from '@/lib/rbac/permissions';
 import { P } from '@/lib/rbac/permissions';
 
-// Cross-service UIs we LINK to (never duplicate). Code fallback is the real safety net since
-// NEXT_PUBLIC URLs are baked at build time.
-const INVENTORY_URL = process.env.NEXT_PUBLIC_INVENTORY_UI_URL || 'https://inventory.codevertexafrica.com';
+// Cross-service UI we deep-link INTO from within a same-workflow POS screen (e.g. a customer's
+// ledger from the Clients row, a quotation from the Quotations row) — never duplicated here.
+// Whole-app "switch to another service" links (Inventory/Accounting/CRM/ERP/Logistics) live in
+// the shared AppSwitcherGrid/AppSwitcherTrigger now, not as their own sidebar groups — see header.tsx.
 const TREASURY_URL = process.env.NEXT_PUBLIC_TREASURY_UI_URL || 'https://books.codevertexafrica.com';
-const MARKETFLOW_URL = process.env.NEXT_PUBLIC_MARKETFLOW_UI_URL || 'https://marketflow.codevertexafrica.com';
-const ERP_URL = process.env.NEXT_PUBLIC_ERP_UI_URL || 'https://erp.codevertexafrica.com';
-const LOGISTICS_URL = process.env.NEXT_PUBLIC_LOGISTICS_UI_URL || 'https://logistics.codevertexafrica.com';
 
 export interface NavItem {
   label: string;
@@ -162,51 +160,6 @@ export function buildNavGroups(orgSlug: string): NavGroup[] {
         { label: 'Triage', icon: HeartPulse, href: '/triage', moduleKey: 'triage', permission: [P.TRIAGE_VIEW, P.TRIAGE_ADD, P.TRIAGE_CHANGE, P.TRIAGE_MANAGE], waiterHidden: true },
         { label: 'Examination', icon: Stethoscope, href: '/examination', moduleKey: 'examination', permission: [P.EXAMINATION_VIEW, P.EXAMINATION_ADD, P.EXAMINATION_CHANGE, P.EXAMINATION_MANAGE], waiterHidden: true },
         { label: 'Lab', icon: FlaskConical, href: '/lab', moduleKey: 'lab', permission: [P.LAB_VIEW, P.LAB_ADD, P.LAB_CHANGE, P.LAB_MANAGE], waiterHidden: true },
-      ],
-    },
-    {
-      label: 'Inventory',
-      defaultCollapsed: true,
-      items: [
-        // Purchase Orders duplicate removed per the use-case PowerSuite specs — the module is
-        // owned by inventory-service; POS links to Manage Inventory instead.
-        { label: 'Manage Inventory', icon: Truck, href: `${INVENTORY_URL}/${orgSlug}`, moduleKey: 'inventory', permission: [P.CATALOG_MANAGE, P.CATALOG_CHANGE], waiterHidden: true },
-      ],
-    },
-    {
-      label: 'Accounting',
-      defaultCollapsed: true,
-      items: [
-        // Single link to treasury-ui (the owner) — the old Invoices/Expenses/Credit Notes/
-        // Finance Reports duplicates were removed per the use-case PowerSuite specs.
-        { label: 'Treasury', icon: Wallet, href: `${TREASURY_URL}/${orgSlug}`, moduleKey: 'accounting', permission: [P.REPORTS_VIEW, P.REPORTS_MANAGE, P.CONFIG_MANAGE], waiterHidden: true },
-      ],
-    },
-    {
-      label: 'CRM & Marketing',
-      defaultCollapsed: true,
-      items: [
-        // Single link to marketflow-ui (the owner) — Campaigns/Contacts/Segments duplicates
-        // removed per the use-case PowerSuite specs.
-        { label: 'CRM', icon: UserSquare, href: `${MARKETFLOW_URL}/${orgSlug}`, moduleKey: 'crm', permission: [P.CLIENTS_VIEW, P.CLIENTS_MANAGE], waiterHidden: true },
-      ],
-    },
-    {
-      label: 'ERP',
-      defaultCollapsed: true,
-      items: [
-        // Cross-service link, shown but locked below tier 2 (no ERP access at Basic per the
-        // use-case PowerSuite matrix — hr_management unlocks at Professional).
-        { label: 'ERP', icon: Users, href: `${ERP_URL}/${orgSlug}`, moduleKey: 'erp', permission: [P.CONFIG_MANAGE, P.REPORTS_MANAGE], subFeature: 'hr_management', subPlan: 'Pro', waiterHidden: true },
-      ],
-    },
-    {
-      label: 'Logistics',
-      defaultCollapsed: true,
-      items: [
-        // Cross-service link to logistics-ui (delivery-execution owner: dispatch board, riders,
-        // tracking). Shipments dispatched from Sell → Shipments are assigned/tracked there.
-        { label: 'Dispatch & Riders', icon: Truck, href: `${LOGISTICS_URL}/${orgSlug}`, moduleKey: 'logistics', permission: [P.ORDERS_MANAGE, P.CONFIG_MANAGE], waiterHidden: true },
       ],
     },
     {
