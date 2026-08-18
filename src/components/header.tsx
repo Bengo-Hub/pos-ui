@@ -8,7 +8,6 @@ import { canAccessAllOutlets } from '@/lib/auth/outlet-access';
 import { P } from '@/lib/rbac/permissions';
 import { cn } from '@/lib/utils';
 import { useTenantBranding } from '@/providers/tenant-branding-provider';
-import { useSubscription } from '@/hooks/use-subscription';
 import { useAuthStore } from '@/store/auth';
 import { useOutletFilterStore } from '@/store/outlet-filter';
 import { useQuery } from '@tanstack/react-query';
@@ -327,15 +326,13 @@ export function Header({ onMenuClick, onToggleSidebar, sidebarCollapsed }: Heade
   const { can, isSuperuser } = usePermissions();
   const isHQUser = isSuperuser || canAccessAllOutlets(user);
   const showSettings = isHQUser || can(P.CONFIG_VIEW) || can(P.CONFIG_CHANGE) || can(P.CONFIG_MANAGE);
-  // activeProducts is undefined while the subscription lookup is in flight/unknown — fails open
-  // (shows everything) until it resolves, matching this codebase's existing "never block the UI
-  // on a subscription-fetch failure" convention.
-  const { activeProducts } = useSubscription();
+  // The App Store shows every real service to every authenticated user in the tenant — each
+  // destination service already enforces its own RBAC + subscription gating on arrival, so
+  // pre-filtering the directory here just hid apps that were actually reachable.
   const services = useVisibleServices({
     orgSlug,
     urls: SERVICE_URLS,
-    canManageLinks: isHQUser,
-    activeServiceTags: activeProducts,
+    canManageLinks: true,
   });
 
   const { data: currentShift } = useCurrentShift();
@@ -423,7 +420,7 @@ export function Header({ onMenuClick, onToggleSidebar, sidebarCollapsed }: Heade
 
         <ThemeToggle />
 
-        {isHQUser && <AppSwitcherTrigger services={services} />}
+        {isAuthenticated && <AppSwitcherTrigger services={services} />}
 
         <div className="h-8 w-[1px] bg-slate-200 dark:bg-white/10 mx-1 hidden sm:block"></div>
 
@@ -470,9 +467,7 @@ export function Header({ onMenuClick, onToggleSidebar, sidebarCollapsed }: Heade
                     <Settings className="h-4 w-4" /> Settings
                   </Link>
                 )}
-                {isHQUser && (
-                  <AppSwitcherGrid services={services} onNavigate={() => setProfileOpen(false)} />
-                )}
+                <AppSwitcherGrid services={services} onNavigate={() => setProfileOpen(false)} />
               </div>
             </AccountPanel>
           )}
