@@ -248,6 +248,7 @@ export const reportKeys = {
   salesByHour: (tid: string, date: string, outletId?: string) => ['reports', tid, 'sales-by-hour', date, outletId] as const,
   salesByCategory: (tid: string, from: string, to: string, outletId?: string) => ['reports', tid, 'sales-by-category', from, to, outletId] as const,
   salesByKDSStation: (tid: string, from: string, to: string, outletId?: string) => ['reports', tid, 'sales-by-kds-station', from, to, outletId] as const,
+  hotelOccupancy: (tid: string, from: string, to: string, outletId?: string) => ['reports', tid, 'hotel-occupancy', from, to, outletId] as const,
   productMix: (tid: string, from: string, to: string, outletId?: string) => ['reports', tid, 'product-mix', from, to, outletId] as const,
   voidSummary: (tid: string, from: string, to: string, outletId?: string) => ['reports', tid, 'void-summary', from, to, outletId] as const,
   eodList: (tid: string, outletId: string, from: string, to: string) => ['reports', tid, 'eod', outletId, from, to] as const,
@@ -391,6 +392,40 @@ export function useSalesByKDSStation(from: string, to: string, outletId?: string
       );
       return Array.isArray(res) ? res : res?.data ?? [];
     },
+    enabled: !!tenantID && !!from && !!to && enabled,
+    staleTime: 2 * 60_000,
+  });
+}
+
+export interface HotelChargeTypeRevenue {
+  charge_type: string;
+  amount: number;
+}
+
+export interface HotelOccupancyResult {
+  from: string;
+  to: string;
+  total_rooms: number;
+  available_room_nights: number;
+  occupied_room_nights: number;
+  occupancy_rate: number; // 0..1
+  room_revenue: number;
+  ancillary_revenue: number;
+  total_revenue: number;
+  adr: number;
+  revpar: number;
+  revenue_by_charge_type: HotelChargeTypeRevenue[];
+}
+
+/** Occupancy %, ADR, RevPAR, and room-vs-ancillary revenue split for hotel-module outlets —
+ *  see pos-api's ReportsHandler.HotelOccupancyReport. Gated the same as the /hotel module itself
+ *  (hospitality use-case + hotel_module feature) so this is only ever called where it can resolve. */
+export function useHotelOccupancyReport(from: string, to: string, outletId?: string, enabled = true) {
+  const tenantID = useTenantID();
+  return useQuery({
+    queryKey: reportKeys.hotelOccupancy(tenantID, from, to, outletId),
+    queryFn: () =>
+      apiClient.get<HotelOccupancyResult>(`${basePath(tenantID)}/hotel-occupancy`, { from, to, outlet_id: outletId }),
     enabled: !!tenantID && !!from && !!to && enabled,
     staleTime: 2 * 60_000,
   });
