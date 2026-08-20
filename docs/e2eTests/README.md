@@ -20,8 +20,8 @@ Local runs open the browser (headed). Set `CI=true` for headless. Env vars:
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `BASE_URL` | POS UI origin | `https://pos.codevertexafrica.com` |
-| `E2E_ORG_SLUG` | Tenant slug | `urban-loft` |
-| `E2E_LOGIN_EMAIL` | SSO login email | `demo@bengobox.dev` |
+| `E2E_ORG_SLUG` | Tenant slug | `codevertex-demo` |
+| `E2E_LOGIN_EMAIL` | SSO login email | `admin@demo.codevertexafrica.com` |
 | `E2E_LOGIN_PASSWORD` | SSO login password | (set in env) |
 
 Artifacts: `playwright-report/`, `test-results/` (gitignored).
