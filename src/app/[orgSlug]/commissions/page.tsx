@@ -62,6 +62,7 @@ function CommissionsPage() {
         rows={records}
         rowKey={(rec) => rec.id}
         loading={isLoading}
+        loadingRows={8}
         storageKey="commissions-col-prefs"
         emptyState={
           <div className="flex flex-col items-center justify-center gap-2 text-muted-foreground">

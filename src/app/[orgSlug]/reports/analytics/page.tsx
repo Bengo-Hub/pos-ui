@@ -651,6 +651,7 @@ function Section({ title, icon: Icon, loading, error, head, rows, actions, filte
             rows={keyedRows}
             rowKey={(r) => r.key}
             loading={loading}
+            loadingRows={8}
             emptyText="No data for this range"
           />
         </div>

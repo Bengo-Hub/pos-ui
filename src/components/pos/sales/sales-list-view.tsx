@@ -405,6 +405,7 @@ export function SalesListView({ orgSlug, fixedSource, title, subtitle }: {
         rows={rows}
         rowKey={(o) => o.id}
         loading={isLoading}
+        loadingRows={8}
         emptyText="No sales match your filters."
         storageKey={fixedSource ? 'pos-pos-sales' : 'pos-all-sales'}
         renderExpanded={(o) => <OrderLinesPanel order={o} noun="sale" />}

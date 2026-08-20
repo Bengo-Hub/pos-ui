@@ -112,6 +112,7 @@ function BillsPage() {
         rows={rows}
         rowKey={(b) => b.prescription.id}
         loading={isLoading}
+        loadingRows={8}
         storageKey="pharmacy-bills-col-prefs"
         emptyState={
           <EmptyState

@@ -69,6 +69,7 @@ function StaffCreditPage() {
           rows={rows}
           rowKey={(r) => r.id}
           loading={isLoading}
+          loadingRows={8}
           error={isError}
           onRetry={() => refetch()}
           storageKey="staff-credit-col-prefs"

@@ -100,6 +100,7 @@ export default function ShipmentsPage() {
         rows={rows}
         rowKey={(o) => o.id}
         loading={isLoading}
+        loadingRows={8}
         error={isError}
         onRetry={() => refetch()}
         onRowClick={(o) => setDetailId(o.id)}

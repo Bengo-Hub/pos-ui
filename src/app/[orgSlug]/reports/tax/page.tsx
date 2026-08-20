@@ -102,6 +102,7 @@ function TaxReportContent() {
             rows={rows}
             rowKey={(r) => r.tax_name}
             loading={isLoading}
+            loadingRows={8}
             error={isError}
             onRetry={refetch}
             storageKey="tax-report-col-prefs"

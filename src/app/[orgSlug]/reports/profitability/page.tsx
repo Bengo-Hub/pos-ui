@@ -89,6 +89,7 @@ function GroupTabPanel({ groupBy, label, from, to, outletId, money }: {
             rows={groups}
             rowKey={(g) => g.group}
             loading={isLoading}
+            loadingRows={8}
             storageKey={`profitability-${groupBy}-col-prefs`}
             emptyText="No sales data for this period."
           />
@@ -199,6 +200,7 @@ function ProfitabilityContent() {
                 rows={items}
                 rowKey={(it) => it.sku}
                 loading={isLoading}
+                loadingRows={8}
                 storageKey="profitability-products-col-prefs"
                 emptyText="No sales data for this period."
               />

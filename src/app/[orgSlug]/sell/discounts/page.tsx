@@ -167,6 +167,7 @@ export default function DiscountsPage() {
         rows={discounts}
         rowKey={(d) => d.id}
         loading={isLoading}
+        loadingRows={8}
         error={isError}
         onRetry={() => refetch()}
         storageKey="sell-discounts-col-prefs"

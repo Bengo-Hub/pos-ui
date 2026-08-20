@@ -248,6 +248,7 @@ export function DraftsListView({ orgSlug }: { orgSlug: string }) {
         rows={rows}
         rowKey={(o) => o.id}
         loading={isLoading}
+        loadingRows={8}
         emptyText="No drafts match your filters. Save an in-progress sale as a draft from the POS terminal (Park) or Add Sale to resume it later."
         storageKey="pos-drafts"
         renderExpanded={(o) => <OrderLinesPanel order={o} noun="draft" />}

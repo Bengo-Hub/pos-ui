@@ -112,6 +112,7 @@ function LoyaltyPage() {
         rows={accounts}
         rowKey={(acc) => acc.id}
         loading={isLoading}
+        loadingRows={8}
         storageKey="loyalty-col-prefs"
         emptyState={
           <div className="flex flex-col items-center justify-center gap-2 text-muted-foreground">

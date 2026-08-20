@@ -138,6 +138,7 @@ function ReturnsPage() {
         rows={returns}
         rowKey={(ret) => ret.id}
         loading={isLoading}
+        loadingRows={8}
         onRowClick={(ret) => router.push(`/${orgSlug}/returns/${ret.id}`)}
         storageKey="returns-col-prefs"
         emptyState={
