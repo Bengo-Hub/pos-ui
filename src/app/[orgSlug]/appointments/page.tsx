@@ -5,6 +5,7 @@ import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
 
 import { Badge, Button, Card, CardContent, CardHeader } from '@/components/ui/base';
 import { cn } from '@/lib/utils';
+import { PhoneInputField } from '@bengo-hub/shared-ui-lib/contact';
 import {
   useAppointments,
   useCreateAppointment,
@@ -151,7 +152,7 @@ function BookingForm({
             </div>
             <div>
               <label className="text-xs font-bold text-muted-foreground mb-1 block">Customer Phone</label>
-              <input type="tel" value={form.customer_phone ?? ''} onChange={(e) => set('customer_phone', e.target.value)} placeholder="+254..." className={inputClass} />
+              <PhoneInputField value={form.customer_phone ?? ''} onChange={(v) => set('customer_phone', v)} className={inputClass} />
             </div>
             <div>
               <label className="text-xs font-bold text-muted-foreground mb-1 block">Service *</label>

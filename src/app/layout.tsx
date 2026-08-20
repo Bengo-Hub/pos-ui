@@ -2,6 +2,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 import type { Metadata, Viewport } from "next";
 import { Outfit, DM_Sans, JetBrains_Mono } from "next/font/google";
 import { Toaster } from "sonner";
+import "@bengo-hub/shared-ui-lib/contact/style.css";
 import "./globals.css";
 
 const outfit = Outfit({
