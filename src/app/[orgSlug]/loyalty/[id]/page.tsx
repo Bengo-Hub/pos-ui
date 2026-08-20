@@ -11,6 +11,7 @@ import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { DataTable } from '@bengo-hub/shared-ui-lib/data-table';
+import { PhoneInputField } from '@bengo-hub/shared-ui-lib/contact';
 import { buildLoyaltyTransactionColumns, buildReferralColumns } from './loyalty-detail-columns';
 
 function LoyaltyAccountDetailPage() {
@@ -188,12 +189,13 @@ function LoyaltyAccountDetailPage() {
           <p className="text-sm font-semibold">Referrals</p>
         </div>
         <form onSubmit={handleRefer} className="flex items-center gap-2 p-4 border-b border-border">
-          <input
-            type="tel"
-            placeholder="Friend's phone (e.g. 2547…)"
+          {/* pos-api's CreateReferral now compares by national subscriber digits as a fallback
+              (matching CompleteReferral's own tolerance), so E.164 input here is safe — see the
+              backend fix landed alongside this. */}
+          <PhoneInputField
             value={referredPhone}
-            onChange={(e) => setReferredPhone(e.target.value)}
-            className="flex-1 px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+            onChange={setReferredPhone}
+            className="flex-1"
           />
           <button
             type="submit"
