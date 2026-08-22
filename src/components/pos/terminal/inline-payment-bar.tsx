@@ -512,6 +512,10 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
             const Icon = tenderIcon(a.key);
             const tone = TONES[a.tone];
             const isBusy = busyKey === a.key;
+            // MpesaLogo is a wide wordmark (~1.88:1), not a square icon — a square box
+            // letterboxes it down to an illegible sliver, so it needs a wider slot than the
+            // other (genuinely square) lucide tender icons share here.
+            const isMpesa = a.key === 'mpesa_stk' || a.key === 'mpesa_c2b';
             return (
               <button
                 key={a.key}
@@ -526,7 +530,7 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
                   tone.bg, tone.text,
                 )}
               >
-                {isBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Icon className="h-4 w-4 shrink-0" />}
+                {isBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Icon className={isMpesa ? 'h-4 w-7 shrink-0' : 'h-4 w-4 shrink-0'} />}
                 <span className="whitespace-nowrap">{a.label}</span>
               </button>
             );
@@ -548,6 +552,9 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
                 const Icon = tenderIcon(a.key);
                 const tone = TONES[a.tone];
                 const isBusy = busyKey === a.key;
+                // See the "bar" layout above — MpesaLogo is a wide wordmark, needs a wider slot
+                // than the square lucide icons the other tenders share.
+                const isMpesa = a.key === 'mpesa_stk' || a.key === 'mpesa_c2b';
                 return (
                   <button
                     key={a.key}
@@ -561,8 +568,8 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
                       tone.ring,
                     )}
                   >
-                    <span className={cn('h-10 w-10 rounded-lg flex items-center justify-center shrink-0', tone.bg, tone.text)}>
-                      {isBusy ? <Loader2 className="h-5 w-5 animate-spin" /> : <Icon className="h-5 w-5" />}
+                    <span className={cn('h-10 rounded-lg flex items-center justify-center shrink-0', isMpesa ? 'w-16' : 'w-10', tone.bg, tone.text)}>
+                      {isBusy ? <Loader2 className="h-5 w-5 animate-spin" /> : <Icon className={isMpesa ? 'h-5 w-9' : 'h-5 w-5'} />}
                     </span>
                     <span className="text-xs font-bold text-center leading-tight">{a.label}</span>
                   </button>

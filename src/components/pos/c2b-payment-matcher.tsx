@@ -93,7 +93,7 @@ export function C2BPaymentMatcher({
   const header = (
     <div className="flex items-center justify-between">
       <span className="flex items-center gap-2 text-sm font-bold">
-        <MpesaLogo className="h-5 w-5 rounded shrink-0" /> C2B · {formatCurrency(amount, currency)}
+        <MpesaLogo className="h-5 w-9 rounded shrink-0" /> C2B · {formatCurrency(amount, currency)}
       </span>
       <button onClick={onCancel} className="h-7 w-7 rounded-lg flex items-center justify-center hover:bg-accent" aria-label="Cancel">
         <X className="h-4 w-4" />

@@ -595,7 +595,7 @@ export function POSPaymentModal({
                     <div className="flex flex-wrap gap-2.5">
                       {gateways?.mpesa && (
                         <PayBadge
-                          icon={<MpesaLogo className="h-4 w-4 rounded" />}
+                          icon={<MpesaLogo className="h-4 w-7 rounded" />}
                           color="text-green-600"
                           bg="bg-green-500/10"
                           label="STK Push"
@@ -607,7 +607,7 @@ export function POSPaymentModal({
                       )}
                       {gateways?.mpesa && (
                         <PayBadge
-                          icon={<MpesaLogo className="h-4 w-4 rounded" />}
+                          icon={<MpesaLogo className="h-4 w-7 rounded" />}
                           color="text-green-700"
                           bg="bg-green-500/10"
                           label="C2B"
