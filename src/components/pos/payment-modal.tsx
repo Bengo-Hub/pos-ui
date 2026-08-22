@@ -39,6 +39,7 @@ import { useHotelRooms } from '@/hooks/useHotel';
 import { hotelApi, type Room } from '@/lib/api/hotel';
 import { useRedeemToOrder } from '@/hooks/useLoyalty';
 import { canRedeemLoyaltyFor, loyaltyPointsToRedeem, type LoyaltyRedeemInfo } from '@/lib/pos/terminal-actions';
+import { useSubscription } from '@/hooks/use-subscription';
 
 export interface POSPaymentModalProps {
   open: boolean;
@@ -114,6 +115,8 @@ export function POSPaymentModal({
   const createIntent = useCreatePaymentIntent();
   const isOnline = useEffectiveOnline();
   const { data: gateways } = usePOSGateways();
+  // C2B "Simulate" trigger (sandbox testing aid) shows for the demo tenant only.
+  const { isDemo } = useSubscription();
 
   // SSE-based payment detection: fires as soon as pos-api records the payment,
   // eliminating polling latency for M-Pesa STK push confirmations.
@@ -219,13 +222,16 @@ export function POSPaymentModal({
   // M-Pesa confirmation code. Recorded as 'mpesa_manual' (NOT the old bare 'manual', which every
   // method breakdown rendered as an unexplained "manual" bucket — pos-api still accepts the legacy
   // string from queued offline payments and canonicalizes it).
-  const handleManualConfirm = useCallback(async () => {
+  const handleManualConfirm = useCallback(async (codeOverride?: string) => {
+    // codeOverride lets the C2B matcher's timeout fallback ("Enter M-Pesa Code") settle via this
+    // exact same path with a code that never touched the `manualRef` input state.
+    const code = (codeOverride ?? manualRef).trim();
     methodRef.current = 'mpesa_manual';
-    if (!manualRef.trim()) return;
+    if (!code) return;
 
     if (!isOnline) {
       try {
-        await queueOfflinePayment('mpesa_manual', manualRef.trim());
+        await queueOfflinePayment('mpesa_manual', code);
         setStep('offline_queued');
         onPaymentConfirmed(methodRef.current);
       } catch {
@@ -236,7 +242,7 @@ export function POSPaymentModal({
     }
 
     createIntent.mutate(
-      { orderId, tenderMethod: 'mpesa_manual', amount: roundedTotal, externalRef: manualRef.trim(), tenderId },
+      { orderId, tenderMethod: 'mpesa_manual', amount: roundedTotal, externalRef: code, tenderId },
       {
         onSuccess: () => { setStep('confirmed'); onPaymentConfirmed(methodRef.current); },
         onError: async (err: any) => {
@@ -245,7 +251,7 @@ export function POSPaymentModal({
           const { isNetworkShapedError } = await import('@/lib/connectivity');
           if (isNetworkShapedError(err)) {
             try {
-              await queueOfflinePayment('mpesa_manual', manualRef.trim());
+              await queueOfflinePayment('mpesa_manual', code);
               setStep('offline_queued');
               onPaymentConfirmed(methodRef.current);
               return;
@@ -775,7 +781,7 @@ export function POSPaymentModal({
                   />
                 </label>
                 <button
-                  onClick={handleManualConfirm}
+                  onClick={() => handleManualConfirm()}
                   disabled={!manualRef.trim() || createIntent.isPending}
                   className="w-full min-h-12 rounded-xl bg-primary text-primary-foreground font-bold flex items-center justify-center gap-2 disabled:opacity-40 hover:bg-primary/90 transition-colors"
                 >
@@ -832,6 +838,9 @@ export function POSPaymentModal({
                 isOnline={isOnline}
                 onCancel={() => setStep('select')}
                 onClaimed={handleC2BClaimed}
+                onManualCodeConfirm={handleManualConfirm}
+                manualConfirming={createIntent.isPending}
+                showSimulateButton={isDemo}
               />
             )}
 

@@ -266,6 +266,21 @@ export function useClaimC2BPayment() {
   });
 }
 
+// useSimulateC2BPayment triggers treasury-api's SANDBOX-ONLY C2B simulation (Safaricom's own
+// "Simulate C2B Payment" API) so the C2B matcher can be tested end-to-end without a real phone —
+// callers should gate this to the demo tenant (useSubscription().isDemo), matching how it's shown
+// in the terminal; treasury-api independently hard-blocks it against a production credential.
+export function useSimulateC2BPayment() {
+  const tenantID = useTenantID();
+  return useMutation({
+    mutationFn: ({ amount, billRefNumber }: { amount: number; billRefNumber?: string }) =>
+      apiClient.post(`${basePath(tenantID)}/c2b/simulate`, {
+        amount,
+        bill_ref_number: billRefNumber,
+      }),
+  });
+}
+
 // ─── Catalog Items ──────────────────────────────────────────────────────────
 
 export interface CatalogItem {

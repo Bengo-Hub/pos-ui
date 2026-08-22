@@ -10,17 +10,23 @@
  *
  * Clicking the M-Pesa C2B tender mounts this component, which immediately starts actively querying
  * treasury's C2B inbox (already-polling `useListC2BPayments`, amount-scoped) for a payment matching
- * the sale total. A 20s countdown auto-cancels the search if nothing turns up (no dead-end spinner);
- * cashier can cancel any time. As soon as exactly one match lands, the search stops and the
- * customer's payment details (payer name/phone, M-Pesa receipt, amount, time) are shown for a
- * one-tap confirm — claiming (and, server-side, settling) only happens on that explicit confirm, not
- * silently on match. The rare multi-match case (two customers paying the identical amount) falls
- * back to a pick-one list, same as before.
+ * the sale total. A 20s countdown runs while nothing has matched; cashier can cancel any time. As
+ * soon as exactly one match lands, the search stops and the customer's payment details (payer
+ * name/phone, M-Pesa receipt, amount, time) are shown for a one-tap confirm — claiming (and,
+ * server-side, settling) only happens on that explicit confirm, not silently on match. The rare
+ * multi-match case (two customers paying the identical amount) falls back to a pick-one list.
+ *
+ * On timeout (no match in 20s), the panel does NOT auto-close — Daraja's C2B confirmation webhook
+ * can legitimately be slower than 20s, or never land for a payment that genuinely happened. Instead
+ * it offers Retry (restart the search) alongside "Enter M-Pesa Code", which falls back to the
+ * cashier keying in the SMS confirmation code directly (settled via the same `mpesa_manual` tender
+ * the standalone "M-Pesa Code" entry uses) — so a sale is never stuck just because the automatic
+ * match didn't land in time.
  */
 
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { Loader2, X, CheckCircle2, User, Phone, Receipt, Clock } from 'lucide-react';
-import { useListC2BPayments, useClaimC2BPayment, type C2BPayment } from '@/hooks/usePOS';
+import { useEffect, useRef, useState } from 'react';
+import { Loader2, X, CheckCircle2, User, Phone, Receipt, Clock, Hash, RotateCcw, FlaskConical } from 'lucide-react';
+import { useListC2BPayments, useClaimC2BPayment, useSimulateC2BPayment, type C2BPayment } from '@/hooks/usePOS';
 import { formatCurrency } from '@/lib/utils';
 import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api/error-message';
@@ -37,46 +43,79 @@ export interface C2BPaymentMatcherProps {
   isOnline: boolean;
   onCancel: () => void;
   onClaimed: () => void;
+  /** Settles the sale from a manually-entered M-Pesa SMS code (the timeout fallback) — the caller
+   *  implements this via its own existing mpesa_manual tender path (createIntent). Receives the
+   *  trimmed, uppercased code the cashier typed. */
+  onManualCodeConfirm: (code: string) => void;
+  /** True while the caller's onManualCodeConfirm is in flight, so this panel can show a spinner. */
+  manualConfirming?: boolean;
+  /** Shows a "Simulate C2B" trigger (sandbox-only testing aid) — callers gate this to the demo
+   *  tenant (useSubscription().isDemo); treasury-api independently hard-blocks it in production. */
+  showSimulateButton?: boolean;
   /** Compact heading — inline bar uses a tight strip, the settle modal has more room. */
   compact?: boolean;
 }
 
+type Phase = 'searching' | 'timedOut' | 'manualEntry';
+
 export function C2BPaymentMatcher({
-  amount, currency, orderId, tenderId, isOnline, onCancel, onClaimed, compact = false,
+  amount, currency, orderId, tenderId, isOnline, onCancel, onClaimed,
+  onManualCodeConfirm, manualConfirming = false, showSimulateButton = false, compact = false,
 }: C2BPaymentMatcherProps) {
   const c2bQuery = useListC2BPayments(amount, isOnline);
   const claimC2B = useClaimC2BPayment();
+  const simulateC2B = useSimulateC2BPayment();
   const candidates = c2bQuery.data?.candidates ?? [];
 
+  const [phase, setPhase] = useState<Phase>('searching');
+  const [searchGeneration, setSearchGeneration] = useState(0);
   const [secondsLeft, setSecondsLeft] = useState(Math.ceil(SEARCH_TIMEOUT_MS / 1000));
-  const [timedOut, setTimedOut] = useState(false);
+  const [manualCode, setManualCode] = useState('');
   const candidatesRef = useRef(candidates);
   candidatesRef.current = candidates;
-  const onCancelRef = useRef(onCancel);
-  onCancelRef.current = onCancel;
 
-  // 20s auto-close: only while nothing has matched yet. A match found mid-countdown stops the
-  // clock (no point auto-cancelling a search that already succeeded).
+  // 20s search window: only while nothing has matched yet and we're actively searching. A match
+  // found mid-countdown stops the clock (no point timing out a search that already succeeded).
   useEffect(() => {
-    if (candidates.length > 0) return;
+    if (phase !== 'searching' || candidates.length > 0) return;
     const start = Date.now();
     const tick = setInterval(() => {
       const remainingMs = SEARCH_TIMEOUT_MS - (Date.now() - start);
       if (remainingMs <= 0) {
         clearInterval(tick);
         if (candidatesRef.current.length === 0) {
-          setTimedOut(true);
-          toast.info('No matching M-Pesa payment found within 20s.');
-          onCancelRef.current();
+          setPhase('timedOut');
         }
         return;
       }
       setSecondsLeft(Math.ceil(remainingMs / 1000));
     }, 250);
     return () => clearInterval(tick);
-    // Restart the window only when the search target amount changes, not on every candidates poll.
+    // Restart the window on the target amount changing OR an explicit Retry (searchGeneration).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [amount]);
+  }, [amount, searchGeneration, phase]);
+
+  const handleRetry = () => {
+    setSecondsLeft(Math.ceil(SEARCH_TIMEOUT_MS / 1000));
+    setSearchGeneration((g) => g + 1);
+    setPhase('searching');
+  };
+
+  const handleSimulate = () => {
+    simulateC2B.mutate(
+      { amount, billRefNumber: orderId },
+      {
+        onSuccess: () => toast.success('C2B payment simulated — Safaricom will confirm shortly.'),
+        onError: async (e: any) => toast.error(await apiErrorMessage(e, 'Could not simulate the C2B payment.')),
+      },
+    );
+  };
+
+  const handleManualSubmit = () => {
+    const code = manualCode.trim().toUpperCase();
+    if (!code) return;
+    onManualCodeConfirm(code);
+  };
 
   const single: C2BPayment | null = candidates.length === 1 ? candidates[0] : null;
 
@@ -101,11 +140,22 @@ export function C2BPaymentMatcher({
     </div>
   );
 
+  const simulateButton = showSimulateButton ? (
+    <button
+      type="button"
+      onClick={handleSimulate}
+      disabled={simulateC2B.isPending}
+      className="w-full flex items-center justify-center gap-2 py-2 text-xs font-semibold text-amber-700 dark:text-amber-400 bg-amber-500/10 rounded-lg hover:bg-amber-500/15 transition-colors disabled:opacity-50"
+      title="Sandbox testing only — simulates Safaricom sending a real C2B confirmation for this amount"
+    >
+      {simulateC2B.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FlaskConical className="h-3.5 w-3.5" />}
+      Simulate C2B (demo)
+    </button>
+  ) : null;
+
   const wrapClass = compact
     ? 'p-3 border-b border-border bg-green-500/5 space-y-2'
     : 'p-5 space-y-4';
-
-  if (timedOut) return null; // onCancel already fired — parent unmounts this panel.
 
   // ── Exactly one match: show customer + payment details, require an explicit confirm ──────────
   if (single) {
@@ -198,6 +248,79 @@ export function C2BPaymentMatcher({
     );
   }
 
+  // ── Manual M-Pesa code entry (timeout fallback) ───────────────────────────────────────────────
+  if (phase === 'manualEntry') {
+    return (
+      <div className={wrapClass}>
+        {header}
+        <p className="text-xs text-muted-foreground">
+          Enter the M-Pesa confirmation code from the customer&apos;s SMS to close this sale.
+        </p>
+        <label className="block">
+          <span className="text-xs font-medium text-muted-foreground">M-Pesa Code</span>
+          <div className="mt-1 flex items-center gap-2 rounded-lg border border-input bg-background px-3 py-2">
+            <Hash className="h-4 w-4 text-muted-foreground shrink-0" />
+            <input
+              type="text"
+              autoFocus
+              value={manualCode}
+              onChange={(e) => setManualCode(e.target.value.toUpperCase())}
+              onKeyDown={(e) => { if (e.key === 'Enter' && !manualConfirming) handleManualSubmit(); }}
+              placeholder="e.g. QB234ABCDE"
+              className="flex-1 bg-transparent text-sm font-bold tracking-widest uppercase outline-none"
+              maxLength={20}
+            />
+          </div>
+        </label>
+        <button
+          type="button"
+          disabled={!manualCode.trim() || manualConfirming}
+          onClick={handleManualSubmit}
+          className="w-full min-h-11 rounded-xl bg-green-600 text-white font-bold flex items-center justify-center gap-2 disabled:opacity-40 hover:bg-green-700 transition-colors"
+        >
+          {manualConfirming ? <Loader2 className="h-5 w-5 animate-spin" /> : <CheckCircle2 className="h-5 w-5" />}
+          Confirm &amp; Complete Sale
+        </button>
+        <button onClick={() => setPhase('timedOut')} className="w-full py-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
+          ← Back
+        </button>
+      </div>
+    );
+  }
+
+  // ── Timed out: no match after 20s — offer Retry or the manual-code fallback, never a dead end ─
+  if (phase === 'timedOut') {
+    return (
+      <div className={wrapClass}>
+        {header}
+        <div className="rounded-xl bg-muted/40 px-4 py-4 text-center text-sm text-muted-foreground">
+          No matching M-Pesa payment found within 20s. If the customer already paid, Daraja&apos;s
+          confirmation may just be running slow — try again, or enter the SMS code directly.
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={handleRetry}
+            className="flex items-center justify-center gap-2 py-2.5 rounded-xl border border-border font-semibold text-sm hover:bg-accent transition-colors"
+          >
+            <RotateCcw className="h-4 w-4" /> Retry
+          </button>
+          <button
+            type="button"
+            onClick={() => setPhase('manualEntry')}
+            className="flex items-center justify-center gap-2 py-2.5 rounded-xl bg-green-600 text-white font-semibold text-sm hover:bg-green-700 transition-colors"
+          >
+            <Hash className="h-4 w-4" /> Enter M-Pesa Code
+          </button>
+        </div>
+        {simulateButton}
+        <button onClick={onCancel} className="w-full py-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
+          Cancel
+        </button>
+      </div>
+    );
+  }
+
   // ── Still searching ────────────────────────────────────────────────────────────────────────
   return (
     <div className={wrapClass}>
@@ -207,8 +330,16 @@ export function C2BPaymentMatcher({
         <p className="text-sm text-muted-foreground">
           Checking for the customer&apos;s M-Pesa payment of {formatCurrency(amount, currency)}…
         </p>
-        <p className="text-xs text-muted-foreground">Auto-cancelling in {secondsLeft}s if none is found</p>
+        <p className="text-xs text-muted-foreground">{secondsLeft}s left in this search</p>
       </div>
+      <button
+        type="button"
+        onClick={() => setPhase('manualEntry')}
+        className="w-full flex items-center justify-center gap-2 py-2 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors"
+      >
+        <Hash className="h-3.5 w-3.5" /> Already have the M-Pesa code? Enter it instead
+      </button>
+      {simulateButton}
       <button onClick={onCancel} className="w-full py-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
         Cancel
       </button>
