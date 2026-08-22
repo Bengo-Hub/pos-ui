@@ -285,24 +285,6 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
     );
   }, [ensureOrder, createIntent, roundedTotal, tenderId]);
 
-  // C2B timeout fallback: cashier sighted the M-Pesa SMS code but the automatic inbox match never
-  // landed — settle the same way the standalone "M-Pesa Code" tender does (mpesa_manual).
-  const [c2bManualPending, setC2bManualPending] = useState(false);
-  const handleC2BManualCode = useCallback((code: string) => {
-    if (!order) return;
-    setC2bManualPending(true);
-    createIntent.mutate(
-      { orderId: order.orderId, tenderMethod: 'mpesa_manual', amount: roundedTotal, tenderId, externalRef: code },
-      {
-        onSuccess: () => { setC2bManualPending(false); finish(order); },
-        onError: async (e: any) => {
-          setC2bManualPending(false);
-          toast.error(await apiErrorMessage(e, 'Could not verify M-Pesa code. Please check and try again.'));
-        },
-      },
-    );
-  }, [order, createIntent, roundedTotal, tenderId, finish]);
-
   // ── Dispatch a tender button ─────────────────────────────────────────────────
   const onPick = useCallback(async (key: TenderKey) => {
     switch (key) {
@@ -460,8 +442,6 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
           isOnline={isOnline}
           onCancel={reset}
           onClaimed={() => finish(order)}
-          onManualCodeConfirm={handleC2BManualCode}
-          manualConfirming={c2bManualPending}
           showSimulateButton={isDemo}
           compact
         />

@@ -18,10 +18,12 @@
  *
  * On timeout (no match in 20s), the panel does NOT auto-close — Daraja's C2B confirmation webhook
  * can legitimately be slower than 20s, or never land for a payment that genuinely happened. Instead
- * it offers Retry (restart the search) alongside "Enter M-Pesa Code", which falls back to the
- * cashier keying in the SMS confirmation code directly (settled via the same `mpesa_manual` tender
- * the standalone "M-Pesa Code" entry uses) — so a sale is never stuck just because the automatic
- * match didn't land in time.
+ * it offers Retry (restart the search) alongside "Enter M-Pesa Code", which looks the typed code up
+ * directly against the SAME real treasury C2B inbox (fed only by genuine Daraja confirmation
+ * webhooks) via useClaimC2BPayment — NOT the unrelated `mpesa_manual` tender (that standalone
+ * "M-Pesa Code" button elsewhere is intentionally pure trust with no API query; this fallback is the
+ * opposite — it exists specifically to verify the code against a real M-Pesa transaction before
+ * settling, so a fabricated or mistyped code is rejected exactly like an unmatched auto-search).
  */
 
 import { useEffect, useRef, useState } from 'react';
@@ -43,12 +45,6 @@ export interface C2BPaymentMatcherProps {
   isOnline: boolean;
   onCancel: () => void;
   onClaimed: () => void;
-  /** Settles the sale from a manually-entered M-Pesa SMS code (the timeout fallback) — the caller
-   *  implements this via its own existing mpesa_manual tender path (createIntent). Receives the
-   *  trimmed, uppercased code the cashier typed. */
-  onManualCodeConfirm: (code: string) => void;
-  /** True while the caller's onManualCodeConfirm is in flight, so this panel can show a spinner. */
-  manualConfirming?: boolean;
   /** Shows a "Simulate C2B" trigger (sandbox-only testing aid) — callers gate this to the demo
    *  tenant (useSubscription().isDemo); treasury-api independently hard-blocks it in production. */
   showSimulateButton?: boolean;
@@ -60,7 +56,7 @@ type Phase = 'searching' | 'timedOut' | 'manualEntry';
 
 export function C2BPaymentMatcher({
   amount, currency, orderId, tenderId, isOnline, onCancel, onClaimed,
-  onManualCodeConfirm, manualConfirming = false, showSimulateButton = false, compact = false,
+  showSimulateButton = false, compact = false,
 }: C2BPaymentMatcherProps) {
   const c2bQuery = useListC2BPayments(amount, isOnline);
   const claimC2B = useClaimC2BPayment();
@@ -71,6 +67,7 @@ export function C2BPaymentMatcher({
   const [searchGeneration, setSearchGeneration] = useState(0);
   const [secondsLeft, setSecondsLeft] = useState(Math.ceil(SEARCH_TIMEOUT_MS / 1000));
   const [manualCode, setManualCode] = useState('');
+  const [manualError, setManualError] = useState('');
   const candidatesRef = useRef(candidates);
   candidatesRef.current = candidates;
 
@@ -111,10 +108,22 @@ export function C2BPaymentMatcher({
     );
   };
 
+  // Looks the typed code up directly against the real treasury C2B inbox (the SAME claim endpoint
+  // the auto-match "Confirm" button uses) — a fabricated or not-yet-arrived code is rejected here,
+  // never silently trusted.
   const handleManualSubmit = () => {
     const code = manualCode.trim().toUpperCase();
     if (!code) return;
-    onManualCodeConfirm(code);
+    setManualError('');
+    claimC2B.mutate(
+      { transID: code, posOrderId: orderId, amount, tenderId },
+      {
+        onSuccess: onClaimed,
+        onError: async (e: any) => setManualError(
+          await apiErrorMessage(e, 'No confirmed M-Pesa payment found with that code. If the customer just paid, Safaricom’s confirmation may still be arriving — wait a few seconds and try again.')
+        ),
+      },
+    );
   };
 
   const single: C2BPayment | null = candidates.length === 1 ? candidates[0] : null;
@@ -254,7 +263,8 @@ export function C2BPaymentMatcher({
       <div className={wrapClass}>
         {header}
         <p className="text-xs text-muted-foreground">
-          Enter the M-Pesa confirmation code from the customer&apos;s SMS to close this sale.
+          Enter the M-Pesa confirmation code from the customer&apos;s SMS — we&apos;ll verify it against
+          the real M-Pesa transaction before closing this sale.
         </p>
         <label className="block">
           <span className="text-xs font-medium text-muted-foreground">M-Pesa Code</span>
@@ -264,24 +274,27 @@ export function C2BPaymentMatcher({
               type="text"
               autoFocus
               value={manualCode}
-              onChange={(e) => setManualCode(e.target.value.toUpperCase())}
-              onKeyDown={(e) => { if (e.key === 'Enter' && !manualConfirming) handleManualSubmit(); }}
+              onChange={(e) => { setManualCode(e.target.value.toUpperCase()); setManualError(''); }}
+              onKeyDown={(e) => { if (e.key === 'Enter' && !claimC2B.isPending) handleManualSubmit(); }}
               placeholder="e.g. QB234ABCDE"
               className="flex-1 bg-transparent text-sm font-bold tracking-widest uppercase outline-none"
               maxLength={20}
             />
           </div>
         </label>
+        {manualError && (
+          <p className="text-xs text-red-600 dark:text-red-400">{manualError}</p>
+        )}
         <button
           type="button"
-          disabled={!manualCode.trim() || manualConfirming}
+          disabled={!manualCode.trim() || claimC2B.isPending}
           onClick={handleManualSubmit}
           className="w-full min-h-11 rounded-xl bg-green-600 text-white font-bold flex items-center justify-center gap-2 disabled:opacity-40 hover:bg-green-700 transition-colors"
         >
-          {manualConfirming ? <Loader2 className="h-5 w-5 animate-spin" /> : <CheckCircle2 className="h-5 w-5" />}
-          Confirm &amp; Complete Sale
+          {claimC2B.isPending ? <Loader2 className="h-5 w-5 animate-spin" /> : <CheckCircle2 className="h-5 w-5" />}
+          Verify &amp; Complete Sale
         </button>
-        <button onClick={() => setPhase('timedOut')} className="w-full py-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
+        <button onClick={() => { setManualError(''); setPhase('timedOut'); }} className="w-full py-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
           ← Back
         </button>
       </div>

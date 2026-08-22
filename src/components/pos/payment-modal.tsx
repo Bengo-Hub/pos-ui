@@ -218,14 +218,15 @@ export function POSPaymentModal({
     );
   }, [cashTendered, roundedTotal, orderId, tenderId, tenantSlug, isOnline, createIntent, onPaymentConfirmed, queueOfflinePayment]);
 
-  // "M-Pesa Code" tender: the customer paid via Paybill/Till and the cashier sights + enters the
-  // M-Pesa confirmation code. Recorded as 'mpesa_manual' (NOT the old bare 'manual', which every
-  // method breakdown rendered as an unexplained "manual" bucket — pos-api still accepts the legacy
-  // string from queued offline payments and canonicalizes it).
-  const handleManualConfirm = useCallback(async (codeOverride?: string) => {
-    // codeOverride lets the C2B matcher's timeout fallback ("Enter M-Pesa Code") settle via this
-    // exact same path with a code that never touched the `manualRef` input state.
-    const code = (codeOverride ?? manualRef).trim();
+  // "M-Pesa Code" tender: standalone, cashier-trust entry (NOT the C2B matcher's manual-code
+  // fallback, which instead verifies the code against the real treasury C2B inbox — see
+  // c2b-payment-matcher.tsx). This one intentionally never queries M-Pesa: the customer paid via
+  // Paybill/Till and the cashier sights + types the SMS confirmation code as-is. Recorded as
+  // 'mpesa_manual' (NOT the old bare 'manual', which every method breakdown rendered as an
+  // unexplained "manual" bucket — pos-api still accepts the legacy string from queued offline
+  // payments and canonicalizes it).
+  const handleManualConfirm = useCallback(async () => {
+    const code = manualRef.trim();
     methodRef.current = 'mpesa_manual';
     if (!code) return;
 
@@ -838,8 +839,6 @@ export function POSPaymentModal({
                 isOnline={isOnline}
                 onCancel={() => setStep('select')}
                 onClaimed={handleC2BClaimed}
-                onManualCodeConfirm={handleManualConfirm}
-                manualConfirming={createIntent.isPending}
                 showSimulateButton={isDemo}
               />
             )}
