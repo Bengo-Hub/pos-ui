@@ -3,8 +3,9 @@
 /**
  * GoDigital-style inline POS action bar — renders the payment methods directly on the order page
  * (no separate "select a method" modal). Immediate tenders (Cash, Card/PDQ, Credit) capture inline;
- * online gateway tenders (M-Pesa Express, Paystack card, Wallet) hand off to the treasury pay flow;
- * M-Pesa Paybill/Till reconciles via the C2B match panel; Room charge posts to a guest folio.
+ * online gateway tenders (M-Pesa STK Push, Paystack card, Wallet) hand off to the treasury pay flow;
+ * M-Pesa C2B (customer paid the till directly) reconciles via the inline match panel; Room charge
+ * posts to a guest folio.
  *
  * The bar owns the full settle flow but never creates the order itself — the page provides
  * `createOrderAsync()` (which runs all order validation + creation) so the bar can settle against a
@@ -14,16 +15,18 @@
 
 import { TreasuryPaymentModal } from '@bengo-hub/shared-ui-lib';
 import { cn } from '@/lib/utils';
+import { MpesaLogo } from '@/components/pos/mpesa-logo';
+import { C2BPaymentMatcher } from '@/components/pos/c2b-payment-matcher';
 import {
-  Banknote, ChefHat, Coins, CreditCard, FileText, Gift, Hash, Landmark, Loader2, NotebookPen,
-  Building2, Smartphone, Truck, Wallet, SplitSquareHorizontal, X, CheckCircle2,
+  Banknote, ChefHat, Coins, CreditCard, FileText, Gift, Hash, Loader2, NotebookPen,
+  Building2, Truck, Wallet, SplitSquareHorizontal, X, CheckCircle2,
 } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
-import { useCreatePaymentIntent, useListC2BPayments, useClaimC2BPayment } from '@/hooks/usePOS';
+import { useCreatePaymentIntent } from '@/hooks/usePOS';
 import { formatCurrency } from '@/lib/utils';
 import { useEffectiveOnline } from '@/lib/connectivity';
-import { savePendingPayment, getOfflineOrderByLocalId } from '@/lib/db/pos-db';
+import { queueOfflinePayment as queueOfflinePaymentRecord } from '@/lib/pos/offline-payment';
 import { useCashDrawer } from '@/hooks/useCashDrawer';
 import { CreditSaleDetailsModal, type CreditSaleDetails } from '@/components/pos/credit-sale-details-modal';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
@@ -104,8 +107,8 @@ function tenderIcon(key: TenderKey) {
     case 'cash': return Banknote;
     case 'card_pdq': return CreditCard;
     case 'card_online': return CreditCard;
-    case 'mpesa_stk': return Smartphone;
-    case 'mpesa_c2b': return Landmark;
+    case 'mpesa_stk': return MpesaLogo;
+    case 'mpesa_c2b': return MpesaLogo;
     case 'wallet': return Wallet;
     case 'on_account': return NotebookPen;
     case 'customer_credit': return Coins;
@@ -213,24 +216,12 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
     const method = tenderMethodFor(key);
 
     // Offline: the order is already queued in IndexedDB (createOrderAsync). Queue the payment
-    // too — routed by local_order_id when the order itself is offline — so the sync worker
-    // records it after the order syncs. Without this, offline cash would create an order but
-    // never capture payment.
+    // too (shared queueOfflinePayment — see [[offline-payment.ts]]) so the sync worker records it
+    // after the order syncs. Without this, offline cash would create an order but never capture
+    // payment.
     const queueOffline = async () => {
       try {
-        const localOrder = await getOfflineOrderByLocalId(ord.orderId);
-        await savePendingPayment({
-          server_order_id: localOrder ? undefined : ord.orderId,
-          local_order_id: localOrder ? ord.orderId : undefined,
-          tender_id: tenderId,
-          tender_method: method,
-          amount: roundedTotal,
-          currency,
-          external_ref: externalRef,
-          tenant_slug: tenantSlug,
-          created_at: new Date().toISOString(),
-          synced: false,
-        });
+        await queueOfflinePaymentRecord({ orderId: ord.orderId, tenderId, method, amount: roundedTotal, currency, tenantSlug, externalRef });
         autoOpenOnSettle(method);
         toast.success('Saved offline — will sync when back online.');
         finish(ord);
@@ -440,7 +431,7 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
         />
       )}
       {capture === 'mpesa_c2b' && order && (
-        <C2BCapture
+        <C2BPaymentMatcher
           amount={roundedTotal}
           currency={currency}
           orderId={order.orderId}
@@ -448,6 +439,7 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
           isOnline={isOnline}
           onCancel={reset}
           onClaimed={() => finish(order)}
+          compact
         />
       )}
       {capture === 'on_account' && (
@@ -713,50 +705,6 @@ function CardRefCapture({ total, currency, value, requireRef, onChange, busy, on
         {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <CheckCircle2 className="h-5 w-5" />}
         Confirm Card Payment
       </button>
-    </div>
-  );
-}
-
-// ── Inline M-Pesa Paybill/Till (C2B) reconciliation ─────────────────────────────
-function C2BCapture({ amount, currency, orderId, tenderId, isOnline, onCancel, onClaimed }: {
-  amount: number; currency: string; orderId: string; tenderId: string; isOnline: boolean; onCancel: () => void; onClaimed: () => void;
-}) {
-  const c2bQuery = useListC2BPayments(amount, isOnline);
-  const claimC2B = useClaimC2BPayment();
-  const candidates = c2bQuery.data?.candidates ?? [];
-  return (
-    <div className="p-3 border-b border-border bg-green-500/5 space-y-2">
-      <div className="flex items-center justify-between">
-        <span className="text-sm font-bold">M-Pesa Paybill / Till · {formatCurrency(amount, currency)}</span>
-        <button onClick={onCancel} className="h-7 w-7 rounded-lg flex items-center justify-center hover:bg-accent"><X className="h-4 w-4" /></button>
-      </div>
-      <p className="text-xs text-muted-foreground">Match the customer&apos;s payment to this sale.</p>
-      {c2bQuery.isLoading ? (
-        <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-green-600" /></div>
-      ) : candidates.length === 0 ? (
-        <p className="rounded-lg bg-muted/40 px-3 py-3 text-center text-xs text-muted-foreground">
-          No matching payment yet — it appears here automatically once received.
-        </p>
-      ) : (
-        <div className="space-y-1.5 max-h-44 overflow-y-auto">
-          {candidates.map((c: any) => (
-            <button
-              key={c.trans_id} type="button" disabled={claimC2B.isPending}
-              onClick={() => claimC2B.mutate(
-                { transID: c.trans_id, posOrderId: orderId, amount, tenderId },
-                { onSuccess: onClaimed, onError: async (e: any) => toast.error(await apiErrorMessage(e, 'Could not match that payment.')) },
-              )}
-              className="w-full flex items-center justify-between gap-3 rounded-lg border border-border hover:border-green-500/50 px-3 py-2 text-left disabled:opacity-50"
-            >
-              <span className="min-w-0">
-                <span className="block text-sm font-semibold truncate">{c.payer_name || c.msisdn || 'M-Pesa payer'}</span>
-                <span className="block text-[10px] text-muted-foreground truncate">{c.trans_id}</span>
-              </span>
-              <span className="text-sm font-bold tabular-nums shrink-0">{formatCurrency(parseFloat(String(c.amount)), currency)}</span>
-            </button>
-          ))}
-        </div>
-      )}
     </div>
   );
 }

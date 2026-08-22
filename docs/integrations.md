@@ -1,6 +1,9 @@
 # pos-ui — Integrations
 
-**Last updated:** 2026-05-09  
+**Last updated:** 2026-08-22  
+**Audit note (2026-08-22):** "Payment Flows" below rewritten — the Sprint-6 design (raw `POST /orders/{id}/payments` + client poll, several flows flagged "❌ not yet wired") was superseded long ago by the intent/gateway-handoff architecture actually shipped (`useCreatePaymentIntent` → treasury payment intent → `TreasuryPaymentModal` hosted pay page). Also: centralized the M-Pesa STK/C2B tender logic that had drifted into two separate copies (`payment-modal.tsx` modal-style settle flow and `terminal/inline-payment-bar.tsx` inline action bar) into shared components — `components/pos/c2b-payment-matcher.tsx` (C2B query/timeout/claim) and `lib/pos/offline-payment.ts` (offline payment queueing) — and added the M-Pesa C2B active-query flow documented below.
+**Audit note (2026-08-22, cont'd):** Every M-Pesa tender button (POS terminal bar, settle modal, C2B matcher) now renders the official M-Pesa mark — `public/mpesa-logo.svg` (sourced from Wikimedia Commons, public domain per Commons' own assessment; identical file duplicated into `finance-service/treasury-ui/public/`), rendered via `components/pos/mpesa-logo.tsx`. Labels no longer repeat "M-Pesa" next to that icon: the sibling STK/C2B buttons are just "STK Push" / "C2B" (was "M-Pesa STK Push" / "M-Pesa C2B") — applied uniformly in `terminal-actions.ts`, `payment-modal.tsx`, `c2b-payment-matcher.tsx`, and the transaction-history label map in `terminal/toolbar-modals.tsx`. treasury-ui's hosted `/pay` page and `MpesaPaymentModal` got the matching treatment (see that repo's own docs).
+
 **Audit note (2026-05-09):** M-Pesa and card payment flows expanded to show full pos-api→treasury-api→NATS chain. eTIMS QR code origin clarified (treasury-api → pos-api → pos-ui, not direct). Offline payment constraints documented.
 
 ---
@@ -139,49 +142,68 @@ For void, refund, and drawer close: if current user lacks the required permissio
 
 ## Payment Flows
 
-### Cash Payment
-1. pos-ui: `POST /orders/{id}/payments` `{ tender_id: 'cash', amount }`
-2. pos-api: records immediately, auto-completes order
-3. pos-ui: shows change due, clears cart
+The inline terminal action bar (`components/pos/terminal/inline-payment-bar.tsx`, the primary
+GoDigital-style settle surface) and the modal-style settle flow (`components/pos/payment-modal.tsx`,
+used for dine-in bill settlement, online orders, and split-payment lines) both dispatch tenders
+through `terminal-actions.ts`'s `TenderKey`/`tenderMethodFor()`/`paymentActionsFor()` — the single
+source of truth for which tenders exist, their labels/icons, and which `tender_method` string
+pos-api expects. Every tender ultimately settles via `useCreatePaymentIntent()` (`POST
+/{tenant}/pos/orders/{id}/payments/intent`), which pos-api turns into a treasury `PaymentIntent`.
 
-### M-Pesa STK Push
-1. pos-ui: `POST /orders/{id}/payments` `{ tender_id: 'mpesa', amount, phone }`
-2. pos-api: calls treasury-api S2S → creates payment intent → Daraja STK Push triggered by treasury-api
-3. pos-api: stores `intent_id` in `pos_payments.external_reference`, returns `{ status: "pending", intent_id, mpesa_request_id }` to pos-ui
-4. pos-ui: shows "Waiting for M-Pesa confirmation..." spinner, polls `GET /orders/{id}/payments` every 3s
-5. treasury-api: receives M-Pesa callback from Daraja → publishes `treasury.payment.success` NATS event
-6. pos-api: NATS subscriber sets `pos_payments.status = "completed"`, auto-completes order if fully paid
-7. pos-ui: poll detects `pos_payments[0].status === "completed"` → success screen
+### Cash / Card (PDQ) / On Account / Store Credit / Loyalty Points
+Immediate-settle tenders: `createIntent.mutate({ orderId, tenderMethod, amount, tenderId, externalRef? })`
+records the payment synchronously (no gateway round-trip) and completes the order. Offline
+(`navigator.onLine === false`): queued via the shared `queueOfflinePayment()`
+(`lib/pos/offline-payment.ts`) into IndexedDB (`savePendingPayment`), synced later by the offline
+sync worker. Only these settle-at-the-till tenders support offline queueing.
 
-**Poll field to check:** `payments[0].status` (values: `pending` | `completed` | `failed`)
+### M-Pesa STK Push (`tender_method: "mpesa"`, `TenderKey: "mpesa_stk"`)
+1. pos-ui: `useCreatePaymentIntent()` → pos-api → treasury-api creates a `PaymentIntent`, returns
+   `{ payment_intent_id, initiate_url }`.
+2. pos-ui: renders `<TreasuryPaymentModal>` (`@bengo-hub/shared-ui-lib`) as an iframe pointed at
+   treasury-ui's hosted `/pay?intent_id=…&initiate_url=…&gateways=mpesa&embed=true` page.
+3. treasury-ui `/pay`: with `allowedMethods` narrowed to exactly one gateway (the normal POS case),
+   auto-skips the "choose how you want to pay" list and opens `MpesaPaymentModal` directly — collects
+   phone, `POST`s `initiate_url` (Daraja STK Push, `treasury-api/internal/modules/gateways/mpesa.go`).
+4. pos-ui: `usePaymentStream(orderId)` (SSE) fires as soon as pos-api records the payment — no client
+   polling needed; `treasury-ui`'s own modal also polls the intent status endpoint as a fallback.
+5. On confirm: `postMessage({ type: 'treasury:payment_confirmed', … })` → parent modal → order settled.
 
-**Offline behaviour:** M-Pesa STK push requires network connectivity. When `navigator.onLine === false`, the payment modal must disable the M-Pesa button and show "M-Pesa requires internet connection." Only cash payments may be queued offline.
+**Offline behaviour:** requires network — the tender button is hidden/disabled when offline
+(`paymentActionsFor()`'s `online: true` filter).
 
-**eTIMS QR code on receipt:** After order completion, poll `GET /orders/{id}` for `etims_invoice_number` and `etims_qr_code_url` fields. These are populated asynchronously when treasury-api signs the invoice. If null after 5 seconds, print receipt without QR code — do not block the payment flow. The QR code data originates in treasury-api and is relayed through pos-api; pos-ui does not call treasury-api directly.
+**eTIMS QR code on receipt:** After order completion, poll `GET /orders/{id}` for
+`etims_invoice_number` and `etims_qr_code_url`. Populated asynchronously when treasury-api signs the
+invoice; if still null after 5s, print without the QR code rather than blocking the flow.
 
-**Status:** ❌ S2S treasury intent call not yet wired in pos-api (Sprint 6)
+### M-Pesa C2B (`tender_method: "mpesa"`, `TenderKey: "mpesa_c2b"`) — customer paid the till directly
+For customers who pay to the tenant's Paybill/Till themselves (no STK prompt). Clicking the tender
+mounts the shared `<C2BPaymentMatcher>` (`components/pos/c2b-payment-matcher.tsx`), which:
+1. Immediately starts actively querying `GET /{tenant}/pos/c2b/payments?status=unreconciled&amount={total}`
+   (`useListC2BPayments`, polls every 4s) — this proxies treasury-api's C2B inbox, itself fed by
+   Daraja's Confirmation webhook (`POST /webhooks/mpesa/confirmation`, persisted to
+   `mpesa_c2b_inbox`: `trans_id`, `amount`, `msisdn`, `payer_name`, `trans_time`, `bill_ref_number`).
+2. Shows a live countdown and auto-cancels (closes back to tender selection, with a toast) if no
+   match lands within **20s**. A Cancel button aborts the search at any time.
+3. On exactly one match: stops searching and shows the customer's payment details (payer name,
+   phone, M-Pesa receipt, amount, time — parsed via `lib/pos/c2b-format.ts`'s `formatTransTime()`)
+   with an explicit **Confirm & Complete Sale** button — claiming never happens silently on match.
+4. Confirm → `POST /{tenant}/pos/c2b/payments/{transID}/claim` — pos-api atomically claims the row in
+   treasury (race-safe: only succeeds while still `unreconciled`) AND calls `RecordPayment` to settle
+   the POS order server-side in one request.
+5. The rare multi-match case (two customers paying the identical amount) falls back to a pick-one list.
 
-### Card (Paystack)
-1. pos-ui: `POST /orders/{id}/payments` `{ tender_id: 'card', amount }`
-2. pos-api: calls treasury-api S2S → Paystack intent → returns `authorization_url`
-3. pos-api: stores `intent_id` in `pos_payments.external_reference`, returns `{ status: "pending", authorization_url }` to pos-ui
-4. pos-ui: opens `authorization_url` in a modal/new tab (Paystack checkout)
-5. On Paystack callback: treasury-api receives webhook → publishes `treasury.payment.success`
-6. pos-api: NATS subscriber sets `pos_payments.status = "completed"`, auto-completes order
+### Card / Wallet / MTN Mobile Money / Airtel Money (Paystack-backed gateways)
+Same `TreasuryPaymentModal` handoff as M-Pesa STK Push above, with `allowedMethods` set to the
+relevant gateway (`card`, `wallet`, `mtn_momo`, `airtel_money`).
 
-**Offline behaviour:** Card requires network connectivity. Disable card button when `navigator.onLine === false`.
-
-**Status:** ❌ Not yet wired (Sprint 6)
-
-### Room Charge
-1. pos-ui: `POST /orders/{id}/payments` `{ tender_id: 'room_charge', room_id, room_guest_id, amount }`
-2. pos-api: posts charge to `room_folio_items` (no treasury call)
-3. pos-ui: order completed, folio updated
-
-**Status:** ❌ Room charge tender type not yet implemented
+### Room Charge (hospitality)
+`POST /hotel/rooms/{roomId}/folio/charges` via `hotelApi.postFolioCharge()` — posts directly to the
+guest folio, no treasury intent involved; order is marked settled once the folio post succeeds.
 
 ### Split Payment
-1. pos-ui: multiple `POST /orders/{id}/payments` calls for different tenders
+`split-payment-modal.tsx` wraps multiple `<POSPaymentModal>` instances, one per split line, each
+settling independently through the flows above for its own (smaller) amount.
 2. pos-api: accumulates `paid_amount`; order completed when `paid_amount >= total_amount`
 3. pos-ui: shows remaining balance after each tender; completes on balance = 0
 

@@ -226,6 +226,8 @@ export interface C2BPayment {
   bill_ref_number?: string;
   msisdn?: string;
   payer_name?: string;
+  /** Daraja TransTime, raw "yyyymmddHHMMSS" — format with formatTransTime() before display. */
+  trans_time?: string;
   status: string;
 }
 

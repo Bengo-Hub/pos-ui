@@ -2,6 +2,8 @@
 
 import { TreasuryPaymentModal } from '@bengo-hub/shared-ui-lib';
 import { cn } from '@/lib/utils';
+import { MpesaLogo } from '@/components/pos/mpesa-logo';
+import { C2BPaymentMatcher } from '@/components/pos/c2b-payment-matcher';
 import {
   Banknote,
   Building2,
@@ -12,7 +14,6 @@ import {
   Gift,
   Sparkles,
   Hash,
-  Landmark,
   Loader2,
   NotebookPen,
   Smartphone,
@@ -24,12 +25,12 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
-import { useCreatePaymentIntent, useListC2BPayments, useClaimC2BPayment } from '@/hooks/usePOS';
+import { useCreatePaymentIntent } from '@/hooks/usePOS';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { formatCurrency } from '@/lib/utils';
 import { useEffectiveOnline } from '@/lib/connectivity';
 import { usePaymentStream } from '@/hooks/usePaymentStream';
-import { savePendingPayment, getOfflineOrderByLocalId } from '@/lib/db/pos-db';
+import { queueOfflinePayment as queueOfflinePaymentRecord } from '@/lib/pos/offline-payment';
 import { usePOSGateways } from '@/hooks/use-pos-gateways';
 import { CreditSaleDetailsModal, type CreditSaleDetails } from '@/components/pos/credit-sale-details-modal';
 import { ComplimentarySaleModal } from '@/components/pos/complimentary-sale-modal';
@@ -141,23 +142,13 @@ export function POSPaymentModal({
   // so the async treasury/SSE confirmation path reads the latest value without re-renders.
   const methodRef = useRef<string>('');
 
-  // M-Pesa C2B (paybill/till): poll unreconciled inbox payments matching the active amount, then
-  // claim + settle the one the cashier picks.
-  const c2bQuery = useListC2BPayments(roundedTotal, open && step === 'c2b' && isOnline);
-  const claimC2B = useClaimC2BPayment();
-  const handleClaimC2B = useCallback(
-    (transID: string) => {
-      methodRef.current = 'mpesa';
-      claimC2B.mutate(
-        { transID, posOrderId: orderId, amount: roundedTotal, tenderId },
-        {
-          onSuccess: () => { setStep('confirmed'); onPaymentConfirmed(methodRef.current); },
-          onError: (err: any) => { setErrorMsg(err?.message ?? 'Could not claim that payment.'); setStep('failed'); },
-        }
-      );
-    },
-    [claimC2B, orderId, roundedTotal, tenderId, onPaymentConfirmed]
-  );
+  // M-Pesa C2B (customer paid the till directly): the shared C2BPaymentMatcher owns the active
+  // query/timeout/claim flow — this just reacts to its onClaimed callback.
+  const handleC2BClaimed = useCallback(() => {
+    methodRef.current = 'mpesa';
+    setStep('confirmed');
+    onPaymentConfirmed('mpesa');
+  }, [onPaymentConfirmed]);
 
   useEffect(() => {
     if (open) {
@@ -177,26 +168,11 @@ export function POSPaymentModal({
     }
   }, [open]);
 
-  // Queue an offline payment, routing it to the right key: if `orderId` is an offline
-  // (not-yet-synced) order, attach via local_order_id so the sync worker remaps it to the
-  // server order id once the order syncs; otherwise it is a server order paid offline.
+  // Queue an offline payment via the shared queueOfflinePaymentRecord (see [[offline-payment.ts]]).
   const queueOfflinePayment = useCallback(
-    async (method: string, externalRef?: string) => {
-      const localOrder = await getOfflineOrderByLocalId(orderId);
-      await savePendingPayment({
-        server_order_id: localOrder ? undefined : orderId,
-        local_order_id: localOrder ? orderId : undefined,
-        tender_id: tenderId,
-        tender_method: method,
-        amount: roundedTotal,
-        currency,
-        external_ref: externalRef,
-        tenant_slug: tenantSlug,
-        created_at: new Date().toISOString(),
-        synced: false,
-      });
-    },
-    [orderId, tenderId, roundedTotal, tenantSlug],
+    (method: string, externalRef?: string) =>
+      queueOfflinePaymentRecord({ orderId, tenderId, method, amount: roundedTotal, currency, tenantSlug, externalRef }),
+    [orderId, tenderId, roundedTotal, currency, tenantSlug],
   );
 
   const handleCashConfirm = useCallback(async () => {
@@ -619,10 +595,10 @@ export function POSPaymentModal({
                     <div className="flex flex-wrap gap-2.5">
                       {gateways?.mpesa && (
                         <PayBadge
-                          icon={<Smartphone className="h-4 w-4" />}
+                          icon={<MpesaLogo className="h-4 w-4 rounded" />}
                           color="text-green-600"
                           bg="bg-green-500/10"
-                          label="M-Pesa STK"
+                          label="STK Push"
                           sub="Prompt to phone"
                           disabled={false}
                           loading={createIntent.isPending}
@@ -631,11 +607,11 @@ export function POSPaymentModal({
                       )}
                       {gateways?.mpesa && (
                         <PayBadge
-                          icon={<Landmark className="h-4 w-4" />}
+                          icon={<MpesaLogo className="h-4 w-4 rounded" />}
                           color="text-green-700"
                           bg="bg-green-500/10"
-                          label="M-Pesa Paybill"
-                          sub="Match till / paybill"
+                          label="C2B"
+                          sub="Customer paid the till"
                           disabled={false}
                           loading={false}
                           onClick={() => setStep('c2b')}
@@ -846,54 +822,17 @@ export function POSPaymentModal({
               </div>
             )}
 
-            {/* ── M-Pesa C2B (paybill / till reconciliation) ───────────────── */}
+            {/* ── M-Pesa C2B (customer paid the till directly) ────────────── */}
             {step === 'c2b' && (
-              <div className="p-5 space-y-4">
-                <p className="text-sm text-muted-foreground">
-                  Match the customer&apos;s M-Pesa paybill/till payment to this sale. Showing unreconciled
-                  payments of {fmt(roundedTotal)}.
-                </p>
-                {c2bQuery.isLoading ? (
-                  <div className="flex justify-center py-8">
-                    <Loader2 className="h-5 w-5 animate-spin text-primary" />
-                  </div>
-                ) : (c2bQuery.data?.candidates?.length ?? 0) === 0 ? (
-                  <div className="rounded-xl bg-muted/40 px-4 py-6 text-center text-sm text-muted-foreground">
-                    No matching payment yet. Ask the customer to pay to your paybill/till — it will
-                    appear here automatically.
-                  </div>
-                ) : (
-                  <div className="space-y-2 max-h-72 overflow-y-auto">
-                    {c2bQuery.data!.candidates.map((c) => (
-                      <button
-                        key={c.trans_id}
-                        type="button"
-                        disabled={claimC2B.isPending}
-                        onClick={() => handleClaimC2B(c.trans_id)}
-                        className="w-full flex items-center justify-between gap-3 rounded-xl border border-border hover:border-primary/50 hover:bg-accent px-4 py-3 text-left transition-colors disabled:opacity-50"
-                      >
-                        <div className="min-w-0">
-                          <p className="font-semibold text-sm truncate">{c.payer_name || c.msisdn || 'M-Pesa payer'}</p>
-                          <p className="text-xs text-muted-foreground truncate">
-                            {c.trans_id}{c.bill_ref_number ? ` · ${c.bill_ref_number}` : ''}
-                          </p>
-                        </div>
-                        <span className="font-bold text-sm tabular-nums shrink-0">
-                          {fmt(parseFloat(String(c.amount)))}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-                {claimC2B.isPending && (
-                  <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
-                    <Loader2 className="h-4 w-4 animate-spin" /> Settling…
-                  </div>
-                )}
-                <button onClick={() => setStep('select')} className="w-full py-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
-                  ← Back
-                </button>
-              </div>
+              <C2BPaymentMatcher
+                amount={roundedTotal}
+                currency={currency}
+                orderId={orderId}
+                tenderId={tenderId}
+                isOnline={isOnline}
+                onCancel={() => setStep('select')}
+                onClaimed={handleC2BClaimed}
+              />
             )}
 
             {/* ── Room select ───────────────────────────────────────────── */}
