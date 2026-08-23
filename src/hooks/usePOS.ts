@@ -134,7 +134,16 @@ export function useExpenseCategories() {
 }
 
 /** Chart-of-accounts (from treasury, proxied by pos-api) for the Add-Expense "Payment Account"
- *  dropdown. Degrades to an empty list when none are configured. */
+ *  dropdown. Degrades to an empty list when none are configured.
+ *
+ * Filtered to asset-type accounts only — the endpoint returns the FULL chart of accounts
+ * (revenue/expense/liability/equity included), and without this filter a cashier could pick
+ * something like "4400 Sales Revenue" as the account an expense payment left from, which the
+ * backend would post literally with no validation. Mirrors the same asset-only filter
+ * treasury-ui's own MarkExpensePaidModal/NewExpenditurePage apply client-side. Real bank/mobile-
+ * money/cash accounts (finance-service/treasury-api's account_type-tagged FinancialAccounts) each
+ * get their own dedicated asset-type leaf, so they show up here automatically once created —
+ * no separate wiring needed. */
 export function useExpenseAccounts() {
   const tenantID = useTenantID();
   return useQuery({
@@ -145,7 +154,7 @@ export function useExpenseAccounts() {
       ),
     enabled: !!tenantID,
     staleTime: 5 * 60_000,
-    select: (res) => res.accounts ?? [],
+    select: (res) => (res.accounts ?? []).filter((a) => a.type === 'asset'),
   });
 }
 
