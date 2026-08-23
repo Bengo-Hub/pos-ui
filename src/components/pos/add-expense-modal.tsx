@@ -126,6 +126,10 @@ export function AddExpenseModal({ open, onClose }: AddExpenseModalProps) {
       toast.error('Enter an expense note and a positive total amount');
       return;
     }
+    if (!accountId) {
+      toast.error('Select which account this expense was paid from');
+      return;
+    }
     try {
       await addExpense.mutateAsync({
         description: note.trim(),
