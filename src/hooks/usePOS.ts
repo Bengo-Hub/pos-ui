@@ -158,6 +158,32 @@ export function useExpenseAccounts() {
   });
 }
 
+/** Creates a real, ledger-linked account (bank/mobile_money/cash) inline — backs the Add-Expense
+ *  form's "+ Create account" action (shared-ui-lib's AccountForm). Invalidates the accounts list
+ *  on success so the new account appears in the "Payment Account" dropdown immediately. */
+export function useCreateExpenseAccount() {
+  const tenantID = useTenantID();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: {
+      account_type: string;
+      account_name: string;
+      bank_name?: string;
+      account_number?: string;
+      bank_branch?: string;
+      branch_code?: string;
+      currency?: string;
+      opening_balance?: number;
+    }) => apiClient.post<{ id: string; account_name: string; ledger_account_id?: string }>(
+      `${basePath(tenantID)}/expenses/accounts`,
+      data,
+    ),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['pos-expense-accounts', tenantID] });
+    },
+  });
+}
+
 export interface ExpenseSupplier {
   id: string;
   name: string;

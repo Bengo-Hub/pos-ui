@@ -11,10 +11,12 @@ import {
   useAddExpense,
   useExpenseCategories,
   useExpenseAccounts,
+  useCreateExpenseAccount,
   useExpenseSuppliers,
   useExpenseNumberPreview,
 } from '@/hooks/usePOS';
 import { TypeaheadInput } from '@/components/ui/typeahead-input';
+import { AccountForm, EMPTY_ACCOUNT_FORM, isAccountFormValid, SUPPORTED_CURRENCIES, CURRENCY_META } from '@bengo-hub/shared-ui-lib/payments';
 
 interface AddExpenseModalProps {
   open: boolean;
@@ -57,6 +59,9 @@ export function AddExpenseModal({ open, onClose }: AddExpenseModalProps) {
   const addExpense = useAddExpense();
   const categories = useExpenseCategories();
   const accounts = useExpenseAccounts();
+  const createAccount = useCreateExpenseAccount();
+  const [showCreateAccount, setShowCreateAccount] = useState(false);
+  const [newAccountForm, setNewAccountForm] = useState(EMPTY_ACCOUNT_FORM);
   // Debounce "expense for" into the supplier search so suggestions come from the backend's
   // filtered match rather than only ever the first unfiltered page — a supplier whose name
   // sorts past that first page previously never showed up in the typeahead at all.
@@ -369,6 +374,64 @@ export function AddExpenseModal({ open, onClose }: AddExpenseModalProps) {
                       {selectedAccount?.name}&apos;s balance ({Number(selectedAccount?.balance).toLocaleString('en-KE', { minimumFractionDigits: 2 })} {selectedAccount?.currency}) doesn&apos;t fully cover this amount — consider a different account.
                     </span>
                   </p>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setShowCreateAccount((v) => !v)}
+                  className="mt-1.5 text-[11px] font-medium text-primary hover:underline"
+                >
+                  {showCreateAccount ? 'Cancel' : '+ Create account'}
+                </button>
+                {showCreateAccount && (
+                  <div className="mt-2 rounded-xl border border-border bg-accent/5 p-3 space-y-2">
+                    <AccountForm
+                      value={newAccountForm}
+                      onChange={setNewAccountForm}
+                      currencies={SUPPORTED_CURRENCIES}
+                      currencyLabel={(c) => `${c} — ${CURRENCY_META[c]?.name ?? c}`}
+                      hideTypeSelector={false}
+                    />
+                    <div className="flex justify-end gap-2 pt-1">
+                      <button
+                        type="button"
+                        className="px-3 py-1.5 rounded-lg border border-border text-xs font-medium hover:bg-accent/30"
+                        onClick={() => { setShowCreateAccount(false); setNewAccountForm(EMPTY_ACCOUNT_FORM); }}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        disabled={!isAccountFormValid(newAccountForm) || createAccount.isPending}
+                        className="px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-medium disabled:opacity-50"
+                        onClick={() => {
+                          createAccount.mutate(
+                            {
+                              account_type: newAccountForm.account_type,
+                              account_name: newAccountForm.account_name,
+                              bank_name: newAccountForm.bank_name || undefined,
+                              account_number: newAccountForm.account_number || undefined,
+                              bank_branch: newAccountForm.bank_branch || undefined,
+                              branch_code: newAccountForm.branch_code || undefined,
+                              currency: newAccountForm.currency,
+                              opening_balance: newAccountForm.opening_balance ? parseFloat(newAccountForm.opening_balance) : undefined,
+                            },
+                            {
+                              onSuccess: (created) => {
+                                toast.success('Account created');
+                                setAccountId(created.id);
+                                setAccountTouched(true);
+                                setShowCreateAccount(false);
+                                setNewAccountForm(EMPTY_ACCOUNT_FORM);
+                              },
+                              onError: async (e) => toast.error(await apiErrorMessage(e, 'Failed to create account')),
+                            },
+                          );
+                        }}
+                      >
+                        {createAccount.isPending ? 'Creating…' : 'Create account'}
+                      </button>
+                    </div>
+                  </div>
                 )}
               </div>
             </div>
