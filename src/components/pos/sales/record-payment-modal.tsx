@@ -16,6 +16,7 @@ interface SettleCreditResult {
   outstanding_after: number;
   payment_status: string;
   treasury_synced: boolean;
+  surplus_to_store_credit?: number;
 }
 
 /**
@@ -52,7 +53,7 @@ export function RecordPaymentModal({
   }, [tendersData]);
 
   const mutation = useMutation({
-    mutationFn: (input: { amount: number; method?: string; reference?: string; effectiveAt?: string }) =>
+    mutationFn: (input: { amount: number; method?: string; reference?: string; effectiveAt?: string; overpaymentAction?: 'change' | 'store_credit' }) =>
       apiClient.post<SettleCreditResult>(
         `/api/v1/${tenantID}/pos/orders/${order.id}/payments/settle-credit`,
         {
@@ -61,15 +62,20 @@ export function RecordPaymentModal({
           amount: input.amount,
           externalRef: input.reference,
           occurredAt: input.effectiveAt,
+          surplusAction: input.overpaymentAction === 'store_credit' ? 'store_credit' : undefined,
         },
       ),
     onSuccess: (res) => {
       if (res.treasury_synced) {
-        toast.success(
-          res.payment_status === 'paid'
-            ? `${order.order_number} fully settled`
-            : `Payment recorded — ${res.outstanding_after.toLocaleString()} still outstanding`,
-        );
+        if (res.surplus_to_store_credit && res.surplus_to_store_credit > 0) {
+          toast.success(`${order.order_number} settled — ${res.surplus_to_store_credit.toLocaleString()} credited to ${order.customer_name || 'the customer'}'s store credit`);
+        } else {
+          toast.success(
+            res.payment_status === 'paid'
+              ? `${order.order_number} fully settled`
+              : `Payment recorded — ${res.outstanding_after.toLocaleString()} still outstanding`,
+          );
+        }
       } else {
         toast.warning('Payment recorded at the till, but the treasury balance did not update — re-record it from the treasury Customers page.');
       }
@@ -96,7 +102,7 @@ export function RecordPaymentModal({
       amountLabel="Outstanding"
       amountValue={outstanding}
       defaultAmount={outstanding}
-      maxAmount={outstanding}
+      allowOverpayment
       methods={SETTLE_CREDIT_SALE_METHODS}
       isPending={mutation.isPending}
       onClose={onClose}
