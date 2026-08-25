@@ -109,12 +109,13 @@ export interface ExpenseCategory {
 
 export interface ExpenseAccount {
   id: string;
-  code: string;
-  name: string;
-  type?: string;
-  category?: string;
+  account_type: string; // bank | mobile_money | cash | gateway
+  account_name: string;
+  bank_name?: string;
+  account_number?: string;
   balance?: string; // treasury serializes the decimal as a quoted string
   currency?: string;
+  is_active?: boolean;
 }
 
 /** Expense categories (from treasury, proxied by pos-api) for the Add-Expense form dropdown.
@@ -133,28 +134,27 @@ export function useExpenseCategories() {
   });
 }
 
-/** Chart-of-accounts (from treasury, proxied by pos-api) for the Add-Expense "Payment Account"
- *  dropdown. Degrades to an empty list when none are configured.
+/** Real bank/mobile-money/cash accounts (treasury's bank_accounts table, proxied by pos-api) for
+ *  the Add-Expense "Payment Account" dropdown. Degrades to an empty list when none are configured.
  *
- * Filtered to asset-type accounts only — the endpoint returns the FULL chart of accounts
- * (revenue/expense/liability/equity included), and without this filter a cashier could pick
- * something like "4400 Sales Revenue" as the account an expense payment left from, which the
- * backend would post literally with no validation. Mirrors the same asset-only filter
- * treasury-ui's own MarkExpensePaidModal/NewExpenditurePage apply client-side. Real bank/mobile-
- * money/cash accounts (finance-service/treasury-api's account_type-tagged FinancialAccounts) each
- * get their own dedicated asset-type leaf, so they show up here automatically once created —
- * no separate wiring needed. */
+ * Previously proxied treasury's chart of accounts instead (filtered to asset-type) — a picked id
+ * was a ChartOfAccount id, but treasury's settlement primitive (ledger.ResolveCashCode /
+ * FindFinancialAccountLedgerCode) resolves an explicit paid_from_account_id as a REAL financial
+ * account id, so a cashier's selection here was silently ignored in favor of a fallback account.
+ * Fixed at the source (pos-api's ListExpenseAccounts now proxies /bank-accounts, not /accounts) —
+ * every row here is already a real, ledger-linked account, so no type filter is needed (unlike
+ * the old chart-of-accounts list, which mixed revenue/expense/liability/equity in one response). */
 export function useExpenseAccounts() {
   const tenantID = useTenantID();
   return useQuery({
     queryKey: ['pos-expense-accounts', tenantID],
     queryFn: () =>
-      apiClient.get<{ accounts?: ExpenseAccount[]; total?: number }>(
+      apiClient.get<{ bank_accounts?: ExpenseAccount[]; total?: number }>(
         `${basePath(tenantID)}/expenses/accounts`,
       ),
     enabled: !!tenantID,
     staleTime: 5 * 60_000,
-    select: (res) => (res.accounts ?? []).filter((a) => a.type === 'asset'),
+    select: (res) => (res.bank_accounts ?? []).filter((a) => a.is_active !== false),
   });
 }
 
@@ -228,7 +228,12 @@ export interface AddExpenseInput {
   category_id?: string;
   reference_no?: string;
   expense_date?: string; // YYYY-MM-DD
-  account_id?: string; // Payment Account
+  // account_id is the GL expense-classification leaf — not sent by this form (treasury
+  // auto-resolves it from category_id). NOT the payment source.
+  account_id?: string;
+  // paid_from_account_id is the "Payment Account" field — a real bank_accounts id, required for
+  // this create-and-settle flow (the register expense is entered with the money already gone).
+  paid_from_account_id?: string;
   vendor_id?: string;
   cost_center_id?: string;
   tax_amount?: number;

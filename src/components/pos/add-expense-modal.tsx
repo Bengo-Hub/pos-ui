@@ -77,11 +77,11 @@ export function AddExpenseModal({ open, onClose }: AddExpenseModalProps) {
     [suppliers.data],
   );
 
-  // Default the payment account to "Cash and Cash Equivalents" (code 1000, the tenant's default
-  // payout/settlement account) once accounts load — never clobbers an explicit user pick.
+  // Default the payment account to a cash-type real account once accounts load — never clobbers
+  // an explicit user pick.
   useEffect(() => {
     if (accountTouched || accountId || !accounts.data?.length) return;
-    const cashAccount = accounts.data.find((a) => a.code === '1000');
+    const cashAccount = accounts.data.find((a) => a.account_type === 'cash');
     if (cashAccount) setAccountId(cashAccount.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accounts.data]);
@@ -144,7 +144,7 @@ export function AddExpenseModal({ open, onClose }: AddExpenseModalProps) {
         category_id: categoryId || undefined,
         reference_no: referenceNo.trim() || undefined,
         expense_date: date || undefined,
-        account_id: accountId || undefined,
+        paid_from_account_id: accountId || undefined,
         expense_for: expenseFor.trim() || undefined,
         payment_method: paymentMethod || undefined,
         paid_on: paidOn || undefined,
@@ -362,7 +362,7 @@ export function AddExpenseModal({ open, onClose }: AddExpenseModalProps) {
                   </option>
                   {accounts.data?.map((a) => (
                     <option key={a.id} value={a.id}>
-                      {a.code ? `${a.code} — ${a.name}` : a.name}
+                      {a.bank_name ? `${a.bank_name} — ${a.account_name}` : a.account_name}
                       {a.balance !== undefined ? ` (bal. ${Number(a.balance).toLocaleString('en-KE', { minimumFractionDigits: 2 })} ${a.currency ?? ''})` : ''}
                     </option>
                   ))}
@@ -371,7 +371,7 @@ export function AddExpenseModal({ open, onClose }: AddExpenseModalProps) {
                   <p className="mt-1.5 flex items-start gap-1.5 text-[11px] text-amber-600">
                     <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
                     <span>
-                      {selectedAccount?.name}&apos;s balance ({Number(selectedAccount?.balance).toLocaleString('en-KE', { minimumFractionDigits: 2 })} {selectedAccount?.currency}) doesn&apos;t fully cover this amount — consider a different account.
+                      {selectedAccount?.account_name}&apos;s balance ({Number(selectedAccount?.balance).toLocaleString('en-KE', { minimumFractionDigits: 2 })} {selectedAccount?.currency}) doesn&apos;t fully cover this amount — consider a different account.
                     </span>
                   </p>
                 )}
