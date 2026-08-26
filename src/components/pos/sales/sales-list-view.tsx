@@ -80,7 +80,7 @@ export function SalesListView({ orgSlug, fixedSource, title, subtitle }: {
     // The page's Outlets filter PRESELECTS the globally selected outlet (top-nav switcher).
     outletId: selectedOutlet?.id ?? '', customer: '', paymentStatus: '', paymentMethod: '',
     shippingStatus: '', userId: '', source: '', subscriptions: false,
-    range: { from: '', to: '' }, minTotal: '', maxTotal: '',
+    range: { from: '', to: '' }, minTotal: '', maxTotal: '', itemSku: '', itemLabel: '',
   });
 
   // Follow the global switcher: changing the drilled-in outlet re-scopes this page too.
@@ -132,6 +132,7 @@ export function SalesListView({ orgSlug, fixedSource, title, subtitle }: {
     minTotal: filterState.minTotal === '' ? undefined : filterState.minTotal,
     maxTotal: filterState.maxTotal === '' ? undefined : filterState.maxTotal,
     orderNumber: search.trim() || undefined,
+    sku: filterState.itemSku || undefined,
     page,
     limit: pageSize,
   }), [filterState, fixedSource, search, page, pageSize]);
@@ -164,6 +165,7 @@ export function SalesListView({ orgSlug, fixedSource, title, subtitle }: {
     min_total: filters.minTotal != null ? String(filters.minTotal) : undefined,
     max_total: filters.maxTotal != null ? String(filters.maxTotal) : undefined,
     order_number: filters.orderNumber,
+    sku: filters.sku,
   }), [filters]);
   const exportStamp = new Date().toISOString().slice(0, 10);
 

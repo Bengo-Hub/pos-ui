@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader } from '@/components/ui/base';
 import { DateRangePicker, type DateRange } from '@/components/ui/date-range-picker';
 import { SearchableCombobox } from '@bengo-hub/shared-ui-lib/combobox';
 import { PAYMENT_STATUSES, SHIPPING_STATUSES, SOURCES, PAYMENT_METHOD_OPTIONS } from './sales-shared';
+import { searchCatalogItemsAdapter } from '@/components/pos/discounts/apply-discount-modal';
 
 export interface SalesFilterState {
   outletId: string;
@@ -19,6 +20,10 @@ export interface SalesFilterState {
   /** Order-total (payable) range. Empty string = unbounded on that side. */
   minTotal: number | '';
   maxTotal: number | '';
+  /** Catalog item (SKU) scope — track how a specific product has been sold. */
+  itemSku: string;
+  /** Display label for itemSku, so the closed combobox shows a name, not a bare SKU. */
+  itemLabel: string;
 }
 
 // Upper bound of the amount slider track. Numeric inputs allow exact values above this when a
@@ -128,6 +133,19 @@ export function SalesFilters({ state, onChange, outlets, staff, fixedSource, hid
         </label>
         <label className="text-[11px] font-semibold text-muted-foreground">Customer
           <input className={selectCls} placeholder="Name or phone" value={state.customer} onChange={(e) => onChange({ customer: e.target.value })} />
+        </label>
+        <label className="text-[11px] font-semibold text-muted-foreground">Item
+          <SearchableCombobox
+            className="mt-0.5"
+            options={[]}
+            value={state.itemSku}
+            valueLabel={state.itemLabel}
+            onChange={(value, option) => onChange({ itemSku: value, itemLabel: option?.label ?? '' })}
+            onRemoteSearch={async (q) => (await searchCatalogItemsAdapter(q)).map((i) => ({ value: i.sku, label: i.name, hint: i.sku }))}
+            placeholder="All items"
+            searchPlaceholder="Search products…"
+            clearable
+          />
         </label>
         <label className="text-[11px] font-semibold text-muted-foreground">Payment Status
           <select className={selectCls} value={state.paymentStatus} onChange={(e) => onChange({ paymentStatus: e.target.value })}>

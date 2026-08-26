@@ -1177,6 +1177,7 @@ export interface OrderListFilters {
   orderNumber?: string;
   kdsStationId?: string;    // orders with a line routed to this KDS station
   category?: string;        // orders with a line in this catalog category
+  sku?: string;             // orders containing this catalog item (track how a product has sold)
   limit?: number;
   page?: number;
 }
@@ -1217,6 +1218,7 @@ export function useOrders(filters?: OrderListFilters) {
           order_number: filters?.orderNumber,
           kds_station_id: filters?.kdsStationId,
           category: filters?.category,
+          sku: filters?.sku,
           limit: filters?.limit ?? 20,
           page: filters?.page ?? 1,
           sort: 'created_at',
@@ -1292,6 +1294,7 @@ export function useOrdersSummary(filters?: OrderListFilters) {
         order_number: filters?.orderNumber,
         kds_station_id: filters?.kdsStationId,
         category: filters?.category,
+        sku: filters?.sku,
       }),
     enabled: !!tenantID,
     staleTime: 15_000,
