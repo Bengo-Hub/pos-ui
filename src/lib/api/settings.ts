@@ -150,6 +150,13 @@ export interface POSSettings {
   cashier_terminal_surface: 'full_till' | 'bills_only';
   /** Which of the three policies above are explicitly overridden at this outlet (vs inheriting the default). */
   cashier_policy_overrides?: Record<string, boolean>;
+  /** Quick config: hide the Drafts page/Parked Sales Delete button for non-manager-tier
+   *  ("cashier") users at this outlet, on top of whatever the Roles & Permissions matrix
+   *  already grants. Plain boolean, default false (unchanged behavior) — no per-use-case
+   *  default ladder like the three policies above. */
+  hide_draft_delete_for_cashier: boolean;
+  /** Same as above, for the Resume button. */
+  hide_draft_resume_for_cashier: boolean;
   updated_at: string;
 }
 
@@ -211,6 +218,9 @@ export interface UpdatePOSSettingsInput {
   cashier_terminal_surface?: 'full_till' | 'bills_only' | 'default' | '';
   /** 'on'/'off' sets the override; 'default'/'' clears it. */
   auto_logout_after_sale?: 'on' | 'off' | 'default' | '';
+  // Quick config — plain booleans, no tri-state reset (see POSSettings above).
+  hide_draft_delete_for_cashier?: boolean;
+  hide_draft_resume_for_cashier?: boolean;
 }
 
 export interface UpdatePOSModulesInput {

@@ -11,6 +11,7 @@ import { useAuthStore } from '@/store/auth';
 import { useOutletFilterStore } from '@/store/outlet-filter';
 import { useOwnScope } from '@/lib/rbac/scope';
 import { usePermissions, P } from '@/hooks/usePermissions';
+import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { PrintReceiptButton } from '@/components/pos/print-receipt-button';
 import { DateRangePicker, rangeBound, type DateRange } from '@/components/ui/date-range-picker';
@@ -33,13 +34,20 @@ interface DraftsFilterState {
  * drafts (+ the outlet policy) exactly like the sales list.
  *
  * Row actions:
- *  - Resume → reopens the draft in Add Sale, where payment is taken (existing behavior).
+ *  - Resume → reopens the draft in Add Sale, where payment is taken (existing behavior). Gated
+ *             on the dedicated pos.orders.resume_draft permission (2026-08-28) — a tenant admin
+ *             can hide this button per role via the Roles & Permissions matrix, or blanket-hide
+ *             it for non-manager-tier ("cashier") users at this outlet via the CashierPolicyTab
+ *             "hide Resume for cashiers" quick config.
  *  - Print  → the shared PrintReceiptButton (GetReceipt); a draft has no payment, so it prints
  *             a pro-forma / quotation-style document. No new document pipeline.
  *  - Delete → useDeleteDraft (single) / useBulkDeleteDrafts (selection), behind ConfirmDialogs.
- *             RBAC mirrors the server: pos.orders.manage deletes ANY draft; a cashier only
- *             their OWN — ineligible rows aren't selectable and hide the button. The server
- *             enforces the identical boundary (skips report why).
+ *             RBAC mirrors the server: pos.orders.manage deletes ANY draft; any other caller
+ *             needs the dedicated pos.orders.delete_own AND may delete only their OWN draft —
+ *             delete_own is independent of the general order-write permissions, and can also be
+ *             blanket-hidden for non-manager-tier callers via the same quick config as Resume.
+ *             Ineligible rows aren't selectable and hide the button. The server enforces the
+ *             identical boundary (skips report why).
  */
 export function DraftsListView({ orgSlug }: { orgSlug: string }) {
   const user = useAuthStore((s) => s.user);
@@ -49,15 +57,24 @@ export function DraftsListView({ orgSlug }: { orgSlug: string }) {
 
   // Own-only cashiers see only their own drafts (server-enforced) and must not filter by cashier.
   const { ownOnly } = useOwnScope();
-  const { can, canAny } = usePermissions();
+  const { can } = usePermissions();
+  const { data: settings } = usePOSSettings();
   // Mirrors the server RBAC in DeleteDraft/BulkDeleteDrafts: pos.orders.manage deletes ANY
-  // draft; otherwise the caller may delete only a draft they created, and only if they hold
-  // an order-write permission.
+  // draft; otherwise the caller needs the dedicated pos.orders.delete_own AND may delete only a
+  // draft they created. Both dedicated codes (delete_own / resume_draft) are independent of the
+  // general order-write permissions (add/change_own) — a tenant admin can revoke JUST these
+  // Drafts-page buttons without breaking a cashier's ability to ring/edit sales, either via the
+  // Roles & Permissions matrix or the outlet's "hide for cashiers" quick config below.
   const canDeleteAnyDraft = can(P.ORDERS_MANAGE);
-  const hasOrderWrite = canAny([P.ORDERS_ADD, P.ORDERS_CHANGE_OWN, P.ORDERS_CHANGE, P.ORDERS_MANAGE]);
+  // The quick config only applies to non-manager-tier ("cashier") callers — managers/admins are
+  // always exempt, same as the sibling cashier-policy toggles in CashierPolicyTab.
+  const hideDeleteForCashier = !canDeleteAnyDraft && !!settings?.hide_draft_delete_for_cashier;
+  const hideResumeForCashier = !canDeleteAnyDraft && !!settings?.hide_draft_resume_for_cashier;
+  const canDeleteOwnDraft = (canDeleteAnyDraft || can(P.ORDERS_DELETE_OWN)) && !hideDeleteForCashier;
+  const canResumeDraft = can(P.ORDERS_RESUME_DRAFT) && !hideResumeForCashier;
   const canDeleteThis = useCallback(
-    (o: any) => canDeleteAnyDraft || (!!o.user_id && o.user_id === currentUserId && hasOrderWrite),
-    [canDeleteAnyDraft, currentUserId, hasOrderWrite],
+    (o: any) => canDeleteAnyDraft || (canDeleteOwnDraft && !!o.user_id && o.user_id === currentUserId),
+    [canDeleteAnyDraft, canDeleteOwnDraft, currentUserId],
   );
 
   const [page, setPage] = useState(1);
@@ -181,10 +198,12 @@ export function DraftsListView({ orgSlug }: { orgSlug: string }) {
       key: 'actions', header: 'Actions', exportable: false,
       render: (o) => (
         <div className="flex items-center gap-1.5">
-          <Link href={`/${orgSlug}/sell/add?order_id=${o.id}`}
-            className="inline-flex items-center gap-1 h-8 px-3 rounded-md border border-primary/40 text-primary text-xs font-bold hover:bg-primary/5">
-            Resume <ArrowRight className="h-3.5 w-3.5" />
-          </Link>
+          {canResumeDraft && (
+            <Link href={`/${orgSlug}/sell/add?order_id=${o.id}`}
+              className="inline-flex items-center gap-1 h-8 px-3 rounded-md border border-primary/40 text-primary text-xs font-bold hover:bg-primary/5">
+              Resume <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          )}
           {/* Print a pro-forma/quotation-style document (draft has no payment) — shared receipt flow. */}
           <PrintReceiptButton orderId={o.id} label="Print" variant="outline" size="sm" className="h-8 !px-3 text-xs" />
           {canDeleteThis(o) && (
@@ -195,7 +214,7 @@ export function DraftsListView({ orgSlug }: { orgSlug: string }) {
         </div>
       ),
     },
-  ], [orgSlug, staffNameByUserId, canDeleteThis]);
+  ], [orgSlug, staffNameByUserId, canDeleteThis, canResumeDraft]);
 
   const selectCls = 'w-full bg-accent/30 border border-border rounded-lg py-2 px-3 text-sm';
 
@@ -252,7 +271,7 @@ export function DraftsListView({ orgSlug }: { orgSlug: string }) {
         emptyText="No drafts match your filters. Save an in-progress sale as a draft from the POS terminal (Park) or Add Sale to resume it later."
         storageKey="pos-drafts"
         renderExpanded={(o) => <OrderLinesPanel order={o} noun="draft" />}
-        selectable={hasOrderWrite}
+        selectable={canDeleteOwnDraft}
         selected={selected}
         onSelectedChange={setSelected}
         isRowSelectable={canDeleteThis}

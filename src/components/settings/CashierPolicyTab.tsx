@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Loader2, Lock, Eye, LogOut, LayoutGrid } from 'lucide-react';
+import { Loader2, Lock, Eye, LogOut, LayoutGrid, FileX } from 'lucide-react';
 import { Button, Card, CardContent, CardHeader } from '@/components/ui/base';
 import { usePOSSettings, useUpdatePOSSettings } from '@/hooks/usePOSSettings';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -36,6 +36,9 @@ export function CashierPolicyTab() {
   const [salesVisibility, setSalesVisibility] = useState<'own' | 'outlet' | TriString>('');
   const [autoLogout, setAutoLogout] = useState<'on' | 'off' | TriString>('');
   const [terminalSurface, setTerminalSurface] = useState<'full_till' | 'bills_only' | TriString>('');
+  // Quick config: plain booleans, no per-use-case default to reset to (unlike the three above).
+  const [hideDraftDelete, setHideDraftDelete] = useState(false);
+  const [hideDraftResume, setHideDraftResume] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const overrides = settings?.cashier_policy_overrides ?? {};
@@ -46,6 +49,8 @@ export function CashierPolicyTab() {
     setSalesVisibility(overrides['cashier_sales_visibility'] ? settings.cashier_sales_visibility : '');
     setAutoLogout(overrides['auto_logout_after_sale'] ? (settings.auto_logout_after_sale ? 'on' : 'off') : '');
     setTerminalSurface(overrides['cashier_terminal_surface'] ? settings.cashier_terminal_surface : '');
+    setHideDraftDelete(!!settings.hide_draft_delete_for_cashier);
+    setHideDraftResume(!!settings.hide_draft_resume_for_cashier);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settings]);
 
@@ -57,6 +62,8 @@ export function CashierPolicyTab() {
         cashier_sales_visibility: salesVisibility === '' ? 'default' : salesVisibility,
         auto_logout_after_sale: autoLogout === '' ? 'default' : autoLogout,
         cashier_terminal_surface: terminalSurface === '' ? 'default' : terminalSurface,
+        hide_draft_delete_for_cashier: hideDraftDelete,
+        hide_draft_resume_for_cashier: hideDraftResume,
       });
     } finally {
       setSaving(false);
@@ -176,6 +183,35 @@ export function CashierPolicyTab() {
             <option value="full_till">Full till (terminal + add sale + tables)</option>
             <option value="bills_only">Bills only (settle from Orders/Tables)</option>
           </select>
+        </CardContent>
+      </Card>
+
+      {/* Drafts page quick config (2026-08-28) — a shortcut over the full Roles & Permissions
+          matrix for the common "hide these two buttons for cashiers" ask. Applies to any
+          non-manager-tier user (managers/admins always keep both buttons); AND's with whatever
+          the matrix already grants (pos.orders.delete_own / pos.orders.resume_draft), so a
+          cashier's Delete/Resume still won't show even if the matrix grants it while this is on. */}
+      <Card>
+        <CardHeader>
+          <h3 className="text-base font-bold flex items-center gap-2">
+            <FileX className="h-4 w-4 text-primary" /> Drafts page — cashier buttons
+          </h3>
+          <p className="text-sm text-muted-foreground">
+            Quick blanket switches for the Drafts page, instead of editing each role in Roles &amp; Permissions.
+            Managers/admins are never affected.
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={hideDraftDelete} disabled={!canEdit}
+              onChange={(e) => setHideDraftDelete(e.target.checked)} />
+            Hide the <span className="font-medium">Delete</span> button for cashiers
+          </label>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={hideDraftResume} disabled={!canEdit}
+              onChange={(e) => setHideDraftResume(e.target.checked)} />
+            Hide the <span className="font-medium">Resume</span> button for cashiers
+          </label>
         </CardContent>
       </Card>
 

@@ -33,6 +33,12 @@ export const P = {
   ORDERS_CHANGE:     'pos.orders.change',
   ORDERS_CHANGE_OWN: 'pos.orders.change_own',
   ORDERS_DELETE:     'pos.orders.delete',
+  /** Delete ONE'S OWN draft (parked/unpaid) sale — dedicated toggle for the Drafts page Delete
+   *  button, independent of ORDERS_ADD/CHANGE_OWN so a tenant admin can revoke it without
+   *  breaking a cashier's ability to ring/edit sales. Deleting ANY draft still requires
+   *  ORDERS_MANAGE (unchanged). NOT the same code as ORDERS_DELETE (that gates the separate
+   *  admin-only "shred a finalized sale" tool). */
+  ORDERS_DELETE_OWN: 'pos.orders.delete_own',
   ORDERS_MANAGE:     'pos.orders.manage',
   ORDERS_VOID:       'pos.orders.void',
   /** Self-approve a void without a manager step-up (replaces the old VOID_SELF_ROLES role-name
@@ -42,6 +48,9 @@ export const P = {
    *  GL/inventory/eTIMS resync. Admin-only by default — hidden from managers unless a tenant
    *  admin explicitly grants it via the permission matrix. */
   ORDERS_EDIT_FINALIZED: 'pos.orders.edit_finalized',
+  /** Resume (reopen into Add Sale) a saved draft/parked sale — dedicated toggle for the Drafts
+   *  page + Parked Sales modal Resume button (previously ungated). */
+  ORDERS_RESUME_DRAFT: 'pos.orders.resume_draft',
 
   // Payments
   PAYMENTS_ADD:      'pos.payments.add',
@@ -215,6 +224,7 @@ export const ROLE_PERMISSIONS: Record<string, Permission[]> = {
     // only. A tenant admin can still grant either to manager via the permission matrix; this
     // client map is only the pre-fetch fallback and stays in sync with that default.
     P.ORDERS_ADD, P.ORDERS_VIEW, P.ORDERS_CHANGE, P.ORDERS_MANAGE, P.ORDERS_VOID, P.ORDERS_VOID_SELF,
+    P.ORDERS_RESUME_DRAFT,
     P.PAYMENTS_ADD, P.PAYMENTS_VIEW, P.PAYMENTS_MANAGE,
     P.DISCOUNTS_APPLY,
     P.CATALOG_ADD, P.CATALOG_VIEW, P.CATALOG_CHANGE, P.CATALOG_DELETE, P.CATALOG_MANAGE, P.CATALOG_VIEW_COST,
@@ -243,6 +253,9 @@ export const ROLE_PERMISSIONS: Record<string, Permission[]> = {
     // view_own (NOT view): cashiers see only their OWN sales/drafts ("My Sales", REQ-007).
     // Server-side enforcement lives in pos-api ListOrders/GetOrder; mirrors the backend seed.
     P.ORDERS_ADD, P.ORDERS_VIEW_OWN, P.ORDERS_CHANGE_OWN,
+    // Dedicated draft-only actions (2026-08-28): independent of ADD/CHANGE_OWN so a tenant
+    // admin can revoke JUST delete/resume on Drafts without breaking sale creation/editing.
+    P.ORDERS_DELETE_OWN, P.ORDERS_RESUME_DRAFT,
     // Void: cashier may INITIATE a void; not a manager override role, so it still requires
     // manager approval (card / PIN / one-time code). Mirrors the backend seed.
     P.ORDERS_VOID,
@@ -265,6 +278,8 @@ export const ROLE_PERMISSIONS: Record<string, Permission[]> = {
     // ORDERS_CHANGE (not just _own) lets waiters act on unassigned online
     // pickup/delivery orders (mark ready, collected, assign rider).
     P.ORDERS_ADD, P.ORDERS_VIEW_OWN, P.ORDERS_CHANGE, P.ORDERS_CHANGE_OWN,
+    // Dedicated draft-only actions (2026-08-28) — see cashier's entry above.
+    P.ORDERS_DELETE_OWN, P.ORDERS_RESUME_DRAFT,
     // Void: waiter may INITIATE a void; not a manager override role, so it still requires
     // manager approval (card / PIN / one-time code). Mirrors the backend seed.
     P.ORDERS_VOID,
@@ -288,6 +303,8 @@ export const ROLE_PERMISSIONS: Record<string, Permission[]> = {
   // applies to PIN sessions with no server permissions — SSO users get the server union.
   floor_supervisor: [
     P.ORDERS_ADD, P.ORDERS_VIEW, P.ORDERS_CHANGE, P.ORDERS_CHANGE_OWN, P.ORDERS_VOID,
+    // Dedicated draft-only actions (2026-08-28) — see cashier's entry above.
+    P.ORDERS_DELETE_OWN, P.ORDERS_RESUME_DRAFT,
     P.PAYMENTS_ADD, P.PAYMENTS_VIEW, P.PAYMENTS_VIEW_OWN,
     P.CATALOG_VIEW,
     P.TABLES_VIEW, P.TABLES_CHANGE, P.TABLES_CHANGE_OWN, P.TABLES_MANAGE,
@@ -311,6 +328,8 @@ export const ROLE_PERMISSIONS: Record<string, Permission[]> = {
   ],
   receptionist: [
     P.ORDERS_ADD, P.ORDERS_VIEW, P.ORDERS_CHANGE_OWN,
+    // Dedicated draft-only actions (2026-08-28) — see cashier's entry above.
+    P.ORDERS_DELETE_OWN, P.ORDERS_RESUME_DRAFT,
     P.CATALOG_VIEW,
     P.PAYMENTS_VIEW,
     P.TABLES_VIEW,
@@ -325,6 +344,8 @@ export const ROLE_PERMISSIONS: Record<string, Permission[]> = {
   ],
   stylist: [
     P.ORDERS_ADD, P.ORDERS_VIEW_OWN,
+    // Dedicated draft-only actions (2026-08-28) — see cashier's entry above.
+    P.ORDERS_DELETE_OWN, P.ORDERS_RESUME_DRAFT,
     P.CATALOG_VIEW,
     P.SESSIONS_ADD, P.SESSIONS_VIEW_OWN,
     P.APPOINTMENTS_VIEW, P.APPOINTMENTS_CHANGE,
@@ -334,6 +355,8 @@ export const ROLE_PERMISSIONS: Record<string, Permission[]> = {
   ],
   therapist: [
     P.ORDERS_ADD, P.ORDERS_VIEW_OWN,
+    // Dedicated draft-only actions (2026-08-28) — see cashier's entry above.
+    P.ORDERS_DELETE_OWN, P.ORDERS_RESUME_DRAFT,
     P.CATALOG_VIEW,
     P.SESSIONS_ADD, P.SESSIONS_VIEW_OWN,
     P.APPOINTMENTS_VIEW, P.APPOINTMENTS_CHANGE,
@@ -343,6 +366,8 @@ export const ROLE_PERMISSIONS: Record<string, Permission[]> = {
   ],
   technician: [
     P.ORDERS_ADD, P.ORDERS_VIEW_OWN,
+    // Dedicated draft-only actions (2026-08-28) — see cashier's entry above.
+    P.ORDERS_DELETE_OWN, P.ORDERS_RESUME_DRAFT,
     P.CATALOG_VIEW,
     P.SESSIONS_ADD, P.SESSIONS_VIEW_OWN,
     P.APPOINTMENTS_VIEW, P.APPOINTMENTS_CHANGE,
@@ -352,6 +377,8 @@ export const ROLE_PERMISSIONS: Record<string, Permission[]> = {
   ],
   pharmacist: [
     P.ORDERS_ADD, P.ORDERS_VIEW, P.ORDERS_CHANGE_OWN,
+    // Dedicated draft-only actions (2026-08-28) — see cashier's entry above.
+    P.ORDERS_DELETE_OWN, P.ORDERS_RESUME_DRAFT,
     P.PAYMENTS_ADD, P.PAYMENTS_VIEW,
     P.CATALOG_VIEW,
     P.SESSIONS_ADD, P.SESSIONS_VIEW_OWN,
@@ -360,6 +387,8 @@ export const ROLE_PERMISSIONS: Record<string, Permission[]> = {
   ],
   pharmacy_technician: [
     P.ORDERS_ADD, P.ORDERS_VIEW_OWN, P.ORDERS_CHANGE_OWN,
+    // Dedicated draft-only actions (2026-08-28) — see cashier's entry above.
+    P.ORDERS_DELETE_OWN, P.ORDERS_RESUME_DRAFT,
     P.PAYMENTS_ADD, P.PAYMENTS_VIEW_OWN,
     P.CATALOG_VIEW,
     P.SESSIONS_ADD, P.SESSIONS_VIEW_OWN,

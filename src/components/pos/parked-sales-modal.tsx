@@ -1,15 +1,23 @@
 'use client';
 
-import { Loader2, PauseCircle } from 'lucide-react';
+import { Loader2, Lock, PauseCircle } from 'lucide-react';
 
 import { useOrders } from '@/hooks/usePOS';
+import { usePermissions, P } from '@/hooks/usePermissions';
+import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { formatCurrency } from '@/lib/utils';
 
 // ParkedSalesModal lists suspended (draft) sales for this tenant so the cashier can resume one and
 // take payment. Parking persists the cart as a draft order; resuming opens its payment modal.
+// Resume is gated on pos.orders.resume_draft (2026-08-28) — same dedicated permission + outlet
+// "hide Resume for cashiers" quick config as the Drafts page, so this modal can't be used to
+// bypass whatever a tenant admin configured there.
 export function ParkedSalesModal({ onClose, onResume }: { onClose: () => void; onResume: (order: any) => void }) {
   const { data, isLoading } = useOrders({ status: 'draft', limit: 50 });
   const orders = data?.data ?? [];
+  const { can } = usePermissions();
+  const { data: settings } = usePOSSettings();
+  const canResumeDraft = can(P.ORDERS_RESUME_DRAFT) && !(!can(P.ORDERS_MANAGE) && settings?.hide_draft_resume_for_cashier);
 
   return (
     <div
@@ -30,7 +38,12 @@ export function ParkedSalesModal({ onClose, onResume }: { onClose: () => void; o
           </div>
         </div>
 
-        {isLoading ? (
+        {!canResumeDraft ? (
+          <div className="flex items-center gap-2 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/30 px-4 py-6 text-center text-sm text-amber-800 dark:text-amber-300">
+            <Lock className="h-4 w-4 shrink-0" />
+            You don&apos;t have permission to resume parked sales.
+          </div>
+        ) : isLoading ? (
           <div className="flex justify-center py-8">
             <Loader2 className="h-5 w-5 animate-spin text-primary" />
           </div>
