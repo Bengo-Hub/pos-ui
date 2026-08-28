@@ -432,6 +432,13 @@ export function ReceiptPreview({
                       <span>{row.negative ? '-' : ''}{formatCurrency(row.amount)}</span>
                     </div>
                   );
+                case 'count':
+                  return (
+                    <div key={i} className="flex justify-between py-0.5">
+                      <span>{row.label}</span>
+                      <span>{row.value}</span>
+                    </div>
+                  );
                 case 'total':
                   return (
                     <div key={i} className="flex justify-between py-0.5 font-bold text-sm">

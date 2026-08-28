@@ -19,6 +19,8 @@ export interface ReceiptLineRow {
 export interface ReceiptDividerRow { kind: 'divider' }
 export interface ReceiptMoneyRow { kind: 'money'; label: string; amount: number; negative?: boolean }
 export interface ReceiptTotalRow { kind: 'total'; label: string; amount: number }
+/** Plain label:value count (Total Quantity / TOTAL ITEMS) — NOT currency, so no formatCurrency. */
+export interface ReceiptCountRow { kind: 'count'; label: string; value: string }
 export interface ReceiptPaymentRow { kind: 'payment'; label: string; amount: number }
 export interface ReceiptChangeRow { kind: 'change'; amount: number }
 export interface ReceiptEtimsRow {
@@ -47,6 +49,7 @@ export type ReceiptRow =
   | ReceiptLineRow
   | ReceiptDividerRow
   | ReceiptMoneyRow
+  | ReceiptCountRow
   | ReceiptTotalRow
   | ReceiptPaymentRow
   | ReceiptChangeRow
@@ -91,6 +94,15 @@ export function buildReceiptRows(receipt: ReceiptData): ReceiptRow[] {
   }
 
   rows.push({ kind: 'divider' });
+  // Item-count summary (Total Quantity = summed units across all lines, TOTAL ITEMS = line
+  // count) — label casing/order matches receipt-retail-print.tsx and pos-api's
+  // a4_pdf.go/a4_html.go/thermal_pdf.go/thermal_html.go/escpos.go exactly, so every receipt
+  // surface agrees.
+  if (receipt.lines.length > 0) {
+    const totalQty = receipt.lines.reduce((s, l) => s + l.quantity, 0);
+    rows.push({ kind: 'count', label: 'Total Quantity', value: String(totalQty) });
+    rows.push({ kind: 'count', label: 'TOTAL ITEMS', value: String(receipt.lines.length) });
+  }
   rows.push({ kind: 'money', label: 'Subtotal', amount: receipt.subtotal });
   if (receipt.vat_enabled !== false && receipt.tax_amount > 0) {
     rows.push({ kind: 'money', label: `VAT (${receipt.vat_rate ?? 16}%)`, amount: receipt.tax_amount });

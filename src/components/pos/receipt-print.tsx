@@ -231,6 +231,13 @@ export function ReceiptPrint({
                 <span className="receipt-row-value">{row.negative ? '-' : ''}{fmt(row.amount)}</span>
               </div>
             );
+          case 'count':
+            return (
+              <div key={i} className="receipt-row">
+                <span className="receipt-row-name">{row.label}</span>
+                <span className="receipt-row-value">{row.value}</span>
+              </div>
+            );
           case 'total':
             return (
               <div key={i} className="receipt-row receipt-total-row">
