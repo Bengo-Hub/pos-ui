@@ -37,7 +37,7 @@ export function StartShiftGate({ children }: StartShiftGateProps) {
   // Retail cashiers manage a physical cash drawer whichever way they signed in (PIN terminal
   // OR web SSO): they always get the start-shift gate with the opening-float field, and land
   // on the POS terminal once the drawer is counted.
-  const isRetailCashier = role === 'cashier' && ['retail', 'pharmacy', 'services'].includes(outletUseCase);
+  const isRetailCashier = role === 'cashier' && ['retail', 'services'].includes(outletUseCase);
 
   // Real access distinction, permission-driven (replaces the old hardcoded SHIFT_ROLES list):
   // anyone who can start their own session but cannot MANAGE sessions (i.e. isn't a

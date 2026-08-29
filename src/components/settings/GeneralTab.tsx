@@ -19,11 +19,11 @@ export function GeneralTab() {
   const { data: settings, isLoading } = usePOSSettings();
   const updateSettings = useUpdatePOSSettings();
   const { can } = usePermissions();
-  const { isRetail, isPharmacy } = useModuleAccess();
+  const { isRetail } = useModuleAccess();
   const canEdit = can(P.CONFIG_CHANGE) || can(P.CONFIG_MANAGE);
-  // Goods returns only apply to retail/pharmacy — a hospitality or quick-service outlet doesn't
+  // Goods returns only apply to retail — a hospitality or quick-service outlet doesn't
   // accept returns of consumed food/drinks, so the return-window field is irrelevant there.
-  const showReturnWindow = isRetail || isPharmacy;
+  const showReturnWindow = isRetail;
 
   const tenantID = useAuthStore((s) => s.user?.tenant_id ?? '');
   const [currency, setCurrency] = useState('KES');

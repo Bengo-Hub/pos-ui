@@ -11,8 +11,8 @@
 
 import {
   BarChart3, BedDouble, Calendar, ChefHat, ClipboardList, Clock, Cpu, FilePlus, FileText,
-  FlaskConical, Gift, Grid3x3, HandCoins, HeartPulse, LayoutDashboard, Package, Percent, Pill, Plus, Presentation,
-  Receipt, RotateCcw, Settings, ShoppingBag, Sofa, Stethoscope, TrendingUp, Truck, UserSquare, Users, Wallet, Wine, Wrench,
+  Gift, Grid3x3, HandCoins, LayoutDashboard, Package, Percent, Plus, Presentation,
+  RotateCcw, Settings, ShoppingBag, Sofa, TrendingUp, Truck, Users, Wallet, Wine, Wrench,
 } from 'lucide-react';
 import type { Permission } from '@/lib/rbac/permissions';
 import { P } from '@/lib/rbac/permissions';
@@ -70,27 +70,27 @@ export function buildNavGroups(orgSlug: string): NavGroup[] {
       label: 'Sell',
       items: [
         { label: 'POS Terminal', icon: Plus, href: '/order', moduleKey: 'new_order', permission: P.ORDERS_ADD, waiterHidden: true, cashierHospHidden: true },
-        { label: 'Add Sale', icon: FilePlus, href: '/sell/add', moduleKey: 'new_order', permission: [P.ORDERS_ADD, P.ORDERS_MANAGE], waiterHidden: true, cashierHospHidden: true, hideForProfiles: ['hospitality', 'quick_service', 'pharmacy'] },
+        { label: 'Add Sale', icon: FilePlus, href: '/sell/add', moduleKey: 'new_order', permission: [P.ORDERS_ADD, P.ORDERS_MANAGE], waiterHidden: true, cashierHospHidden: true, hideForProfiles: ['hospitality', 'quick_service'] },
         { label: 'All Sales', icon: ClipboardList, href: '/sell/all-sales', moduleKey: 'orders', permission: [P.ORDERS_ADD, P.ORDERS_CHANGE_OWN, P.ORDERS_CHANGE, P.ORDERS_MANAGE, P.ORDERS_VIEW_OWN, P.REPORTS_VIEW], waiterHidden: true },
         // POS Sales/Drafts are a retail-terminal artifact (parked/held sale-in-progress rows) —
-        // pharmacy checkout is always a single prescription or walk-in cart, never a running list
-        // of in-progress tabs, so both are redundant with All Sales for this profile.
-        { label: 'POS Sales', icon: ClipboardList, href: '/sell/pos-sales', moduleKey: 'orders', permission: [P.ORDERS_ADD, P.ORDERS_CHANGE_OWN, P.ORDERS_CHANGE, P.ORDERS_MANAGE, P.ORDERS_VIEW_OWN, P.REPORTS_VIEW], waiterHidden: true, hideForProfiles: ['hospitality', 'quick_service', 'pharmacy'] },
-        { label: 'Drafts', icon: FileText, href: '/sell/drafts', moduleKey: 'orders', permission: [P.ORDERS_ADD, P.ORDERS_CHANGE_OWN, P.ORDERS_CHANGE, P.ORDERS_MANAGE], waiterHidden: true, hideForProfiles: ['hospitality', 'quick_service', 'pharmacy'] },
+        // hospitality/QSR checkout never runs a parked-sale list the way retail does, so both
+        // are redundant with All Sales for those profiles.
+        { label: 'POS Sales', icon: ClipboardList, href: '/sell/pos-sales', moduleKey: 'orders', permission: [P.ORDERS_ADD, P.ORDERS_CHANGE_OWN, P.ORDERS_CHANGE, P.ORDERS_MANAGE, P.ORDERS_VIEW_OWN, P.REPORTS_VIEW], waiterHidden: true, hideForProfiles: ['hospitality', 'quick_service'] },
+        { label: 'Drafts', icon: FileText, href: '/sell/drafts', moduleKey: 'orders', permission: [P.ORDERS_ADD, P.ORDERS_CHANGE_OWN, P.ORDERS_CHANGE, P.ORDERS_MANAGE], waiterHidden: true, hideForProfiles: ['hospitality', 'quick_service'] },
         { label: 'Credit Sale', icon: HandCoins, href: '/sell/add?credit=1', moduleKey: 'new_order', permission: [P.ORDERS_ADD, P.ORDERS_MANAGE], waiterHidden: true, cashierHospHidden: true, hideForProfiles: ['hospitality', 'quick_service'] },
         // Quotations/Shipments/Import Sales are B2B wholesale/distribution concepts, not a
-        // pharmacy counter workflow (prescription/OTC dispensing never quotes or ships).
-        { label: 'Quotations', icon: FileText, href: `${TREASURY_URL}/${orgSlug}/quotations`, moduleKey: 'orders', permission: [P.ORDERS_ADD, P.ORDERS_MANAGE, P.REPORTS_VIEW], waiterHidden: true, hideForProfiles: ['hospitality', 'quick_service', 'pharmacy'] },
+        // hospitality/QSR counter workflow.
+        { label: 'Quotations', icon: FileText, href: `${TREASURY_URL}/${orgSlug}/quotations`, moduleKey: 'orders', permission: [P.ORDERS_ADD, P.ORDERS_MANAGE, P.REPORTS_VIEW], waiterHidden: true, hideForProfiles: ['hospitality', 'quick_service'] },
         { label: 'Layaway', icon: Package, href: '/layaway', moduleKey: 'layaway', permission: [P.ORDERS_ADD, P.ORDERS_CHANGE_OWN, P.ORDERS_CHANGE, P.ORDERS_MANAGE], subFeature: 'layaway', subPlan: 'Growth', waiterHidden: true },
         { label: 'Staff Credit', icon: Package, href: '/staff-credit', moduleKey: 'layaway', permission: [P.ORDERS_CHANGE, P.ORDERS_MANAGE], subFeature: 'staff_fund_from_salary', subPlan: 'Professional', waiterHidden: true },
         { label: 'Sell Returns', icon: RotateCcw, href: '/returns', moduleKey: 'returns', permission: [P.ORDERS_CHANGE_OWN, P.ORDERS_CHANGE, P.ORDERS_MANAGE], waiterHidden: true },
-        { label: 'Shipments', icon: Truck, href: '/sell/shipments', moduleKey: 'orders', permission: [P.ORDERS_VIEW, P.ORDERS_CHANGE, P.ORDERS_MANAGE, P.ORDERS_VIEW_OWN], waiterHidden: true, cashierHospHidden: true, hideForProfiles: ['pharmacy'] },
+        { label: 'Shipments', icon: Truck, href: '/sell/shipments', moduleKey: 'orders', permission: [P.ORDERS_VIEW, P.ORDERS_CHANGE, P.ORDERS_MANAGE, P.ORDERS_VIEW_OWN], waiterHidden: true, cashierHospHidden: true },
         // Management surface for the platform discount source of truth (pos-api promotions) —
         // promo codes, automatic and time-windowed discounts across ALL use cases (the
         // hotel/happy-hour page remains the hospitality-flavored BOGO editor of the same rows).
         { label: 'Discounts', icon: Percent, href: '/sell/discounts', moduleKey: 'orders', permission: [P.PROMOTIONS_VIEW, P.PROMOTIONS_ADD, P.PROMOTIONS_CHANGE, P.PROMOTIONS_MANAGE], waiterHidden: true, cashierHospHidden: true },
         // Historical sales migration (CSV) — manager/admin only, idempotent on invoice no.
-        { label: 'Import Sales', icon: FilePlus, href: '/sell/import', moduleKey: 'orders', permission: P.ORDERS_MANAGE, waiterHidden: true, cashierHospHidden: true, hideForProfiles: ['hospitality', 'quick_service', 'pharmacy'] },
+        { label: 'Import Sales', icon: FilePlus, href: '/sell/import', moduleKey: 'orders', permission: P.ORDERS_MANAGE, waiterHidden: true, cashierHospHidden: true, hideForProfiles: ['hospitality', 'quick_service'] },
       ],
     },
     {
@@ -139,27 +139,6 @@ export function buildNavGroups(orgSlug: string): NavGroup[] {
       defaultCollapsed: true,
       items: [
         { label: 'Pickup Queue', icon: ShoppingBag, href: '/online-orders', moduleKey: 'online_orders', permission: [P.ORDERS_MANAGE, P.ORDERS_CHANGE, P.QUEUE_MANAGE], subFeature: 'online_ordering', subPlan: 'Pro' },
-      ],
-    },
-    {
-      label: 'Pharmacy',
-      defaultCollapsed: true,
-      items: [
-        { label: 'Prescriptions', icon: Pill, href: '/pharmacy', moduleKey: 'pharmacy', permission: [P.PHARMACY_VIEW, P.PHARMACY_ADD, P.PHARMACY_CHANGE, P.PHARMACY_MANAGE], waiterHidden: true },
-        // Bills — the cashier queue for the "billing" workflow mode (a prescriber posts the script,
-        // any cashier settles it). Hidden in "direct" mode, where the prescriber takes payment
-        // themselves straight from the prescription page.
-        { label: 'Bills', icon: Receipt, href: '/bills', moduleKey: 'pharmacy_bills', permission: [P.PAYMENTS_ADD, P.PAYMENTS_VIEW], waiterHidden: true },
-        // ONE patient directory. This used to be two near-identical screens ("Patient Profiles"
-        // over derived prescription patients + "Records" over registered ones) — merged, with the
-        // register/open-visit actions inside gated on the OPD Records module toggle.
-        { label: 'Patients', icon: UserSquare, href: '/patients', moduleKey: 'patients', permission: [P.PHARMACY_VIEW, P.RECORDS_VIEW, P.RECORDS_MANAGE], waiterHidden: true },
-        // OPD clinical workflow — each independently OFF by default (OutletSetting.enable_*_module,
-        // toggled in Settings > Modules); a small chemist never sees these, a clinic-attached
-        // pharmacy turns on only the stages it actually runs.
-        { label: 'Triage', icon: HeartPulse, href: '/triage', moduleKey: 'triage', permission: [P.TRIAGE_VIEW, P.TRIAGE_ADD, P.TRIAGE_CHANGE, P.TRIAGE_MANAGE], waiterHidden: true },
-        { label: 'Examination', icon: Stethoscope, href: '/examination', moduleKey: 'examination', permission: [P.EXAMINATION_VIEW, P.EXAMINATION_ADD, P.EXAMINATION_CHANGE, P.EXAMINATION_MANAGE], waiterHidden: true },
-        { label: 'Lab', icon: FlaskConical, href: '/lab', moduleKey: 'lab', permission: [P.LAB_VIEW, P.LAB_ADD, P.LAB_CHANGE, P.LAB_MANAGE], waiterHidden: true },
       ],
     },
     {

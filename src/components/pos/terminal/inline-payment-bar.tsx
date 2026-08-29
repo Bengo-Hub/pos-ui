@@ -188,9 +188,9 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
     if (splitIdx === -1) return [...base, ...extras];
     return [...base.slice(0, splitIdx), ...extras, ...base.slice(splitIdx)];
   }, [profile, gateways, isHospitality, isOnline, allowCOD, canCreditSale, hasCustomerCredit, customerCreditAvailable, canRedeemLoyalty, loyaltyAccount, currency]);
-  // Back-office profiles (retail/pharmacy/services) get Draft + Quotation; hospitality/QSR do not.
+  // Back-office profiles (retail/services) get Draft + Quotation; hospitality/QSR do not.
   // Quotation is additionally manager-gated (canPrivileged).
-  const isBackOffice = profile === 'retail' || profile === 'pharmacy' || profile === 'services';
+  const isBackOffice = profile === 'retail' || profile === 'services';
   const showQuotation = isBackOffice && canPrivileged;
 
   const reset = useCallback(() => {

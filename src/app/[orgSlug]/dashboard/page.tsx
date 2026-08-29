@@ -8,7 +8,6 @@ import {
   BarDashboard,
   CashierDashboard,
   KitchenDashboard,
-  PharmacyDashboard,
   QuickServiceDashboard,
   ReceptionistDashboard,
   RetailDashboard,
@@ -23,7 +22,7 @@ function hasRole(roles: string[], ...check: string[]): boolean {
 export default function DashboardPage() {
   const { orgSlug } = useParams<{ orgSlug: string }>();
   const user = useAuthStore((s) => s.user);
-  const { isSuperUser, isPharmacy, isServices, isRetail, isQuickService } = useModuleAccess();
+  const { isSuperUser, isServices, isRetail, isQuickService } = useModuleAccess();
   const roles = user?.roles ?? [];
 
   const primaryRole =
@@ -41,14 +40,11 @@ export default function DashboardPage() {
       ? 'kitchen'
       : hasRole(roles, 'bar')
       ? 'bar'
-      : hasRole(roles, 'pharmacist', 'pharmacy_technician')
-      ? 'pharmacist'
       : 'cashier';
 
   switch (primaryRole) {
     case 'admin':
     case 'manager':
-      if (isPharmacy)     return <PharmacyDashboard orgSlug={orgSlug} />;
       if (isServices)     return <ServicesDashboard orgSlug={orgSlug} />;
       if (isRetail)       return <RetailDashboard orgSlug={orgSlug} />;
       if (isQuickService) return <QuickServiceDashboard orgSlug={orgSlug} />;
@@ -63,8 +59,6 @@ export default function DashboardPage() {
       return <KitchenDashboard orgSlug={orgSlug} />;
     case 'bar':
       return <BarDashboard orgSlug={orgSlug} />;
-    case 'pharmacist':
-      return <PharmacyDashboard orgSlug={orgSlug} />;
     default:
       return <CashierDashboard orgSlug={orgSlug} />;
   }

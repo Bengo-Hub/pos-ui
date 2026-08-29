@@ -41,7 +41,6 @@ const USE_CASE_LABELS: Record<string, string> = {
   hospitality: 'Hospitality',
   quick_service: 'Quick Service',
   retail: 'Retail',
-  pharmacy: 'Pharmacy',
   services: 'Services',
 };
 
@@ -54,7 +53,7 @@ const AUTH_API_URL =
 
 // Outlet use cases pos-ui can actually open (mirrors pos-api's posAcceptedUseCases) —
 // logistics/warehouse/weighbridge outlets belong to other services.
-const POS_USE_CASES = new Set(['hospitality', 'quick_service', 'retail', 'pharmacy', 'services', 'hotel', '']);
+const POS_USE_CASES = new Set(['hospitality', 'quick_service', 'retail', 'services', 'hotel', '']);
 
 interface OutletListItem {
   id: string;

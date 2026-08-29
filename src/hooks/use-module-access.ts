@@ -9,7 +9,7 @@
  * Use case is per-outlet (not per-tenant). The default comes from the tenant
  * but each outlet can override it.
  *
- * Use cases: hospitality, retail, services, quick_service, pharmacy
+ * Use cases: hospitality, retail, services, quick_service
  */
 
 import { useAuthStore } from '@/store/auth';
@@ -38,13 +38,6 @@ export type ModuleKey =
   | 'commissions'
   | 'online_orders'
   | 'retail'
-  | 'pharmacy'
-  | 'patients'
-  | 'drug_inventory'
-  | 'pharmacy_bills'
-  | 'triage'
-  | 'examination'
-  | 'lab'
   | 'returns'
   | 'clients'
   | 'staff_schedule'
@@ -59,8 +52,7 @@ export type UseCaseType =
   | 'hospitality'
   | 'retail'
   | 'services'
-  | 'quick_service'
-  | 'pharmacy';
+  | 'quick_service';
 
 // ─── Per use-case module configs ────────────────────────────────────────────
 // Cross-service "switch to another service" shortcuts (Inventory/Accounting/CRM/ERP/Logistics)
@@ -85,7 +77,6 @@ const USE_CASE_MODULES: Record<UseCaseType, ModuleKey[]> = {
   retail:        [...COMMON_MODULES, 'retail', 'shifts', 'reports', 'layaway', 'loyalty', 'commissions', 'online_orders', 'returns', 'clients', 'repairs'],
   services:      [...COMMON_MODULES, 'appointments', 'packages', 'shifts', 'reports', 'loyalty', 'commissions', 'clients', 'staff_schedule', 'resources', 'queue', 'repairs'],
   quick_service: [...COMMON_MODULES, 'kds', 'shifts', 'reports', 'online_orders'],
-  pharmacy:      [...COMMON_MODULES, 'shifts', 'reports', 'pharmacy', 'patients', 'drug_inventory', 'pharmacy_bills', 'triage', 'examination', 'lab'],
 };
 
 // ─── Hook ───────────────────────────────────────────────────────────────────
@@ -156,7 +147,6 @@ export function useModuleAccess() {
   const isRetail = useCase === 'retail';
   const isServices = useCase === 'services';
   const isQuickService = useCase === 'quick_service';
-  const isPharmacy = useCase === 'pharmacy';
 
   // Enabled modules for the current use case (empty until use case resolves)
   const enabledModules: ModuleKey[] = useCase ? USE_CASE_MODULES[useCase] : [];
@@ -206,14 +196,6 @@ export function useModuleAccess() {
       if (moduleKey === 'kds'          && !posSettings.enable_kds)              return false;
       if (moduleKey === 'bar'          && !posSettings.enable_kds)              return false; // bar shares KDS toggle
       if (moduleKey === 'appointments' && !posSettings.enable_appointments)     return false;
-      // OPD clinical stages — each independently toggleable so a small chemist runs none of them
-      // and a clinic-attached pharmacy runs only the stages it actually staffs.
-      if (moduleKey === 'triage'       && !posSettings.enable_triage_module)      return false;
-      if (moduleKey === 'examination'  && !posSettings.enable_examination_module) return false;
-      if (moduleKey === 'lab'          && !posSettings.enable_lab_module)         return false;
-      // The cashier Bills queue only exists in "billing" mode — in "direct" mode the person who
-      // writes the prescription also takes payment, straight from the prescription page.
-      if (moduleKey === 'pharmacy_bills' && posSettings.pharmacy_workflow_mode !== 'billing') return false;
     }
     return true;
   }
@@ -232,7 +214,6 @@ export function useModuleAccess() {
     isRetail,
     isServices,
     isQuickService,
-    isPharmacy,
 
     // Module check
     hasModule,

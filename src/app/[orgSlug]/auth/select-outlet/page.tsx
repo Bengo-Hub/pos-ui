@@ -25,7 +25,6 @@ const USE_CASE_LABELS: Record<string, string> = {
   hospitality: 'Hospitality',
   quick_service: 'Quick Service',
   retail: 'Retail',
-  pharmacy: 'Pharmacy',
   services: 'Services',
 };
 
@@ -33,7 +32,6 @@ const USE_CASE_COLORS: Record<string, string> = {
   hospitality: 'bg-blue-500/20 text-blue-300',
   quick_service: 'bg-orange-500/20 text-orange-300',
   retail: 'bg-green-500/20 text-green-300',
-  pharmacy: 'bg-purple-500/20 text-purple-300',
   services: 'bg-yellow-500/20 text-yellow-300',
 };
 

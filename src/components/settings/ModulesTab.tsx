@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
 import {
-  BadgeCheck, ChefHat, ChevronDown, EyeOff, FlaskConical, Loader2, Lock,
+  BadgeCheck, ChefHat, ChevronDown, EyeOff, Loader2, Lock,
   ShoppingCart, UtensilsCrossed, Wrench,
 } from 'lucide-react';
 import { usePOSSettings, useUpdatePOSModules, useUpdateOutletConfig } from '@/hooks/usePOSSettings';
@@ -20,19 +20,12 @@ import { Toggle } from './shared';
 // module writes both the disabled_modules list (visibility) and the functional flag, so hiding a
 // module the outlet doesn't use also stops its background processing.
 type BackendFlagKey =
-  | 'hotel_module_enabled' | 'enable_kds' | 'enable_appointments' | 'layaway_enabled'
-  | 'enable_records_module' | 'enable_triage_module' | 'enable_examination_module' | 'enable_lab_module';
+  | 'hotel_module_enabled' | 'enable_kds' | 'enable_appointments' | 'layaway_enabled';
 const BACKEND_FLAG: Record<string, BackendFlagKey> = {
   hotel: 'hotel_module_enabled',
   kds: 'enable_kds',
   appointments: 'enable_appointments',
   layaway: 'layaway_enabled',
-  // OPD clinical workflow — each stage its own independent flag so a small chemist can leave all
-  // four off and a clinic-attached pharmacy can turn on only the stages it actually runs.
-  records: 'enable_records_module',
-  triage: 'enable_triage_module',
-  examination: 'enable_examination_module',
-  lab: 'enable_lab_module',
 };
 
 // Friendly module names for the visibility tree (falls back to a title-cased key).
@@ -42,8 +35,6 @@ const MODULE_LABELS: Record<string, string> = {
   tables: 'Tables', reservations: 'Reservations', appointments: 'Appointments', packages: 'Service Packages',
   queue: 'Walk-in Queue', repairs: 'Repairs', staff_schedule: 'Staff Schedule', resources: 'Resources',
   kds: 'Kitchen Display (KDS)', hotel: 'Hotel / Rooms', online_orders: 'Online Orders',
-  pharmacy: 'Pharmacy', patients: 'Patients',
-  records: 'Records (Patient Registration)', triage: 'Triage', examination: 'Examination', lab: 'Lab',
   reports: 'Reports & Analytics',
   loyalty: 'Loyalty', commissions: 'Commissions', settings: 'Settings',
 };
@@ -53,7 +44,6 @@ const USE_CASES = [
   { id: 'retail', label: 'Retail', icon: ShoppingCart, description: 'Supermarkets, hardware, fashion — barcode scanning and inventory.' },
   { id: 'services', label: 'Services', icon: Wrench, description: 'Salons, spas, repair shops — appointments, clients, scheduling.' },
   { id: 'quick_service', label: 'Quick Service', icon: ChefHat, description: 'Fast-food, food courts, kiosks — simple order flow + KDS.' },
-  { id: 'pharmacy', label: 'Pharmacy', icon: FlaskConical, description: 'Dispensaries — drug inventory, prescriptions, patients.' },
 ];
 
 function titleize(key: string): string {
@@ -91,7 +81,6 @@ export function ModulesTab() {
   const [byRoleHidden, setByRoleHidden] = useState<Record<string, string[]>>({});
   const [flags, setFlags] = useState<Record<BackendFlagKey, boolean>>({
     hotel_module_enabled: false, enable_kds: false, enable_appointments: false, layaway_enabled: false,
-    enable_records_module: false, enable_triage_module: false, enable_examination_module: false, enable_lab_module: false,
   });
   const [saving, setSaving] = useState<string | null>(null);
   const [assigningUC, setAssigningUC] = useState(false);
@@ -109,10 +98,6 @@ export function ModulesTab() {
         enable_kds: settings.enable_kds ?? false,
         enable_appointments: settings.enable_appointments ?? false,
         layaway_enabled: settings.layaway_enabled ?? false,
-        enable_records_module: settings.enable_records_module ?? false,
-        enable_triage_module: settings.enable_triage_module ?? false,
-        enable_examination_module: settings.enable_examination_module ?? false,
-        enable_lab_module: settings.enable_lab_module ?? false,
       });
     }
   }, [settings]);

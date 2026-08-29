@@ -13,7 +13,7 @@ import { useState } from 'react';
 import {
   ArrowRight, BarChart3, BedDouble, Calendar, ChefHat,
   ClipboardList, Clock, Coins, Grid3x3, Package,
-  Pill, Plus, RefreshCw, ShoppingBag, TrendingUp, Users,
+  Plus, RefreshCw, ShoppingBag, TrendingUp, Users,
   Wallet, Wine,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -45,7 +45,7 @@ function DashboardCharts({ range, currency }: { range: DashboardRange; currency?
 export function AdminDashboard({ orgSlug }: { orgSlug: string }) {
   const { range, preset, setPreset, custom, setCustom } = useDashboardRange();
   const { data: summary, isLoading, refetch, isFetching } = useDashboardSummary(range);
-  const { hasModule, isPharmacy, isServices, isRetail, isQuickService } = useModuleAccess();
+  const { hasModule, isServices, isRetail, isQuickService } = useModuleAccess();
   const s = summary ?? {};
   const periodSub = range.isSingleDay ? 'today' : 'in range';
 
@@ -75,16 +75,13 @@ export function AdminDashboard({ orgSlug }: { orgSlug: string }) {
         <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Quick Actions</p>
         <QuickActionGrid>
           <QuickActionTile icon={Plus} label="New Order" href={`/${orgSlug}/order`} accent />
-          {isPharmacy && hasModule('pharmacy') && (
-            <QuickActionTile icon={Pill} label="Prescriptions" href={`/${orgSlug}/pharmacy`} tint="teal" />
-          )}
           {isServices && hasModule('appointments') && (
             <QuickActionTile icon={Calendar} label="Appointments" href={`/${orgSlug}/appointments`} tint="rose" />
           )}
           {isRetail && (
             <QuickActionTile icon={ShoppingBag} label="Layaway" href={`/${orgSlug}/layaway`} tint="purple" />
           )}
-          {!isPharmacy && !isServices && !isRetail && !isQuickService && hasModule('tables') && (
+          {!isServices && !isRetail && !isQuickService && hasModule('tables') && (
             <QuickActionTile icon={Grid3x3} label="Tables" href={`/${orgSlug}/tables`} tint="blue" />
           )}
           {hasModule('reports') && (
@@ -374,88 +371,6 @@ export function QuickServiceDashboard({ orgSlug }: { orgSlug: string }) {
       </div>
       <DashboardCharts range={range} currency={s.currency} />
       <RecentOrdersCard orgSlug={orgSlug} />
-    </div>
-  );
-}
-
-export function PharmacyDashboard({ orgSlug }: { orgSlug: string }) {
-  const tenantID = useTenantID();
-  const { range, preset, setPreset, custom, setCustom } = useDashboardRange();
-  const { data: summary, isLoading, refetch, isFetching } = useDashboardSummary(range);
-  const s = summary ?? {};
-  const { data: pendingData, isLoading: pendingLoading } = useQuery({
-    queryKey: ['dashboard-rx-pending', tenantID],
-    queryFn: () => apiClient.get<any>(`/api/v1/${tenantID}/pos/pharmacy/prescriptions?status=pending`),
-    enabled: !!tenantID, refetchInterval: 30_000, retry: false,
-  });
-  const pendingCount = pendingData?.meta?.total ?? pendingData?.data?.length ?? 0;
-  const pendingList = pendingData?.data?.slice(0, 5) ?? [];
-  const { data: lowStockData } = useQuery({
-    queryKey: ['dashboard-drug-low-stock', tenantID],
-    queryFn: () => apiClient.get<any>(`/api/v1/${tenantID}/pos/catalog/items?low_stock=true&category=medication`),
-    enabled: !!tenantID, staleTime: 5 * 60_000, retry: false,
-  });
-  const lowDrugCount = lowStockData?.meta?.total ?? lowStockData?.data?.length ?? 0;
-
-  const periodSub = range.isSingleDay ? 'dispensed today' : 'dispensed in range';
-
-  return (
-    <div className="p-6 space-y-6 overflow-x-hidden">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-bold text-foreground font-display">Pharmacy Overview</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            {new Date().toLocaleDateString('en-KE', { weekday: 'long', day: 'numeric', month: 'long' })}
-          </p>
-        </div>
-        <div className="flex items-center gap-2 w-full sm:w-auto min-w-0">
-          <DashboardRangeFilter preset={preset} setPreset={setPreset} custom={custom} setCustom={setCustom} />
-          <button onClick={() => refetch()} className="h-9 w-9 shrink-0 rounded-xl border border-border flex items-center justify-center hover:bg-accent transition-colors">
-            <RefreshCw className={cn('h-4 w-4 text-muted-foreground', isFetching && 'animate-spin')} />
-          </button>
-        </div>
-      </div>
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <KPICard label="Prescriptions" value={fmtNum(s.total_orders ?? 0)} sub={periodSub} icon={Pill} trend={s.orders_growth} loading={isLoading} />
-        <KPICard label="Pending Queue" value={fmtNum(pendingCount)} sub="awaiting dispensing" icon={ClipboardList} loading={pendingLoading} />
-        <KPICard label="Revenue" value={fmt(s.total_revenue ?? 0, s.currency)} sub={range.compareLabel} icon={TrendingUp} trend={s.revenue_growth} loading={isLoading} />
-        <KPICard label="Low Stock Drugs" value={fmtNum(lowDrugCount)} sub="below reorder level" icon={Package} loading={isLoading} />
-      </div>
-      <div className="space-y-3">
-        <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Quick Actions</p>
-        <QuickActionGrid>
-          <QuickActionTile icon={Plus} label="New Prescription" href={`/${orgSlug}/pharmacy`} accent />
-          <QuickActionTile icon={Pill} label="All Prescriptions" href={`/${orgSlug}/pharmacy`} tint="teal" />
-        </QuickActionGrid>
-      </div>
-      <DashboardCharts range={range} currency={s.currency} />
-      {pendingList.length > 0 && (
-        <div className="bg-card border border-border rounded-2xl overflow-hidden">
-          <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-            <div className="flex items-center gap-2">
-              <Pill className="h-4 w-4 text-primary" />
-              <p className="font-semibold text-sm">Pending Prescriptions</p>
-            </div>
-            <Link href={`/${orgSlug}/pharmacy`} className="text-xs text-primary hover:underline flex items-center gap-1">
-              View all <ArrowRight className="h-3 w-3" />
-            </Link>
-          </div>
-          <div className="divide-y divide-border">
-            {pendingList.map((rx: any) => (
-              <Link key={rx.id} href={`/${orgSlug}/pharmacy/${rx.id}`} className="flex items-center gap-4 px-5 py-3.5 hover:bg-accent/50 transition-colors">
-                <div className="h-8 w-8 rounded-lg bg-primary/8 flex items-center justify-center shrink-0">
-                  <Pill className="h-3.5 w-3.5 text-primary" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">{rx.prescription_number}</p>
-                  <p className="text-xs text-muted-foreground">{rx.patient_name}</p>
-                </div>
-                <span className="text-xs font-semibold text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded-full">{rx.lines?.length ?? 0} items</span>
-              </Link>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

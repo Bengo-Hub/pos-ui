@@ -10,7 +10,6 @@ import type { BannerFormState } from './discount-form-types';
  *  wire-shape string values themselves, per DiscountFormModal's adapter-driven doc comment. */
 const USE_CASE_OPTIONS: { v: string; l: string }[] = [
   { v: 'retail', l: 'Retail' },
-  { v: 'pharmacy', l: 'Pharmacy' },
   { v: 'hospitality', l: 'Hospitality' },
   { v: 'quick_service', l: 'Quick Service' },
   { v: 'services', l: 'Services' },

@@ -178,7 +178,6 @@ export function Sidebar({ open = false, onClose, collapsed = false }: SidebarPro
   // wrong menus (e.g. a "hotel" outlet must behave like hospitality, not fall through to retail).
   const outletProfile = normalizeUseCase(outlet?.use_case ?? (user as any)?.outlet_use_case ?? '');
   const isServices = outletProfile === 'services';
-  const isPharmacy = outletProfile === 'pharmacy';
 
   // ── Nav groups ────────────────────────────────────────────────────────────
 
@@ -253,12 +252,6 @@ export function Sidebar({ open = false, onClose, collapsed = false }: SidebarPro
           return canAny(perms);
         })
         .map((item) => {
-          // Pharmacy outlets: the fast terminal IS the "Walk-In Sale" surface. Rename ONLY the POS
-          // Terminal entry — not every new_order item: Add Sale and Credit Sale also use
-          // moduleKey 'new_order', so matching on that produced three identical "Walk-In Sale" rows.
-          if (isPharmacy && item.href === '/order') {
-            return { ...item, label: 'Walk-In Sale' };
-          }
           // Services outlets: the terminal is the "New Sale" surface (matches the terminal title).
           if (isServices && item.href === '/order') {
             return { ...item, label: 'New Sale' };

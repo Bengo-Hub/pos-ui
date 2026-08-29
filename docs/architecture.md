@@ -2,7 +2,7 @@
 
 **Service**: pos-ui (Next.js 16 PWA)  
 **Last updated**: 2026-05-25  
-**Purpose**: Touch-optimized, offline-capable Point of Sale terminal — multi-vertical (hospitality, retail, pharmacy, services)  
+**Purpose**: Touch-optimized, offline-capable Point of Sale terminal — multi-vertical (hospitality, retail, services, quick_service)  
 **Status**: Sprints 1–10 substantially complete. PWA offline, PIN terminal login, multi-vertical module gating, and loyalty all shipped.
 
 ---
@@ -108,7 +108,6 @@ const USE_CASE_MODULES = {
   retail:      ['dashboard','orders','new_order','shifts','reports','cash_drawer','settings','platform'],
   services:    ['dashboard','orders','new_order','appointments','shifts','reports','cash_drawer','settings','platform'],
   quick_service: ['dashboard','orders','new_order','kds','shifts','reports','cash_drawer','settings','platform'],
-  pharmacy:    ['dashboard','orders','new_order','shifts','reports','cash_drawer','settings','platform'],
 }
 ```
 

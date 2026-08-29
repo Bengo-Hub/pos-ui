@@ -14,7 +14,7 @@ pos-ui is a touch-optimized, offline-capable Progressive Web App (PWA) built on 
 - Menu grid with barcode scanner, modifiers, age verification, serial number capture
 - KDS terminal and bar display with 5-second polling
 - Hotel check-in/check-out, folio management, facility bookings
-- Multi-vertical module access (hospitality, retail, pharmacy, services) via `useModuleAccess`
+- Multi-vertical module access (hospitality, retail, services, quick_service) via `useModuleAccess`
 - Offline order queue via IndexedDB (planned Sprint 6)
 - M-Pesa STK push flow, card (Paystack), room charge, split payments
 - KRA eTIMS receipt signing (planned via pos-api Sprint 12)

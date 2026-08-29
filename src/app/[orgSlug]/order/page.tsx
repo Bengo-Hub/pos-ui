@@ -17,7 +17,6 @@ import { normalizeUseCase } from '@/lib/use-case-config';
 import { useAuthStore } from '@/store/auth';
 import { TerminalProvider } from '@/components/pos/terminal/terminal-context';
 import { RetailTerminalView } from '@/components/pos/terminal/views/RetailTerminalView';
-import { PharmacyTerminalView } from '@/components/pos/terminal/views/PharmacyTerminalView';
 import { ServicesTerminalView } from '@/components/pos/terminal/views/ServicesTerminalView';
 import { QuickServiceTerminalView } from '@/components/pos/terminal/views/QuickServiceTerminalView';
 import { HospitalityTerminalView } from '@/components/pos/terminal/views/HospitalityTerminalView';
@@ -32,8 +31,6 @@ export default function OrderPage() {
         <HospitalityTerminalView />
       ) : profile === 'quick_service' ? (
         <QuickServiceTerminalView />
-      ) : profile === 'pharmacy' ? (
-        <PharmacyTerminalView />
       ) : profile === 'services' ? (
         <ServicesTerminalView />
       ) : (

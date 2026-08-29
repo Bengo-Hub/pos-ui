@@ -218,7 +218,7 @@ function timeAgo(dateStr: string): string {
   return `${Math.floor(diff / 60)}h ago`;
 }
 
-// Subtype badges are use-case aware (orderSubtypeBadge): retail/pharmacy/services show
+// Subtype badges are use-case aware (orderSubtypeBadge): retail/services show
 // Walk-in / Online / Shipping; Dine-in etc. are hospitality/quick-service only.
 
 function statusVariantClass(status: string) {

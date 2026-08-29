@@ -3,11 +3,11 @@
  *
  * `useModuleAccess` gates NAVIGATION by use case; this module drives the SCREEN — the terminal
  * layout, default catalog display, and which cart actions/controls render — so a single `/order`
- * page adapts to retail · pharmacy · hospitality · quick_service · services without per-vertical
+ * page adapts to retail · hospitality · quick_service · services without per-vertical
  * pages. One source of truth, consumed by the order terminal (and reusable elsewhere).
  */
 
-export type TerminalProfile = 'retail' | 'pharmacy' | 'hospitality' | 'quick_service' | 'services';
+export type TerminalProfile = 'retail' | 'hospitality' | 'quick_service' | 'services';
 export type DisplayMode = 'card' | 'list' | 'image_grid';
 
 export interface TerminalConfig {
@@ -57,7 +57,7 @@ const QUICK = ['quick_service', 'quick service'];
 
 /**
  * Product-search placeholder per profile — centralised so the terminal never hardcodes it.
- * Retail/pharmacy are barcode-first checkout; hospitality/QSR browse a menu; services sell services.
+ * Retail is barcode-first checkout; hospitality/QSR browse a menu; services sell services.
  */
 export function searchPlaceholderFor(profile: TerminalProfile): string {
   switch (profile) {
@@ -67,7 +67,6 @@ export function searchPlaceholderFor(profile: TerminalProfile): string {
     case 'services':
       return 'Search services…';
     case 'retail':
-    case 'pharmacy':
     default:
       return 'Product name / SKU / Scan barcode';
   }
@@ -78,7 +77,6 @@ export function normalizeUseCase(useCase?: string | null): TerminalProfile {
   const uc = (useCase ?? '').toLowerCase();
   if (HOSPITALITY.some((h) => uc.includes(h))) return 'hospitality';
   if (QUICK.some((q) => uc.includes(q))) return 'quick_service';
-  if (uc.includes('pharmacy')) return 'pharmacy';
   if (uc.includes('service') || uc.includes('salon') || uc.includes('clinic') || uc.includes('spa')) return 'services';
   return 'retail';
 }
@@ -106,15 +104,6 @@ export function terminalConfigFor(useCase?: string | null): TerminalConfig {
         keyboardCheckout: false, showBrandGrid: false,
         showStockBadge: false, showScale: false, managerOverride: false, showCostMargin: false,
         terminalTitle: 'New Order', multiCart: false,
-      };
-    case 'pharmacy':
-      return {
-        profile, defaultDisplayMode: 'list', barcodeFirst: true, showPricingProfile: true,
-        showCustomerLoyalty: true,
-        showOrderType: false, showCourses: false, showCalculator: true,
-        keyboardCheckout: true, showBrandGrid: true,
-        showStockBadge: true, showScale: true, managerOverride: true, showCostMargin: true,
-        terminalTitle: 'Walk-In Sale', multiCart: false,
       };
     case 'services':
       return {

@@ -65,7 +65,7 @@ interface OutletInfo extends PinLoginOutlet {
 }
 
 // Use cases that support POS terminals — logistics/warehouse do not.
-const POS_OUTLET_USE_CASES = ['hospitality', 'quick_service', 'retail', 'pharmacy', 'services'];
+const POS_OUTLET_USE_CASES = ['hospitality', 'quick_service', 'retail', 'services'];
 
 const TIMEOUT_OPTIONS = [
   { label: '30 s',  ms: 30_000 },
@@ -79,14 +79,13 @@ const TIMEOUT_OPTIONS = [
 // Demo PINs — shown only on codevertex-demo tenant, filtered to the selected outlet's use_case.
 // Pin assignments mirror the seeded demo staff roles in auth-api/cmd/seed/seed_users.go.
 const DEMO_HINTS_ALL = [
-  { pin: '0000', role: 'Admin',      accent: '#ef4444', useCases: ['hospitality', 'quick_service', 'retail', 'pharmacy', 'services'] },
-  { pin: '1111', role: 'Manager',    accent: '#f97316', useCases: ['hospitality', 'quick_service', 'retail', 'pharmacy', 'services'] },
-  { pin: '2222', role: 'Cashier',    accent: '#3b82f6', useCases: ['hospitality', 'quick_service', 'retail', 'pharmacy', 'services'] },
+  { pin: '0000', role: 'Admin',      accent: '#ef4444', useCases: ['hospitality', 'quick_service', 'retail', 'services'] },
+  { pin: '1111', role: 'Manager',    accent: '#f97316', useCases: ['hospitality', 'quick_service', 'retail', 'services'] },
+  { pin: '2222', role: 'Cashier',    accent: '#3b82f6', useCases: ['hospitality', 'quick_service', 'retail', 'services'] },
   { pin: '3333', role: 'Waiter',     accent: '#10b981', useCases: ['hospitality'] },
   { pin: '4444', role: 'Kitchen',    accent: '#f59e0b', useCases: ['hospitality', 'quick_service'] },
   { pin: '5555', role: 'Bar',        accent: '#a855f7', useCases: ['hospitality'] },
   { pin: '6666', role: 'Reception',  accent: '#ec4899', useCases: ['hospitality', 'services'] },
-  { pin: '7777', role: 'Pharmacist', accent: '#14b8a6', useCases: ['pharmacy'] },
   { pin: '8888', role: 'Stylist',    accent: '#8b5cf6', useCases: ['services'] },
   { pin: '9999', role: 'Therapist',  accent: '#06b6d4', useCases: ['services'] },
 ];

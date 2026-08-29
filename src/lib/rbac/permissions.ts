@@ -11,11 +11,10 @@ export const MODULES = [
   'orders', 'payments', 'catalog', 'outlets', 'devices',
   'sessions', 'cash_drawers', 'tables', 'gift_cards',
   'price_books', 'modifiers', 'channels', 'config', 'users',
-  'reports', 'hotel', 'appointments', 'pharmacy',
+  'reports', 'hotel', 'appointments',
   'kds', 'retail', 'layaway', 'serial', 'loyalty', 'webhooks',
   'integrations', 'fiscal', 'queue', 'staff', 'commissions',
   'packages', 'clients', 'conference', 'promotions',
-  'records', 'triage', 'examination', 'lab',
 ] as const;
 
 export const ACTIONS = [
@@ -135,34 +134,6 @@ export const P = {
   APPOINTMENTS_CHANGE: 'pos.appointments.change',
   APPOINTMENTS_MANAGE: 'pos.appointments.manage',
 
-  // Pharmacy
-  PHARMACY_VIEW:     'pos.pharmacy.view',
-  PHARMACY_CHANGE:   'pos.pharmacy.change',
-  PHARMACY_ADD:      'pos.pharmacy.add',
-  PHARMACY_MANAGE:   'pos.pharmacy.manage',
-  // Extras outside the module x action matrix (cmd/seed/main.go `extras` list) — pharmacist-only
-  // clinical sign-off gates, picked up automatically via the pharmacist role's pos.pharmacy.* wildcard.
-  PHARMACY_APPROVE:               'pos.pharmacy.approve',
-  PHARMACY_INTERACTION_OVERRIDE:  'pos.pharmacy.interaction_override',
-
-  // OPD clinical workflow (pharmacy use case, each stage independently toggleable in Settings)
-  RECORDS_VIEW:        'pos.records.view',
-  RECORDS_ADD:         'pos.records.add',
-  RECORDS_CHANGE:      'pos.records.change',
-  RECORDS_MANAGE:      'pos.records.manage',
-  TRIAGE_VIEW:         'pos.triage.view',
-  TRIAGE_ADD:          'pos.triage.add',
-  TRIAGE_CHANGE:       'pos.triage.change',
-  TRIAGE_MANAGE:       'pos.triage.manage',
-  EXAMINATION_VIEW:    'pos.examination.view',
-  EXAMINATION_ADD:     'pos.examination.add',
-  EXAMINATION_CHANGE:  'pos.examination.change',
-  EXAMINATION_MANAGE:  'pos.examination.manage',
-  LAB_VIEW:            'pos.lab.view',
-  LAB_ADD:             'pos.lab.add',
-  LAB_CHANGE:          'pos.lab.change',
-  LAB_MANAGE:          'pos.lab.manage',
-
   // KDS (Kitchen Display System) — kitchen/bar staff only
   KDS_VIEW:          'pos.kds.view',
   KDS_CHANGE:        'pos.kds.change',
@@ -246,8 +217,6 @@ export const ROLE_PERMISSIONS: Record<string, Permission[]> = {
     P.CONFERENCE_VIEW, P.CONFERENCE_ADD, P.CONFERENCE_CHANGE, P.CONFERENCE_MANAGE,
     P.PROMOTIONS_VIEW, P.PROMOTIONS_ADD, P.PROMOTIONS_CHANGE, P.PROMOTIONS_MANAGE,
     P.APPOINTMENTS_ADD, P.APPOINTMENTS_VIEW, P.APPOINTMENTS_CHANGE, P.APPOINTMENTS_MANAGE,
-    P.PHARMACY_ADD, P.PHARMACY_VIEW, P.PHARMACY_CHANGE, P.PHARMACY_MANAGE,
-    P.PHARMACY_APPROVE, P.PHARMACY_INTERACTION_OVERRIDE,
   ],
   cashier: [
     // view_own (NOT view): cashiers see only their OWN sales/drafts ("My Sales", REQ-007).
@@ -375,25 +344,6 @@ export const ROLE_PERMISSIONS: Record<string, Permission[]> = {
     P.COMMISSIONS_VIEW_OWN,
     P.CLIENTS_VIEW,
   ],
-  pharmacist: [
-    P.ORDERS_ADD, P.ORDERS_VIEW, P.ORDERS_CHANGE_OWN,
-    // Dedicated draft-only actions (2026-08-28) — see cashier's entry above.
-    P.ORDERS_DELETE_OWN, P.ORDERS_RESUME_DRAFT,
-    P.PAYMENTS_ADD, P.PAYMENTS_VIEW,
-    P.CATALOG_VIEW,
-    P.SESSIONS_ADD, P.SESSIONS_VIEW_OWN,
-    P.PHARMACY_ADD, P.PHARMACY_VIEW, P.PHARMACY_CHANGE, P.PHARMACY_MANAGE,
-    P.CLIENTS_VIEW,
-  ],
-  pharmacy_technician: [
-    P.ORDERS_ADD, P.ORDERS_VIEW_OWN, P.ORDERS_CHANGE_OWN,
-    // Dedicated draft-only actions (2026-08-28) — see cashier's entry above.
-    P.ORDERS_DELETE_OWN, P.ORDERS_RESUME_DRAFT,
-    P.PAYMENTS_ADD, P.PAYMENTS_VIEW_OWN,
-    P.CATALOG_VIEW,
-    P.SESSIONS_ADD, P.SESSIONS_VIEW_OWN,
-    P.PHARMACY_VIEW, P.PHARMACY_CHANGE,
-  ],
   viewer: [
     P.ORDERS_VIEW, P.PAYMENTS_VIEW, P.CATALOG_VIEW,
     P.OUTLETS_VIEW, P.DEVICES_VIEW, P.SESSIONS_VIEW,
@@ -405,6 +355,6 @@ export const ROLE_PERMISSIONS: Record<string, Permission[]> = {
     P.LOYALTY_VIEW,
     P.COMMISSIONS_VIEW,
     P.CLIENTS_VIEW, P.PACKAGES_VIEW,
-    P.HOTEL_VIEW, P.APPOINTMENTS_VIEW, P.PHARMACY_VIEW,
+    P.HOTEL_VIEW, P.APPOINTMENTS_VIEW,
   ],
 };

@@ -9,7 +9,6 @@ const USE_CASE_LABELS: Record<string, string> = {
   hospitality: 'Hospitality',
   retail: 'Retail',
   quick_service: 'Quick Service',
-  pharmacy: 'Pharmacy',
   services: 'Services',
 };
 

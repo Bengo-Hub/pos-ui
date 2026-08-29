@@ -87,17 +87,6 @@ export interface POSSettings {
   enable_appointments: boolean;
   hotel_module_enabled: boolean;
   layaway_enabled: boolean;
-  // OPD clinical workflow (pharmacy use case) — independently toggleable per outlet so a small
-  // chemist can leave all four off and a full clinic-attached pharmacy can turn them all on.
-  enable_records_module: boolean;
-  enable_triage_module: boolean;
-  enable_examination_module: boolean;
-  enable_lab_module: boolean;
-  require_registration_fee: boolean;
-  registration_fee_catalog_item_id?: string | null;
-  /** direct = prescriber also takes payment; billing = posted to a shared cashier Bills queue. */
-  pharmacy_workflow_mode?: 'direct' | 'billing';
-  require_lab_prepayment?: boolean;
   shift_reports_enabled: boolean;
   shift_auto_end_enabled: boolean;
   shift_max_hours: number;
@@ -229,13 +218,6 @@ export interface UpdatePOSModulesInput {
   shift_reports_enabled?: boolean;
   enable_kds?: boolean;
   enable_appointments?: boolean;
-  enable_records_module?: boolean;
-  enable_triage_module?: boolean;
-  enable_examination_module?: boolean;
-  enable_lab_module?: boolean;
-  require_registration_fee?: boolean;
-  pharmacy_workflow_mode?: 'direct' | 'billing';
-  require_lab_prepayment?: boolean;
   // Whole-module hide (by moduleKey) and individual sidebar item hide (by href). A provided array
   // replaces the stored list; omit to leave unchanged. The *_by_role maps hide additionally per role.
   disabled_modules?: string[];

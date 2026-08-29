@@ -145,9 +145,9 @@ export function paymentActionsFor(
   const { isHospitality = false, isOnline = true, allowCOD = false } = opts;
   const g = gateways ?? {};
 
-  // Credit Sale (charge to AR) is a back-office retail/pharmacy concept — it does NOT apply to
+  // Credit Sale (charge to AR) is a back-office retail concept — it does NOT apply to
   // hospitality, quick_service or services, which settle at the point of sale.
-  const allowCredit = profile === 'retail' || profile === 'pharmacy';
+  const allowCredit = profile === 'retail';
 
   const ordered: TenderAction[] = [CASH, CARD_PDQ, MPESA_STK, MPESA_C2B, CARD_ONLINE, WALLET];
   if (allowCredit) ordered.push(ON_ACCOUNT);

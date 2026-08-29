@@ -53,11 +53,11 @@ gating over one shared page.
 
 Resolved server-side in `pos-api internal/modules/outletpolicy` (outlet override → use-case default):
 
-| Policy | hospitality | quick_service | retail | pharmacy | services |
-|--------|:-:|:-:|:-:|:-:|:-:|
-| `cashier_sales_visibility` | own | outlet | outlet | outlet | outlet |
-| `auto_logout_after_sale` | on | on | off | off | off |
-| `cashier_terminal_surface` | full_till | full_till | full_till | full_till | full_till |
+| Policy | hospitality | quick_service | retail | services |
+|--------|:-:|:-:|:-:|:-:|
+| `cashier_sales_visibility` | own | outlet | outlet | outlet |
+| `auto_logout_after_sale` | on | on | off | off |
+| `cashier_terminal_surface` | full_till | full_till | full_till | full_till |
 
 Any outlet can override any of these from the **Cashier & Terminal** tab; "Use default" clears the
 override and re-inherits the value above.

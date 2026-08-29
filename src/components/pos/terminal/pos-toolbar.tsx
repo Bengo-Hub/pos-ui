@@ -53,7 +53,7 @@ export function PosToolbar({
 }: PosToolbarProps) {
   const router = useRouter();
   const go = (path: string) => router.push(`/${orgSlug}${path}`);
-  const isRetailish = profile === 'retail' || profile === 'pharmacy' || profile === 'services';
+  const isRetailish = profile === 'retail' || profile === 'services';
   const isHospitality = profile === 'hospitality' || profile === 'quick_service';
   // Parked (set-aside) item count for the hospitality badge — only fetched where the button shows.
   const { data: heldItems = [] } = useHeldItems('held', isHospitality && !!onHeldItems);
