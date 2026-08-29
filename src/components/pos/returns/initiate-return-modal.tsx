@@ -30,6 +30,9 @@ export interface InitiateReturnPayload {
   reason: string;
   reason_code?: string;
   refund_channel?: string;
+  // Optional return date ("YYYY-MM-DD") — lets the cashier backdate a return that's being
+  // filed after the fact instead of always stamping it with the moment it was submitted.
+  return_date?: string;
   lines: ReturnLinePayload[];
 }
 
@@ -156,6 +159,7 @@ export function InitiateReturnModal({
   const [reason, setReason] = useState(RETURN_REASONS[0]);
   const [reasonCode, setReasonCode] = useState('');
   const [refundChannel, setRefundChannel] = useState('cash');
+  const [returnDate, setReturnDate] = useState(() => new Date().toISOString().slice(0, 10));
   // Exchange top-up: amount to collect from the customer when the replacement is pricier than the
   // returned goods. Recorded in the return reason so the cashier/accounting has a trail.
   const [topUpAmount, setTopUpAmount] = useState('');
@@ -296,6 +300,7 @@ export function InitiateReturnModal({
           ...(reasonCode ? { reason_code: reasonCode } : {}),
           // Exchanges settle in-kind (no cash refund channel); refunds/store-credit carry the channel.
           ...(returnType === 'exchange' ? {} : { refund_channel: refundChannel }),
+          ...(returnDate ? { return_date: returnDate } : {}),
           lines: returnLines,
         },
       },
@@ -543,6 +548,19 @@ export function InitiateReturnModal({
                 {REASON_CODES.map((rc) => <option key={rc.value} value={rc.value}>{rc.label}</option>)}
               </select>
             </div>
+          </div>
+
+          {/* Return date — defaults to today; lets the cashier backdate a return filed after
+              the fact (e.g. paperwork processed a day later) instead of always stamping "now". */}
+          <div>
+            <label className="text-xs font-semibold text-muted-foreground">Return Date</label>
+            <input
+              type="date"
+              value={returnDate}
+              onChange={(e) => setReturnDate(e.target.value)}
+              max={new Date().toISOString().slice(0, 10)}
+              className="mt-1 w-full bg-background border border-border rounded-xl py-2.5 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+            />
           </div>
 
           {isError && <p className="text-xs text-red-500">Failed to initiate return. Please try again.</p>}
