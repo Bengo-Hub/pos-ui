@@ -73,7 +73,8 @@ export function usePricingTiers() {
 }
 
 /** A treasury tax code (the platform source of truth for tax rates), proxied by pos-api. The POS
- *  applies each item's enriched rate at checkout; this list is shown read-only in Settings → Tax. */
+ *  applies each item's enriched rate at checkout; Settings → Tax lets the tenant pick one of these
+ *  as the outlet's default/fallback code for items with no tax code of their own. */
 export interface TaxCode {
   id: string;
   code: string;

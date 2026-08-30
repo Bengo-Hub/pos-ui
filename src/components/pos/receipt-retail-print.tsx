@@ -157,7 +157,7 @@ export function RetailReceiptPrint({ receipt, tenantName, outletName, logoUrl }:
         {trow('Subtotal:', money(currency, receipt.subtotal), true)}
         {receipt.discount_amount > 0 && trow('Discount(-):', `-${money(currency, receipt.discount_amount)}`)}
         {(receipt.vat_enabled !== false && receipt.tax_amount > 0) &&
-          trow(`VAT ${receipt.vat_rate ?? 16}%(+):`, money(currency, receipt.tax_amount))}
+          trow(`VAT ${receipt.vat_rate ?? 0}%(+):`, money(currency, receipt.tax_amount))}
         {chargeEntries.map(([k, v]) => trow(`${k.charAt(0).toUpperCase()}${k.slice(1)}(+):`, money(currency, v), false, `charge-${k}`))}
         {chargeEntries.length === 0 && (receipt.charges_total ?? 0) > 0 && trow('Charges(+):', money(currency, receipt.charges_total ?? 0))}
         {(receipt.round_off ?? 0) > 0 && trow('Round Off:', money(currency, receipt.round_off ?? 0))}

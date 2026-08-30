@@ -5,20 +5,34 @@
  *
  * Tax is sourced from TREASURY per item / tax-code — it is NOT a manual flat POS rate. Each
  * inventory item is enriched with its treasury tax code (rate + inclusive flag) and the POS
- * terminal applies THAT per-item tax at checkout. This tab therefore SHOWS the tenant's
- * treasury tax codes/rates read-only (the real source of truth) and demotes the old flat
- * "VAT / Tax Rate" field to a clearly-labelled legacy fallback used only for items that have no
- * treasury tax info yet (and for the receipt VAT line when "Show VAT on receipts" is on).
+ * terminal applies THAT per-item tax at checkout. This tab lets the tenant pick which of
+ * Treasury's tax codes is the FALLBACK/default one — used only for items that have no
+ * treasury tax code of their own yet, and as the VAT% label on receipts.
  */
 
 import { useEffect, useState } from 'react';
-import { Loader2, Lock, Save, ShieldCheck, Receipt } from 'lucide-react';
+import { Loader2, Lock, Save, ShieldCheck } from 'lucide-react';
 import { Button, Card, CardContent, CardHeader } from '@/components/ui/base';
+import { SearchableCombobox, type ComboboxOption } from '@bengo-hub/shared-ui-lib/combobox';
 import { usePOSSettings, useUpdatePOSSettings } from '@/hooks/usePOSSettings';
-import { useTaxCodes } from '@/hooks/usePOS';
+import { useTaxCodes, type TaxCode } from '@/hooks/usePOS';
 import { usePermissions } from '@/hooks/usePermissions';
 import { P } from '@/lib/rbac/permissions';
-import { Toggle, inputClass, labelClass } from './shared';
+import { Toggle, labelClass } from './shared';
+
+/** "Non-VAT" has no single universal tax_type across tenants' treasury seed data (seen live:
+ *  non_vat, exempt, zero_rated, and plain "custom" all used for a tenant's own 0%/KRA-D code)
+ *  — so match the explicit type first, else fall back to any zero-rate code. */
+function findNonVatCode(codes: TaxCode[]): TaxCode | undefined {
+  return codes.find((c) => c.tax_type === 'non_vat') ?? codes.find((c) => c.rate === 0);
+}
+
+function findVatCode(codes: TaxCode[]): TaxCode | undefined {
+  return (
+    codes.find((c) => c.is_default && c.rate > 0) ??
+    codes.find((c) => c.tax_type === 'vat' && c.rate > 0)
+  );
+}
 
 export function TaxTab() {
   const { data: settings, isLoading } = usePOSSettings();
@@ -27,15 +41,52 @@ export function TaxTab() {
   const { can } = usePermissions();
   const canEdit = can(P.CONFIG_CHANGE) || can(P.CONFIG_MANAGE);
 
-  const [vatRate, setVatRate] = useState('16');
-  const [vatEnabled, setVatEnabled] = useState(true);
+  const [vatRate, setVatRate] = useState('0');
+  const [vatEnabled, setVatEnabled] = useState(false);
+  const [selectedCode, setSelectedCode] = useState('');
+
+  const codes = taxCodes ?? [];
 
   useEffect(() => {
     if (settings) {
-      setVatRate(String(settings.vat_rate ?? 16));
-      setVatEnabled(settings.vat_enabled ?? true);
+      setVatRate(String(settings.vat_rate ?? 0));
+      setVatEnabled(settings.vat_enabled ?? false);
     }
   }, [settings]);
+
+  // Preselect a code once the tax-code list has loaded and nothing is selected yet: prefer
+  // whatever rate is already saved (so a reload reflects the real stored config), else fall
+  // back to the non-VAT code (tenant not VAT-enabled) or the default VAT code (enabled).
+  useEffect(() => {
+    if (taxCodesLoading || codes.length === 0 || selectedCode || !settings) return;
+    const savedRate = settings.vat_rate;
+    const byRate = typeof savedRate === 'number' ? codes.find((c) => c.rate === savedRate) : undefined;
+    const preset = byRate ?? (vatEnabled ? findVatCode(codes) : findNonVatCode(codes));
+    if (preset) setSelectedCode(preset.code);
+  }, [codes, taxCodesLoading, selectedCode, settings, vatEnabled]);
+
+  const codeOptions: ComboboxOption[] = codes.map((c) => ({
+    value: c.code,
+    label: `${c.name} (${c.rate}%)`,
+    hint: c.kra_code ? `KRA ${c.kra_code}` : undefined,
+  }));
+
+  const handleSelectCode = (value: string) => {
+    setSelectedCode(value);
+    const code = codes.find((c) => c.code === value);
+    if (code) setVatRate(String(code.rate));
+  };
+
+  // Flipping the master switch re-derives which code applies (non-VAT ↔ default VAT); the
+  // combobox still lets the tenant override the pick afterward before saving.
+  const handleToggleVat = (checked: boolean) => {
+    setVatEnabled(checked);
+    const preset = checked ? findVatCode(codes) : findNonVatCode(codes);
+    if (preset) {
+      setSelectedCode(preset.code);
+      setVatRate(String(preset.rate));
+    }
+  };
 
   const handleSave = () => {
     updateSettings.mutate({
@@ -43,8 +94,6 @@ export function TaxTab() {
       vat_enabled: vatEnabled,
     });
   };
-
-  const codes = taxCodes ?? [];
 
   return (
     <div className="space-y-4">
@@ -68,60 +117,7 @@ export function TaxTab() {
         </CardContent>
       </Card>
 
-      {/* Treasury tax codes (read-only) */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-2">
-            <Receipt className="h-4 w-4 text-primary" />
-            <span className="font-bold text-sm">Tax Codes (from Treasury)</span>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {taxCodesLoading ? (
-            <div className="h-20 flex items-center justify-center text-muted-foreground">
-              <Loader2 className="h-5 w-5 animate-spin" />
-            </div>
-          ) : codes.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No tax codes configured in Treasury (or Treasury is unreachable). Items with no tax
-              code fall back to the legacy rate below.
-            </p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-xs uppercase text-muted-foreground border-b border-border">
-                    <th className="py-2 pr-4 font-medium">Code</th>
-                    <th className="py-2 pr-4 font-medium">Name</th>
-                    <th className="py-2 pr-4 font-medium">Type</th>
-                    <th className="py-2 pr-4 font-medium text-right">Rate</th>
-                    <th className="py-2 pr-4 font-medium">KRA</th>
-                    <th className="py-2 font-medium">Default</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {codes.map((c) => (
-                    <tr key={c.id || c.code} className="border-b border-border/50 last:border-0">
-                      <td className="py-2 pr-4 font-mono">{c.code}</td>
-                      <td className="py-2 pr-4">{c.name}</td>
-                      <td className="py-2 pr-4 uppercase text-muted-foreground">{c.tax_type || '—'}</td>
-                      <td className="py-2 pr-4 text-right tabular-nums font-mono">{c.rate}%</td>
-                      <td className="py-2 pr-4 text-muted-foreground">{c.kra_code || '—'}</td>
-                      <td className="py-2">
-                        {c.is_default ? (
-                          <span className="text-xs rounded bg-primary/10 text-primary px-2 py-0.5">Default</span>
-                        ) : null}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Legacy flat fallback + receipt toggle */}
+      {/* Default tax code + receipt toggle */}
       {isLoading ? (
         <div className="h-24 flex items-center justify-center text-muted-foreground">
           <Loader2 className="h-6 w-6 animate-spin" />
@@ -130,34 +126,38 @@ export function TaxTab() {
         <Card>
           <CardHeader>
             <div className="flex items-center gap-2">
-              <span className="font-bold text-sm">Fallback &amp; Receipt Display</span>
+              <span className="font-bold text-sm">Default Tax Code &amp; Receipt Display</span>
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <label className={labelClass}>Fallback VAT / Tax Rate (%) — legacy</label>
-              <input
-                type="number"
-                min={0}
-                max={100}
-                step={0.1}
-                value={vatRate}
-                onChange={(e) => setVatRate(e.target.value)}
-                disabled={!canEdit}
-                className={`${inputClass} font-mono`}
+              <label className={labelClass}>Default Tax Code</label>
+              <SearchableCombobox
+                options={codeOptions}
+                value={selectedCode}
+                onChange={handleSelectCode}
+                loading={taxCodesLoading}
+                disabled={!canEdit || codes.length === 0}
+                clearable={false}
+                placeholder={codes.length === 0 ? 'No tax codes configured in Treasury' : 'Select a tax code…'}
+                searchPlaceholder="Search tax codes…"
+                emptyText="No tax codes match"
               />
               <p className="text-xs text-muted-foreground">
-                Applied <span className="font-medium">only</span> to items that have no Treasury tax
-                code yet, and used as the VAT% label on receipts. Items enriched from Treasury ignore
-                this value and use their own rate.
+                Pulled live from Treasury. Applied <span className="font-medium">only</span> to items
+                that have no Treasury tax code of their own yet, and used as the VAT% label on
+                receipts. Items enriched from Treasury ignore this and use their own rate.
               </p>
             </div>
             <div className="flex items-center justify-between pt-1">
               <div>
                 <p className="text-sm font-medium">Show VAT on Receipts</p>
-                <p className="text-xs text-muted-foreground">Display VAT as a receipt line item</p>
+                <p className="text-xs text-muted-foreground">
+                  Display the VAT line on receipts and charge the default tax code above on items
+                  with no tax code of their own. Off hides tax entirely, everywhere.
+                </p>
               </div>
-              <Toggle checked={vatEnabled} onChange={setVatEnabled} disabled={!canEdit} />
+              <Toggle checked={vatEnabled} onChange={handleToggleVat} disabled={!canEdit} />
             </div>
           </CardContent>
         </Card>

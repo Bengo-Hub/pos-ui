@@ -105,7 +105,7 @@ export function buildReceiptRows(receipt: ReceiptData): ReceiptRow[] {
   }
   rows.push({ kind: 'money', label: 'Subtotal', amount: receipt.subtotal });
   if (receipt.vat_enabled !== false && receipt.tax_amount > 0) {
-    rows.push({ kind: 'money', label: `VAT (${receipt.vat_rate ?? 16}%)`, amount: receipt.tax_amount });
+    rows.push({ kind: 'money', label: `VAT (${receipt.vat_rate ?? 0}%)`, amount: receipt.tax_amount });
   }
   if (receipt.discount_amount > 0) {
     rows.push({ kind: 'money', label: 'Discount', amount: receipt.discount_amount, negative: true });

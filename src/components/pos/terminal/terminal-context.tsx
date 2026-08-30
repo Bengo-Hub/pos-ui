@@ -503,7 +503,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
   // Legacy-fallback VAT for lines with NO inventory/treasury tax info. Mirrors pos-api's
   // outletFallbackTaxRate: VAT disabled in POS settings → 0 (server charges nothing, so the till
   // preview must match); otherwise the configured rate. Per-item treasury tax always wins.
-  const taxRate = (posSettings?.vat_enabled === false ? 0 : (posSettings?.vat_rate ?? 16)) / 100;
+  const taxRate = (posSettings?.vat_enabled === false ? 0 : (posSettings?.vat_rate ?? 0)) / 100;
   // Live KDS stations — drive per-station ticket routing/printing (same category_filter routing the
   // kitchen displays use), so a ticket prints on the printer of the station it was routed to. Only
   // fetched for outlets whose use-case AND plan can actually reach pos-api's /kds/stations route —

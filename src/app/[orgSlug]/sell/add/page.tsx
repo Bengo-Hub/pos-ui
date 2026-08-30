@@ -100,7 +100,7 @@ export default function AddSalePage() {
   // outletFallbackTaxRate exactly: VAT disabled in POS settings → 0 (the server charges nothing,
   // so the preview must not show VAT either); otherwise the configured rate. Items that DO carry
   // treasury tax info (tax_rate/tax_inclusive) always use their own per-line values instead.
-  const taxRate = (posSettings?.vat_enabled === false ? 0 : (posSettings?.vat_rate ?? 16)) / 100;
+  const taxRate = (posSettings?.vat_enabled === false ? 0 : (posSettings?.vat_rate ?? 0)) / 100;
   const currency = (posSettings as any)?.currency ?? 'KES';
   const fmt = (n: number) => formatCurrency(n, currency);
 
