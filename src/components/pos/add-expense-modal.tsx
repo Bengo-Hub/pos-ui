@@ -16,7 +16,7 @@ import {
   useExpenseNumberPreview,
 } from '@/hooks/usePOS';
 import { TypeaheadInput } from '@/components/ui/typeahead-input';
-import { AccountForm, EMPTY_ACCOUNT_FORM, isAccountFormValid, SUPPORTED_CURRENCIES, CURRENCY_META } from '@bengo-hub/shared-ui-lib/payments';
+import { AccountForm, EMPTY_ACCOUNT_FORM, isAccountFormValid, SUPPORTED_CURRENCIES, CURRENCY_META, resolveDefaultAccount } from '@bengo-hub/shared-ui-lib/payments';
 
 interface AddExpenseModalProps {
   open: boolean;
@@ -77,14 +77,15 @@ export function AddExpenseModal({ open, onClose }: AddExpenseModalProps) {
     [suppliers.data],
   );
 
-  // Default the payment account to a cash-type real account once accounts load — never clobbers
-  // an explicit user pick.
+  // Default the payment account from the tenant's default_payment_methods mapping for the
+  // selected payment method (falling back to the first cash-type account when nothing matches) —
+  // re-runs as the method changes, never clobbers an explicit user pick.
   useEffect(() => {
     if (accountTouched || accountId || !accounts.data?.length) return;
-    const cashAccount = accounts.data.find((a) => a.account_type === 'cash');
-    if (cashAccount) setAccountId(cashAccount.id);
+    const def = resolveDefaultAccount(accounts.data, paymentMethod);
+    if (def) setAccountId(def.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [accounts.data]);
+  }, [accounts.data, paymentMethod]);
 
   const totalNum = parseFloat(total) || 0;
   const taxRateNum = parseFloat(taxRate) || 0;
