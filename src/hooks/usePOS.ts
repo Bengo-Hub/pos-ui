@@ -1881,15 +1881,18 @@ export function useEditSale() {
   const qc = useQueryClient();
   return useMutation({
     // customerName/customerIdentifier let the caller attach a real customer to an order that
-    // doesn't have one — required by pos-api when the edit includes an increase (it always
-    // posts as an AR receivable, and refuses to do that against a walk-in with no phone; see
-    // orders.RequireIdentifiableCustomer). Without sending these, an admin adding an item to a
-    // walk-in's sale via this page had no way to satisfy that guard at all.
-    mutationFn: ({ orderId, reason, lines, customerName, customerIdentifier }: {
+    // doesn't have one. Only needed when an increase is DELIBERATELY billed to that customer's
+    // account (increaseSettlement: 'credit') — the backend otherwise mirrors whatever the
+    // order's own tender already was (a cash sale's top-up is collected as cash, needing no
+    // customer at all; see saleedit.resolveIncreaseSettlement). increaseSettlement/
+    // externalReference are optional overrides — omit both to get that safe default.
+    mutationFn: ({ orderId, reason, lines, customerName, customerIdentifier, increaseSettlement, externalReference }: {
       orderId: string; reason: string; lines: EditSaleLine[]; customerName?: string; customerIdentifier?: string;
+      increaseSettlement?: string; externalReference?: string;
     }) =>
       apiClient.post<EditSaleResult>(`${basePath(tenantID)}/orders/${orderId}/edit`, {
         reason, lines, customer_name: customerName, customer_identifier: customerIdentifier,
+        increase_settlement: increaseSettlement, external_reference: externalReference,
       }),
     // Invalidate every cache keyed on THIS order, not just the list — a Sell Details modal or
     // the Edit Sale page itself may still be mounted with a cached useOrder(orderId)/returns
