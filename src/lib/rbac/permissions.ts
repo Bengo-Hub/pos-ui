@@ -73,6 +73,10 @@ export const P = {
   // Reveal supplier COST price + margin on the POS cart (manager/admin). Separate from view/manage so
   // it can be granted to e.g. an accountant without full catalog edit rights.
   CATALOG_VIEW_COST: 'pos.catalog.view_cost',
+  /** Self-approve an out-of-stock/oversell override without a manager step-up (scan card/PIN/
+   *  one-time code) — mirrors ORDERS_VOID_SELF. Admin/manager by default; a tenant admin can
+   *  grant/revoke it per role. */
+  CATALOG_OOS_OVERRIDE_SELF: 'pos.catalog.oos_override_self',
 
   // Tables
   TABLES_VIEW:       'pos.tables.view',
@@ -199,6 +203,7 @@ export const ROLE_PERMISSIONS: Record<string, Permission[]> = {
     P.PAYMENTS_ADD, P.PAYMENTS_VIEW, P.PAYMENTS_MANAGE,
     P.DISCOUNTS_APPLY,
     P.CATALOG_ADD, P.CATALOG_VIEW, P.CATALOG_CHANGE, P.CATALOG_DELETE, P.CATALOG_MANAGE, P.CATALOG_VIEW_COST,
+    P.CATALOG_OOS_OVERRIDE_SELF,
     P.TABLES_VIEW, P.TABLES_CHANGE, P.TABLES_MANAGE,
     P.DRAWERS_ADD, P.DRAWERS_VIEW, P.DRAWERS_MANAGE,
     P.SESSIONS_ADD, P.SESSIONS_VIEW, P.SESSIONS_MANAGE,

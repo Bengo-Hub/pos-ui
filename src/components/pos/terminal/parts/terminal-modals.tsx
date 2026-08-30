@@ -21,6 +21,8 @@ import { ReceiptPreview } from '@/components/pos/receipt-preview';
 import { CalculatorOverlay } from '@/components/pos/calculator-overlay';
 import { ApprovalDialog } from '@/components/pos/approval-dialog';
 import { VoidApprovalDialog } from '@/components/pos/void-approval-dialog';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { P } from '@/hooks/usePermissions';
 import { ChargesModal } from '@/components/pos/charges-modal';
 import { ApplyDiscountModal } from '@/components/pos/discounts/apply-discount-modal';
 import { OrderTaxModal } from '@/components/pos/order-tax-modal';
@@ -236,41 +238,64 @@ export function TerminalModals() {
         autoLogout={t.autoLogoutAfterSale}
       />
 
-      {/* Manager override — out-of-stock add interception (retail/pharmacy). Same 3-mode dialog as
-          hospitality (scan · PIN · one-time code): scan/PIN do a live audited step-up; the code
-          path lets an off-site manager authorise by sharing a one-time code. */}
+      {/* Manager override — out-of-stock add interception (retail/pharmacy). A caller who already
+          holds pos.catalog.oos_override_self (admin/manager by default — mirrors
+          pos.orders.void_self) IS the approver, so a quick Yes/No confirm replaces the PIN/scan/
+          code flow entirely; everyone else still gets the full 3-mode dialog (scan · PIN ·
+          one-time code from an off-site manager). */}
       {t.pendingOverride && (
-        <ApprovalDialog
-          open
-          action="catalog.oos_override"
-          description={`A manager must approve to override out-of-stock for ${t.pendingOverride.name}.`}
-          confirmLabel="Approve override"
-          onClose={() => t.setPendingOverride(null)}
-          onApproved={async (approval) => {
-            const item = t.pendingOverride!;
-            // scan/PIN already did a live step-up (verified). The one-time CODE path is not yet
-            // verified — redeem it server-side before allowing the out-of-stock add.
-            if (approval.code && !approval.approvalToken) {
-              try {
-                const res = await rbacApi.verifyApprovalCode(
-                  t.user?.tenant_id ?? '', 'catalog.oos_override', approval.code,
-                  t.outlet?.id ?? '',
-                );
-                if (!res?.approved) { toast.error('Invalid or expired approval code'); return; }
-              } catch { toast.error('Invalid or expired approval code'); return; }
-            }
-            t.setPendingOverride(null);
-            // Remember this item is cleared to oversell for the rest of the order, so bumping its
-            // qty afterwards (stepper or typed) doesn't re-prompt for manager PIN every time.
-            t.markOversoldApproved(item.id);
-            // Override approved — continue the normal add flow (serial/modifier/age still apply).
-            if (item.requiresAgeVerification || item.trackSerialNumber || item.modifierGroups?.length) {
-              t.proceedWithItem(item);
-            } else {
-              t.addItemToCart(item);
-            }
-          }}
-        />
+        t.can(P.CATALOG_OOS_OVERRIDE_SELF) ? (
+          <ConfirmDialog
+            open
+            variant="warning"
+            title="Override out-of-stock?"
+            description={`${t.pendingOverride.name} exceeds on-hand stock. Continue selling it anyway?`}
+            confirmLabel="Override & continue"
+            onOpenChange={(open) => { if (!open) t.setPendingOverride(null); }}
+            onConfirm={() => {
+              const item = t.pendingOverride!;
+              t.setPendingOverride(null);
+              t.markOversoldApproved(item.id);
+              if (item.requiresAgeVerification || item.trackSerialNumber || item.modifierGroups?.length) {
+                t.proceedWithItem(item);
+              } else {
+                t.addItemToCart(item);
+              }
+            }}
+          />
+        ) : (
+          <ApprovalDialog
+            open
+            action="catalog.oos_override"
+            description={`A manager must approve to override out-of-stock for ${t.pendingOverride.name}.`}
+            confirmLabel="Approve override"
+            onClose={() => t.setPendingOverride(null)}
+            onApproved={async (approval) => {
+              const item = t.pendingOverride!;
+              // scan/PIN already did a live step-up (verified). The one-time CODE path is not yet
+              // verified — redeem it server-side before allowing the out-of-stock add.
+              if (approval.code && !approval.approvalToken) {
+                try {
+                  const res = await rbacApi.verifyApprovalCode(
+                    t.user?.tenant_id ?? '', 'catalog.oos_override', approval.code,
+                    t.outlet?.id ?? '',
+                  );
+                  if (!res?.approved) { toast.error('Invalid or expired approval code'); return; }
+                } catch { toast.error('Invalid or expired approval code'); return; }
+              }
+              t.setPendingOverride(null);
+              // Remember this item is cleared to oversell for the rest of the order, so bumping its
+              // qty afterwards (stepper or typed) doesn't re-prompt for manager PIN every time.
+              t.markOversoldApproved(item.id);
+              // Override approved — continue the normal add flow (serial/modifier/age still apply).
+              if (item.requiresAgeVerification || item.trackSerialNumber || item.modifierGroups?.length) {
+                t.proceedWithItem(item);
+              } else {
+                t.addItemToCart(item);
+              }
+            }}
+          />
+        )
       )}
 
       {/* Age Verification */}

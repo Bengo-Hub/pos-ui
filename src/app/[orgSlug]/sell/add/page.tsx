@@ -20,7 +20,8 @@ import { SplitPaymentModal } from '@/components/pos/split-payment-modal';
 import { StockCell, isStockTracked } from '@/components/pos/stock-cell';
 import { Button } from '@/components/ui/base';
 import { useClientCredit } from '@/hooks/useClients';
-import { usePermissions } from '@/hooks/usePermissions';
+import { usePermissions, P } from '@/hooks/usePermissions';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { useAddOrderLines, useCreateOrder, useCreatePaymentIntent, useEditOrderLine, useEditSale, useFullCatalog, useOrder, usePricingTiers, searchMenuItems, useSetOrderDiscount, useVoidOrderLine, type CatalogItem, type EditSaleLine } from '@/hooks/usePOS';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { useStaffAdmin, useStaffSearch } from '@/hooks/useStaff';
@@ -1563,30 +1564,50 @@ export default function AddSalePage() {
         />
       )}
 
-      {/* Out-of-stock override — the line qty exceeds on-hand stock. Same catalog.oos_override
-          manager approval the POS terminal uses; on approval the intended qty is applied. */}
+      {/* Out-of-stock override — the line qty exceeds on-hand stock. A caller who already holds
+          pos.catalog.oos_override_self (admin/manager by default) IS the approver, so a quick
+          Yes/No confirm replaces the PIN/scan/code flow; everyone else gets the full manager
+          approval dialog the POS terminal also uses. */}
       {pendingOversell && (
-        <ApprovalDialog
-          open
-          action="catalog.oos_override"
-          description={`Overselling ${lines[pendingOversell.index]?.item.name ?? 'this item'} (exceeds on-hand stock) requires a manager to approve.`}
-          confirmLabel="Approve override"
-          onApproved={async (approval) => {
-            // scan/PIN already stepped up (verified). The one-time CODE path is redeemed here.
-            if (approval.code && !approval.approvalToken) {
-              try {
-                const res = await rbacApi.verifyApprovalCode(tenantId, 'catalog.oos_override', approval.code, outletId);
-                if (!res?.approved) { toast.error('Invalid or expired approval code'); return; }
-              } catch { toast.error('Invalid or expired approval code'); return; }
-            }
-            const { index, qty } = pendingOversell;
-            setPendingOversell(null);
-            const approvedItemId = lines[index]?.item.id;
-            if (approvedItemId) setOversoldApprovedIds((prev) => new Set(prev).add(approvedItemId));
-            applyQty(index, qty);
-          }}
-          onClose={() => setPendingOversell(null)}
-        />
+        can(P.CATALOG_OOS_OVERRIDE_SELF) ? (
+          <ConfirmDialog
+            open
+            variant="warning"
+            title="Override out-of-stock?"
+            description={`${lines[pendingOversell.index]?.item.name ?? 'This item'} exceeds on-hand stock. Continue selling it anyway?`}
+            confirmLabel="Override & continue"
+            onOpenChange={(open) => { if (!open) setPendingOversell(null); }}
+            onConfirm={() => {
+              const { index, qty } = pendingOversell;
+              setPendingOversell(null);
+              const approvedItemId = lines[index]?.item.id;
+              if (approvedItemId) setOversoldApprovedIds((prev) => new Set(prev).add(approvedItemId));
+              applyQty(index, qty);
+            }}
+          />
+        ) : (
+          <ApprovalDialog
+            open
+            action="catalog.oos_override"
+            description={`Overselling ${lines[pendingOversell.index]?.item.name ?? 'this item'} (exceeds on-hand stock) requires a manager to approve.`}
+            confirmLabel="Approve override"
+            onApproved={async (approval) => {
+              // scan/PIN already stepped up (verified). The one-time CODE path is redeemed here.
+              if (approval.code && !approval.approvalToken) {
+                try {
+                  const res = await rbacApi.verifyApprovalCode(tenantId, 'catalog.oos_override', approval.code, outletId);
+                  if (!res?.approved) { toast.error('Invalid or expired approval code'); return; }
+                } catch { toast.error('Invalid or expired approval code'); return; }
+              }
+              const { index, qty } = pendingOversell;
+              setPendingOversell(null);
+              const approvedItemId = lines[index]?.item.id;
+              if (approvedItemId) setOversoldApprovedIds((prev) => new Set(prev).add(approvedItemId));
+              applyQty(index, qty);
+            }}
+            onClose={() => setPendingOversell(null)}
+          />
+        )
       )}
 
       {/* Credit-sale terms capture (due date default +30d, notes) — shared component. */}
