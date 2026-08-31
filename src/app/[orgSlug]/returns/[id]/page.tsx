@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api/client';
@@ -258,11 +259,11 @@ export default function ReturnDetailPage() {
         <div>
           <p className="text-xs text-muted-foreground">Original Order</p>
           {ret.order_number ? (
-            <a href={`/${orgSlug}/sell/all-sales?invoice=${encodeURIComponent(ret.order_number)}`}
+            <Link href={`/${orgSlug}/sell/all-sales?invoice=${encodeURIComponent(ret.order_number)}`}
               className="text-sm font-semibold font-mono mt-0.5 truncate text-primary hover:underline block"
               title="Find this sale in All Sales">
               {ret.order_number}
-            </a>
+            </Link>
           ) : <p className="text-sm font-semibold font-mono mt-0.5">—</p>}
         </div>
         <div>
