@@ -6,6 +6,7 @@
 export type SubscriptionErrorCode =
   | 'subscription_inactive'
   | 'subscription_expired'
+  | 'subscription_grace_write_blocked'
   | 'feature_not_available'
   | 'usage_limit_exceeded'
   | 'device_limit_reached'
@@ -46,6 +47,7 @@ export interface SubscriptionError extends ApiError {
 const SUBSCRIPTION_CODES = new Set<SubscriptionErrorCode>([
   'subscription_inactive',
   'subscription_expired',
+  'subscription_grace_write_blocked',
   'feature_not_available',
   'usage_limit_exceeded',
   'device_limit_reached',
@@ -92,6 +94,7 @@ export function parseLimitInfo(data: any): LimitReachedInfo | undefined {
 const SUBSCRIPTION_MESSAGES: Record<SubscriptionErrorCode, string> = {
   subscription_inactive: 'Your subscription is inactive. Please renew to continue.',
   subscription_expired: 'Your subscription has expired. Renew now to restore access.',
+  subscription_grace_write_blocked: 'Your subscription expired. Renew to create, edit, or delete.',
   feature_not_available: 'This feature is not available on your current plan.',
   usage_limit_exceeded: 'You have reached the usage limit for your plan.',
   device_limit_reached: 'Device limit reached. Upgrade your plan to add more devices.',

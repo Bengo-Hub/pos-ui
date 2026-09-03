@@ -71,6 +71,7 @@ class ApiClient {
     private on401Callback: (() => void) | null = null;
     private onSubscription403Callback: ((data: any) => void) | null = null;
     private onLimitReachedCallback: ((data: any) => void) | null = null;
+    private onGraceWriteBlockedCallback: ((data: any) => void) | null = null;
     private onServerErrorCallback: ((status: number, message: string) => void) | null = null;
 
     /** Register a callback to run when any API response is 401 (e.g. clear session / redirect to auth). */
@@ -86,6 +87,14 @@ class ApiClient {
     /** Register a callback for 402 metered-limit-reached errors (opens the extra-usage modal). */
     public setOnLimitReached(callback: ((data: any) => void) | null) {
         this.onLimitReachedCallback = callback;
+    }
+
+    /** Register a callback for a 402 write attempt rejected because the tenant is in its
+     *  post-expiry grace window (pos-api's SubscriptionGate blocks create/edit/delete there,
+     *  reads still pass) — distinct from the metered-limit 402 above, which carries
+     *  metric/limit/used fields this one doesn't have. */
+    public setOnGraceWriteBlocked(callback: ((data: any) => void) | null) {
+        this.onGraceWriteBlockedCallback = callback;
     }
 
     /** Register a callback for 5xx server errors to show a global error toast. */
@@ -127,11 +136,17 @@ class ApiClient {
                 this.onSubscription403Callback(data);
             }
         }
-        // 402 Payment Required = a metered limit was hit. Open the extra-usage modal
-        // (the body carries the overage price + eligibility from subscription-service).
+        // 402 Payment Required — either a metered limit was hit (opens the extra-usage modal;
+        // the body carries metric/limit/used) or the tenant is in grace and this was a write
+        // (the body has no metric/limit/used, just a message — route it to its own callback so
+        // it doesn't reach parseLimitInfo, which silently no-ops without a `metric` field).
         if (error.response?.status === 402) {
             const data = error.response?.data;
-            if (this.onLimitReachedCallback) {
+            if (data?.code === 'subscription_grace_write_blocked') {
+                if (this.onGraceWriteBlockedCallback) {
+                    this.onGraceWriteBlockedCallback(data);
+                }
+            } else if (this.onLimitReachedCallback) {
                 this.onLimitReachedCallback(data);
             }
         }

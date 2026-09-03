@@ -90,6 +90,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => apiClient.setOnSubscription403(null);
   }, [orgSlug, router]);
 
+  // Wire 402 grace-period write-blocked → sonner toast with renew action (reads still work;
+  // this only fires on a rejected create/edit/delete attempt — see pos-api's SubscriptionGate).
+  useEffect(() => {
+    apiClient.setOnGraceWriteBlocked((data) => {
+      const message = subscriptionErrorMessage(data);
+      toast.error('Subscription expired', {
+        description: message,
+        duration: 8000,
+        action: orgSlug
+          ? {
+              label: 'Renew now',
+              onClick: () => router.push(`/${orgSlug}/settings/billing`),
+            }
+          : undefined,
+      });
+    });
+    return () => apiClient.setOnGraceWriteBlocked(null);
+  }, [orgSlug, router]);
+
   // Wire 402 metered-limit-reached → extra-usage modal
   useEffect(() => {
     apiClient.setOnLimitReached((data) => {
