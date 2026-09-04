@@ -24,7 +24,11 @@ export function StockBadge({ quantity, threshold = 5, className, itemType }: Sto
     );
   }
 
-  if (quantity === 0) {
+  if (quantity <= 0) {
+    // A negative quantity is a genuine, persisted backorder debt (an approved oversell not yet
+    // settled by a restock) — still "Out of Stock" (not "Low Stock", which the old `=== 0` check
+    // let a negative value fall through to), but shown so staff can see how far in the hole the
+    // item actually is.
     return (
       <span
         className={cn(
@@ -32,7 +36,7 @@ export function StockBadge({ quantity, threshold = 5, className, itemType }: Sto
           className,
         )}
       >
-        Out of Stock
+        {quantity < 0 ? `Out of Stock (${quantity} backordered)` : 'Out of Stock'}
       </span>
     );
   }
