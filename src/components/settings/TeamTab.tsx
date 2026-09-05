@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { CalendarDays, Check, Loader2, Pencil, Plus, QrCode, ShieldPlus, Store, Trash2, Users, X } from 'lucide-react';
 import { Button, Card, CardContent, CardHeader } from '@/components/ui/base';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
@@ -12,6 +12,8 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { useRbacRoles } from '@/hooks/useRbac';
 import { useAuthStore } from '@/store/auth';
 import { fetchOutlets } from '@/lib/api/outlets';
+import { isPlatformOwner as checkIsPlatformOwner } from '@/lib/auth/permissions';
+import { purgeUserAccount } from '@/lib/auth/admin-actions';
 import { SearchableCombobox } from '@bengo-hub/shared-ui-lib/combobox';
 import type { StaffMember, UpdateStaffInput, CreateStaffInput } from '@/lib/api/staff';
 import { StaffShiftDrawer } from '@/components/pos/staff-shift-drawer';
@@ -21,6 +23,21 @@ import { ExtraRolesModal } from './ExtraRolesModal';
 import { toast } from 'sonner';
 import { inputClass } from './shared';
 import { apiErrorMessage } from '@/lib/api/error-message';
+
+function Toggle({ checked, onChange, disabled }: { checked: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      onClick={() => !disabled && onChange(!checked)}
+      disabled={disabled}
+      className={`relative w-10 h-5 rounded-full transition-colors shrink-0 ${checked ? 'bg-primary' : 'bg-muted'} ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+    >
+      <span className={`absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white transition-transform ${checked ? 'translate-x-5' : ''}`} />
+    </button>
+  );
+}
 
 // Fallback display labels for the built-in system roles. The authoritative role list now
 // comes from the backend (useRbacRoles) so CUSTOM roles created in the Roles & Permissions
@@ -54,6 +71,9 @@ export function TeamTab() {
   const update = useUpdateStaff(tenantId);
   const setPin = useSetStaffPIN(tenantId);
   const create = useCreateStaff(tenantId);
+  const queryClient = useQueryClient();
+  const accessToken = useAuthStore((s) => s.session?.accessToken);
+  const isPlatformOwner = checkIsPlatformOwner(user);
 
   const { canManageStaff, isSuperuser } = usePermissions();
   // A manager is guardrailed: cannot manage admin/manager-level staff. Anyone who ALSO holds
@@ -102,10 +122,11 @@ export function TeamTab() {
   const [editForm, setEditForm] = useState<UpdateStaffInput>({});
   const [pinStaffId, setPinStaffId] = useState<string | null>(null);
   const [newPin, setNewPin] = useState('');
-  const [confirmId, setConfirmId] = useState<string | null>(null);
   const [scheduleStaff, setScheduleStaff] = useState<StaffMember | null>(null);
   const [cardStaff, setCardStaff] = useState<StaffMember | null>(null);
   const [extraRolesStaff, setExtraRolesStaff] = useState<StaffMember | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<StaffMember | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   function startEdit(m: StaffMember) {
     setEditingId(m.id);
@@ -122,13 +143,38 @@ export function TeamTab() {
     }
   }
 
-  async function confirmDeactivate(staffId: string) {
+  async function toggleActive(m: StaffMember, nextActive: boolean) {
+    // The "off" direction still goes through the dedicated deactivate endpoint (it's the
+    // one the backend actually treats as "sign this person out everywhere"); "on" reuses
+    // the generic update endpoint's existing is_active field, previously never invoked
+    // from this page.
     try {
-      await deactivate.mutateAsync(staffId);
-      toast.success('Staff deactivated');
-      setConfirmId(null);
+      if (nextActive) {
+        await update.mutateAsync({ staffId: m.id, input: { is_active: true } });
+        toast.success('Staff activated');
+      } else {
+        await deactivate.mutateAsync(m.id);
+        toast.success('Staff deactivated');
+      }
     } catch (e) {
-      toast.error(await apiErrorMessage(e, 'Failed to deactivate staff'));
+      toast.error(await apiErrorMessage(e, nextActive ? 'Failed to activate staff' : 'Failed to deactivate staff'));
+    }
+  }
+
+  async function confirmHardDelete() {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await purgeUserAccount(accessToken, deleteTarget.user_id);
+      toast.success('Staff member permanently deleted');
+      setDeleteTarget(null);
+      // The purge cascades back to pos-api via the auth.user.deleted event; refresh once
+      // that's had a moment to land rather than optimistically removing the row.
+      setTimeout(() => queryClient.invalidateQueries({ queryKey: ['staff-admin', tenantId] }), 1500);
+    } catch (e) {
+      toast.error(await apiErrorMessage(e, 'Failed to delete staff member'));
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -283,12 +329,21 @@ export function TeamTab() {
                         <td className="px-4 py-3 text-xs text-muted-foreground">
                           {EMP_TYPE_LABELS[m.employment_type] ?? m.employment_type}
                         </td>
-                        <td className="px-4 py-3 text-center">
-                          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-                            m.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'
-                          }`}>
-                            {m.is_active ? 'Active' : 'Inactive'}
-                          </span>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center justify-center gap-1.5">
+                            <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                              m.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'
+                            }`}>
+                              {m.is_active ? 'Active' : 'Inactive'}
+                            </span>
+                            {canManageStaff && !isProtected && (
+                              <Toggle
+                                checked={m.is_active}
+                                disabled={update.isPending || deactivate.isPending}
+                                onChange={(v) => toggleActive(m, v)}
+                              />
+                            )}
+                          </div>
                         </td>
                         <td className="px-4 py-3 text-center">
                           {pinStaffId === m.id ? (
@@ -389,12 +444,13 @@ export function TeamTab() {
                                     <Pencil className="h-3.5 w-3.5" />
                                   </Button>
                                 )}
-                                {m.is_active && !isProtected && (
+                                {isPlatformOwner && (
                                   <Button
                                     size="sm"
                                     variant="ghost"
                                     className="h-7 w-7 p-0 text-destructive hover:text-destructive"
-                                    onClick={() => setConfirmId(m.id)}
+                                    onClick={() => setDeleteTarget(m)}
+                                    title="Permanently delete this staff member (platform admin only)"
                                   >
                                     <Trash2 className="h-3.5 w-3.5" />
                                   </Button>
@@ -513,14 +569,14 @@ export function TeamTab() {
       )}
 
       <ConfirmDialog
-        open={!!confirmId}
-        onOpenChange={(v) => { if (!v) setConfirmId(null); }}
-        title="Deactivate Staff Member"
-        description="This staff member will no longer be able to log in. You can reactivate them later."
-        confirmLabel="Deactivate"
-        onConfirm={() => confirmId && confirmDeactivate(confirmId)}
+        open={!!deleteTarget}
+        onOpenChange={(v) => { if (!v && !deleting) setDeleteTarget(null); }}
+        title="Permanently delete this staff member?"
+        description={`This deletes ${deleteTarget?.name ?? 'this person'}'s account everywhere on the platform — every tenant, every service. This cannot be undone. If you only want to remove their access here, use the Active/Inactive toggle instead.`}
+        confirmLabel={deleting ? 'Deleting…' : 'Delete permanently'}
+        onConfirm={confirmHardDelete}
         variant="danger"
-        loading={deactivate.isPending}
+        loading={deleting}
       />
 
       <StaffShiftDrawer
