@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { CalendarDays, Check, Loader2, Pencil, Plus, QrCode, ShieldPlus, Store, Trash2, Users, X } from 'lucide-react';
+import { CalendarDays, Check, KeyRound, Loader2, Pencil, Plus, QrCode, ShieldPlus, Store, Trash2, Users, X } from 'lucide-react';
 import { Button, Card, CardContent, CardHeader } from '@/components/ui/base';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import {
@@ -20,6 +20,7 @@ import { StaffShiftDrawer } from '@/components/pos/staff-shift-drawer';
 import { RolesPanel } from './RolesPanel';
 import { StaffCardModal } from './StaffCardModal';
 import { ExtraRolesModal } from './ExtraRolesModal';
+import { ResetPasswordDialog } from './ResetPasswordDialog';
 import { toast } from 'sonner';
 import { inputClass } from './shared';
 import { apiErrorMessage } from '@/lib/api/error-message';
@@ -127,6 +128,7 @@ export function TeamTab() {
   const [extraRolesStaff, setExtraRolesStaff] = useState<StaffMember | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<StaffMember | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [resetPasswordStaff, setResetPasswordStaff] = useState<StaffMember | null>(null);
 
   function startEdit(m: StaffMember) {
     setEditingId(m.id);
@@ -444,6 +446,17 @@ export function TeamTab() {
                                     <Pencil className="h-3.5 w-3.5" />
                                   </Button>
                                 )}
+                                {canManageStaff && !isProtected && (
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-7 w-7 p-0 text-muted-foreground hover:text-primary"
+                                    onClick={() => setResetPasswordStaff(m)}
+                                    title="Reset password"
+                                  >
+                                    <KeyRound className="h-3.5 w-3.5" />
+                                  </Button>
+                                )}
                                 {isPlatformOwner && (
                                   <Button
                                     size="sm"
@@ -589,6 +602,13 @@ export function TeamTab() {
         staff={cardStaff}
         open={!!cardStaff}
         onClose={() => setCardStaff(null)}
+      />
+
+      <ResetPasswordDialog
+        staff={resetPasswordStaff}
+        open={!!resetPasswordStaff}
+        onClose={() => setResetPasswordStaff(null)}
+        accessToken={accessToken}
       />
 
       <ExtraRolesModal
