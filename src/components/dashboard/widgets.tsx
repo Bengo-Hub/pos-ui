@@ -169,7 +169,10 @@ export function KPICard({
   value: string;
   sub?: string;
   icon: React.ElementType;
-  trend?: number;
+  // null means the backend deliberately suppressed the figure (e.g. a near-zero previous-period
+  // baseline would make the percentage meaningless — see reports.go's growthPct) — treated the
+  // same as "no trend at all", not as a real 0%.
+  trend?: number | null;
   loading?: boolean;
   /** Optional — makes the whole card a link (e.g. "Active Staff" → the Team-on-shift tab). */
   href?: string;
@@ -193,7 +196,7 @@ export function KPICard({
         <p className="text-lg sm:text-2xl font-bold text-foreground tabular-nums font-display leading-tight break-words">{value}</p>
       )}
       <div className="flex items-center gap-2 flex-wrap min-w-0">
-        {trend !== undefined && (
+        {trend !== undefined && trend !== null && (
           <span className={cn(
             'text-xs font-semibold flex items-center gap-0.5 shrink-0',
             trend >= 0 ? 'text-emerald-500' : 'text-red-500'

@@ -100,6 +100,20 @@ export function SalesActionsMenu({ order, orgSlug, onView, onEditShipping, onVie
   const isDelivery = order.order_subtype === 'delivery' || order.order_type === 'delivery';
   const isFinal = order.status === 'completed';
   const linesLocked = ['completed', 'cancelled', 'voided', 'refunded'].includes(order.status);
+  // Edit Sale's REAL backend gate (saleedit orchestrator.go) is narrower than "any correction
+  // history" (that's Delete Sale's gate, order.has_correction_history, used above) — a sale
+  // with a partial reversal/return is still legitimately re-editable, only a FULL reversal or
+  // an already-"refunded" status is terminal. Disabling on the broader flag would wrongly block
+  // sales admins are expected to keep correcting over time.
+  const editSaleBlocked = order.status === 'refunded' || order.has_full_reversal === true;
+  // Non-blocking hint only: an increase (not a reduction) on a sale with no identifiable
+  // customer will be refused unless it can be collected in cash immediately — see
+  // orders.RequireIdentifiableCustomer / saleedit.resolveIncreaseSettlement. Mirrors that same
+  // "walk-in" definition (no phone, or the shared placeholder name) so the hint never disagrees
+  // with the actual server-side error a cashier would hit.
+  const isWalkInSale =
+    !order.customer_phone ||
+    /^walk[\s-]?in customer$/i.test(String(order.customer_name ?? '').trim());
 
   const close = () => setOpen(false);
   const item = 'flex items-center gap-2.5 w-full px-3 py-2 text-sm text-left hover:bg-accent transition-colors';
@@ -142,9 +156,24 @@ export function SalesActionsMenu({ order, orgSlug, onView, onEditShipping, onVie
               isn't missed in favor of the narrower "Edit Sale Info" below (they used to share
               the same "Edit" label, which is exactly why admins kept landing on the wrong one). */}
           {isFinal && canEditFinalizedSale && onEditFinalizedSale && (
-            <button className={item} onClick={() => { onEditFinalizedSale(order); close(); }}>
-              <Pencil className="h-4 w-4 text-primary" /> Edit Sale
-            </button>
+            editSaleBlocked ? (
+              <button
+                className={`${item} opacity-50 cursor-not-allowed`}
+                disabled
+                title="This sale has already been fully reversed/refunded — there's nothing left to edit."
+              >
+                <Pencil className="h-4 w-4 text-muted-foreground" /> Edit Sale
+              </button>
+            ) : (
+              <button
+                className={item}
+                onClick={() => { onEditFinalizedSale(order); close(); }}
+                title={isWalkInSale ? 'Walk-in sale — reducing it is unaffected, but increasing its value will need a customer attached unless it can be collected in cash immediately.' : undefined}
+              >
+                <Pencil className="h-4 w-4 text-primary" /> Edit Sale
+                {isWalkInSale && <span className="ml-auto text-[10px] font-medium text-amber-600 dark:text-amber-400">walk-in</span>}
+              </button>
+            )
           )}
           {isFinal && canEditSaleInfo && onEditSaleInfo && (
             <button className={item} onClick={() => { onEditSaleInfo(order); close(); }}>
