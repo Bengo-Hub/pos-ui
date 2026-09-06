@@ -19,6 +19,10 @@ export interface SaleSessionSnapshot {
   cart: CartItem[];
   manualDiscount: number;
   discountReason: string;
+  /** Which Promotion produced manualDiscount, when it came from a real applied deal/promo code
+   *  (undefined for a manager's free-form discount) — lets the order-create call enforce that
+   *  promotion's redemption cap. */
+  discountPromotionId?: string;
   orderTax: number;
   charges: Record<string, number>;
   loyaltyState: LoyaltyState | null;
@@ -44,6 +48,7 @@ export function emptySnapshot(): SaleSessionSnapshot {
     cart: [],
     manualDiscount: 0,
     discountReason: '',
+    discountPromotionId: undefined,
     orderTax: 0,
     charges: {},
     loyaltyState: null,

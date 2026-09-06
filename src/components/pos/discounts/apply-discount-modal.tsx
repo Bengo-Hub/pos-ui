@@ -14,13 +14,18 @@ import { UpgradeDialog } from '@bengo-hub/shared-ui-lib/subscription';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import type { ApplyPromoLine, Discount, DiscountInput } from '@/lib/api/discounts';
 import { DiscountFormModal, describeDiscount, type DiscountItemRef } from './discount-form-modal';
+import { ADDON_UPGRADE_COPY } from './discount-form-types';
 
 interface ApplyDiscountModalProps {
   open: boolean;
   subtotal: number;
   currentAmount: number;
   currentReason: string;
-  onApply: (amount: number, reason: string) => void;
+  /** promotionId is set only when the applied discount came from a real Promotion (predefined
+   *  catalog discount or a redeemed promo code) — undefined for the manual quick discount. Lets
+   *  the host thread it through order creation so the server can enforce that promotion's
+   *  usage_limit/max_units_per_customer redemption cap. */
+  onApply: (amount: number, reason: string, promotionId?: string) => void;
   onClose: () => void;
   /** The sale's real cart lines — required so a typed/scanned promo code is evaluated against
    *  the actual items (schedule/meal_period/item-or-category scope/BOGO), not a flat amount. */
@@ -141,7 +146,7 @@ export function ApplyDiscountModal({ open, subtotal, currentAmount, currentReaso
   const pct = subtotal > 0 ? (amount / subtotal) * 100 : 0;
 
   const applyDefined = (d: Discount, amt: number) =>
-    onApply(amt, `${d.name}${d.promo_code ? ` (${d.promo_code})` : ''}`);
+    onApply(amt, `${d.name}${d.promo_code ? ` (${d.promo_code})` : ''}`, d.id);
 
   // Create the reusable discount through the SoT, then apply it to this sale immediately.
   async function handleCreate(payload: DiscountInput) {
@@ -175,7 +180,7 @@ export function ApplyDiscountModal({ open, subtotal, currentAmount, currentReaso
         return;
       }
       toast.success(`Code ${trimmed} applied`);
-      onApply(amt, `Code: ${trimmed}`);
+      onApply(amt, `Code: ${trimmed}`, res.promoId);
     } catch (e) {
       toast.error(await apiErrorMessage(e, 'Failed to apply code'));
     }
@@ -337,7 +342,12 @@ export function ApplyDiscountModal({ open, subtotal, currentAmount, currentReaso
           onLockedFlashSaleClick={() => setUpgradeFeature('flash_sale')}
         />
       )}
-      <UpgradeDialog feature={upgradeFeature ?? 'happy_hour'} open={!!upgradeFeature} onClose={() => setUpgradeFeature(null)} />
+      <UpgradeDialog
+        feature={upgradeFeature ?? 'happy_hour'}
+        open={!!upgradeFeature}
+        onClose={() => setUpgradeFeature(null)}
+        {...(upgradeFeature ? ADDON_UPGRADE_COPY[upgradeFeature] : undefined)}
+      />
     </div>
   );
 }

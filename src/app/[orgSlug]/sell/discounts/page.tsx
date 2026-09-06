@@ -16,6 +16,7 @@ import { UpgradeDialog } from '@bengo-hub/shared-ui-lib/subscription';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import type { Discount, DiscountInput } from '@/lib/api/discounts';
 import { DiscountFormModal } from '@/components/pos/discounts/discount-form-modal';
+import { ADDON_UPGRADE_COPY } from '@/components/pos/discounts/discount-form-types';
 import { searchCatalogItemsAdapter, fetchCategoryItemsAdapter } from '@/components/pos/discounts/apply-discount-modal';
 import { DataTable } from '@bengo-hub/shared-ui-lib/data-table';
 import { buildDiscountColumns } from './discounts-columns';
@@ -209,7 +210,12 @@ export default function DiscountsPage() {
         currentOutletId={currentOutletId}
         currentOutletName={currentOutletName}
       />
-      <UpgradeDialog feature={upgradeFeature ?? 'happy_hour'} open={!!upgradeFeature} onClose={() => setUpgradeFeature(null)} />
+      <UpgradeDialog
+        feature={upgradeFeature ?? 'happy_hour'}
+        open={!!upgradeFeature}
+        onClose={() => setUpgradeFeature(null)}
+        {...(upgradeFeature ? ADDON_UPGRADE_COPY[upgradeFeature] : undefined)}
+      />
 
       <ConfirmDialog
         open={!!deleteTarget}

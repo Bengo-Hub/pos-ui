@@ -77,6 +77,10 @@ export interface Discount {
   auto_apply: boolean;
   status: string;
   rule?: PromotionRule | null;
+  /** Redemption caps (nil/absent = unlimited) — enforced server-side via the
+   *  promotion_redemptions ledger, shared globally across POS + ordering-frontend. */
+  usage_limit?: number | null;
+  max_units_per_customer?: number | null;
   /** Freeform JSON blob; `banner` is the only key this app currently reads/writes. */
   metadata?: { banner?: DiscountBannerConfig; [key: string]: unknown } | null;
 }
@@ -112,6 +116,10 @@ export interface DiscountInput {
   get_pair_map?: Record<string, string>;
   max_discount?: number;
   meal_period?: MealPeriod | '';
+  /** Redemption caps (nil/omitted = unlimited). usage_limit is the total across all channels
+   *  combined; max_units_per_customer is matched by phone/customer key. */
+  usage_limit?: number | null;
+  max_units_per_customer?: number | null;
   /** Optional storefront banner config — merged read/merge/write into metadata["banner"]
    *  server-side; other metadata keys already stored on the promotion are preserved. */
   banner?: DiscountBannerConfig;
@@ -167,10 +175,10 @@ export const discountsApi = {
    * scanned code behaves identically to a happy-hour deal instead of a separate flat calculator.
    * `outletId` scopes an outlet-restricted code; omit for a tenant-wide/"All outlets" code.
    */
-  apply: (tenantSlug: string, promoCode: string, lines: ApplyPromoLine[], outletId?: string) =>
-    apiClient.post<{ valid: boolean; reason?: string; discountAmount?: string; perSku?: Record<string, PerSkuDiscount> }>(
+  apply: (tenantSlug: string, promoCode: string, lines: ApplyPromoLine[], outletId?: string, customerKey?: string) =>
+    apiClient.post<{ valid: boolean; reason?: string; promoId?: string; discountAmount?: string; perSku?: Record<string, PerSkuDiscount> }>(
       `/api/v1/${tenantSlug}/pos/promotions/apply`,
-      { promoCode, outlet_id: outletId, lines },
+      { promoCode, outlet_id: outletId, lines, customer_key: customerKey },
     ),
 };
 

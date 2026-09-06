@@ -216,7 +216,7 @@ export interface TerminalContextValue {
   discountReason: string;
   discountOpen: boolean;
   setDiscountOpen: (v: boolean) => void;
-  applyDiscount: (amount: number, reason: string) => void;
+  applyDiscount: (amount: number, reason: string, promotionId?: string) => void;
   // Manager quick-edit order adjustments (QA req 4): order-level tax + additional charges.
   orderTax: number;
   orderTaxOpen: boolean;
@@ -678,6 +678,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
   const [charges, setCharges] = useState<Record<string, number>>({});
   const [chargesOpen, setChargesOpen] = useState(false);
   const [discountReason, setDiscountReason] = useState('');
+  const [discountPromotionId, setDiscountPromotionId] = useState<string | undefined>(undefined);
   const [discountOpen, setDiscountOpen] = useState(false);
   // Action a manager must approve (order.discount_override | price.override), set
   // from the backend's 422; null = no pending approval.
@@ -704,6 +705,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
       cart,
       manualDiscount,
       discountReason,
+      discountPromotionId,
       orderTax,
       charges,
       loyaltyState,
@@ -712,13 +714,14 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
       pricingProfile,
       ageVerified: ageVerifiedRef.current,
     }),
-    [cart, manualDiscount, discountReason, orderTax, charges, loyaltyState, orderSubtype, deliveryInfo, pricingProfile],
+    [cart, manualDiscount, discountReason, discountPromotionId, orderTax, charges, loyaltyState, orderSubtype, deliveryInfo, pricingProfile],
   );
   // Write a tab's snapshot back into this provider's state (used on hydrate/switch/new/close).
   const applySnapshot = useCallback((s: SaleSessionSnapshot) => {
     setCart(s.cart ?? []);
     setManualDiscountState(s.manualDiscount ?? 0);
     setDiscountReason(s.discountReason ?? '');
+    setDiscountPromotionId(s.discountPromotionId ?? undefined);
     setOrderTax(s.orderTax ?? 0);
     setCharges(s.charges ?? {});
     setLoyaltyState(s.loyaltyState ?? null);
@@ -1259,10 +1262,13 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
     setCustomerResetSeq((s) => s + 1);
   };
 
-  // Apply or clear a manual order-level discount (KES amount).
-  const applyDiscount = (amount: number, reason: string) => {
+  // Apply or clear a manual order-level discount (KES amount). promotionId is set only when the
+  // discount came from a real applied deal/promo code (not a manager's free-form discount) —
+  // threaded through to order creation so the server can enforce that promotion's redemption cap.
+  const applyDiscount = (amount: number, reason: string, promotionId?: string) => {
     setManualDiscountState(Math.max(0, amount));
     setDiscountReason(reason);
+    setDiscountPromotionId(promotionId);
     setDiscountOpen(false);
   };
 
@@ -1558,6 +1564,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
         coversCount: coversParam > 1 ? coversParam : undefined,
         discountAmount: (loyaltyDiscount + manualDiscount) || undefined,
         discountReason: discountReason || undefined,
+        promotionId: discountPromotionId,
         orderTaxAmount: orderTax || undefined,
         charges: chargesTotal > 0 ? charges : undefined,
         approvalToken: approval?.approvalToken,
@@ -1740,6 +1747,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
         ageVerified: ageVerifiedRef.current || undefined,
         discountAmount: (loyaltyDiscount + manualDiscount) || undefined,
         discountReason: discountReason || undefined,
+        promotionId: discountPromotionId,
         customerPhone: loyaltyState?.customerPhone || undefined,
         customerName: loyaltyState?.customerName || undefined,
         businessDate: saleDate || undefined,

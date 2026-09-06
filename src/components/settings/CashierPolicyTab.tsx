@@ -29,8 +29,13 @@ export function CashierPolicyTab() {
   const { data: settings, isLoading } = usePOSSettings();
   const update = useUpdatePOSSettings();
   const { can } = usePermissions();
-  const { isSuperUser } = useModuleAccess();
+  const { isSuperUser, isHospitality } = useModuleAccess();
   const canEdit = can(P.CONFIG_MANAGE) || can(P.CONFIG_CHANGE) || isSuperUser;
+  // "Full till" vs "Bills only" governs the hospitality Terminal/Tables surface (Tables is a
+  // hospitality-only module — see USE_CASE_MODULES in use-module-access.ts); a retail/services/
+  // quick_service outlet has no Tables screen for this to toggle, so hide it there entirely
+  // rather than showing a hospitality-worded control that does nothing for them.
+  const showTerminalSurface = isHospitality;
 
   // '' = use default; otherwise the explicit override.
   const [salesVisibility, setSalesVisibility] = useState<'own' | 'outlet' | TriString>('');
@@ -156,35 +161,37 @@ export function CashierPolicyTab() {
         </CardContent>
       </Card>
 
-      {/* Terminal surface (hospitality cashier) */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <h3 className="text-base font-bold flex items-center gap-2">
-              <LayoutGrid className="h-4 w-4 text-primary" /> Hospitality cashier menu
-            </h3>
-            <OverriddenBadge overridden={!!overrides['cashier_terminal_surface']} />
-          </div>
-          <p className="text-sm text-muted-foreground">
-            <span className="font-medium">Full till</span> lets a hospitality cashier ring sales at the POS Terminal AND
-            settle bills (Terminal + Add Sale + Tables shown). <span className="font-medium">Bills only</span> hides the
-            fast terminal so they settle from the Orders/Tables list. Resolved:{' '}
-            <span className="font-medium text-foreground">{resolvedSurface === 'bills_only' ? 'Bills only' : 'Full till'}</span>.
-          </p>
-        </CardHeader>
-        <CardContent>
-          <select
-            value={terminalSurface}
-            onChange={(e) => setTerminalSurface(e.target.value as typeof terminalSurface)}
-            disabled={!canEdit}
-            className={inputClass + ' max-w-sm'}
-          >
-            <option value="">Use default ({resolvedSurface === 'bills_only' ? 'Bills only' : 'Full till'})</option>
-            <option value="full_till">Full till (terminal + add sale + tables)</option>
-            <option value="bills_only">Bills only (settle from Orders/Tables)</option>
-          </select>
-        </CardContent>
-      </Card>
+      {/* Terminal surface (hospitality cashier) — hospitality-only, see showTerminalSurface above */}
+      {showTerminalSurface && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-bold flex items-center gap-2">
+                <LayoutGrid className="h-4 w-4 text-primary" /> Hospitality cashier menu
+              </h3>
+              <OverriddenBadge overridden={!!overrides['cashier_terminal_surface']} />
+            </div>
+            <p className="text-sm text-muted-foreground">
+              <span className="font-medium">Full till</span> lets a hospitality cashier ring sales at the POS Terminal AND
+              settle bills (Terminal + Add Sale + Tables shown). <span className="font-medium">Bills only</span> hides the
+              fast terminal so they settle from the Orders/Tables list. Resolved:{' '}
+              <span className="font-medium text-foreground">{resolvedSurface === 'bills_only' ? 'Bills only' : 'Full till'}</span>.
+            </p>
+          </CardHeader>
+          <CardContent>
+            <select
+              value={terminalSurface}
+              onChange={(e) => setTerminalSurface(e.target.value as typeof terminalSurface)}
+              disabled={!canEdit}
+              className={inputClass + ' max-w-sm'}
+            >
+              <option value="">Use default ({resolvedSurface === 'bills_only' ? 'Bills only' : 'Full till'})</option>
+              <option value="full_till">Full till (terminal + add sale + tables)</option>
+              <option value="bills_only">Bills only (settle from Orders/Tables)</option>
+            </select>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Drafts page quick config (2026-08-28) — a shortcut over the full Roles & Permissions
           matrix for the common "hide these two buttons for cashiers" ask. Applies to any

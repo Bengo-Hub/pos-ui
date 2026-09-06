@@ -395,6 +395,25 @@ export function DiscountFormModal({
             </div>
           )}
 
+          {/* Redemption caps — optional, blank = unlimited (the historical default). Enforced
+              server-side in real time via the promotion_redemptions ledger, shared globally
+              across the POS terminal and the online storefront. */}
+          <div>
+            <span className="text-sm font-medium">Redemption limits <span className="text-xs text-muted-foreground">(optional)</span></span>
+            <div className="mt-1 grid grid-cols-2 gap-3">
+              <label className="block">
+                <span className="text-xs text-muted-foreground">Total uses (all channels)</span>
+                <input type="number" min="1" step="1" placeholder="Unlimited" value={f.usageLimit}
+                  onChange={(e) => set('usageLimit', e.target.value)} className={input} />
+              </label>
+              <label className="block">
+                <span className="text-xs text-muted-foreground">Max per customer</span>
+                <input type="number" min="1" step="1" placeholder="Unlimited" value={f.maxUnitsPerCustomer}
+                  onChange={(e) => set('maxUnitsPerCustomer', e.target.value)} className={input} />
+              </label>
+            </div>
+          </div>
+
           {/* Storefront banner is Pro/Gold PowerSuite only — this is UX defense-in-depth
               (show, don't hide), never the security boundary: pos-api re-checks the same
               feature entitlement server-side on every write AND on every S2SListBanners read,

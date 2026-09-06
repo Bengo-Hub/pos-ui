@@ -196,6 +196,10 @@ export default function AddSalePage() {
   // quick one-time) — same entry point and server-side over-limit step-up as the terminal.
   const [discount, setDiscount] = useState(0);
   const [discountReason, setDiscountReason] = useState('');
+  // Set only when the discount came from a real applied deal/promo code (not the manual
+  // quick discount) — threaded into order creation so the server enforces that promotion's
+  // usage_limit/max_units_per_customer redemption cap.
+  const [discountPromotionId, setDiscountPromotionId] = useState<string | undefined>(undefined);
   const [discountOpen, setDiscountOpen] = useState(false);
   // The discount as last persisted on the SERVER for a resumed sale (null = not a resume).
   // A mismatch with `discount` marks it dirty and surfaces the ✓ save / ✕ cancel actions —
@@ -827,6 +831,7 @@ export default function AddSalePage() {
       orderSubtype: 'retail' as const,
       discountAmount: discount || undefined,
       discountReason: (discount > 0 && discountReason) || undefined,
+      promotionId: discount > 0 ? discountPromotionId : undefined,
       // Manager step-up outcome (over-limit discount / order adjustment) — token from a live
       // PIN/card step-up, or the one-time code a manager generated remotely.
       approvalToken: approval?.approvalToken,
@@ -1537,7 +1542,7 @@ export default function AddSalePage() {
         subtotal={subtotal}
         currentAmount={discount}
         currentReason={discountReason}
-        onApply={(amount, reason) => { setDiscount(amount); setDiscountReason(reason); setDiscountOpen(false); }}
+        onApply={(amount, reason, promotionId) => { setDiscount(amount); setDiscountReason(reason); setDiscountPromotionId(promotionId); setDiscountOpen(false); }}
         onClose={() => setDiscountOpen(false)}
         lines={lines.map((l) => ({ sku: l.item.sku, category: l.item.category, quantity: l.quantity, unit_price: l.unitPrice }))}
         outletId={outletId}

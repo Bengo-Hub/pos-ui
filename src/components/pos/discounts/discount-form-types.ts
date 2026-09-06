@@ -12,6 +12,21 @@ import type { Discount, DiscountBannerConfig, DiscountInput, DiscountKind, MealP
  * lossy mapping here.
  */
 
+/**
+ * Copy overrides for `UpgradeDialog` when the locked feature is a platform-admin-grant-only
+ * ADD-ON (never included in any subscription plan tier), not a real tier feature. The shared
+ * dialog's default "upgrade to a higher plan" wording is actively wrong for these — a tenant
+ * already on the top tier would see a nonsensical prompt for something no plan unlocks. Both
+ * DiscountFormModal hosts (apply-discount-modal.tsx, sell/discounts/page.tsx) spread this into
+ * their `<UpgradeDialog>` when `upgradeFeature` matches one of these keys.
+ */
+export const ADDON_UPGRADE_COPY: Record<string, { title: string; description: string }> = {
+  flash_sale: {
+    title: 'Flash Sale is a platform add-on',
+    description: "This isn't part of any subscription plan tier — ask your account manager to enable it for your account.",
+  },
+};
+
 export interface DiscountItemRef {
   sku: string;
   name: string;
@@ -79,6 +94,11 @@ export interface FormState {
   // whichever outlet the form was opened from). The actual outlet id is supplied by the host
   // at submit time (see toPayload), not stored on the form itself.
   outletScope: 'all' | 'this_outlet';
+  // Redemption caps — '' = unlimited (the historical default; every existing promotion is
+  // unaffected until a tenant opts in). usageLimit is the total across all channels combined;
+  // maxUnitsPerCustomer is matched by phone/customer key.
+  usageLimit: string;
+  maxUnitsPerCustomer: string;
   // Optional storefront marketing banner — off by default so existing promotions (and every
   // new one that doesn't opt in) are unaffected.
   banner: BannerFormState;
@@ -113,6 +133,7 @@ export function blankForm(): FormState {
     buyQuantity: '1', getQuantity: '1', getDiscountPercent: '100',
     crossItemGet: false, pairs: [],
     outletScope: 'all',
+    usageLimit: '', maxUnitsPerCustomer: '',
     banner: blankBanner(),
   };
 }
@@ -192,6 +213,8 @@ export function formFromDiscount(d: Discount, resolveName?: (sku: string) => str
     crossItemGet: pairs.length > 0,
     pairs,
     outletScope: d.outlet_id ? 'this_outlet' : 'all',
+    usageLimit: d.usage_limit != null ? String(d.usage_limit) : '',
+    maxUnitsPerCustomer: d.max_units_per_customer != null ? String(d.max_units_per_customer) : '',
     banner: bannerFromDiscount(d),
   };
 }
@@ -244,6 +267,14 @@ export function toPayload(f: FormState, currentOutletId?: string): DiscountInput
     toast.error('Flash sale needs an end date so the storefront can show a countdown');
     return null;
   }
+  if (f.usageLimit.trim() && !(parseInt(f.usageLimit, 10) > 0)) {
+    toast.error('Total redemption limit must be a positive whole number, or blank for unlimited');
+    return null;
+  }
+  if (f.maxUnitsPerCustomer.trim() && !(parseInt(f.maxUnitsPerCustomer, 10) > 0)) {
+    toast.error('Per-customer limit must be a positive whole number, or blank for unlimited');
+    return null;
+  }
   // Explicit correspondence map (buy SKU → free get SKU). Server derives scope_ids/get_scope_ids
   // from it, but we send them too so an older backend still applies the deal.
   const pairMap: Record<string, string> = {};
@@ -289,6 +320,10 @@ export function toPayload(f: FormState, currentOutletId?: string): DiscountInput
     } : {}),
     ...(f.maxDiscount ? { max_discount: parseFloat(f.maxDiscount) } : {}),
     ...(f.mealPeriod ? { meal_period: f.mealPeriod as DiscountInput['meal_period'] } : {}),
+    // Always sent explicitly (null when blank) so clearing the field on edit actually removes
+    // a previously-set cap instead of leaving it stale — same convention as outlet_id above.
+    usage_limit: f.usageLimit.trim() ? parseInt(f.usageLimit, 10) : null,
+    max_units_per_customer: f.maxUnitsPerCustomer.trim() ? parseInt(f.maxUnitsPerCustomer, 10) : null,
     banner: bannerToPayload(f.banner),
   };
 }

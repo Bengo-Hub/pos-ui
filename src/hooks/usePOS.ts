@@ -1444,6 +1444,10 @@ interface CreateOrderInput {
   orderSubtype?: OrderSubtype | 'retail';
   tableId?: string;
   discountAmount?: number;
+  /** Which Promotion produced discountAmount, when it came from a real applied deal/promo code
+   *  (as opposed to a manager's free-form discount). Lets the server enforce that promotion's
+   *  usage_limit/max_units_per_customer redemption cap at order-creation time. */
+  promotionId?: string;
   coversCount?: number;
   customerPhone?: string;
   customerName?: string;
@@ -1554,6 +1558,7 @@ export function useCreateOrder() {
             age_verified: data.ageVerified,
             discount_amount: data.discountAmount,
             discount_reason: data.discountReason,
+            promotion_id: data.promotionId,
             order_tax_amount: data.orderTaxAmount,
             charges: data.charges,
             approval_token: data.approvalToken,
