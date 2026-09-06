@@ -4,6 +4,7 @@ import { useEffect, useRef, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { playNotificationChime } from '@/lib/sounds';
 import { apiClient } from '@/lib/api/client';
+import { useAuthStore } from '@/store/auth';
 
 // Stream against the API host (matches REST/SSE), not the UI host.
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://posapi.codevertexafrica.com';
@@ -30,6 +31,10 @@ export type NotificationStreamMessage =
   | { type: 'etims_fiscalized'; payload: EtimsFiscalizedPayload }
   | { type: 'catalog_changed'; payload: { tenant_id: string } }
   | { type: 'customer_balance_changed'; payload: { tenant_id: string; contact_id?: string; customer_identifier?: string } }
+  // Pushed by pos-api's subscription CacheSubscriber the instant a platform admin grants/revokes
+  // a TenantFeatureGrant add-on, or the tenant's subscription plan/status otherwise changes —
+  // see internal/platform/subscriptions/subscriber.go. Thin nudge only, never trusted as data.
+  | { type: 'entitlements_changed'; payload: { tenant_id: string } }
   | { type: 'ping' | 'pong'; payload: { ts: number } };
 
 interface UseNotificationStreamOptions {
@@ -117,6 +122,13 @@ export function useNotificationStream({ tenantID, userID, onMessage }: UseNotifi
       // until the page is reopened.
       if (msg.type === 'customer_balance_changed') {
         qc.invalidateQueries({ queryKey: ['pos-client-credit', tenantID] });
+      }
+
+      if (msg.type === 'entitlements_changed') {
+        // Re-arm useSubscription's fetch effect (guarded by "already have a value, skip" — see
+        // hooks/use-subscription.ts — so flipping this back to undefined is what makes it
+        // actually re-fetch) instead of trusting anything from the push payload itself.
+        useAuthStore.getState().setSubscriptionInfo(undefined as any);
       }
 
       onMessage?.(msg);

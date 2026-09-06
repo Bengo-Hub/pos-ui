@@ -107,6 +107,25 @@ export function useSubscription() {
       .catch(() => handleLookupFailure());
   }, [status, session?.accessToken, user, subscriptionInfo, setSubscriptionInfo, tenantSlug, isPlatformOwner]);
 
+  // Defense-in-depth freshness, independent of the real-time WS push (use-notification-stream's
+  // "entitlements_changed" handler already re-arms this on a grant/revoke/plan change — this is
+  // the fallback for when that socket is reconnecting or unavailable): re-check at most once a
+  // minute, and whenever the tab regains focus/visibility, so a stale add-on/plan state never
+  // survives longer than a beat once the terminal or back-office tab is actually looked at again.
+  useEffect(() => {
+    if (status !== 'authenticated' || !session?.accessToken || !user) return;
+    const rearm = () => setSubscriptionInfo(undefined as any);
+    const interval = setInterval(rearm, 60_000);
+    const onVisible = () => { if (document.visibilityState === 'visible') rearm(); };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', rearm);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', rearm);
+    };
+  }, [status, session?.accessToken, user, setSubscriptionInfo]);
+
   const info = subscriptionInfo as SubscriptionInfo | null | undefined;
   const subStatus = info?.status ?? null;
 
