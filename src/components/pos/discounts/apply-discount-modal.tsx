@@ -121,7 +121,7 @@ export function ApplyDiscountModal({ open, subtotal, currentAmount, currentReaso
     [catalogCategories],
   );
   const { hasFeature } = useSubscription();
-  const [upgradeOpen, setUpgradeOpen] = useState(false);
+  const [upgradeFeature, setUpgradeFeature] = useState<string | null>(null);
 
   const { data: discountsResp, isLoading } = useDiscounts('active');
   const defined = useMemo(() => {
@@ -332,10 +332,12 @@ export function ApplyDiscountModal({ open, subtotal, currentAmount, currentReaso
           fetchCategoryItems={fetchCategoryItemsAdapter}
           categories={categoryNames}
           happyHourLocked={!hasFeature('happy_hour')}
-          onLockedKindClick={() => setUpgradeOpen(true)}
+          onLockedKindClick={() => setUpgradeFeature('happy_hour')}
+          flashSaleLocked={!hasFeature('flash_sale')}
+          onLockedFlashSaleClick={() => setUpgradeFeature('flash_sale')}
         />
       )}
-      <UpgradeDialog feature="happy_hour" open={upgradeOpen} onClose={() => setUpgradeOpen(false)} />
+      <UpgradeDialog feature={upgradeFeature ?? 'happy_hour'} open={!!upgradeFeature} onClose={() => setUpgradeFeature(null)} />
     </div>
   );
 }

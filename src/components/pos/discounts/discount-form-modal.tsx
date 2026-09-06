@@ -43,6 +43,7 @@ export { describeDiscount, describeScope, type DiscountItemRef } from './discoun
 export function DiscountFormModal({
   open, initial, saving, onClose, onSubmit, searchItems, resolveItemName,
   categories, fetchCategoryItems, happyHourLocked, onLockedKindClick,
+  flashSaleLocked, onLockedFlashSaleClick,
   useCase, currentOutletId, currentOutletName,
 }: {
   open: boolean;
@@ -63,6 +64,11 @@ export function DiscountFormModal({
   happyHourLocked?: boolean;
   /** Called when the user taps the locked Time Window kind (host opens its upgrade flow). */
   onLockedKindClick?: () => void;
+  /** Subscription/add-on gate: when true, the "Flash Sale" storefront checkbox is locked
+   *  (platform-admin must grant the flash_sale add-on first). Editing an already-flash-sale
+   *  promotion stays allowed even when locked. */
+  flashSaleLocked?: boolean;
+  onLockedFlashSaleClick?: () => void;
   /** Current outlet's use_case (e.g. 'retail', 'hospitality') — scopes which fields render
    *  (Happy Hour kind + meal period are hospitality-only concepts). Omit to show every field. */
   useCase?: string | null;
@@ -85,6 +91,7 @@ export function DiscountFormModal({
   // Editing an existing happy hour stays allowed even when the feature is locked
   // (grandfathered rows must remain manageable); only NEW happy-hour creation is gated.
   const hhLockedHere = !!happyHourLocked && !(initial && initial.promo_kind === 'happy_hour');
+  const flashSaleLockedHere = !!flashSaleLocked && !(initial && initial.metadata?.banner?.is_flash_sale);
   const isBogo = f.discountType === 'bogo';
   const crossItem = isBogo && f.crossItemGet;
   const isHappyHour = f.kind === 'happy_hour';
@@ -393,7 +400,12 @@ export function DiscountFormModal({
               feature entitlement server-side on every write AND on every S2SListBanners read,
               so a downgraded tenant's banner stops being served even if this client is bypassed. */}
           <FeatureLock feature={STOREFRONT_BANNER_FEATURE} mode="overlay">
-            <StorefrontBannerFields banner={f.banner} onChange={setBanner} />
+            <StorefrontBannerFields
+              banner={f.banner}
+              onChange={setBanner}
+              flashSaleLocked={flashSaleLockedHere}
+              onLockedFlashSaleClick={onLockedFlashSaleClick}
+            />
           </FeatureLock>
 
           <p className="text-xs text-muted-foreground bg-muted/50 rounded-lg px-3 py-2">

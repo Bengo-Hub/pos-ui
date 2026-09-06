@@ -1,6 +1,6 @@
 'use client';
 
-import { Image as ImageIcon, Megaphone } from 'lucide-react';
+import { Image as ImageIcon, Lock, Megaphone, Zap } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { BannerFormState } from './discount-form-types';
 
@@ -27,10 +27,15 @@ const USE_CASE_OPTIONS: { v: string; l: string }[] = [
  * upload infra — no trivially-reachable image-upload component exists from this form today.
  */
 export function StorefrontBannerFields({
-  banner, onChange,
+  banner, onChange, flashSaleLocked, onLockedFlashSaleClick,
 }: {
   banner: BannerFormState;
   onChange: (patch: Partial<BannerFormState>) => void;
+  /** Subscription/add-on gate: when true, the "Flash Sale" checkbox is shown locked (a
+   *  platform-admin must grant the flash_sale add-on first). Editing an already-flash-sale
+   *  promotion stays allowed even when locked (grandfathered, like happyHourLocked). */
+  flashSaleLocked?: boolean;
+  onLockedFlashSaleClick?: () => void;
 }) {
   const input = 'mt-1 w-full px-3.5 py-2.5 rounded-xl border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring';
 
@@ -54,6 +59,32 @@ export function StorefrontBannerFields({
             Surfaces this discount as a marketing banner on the customer-facing online ordering
             storefront, alongside the POS discount itself.
           </p>
+          <label
+            className={cn(
+              'flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl border border-border',
+              flashSaleLocked ? 'opacity-60 cursor-pointer' : 'cursor-pointer',
+            )}
+            onClick={(e) => {
+              if (flashSaleLocked) { e.preventDefault(); onLockedFlashSaleClick?.(); }
+            }}
+          >
+            <span className="flex items-center gap-2 text-sm font-medium">
+              <Zap className="h-4 w-4 text-amber-500" /> Flash sale
+              {flashSaleLocked && <Lock className="h-3 w-3 text-muted-foreground" />}
+            </span>
+            <input
+              type="checkbox"
+              checked={banner.isFlashSale}
+              disabled={flashSaleLocked}
+              onChange={(e) => onChange({ isFlashSale: e.target.checked })}
+              className="h-4 w-4 rounded border-input"
+            />
+          </label>
+          {banner.isFlashSale && !flashSaleLocked && (
+            <p className="text-xs text-muted-foreground -mt-2">
+              The storefront shows a countdown to this promotion&apos;s end date instead of a static banner.
+            </p>
+          )}
           <label className="block">
             <span className="text-sm font-medium">Banner title</span>
             <input value={banner.bannerTitle} onChange={(e) => onChange({ bannerTitle: e.target.value })}

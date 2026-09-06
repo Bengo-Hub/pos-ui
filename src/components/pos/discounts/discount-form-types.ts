@@ -43,6 +43,9 @@ export interface BannerFormState {
   bannerColor: string;
   textColor: string;
   useCases: string[];
+  /** Flash-sale add-on (platform-admin grant required): renders a countdown to
+   *  start_at/end_at on the storefront instead of a static banner. */
+  isFlashSale: boolean;
 }
 
 export interface FormState {
@@ -97,7 +100,7 @@ export const MEAL_PERIODS: { v: MealPeriod; l: string }[] = [
 export function blankBanner(): BannerFormState {
   return {
     showOnStorefront: false, bannerTitle: '', bannerSubtitle: '', bannerImageUrl: '',
-    ctaLabel: '', ctaLink: '', bannerColor: '', textColor: '', useCases: [],
+    ctaLabel: '', ctaLink: '', bannerColor: '', textColor: '', useCases: [], isFlashSale: false,
   };
 }
 
@@ -129,6 +132,7 @@ function bannerFromDiscount(d: Discount): BannerFormState {
     bannerColor: b.banner_color ?? '',
     textColor: b.text_color ?? '',
     useCases: b.use_cases ?? [],
+    isFlashSale: !!b.is_flash_sale,
   };
 }
 
@@ -146,6 +150,7 @@ function bannerToPayload(b: BannerFormState): DiscountBannerConfig {
     ...(b.bannerColor.trim() ? { banner_color: b.bannerColor.trim() } : {}),
     ...(b.textColor.trim() ? { text_color: b.textColor.trim() } : {}),
     ...(b.useCases.length ? { use_cases: b.useCases } : {}),
+    ...(b.isFlashSale ? { is_flash_sale: true } : {}),
   };
 }
 
@@ -233,6 +238,10 @@ export function toPayload(f: FormState, currentOutletId?: string): DiscountInput
   }
   if (f.banner.showOnStorefront && !f.banner.bannerTitle.trim()) {
     toast.error('Banner title is required when "Show on storefront" is on');
+    return null;
+  }
+  if (f.banner.isFlashSale && !f.endAt) {
+    toast.error('Flash sale needs an end date so the storefront can show a countdown');
     return null;
   }
   // Explicit correspondence map (buy SKU → free get SKU). Server derives scope_ids/get_scope_ids

@@ -57,6 +57,9 @@ export interface DiscountBannerConfig {
   text_color?: string;
   /** Empty/absent = show for every outlet use_case. */
   use_cases?: string[];
+  /** Renders a countdown to start_at/end_at on the storefront instead of a static banner.
+   *  Requires the "flash_sale" add-on feature (platform-admin grant). */
+  is_flash_sale?: boolean;
 }
 
 export interface Discount {

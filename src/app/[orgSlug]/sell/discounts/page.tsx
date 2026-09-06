@@ -77,7 +77,7 @@ export default function DiscountsPage() {
   // happy_hour kind is a Pro sub-feature: creating NEW time-window deals is gated (editing
   // existing ones stays allowed — grandfathered urban-loft deals must remain manageable).
   const { hasFeature } = useSubscription();
-  const [upgradeOpen, setUpgradeOpen] = useState(false);
+  const [upgradeFeature, setUpgradeFeature] = useState<string | null>(null);
 
   // SKU → name resolution for edit-prefill chips + pairing rows (rule.scope_ids /
   // get_pair_map carry only SKUs). Full catalog, not one page — deep SKUs must resolve.
@@ -202,12 +202,14 @@ export default function DiscountsPage() {
         categories={categoryNames}
         fetchCategoryItems={fetchCategoryItemsAdapter}
         happyHourLocked={!hasFeature('happy_hour')}
-        onLockedKindClick={() => setUpgradeOpen(true)}
+        onLockedKindClick={() => setUpgradeFeature('happy_hour')}
+        flashSaleLocked={!hasFeature('flash_sale')}
+        onLockedFlashSaleClick={() => setUpgradeFeature('flash_sale')}
         useCase={useCase}
         currentOutletId={currentOutletId}
         currentOutletName={currentOutletName}
       />
-      <UpgradeDialog feature="happy_hour" open={upgradeOpen} onClose={() => setUpgradeOpen(false)} />
+      <UpgradeDialog feature={upgradeFeature ?? 'happy_hour'} open={!!upgradeFeature} onClose={() => setUpgradeFeature(null)} />
 
       <ConfirmDialog
         open={!!deleteTarget}
