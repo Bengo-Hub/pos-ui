@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 // Server-to-server call — prefer the in-cluster Service DNS so this never
 // leaves the cluster and round-trips through the public ingress/Cloudflare.
 const PRICING_API =
-  process.env.SUBSCRIPTIONS_API_INTERNAL_URL ||
+  process.env.SUBSCRIPTION_BASE_URL ||
   process.env.NEXT_PUBLIC_SUBSCRIPTIONS_API_URL ||
   'https://pricingapi.codevertexafrica.com';
 
