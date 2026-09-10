@@ -243,6 +243,70 @@ test('retail terminal — toolbar, cart, and every dialog', async ({ page }) => 
   if (await clearCartLink.isVisible({ timeout: 1_000 }).catch(() => false)) await clearCartLink.click().catch(() => {});
 });
 
+test('customer search and add-new-customer', async ({ page }) => {
+  await pinLogin(page);
+  await selectOutlet(page, DEMO_OUTLETS.retail);
+  await goToViaSidebar(page, 'POS Terminal');
+  await page.waitForTimeout(800);
+
+  // 1. Default Walk-in Customer chip + the search field, before typing anything.
+  const customerSearch = page.getByPlaceholder('Search by name, phone or email').locator('visible=true').first();
+  await screenshotWithCallouts(page, assetPath(DIR, '17-customer-walk-in-default.png'), [
+    { locator: page.getByText('Walk-in Customer', { exact: true }).locator('visible=true').first(), number: 1 },
+    { locator: customerSearch, number: 2 },
+  ]);
+
+  // 2. Type a phone number very unlikely to already exist in this demo tenant — triggers the
+  // "No match" add-new prompt without needing to know the real customer list up front.
+  await customerSearch.click();
+  await customerSearch.fill('0700000001');
+  await page.waitForTimeout(900); // 400ms debounce + the search round trip
+  await waitForSpinnerGone(page);
+  const noMatch = page.getByRole('button', { name: /no match/i });
+  if (await noMatch.isVisible({ timeout: 3_000 }).catch(() => false)) {
+    await screenshotWithCallouts(page, assetPath(DIR, '18-customer-no-match.png'), [
+      { locator: noMatch, number: 1 },
+    ]);
+
+    // 3. The inline "add new customer" form — filled in for the screenshot, then Cancelled
+    // (never actually submitted) so no fake customer is created in the shared demo tenant.
+    await noMatch.click();
+    await page.waitForTimeout(400);
+    await page.getByPlaceholder('Customer name').fill('Docs Example Customer');
+    await screenshotWithCallouts(page, assetPath(DIR, '19-customer-add-new-form.png'), [
+      { locator: page.getByPlaceholder('Customer name'), number: 1 },
+      { locator: page.getByPlaceholder(/phone/i), number: 2 },
+      { locator: page.getByPlaceholder(/email/i), number: 3 },
+      { locator: page.getByRole('button', { name: /^add customer$/i }), number: 4 },
+    ]);
+    // .first(): the terminal's own tender row also has an unrelated "Cancel" button.
+    await page.getByRole('button', { name: /^cancel$/i }).first().click();
+    await page.waitForTimeout(300);
+  }
+
+  // 4. A real match, if this tenant's demo data happens to have one searchable by a broad term —
+  // shows the picked-customer chip (name/phone, and any real account balance). Best-effort: skip
+  // cleanly if nothing matches rather than fabricating a customer just for this screenshot.
+  await customerSearch.fill('');
+  await customerSearch.fill('a');
+  await page.waitForTimeout(900);
+  await waitForSpinnerGone(page);
+  // Scoped to the matches dropdown's own distinctive container (customer-search.tsx), not just
+  // "any button with a middle dot" — safer against an unrelated coincidental match elsewhere.
+  const firstMatch = page.locator('div.divide-y.divide-border.max-h-44').getByRole('button').locator('visible=true').first();
+  if (await firstMatch.isVisible({ timeout: 2_000 }).catch(() => false)) {
+    await firstMatch.click();
+    await page.waitForTimeout(500);
+    await screenshotWithCallouts(page, assetPath(DIR, '20-customer-selected.png'), [
+      { locator: page.getByLabel('Change customer'), number: 1 },
+    ]);
+    // Deselect back to Walk-in so the terminal is left clean.
+    await page.getByLabel('Change customer').click().catch(() => {});
+  } else {
+    await customerSearch.fill('');
+  }
+});
+
 test('drafts (held sales) list', async ({ page }) => {
   await pinLogin(page);
   await selectOutlet(page, DEMO_OUTLETS.retail);
