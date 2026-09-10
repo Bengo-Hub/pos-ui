@@ -7,6 +7,26 @@ import { useSubscriptionStore } from "@/store/subscription";
 import { isFeatureUnlocked, type SubscriptionEntitlements } from "@bengo-hub/shared-ui-lib/subscription";
 import { useEffect, useRef } from "react";
 
+/**
+ * Reads the sub_exempt claim straight out of the access token (no signature verification —
+ * purely to read a claim the SSO token already carries). The /me-derived `user` object never
+ * carries this field, so this is the only reliable source client-side. Returns false on any
+ * malformed/missing token.
+ */
+function decodeSubExempt(token: string | null | undefined): boolean {
+  if (!token) return false;
+  try {
+    const part = token.split('.')[1];
+    if (!part) return false;
+    const base64 = part.replace(/-/g, '+').replace(/_/g, '/');
+    const padded = base64 + '='.repeat((4 - (base64.length % 4)) % 4);
+    const json = JSON.parse(atob(padded)) as Record<string, unknown>;
+    return json?.sub_exempt === true;
+  } catch {
+    return false;
+  }
+}
+
 export function useSubscription() {
   const session = useAuthStore((s) => s.session);
   const user = useAuthStore((s) => s.user);
@@ -19,16 +39,19 @@ export function useSubscription() {
   const lookupRetries = useRef(0);
 
   const tenantSlug = user?.tenant_slug as string | undefined;
-  const roles = (((user as any)?.roles ?? []) as string[]).map((r) => String(r).toLowerCase());
-  const isSuperuser = roles.includes('superuser') || roles.includes('super_admin');
-  const isPlatformOwner =
-    !!(user as any)?.is_platform_owner ||
-    !!(user as any)?.isPlatformOwner ||
-    isSuperuser ||
-    tenantSlug === 'codevertex';
+  // Platform-owner-ness comes ONLY from the server-derived flag (+ the codevertex slug as a
+  // defensive fallback) — a tenant superuser/admin is NOT a platform owner and must not bypass
+  // subscription gating (platform SEC-3 policy: otherwise any tenant admin unlocks paid features
+  // for free). `roles` is intentionally unused here now; it still drives real RBAC elsewhere.
+  const isPlatformOwner = !!(user as any)?.is_platform_owner || !!(user as any)?.isPlatformOwner || tenantSlug === 'codevertex';
   const isServiceCharge = (user as any)?.billing_mode === 'service_charge';
   const isDemo = !!(user as any)?.is_demo || tenantSlug === 'codevertex-demo';
-  const isExempt = isPlatformOwner || isDemo || isServiceCharge;
+  // Platform-granted per-tenant exemption (sub_exempt JWT claim) — decoded straight from the
+  // access token since it's never round-tripped onto the /me-derived `user` object here. Without
+  // this, marking a tenant subscription-exempt could never actually unblock a non-admin user of
+  // that tenant in this app: only isSuperuser/isPlatformOwner ever bypassed before.
+  const isSubExempt = decodeSubExempt(session?.accessToken);
+  const isExempt = isPlatformOwner || isDemo || isServiceCharge || isSubExempt;
 
   // Hydrate from IndexedDB on auth so gating works offline
   useEffect(() => {
