@@ -35,6 +35,11 @@ export const DEMO_PINS = {
 
 export interface PinLoginOptions {
   pin?: string;
+  /** Pick a specific outlet card at the pre-PIN outlet-selection step, instead of the first one.
+   *  Needed for a role PIN that's only valid for one particular outlet (e.g. a hospitality-only
+   *  waiter PIN reused across the demo tenant's other outlets) — picking the wrong outlet card
+   *  first means the PIN gets rejected there and pinLogin exhausts its retries. */
+  outletName?: RegExp | string;
 }
 
 // Ported from inventory-ui's e2e/docs-capture/lib/pin-login.ts (see
@@ -75,8 +80,11 @@ export async function pinLogin(page: Page, opts: PinLoginOptions = {}) {
     .catch(() => false);
   if (sawOutletPrompt) {
     await page.waitForTimeout(600);
+    const target = opts.outletName
+      ? page.getByRole('button').filter({ hasText: opts.outletName }).first()
+      : page.getByRole('button').first();
     for (let attempt = 0; attempt < 3; attempt++) {
-      await page.getByRole('button').first().click();
+      await target.click();
       const left = await outletPrompt.waitFor({ state: 'hidden', timeout: 4_000 }).then(() => true).catch(() => false);
       if (left) break;
     }
