@@ -16,7 +16,7 @@
 | UI primitives | shadcn (initialized 2026-05-25, uses `@base-ui/react` not Radix; add via `pnpm dlx shadcn@latest add <name>`) |
 | State | Zustand (global: cart, drawer, session) + TanStack Query (server state) |
 | API client | Axios with auth interceptors + tenant/outlet headers (`src/lib/api/client.ts`) |
-| PWA | `@ducanh2912/next-pwa` (offline capability) |
+| PWA | Hand-written `public/sw.js` (Next 16 builds with Turbopack, which `@ducanh2912/next-pwa` — a webpack plugin — does not run under; see sw.js header comment) |
 | Forms | React Hook Form + Zod |
 | Offline DB | Dexie.js / IndexedDB (`src/lib/db/pos-db.ts`) |
 | Auth | SSO via auth-api OIDC/OAuth2 PKCE; PIN terminal login (Sprint 10 ✅) |
@@ -267,3 +267,49 @@ src/
 | 8 | Service Business UI (appointments, commissions, schedules) | ✅ Core delivered (detail/new/queue pages pending) |
 | 9 | Reports & Analytics UI | ✅ Core delivered (category/staff/top-items charts pending) |
 | 10 | Dual Auth (SSO + PIN terminal login) | ✅ Complete (supervisor override PIN pending) |
+
+---
+
+## Incident log
+
+### 2026-09-11: fleet-wide "page keeps breaking after a while" (pos-ui + inventory-ui) — root-caused, fixed
+
+**Symptom:** long-open terminal/browser tabs on both pos-ui and inventory-ui eventually became
+unusable ("This page couldn't load", React minified error #185 = "Maximum update depth
+exceeded"), preceded by a growing console noise floor of `/pos/auth/me` 404s.
+
+**Two independent, confirmed bugs, both fixed same day:**
+
+1. **`fetchPosServiceProfile` (`src/lib/auth/api.ts`) always hit the wrong host.** It built its
+   request URL from `NEXT_PUBLIC_POS_API_URL`, an env var that was never actually set in
+   `devops-k8s/apps/pos-ui/values.yaml` (only `NEXT_PUBLIC_API_URL` is, which `apiClient`
+   correctly uses). `POS_API_URL` therefore always resolved to `''`, so every call — once at SSO
+   login and again every 60s forever via `ServicePermissionsRefresher` (org-shell.tsx) — was a
+   same-origin relative fetch against pos-ui's own Next.js host, which has no such route: a
+   guaranteed 404 (visible in devtools as a domain-less `/api/v1/{tenant}/pos/auth/me` entry,
+   distinct from the full-domain `posapi.codevertexafrica.com/...` entries next to it). Caught
+   internally (best-effort), so it never crashed anything by itself, but it meant pos-api's
+   service-level role, fine-grained `pos.*.*` permissions, home outlet, and outlet_ids were
+   **never actually synced from pos-api in production** for SSO sessions. Fixed: use the same
+   `NEXT_PUBLIC_API_URL || 'https://posapi.codevertexafrica.com'` fallback `apiClient` already
+   uses.
+
+2. **No recovery from a stale-bundle chunk-load failure (the actual crash).** Both apps ship a
+   committed, cache-first-for-`/_next/static/*` service worker with no per-deploy invalidation,
+   and pos-ui's update banner (shared-ui-lib's `PwaUpdater`, wired via `OfflineBar`) only ever
+   *prompts* — it never forces a reload; inventory-ui's own local update banner
+   (`use-pwa-update.ts` / `pwa-update-banner.tsx`) turned out to be fully dead code, since nothing
+   in inventory-ui ever called `serviceWorker.register(...)` in the first place, so its
+   `navigator.serviceWorker.ready` promise never resolved. A tab left open across a backend
+   deploy keeps running the OLD bundle; the first time it needs a chunk it hadn't already
+   fetched (a route not yet visited this session), the request hits the new deployment, which no
+   longer has that old content-hashed file — an uncaught `ChunkLoadError` that crashes the render
+   tree with no way back. Fixed: added `StaleChunkRecovery` (new, in both apps —
+   `src/components/stale-chunk-recovery.tsx`) mounted at the top of `OrgShell`, listening for
+   `unhandledrejection`/capture-phase `error` events matching the chunk-load-failure shape and
+   doing one cooldown-guarded hard reload. inventory-ui was also switched from its dead local PWA
+   update code onto the same shared-ui-lib `PwaUpdater` pos-ui already uses (already available at
+   the pinned `v0.1.87` tag — no version bump needed), giving it a working update-detection
+   banner for the first time.
+
+Both apps rebuilt clean (`next build`, full TS validation) after the fix.

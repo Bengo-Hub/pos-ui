@@ -21,6 +21,7 @@ import { TerminalSessionExpiryWarning } from '@/components/pos/terminal-session-
 import { StartShiftGate } from '@/components/pos/start-shift-gate';
 import { RouteGuard } from '@/components/auth/route-guard';
 import { TerminalIdleScreensaver } from '@/components/pos/terminal-idle-screensaver';
+import { StaleChunkRecovery } from '@/components/stale-chunk-recovery';
 import { triggerSyncNow } from '@/hooks/use-sync-offline-orders';
 import { cn } from '@/lib/utils';
 import { useBackgroundSync } from '@/lib/sync/background-sync';
@@ -259,6 +260,7 @@ export function OrgShell({ children }: { children: ReactNode }) {
       <AuthProvider>
         <TenantBrandingProvider>
           <SubscriptionEntitlementsProvider>
+          <StaleChunkRecovery />
           <ManifestInjector />
           {/* Floating pill kept for dead-letter review (failed items + manual retry). Already
               `fixed`-positioned, so where it mounts in the tree doesn't affect where it paints. */}

@@ -109,7 +109,15 @@ export async function fetchPosServiceProfile(
   tenantId: string
 ): Promise<{ posRole: string; permissions: string[]; homeOutletId: string; outletIds: string[] } | null> {
   try {
-    const POS_API_URL = process.env.NEXT_PUBLIC_POS_API_URL ?? '';
+    // NOTE: must match apiClient's own base URL derivation (lib/api/client.ts) — this used to read
+    // a NEXT_PUBLIC_POS_API_URL env var that was never actually set in any deployment, so
+    // POS_API_URL was always '' and every call here silently resolved to a SAME-ORIGIN relative
+    // fetch against pos-ui's own Next.js host (/api/v1/{tenantId}/pos/auth/me), which has no such
+    // route — a guaranteed 404 on every SSO login AND every 60s ServicePermissionsRefresher tick
+    // (org-shell.tsx), for the lifetime of every open tab. Caught internally below, so it never
+    // crashed the app, but it meant pos-api's service-level role + pos.*.* permissions, home
+    // outlet, and outlet_ids were NEVER actually synced in production.
+    const POS_API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://posapi.codevertexafrica.com';
     const response = await fetchWithTimeout(`${POS_API_URL}/api/v1/${tenantId}/pos/auth/me`, {
       headers: { Authorization: `Bearer ${accessToken}`, 'X-Tenant-ID': tenantId },
     });
