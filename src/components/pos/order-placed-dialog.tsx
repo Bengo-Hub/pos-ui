@@ -43,6 +43,9 @@ export function OrderPlacedDialog({ open, orderNumber, orderId, tenantId, orgSlu
   const [browserPrompt, setBrowserPrompt] = useState<{ html: string; paper: 'thermal' | 'a4'; reason?: string } | null>(null);
   // Guards the one-shot auto-print so it fires once per dialog open, not on every re-render.
   const autoFiredRef = useRef(false);
+  // Always holds the LATEST handlePrint closure — see the auto-print effect below for why the
+  // effect itself must not depend on handlePrint directly.
+  const handlePrintRef = useRef<(auto?: boolean) => Promise<void>>(async () => {});
 
   const stations = stationsData?.data ?? [];
   const kdsDestination = stations.length > 0
@@ -176,8 +179,28 @@ export function OrderPlacedDialog({ open, orderNumber, orderId, tenantId, orgSlu
     }
   }, [tenantId, orderId, orderNumber, billProfile, printerConfigured, posSettings, handleLogout, fetchReceiptFragment]);
 
+  useEffect(() => {
+    handlePrintRef.current = handlePrint;
+  }, [handlePrint]);
+
   // Auto-print path: silent when configured; skipped with a toast when not. The "No printer
   // detected" modal is strictly a MANUAL-print concern now.
+  //
+  // BUG FIX (live-reported, alpha-china-market, 2026-09-11/12 — root-caused after the fix in
+  // stale-chunk-recovery.tsx didn't stop the recurrence): this used to depend on `handlePrint`
+  // directly. `handlePrint` depends on `handleLogout`, which depends on the `onClose` prop —
+  // and every real caller (terminal-modals.tsx) passes `onClose` as a brand-new inline arrow
+  // function on every render. `TerminalModals` re-renders on nearly every cart/order mutation
+  // in the terminal, so `handlePrint`'s identity was effectively never stable, which meant this
+  // effect re-evaluated on every one of those renders whenever the dialog was open — and its
+  // auto-print branch synchronously calls handleLogout(), which calls router.replace() (an SPA
+  // navigation, not a hard reload) from inside a useEffect that itself never settles into a
+  // stable dependency set. Under enough re-render pressure (a busy terminal, an order placed
+  // right as several other queries/mutations are mid-flight) this manifested in prod as React
+  // error #185 ("Maximum update depth exceeded") followed by the tab becoming unusable. Fixed
+  // by depending only on stable primitives here and calling through handlePrintRef (same
+  // ref-forwarding idiom hooks/use-idle-timer.ts already uses for exactly this class of
+  // problem) so the effect only re-runs when `open` or the auto-print setting itself changes.
   useEffect(() => {
     if (!open) {
       autoFiredRef.current = false;
@@ -186,9 +209,9 @@ export function OrderPlacedDialog({ open, orderNumber, orderId, tenantId, orgSlu
     }
     if (posSettings?.auto_print_order && !autoFiredRef.current) {
       autoFiredRef.current = true;
-      handlePrint(true);
+      void handlePrintRef.current(true);
     }
-  }, [open, posSettings, handlePrint]);
+  }, [open, posSettings?.auto_print_order]);
 
   if (!open) return null;
 

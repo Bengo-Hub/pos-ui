@@ -313,3 +313,36 @@ exceeded"), preceded by a growing console noise floor of `/pos/auth/me` 404s.
    banner for the first time.
 
 Both apps rebuilt clean (`next build`, full TS validation) after the fix.
+
+**Addendum (2026-09-12): the crash recurred after the above fix shipped — found the actual
+trigger.** The `/pos/auth/me` 404 storm was confirmed gone in the next occurrence (no more
+domain-less entries), proving fix #1 landed correctly, but the "This page couldn't load" / React
+error #185 crash still hit the same `/order` route. Deploy timing (`kubectl get pods`, ArgoCD
+sync revision) confirmed the recurrence happened on the ALREADY-fixed build, ruling out fix #2
+simply not having rolled out yet — the stale-chunk theory was real and worth keeping as a
+defensive layer, but it was not (or not the only) trigger here. Traced the actual cause by
+extracting the exact minified frame from the production stack trace (`039i6qbqn2yi8.js:3:109429`)
+against a local build with byte-identical chunk hashes (Turbopack output is deterministic for a
+given commit) — landed exactly on the `useEffect` in `OrderPlacedDialog`
+(`src/components/pos/order-placed-dialog.tsx`), a SEPARATE "auto-logout after placing a dine-in
+order" feature (distinct from the idle-screensaver auto-logout, which was checked and is fine —
+it uses a hard `window.location.href` navigation, not the SPA router).
+
+Root cause: that effect's dependency array included `handlePrint`, a `useCallback` that
+transitively depends on the `onClose` prop. The only real caller
+(`terminal/parts/terminal-modals.tsx`) passes `onClose={() => t.setOrderPlacedOpen(false)}` — a
+new inline closure every render of `TerminalModals`, which re-renders on nearly every cart/order
+mutation in an active terminal. So `handlePrint`'s identity was never stable, the effect
+re-evaluated far more often than intended, and its auto-print branch synchronously calls
+`handleLogout()` → `router.replace(...)` (an SPA navigation) from inside an effect whose own
+dependencies never settled — under enough re-render pressure this is what produced "Maximum
+update depth exceeded." Fixed by holding the latest `handlePrint` in a ref and depending only on
+`open`/`posSettings?.auto_print_order` (stable primitives) — the exact same ref-forwarding idiom
+`hooks/use-idle-timer.ts` already uses correctly for this class of problem, now applied here too.
+
+Lesson for future review of this incident family: when a fix addresses a confirmed real bug but
+the reported symptom recurs, verify the recurrence happened on the NEW build (deploy image tag /
+pod age / ArgoCD sync revision) before assuming the fix didn't work or piling on more theories —
+and a minified prod stack trace IS traceable to source without a published source map, by
+rebuilding the same commit locally (deterministic content hashes) and reading the exact byte
+offset out of the matching chunk file.
