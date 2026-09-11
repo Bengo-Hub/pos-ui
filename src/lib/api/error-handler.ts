@@ -10,7 +10,8 @@ export type SubscriptionErrorCode =
   | 'feature_not_available'
   | 'usage_limit_exceeded'
   | 'device_limit_reached'
-  | 'plan_upgrade_required';
+  | 'plan_upgrade_required'
+  | 'service_not_subscribed';
 
 export interface ApiError {
   status: number;
@@ -22,6 +23,8 @@ export interface ApiError {
   upgrade_plan?: string;
   /** Present on usage_limit_exceeded — overage metadata for the limit-reached modal */
   limit?: LimitReachedInfo;
+  /** Present on service_not_subscribed (RequireServiceAccess) — which whole module was blocked. */
+  service_tag?: string;
 }
 
 /** Structured overage metadata returned by subscription-service on a metered limit (402). */
@@ -52,6 +55,7 @@ const SUBSCRIPTION_CODES = new Set<SubscriptionErrorCode>([
   'usage_limit_exceeded',
   'device_limit_reached',
   'plan_upgrade_required',
+  'service_not_subscribed',
 ]);
 
 export function isSubscriptionError(data: any): data is SubscriptionError {
@@ -73,6 +77,7 @@ export function parseApiError(error: any): ApiError {
     detail: data.detail ?? data.description,
     upgrade_plan: data.upgrade_plan,
     limit: parseLimitInfo(data),
+    service_tag: data.service_tag,
   };
 }
 
@@ -99,6 +104,7 @@ const SUBSCRIPTION_MESSAGES: Record<SubscriptionErrorCode, string> = {
   usage_limit_exceeded: 'You have reached the usage limit for your plan.',
   device_limit_reached: 'Device limit reached. Upgrade your plan to add more devices.',
   plan_upgrade_required: 'An upgrade is required to access this feature.',
+  service_not_subscribed: 'This service is not included in your current plan.',
 };
 
 export function subscriptionErrorMessage(data: any): string {
