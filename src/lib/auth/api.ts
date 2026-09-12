@@ -107,7 +107,13 @@ export async function refreshTokens(refreshToken: string): Promise<{
 export async function fetchPosServiceProfile(
   accessToken: string,
   tenantId: string
-): Promise<{ posRole: string; permissions: string[]; homeOutletId: string; outletIds: string[] } | null> {
+): Promise<{
+  posRole: string;
+  permissions: string[];
+  homeOutletId: string;
+  outletIds: string[];
+  emailVerification?: import('@bengo-hub/shared-ui-lib/auth').EmailVerificationState;
+} | null> {
   try {
     // NOTE: must match apiClient's own base URL derivation (lib/api/client.ts) — this used to read
     // a NEXT_PUBLIC_POS_API_URL env var that was never actually set in any deployment, so
@@ -130,6 +136,9 @@ export async function fetchPosServiceProfile(
       // the user is tied to on login (empty for HQ/admin users with no explicit assignment).
       homeOutletId: data.home_outlet_id ?? '',
       outletIds: Array.isArray(data.outlets) ? data.outlets : [],
+      // auth-api's computed graduated verify state, forwarded verbatim by pos-api so the same
+      // banner shown by SSO/inventory shows here too — for SSO AND terminal/PIN sessions alike.
+      emailVerification: data.email_verification ?? undefined,
     };
   } catch {
     return null;

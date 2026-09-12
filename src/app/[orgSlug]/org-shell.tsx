@@ -13,6 +13,7 @@ import { OfflineBar } from '@bengo-hub/shared-ui-lib/offline';
 import { revalidateFullCatalog, useCatalogVersionSync, offlineToCatalogItem, FULL_CATALOG_QUERY_KEY } from '@/hooks/usePOS';
 import { Footer } from '@/components/footer';
 import { SubscriptionBanner } from '@/components/subscription/subscription-banner';
+import { VerifyEmailPrompt } from '@/components/auth/VerifyEmailPrompt';
 import { SyncStatusIndicator } from '@/components/pos/sync-status-indicator';
 import { PWARegistration } from '@/components/pwa-registration';
 import { PwaSplashScreen } from '@/components/pwa-splash-screen';
@@ -313,6 +314,7 @@ export function OrgShell({ children }: { children: ReactNode }) {
                     token lapses so a payment never fails mid-sale with a bearer-token error. */}
                 <TerminalSessionExpiryWarning />
                 <SubscriptionBanner />
+                <VerifyEmailPrompt />
                 {/* min-h-0 is required here: without it a flex child defaults to min-height:auto
                     and overflow-y-auto can never create a scroll context. */}
                 {/* The terminal (/order) manages its OWN internal scroll regions (cart + product

@@ -29,6 +29,9 @@ export interface UserProfile {
   /** All outlets the staff member is assigned to (for the switcher's allowed set / single-outlet
    *  auto-select). Empty = no restriction (HQ/admin sees all). */
   outlet_ids?: string[];
+  // auth-api's computed graduated email-verification state, forwarded by pos-api's /auth/me
+  // (see fetchPosServiceProfile) so pos-ui can render the same banner SSO/inventory show.
+  email_verification?: import('@bengo-hub/shared-ui-lib/auth').EmailVerificationState;
 }
 
 interface Session {
@@ -284,6 +287,7 @@ export const useAuthStore = create<AuthState>()(
                     permissions: svcProfile.permissions,
                     home_outlet_id: svcProfile.homeOutletId,
                     outlet_ids: svcProfile.outletIds,
+                    email_verification: svcProfile.emailVerification,
                   }
                 : ssoUser;
 
@@ -405,6 +409,7 @@ export const useAuthStore = create<AuthState>()(
             // that never ran the SSO callback), so OutletContextHealer can preselect the home outlet.
             home_outlet_id: svcProfile.homeOutletId || current.home_outlet_id,
             outlet_ids: svcProfile.outletIds?.length ? svcProfile.outletIds : current.outlet_ids,
+            email_verification: svcProfile.emailVerification ?? current.email_verification,
           },
         });
         // Keep the OFFLINE staff-profile cache (the weak-wifi/offline PIN bcrypt fallback in
