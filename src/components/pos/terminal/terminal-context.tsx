@@ -12,43 +12,52 @@
  * Views read this via `useTerminal()`; the order page wraps the chosen view in `<TerminalProvider>`.
  */
 
-import { createContext, useContext, useState, useMemo, useCallback, useRef, useEffect } from 'react';
-import { useRouter, useParams, useSearchParams } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
-import type { ModifierGroup } from '@/components/pos/modifier-modal';
-import type { OrderLineItem } from '@/components/pos/split-payment-modal';
 import { COURSES, type CourseValue } from '@/components/pos/course-selector';
+import { type SelectedCustomer } from '@/components/pos/customer-search';
+import type { ModifierGroup } from '@/components/pos/modifier-modal';
 import type { ReceiptData } from '@/components/pos/receipt-preview';
-import type { LoyaltyState } from '@/components/retail/LoyaltyPanel';
+import type { OrderLineItem } from '@/components/pos/split-payment-modal';
+import { isStockTracked } from '@/components/pos/stock-cell';
 import type { CreatedOrder } from '@/components/pos/terminal/inline-payment-bar';
-import { printKitchenBarTickets } from '@/lib/pos/kitchen-bar-print';
-import { applyRoundOff, computeCartTax } from '@/lib/pos/cart-tax';
-import { isFractionalUnit, normalizeQuantity } from '@/lib/pos/units';
-import { terminalConfigFor, type TerminalConfig } from '@/lib/use-case-config';
+import type { LoyaltyState } from '@/components/retail/LoyaltyPanel';
+import { useReceiptAfterSale } from '@/hooks/use-receipt-after-sale';
+import { useSubscription } from '@/hooks/use-subscription';
+import { useClientCredit } from '@/hooks/useClients';
+import { useActiveHappyHours } from '@/hooks/useDiscounts';
+import { useKDSStations } from '@/hooks/useKDS';
+import { useLoyaltyAccount, useLoyaltyPrograms } from '@/hooks/useLoyalty';
+import { usePermissions } from '@/hooks/usePermissions';
 import {
-  useFullCatalog, useCategories, useCreateOrder, useAddOrderLines, useVoidOrder,
-  useAssignTable, useReleaseTable, usePricingTiers, useEffectiveOutletID, type OrderSubtype,
+    searchMenuItems,
+    useAddOrderLines,
+    useAssignTable,
+    useCategories,
+    useCreateOrder,
+    useEffectiveOutletID,
+    useFullCatalog,
+    usePricingTiers,
+    useReleaseTable,
+    useVoidOrder,
+    type CatalogItem, type OrderSubtype,
 } from '@/hooks/usePOS';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
-import { useReceiptAfterSale } from '@/hooks/use-receipt-after-sale';
-import { isStockTracked } from '@/components/pos/stock-cell';
-import { useKDSStations } from '@/hooks/useKDS';
-import { useLoyaltyPrograms, useLoyaltyAccount } from '@/hooks/useLoyalty';
-import type { LoyaltyRedeemInfo } from '@/lib/pos/terminal-actions';
-import { useActiveHappyHours } from '@/hooks/useDiscounts';
-import { computeHappyHour, bogoFreeUnitsForSku, type HHLine, type HappyHourResult } from '@/lib/pos/happy-hour';
-import { computePairAutoAdd, describeAutoApplyAnnouncement } from '@/lib/pos/auto-apply-discounts';
-import { usePermissions } from '@/hooks/usePermissions';
-import { useSubscription } from '@/hooks/use-subscription';
-import { P } from '@/lib/rbac/permissions';
-import { useClientCredit } from '@/hooks/useClients';
-import { useAuthStore } from '@/store/auth';
+import { useSaleSessions, type SaleSessionControls } from '@/hooks/useSaleSessions';
 import { apiClient } from '@/lib/api/client';
 import { apiErrorMessage } from '@/lib/api/error-message';
-import { useSaleSessions, type SaleSessionControls } from '@/hooks/useSaleSessions';
+import { computePairAutoAdd, describeAutoApplyAnnouncement } from '@/lib/pos/auto-apply-discounts';
+import { applyRoundOff, computeCartTax } from '@/lib/pos/cart-tax';
+import { bogoFreeUnitsForSku, computeHappyHour, type HHLine, type HappyHourResult } from '@/lib/pos/happy-hour';
+import { printKitchenBarTickets } from '@/lib/pos/kitchen-bar-print';
 import { selectedFromLoyalty, type SaleSessionSnapshot } from '@/lib/pos/sale-session';
-import { type SelectedCustomer } from '@/components/pos/customer-search';
+import type { LoyaltyRedeemInfo } from '@/lib/pos/terminal-actions';
+import { isFractionalUnit, normalizeQuantity } from '@/lib/pos/units';
+import { P } from '@/lib/rbac/permissions';
+import { terminalConfigFor, type TerminalConfig } from '@/lib/use-case-config';
+import { useAuthStore } from '@/store/auth';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -675,6 +684,47 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
   // fetch). Category / search / brand / pagination are all resolved CLIENT-SIDE over the
   // complete set below — so filters never operate on a single paginated page.
   const { data: catalogItems, isLoading: menuLoading } = useFullCatalog();
+  const [remoteSearchItems, setRemoteSearchItems] = useState<CatalogItem[]>([]);
+  const tenantID = user?.tenant_id ?? '';
+
+  // The normal path is instant client-side search over the full catalog. A stale or partial
+  // offline catalog must not make a valid inventory item look nonexistent, so query the POS API
+  // when the local catalog has no match. This is deliberately debounced and only runs on a local
+  // miss, avoiding a request per keystroke for terminals with a complete cache.
+  useEffect(() => {
+    const query = searchQuery.trim();
+    if (!query) {
+      setRemoteSearchItems([]);
+      return;
+    }
+    const localItems = catalogItems ?? [];
+    const normalized = query.toLowerCase();
+    const hasLocalMatch = localItems.some((item) =>
+      item.name.toLowerCase().includes(normalized) ||
+      item.sku.toLowerCase().includes(normalized) ||
+      (item.barcode ?? '').toLowerCase().includes(normalized),
+    );
+    if (hasLocalMatch || !tenantID) {
+      setRemoteSearchItems([]);
+      return;
+    }
+
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      void searchMenuItems(tenantID, orderOutletID, query, 50)
+        .then((items) => {
+          if (!cancelled) setRemoteSearchItems(items);
+        })
+        .catch(() => {
+          if (!cancelled) setRemoteSearchItems([]);
+        });
+    }, 250);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [catalogItems, orderOutletID, searchQuery, tenantID]);
+
   const createOrder = useCreateOrder();
   // Set true when the cashier confirms the age prompt for an age-restricted item;
   // sent with the order so the backend age gate passes. Reset when the cart clears.
@@ -760,7 +810,12 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
   };
 
   const menuItems: MenuItem[] = useMemo(() => {
-    const items = catalogItems ?? [];
+    const seen = new Set<string>();
+    const items = [...(catalogItems ?? []), ...remoteSearchItems].filter((item) => {
+      if (seen.has(item.id)) return false;
+      seen.add(item.id);
+      return true;
+    });
     return items.map((item: any) => {
       const tierPrices: Record<string, number> | undefined =
         item.prices && typeof item.prices === 'object' ? item.prices : undefined;
@@ -825,7 +880,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
       taxAmount: typeof item.tax_amount === 'number' ? item.tax_amount : undefined,
       };
     });
-  }, [catalogItems, pricingProfile]);
+  }, [catalogItems, pricingProfile, remoteSearchItems]);
 
   // Catalog indexed by lowercase SKU — used to build the auto-added free "get" line for a
   // corresponding-pair BOGO deal (the matching item's real price/recipe/tax).
@@ -898,11 +953,13 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
   // the "All" tab, so it is not included here. Falls back to deriving categories
   // from item names (no icons) when the server returns none.
   const categories = useMemo(() => {
-    if (serverCategories && serverCategories.length > 0) {
-      return serverCategories;
+    const byName = new Map<string, { name: string; icon?: string; image_url?: string }>();
+    for (const category of serverCategories ?? []) byName.set(category.name.toLowerCase(), category);
+    for (const name of Array.from(new Set(menuItems.map((i) => i.category))).sort()) {
+      const key = name.toLowerCase();
+      if (!byName.has(key)) byName.set(key, { name });
     }
-    const names = Array.from(new Set(menuItems.map((i) => i.category))).sort();
-    return names.map((name) => ({ name }));
+    return Array.from(byName.values());
   }, [serverCategories, menuItems]);
 
   // Brand list (retail/pharmacy) derived from the items actually present, so only brands with
