@@ -655,7 +655,16 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
 
   // Reset to page 1 when search/category/brand changes
   const handleCategoryChange = (cat: string) => { setActiveCategory(cat); setPage(1); };
-  const handleSearchChange = (q: string) => { setSearchQuery(q); setPage(1); };
+  const handleSearchChange = (q: string) => {
+    setSearchQuery(q);
+    // A direct item search should not remain constrained by the previously browsed
+    // category or brand; otherwise a valid item in another category appears missing.
+    if (q.trim()) {
+      setActiveCategory('All');
+      setActiveBrand('All');
+    }
+    setPage(1);
+  };
   const handleBrandChange = (b: string) => { setActiveBrand(b); setPage(1); };
   // Switching Category↔Brand resets the other axis so the two never compound.
   const setPickerMode = (m: 'category' | 'brand') => {
