@@ -142,8 +142,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Only an authenticated tenant session may activate the overlay. The PIN-login request is
   // expected to return tenant_under_repair before a session exists, so it must not lock the app.
+  // A stale SSO user can still be present while switching tenant PIN routes, so the kiosk path
+  // itself is an explicit exclusion as well.
   useEffect(() => {
     apiClient.setOnTenantUnderRepair((data) => {
+      if (isKiosk) return;
       const { user } = useAuthStore.getState();
       const tenantId = user?.tenant_id;
       const isPlatformOwner = user?.isPlatformOwner === true || user?.tenant_slug === 'codevertex';
@@ -151,7 +154,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       useMaintenanceStore.getState().show(tenantId, data);
     });
     return () => apiClient.setOnTenantUnderRepair(null);
-  }, []);
+  }, [isKiosk]);
 
   // Warn before a terminal PIN session's 4-hour JWT expires. Terminal sessions carry NO
   // refresh token by design (setTerminalSession sets refreshToken: '') — a hard ceiling
