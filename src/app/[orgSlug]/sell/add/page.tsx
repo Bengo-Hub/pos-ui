@@ -230,7 +230,7 @@ export default function AddSalePage() {
   // Credit Sale is available to CASHIERS too (product decision 2026-07-07 — terms captured via
   // the shared CreditSaleDetailsModal; treasury enforces the credit limit). Quotations remain a
   // manager/back-office action (same permission that approves sale returns).
-  const { can, canAny } = usePermissions();
+  const { can, canAny, isSuperuser } = usePermissions();
   const canPrivileged = can('pos.orders.manage');
   // Discounting is permission-gated (2026-07-17): manager/admin + platform owner by default
   // (pos.discounts.add / pos.orders.manage); hidden from cashiers unless the tenant admin
@@ -287,6 +287,24 @@ export default function AddSalePage() {
   const {
     receiptData, receiptOpen, receiptOrderId, showReceiptForOrder, closeReceipt,
   } = useReceiptAfterSale(tenantId, authUser?.fullName || authUser?.email);
+  // Shared-terminal auto-logout after a completed sale (auto_logout_after_sale policy) — mirrors
+  // terminal-context's identically-named memo/callback verbatim. Add Sale is a real, nav-exposed
+  // sale-completion surface for retail/pharmacy/services outlets (see nav-config.ts's "Add Sale"
+  // entry, only hidden for hospitality/quick_service), so it must honor the same policy the main
+  // terminal's handleReceiptClose does — closeReceipt alone (wired below before this fix) never
+  // checked the setting at all, so a cashier ringing up sales here was never logged out even with
+  // the setting ON. Applies to operational floor staff but never managers/admins/HQ.
+  const autoLogoutAfterSale = useMemo(() => {
+    if (!(posSettings as any)?.auto_logout_after_sale) return false;
+    if (isSuperuser || can(P.SESSIONS_MANAGE)) return false;
+    return true;
+  }, [posSettings, isSuperuser, can]);
+  const handleReceiptClose = useCallback(() => {
+    closeReceipt();
+    if (autoLogoutAfterSale) {
+      router.replace(`/${orgSlug}/pin-login`);
+    }
+  }, [closeReceipt, autoLogoutAfterSale, orgSlug, router]);
   const [servedByUserId, setServedByUserId] = useState('');
   const [servedByName, setServedByName] = useState('');
   useEffect(() => {
@@ -1646,7 +1664,7 @@ export default function AddSalePage() {
       <ReceiptPreview
         receipt={receiptData}
         open={receiptOpen}
-        onClose={closeReceipt}
+        onClose={handleReceiptClose}
         printerProfile={resolveBillProfile((posSettings as any)?.printer_profiles)}
         tenantId={tenantId}
         orderId={receiptOrderId}

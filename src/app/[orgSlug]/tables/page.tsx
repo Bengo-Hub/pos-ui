@@ -41,7 +41,7 @@ import {
   Users,
   X,
 } from 'lucide-react';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
@@ -476,7 +476,7 @@ function MyBillsTab({ orgSlug }: { orgSlug: string }) {
   const currency = (posSettings as any)?.currency ?? 'KES';
   const fmt = fmtFor(currency);
   const router = useRouter();
-  const { can } = usePermissions();
+  const { can, isSuperuser } = usePermissions();
   const user = useAuthStore((s) => s.user);
   const outlet = useAuthStore((s) => s.outlet);
   const queryClient = useQueryClient();
@@ -488,6 +488,22 @@ function MyBillsTab({ orgSlug }: { orgSlug: string }) {
   const {
     receiptData, receiptOpen, receiptOrderId, showReceiptForOrder, closeReceipt,
   } = useReceiptAfterSale(user?.tenant_id ?? '', user?.fullName || user?.email);
+  // Shared-terminal auto-logout after a completed sale (auto_logout_after_sale policy) — mirrors
+  // terminal-context's identically-named memo/callback. Settling a bill from My Bills is a real
+  // sale-completion surface (hit constantly by hospitality/quick_service — the two profiles that
+  // default this setting ON) that never went through OrderPlacedDialog/handleReceiptClose, so it
+  // never checked the setting at all. Applies to floor staff but never managers/admins/HQ.
+  const autoLogoutAfterSale = useMemo(() => {
+    if (!(posSettings as any)?.auto_logout_after_sale) return false;
+    if (isSuperuser || can(P.SESSIONS_MANAGE)) return false;
+    return true;
+  }, [posSettings, isSuperuser, can]);
+  const handleReceiptClose = useCallback(() => {
+    closeReceipt();
+    if (autoLogoutAfterSale) {
+      router.replace(`/${orgSlug}/pin-login`);
+    }
+  }, [closeReceipt, autoLogoutAfterSale, orgSlug, router]);
   const isHospitality = ['hospitality', 'quick_service', 'hotel'].includes(
     (outlet?.use_case ?? (user as any)?.outlet_use_case ?? '').toLowerCase()
   );
@@ -865,7 +881,7 @@ function MyBillsTab({ orgSlug }: { orgSlug: string }) {
       <ReceiptPreview
         receipt={receiptData}
         open={receiptOpen}
-        onClose={closeReceipt}
+        onClose={handleReceiptClose}
         printerProfile={resolveBillProfile((posSettings as any)?.printer_profiles)}
         tenantId={user?.tenant_id ?? ''}
         orderId={receiptOrderId}
