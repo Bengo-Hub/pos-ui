@@ -3,7 +3,9 @@
 import { apiClient } from '@/lib/api/client';
 import { parseLimitInfo, subscriptionErrorMessage } from '@/lib/api/error-handler';
 import { LimitReachedModal } from '@/components/subscription/limit-reached-modal';
+import { MaintenanceOverlay } from '@/components/pos/maintenance-overlay';
 import { useLimitModal } from '@/store/limit-modal';
+import { useMaintenanceStore } from '@/store/maintenance';
 import { useMe } from '@/hooks/useMe';
 import { useAuthStore } from '@/store/auth';
 import { useQueryClient } from '@tanstack/react-query';
@@ -129,6 +131,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => apiClient.setOnServerError(null);
   }, []);
 
+  // Wire tenant_under_repair 503 → the global maintenance overlay (see maintenance-overlay.tsx).
+  // Sticky on purpose: once shown it stays until the window elapses server-side and a later
+  // request succeeds again, or a platform owner cancels it — nothing in the UI can dismiss it.
+  useEffect(() => {
+    apiClient.setOnTenantUnderRepair((data) => {
+      useMaintenanceStore.getState().show(data);
+    });
+    return () => apiClient.setOnTenantUnderRepair(null);
+  }, []);
+
   // Warn before a terminal PIN session's 4-hour JWT expires. Terminal sessions carry NO
   // refresh token by design (setTerminalSession sets refreshToken: '') — a hard ceiling
   // forcing periodic PIN re-entry rather than silent renewal. Without a warning, the
@@ -194,6 +206,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     <>
       {children}
       <LimitReachedModal />
+      <MaintenanceOverlay />
     </>
   );
 }

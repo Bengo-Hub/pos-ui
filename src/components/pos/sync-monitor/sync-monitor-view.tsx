@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import {
-  Activity, AlertTriangle, ArrowLeftRight, CloudUpload, Database, Pause, Play, RefreshCw, Tag, Wifi, WifiOff,
+  Activity, AlertTriangle, ArrowLeftRight, CloudUpload, Database, Pause, Play, RefreshCw, ShieldAlert, Tag, Wifi, WifiOff,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/store/auth';
@@ -24,9 +24,10 @@ import { isPlatformOwner as checkPlatformOwner } from '@/lib/auth/permissions';
 import { SyncLogTable } from './sync-log-table';
 import { PriceReconcileTab } from './price-reconcile-tab';
 import { TxnReversalTab } from './txn-reversal-tab';
+import { MaintenanceWindowTab } from './maintenance-window-tab';
 
 const POLL_MS = 2_000;
-type SyncMonitorTab = 'overview' | 'prices' | 'reversals';
+type SyncMonitorTab = 'overview' | 'prices' | 'reversals' | 'maintenance';
 
 function timeAgo(iso?: string | number | null): string {
   if (!iso) return '—';
@@ -186,10 +187,24 @@ export function SyncMonitorView() {
             <ArrowLeftRight className="h-4 w-4" /> Txn Reversals
           </button>
         )}
+        {isPlatformOwner && (
+          <button
+            onClick={() => setTab('maintenance')}
+            className={cn(
+              'flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 transition-colors',
+              tab === 'maintenance'
+                ? 'border-primary text-primary'
+                : 'border-transparent text-muted-foreground hover:text-foreground',
+            )}
+          >
+            <ShieldAlert className="h-4 w-4" /> Maintenance Window
+          </button>
+        )}
       </div>
 
       {tab === 'prices' && <PriceReconcileTab tenantID={tenantID} outletID={outletID} />}
       {tab === 'reversals' && isPlatformOwner && <TxnReversalTab tenantID={tenantID} />}
+      {tab === 'maintenance' && isPlatformOwner && <MaintenanceWindowTab />}
 
       {tab === 'overview' && (
       <>

@@ -73,6 +73,7 @@ class ApiClient {
     private onLimitReachedCallback: ((data: any) => void) | null = null;
     private onGraceWriteBlockedCallback: ((data: any) => void) | null = null;
     private onServerErrorCallback: ((status: number, message: string) => void) | null = null;
+    private onTenantUnderRepairCallback: ((data: any) => void) | null = null;
 
     /** Register a callback to run when any API response is 401 (e.g. clear session / redirect to auth). */
     public setOn401(callback: (() => void) | null) {
@@ -100,6 +101,13 @@ class ApiClient {
     /** Register a callback for 5xx server errors to show a global error toast. */
     public setOnServerError(callback: ((status: number, message: string) => void) | null) {
         this.onServerErrorCallback = callback;
+    }
+
+    /** Register a callback for the tenant_under_repair 503 (pos-api's maintenance window gate —
+     *  product name: Repair Mode). Checked ahead of the generic 5xx toast below so a maintenance
+     *  block shows its own full-screen overlay instead of a passing "server error" toast. */
+    public setOnTenantUnderRepair(callback: ((data: any) => void) | null) {
+        this.onTenantUnderRepairCallback = callback;
     }
 
     private handleError = async (error: any) => {
@@ -150,7 +158,9 @@ class ApiClient {
                 this.onLimitReachedCallback(data);
             }
         }
-        if (error.response?.status >= 500 && this.onServerErrorCallback && !error.config?.suppressErrorToast) {
+        if (error.response?.status === 503 && error.response?.data?.code === 'tenant_under_repair') {
+            this.onTenantUnderRepairCallback?.(error.response.data);
+        } else if (error.response?.status >= 500 && this.onServerErrorCallback && !error.config?.suppressErrorToast) {
             const data = error.response?.data;
             const message = data?.message ?? data?.error ?? 'A server error occurred. Please try again.';
             this.onServerErrorCallback(error.response.status, message);
