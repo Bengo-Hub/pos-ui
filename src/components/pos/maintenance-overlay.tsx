@@ -1,5 +1,6 @@
 'use client';
 
+import { useAuthStore } from '@/store/auth';
 import { useMaintenanceStore } from '@/store/maintenance';
 import { ShieldAlert } from 'lucide-react';
 
@@ -14,10 +15,12 @@ import { ShieldAlert } from 'lucide-react';
  */
 export function MaintenanceOverlay() {
   const active = useMaintenanceStore((s) => s.active);
+  const tenantId = useMaintenanceStore((s) => s.tenantId);
   const reason = useMaintenanceStore((s) => s.reason);
   const endsAt = useMaintenanceStore((s) => s.endsAt);
+  const currentTenantId = useAuthStore((s) => s.user?.tenant_id);
 
-  if (!active) return null;
+  if (!active || !tenantId || tenantId !== currentTenantId) return null;
 
   const endsAtLabel = endsAt
     ? new Date(endsAt).toLocaleString('en-KE', { dateStyle: 'medium', timeStyle: 'short' })

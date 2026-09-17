@@ -1,13 +1,13 @@
 'use client';
 
+import { MaintenanceOverlay } from '@/components/pos/maintenance-overlay';
+import { LimitReachedModal } from '@/components/subscription/limit-reached-modal';
+import { useMe } from '@/hooks/useMe';
 import { apiClient } from '@/lib/api/client';
 import { parseLimitInfo, subscriptionErrorMessage } from '@/lib/api/error-handler';
-import { LimitReachedModal } from '@/components/subscription/limit-reached-modal';
-import { MaintenanceOverlay } from '@/components/pos/maintenance-overlay';
+import { useAuthStore } from '@/store/auth';
 import { useLimitModal } from '@/store/limit-modal';
 import { useMaintenanceStore } from '@/store/maintenance';
-import { useMe } from '@/hooks/useMe';
-import { useAuthStore } from '@/store/auth';
 import { useQueryClient } from '@tanstack/react-query';
 import { useParams, usePathname, useRouter } from 'next/navigation';
 import { ReactNode, useEffect } from 'react';
@@ -22,6 +22,7 @@ function isKioskPath(pathname: string | null): boolean {
 /** Uses TanStack Query (useMe) for auth-api GET /me with TTL; roles/permissions for nav and route protection. */
 export function AuthProvider({ children }: { children: ReactNode }) {
   const { status, initialize, isTerminalSession } = useAuthStore();
+  const user = useAuthStore((s) => s.user);
   const session = useAuthStore((s) => s.session);
   const _hasHydrated = useAuthStore((s) => s._hasHydrated);
   const logout = useAuthStore((s) => s.logout);
@@ -35,6 +36,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isAuthCallback   = pathname?.includes('/auth');
   const isUnauthorizedPage = pathname?.endsWith('/unauthorized');
   const isKiosk = isKioskPath(pathname);
+
+  // Maintenance state is session-owned. Never carry a tenant's lock through logout or into a
+  // platform-owner session, even when the next login uses the same browser and tenant.
+  useEffect(() => {
+    if (!user || user.isPlatformOwner === true || user.tenant_slug === 'codevertex') {
+      useMaintenanceStore.getState().clear();
+    }
+  }, [user]);
 
   // Wait for Zustand localStorage rehydration before running initialize to prevent
   // the race where isTerminalSession=false fires before persisted state is loaded.
@@ -131,12 +140,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => apiClient.setOnServerError(null);
   }, []);
 
-  // Wire tenant_under_repair 503 → the global maintenance overlay (see maintenance-overlay.tsx).
-  // Sticky on purpose: once shown it stays until the window elapses server-side and a later
-  // request succeeds again, or a platform owner cancels it — nothing in the UI can dismiss it.
+  // Only an authenticated tenant session may activate the overlay. The PIN-login request is
+  // expected to return tenant_under_repair before a session exists, so it must not lock the app.
   useEffect(() => {
     apiClient.setOnTenantUnderRepair((data) => {
-      useMaintenanceStore.getState().show(data);
+      const { user } = useAuthStore.getState();
+      const tenantId = user?.tenant_id;
+      const isPlatformOwner = user?.isPlatformOwner === true || user?.tenant_slug === 'codevertex';
+      if (!tenantId || isPlatformOwner) return;
+      useMaintenanceStore.getState().show(tenantId, data);
     });
     return () => apiClient.setOnTenantUnderRepair(null);
   }, []);
