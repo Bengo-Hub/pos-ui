@@ -142,6 +142,10 @@ export interface OfflinePayment extends SyncState {
   amount: number;
   currency: string;
   external_ref?: string;
+  // Raw cash physically handed over (cash tender only) — replayed to the server on sync so an
+  // offline cash-with-change sale's receipt still shows "Tendered"/"Change" (see pos-api's
+  // cashPaymentData). Undefined for every other tender.
+  amount_tendered?: number;
   tenant_slug: string;
   tenant_id?: string;
   created_at: string;

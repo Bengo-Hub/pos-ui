@@ -18,10 +18,14 @@ export interface QueueOfflinePaymentArgs {
   currency: string;
   tenantSlug: string;
   externalRef?: string;
+  // Raw cash physically handed over (cash tender only) — carried through to the sync worker so
+  // an offline cash-with-change sale still shows "Tendered"/"Change" on its receipt once synced
+  // and printed/reprinted, instead of only ever recording the amount applied.
+  amountTendered?: number;
 }
 
 export async function queueOfflinePayment({
-  orderId, tenderId, method, amount, currency, tenantSlug, externalRef,
+  orderId, tenderId, method, amount, currency, tenantSlug, externalRef, amountTendered,
 }: QueueOfflinePaymentArgs): Promise<void> {
   const localOrder = await getOfflineOrderByLocalId(orderId);
   await savePendingPayment({
@@ -32,6 +36,7 @@ export async function queueOfflinePayment({
     amount,
     currency,
     external_ref: externalRef,
+    amount_tendered: amountTendered,
     tenant_slug: tenantSlug,
     created_at: new Date().toISOString(),
     synced: false,

@@ -2109,6 +2109,7 @@ export function useCreatePaymentIntent() {
       reason,
       approvalToken,
       approvalCode,
+      amountTendered,
     }: {
       orderId: string;
       tenderMethod: string;
@@ -2124,6 +2125,11 @@ export function useCreatePaymentIntent() {
       reason?: string;
       approvalToken?: string;
       approvalCode?: string;
+      // Raw cash physically handed over (cash tender only) — e.g. a 2,000 note against a 1,820
+      // bill. Only meaningful when greater than `amount`; the server ignores it otherwise. This
+      // is what makes "Tendered"/"Change" show up on the printed receipt (see pos-api's
+      // cashPaymentData) — without it, the server only ever knows the amount actually applied.
+      amountTendered?: number;
     }) =>
       apiClient.post<PaymentIntentResult>(`${basePath(tenantID)}/orders/${orderId}/payments/intent`, {
         tenderMethod,
@@ -2137,6 +2143,7 @@ export function useCreatePaymentIntent() {
         reason,
         approvalToken,
         approvalCode,
+        amountTendered,
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['pos-orders'] });

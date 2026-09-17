@@ -261,6 +261,7 @@ async function syncPayments(tenantID: string): Promise<number> {
           amount: payment.amount,
           currency: payment.currency,
           externalRef: payment.external_ref,
+          amountTendered: payment.amount_tendered,
         },
         idem(`pay-${payment.local_order_id ?? orderId}-${payment.tender_method}-${payment.external_ref ?? payment.amount}`),
       );

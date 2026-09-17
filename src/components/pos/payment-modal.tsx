@@ -173,8 +173,8 @@ export function POSPaymentModal({
 
   // Queue an offline payment via the shared queueOfflinePaymentRecord (see [[offline-payment.ts]]).
   const queueOfflinePayment = useCallback(
-    (method: string, externalRef?: string) =>
-      queueOfflinePaymentRecord({ orderId, tenderId, method, amount: roundedTotal, currency, tenantSlug, externalRef }),
+    (method: string, externalRef?: string, amountTendered?: number) =>
+      queueOfflinePaymentRecord({ orderId, tenderId, method, amount: roundedTotal, currency, tenantSlug, externalRef, amountTendered }),
     [orderId, tenderId, roundedTotal, currency, tenantSlug],
   );
 
@@ -185,7 +185,7 @@ export function POSPaymentModal({
 
     if (!isOnline) {
       try {
-        await queueOfflinePayment('cash');
+        await queueOfflinePayment('cash', undefined, tendered);
         setStep('offline_queued');
         onPaymentConfirmed(methodRef.current);
       } catch {
@@ -196,7 +196,7 @@ export function POSPaymentModal({
     }
 
     createIntent.mutate(
-      { orderId, tenderMethod: 'cash', amount: roundedTotal, tenderId },
+      { orderId, tenderMethod: 'cash', amount: roundedTotal, tenderId, amountTendered: tendered },
       {
         onSuccess: () => { setStep('confirmed'); onPaymentConfirmed(methodRef.current); },
         onError: async (err: any) => {
@@ -205,7 +205,7 @@ export function POSPaymentModal({
           const { isNetworkShapedError } = await import('@/lib/connectivity');
           if (isNetworkShapedError(err)) {
             try {
-              await queueOfflinePayment('cash');
+              await queueOfflinePayment('cash', undefined, tendered);
               setStep('offline_queued');
               onPaymentConfirmed(methodRef.current);
               return;

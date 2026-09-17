@@ -212,7 +212,11 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
   }, [order, createOrderAsync]);
 
   // ── Immediate-settle tenders (cash / card-PDQ / credit) ──────────────────────
-  const settleImmediate = useCallback(async (key: TenderKey, externalRef?: string, creditDetails?: CreditSaleDetails) => {
+  // amountTendered: the raw cash physically handed over (cash tender only) — e.g. a 2,000 note
+  // against a 1,820 bill. Undefined for every other tender. This is what lets the printed
+  // receipt show "Tendered"/"Change" (pos-api's cashPaymentData) instead of just the amount
+  // applied — see CashCapture below, the only caller that ever passes it.
+  const settleImmediate = useCallback(async (key: TenderKey, externalRef?: string, creditDetails?: CreditSaleDetails, amountTendered?: number) => {
     setBusyKey(key);
     const ord = await ensureOrder();
     if (!ord) { setBusyKey(null); return; }
@@ -224,7 +228,7 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
     // payment.
     const queueOffline = async () => {
       try {
-        await queueOfflinePaymentRecord({ orderId: ord.orderId, tenderId, method, amount: roundedTotal, currency, tenantSlug, externalRef });
+        await queueOfflinePaymentRecord({ orderId: ord.orderId, tenderId, method, amount: roundedTotal, currency, tenantSlug, externalRef, amountTendered });
         autoOpenOnSettle(method);
         toast.success('Saved offline — will sync when back online.');
         finish(ord);
@@ -243,6 +247,7 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
         orderId: ord.orderId, tenderMethod: method, amount: roundedTotal, tenderId, externalRef,
         paymentDueDate: creditDetails?.dueDate, creditNotes: creditDetails?.notes || undefined,
         applyStoreCredit: creditDetails?.applyStoreCredit,
+        amountTendered,
       },
       {
         onSuccess: () => { autoOpenOnSettle(method); finish(ord); },
@@ -418,7 +423,7 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
           onChange={setCashTendered}
           busy={anyBusy}
           onCancel={reset}
-          onConfirm={() => settleImmediate('cash')}
+          onConfirm={() => settleImmediate('cash', undefined, undefined, parseFloat(cashTendered) || roundedTotal)}
         />
       )}
       {capture === 'card_pdq' && (
