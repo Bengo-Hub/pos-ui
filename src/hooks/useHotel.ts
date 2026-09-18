@@ -14,6 +14,7 @@ import {
   type CreateHousekeepingInput,
   type UpdateHousekeepingInput,
   type SettleFolioInput,
+  type CreateDamageReportInput,
 } from '@/lib/api/hotel';
 
 function useTenantSlug() {
@@ -235,6 +236,58 @@ export function useUpdateHousekeepingTask() {
     mutationFn: ({ taskID, body }: { taskID: string; body: UpdateHousekeepingInput }) =>
       hotelApi.updateHousekeeping(slug, taskID, body),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['housekeeping', slug] }),
+  });
+}
+
+// ─── Damage / fine reports ─────────────────────────────────────────────────────
+
+export function useDamageReports(params?: { status?: string; room_id?: string }) {
+  const slug = useTenantSlug();
+  return useQuery({
+    queryKey: ['damage-reports', slug, params ?? {}],
+    queryFn: () => hotelApi.listDamageReports(slug, params),
+    enabled: !!slug,
+    staleTime: 15_000,
+  });
+}
+
+export function useCreateDamageReport(roomId: string) {
+  const slug = useTenantSlug();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: CreateDamageReportInput) => hotelApi.createDamageReport(slug, roomId, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['damage-reports', slug] }),
+  });
+}
+
+export function useApproveDamageReport() {
+  const slug = useTenantSlug();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, reviewNotes }: { id: string; reviewNotes?: string }) =>
+      hotelApi.approveDamageReport(slug, id, { review_notes: reviewNotes }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['damage-reports', slug] });
+      qc.invalidateQueries({ queryKey: ['room-folio', slug] });
+      qc.invalidateQueries({ queryKey: ['folio-summary', slug] });
+    },
+  });
+}
+
+export function useRejectDamageReport() {
+  const slug = useTenantSlug();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, reviewNotes }: { id: string; reviewNotes: string }) =>
+      hotelApi.rejectDamageReport(slug, id, { review_notes: reviewNotes }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['damage-reports', slug] }),
+  });
+}
+
+export function useUploadDamageEvidence() {
+  const slug = useTenantSlug();
+  return useMutation({
+    mutationFn: (file: File) => hotelApi.uploadDamageEvidence(slug, file),
   });
 }
 

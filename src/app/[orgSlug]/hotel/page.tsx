@@ -14,6 +14,7 @@ import {
   CheckCircle,
   Loader2,
   Presentation,
+  ShieldAlert,
   Sparkles,
   Users,
   Wine,
@@ -171,6 +172,19 @@ function HotelPage() {
           <div>
             <p className="font-semibold text-foreground">Housekeeping</p>
             <p className="text-sm text-muted-foreground">Room cleaning &amp; maintenance tasks</p>
+          </div>
+        </Link>
+
+        <Link
+          href={`/${orgSlug}/hotel/damage-reports`}
+          className="group flex items-center gap-4 p-5 rounded-2xl border border-border bg-card hover:border-primary/40 hover:shadow-md transition-all"
+        >
+          <div className="size-12 rounded-xl bg-amber-500/10 flex items-center justify-center group-hover:bg-amber-500/20 transition-colors">
+            <ShieldAlert className="h-6 w-6 text-amber-600" />
+          </div>
+          <div>
+            <p className="font-semibold text-foreground">Damage Reports</p>
+            <p className="text-sm text-muted-foreground">Review &amp; approve guest damage/fine charges</p>
           </div>
         </Link>
       </div>

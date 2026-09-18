@@ -15,6 +15,7 @@ import {
   LogIn,
   LogOut,
   Receipt,
+  ShieldAlert,
   Smartphone,
   X,
 } from 'lucide-react';
@@ -24,6 +25,7 @@ import { apiErrorMessage } from '@/lib/api/error-message';
 import { ModuleGate } from '@/components/auth/module-gate';
 import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
 import { CheckoutPanel } from '@/components/pos/hotel/checkout-panel';
+import { DamageReportModal } from '@/components/pos/hotel/damage-report-modal';
 
 // Folio charge types a front-desk agent can post manually from this form. Mirrors the
 // subset of pos-api's RoomFolioItem.charge_type enum that isn't already posted by a
@@ -60,6 +62,7 @@ function RoomDetailPageInner() {
   });
   const [showCheckIn, setShowCheckIn] = useState(false);
   const [showCheckout, setShowCheckout] = useState(false);
+  const [showDamageReport, setShowDamageReport] = useState(false);
   const [checkInPaymentMethod, setCheckInPaymentMethod] = useState('');
   const [checkInPaymentReference, setCheckInPaymentReference] = useState('');
 
@@ -230,8 +233,106 @@ function RoomDetailPageInner() {
         </span>
       </div>
 
+      {/* Check-in form — full width while open; it's the only content on the page at this
+          point (an available room has no guest/folio to show yet), so a sidebar next to it
+          would just be empty space. */}
+      {showCheckIn && (
+        <Card>
+          <CardContent className="p-5 sm:p-6 space-y-5">
+            <p className="font-semibold text-foreground">Guest Check-In</p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <Field label="First Name" value={checkInForm.first_name} onChange={(v) => setField('first_name', v)} placeholder="First name" />
+              <Field label="Last Name" value={checkInForm.last_name} onChange={(v) => setField('last_name', v)} placeholder="Last name" />
+              <Field label="Phone" value={checkInForm.phone} onChange={(v) => setField('phone', v)} placeholder="+254..." />
+              <Field label="Email" type="email" value={checkInForm.email} onChange={(v) => setField('email', v)} placeholder="guest@email.com" />
+              <Field label="Nationality" value={checkInForm.nationality} onChange={(v) => setField('nationality', v)} placeholder="e.g. Kenyan" />
+              <label className="block">
+                <span className="text-sm font-medium text-foreground">ID Type</span>
+                <select
+                  value={checkInForm.id_type}
+                  onChange={(e) => setField('id_type', e.target.value)}
+                  className="mt-1 w-full px-4 py-2.5 rounded-xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                >
+                  <option value="national_id">National ID</option>
+                  <option value="passport">Passport</option>
+                  <option value="driving_licence">Driving Licence</option>
+                  <option value="other">Other</option>
+                </select>
+              </label>
+              <Field label="ID Number *" value={checkInForm.id_number} onChange={(v) => setField('id_number', v)} placeholder="Required — guest ID/passport number" />
+              <Field label="ID Document URL" value={checkInForm.id_document_url} onChange={(v) => setField('id_document_url', v)} placeholder="Uploaded scan link (optional)" />
+              <Field label="Nights (if no dates)" type="number" value={checkInForm.nights} onChange={(v) => setField('nights', v)} placeholder="1" />
+              <Field label="Check-In Date & Time" type="datetime-local" value={checkInForm.expected_arrival_at} onChange={(v) => setField('expected_arrival_at', v)} />
+              <Field label="Check-Out Date & Time" type="datetime-local" value={checkInForm.expected_departure_at} onChange={(v) => setField('expected_departure_at', v)} />
+              <Field label="Adults" type="number" value={checkInForm.adults} onChange={(v) => setField('adults', v)} placeholder="1" />
+              <Field label="Children" type="number" value={checkInForm.children} onChange={(v) => setField('children', v)} placeholder="0" />
+            </div>
+
+            {paymentTiming === 'per_day_split' && (
+              <p className="text-xs text-muted-foreground rounded-xl bg-muted/50 px-3 py-2">
+                This property splits the room charge per night — {checkInNights} separate line item{checkInNights !== 1 ? 's' : ''} will be posted to the folio instead of one lump sum.
+              </p>
+            )}
+
+            {requiresUpfrontPayment && (
+              <div className="rounded-xl border border-primary/30 bg-primary/5 p-4 space-y-3 sm:max-w-md">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-semibold text-foreground">Collect Payment (required at check-in)</p>
+                  {estimatedCheckInTotal > 0 && (
+                    <span className="text-sm font-bold text-primary tabular-nums">~{formatCurrency(estimatedCheckInTotal, currency)}</span>
+                  )}
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  {CHECK_IN_PAYMENT_METHODS.map((m) => {
+                    const Icon = m.icon;
+                    return (
+                      <button
+                        key={m.key}
+                        type="button"
+                        onClick={() => setCheckInPaymentMethod(m.key)}
+                        className={cn(
+                          'flex flex-col items-center gap-1 py-2.5 rounded-xl border-2 text-xs font-semibold transition-colors',
+                          checkInPaymentMethod === m.key ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:bg-muted'
+                        )}
+                      >
+                        <Icon className="h-4.5 w-4.5" />
+                        {m.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                <label className="block">
+                  <span className="text-xs font-medium text-muted-foreground">Reference (optional — M-Pesa code / card approval)</span>
+                  <input
+                    value={checkInPaymentReference}
+                    onChange={(e) => setCheckInPaymentReference(e.target.value.toUpperCase())}
+                    placeholder="Code / approval"
+                    className="mt-1 w-full px-3 py-2 rounded-lg border border-input bg-background text-sm uppercase focus:outline-none focus:ring-2 focus:ring-ring"
+                  />
+                </label>
+              </div>
+            )}
+
+            <div className="flex gap-3 pt-1 sm:max-w-md">
+              <button onClick={() => setShowCheckIn(false)} className="flex-1 sm:flex-none sm:px-8 py-2.5 rounded-xl border border-border text-foreground font-medium hover:bg-muted transition-colors">
+                Cancel
+              </button>
+              <button
+                onClick={handleCheckIn}
+                disabled={checkIn.isPending || !checkInForm.first_name.trim() || !checkInForm.id_number.trim() || (requiresUpfrontPayment && !checkInPaymentMethod)}
+                className="flex-1 py-2.5 rounded-xl bg-primary text-primary-foreground font-semibold hover:bg-primary/90 disabled:opacity-50 transition-colors"
+              >
+                {checkIn.isPending ? 'Checking in…' : 'Confirm Check-In'}
+              </button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {!showCheckIn && (
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        {/* Main column — guest info, folio, add-charge, check-in form */}
+        {/* Main column — guest info, folio, add-charge */}
         <div className="space-y-6 lg:col-span-2">
           {/* Guest info */}
           {isOccupied && guest && (
@@ -379,101 +480,6 @@ function RoomDetailPageInner() {
             </Card>
           )}
 
-          {/* Check-in form */}
-          {showCheckIn && (
-            <Card>
-              <CardContent className="p-5 sm:p-6 space-y-5">
-                <p className="font-semibold text-foreground">Guest Check-In</p>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  <Field label="First Name" value={checkInForm.first_name} onChange={(v) => setField('first_name', v)} placeholder="First name" />
-                  <Field label="Last Name" value={checkInForm.last_name} onChange={(v) => setField('last_name', v)} placeholder="Last name" />
-                  <Field label="Phone" value={checkInForm.phone} onChange={(v) => setField('phone', v)} placeholder="+254..." />
-                  <Field label="Email" type="email" value={checkInForm.email} onChange={(v) => setField('email', v)} placeholder="guest@email.com" />
-                  <Field label="Nationality" value={checkInForm.nationality} onChange={(v) => setField('nationality', v)} placeholder="e.g. Kenyan" />
-                  <label className="block">
-                    <span className="text-sm font-medium text-foreground">ID Type</span>
-                    <select
-                      value={checkInForm.id_type}
-                      onChange={(e) => setField('id_type', e.target.value)}
-                      className="mt-1 w-full px-4 py-2.5 rounded-xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                    >
-                      <option value="national_id">National ID</option>
-                      <option value="passport">Passport</option>
-                      <option value="driving_licence">Driving Licence</option>
-                      <option value="other">Other</option>
-                    </select>
-                  </label>
-                  <Field label="ID Number *" value={checkInForm.id_number} onChange={(v) => setField('id_number', v)} placeholder="Required — guest ID/passport number" />
-                  <Field label="ID Document URL" value={checkInForm.id_document_url} onChange={(v) => setField('id_document_url', v)} placeholder="Uploaded scan link (optional)" />
-                  <Field label="Nights (if no dates)" type="number" value={checkInForm.nights} onChange={(v) => setField('nights', v)} placeholder="1" />
-                  <Field label="Check-In Date & Time" type="datetime-local" value={checkInForm.expected_arrival_at} onChange={(v) => setField('expected_arrival_at', v)} />
-                  <Field label="Check-Out Date & Time" type="datetime-local" value={checkInForm.expected_departure_at} onChange={(v) => setField('expected_departure_at', v)} />
-                  <Field label="Adults" type="number" value={checkInForm.adults} onChange={(v) => setField('adults', v)} placeholder="1" />
-                  <Field label="Children" type="number" value={checkInForm.children} onChange={(v) => setField('children', v)} placeholder="0" />
-                </div>
-
-                {paymentTiming === 'per_day_split' && (
-                  <p className="text-xs text-muted-foreground rounded-xl bg-muted/50 px-3 py-2">
-                    This property splits the room charge per night — {checkInNights} separate line item{checkInNights !== 1 ? 's' : ''} will be posted to the folio instead of one lump sum.
-                  </p>
-                )}
-
-                {requiresUpfrontPayment && (
-                  <div className="rounded-xl border border-primary/30 bg-primary/5 p-4 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <p className="text-sm font-semibold text-foreground">Collect Payment (required at check-in)</p>
-                      {estimatedCheckInTotal > 0 && (
-                        <span className="text-sm font-bold text-primary tabular-nums">~{formatCurrency(estimatedCheckInTotal, currency)}</span>
-                      )}
-                    </div>
-                    <div className="grid grid-cols-3 gap-2">
-                      {CHECK_IN_PAYMENT_METHODS.map((m) => {
-                        const Icon = m.icon;
-                        return (
-                          <button
-                            key={m.key}
-                            type="button"
-                            onClick={() => setCheckInPaymentMethod(m.key)}
-                            className={cn(
-                              'flex flex-col items-center gap-1 py-2.5 rounded-xl border-2 text-xs font-semibold transition-colors',
-                              checkInPaymentMethod === m.key ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:bg-muted'
-                            )}
-                          >
-                            <Icon className="h-4.5 w-4.5" />
-                            {m.label}
-                          </button>
-                        );
-                      })}
-                    </div>
-                    <label className="block">
-                      <span className="text-xs font-medium text-muted-foreground">Reference (optional — M-Pesa code / card approval)</span>
-                      <input
-                        value={checkInPaymentReference}
-                        onChange={(e) => setCheckInPaymentReference(e.target.value.toUpperCase())}
-                        placeholder="Code / approval"
-                        className="mt-1 w-full px-3 py-2 rounded-lg border border-input bg-background text-sm uppercase focus:outline-none focus:ring-2 focus:ring-ring"
-                      />
-                    </label>
-                  </div>
-                )}
-
-                <div className="flex gap-3 pt-1">
-                  <button onClick={() => setShowCheckIn(false)} className="flex-1 sm:flex-none sm:px-8 py-2.5 rounded-xl border border-border text-foreground font-medium hover:bg-muted transition-colors">
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleCheckIn}
-                    disabled={checkIn.isPending || !checkInForm.first_name.trim() || !checkInForm.id_number.trim() || (requiresUpfrontPayment && !checkInPaymentMethod)}
-                    className="flex-1 py-2.5 rounded-xl bg-primary text-primary-foreground font-semibold hover:bg-primary/90 disabled:opacity-50 transition-colors"
-                  >
-                    {checkIn.isPending ? 'Checking in…' : 'Confirm Check-In'}
-                  </button>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
           {/* Empty state — available room, check-in not yet started */}
           {showEmptyState && (
             <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-border py-16 text-center text-muted-foreground">
@@ -524,9 +530,28 @@ function RoomDetailPageInner() {
                 </button>
               </div>
             )}
+
+            {/* Report Damage — available regardless of occupancy (housekeeping may find it
+                after the guest has already checked out); goes to a manager for review, never
+                straight to the folio. */}
+            <button
+              onClick={() => setShowDamageReport(true)}
+              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-amber-500/30 text-amber-700 dark:text-amber-400 text-sm font-semibold hover:bg-amber-500/10 transition-colors"
+            >
+              <ShieldAlert className="h-4 w-4" />
+              Report Damage
+            </button>
           </div>
         </div>
       </div>
+      )}
+
+      <DamageReportModal
+        roomId={roomId}
+        roomNumber={room.room_number}
+        open={showDamageReport}
+        onClose={() => setShowDamageReport(false)}
+      />
 
       <CheckoutPanel
         roomId={roomId}

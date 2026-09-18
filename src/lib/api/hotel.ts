@@ -89,6 +89,8 @@ export interface BookingMeta {
   children?: number;
   notes?: string;
   package_inclusions?: string;
+  /** Set on guest-submitted (source=online) bookings from the self-service widget. */
+  room_type?: string;
 }
 
 export interface RoomBooking {
@@ -102,6 +104,8 @@ export interface RoomBooking {
   departure_date: string;
   market_segment?: string;
   inventory_rate_plan_bundle_id?: string | null;
+  /** staff | online | api — online means the guest submitted this via the public widget. */
+  source?: string;
   status: string;
   metadata?: BookingMeta;
 }
@@ -352,6 +356,52 @@ export interface HousekeepingTask {
   created_at: string;
 }
 
+export interface DamageReport {
+  id: string;
+  room_id: string;
+  room_guest_id?: string;
+  description: string;
+  amount: number;
+  currency: string;
+  evidence_urls: string[];
+  status: 'pending' | 'approved' | 'rejected';
+  reported_by: string;
+  reviewed_by?: string;
+  reviewed_at?: string;
+  review_notes?: string;
+  folio_item_id?: string;
+  created_at: string;
+}
+
+export interface CreateDamageReportInput {
+  description: string;
+  amount: number;
+  currency?: string;
+  evidence_urls?: string[];
+}
+
+export interface RoomTypeAvailability {
+  room_type: string;
+  available_count: number;
+  total_count: number;
+  sample_rate: number;
+  currency: string;
+}
+
+export interface PublicRoomBookingInput {
+  outlet_id: string;
+  room_type: string;
+  rooms_count: number;
+  arrival_date: string;
+  departure_date: string;
+  lead_guest_name: string;
+  email?: string;
+  phone?: string;
+  adults?: number;
+  children?: number;
+  notes?: string;
+}
+
 export interface CreateHousekeepingInput {
   room_id: string;
   task_type?: string;
@@ -444,6 +494,42 @@ export const hotelApi = {
 
   updateHousekeeping: (tenantSlug: string, taskID: string, body: UpdateHousekeepingInput) =>
     apiClient.patch<HousekeepingTask>(`${hotelBase(tenantSlug)}/housekeeping/${taskID}`, body),
+
+  // ─── Damage / fine reports ───────────────────────────────────────────────────
+  createDamageReport: (tenantSlug: string, roomId: string, body: CreateDamageReportInput) =>
+    apiClient.post<DamageReport>(`${hotelBase(tenantSlug)}/rooms/${roomId}/damage-reports`, body),
+
+  listDamageReports: (tenantSlug: string, params?: { status?: string; room_id?: string }) =>
+    apiClient
+      .get<{ data: DamageReport[]; total: number }>(`${hotelBase(tenantSlug)}/damage-reports`, params ?? {})
+      .then((r) => r?.data ?? []),
+
+  getDamageReport: (tenantSlug: string, id: string) =>
+    apiClient.get<DamageReport>(`${hotelBase(tenantSlug)}/damage-reports/${id}`),
+
+  approveDamageReport: (tenantSlug: string, id: string, body: { review_notes?: string }) =>
+    apiClient.post<{ report: DamageReport; folio_posted: boolean }>(`${hotelBase(tenantSlug)}/damage-reports/${id}/approve`, body),
+
+  rejectDamageReport: (tenantSlug: string, id: string, body: { review_notes: string }) =>
+    apiClient.post<DamageReport>(`${hotelBase(tenantSlug)}/damage-reports/${id}/reject`, body),
+
+  /** Uploads one evidence photo, returning its relative /media/... URL to attach on createDamageReport. */
+  uploadDamageEvidence: (tenantSlug: string, file: File) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    return apiClient.post<{ url: string }>(`${hotelBase(tenantSlug)}/damage-evidence/upload`, fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+
+  // ─── Self-service room booking (public widget) ───────────────────────────────
+  publicRoomAvailability: (tenantSlug: string, params: { outlet_id: string; arrival_date: string; departure_date: string }) =>
+    apiClient
+      .get<{ data: RoomTypeAvailability[] }>(`/api/v1/${tenantSlug}/pos/room-bookings/availability`, params)
+      .then((r) => r?.data ?? []),
+
+  createPublicRoomBooking: (tenantSlug: string, body: PublicRoomBookingInput) =>
+    apiClient.post<RoomBooking>(`/api/v1/${tenantSlug}/pos/room-bookings`, body),
 
   // ─── Facilities ────────────────────────────────────────────────────────────
 

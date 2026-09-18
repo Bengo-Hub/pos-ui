@@ -6,10 +6,10 @@ import { useParams } from 'next/navigation';
 import { Card, CardContent } from '@/components/ui/base';
 import { Combobox } from '@/components/ui/combobox';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
-import { useRoomBookings, useCreateRoomBooking, useUpdateRoomBooking, useInventoryBundles } from '@/hooks/useHotel';
+import { useRoomBookings, useCreateRoomBooking, useUpdateRoomBooking, useInventoryBundles, useBookingPolicy } from '@/hooks/useHotel';
 import { usePermissions, P } from '@/hooks/usePermissions';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
-import type { CreateRoomBookingInput, RoomBooking } from '@/lib/api/hotel';
+import type { CreateRoomBookingInput, RoomBooking, BookingPolicy } from '@/lib/api/hotel';
 import { ArrowLeft, ChevronDown, ChevronRight, Loader2, Pencil, Plus, Users, X, XCircle } from 'lucide-react';
 import { cn, formatCurrency } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -22,6 +22,7 @@ const inputCls ='mt-1 w-full px-4 py-2.5 rounded-xl border border-input bg-backg
 type BookingType = 'group' | 'individual';
 
 const STATUS_COLOR: Record<string, string> = {
+  pending:     'bg-amber-500/10 text-amber-700 dark:text-amber-400',
   confirmed:   'bg-blue-500/10 text-blue-700 dark:text-blue-400',
   checked_in:  'bg-green-500/10 text-green-700 dark:text-green-400',
   checked_out: 'bg-muted text-muted-foreground',
@@ -33,7 +34,7 @@ const emptyForm = (): CreateRoomBookingInput & { adults: number; children: numbe
   lead_guest_name: '', email: '', phone: '', rooms_count: 1,
   arrival_date: '', departure_date: '', market_segment: '', source: 'staff',
   inventory_rate_plan_bundle_id: '',
-  booking_type: 'group', adults: 1, children: 0, notes: '', package_inclusions: '',
+  booking_type: 'individual', adults: 1, children: 0, notes: '', package_inclusions: '',
 });
 
 function toLocalInput(iso: string) {
@@ -42,10 +43,23 @@ function toLocalInput(iso: string) {
   return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
 }
 
-const BOOKING_STATUSES = ['confirmed', 'checked_in', 'checked_out', 'cancelled', 'no_show'];
+const BOOKING_STATUSES = ['pending', 'confirmed', 'checked_in', 'checked_out', 'cancelled', 'no_show'];
+
+// Client-side preview of the amendment/cancellation fee, mirroring pos-api's
+// computeBookingFee (roombooking.go) exactly — this is a preview only, shown BEFORE the staff
+// confirms, so the policy actually governs the decision instead of only being revealed
+// after the fact in the success toast. The backend remains the source of truth: it
+// recomputes and applies the real fee server-side regardless of what this preview shows.
+function previewBookingFee(policy: BookingPolicy | undefined, arrivalISO: string, isCancel: boolean): number {
+  if (!policy || !arrivalISO) return 0;
+  const hoursAhead = (new Date(arrivalISO).getTime() - Date.now()) / 3_600_000;
+  if (isCancel) return hoursAhead < policy.cancellation_window_hours ? policy.cancellation_fee : 0;
+  return hoursAhead < policy.free_amendment_window_hours ? policy.amendment_fee : 0;
+}
 
 function BookingEditModal({ b, onClose }: { b: RoomBooking; onClose: () => void }) {
   const update = useUpdateRoomBooking(b.id);
+  const { data: policy } = useBookingPolicy();
   const meta = b.metadata ?? {};
   const [form, setForm] = useState({
     lead_guest_name: b.lead_guest_name, email: b.email ?? '', phone: b.phone ?? '',
@@ -54,6 +68,9 @@ function BookingEditModal({ b, onClose }: { b: RoomBooking; onClose: () => void 
     adults: meta.adults ?? 1, children: meta.children ?? 0, notes: meta.notes ?? '',
   });
   function set<K extends keyof typeof form>(k: K, v: (typeof form)[K]) { setForm((f) => ({ ...f, [k]: v })); }
+
+  const isCancelling = form.status === 'cancelled' && b.status !== 'cancelled';
+  const feePreview = previewBookingFee(policy, form.arrival_date, isCancelling);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -100,7 +117,14 @@ function BookingEditModal({ b, onClose }: { b: RoomBooking; onClose: () => void 
             <input type="datetime-local" value={form.departure_date} onChange={(e) => set('departure_date', e.target.value)} className={inputCls} /></label>
           <label className="block sm:col-span-2"><span className="text-sm font-medium">Notes</span>
             <textarea value={form.notes} onChange={(e) => set('notes', e.target.value)} rows={2} className={inputCls} /></label>
-          <p className="text-[11px] text-muted-foreground sm:col-span-2">Amendments made close to arrival may incur a fee per your booking policy.</p>
+          {feePreview > 0 ? (
+            <p className="sm:col-span-2 text-xs rounded-lg bg-amber-500/10 text-amber-700 dark:text-amber-400 px-3 py-2">
+              {isCancelling ? 'Cancelling' : 'Amending'} now will incur a {policy?.currency} {feePreview.toLocaleString()} fee
+              — within the {isCancelling ? policy?.cancellation_window_hours : policy?.free_amendment_window_hours}h policy window before arrival.
+            </p>
+          ) : (
+            <p className="text-[11px] text-muted-foreground sm:col-span-2">Amendments made close to arrival may incur a fee per your booking policy.</p>
+          )}
           <div className="flex gap-3 sm:col-span-2">
             <button type="button" onClick={onClose} className="flex-1 rounded-xl border border-border py-2.5 text-sm font-medium hover:bg-muted">Cancel</button>
             <button type="submit" disabled={update.isPending} className="flex-1 rounded-xl bg-primary py-2.5 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
@@ -118,8 +142,10 @@ function BookingRow({ b, canManage }: { b: RoomBooking; canManage: boolean }) {
   const [editing, setEditing] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const cancelMut = useUpdateRoomBooking(b.id);
+  const { data: policy } = useBookingPolicy();
   const meta = b.metadata ?? {};
   const isCancelled = b.status === 'cancelled';
+  const cancelFeePreview = previewBookingFee(policy, b.arrival_date, true);
 
   async function handleCancel() {
     try {
@@ -177,7 +203,11 @@ function BookingRow({ b, canManage }: { b: RoomBooking; canManage: boolean }) {
         open={confirmCancel}
         onOpenChange={setConfirmCancel}
         title={`Cancel booking ${b.confirmation_no}?`}
-        description="A cancellation fee may apply if this is within the policy window before arrival. The guest will be notified."
+        description={
+          cancelFeePreview > 0
+            ? `A ${policy?.currency} ${cancelFeePreview.toLocaleString()} cancellation fee applies — this arrival is within the ${policy?.cancellation_window_hours}h policy window. The guest will be notified.`
+            : 'This arrival is outside the cancellation-fee window, so no fee applies. The guest will be notified.'
+        }
         confirmLabel="Cancel Booking"
         variant="danger"
         onConfirm={handleCancel}
