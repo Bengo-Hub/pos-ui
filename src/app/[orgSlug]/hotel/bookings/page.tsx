@@ -72,10 +72,10 @@ function BookingEditModal({ b, onClose }: { b: RoomBooking; onClose: () => void 
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 backdrop-blur-sm sm:items-center" onClick={onClose}>
-      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-t-2xl border border-border bg-card shadow-2xl sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
+      <div className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-t-2xl border border-border bg-card shadow-2xl sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-border px-5 py-4">
           <h2 className="text-base font-bold">Amend Booking <span className="text-xs font-normal text-muted-foreground">({b.confirmation_no})</span></h2>
-          <button onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-full bg-muted hover:bg-destructive/10 hover:text-destructive"><X className="h-4 w-4" /></button>
+          <button onClick={onClose} aria-label="Close" className="flex h-8 w-8 items-center justify-center rounded-full bg-muted hover:bg-destructive/10 hover:text-destructive"><X className="h-4 w-4" /></button>
         </div>
         <form onSubmit={submit} className="grid grid-cols-1 gap-3 p-5 sm:grid-cols-2">
           <label className="block sm:col-span-2"><span className="text-sm font-medium">Lead Guest</span>
@@ -150,10 +150,10 @@ function BookingRow({ b, canManage }: { b: RoomBooking; canManage: boolean }) {
           </span>
           {canManage && !isCancelled && (
             <>
-              <button onClick={() => setEditing(true)} title="Amend booking" className="flex h-7 w-7 items-center justify-center rounded-lg border border-border hover:bg-primary/10 hover:text-primary">
+              <button onClick={() => setEditing(true)} title="Amend booking" aria-label={`Amend booking ${b.confirmation_no}`} className="flex h-7 w-7 items-center justify-center rounded-lg border border-border hover:bg-primary/10 hover:text-primary">
                 <Pencil className="h-3.5 w-3.5" />
               </button>
-              <button onClick={() => setConfirmCancel(true)} title="Cancel booking" className="flex h-7 w-7 items-center justify-center rounded-lg border border-border hover:bg-destructive/10 hover:text-destructive">
+              <button onClick={() => setConfirmCancel(true)} title="Cancel booking" aria-label={`Cancel booking ${b.confirmation_no}`} className="flex h-7 w-7 items-center justify-center rounded-lg border border-border hover:bg-destructive/10 hover:text-destructive">
                 <XCircle className="h-3.5 w-3.5" />
               </button>
             </>
@@ -243,9 +243,9 @@ function BookingsPageInner() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-6 p-4 sm:p-6 lg:px-8">
+    <div className="mx-auto w-full max-w-6xl space-y-6 p-4 sm:p-6 lg:px-8">
       <div className="flex items-center gap-3">
-        <Link href={`/${orgSlug}/hotel`} className="rounded-lg p-2 transition-colors hover:bg-muted"><ArrowLeft className="h-5 w-5" /></Link>
+        <Link href={`/${orgSlug}/hotel`} aria-label="Back to hotel overview" className="rounded-lg p-2 transition-colors hover:bg-muted"><ArrowLeft className="h-5 w-5" /></Link>
         <div className="flex flex-1 items-center gap-3">
           <div className="flex size-10 items-center justify-center rounded-xl bg-primary/10"><Users className="h-5 w-5 text-primary" /></div>
           <div>
@@ -277,8 +277,8 @@ function BookingsPageInner() {
             ))}
           </div>
 
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <label className="block sm:col-span-2"><span className="text-sm font-medium">{isGroup ? 'Lead Guest / Organisation' : 'Guest Name'}</span>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <label className="block sm:col-span-2 lg:col-span-3"><span className="text-sm font-medium">{isGroup ? 'Lead Guest / Organisation' : 'Guest Name'}</span>
               <input value={form.lead_guest_name} onChange={(e) => set('lead_guest_name', e.target.value)} className={inputCls} /></label>
             <label className="block"><span className="text-sm font-medium">Email</span>
               <input type="email" value={form.email ?? ''} onChange={(e) => set('email', e.target.value)} className={inputCls} /></label>
@@ -303,7 +303,7 @@ function BookingsPageInner() {
             <label className="block"><span className="text-sm font-medium">Departure</span>
               <input type="datetime-local" value={form.departure_date} onChange={(e) => set('departure_date', e.target.value)} className={inputCls} /></label>
 
-            <label className="block sm:col-span-2"><span className="text-sm font-medium">Rate plan / Package (optional)</span>
+            <label className="block sm:col-span-2 lg:col-span-3"><span className="text-sm font-medium">Rate plan / Package (optional)</span>
               <div className="mt-1">
                 <Combobox
                   options={bundles.map((b) => ({ value: b.id, label: b.name, hint: [b.sku, b.price ? formatCurrency(b.price, currency) : null].filter(Boolean).join(' · ') }))}
@@ -315,9 +315,9 @@ function BookingsPageInner() {
                 />
               </div>
             </label>
-            <label className="block sm:col-span-2"><span className="text-sm font-medium">What&apos;s included (optional)</span>
+            <label className="block sm:col-span-2 lg:col-span-3"><span className="text-sm font-medium">What&apos;s included (optional)</span>
               <input value={form.package_inclusions} onChange={(e) => set('package_inclusions', e.target.value)} placeholder="e.g. Breakfast, airport transfer, 2 spa sessions" className={inputCls} /></label>
-            <label className="block sm:col-span-2"><span className="text-sm font-medium">Notes (optional)</span>
+            <label className="block sm:col-span-2 lg:col-span-3"><span className="text-sm font-medium">Notes (optional)</span>
               <textarea value={form.notes} onChange={(e) => set('notes', e.target.value)} rows={2} className={inputCls} /></label>
           </div>
 

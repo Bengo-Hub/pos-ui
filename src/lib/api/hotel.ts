@@ -60,6 +60,27 @@ export interface CheckInInput {
   booking_id?: string;
   crm_contact_id?: string;
   checked_in_by?: string;
+  /** Required when the outlet's booking policy is payment_timing=pay_upfront (immediate desk tenders only). */
+  payment_method?: string;
+  payment_reference?: string;
+  payment_amount?: number;
+}
+
+export interface CheckInResult {
+  guest: RoomGuest;
+  payment_timing: 'settle_at_checkout' | 'pay_upfront' | 'per_day_split';
+  payment_recorded: boolean;
+}
+
+export type PaymentTiming = 'settle_at_checkout' | 'pay_upfront' | 'per_day_split';
+
+export interface BookingPolicy {
+  free_amendment_window_hours: number;
+  cancellation_window_hours: number;
+  amendment_fee: number;
+  cancellation_fee: number;
+  currency: string;
+  payment_timing: PaymentTiming;
 }
 
 export interface BookingMeta {
@@ -374,7 +395,11 @@ export const hotelApi = {
     apiClient.patch<Room>(`${hotelBase(tenantSlug)}/rooms/${roomId}/status`, { status }),
 
   checkIn: (tenantSlug: string, roomId: string, body: CheckInInput) =>
-    apiClient.post(`${hotelBase(tenantSlug)}/rooms/${roomId}/check-in`, body),
+    apiClient.post<CheckInResult>(`${hotelBase(tenantSlug)}/rooms/${roomId}/check-in`, body),
+
+  // Room payment-timing / amendment-fee policy (OutletSetting.metadata.booking_policy).
+  getBookingPolicy: (tenantSlug: string) =>
+    apiClient.get<BookingPolicy>(`/api/v1/${tenantSlug}/pos/settings/booking-policy`),
 
   checkOut: (tenantSlug: string, roomId: string) =>
     apiClient.post(`${hotelBase(tenantSlug)}/rooms/${roomId}/check-out`, {}),

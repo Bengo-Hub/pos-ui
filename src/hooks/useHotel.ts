@@ -132,6 +132,18 @@ export function useCheckIn(roomId: string) {
   });
 }
 
+// Room payment-timing (pay_upfront / per_day_split / settle_at_checkout) + amendment/
+// cancellation-fee policy. Read-only here; edited from Settings → Booking Policy.
+export function useBookingPolicy() {
+  const slug = useTenantSlug();
+  return useQuery({
+    queryKey: ['booking-policy', slug],
+    queryFn: () => hotelApi.getBookingPolicy(slug),
+    enabled: !!slug,
+    staleTime: 60_000,
+  });
+}
+
 export function useCheckOut(roomId: string) {
   const slug = useTenantSlug();
   const qc = useQueryClient();

@@ -73,10 +73,10 @@ function EventEditModal({ event, onClose }: { event: EventBooking; onClose: () =
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 backdrop-blur-sm sm:items-center" onClick={onClose}>
-      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-t-2xl border border-border bg-card shadow-2xl sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
+      <div className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-t-2xl border border-border bg-card shadow-2xl sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-border px-5 py-4">
           <h2 className="text-base font-bold">Edit Event</h2>
-          <button onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-full bg-muted hover:bg-destructive/10 hover:text-destructive"><X className="h-4 w-4" /></button>
+          <button onClick={onClose} aria-label="Close" className="flex h-8 w-8 items-center justify-center rounded-full bg-muted hover:bg-destructive/10 hover:text-destructive"><X className="h-4 w-4" /></button>
         </div>
         <form onSubmit={submit} className="space-y-4 p-5">
           <label className="block"><span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Title</span>
@@ -156,9 +156,9 @@ function EventDetailPageInner() {
   const cards = event.edges?.meal_entitlements ?? [];
 
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-6 p-4 sm:p-6 lg:px-8">
+    <div className="mx-auto w-full max-w-6xl space-y-6 p-4 sm:p-6 lg:px-8">
       <div className="flex items-center gap-3">
-        <Link href={`/${orgSlug}/hotel/conference`} className="p-2 rounded-lg hover:bg-muted transition-colors"><ArrowLeft className="h-5 w-5" /></Link>
+        <Link href={`/${orgSlug}/hotel/conference`} aria-label="Back to conferences" className="p-2 rounded-lg hover:bg-muted transition-colors"><ArrowLeft className="h-5 w-5" /></Link>
         <div className="flex items-center gap-3">
           <div className="size-10 rounded-xl bg-primary/10 flex items-center justify-center"><Presentation className="h-5 w-5 text-primary" /></div>
           <div>
@@ -175,7 +175,7 @@ function EventDetailPageInner() {
       </div>
 
       <Card><CardContent className="p-5">
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 text-sm">
           {[
             { label: 'Delegates', value: String(event.delegate_count) },
             { label: 'Conference Days', value: String(event.conference_days) },

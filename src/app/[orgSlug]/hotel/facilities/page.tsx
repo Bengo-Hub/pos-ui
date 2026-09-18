@@ -138,7 +138,7 @@ function FacilitiesPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-6xl space-y-6 p-4 sm:p-6">
+    <div className="mx-auto w-full max-w-7xl space-y-6 p-4 sm:p-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Facilities</h1>
@@ -169,7 +169,7 @@ function FacilitiesPage() {
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
           {facilities.map((facility) => {
             const isShared = facility.booking_mode === 'shared';
             // Exclusive spaces gate purely on status; shared (co-working) spaces stay
@@ -196,10 +196,10 @@ function FacilitiesPage() {
                     <span className={cn('rounded-full px-2 py-0.5 text-xs font-medium capitalize', statusColors[facility.status])}>{facility.status}</span>
                     {canManage && (
                       <div className="flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-                        <button onClick={() => setFormFacility(facility)} title="Edit" className="flex h-7 w-7 items-center justify-center rounded-lg border border-border hover:bg-primary/10 hover:text-primary">
+                        <button onClick={() => setFormFacility(facility)} title="Edit" aria-label={`Edit ${facility.name}`} className="flex h-7 w-7 items-center justify-center rounded-lg border border-border hover:bg-primary/10 hover:text-primary">
                           <Edit2 className="h-3.5 w-3.5" />
                         </button>
-                        <button onClick={() => setDeleteTarget(facility)} title="Delete" className="flex h-7 w-7 items-center justify-center rounded-lg border border-border hover:bg-destructive/10 hover:text-destructive">
+                        <button onClick={() => setDeleteTarget(facility)} title="Delete" aria-label={`Delete ${facility.name}`} className="flex h-7 w-7 items-center justify-center rounded-lg border border-border hover:bg-destructive/10 hover:text-destructive">
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
                       </div>
