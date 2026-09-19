@@ -16,9 +16,10 @@ import { Card, CardContent } from '@/components/ui/base';
 import { DateRangePicker, type DateRange } from '@/components/ui/date-range-picker';
 import { OutletFilter } from '@/components/outlet-filter';
 import { useOutletFilterStore } from '@/store/outlet-filter';
-import { useHotelOccupancyReport } from '@/hooks/useReports';
+import { useHotelOccupancyReport, useHotelOccupancyTrend } from '@/hooks/useReports';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { cn } from '@/lib/utils';
+import { HotelOccupancyTrendChart, RoomTypePerformanceChart, BookingSourceChart } from '@/components/pos/hotel/hotel-report-charts';
 
 function isoDaysAgo(days: number): string {
   const d = new Date();
@@ -71,6 +72,7 @@ function HotelReportsPage() {
   const fmt = (n: number) => `${currency} ${(n ?? 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
 
   const { data, isLoading } = useHotelOccupancyReport(range.from, range.to, outletId);
+  const { data: trend, isLoading: trendLoading } = useHotelOccupancyTrend(range.from, range.to, outletId);
 
   const breakdown = (data?.revenue_by_charge_type ?? []).slice().sort((a, b) => b.amount - a.amount);
   const maxAmount = Math.max(1, ...breakdown.map((b) => b.amount));
@@ -121,6 +123,13 @@ function HotelReportsPage() {
               value={fmt(data?.total_revenue ?? 0)}
               hint={`Room ${fmt(data?.room_revenue ?? 0)} · Ancillary ${fmt(data?.ancillary_revenue ?? 0)}`}
             />
+          </div>
+
+          <HotelOccupancyTrendChart data={trend} isLoading={trendLoading} currency={currency} />
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <RoomTypePerformanceChart data={trend} isLoading={trendLoading} currency={currency} />
+            <BookingSourceChart data={trend} isLoading={trendLoading} />
           </div>
 
           <Card>

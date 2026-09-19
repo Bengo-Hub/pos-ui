@@ -249,6 +249,7 @@ export const reportKeys = {
   salesByCategory: (tid: string, from: string, to: string, outletId?: string) => ['reports', tid, 'sales-by-category', from, to, outletId] as const,
   salesByKDSStation: (tid: string, from: string, to: string, outletId?: string) => ['reports', tid, 'sales-by-kds-station', from, to, outletId] as const,
   hotelOccupancy: (tid: string, from: string, to: string, outletId?: string) => ['reports', tid, 'hotel-occupancy', from, to, outletId] as const,
+  hotelOccupancyTrend: (tid: string, from: string, to: string, outletId?: string) => ['reports', tid, 'hotel-occupancy-trend', from, to, outletId] as const,
   productMix: (tid: string, from: string, to: string, outletId?: string) => ['reports', tid, 'product-mix', from, to, outletId] as const,
   voidSummary: (tid: string, from: string, to: string, outletId?: string) => ['reports', tid, 'void-summary', from, to, outletId] as const,
   eodList: (tid: string, outletId: string, from: string, to: string) => ['reports', tid, 'eod', outletId, from, to] as const,
@@ -426,6 +427,53 @@ export function useHotelOccupancyReport(from: string, to: string, outletId?: str
     queryKey: reportKeys.hotelOccupancy(tenantID, from, to, outletId),
     queryFn: () =>
       apiClient.get<HotelOccupancyResult>(`${basePath(tenantID)}/hotel-occupancy`, { from, to, outlet_id: outletId }),
+    enabled: !!tenantID && !!from && !!to && enabled,
+    staleTime: 2 * 60_000,
+  });
+}
+
+export interface HotelTrendBucket {
+  date: string;
+  available_room_nights: number;
+  occupied_room_nights: number;
+  occupancy_rate: number;
+  room_revenue: number;
+  ancillary_revenue: number;
+  adr: number;
+}
+
+export interface HotelRoomTypePerformance {
+  room_type: string;
+  room_count: number;
+  available_room_nights: number;
+  occupied_room_nights: number;
+  occupancy_rate: number;
+  revenue: number;
+}
+
+export interface HotelBookingSourceBreakdown {
+  source: string;
+  bookings: number;
+  revenue: number;
+}
+
+export interface HotelOccupancyTrendResult {
+  from: string;
+  to: string;
+  buckets: HotelTrendBucket[];
+  room_type_breakdown: HotelRoomTypePerformance[];
+  booking_source_breakdown: HotelBookingSourceBreakdown[];
+}
+
+/** Daily occupancy/ADR/revenue series + room-type and booking-source cross-sections behind the
+ *  Hotel Reports charts — see pos-api's ReportsHandler.HotelOccupancyTrend. Same gate and shape
+ *  of query as useHotelOccupancyReport, just the day-by-day sibling of it. */
+export function useHotelOccupancyTrend(from: string, to: string, outletId?: string, enabled = true) {
+  const tenantID = useTenantID();
+  return useQuery({
+    queryKey: reportKeys.hotelOccupancyTrend(tenantID, from, to, outletId),
+    queryFn: () =>
+      apiClient.get<HotelOccupancyTrendResult>(`${basePath(tenantID)}/hotel-occupancy/trend`, { from, to, outlet_id: outletId }),
     enabled: !!tenantID && !!from && !!to && enabled,
     staleTime: 2 * 60_000,
   });

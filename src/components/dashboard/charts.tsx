@@ -17,16 +17,18 @@ import { useDailyBreakdown, useSalesByCategory, useSalesByHour, useTopItems } fr
 import { useEffectiveOutletID } from '@/hooks/usePOS';
 import type { DashboardRange } from './range-filter';
 
-const CHART_COLORS = [
+export const CHART_COLORS = [
   'hsl(var(--chart-1))', 'hsl(var(--chart-2))', 'hsl(var(--chart-3))',
   'hsl(var(--chart-4))', 'hsl(var(--chart-5))',
 ];
 
-function fmtFor(currency: string) {
+export function fmtFor(currency: string) {
   return (n: number) => `${currency} ${(n ?? 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
 }
 
-function ChartCard({ title, icon: Icon, loading, empty, height = 'h-64', children }: {
+/** Shared chart-card shell (title bar + loading/empty states) — reused outside this file (e.g.
+ *  the hotel module's reports charts) so every analytics chart in the app looks identical. */
+export function ChartCard({ title, icon: Icon, loading, empty, height = 'h-64', children }: {
   title: string; icon: React.ElementType; loading: boolean; empty: boolean; height?: string; children: React.ReactNode;
 }) {
   return (
@@ -46,8 +48,8 @@ function ChartCard({ title, icon: Icon, loading, empty, height = 'h-64', childre
   );
 }
 
-const axisTick = { fontSize: 11, fill: 'hsl(var(--muted-foreground))' };
-const tooltipStyle = { background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8, fontSize: 12 };
+export const axisTick = { fontSize: 11, fill: 'hsl(var(--muted-foreground))' };
+export const tooltipStyle = { background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8, fontSize: 12 };
 
 /** Shortens a category-axis label to a single line — recharts wraps a category tick's text
  *  across multiple tspans when it doesn't fit the axis width, and with 6-8 rows sharing a fixed
