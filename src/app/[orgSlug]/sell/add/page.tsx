@@ -22,7 +22,7 @@ import { Button } from '@/components/ui/base';
 import { useClientCredit } from '@/hooks/useClients';
 import { usePermissions, P } from '@/hooks/usePermissions';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
-import { useAddOrderLines, useCreateOrder, useCreatePaymentIntent, useEditOrderLine, useEditSale, useFullCatalog, useOrder, usePricingTiers, searchMenuItems, useSetOrderDiscount, useVoidOrderLine, type CatalogItem, type EditSaleLine } from '@/hooks/usePOS';
+import { useAddOrderLines, useCreateOrder, useCreatePaymentIntent, useEditOrderLine, useEditSale, useFullCatalog, useOrder, usePricingTiers, searchMenuItems, useSetOrderDiscount, useUpdateSaleInfo, useVoidOrderLine, type CatalogItem, type EditSaleLine } from '@/hooks/usePOS';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { useStaffAdmin, useStaffSearch } from '@/hooks/useStaff';
 import { SearchableCombobox } from '@bengo-hub/shared-ui-lib/combobox';
@@ -207,6 +207,12 @@ export default function AddSalePage() {
   // an unmodified resume charges the server's stored total (2026-07-14: an unsaved 1,000
   // discount settled at the stale 10,180 and the retry double-posted the sale).
   const [savedDiscount, setSavedDiscount] = useState<number | null>(null);
+  // The customer/servedBy snapshot last PERSISTED to a resumed draft — mirrors savedDiscount's
+  // dirty-tracking pattern. Without this, picking a real CRM customer over a walk-in on a resumed
+  // draft was silently dropped: linesDirty only tracks cart lines, so an unmodified-lines draft
+  // fell into the "Draft unchanged" no-op branch below even though the customer had changed.
+  const [savedCustomerName, setSavedCustomerName] = useState('');
+  const [savedCustomerPhone, setSavedCustomerPhone] = useState('');
   // Credit Sale entry point (sidebar /sell/add?credit=1) pre-selects on-account. When checked, Save
   // posts the total straight to the customer's AR (on_account tender) and completes the order with no
   // payment collected now — treasury enforces the credit limit. No payment modal.
@@ -343,6 +349,8 @@ export default function AddSalePage() {
     if (o.customer_name || o.customer_phone) {
       setCustomer({ name: o.customer_name ?? '', phone: o.customer_phone ?? '', isWalkIn: !o.customer_phone } as SelectedCustomer);
     }
+    setSavedCustomerName(o.customer_name ?? '');
+    setSavedCustomerPhone(o.customer_phone ?? '');
     // Prefill shipping from the draft's metadata (same keys the Edit Shipping action writes).
     const md = o.metadata ?? {};
     if (md.shipping_status || md.shipping_address || md.shipping_details) {
@@ -667,6 +675,35 @@ export default function AddSalePage() {
     );
   };
   const cancelDiscount = () => setDiscount(savedDiscount ?? 0);
+
+  // Whether the customer currently shown differs from what the resumed draft actually has
+  // persisted — custName/custPhone already resolve to '' for a walk-in/staff party, so a plain
+  // string compare against the saved snapshot covers picking a real customer, switching to a
+  // different one, AND reverting back to walk-in.
+  const updateSaleInfo = useUpdateSaleInfo();
+  const customerDirty = !!resume && (custName !== savedCustomerName || custPhone !== savedCustomerPhone);
+  // PATCHes the customer/served-by onto the SAME resumed order via the existing admin
+  // UpdateSaleInfo tool (safe pre-settlement: no treasury AR debt exists yet on a draft/open
+  // order, unlike the on-account-sale guard that tool enforces once a sale is completed).
+  // Returns false (and toasts) on failure so callers can abort rather than silently proceeding
+  // with the stale customer.
+  const persistCustomerIfDirty = async (): Promise<boolean> => {
+    if (!resume || !customerDirty) return true;
+    try {
+      await updateSaleInfo.mutateAsync({
+        orderId: resume.id,
+        customerName: custName,
+        customerPhone: custPhone,
+        reason: 'Customer updated while editing draft',
+      });
+      setSavedCustomerName(custName);
+      setSavedCustomerPhone(custPhone);
+      return true;
+    } catch (e) {
+      toast.error(await apiErrorMessage(e, 'Failed to update the customer on this draft.'));
+      return false;
+    }
+  };
   const revertLine = (i: number) =>
     setLines((p) => p.map((l, x) => (x === i && l.lineId ? { ...l, unitPrice: l.savedPrice ?? l.unitPrice, quantity: l.savedQty ?? l.quantity } : l)));
   const confirmSaveLine = (i: number, reason: string, updateCatalog: boolean) => {
@@ -704,6 +741,9 @@ export default function AddSalePage() {
   // proceed to settle/save against a half-applied edit).
   const applyResumedLineEdits = async (): Promise<number | null> => {
     if (!resume) return null;
+    // Persist a customer change alongside any line changes — both are part of "fully update the
+    // draft in place." Failure here aborts before touching lines, same as a line-mutation failure.
+    if (!(await persistCustomerIfDirty())) return null;
     const currentIds = new Set(lines.filter((l) => l.lineId).map((l) => l.lineId as string));
     const removedIds = [...originalLineIdsRef.current].filter((id) => !currentIds.has(id));
     const changedLines = lines.filter((l) => l.lineId && lineDirty(l));
@@ -931,24 +971,37 @@ export default function AddSalePage() {
     // overshoot an order that stored no/inclusive tax (a real over-collection source).
     if (resume && !linesDirty) {
       const settleTotal = resume.total ?? total;
-      if (mode === 'draft') { toast.info('Draft unchanged.'); return; }
-      if (creditSale) {
-        createIntent.mutate(
-          { orderId: resume.id, tenderMethod: 'on_account', amount: settleTotal, ...creditExtras },
-          {
-            onSuccess: () => {
-              setCreditModalOpen(false);
-              toast.success(`Sale posted on account · ${fmt(settleTotal)}`);
-              // Receipt first — reset() only clears the cart form; the preview is an independent
-              // overlay (same ordering the POS terminal's handlePaymentConfirmed uses).
-              void showReceiptForOrder(resume.id);
-              reset();
+      if (mode === 'draft') {
+        if (!customerDirty) { toast.info('Draft unchanged.'); return; }
+        persistCustomerIfDirty().then((ok) => { if (ok) { toast.success('Draft updated'); reset(); } });
+        return;
+      }
+      const proceedToPay = () => {
+        if (creditSale) {
+          createIntent.mutate(
+            { orderId: resume.id, tenderMethod: 'on_account', amount: settleTotal, ...creditExtras },
+            {
+              onSuccess: () => {
+                setCreditModalOpen(false);
+                toast.success(`Sale posted on account · ${fmt(settleTotal)}`);
+                // Receipt first — reset() only clears the cart form; the preview is an independent
+                // overlay (same ordering the POS terminal's handlePaymentConfirmed uses).
+                void showReceiptForOrder(resume.id);
+                reset();
+              },
+              onError: async (e) => { setCreditModalOpen(false); toast.error(await apiErrorMessage(e, 'Failed to post credit sale to AR.')); },
             },
-            onError: async (e) => { setCreditModalOpen(false); toast.error(await apiErrorMessage(e, 'Failed to post credit sale to AR.')); },
-          },
-        );
+          );
+        } else {
+          setPayOrder({ id: resume.id, number: resume.number, total: settleTotal });
+        }
+      };
+      // A changed customer must reach the order BEFORE it settles — otherwise the sale would
+      // complete/post-to-AR for the OLD customer while the screen shows the newly-picked one.
+      if (customerDirty) {
+        persistCustomerIfDirty().then((ok) => { if (ok) proceedToPay(); });
       } else {
-        setPayOrder({ id: resume.id, number: resume.number, total: settleTotal });
+        proceedToPay();
       }
       return;
     }
@@ -1025,6 +1078,7 @@ export default function AddSalePage() {
   }
   function reset() {
     setLines([]); setDiscount(0); setDiscountReason(''); setSavedDiscount(null); setNotes(''); setCustomer(WALK_IN_CUSTOMER); setCreditSale(false);
+    setSavedCustomerName(''); setSavedCustomerPhone('');
     setPendingApproval(null);
     setPartyType('customer'); setStaffId(''); setFundFromSalary(false); setMonths(1);
     setShippingOpen(false); setShipping(emptyShippingForm());
