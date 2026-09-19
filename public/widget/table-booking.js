@@ -2,7 +2,7 @@
  * Codevertex POS — Table Booking Widget v1.0
  *
  * Usage:
- *   <script src="https://pos.codevertexafrica.com/widget/booking.js"
+ *   <script src="https://pos.codevertexafrica.com/widget/table-booking.js"
  *           data-tenant="<tenant-slug>"
  *           data-outlet-id="<outlet-uuid>"        (optional — picker shown if omitted)
  *           data-api-url="https://posapi.codevertexafrica.com"
