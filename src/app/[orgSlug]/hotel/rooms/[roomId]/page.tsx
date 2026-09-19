@@ -217,6 +217,8 @@ function RoomDetailPageInner() {
     const f = checkInForm;
     const guestName = `${f.first_name} ${f.last_name}`.trim() || f.first_name;
     if (!guestName) { toast.error('Guest name is required'); return; }
+    if (!f.phone.trim()) { toast.error('Phone number is required'); return; }
+    if (!f.id_number.trim()) { toast.error('ID number is required'); return; }
     if (requiresUpfrontPayment && !checkInPaymentMethod) {
       toast.error('This property requires payment at check-in — select a payment method');
       return;
@@ -323,9 +325,9 @@ function RoomDetailPageInner() {
             <p className="font-semibold text-foreground">Guest Check-In</p>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <Field label="First Name" value={checkInForm.first_name} onChange={(v) => setField('first_name', v)} placeholder="First name" />
+              <Field label="First Name *" value={checkInForm.first_name} onChange={(v) => setField('first_name', v)} placeholder="First name" />
               <Field label="Last Name" value={checkInForm.last_name} onChange={(v) => setField('last_name', v)} placeholder="Last name" />
-              <Field label="Phone" value={checkInForm.phone} onChange={(v) => setField('phone', v)} placeholder="+254..." />
+              <Field label="Phone *" value={checkInForm.phone} onChange={(v) => setField('phone', v)} placeholder="+254..." />
               <Field label="Email" type="email" value={checkInForm.email} onChange={(v) => setField('email', v)} placeholder="guest@email.com" />
               <Field label="Nationality" value={checkInForm.nationality} onChange={(v) => setField('nationality', v)} placeholder="e.g. Kenyan" />
               <label className="block">
@@ -387,7 +389,7 @@ function RoomDetailPageInner() {
               </button>
               <button
                 onClick={handleCheckIn}
-                disabled={checkIn.isPending || !checkInForm.first_name.trim() || !checkInForm.id_number.trim() || (requiresUpfrontPayment && !checkInPaymentMethod)}
+                disabled={checkIn.isPending || !checkInForm.first_name.trim() || !checkInForm.phone.trim() || !checkInForm.id_number.trim() || (requiresUpfrontPayment && !checkInPaymentMethod)}
                 className="flex-1 py-2.5 rounded-xl bg-primary text-primary-foreground font-semibold hover:bg-primary/90 disabled:opacity-50 transition-colors"
               >
                 {checkIn.isPending ? 'Checking in…' : 'Confirm Check-In'}
