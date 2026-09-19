@@ -21,6 +21,10 @@ interface BookingPolicy {
   payment_timing: PaymentTiming;
   checkin_time: string;
   checkout_time: string;
+  base_occupancy_adults: number;
+  extra_adult_rate: number;
+  child_free_under_age: number;
+  extra_child_rate: number;
 }
 
 const PAYMENT_TIMING_OPTIONS: { value: PaymentTiming; label: string; hint: string }[] = [
@@ -58,6 +62,10 @@ export function BookingPolicyTab() {
     payment_timing: 'settle_at_checkout',
     checkin_time: '14:00',
     checkout_time: '10:00',
+    base_occupancy_adults: 0,
+    extra_adult_rate: 0,
+    child_free_under_age: 0,
+    extra_child_rate: 0,
   });
 
   useEffect(() => {
@@ -135,6 +143,40 @@ export function BookingPolicyTab() {
             <span className="text-sm font-medium">Check-out time</span>
             <input type="time" value={form.checkout_time}
               onChange={(e) => set('checkout_time', e.target.value)} className={num} disabled={!canManage} />
+          </label>
+        </div>
+      </div>
+
+      {/* Occupancy-based pricing */}
+      <div className="space-y-2">
+        <span className="text-sm font-semibold">Occupancy-based pricing</span>
+        <p className="text-xs text-muted-foreground">
+          Standard hotel pricing: the room rate covers a base number of adults for free; each adult beyond that adds a
+          per-night surcharge, and children below the free age are always free. Leave Base Occupancy at 0 to keep
+          charging the flat room rate regardless of how many adults/children check in (the default — no change unless
+          you set this up).
+        </p>
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+          <label className="block">
+            <span className="text-sm font-medium">Base occupancy (adults included free)</span>
+            <input type="number" min={0} step={1} value={form.base_occupancy_adults}
+              onChange={(e) => set('base_occupancy_adults', parseInt(e.target.value) || 0)} className={num} disabled={!canManage} />
+            <span className="mt-1 block text-[11px] text-muted-foreground">0 = occupancy pricing off</span>
+          </label>
+          <label className="block">
+            <span className="text-sm font-medium">Extra adult rate (per night)</span>
+            <input type="number" min={0} step={0.01} value={form.extra_adult_rate}
+              onChange={(e) => set('extra_adult_rate', parseFloat(e.target.value) || 0)} className={num} disabled={!canManage} />
+          </label>
+          <label className="block">
+            <span className="text-sm font-medium">Children free under age</span>
+            <input type="number" min={0} step={1} value={form.child_free_under_age}
+              onChange={(e) => set('child_free_under_age', parseInt(e.target.value) || 0)} className={num} disabled={!canManage} />
+          </label>
+          <label className="block">
+            <span className="text-sm font-medium">Extra child rate (per night, at/above free age)</span>
+            <input type="number" min={0} step={0.01} value={form.extra_child_rate}
+              onChange={(e) => set('extra_child_rate', parseFloat(e.target.value) || 0)} className={num} disabled={!canManage} />
           </label>
         </div>
       </div>

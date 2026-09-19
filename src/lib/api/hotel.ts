@@ -68,6 +68,26 @@ export interface CheckInInput {
   payment_amount?: number;
 }
 
+/** Editable subset for PATCH .../guest — see pos-api's editGuestInput/UpdateGuest doc comment:
+ *  a correction/amendment tool (contact details, occupancy, extend/shorten dates), never
+ *  auto-adjusts total_room_charge. Post a manual folio charge for any resulting billing change. */
+export interface UpdateGuestInput {
+  guest_name?: string;
+  first_name?: string;
+  last_name?: string;
+  email?: string;
+  phone?: string;
+  nationality?: string;
+  id_type?: string;
+  id_number?: string;
+  id_document_url?: string;
+  adults?: number;
+  children?: number;
+  child_ages?: number[];
+  nights?: number;
+  expected_departure_at?: string;
+}
+
 export interface CheckInResult {
   guest: RoomGuest;
   payment_timing: 'settle_at_checkout' | 'pay_upfront' | 'per_day_split';
@@ -86,6 +106,14 @@ export interface BookingPolicy {
   /** HH:MM (24h) — drives the check-in form's departure-date auto-fill from nights. */
   checkin_time?: string;
   checkout_time?: string;
+  /** Occupancy-based pricing (standard hotel PMS practice — see pos-api's
+   *  occupancySurchargePerNight doc comment). base_occupancy_adults <= 0 (the default) means
+   *  disabled: the room rate stays flat regardless of adults/children, unchanged from before
+   *  this feature existed. */
+  base_occupancy_adults?: number;
+  extra_adult_rate?: number;
+  child_free_under_age?: number;
+  extra_child_rate?: number;
 }
 
 export interface BookingMeta {
@@ -489,6 +517,9 @@ export const hotelApi = {
 
   checkIn: (tenantSlug: string, roomId: string, body: CheckInInput) =>
     apiClient.post<CheckInResult>(`${hotelBase(tenantSlug)}/rooms/${roomId}/check-in`, body),
+
+  updateGuest: (tenantSlug: string, roomId: string, body: UpdateGuestInput) =>
+    apiClient.patch<RoomGuest>(`${hotelBase(tenantSlug)}/rooms/${roomId}/guest`, body),
 
   // Room payment-timing / amendment-fee policy (OutletSetting.metadata.booking_policy).
   getBookingPolicy: (tenantSlug: string) =>

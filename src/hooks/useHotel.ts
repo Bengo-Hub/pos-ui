@@ -7,6 +7,7 @@ import {
   type CreateRoomInput,
   type CreateFacilityInput,
   type CheckInInput,
+  type UpdateGuestInput,
   type CreateRoomBookingInput,
   type UpdateRoomBookingInput,
   type CreateEventBookingInput,
@@ -128,6 +129,19 @@ export function useCheckIn(roomId: string) {
       hotelApi.checkIn(slug, roomId, body),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['hotel-rooms', slug] });
+      qc.invalidateQueries({ queryKey: ['hotel-room', slug, roomId] });
+      qc.invalidateQueries({ queryKey: ['room-guest', slug, roomId] });
+    },
+  });
+}
+
+export function useUpdateGuest(roomId: string) {
+  const slug = useTenantSlug();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: UpdateGuestInput) =>
+      hotelApi.updateGuest(slug, roomId, body),
+    onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['hotel-room', slug, roomId] });
       qc.invalidateQueries({ queryKey: ['room-guest', slug, roomId] });
     },

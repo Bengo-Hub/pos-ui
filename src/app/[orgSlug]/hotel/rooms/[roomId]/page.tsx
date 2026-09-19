@@ -13,8 +13,10 @@ import {
   LogIn,
   LogOut,
   PackageSearch,
+  Pencil,
   Receipt,
   ShieldAlert,
+  Wallet,
   X,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -24,6 +26,7 @@ import { ModuleGate } from '@/components/auth/module-gate';
 import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
 import { CheckoutPanel } from '@/components/pos/hotel/checkout-panel';
 import { DamageReportModal } from '@/components/pos/hotel/damage-report-modal';
+import { EditGuestModal } from '@/components/pos/hotel/edit-guest-modal';
 import { LostFoundModal } from '@/components/pos/hotel/lost-found-modal';
 import { HotelTenderPicker } from '@/components/pos/hotel/payment-method-picker';
 
@@ -63,13 +66,18 @@ function RoomDetailPageInner() {
   const [checkInForm, setCheckInForm] = useState({
     first_name: '', last_name: '', email: '', phone: '',
     nationality: '', id_type: 'national_id', id_number: '', id_document_url: '',
-    adults: '1', children: '0',
+    adults: '1', children: '0', child_ages: '',
     expected_arrival_at: '', expected_departure_at: '', nights: '1',
   });
   const [showCheckIn, setShowCheckIn] = useState(false);
   const [showCheckout, setShowCheckout] = useState(false);
+  // Whether the checkout panel, once open, defaults to also checking the guest out when the
+  // balance clears — true for "Checkout & Settle Bill", false for "Settle Now" (take a mid-stay
+  // payment, e.g. the settle_at_checkout guest who didn't pay upfront, without ending the stay).
+  const [checkoutPanelDefaultsToCheckout, setCheckoutPanelDefaultsToCheckout] = useState(true);
   const [showDamageReport, setShowDamageReport] = useState(false);
   const [showLostFound, setShowLostFound] = useState(false);
+  const [showEditGuest, setShowEditGuest] = useState(false);
   const [checkInPaymentMethod, setCheckInPaymentMethod] = useState('');
   const [checkInPaymentReference, setCheckInPaymentReference] = useState('');
 
@@ -92,8 +100,25 @@ function RoomDetailPageInner() {
   const paymentTiming = bookingPolicy?.payment_timing ?? 'settle_at_checkout';
   const requiresUpfrontPayment = paymentTiming === 'pay_upfront';
   const checkInNights = parseInt(checkInForm.nights) || 1;
-  const estimatedCheckInTotal = (room?.rate_per_night ?? 0) * checkInNights;
   const checkoutTimeDefault = bookingPolicy?.checkout_time || '10:00';
+
+  // Occupancy-based pricing estimate — mirrors pos-api's occupancySurchargePerNight exactly
+  // (base occupancy adults free, extra adults/children beyond that surcharge per night) so the
+  // total shown here before Confirm matches what actually gets charged. base_occupancy_adults<=0
+  // means the property hasn't configured this: stays a flat rate-times-nights estimate, unchanged
+  // from before this feature existed.
+  const baseOccupancyAdults = bookingPolicy?.base_occupancy_adults ?? 0;
+  const checkInAdults = Math.max(1, parseInt(checkInForm.adults) || 1);
+  const checkInChildAges = checkInForm.child_ages.split(',').map((s) => parseInt(s.trim(), 10)).filter((n) => Number.isFinite(n) && n >= 0);
+  const extraAdultCount = baseOccupancyAdults > 0 ? Math.max(0, checkInAdults - baseOccupancyAdults) : 0;
+  const extraAdultCharge = extraAdultCount * (bookingPolicy?.extra_adult_rate ?? 0);
+  const chargeableChildCount = (bookingPolicy?.extra_child_rate ?? 0) > 0
+    ? checkInChildAges.filter((age) => age >= (bookingPolicy?.child_free_under_age ?? 0)).length
+    : 0;
+  const extraChildCharge = chargeableChildCount * (bookingPolicy?.extra_child_rate ?? 0);
+  const occupancySurchargePerNight = extraAdultCharge + extraChildCharge;
+  const estimatedNightlyRate = (room?.rate_per_night ?? 0) + occupancySurchargePerNight;
+  const estimatedCheckInTotal = estimatedNightlyRate * checkInNights;
 
   // Nights and the two datetime pickers are kept in sync so exactly ONE of them is ever the
   // "driver" at a time — nights is authoritative by default (arrival + nights determines
@@ -231,6 +256,7 @@ function RoomDetailPageInner() {
     // Math.ceil, over-counted by a night whenever the two times of day didn't line up exactly.
     const nights = Math.max(1, parseInt(f.nights) || 1);
     const childrenCount = parseInt(f.children) || 0;
+    const childAges = f.child_ages.split(',').map((s) => parseInt(s.trim(), 10)).filter((n) => Number.isFinite(n) && n >= 0);
     try {
       const res = await checkIn.mutateAsync({
         guest_name: guestName,
@@ -244,6 +270,7 @@ function RoomDetailPageInner() {
         id_document_url: f.id_document_url || undefined,
         adults: parseInt(f.adults) || 1,
         children: childrenCount,
+        child_ages: childAges.length > 0 ? childAges : undefined,
         nights,
         expected_arrival_at: f.expected_arrival_at ? new Date(f.expected_arrival_at).toISOString() : undefined,
         expected_departure_at: f.expected_departure_at ? new Date(f.expected_departure_at).toISOString() : undefined,
@@ -350,11 +377,29 @@ function RoomDetailPageInner() {
               <Field label="Check-Out Date & Time" type="datetime-local" value={checkInForm.expected_departure_at} onChange={setDeparture} />
               <Field label="Adults" type="number" value={checkInForm.adults} onChange={(v) => setField('adults', v)} placeholder="1" />
               <Field label="Children" type="number" value={checkInForm.children} onChange={(v) => setField('children', v)} placeholder="0" />
+              <Field label="Child Ages (comma-separated)" value={checkInForm.child_ages} onChange={(v) => setField('child_ages', v)} placeholder="e.g. 4, 9" />
             </div>
 
             <p className="text-[11px] text-muted-foreground">
               Check-out auto-fills to {checkInNights} night{checkInNights !== 1 ? 's' : ''} from check-in, by {checkoutTimeDefault} on the departure date (this property&apos;s standard checkout time) — edit either field directly and the other stays in sync. A later departure can still be approved afterwards via Late Checkout.
             </p>
+
+            {baseOccupancyAdults > 0 && (
+              <div className="rounded-xl bg-muted/50 px-3 py-2 space-y-1">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">Estimated room total ({checkInNights} night{checkInNights !== 1 ? 's' : ''})</span>
+                  <span className="font-bold text-foreground tabular-nums">{formatCurrency(estimatedCheckInTotal, currency)}</span>
+                </div>
+                {occupancySurchargePerNight > 0 && (
+                  <p className="text-[11px] text-muted-foreground">
+                    {formatCurrency(room?.rate_per_night ?? 0, currency)} base rate
+                    {extraAdultCount > 0 && ` + ${extraAdultCount} extra adult${extraAdultCount !== 1 ? 's' : ''} (${formatCurrency(extraAdultCharge, currency)})`}
+                    {chargeableChildCount > 0 && ` + ${chargeableChildCount} chargeable child${chargeableChildCount !== 1 ? 'ren' : ''} (${formatCurrency(extraChildCharge, currency)})`}
+                    {' '}per night, beyond {baseOccupancyAdults} adult{baseOccupancyAdults !== 1 ? 's' : ''} included free.
+                  </p>
+                )}
+              </div>
+            )}
 
             {paymentTiming === 'per_day_split' && (
               <p className="text-xs text-muted-foreground rounded-xl bg-muted/50 px-3 py-2">
@@ -610,7 +655,24 @@ function RoomDetailPageInner() {
             {isOccupied && (
               <div className="space-y-3">
                 <button
-                  onClick={() => setShowCheckout(true)}
+                  onClick={() => setShowEditGuest(true)}
+                  className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border border-border font-semibold hover:bg-muted transition-colors"
+                >
+                  <Pencil className="h-5 w-5" />
+                  Edit Guest / Booking
+                </button>
+                {/* Settle Now — take a payment without ending the stay (e.g. a settle_at_checkout
+                    guest who didn't pay at check-in). Opens the SAME panel as Checkout & Settle
+                    Bill, just with "check out when balance clears" unchecked by default. */}
+                <button
+                  onClick={() => { setCheckoutPanelDefaultsToCheckout(false); setShowCheckout(true); }}
+                  className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-primary text-primary font-bold hover:bg-primary/10 transition-colors"
+                >
+                  <Wallet className="h-5 w-5" />
+                  Settle Now
+                </button>
+                <button
+                  onClick={() => { setCheckoutPanelDefaultsToCheckout(true); setShowCheckout(true); }}
                   className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-primary text-primary-foreground font-bold hover:bg-primary/90 transition-colors"
                 >
                   <Receipt className="h-5 w-5" />
@@ -681,7 +743,17 @@ function RoomDetailPageInner() {
         open={showCheckout}
         onClose={() => setShowCheckout(false)}
         onCheckedOut={() => router.push(`/${orgSlug}/hotel/rooms`)}
+        defaultCheckoutOnSettle={checkoutPanelDefaultsToCheckout}
       />
+
+      {guest && (
+        <EditGuestModal
+          roomId={roomId}
+          guest={guest}
+          open={showEditGuest}
+          onClose={() => setShowEditGuest(false)}
+        />
+      )}
 
       {showLate && (
         <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center bg-black/50 backdrop-blur-sm p-0 sm:p-4" onClick={() => setShowLate(false)}>

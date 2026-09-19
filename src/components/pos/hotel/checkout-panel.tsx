@@ -21,15 +21,22 @@ interface CheckoutPanelProps {
   open: boolean;
   onClose: () => void;
   onCheckedOut?: () => void;
+  // Whether the "check guest out when the balance clears" box starts checked. true when opened
+  // from "Checkout & Settle Bill" (the common case); false when opened from "Settle Now" — taking
+  // a mid-stay payment without ending the stay. The panel itself already supported both (the
+  // checkbox is user-togglable either way) — this just sets which intent the button that opened
+  // it actually meant, so staff don't have to remember to uncheck it every time they just want to
+  // take a payment.
+  defaultCheckoutOnSettle?: boolean;
 }
 
-export function CheckoutPanel({ roomId, open, onClose, onCheckedOut }: CheckoutPanelProps) {
+export function CheckoutPanel({ roomId, open, onClose, onCheckedOut, defaultCheckoutOnSettle = true }: CheckoutPanelProps) {
   const { data: summary, isLoading } = useFolioSummary(roomId, open);
   const settle = useSettleFolio(roomId);
   const [method, setMethod] = useState('cash');
   const [amount, setAmount] = useState('');
   const [reference, setReference] = useState('');
-  const [checkoutOnSettle, setCheckoutOnSettle] = useState(true);
+  const [checkoutOnSettle, setCheckoutOnSettle] = useState(defaultCheckoutOnSettle);
 
   const balance = summary?.balance ?? 0;
   const currency = summary?.currency ?? 'KES';
@@ -72,7 +79,7 @@ export function CheckoutPanel({ roomId, open, onClose, onCheckedOut }: CheckoutP
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">
           <div className="flex items-center gap-2">
             <BedDouble className="h-5 w-5 text-primary" />
-            <h2 className="font-bold text-base">Checkout · Room {summary?.room_number ?? ''}</h2>
+            <h2 className="font-bold text-base">{defaultCheckoutOnSettle ? 'Checkout' : 'Settle Bill'} · Room {summary?.room_number ?? ''}</h2>
           </div>
           <button onClick={onClose} className="h-8 w-8 rounded-lg flex items-center justify-center hover:bg-accent"><X className="h-4 w-4" /></button>
         </div>
