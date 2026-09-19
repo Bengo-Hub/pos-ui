@@ -2,6 +2,7 @@ import { apiClient } from './client';
 
 export interface Room {
   id: string;
+  outlet_id: string;
   room_number: string;
   name: string;
   room_type: string;
@@ -38,6 +39,7 @@ export interface RoomGuest {
   nights: number;
   total_room_charge: number;
   status: 'active' | 'checked_out';
+  checked_out_at?: string;
 }
 
 export interface CheckInInput {
@@ -81,6 +83,9 @@ export interface BookingPolicy {
   cancellation_fee: number;
   currency: string;
   payment_timing: PaymentTiming;
+  /** HH:MM (24h) — drives the check-in form's departure-date auto-fill from nights. */
+  checkin_time?: string;
+  checkout_time?: string;
 }
 
 export interface BookingMeta {
@@ -402,6 +407,44 @@ export interface PublicRoomBookingInput {
   notes?: string;
 }
 
+export interface LostFoundItem {
+  id: string;
+  outlet_id: string;
+  room_id?: string;
+  room_guest_id?: string;
+  description: string;
+  category: 'electronics' | 'clothing' | 'jewelry' | 'documents' | 'toiletries' | 'luggage' | 'other';
+  location_found?: string;
+  storage_location?: string;
+  photo_urls: string[];
+  status: 'stored' | 'claimed' | 'disposed' | 'donated';
+  found_by: string;
+  found_at: string;
+  guest_name?: string;
+  guest_phone?: string;
+  guest_email?: string;
+  claimed_by_name?: string;
+  claimed_notes?: string;
+  claimed_at?: string;
+  disposal_reason?: string;
+  disposed_at?: string;
+  created_at: string;
+}
+
+export interface CreateLostFoundItemInput {
+  outlet_id: string;
+  room_id?: string;
+  room_guest_id?: string;
+  description: string;
+  category?: string;
+  location_found?: string;
+  storage_location?: string;
+  photo_urls?: string[];
+  guest_name?: string;
+  guest_phone?: string;
+  guest_email?: string;
+}
+
 export interface CreateHousekeepingInput {
   room_id: string;
   task_type?: string;
@@ -518,6 +561,33 @@ export const hotelApi = {
     const fd = new FormData();
     fd.append('file', file);
     return apiClient.post<{ url: string }>(`${hotelBase(tenantSlug)}/damage-evidence/upload`, fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+
+  // ─── Lost & found ────────────────────────────────────────────────────────────
+  createLostFoundItem: (tenantSlug: string, body: CreateLostFoundItemInput) =>
+    apiClient.post<LostFoundItem>(`${hotelBase(tenantSlug)}/lost-found`, body),
+
+  listLostFoundItems: (tenantSlug: string, params?: { status?: string; category?: string; room_id?: string }) =>
+    apiClient
+      .get<{ data: LostFoundItem[]; total: number }>(`${hotelBase(tenantSlug)}/lost-found`, params ?? {})
+      .then((r) => r?.data ?? []),
+
+  getLostFoundItem: (tenantSlug: string, id: string) =>
+    apiClient.get<LostFoundItem>(`${hotelBase(tenantSlug)}/lost-found/${id}`),
+
+  claimLostFoundItem: (tenantSlug: string, id: string, body: { claimed_by_name: string; claimed_notes?: string }) =>
+    apiClient.post<LostFoundItem>(`${hotelBase(tenantSlug)}/lost-found/${id}/claim`, body),
+
+  disposeLostFoundItem: (tenantSlug: string, id: string, body: { disposition: 'disposed' | 'donated'; reason: string }) =>
+    apiClient.post<LostFoundItem>(`${hotelBase(tenantSlug)}/lost-found/${id}/dispose`, body),
+
+  /** Uploads one photo, returning its relative /media/... URL to attach on createLostFoundItem. */
+  uploadLostFoundPhoto: (tenantSlug: string, file: File) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    return apiClient.post<{ url: string }>(`${hotelBase(tenantSlug)}/lost-found/upload`, fd, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
   },

@@ -73,13 +73,12 @@ const USE_CASE_MODULES: Record<UseCaseType, ModuleKey[]> = {
   // or per-staff sales commissions. (Removed per QA: no need for Loyalty/Commissions here.)
   // purchase_orders was removed platform-wide: the POS duplicate page is gone — purchase
   // orders are owned by inventory-service (linked via the Inventory group).
-  // 'repairs' (device/job-card repair intake) is available for every use case, not just
-  // retail/services — a hospitality or quick_service outlet can just as well take in a device
-  // for repair (e.g. a hotel's own equipment, a cafe's POS hardware) as a retail shop can.
-  hospitality:   [...COMMON_MODULES, 'bar', 'tables', 'reservations', 'kds', 'appointments', 'packages', 'hotel', 'shifts', 'reports', 'online_orders', 'repairs'],
+  // 'repairs' (device/job-card repair intake) is retail-only by explicit product decision
+  // (2026-09-19) — a prior session had made it available to every use case, reversed here.
+  hospitality:   [...COMMON_MODULES, 'bar', 'tables', 'reservations', 'kds', 'appointments', 'packages', 'hotel', 'shifts', 'reports', 'online_orders'],
   retail:        [...COMMON_MODULES, 'retail', 'shifts', 'reports', 'layaway', 'loyalty', 'commissions', 'online_orders', 'returns', 'clients', 'repairs'],
-  services:      [...COMMON_MODULES, 'appointments', 'packages', 'shifts', 'reports', 'loyalty', 'commissions', 'clients', 'staff_schedule', 'resources', 'queue', 'repairs'],
-  quick_service: [...COMMON_MODULES, 'kds', 'shifts', 'reports', 'online_orders', 'repairs'],
+  services:      [...COMMON_MODULES, 'appointments', 'packages', 'shifts', 'reports', 'loyalty', 'commissions', 'clients', 'staff_schedule', 'resources', 'queue'],
+  quick_service: [...COMMON_MODULES, 'kds', 'shifts', 'reports', 'online_orders'],
 };
 
 // ─── Hook ───────────────────────────────────────────────────────────────────

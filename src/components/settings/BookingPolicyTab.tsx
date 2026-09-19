@@ -19,6 +19,8 @@ interface BookingPolicy {
   cancellation_fee: number;
   currency: string;
   payment_timing: PaymentTiming;
+  checkin_time: string;
+  checkout_time: string;
 }
 
 const PAYMENT_TIMING_OPTIONS: { value: PaymentTiming; label: string; hint: string }[] = [
@@ -54,6 +56,8 @@ export function BookingPolicyTab() {
     cancellation_fee: 0,
     currency: 'KES',
     payment_timing: 'settle_at_checkout',
+    checkin_time: '14:00',
+    checkout_time: '10:00',
   });
 
   useEffect(() => {
@@ -110,6 +114,28 @@ export function BookingPolicyTab() {
               <span className="block text-xs text-muted-foreground mt-0.5">{opt.hint}</span>
             </button>
           ))}
+        </div>
+      </div>
+
+      {/* Standard check-in / check-out times */}
+      <div className="space-y-2">
+        <span className="text-sm font-semibold">Standard check-in / check-out times</span>
+        <p className="text-xs text-muted-foreground">
+          Used to auto-fill a guest&apos;s departure date on the check-in form (arrival date + nights, at this
+          checkout time) instead of front desk typing it by hand. A stay past this time on the departure date
+          can still be approved via the existing Late Checkout action.
+        </p>
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+          <label className="block">
+            <span className="text-sm font-medium">Check-in time</span>
+            <input type="time" value={form.checkin_time}
+              onChange={(e) => set('checkin_time', e.target.value)} className={num} disabled={!canManage} />
+          </label>
+          <label className="block">
+            <span className="text-sm font-medium">Check-out time</span>
+            <input type="time" value={form.checkout_time}
+              onChange={(e) => set('checkout_time', e.target.value)} className={num} disabled={!canManage} />
+          </label>
         </div>
       </div>
 

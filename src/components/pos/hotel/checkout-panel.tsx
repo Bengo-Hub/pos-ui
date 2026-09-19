@@ -9,11 +9,12 @@
  */
 
 import { useState, useEffect } from 'react';
-import { Loader2, X, Banknote, CreditCard, Smartphone, CheckCircle2, BedDouble } from 'lucide-react';
+import { Loader2, X, CheckCircle2, BedDouble } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useFolioSummary, useSettleFolio } from '@/hooks/useHotel';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { toast } from 'sonner';
+import { HotelTenderPicker } from './payment-method-picker';
 
 interface CheckoutPanelProps {
   roomId: string;
@@ -21,12 +22,6 @@ interface CheckoutPanelProps {
   onClose: () => void;
   onCheckedOut?: () => void;
 }
-
-const METHODS: { key: string; label: string; icon: React.ElementType }[] = [
-  { key: 'cash', label: 'Cash', icon: Banknote },
-  { key: 'card_manual', label: 'Card / PDQ', icon: CreditCard },
-  { key: 'mpesa', label: 'M-Pesa', icon: Smartphone },
-];
 
 export function CheckoutPanel({ roomId, open, onClose, onCheckedOut }: CheckoutPanelProps) {
   const { data: summary, isLoading } = useFolioSummary(roomId, open);
@@ -76,18 +71,18 @@ export function CheckoutPanel({ roomId, open, onClose, onCheckedOut }: CheckoutP
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">
           <div className="flex items-center gap-2">
-            <BedDouble className="h-5 w-5 text-indigo-600" />
+            <BedDouble className="h-5 w-5 text-primary" />
             <h2 className="font-bold text-base">Checkout · Room {summary?.room_number ?? ''}</h2>
           </div>
           <button onClick={onClose} className="h-8 w-8 rounded-lg flex items-center justify-center hover:bg-accent"><X className="h-4 w-4" /></button>
         </div>
 
         {isLoading || !summary ? (
-          <div className="flex justify-center py-16"><Loader2 className="h-6 w-6 animate-spin text-indigo-600" /></div>
+          <div className="flex justify-center py-16"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
         ) : (
           <div className="flex-1 overflow-y-auto p-5 space-y-4">
             {/* Guest + stay */}
-            <div className="rounded-xl bg-indigo-500/5 border border-indigo-500/15 p-4 space-y-1">
+            <div className="rounded-xl bg-primary/5 border border-primary/15 p-4 space-y-1">
               <p className="font-bold text-sm">{summary.guest_name}</p>
               {summary.phone && <p className="text-xs text-muted-foreground">{summary.phone}</p>}
               <div className="flex justify-between text-xs pt-1">
@@ -116,7 +111,7 @@ export function CheckoutPanel({ roomId, open, onClose, onCheckedOut }: CheckoutP
               )}
               <div className="flex justify-between px-4 py-2.5 text-base font-extrabold bg-muted/30">
                 <span>Balance Due</span>
-                <span className="tabular-nums text-indigo-600">{fmt(balance)}</span>
+                <span className="tabular-nums text-primary">{fmt(balance)}</span>
               </div>
             </div>
 
@@ -145,40 +140,26 @@ export function CheckoutPanel({ roomId, open, onClose, onCheckedOut }: CheckoutP
             {balance > 0.009 && (
               <div className="rounded-xl border border-border p-4 space-y-3">
                 <p className="text-sm font-bold">Take Payment</p>
-                <div className="grid grid-cols-3 gap-2">
-                  {METHODS.map((m) => {
-                    const Icon = m.icon;
-                    return (
-                      <button
-                        key={m.key} type="button" onClick={() => setMethod(m.key)}
-                        className={cn('flex flex-col items-center gap-1 py-2.5 rounded-xl border-2 text-xs font-semibold transition-colors',
-                          method === m.key ? 'border-indigo-500 bg-indigo-500/5 text-indigo-600' : 'border-border text-muted-foreground hover:bg-accent')}
-                      >
-                        <Icon className="h-4.5 w-4.5" />
-                        {m.label}
-                      </button>
-                    );
-                  })}
-                </div>
+                <HotelTenderPicker value={method} onChange={setMethod} />
                 <div className="grid grid-cols-2 gap-2">
                   <label className="block">
                     <span className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Amount</span>
                     <input type="number" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)}
-                      className="mt-0.5 w-full bg-background border border-border rounded-lg py-2 px-3 text-base font-bold tabular-nums focus:ring-2 focus:ring-indigo-500/40 focus:outline-none" />
+                      className="mt-0.5 w-full bg-background border border-border rounded-lg py-2 px-3 text-base font-bold tabular-nums focus:ring-2 focus:ring-ring focus:outline-none" />
                   </label>
                   <label className="block">
                     <span className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Ref (optional)</span>
                     <input type="text" value={reference} onChange={(e) => setReference(e.target.value.toUpperCase())} placeholder="Code / approval"
-                      className="mt-0.5 w-full bg-background border border-border rounded-lg py-2 px-3 text-sm uppercase focus:ring-2 focus:ring-indigo-500/40 focus:outline-none" />
+                      className="mt-0.5 w-full bg-background border border-border rounded-lg py-2 px-3 text-sm uppercase focus:ring-2 focus:ring-ring focus:outline-none" />
                   </label>
                 </div>
                 <label className="flex items-center gap-2 text-xs font-medium">
-                  <input type="checkbox" checked={checkoutOnSettle} onChange={(e) => setCheckoutOnSettle(e.target.checked)} className="accent-indigo-600" />
+                  <input type="checkbox" checked={checkoutOnSettle} onChange={(e) => setCheckoutOnSettle(e.target.checked)} className="accent-primary" />
                   Check guest out when the balance clears
                 </label>
                 <button
                   type="button" disabled={settle.isPending} onClick={handleSettle}
-                  className="w-full min-h-11 rounded-xl bg-indigo-600 text-white font-bold flex items-center justify-center gap-2 disabled:opacity-40 hover:bg-indigo-700 transition-colors"
+                  className="w-full min-h-11 rounded-xl bg-primary text-primary-foreground font-bold flex items-center justify-center gap-2 disabled:opacity-40 hover:bg-primary/90 transition-colors"
                 >
                   {settle.isPending ? <Loader2 className="h-5 w-5 animate-spin" /> : <CheckCircle2 className="h-5 w-5" />}
                   Record Payment {parseFloat(amount) > 0 ? `· ${fmt(parseFloat(amount))}` : ''}

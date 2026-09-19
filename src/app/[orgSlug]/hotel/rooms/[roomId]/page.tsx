@@ -1,22 +1,20 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { useHotelRoom, useRoomFolio, useCheckIn, useCheckOut, useLateCheckout, usePostFolioCharge, useBookingPolicy } from '@/hooks/useHotel';
+import { useHotelRoom, useRoomFolio, useCheckIn, useCheckOut, useLateCheckout, usePostFolioCharge, useBookingPolicy, useUpdateRoomStatus } from '@/hooks/useHotel';
 import { Card, CardContent } from '@/components/ui/base';
 import { cn, formatCurrency } from '@/lib/utils';
 import {
   ArrowLeft,
-  Banknote,
   BedDouble,
   Clock,
-  CreditCard,
   Loader2,
   LogIn,
   LogOut,
+  PackageSearch,
   Receipt,
   ShieldAlert,
-  Smartphone,
   X,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -26,6 +24,8 @@ import { ModuleGate } from '@/components/auth/module-gate';
 import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
 import { CheckoutPanel } from '@/components/pos/hotel/checkout-panel';
 import { DamageReportModal } from '@/components/pos/hotel/damage-report-modal';
+import { LostFoundModal } from '@/components/pos/hotel/lost-found-modal';
+import { HotelTenderPicker } from '@/components/pos/hotel/payment-method-picker';
 
 // Folio charge types a front-desk agent can post manually from this form. Mirrors the
 // subset of pos-api's RoomFolioItem.charge_type enum that isn't already posted by a
@@ -42,11 +42,17 @@ const CHARGE_TYPES = [
   { value: 'other', label: 'Other' },
 ];
 
-const CHECK_IN_PAYMENT_METHODS: { key: string; label: string; icon: React.ElementType }[] = [
-  { key: 'cash', label: 'Cash', icon: Banknote },
-  { key: 'card_manual', label: 'Card / PDQ', icon: CreditCard },
-  { key: 'mpesa', label: 'M-Pesa', icon: Smartphone },
-];
+// Statuses CheckIn's backend gate actually accepts (available|reserved) vs. not — mirrors
+// hotel.go's CheckIn handler exactly so the UI never offers an action the API will 409 on.
+const CHECK_IN_BLOCKED_STATUSES = new Set(['cleaning', 'maintenance', 'occupied', 'checkout']);
+
+const ROOM_STATUS_COPY: Record<string, { title: string; body: string }> = {
+  available: { title: 'This room is available', body: 'Check in a guest to open their stay, post room charges, and start the folio.' },
+  cleaning: { title: 'This room is being cleaned', body: 'Housekeeping hasn’t marked it ready yet — finish the cleaning task to free it up, or override below.' },
+  maintenance: { title: 'This room is under maintenance', body: 'Out of service until the maintenance task is completed, or override below.' },
+  reserved: { title: 'This room is reserved', body: 'Held for an upcoming booking — you can still check a guest in directly if they’ve arrived.' },
+  checkout: { title: 'This room just checked out', body: 'Awaiting housekeeping before it’s bookable again.' },
+};
 
 function RoomDetailPageInner() {
   const params = useParams();
@@ -63,6 +69,7 @@ function RoomDetailPageInner() {
   const [showCheckIn, setShowCheckIn] = useState(false);
   const [showCheckout, setShowCheckout] = useState(false);
   const [showDamageReport, setShowDamageReport] = useState(false);
+  const [showLostFound, setShowLostFound] = useState(false);
   const [checkInPaymentMethod, setCheckInPaymentMethod] = useState('');
   const [checkInPaymentReference, setCheckInPaymentReference] = useState('');
 
@@ -73,13 +80,88 @@ function RoomDetailPageInner() {
   const { data: room, isLoading: roomLoading } = useHotelRoom(roomId);
   const currency = room?.currency ?? 'KES';
   const isOccupied = room?.status === 'occupied';
-  const guest = room?.edges?.guests?.[0] ?? null;
+  // GetRoom now returns the room's most RECENT stay regardless of status, not just an active
+  // one — a room fresh out of checkout ("cleaning") has no active guest but front desk/
+  // housekeeping still needs to see who was just there (for a damage report or a lost-item
+  // claim raised right after checkout). lastGuest is that same row read for display purposes;
+  // guest stays the narrower "currently active" view the check-in/checkout actions rely on.
+  const lastGuest = room?.edges?.guests?.[0] ?? null;
+  const guest = lastGuest?.status === 'active' ? lastGuest : null;
   const { data: folio = [] } = useRoomFolio(roomId, isOccupied);
   const { data: bookingPolicy } = useBookingPolicy();
   const paymentTiming = bookingPolicy?.payment_timing ?? 'settle_at_checkout';
   const requiresUpfrontPayment = paymentTiming === 'pay_upfront';
   const checkInNights = parseInt(checkInForm.nights) || 1;
   const estimatedCheckInTotal = (room?.rate_per_night ?? 0) * checkInNights;
+  const checkoutTimeDefault = bookingPolicy?.checkout_time || '10:00';
+
+  // Nights and the two datetime pickers are kept in sync so exactly ONE of them is ever the
+  // "driver" at a time — nights is authoritative by default (arrival + nights determines
+  // departure, at the property's configured checkout time), but manually editing the departure
+  // date instead re-derives nights from it. This replaced a previous bug: handleCheckIn used to
+  // silently recompute nights from the raw millisecond gap between arrival/departure whenever
+  // BOTH happened to be set, which (a) overrode an explicit Nights value the staff had just
+  // typed and (b) used Math.ceil on a partial-day duration, over-counting by a night whenever
+  // the two times of day didn't line up exactly (e.g. a 2-night stay reading as 3 nights on the
+  // folio). Nights is now always calendar-day arithmetic and always the value actually charged.
+  function calendarDaysBetween(a: Date, b: Date): number {
+    const aMid = new Date(a.getFullYear(), a.getMonth(), a.getDate()).getTime();
+    const bMid = new Date(b.getFullYear(), b.getMonth(), b.getDate()).getTime();
+    return Math.round((bMid - aMid) / 86_400_000);
+  }
+  function toDatetimeLocalValue(d: Date): string {
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+  function departureFromNights(arrivalBase: Date, nights: number): Date {
+    const [h, m] = checkoutTimeDefault.split(':').map((x) => parseInt(x, 10));
+    const out = new Date(arrivalBase.getFullYear(), arrivalBase.getMonth(), arrivalBase.getDate() + nights);
+    out.setHours(Number.isFinite(h) ? h : 10, Number.isFinite(m) ? m : 0, 0, 0);
+    return out;
+  }
+  function setNights(value: string) {
+    setCheckInForm((f) => {
+      const n = Math.max(1, parseInt(value) || 1);
+      const arrivalBase = f.expected_arrival_at ? new Date(f.expected_arrival_at) : new Date();
+      return { ...f, nights: value, expected_departure_at: toDatetimeLocalValue(departureFromNights(arrivalBase, n)) };
+    });
+  }
+  function setArrival(value: string) {
+    setCheckInForm((f) => {
+      if (!value) return { ...f, expected_arrival_at: value };
+      const n = Math.max(1, parseInt(f.nights) || 1);
+      return { ...f, expected_arrival_at: value, expected_departure_at: toDatetimeLocalValue(departureFromNights(new Date(value), n)) };
+    });
+  }
+  function setDeparture(value: string) {
+    setCheckInForm((f) => {
+      if (!value) return { ...f, expected_departure_at: value };
+      const arrivalBase = f.expected_arrival_at ? new Date(f.expected_arrival_at) : new Date();
+      const n = Math.max(1, calendarDaysBetween(arrivalBase, new Date(value)));
+      return { ...f, expected_departure_at: value, nights: String(n) };
+    });
+  }
+
+  // Auto-fill departure the first time the check-in form opens, so the field shows a real
+  // computed value (today + 1 night, at the configured checkout time) instead of sitting blank
+  // until the staff happens to touch Nights.
+  useEffect(() => {
+    if (showCheckIn && !checkInForm.expected_departure_at) {
+      setNights(checkInForm.nights);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showCheckIn]);
+
+  const canCheckIn = !!room && !CHECK_IN_BLOCKED_STATUSES.has(room.status);
+  const updateRoomStatus = useUpdateRoomStatus(roomId);
+  async function handleMarkAvailable() {
+    try {
+      await updateRoomStatus.mutateAsync('available');
+      toast.success('Room marked available');
+    } catch (e) {
+      toast.error(await apiErrorMessage(e, 'Failed to update room status'));
+    }
+  }
 
   const checkIn  = useCheckIn(roomId);
   const checkOut = useCheckOut(roomId);
@@ -140,13 +222,12 @@ function RoomDetailPageInner() {
       return;
     }
 
-    // Derive nights from the date pickers when both are provided.
-    let nights = parseInt(f.nights) || 1;
-    if (f.expected_arrival_at && f.expected_departure_at) {
-      const ms = new Date(f.expected_departure_at).getTime() - new Date(f.expected_arrival_at).getTime();
-      const d = Math.ceil(ms / 86_400_000);
-      if (d > 0) nights = d;
-    }
+    // Nights is always the authoritative value here — setNights/setArrival/setDeparture keep it
+    // in sync with whichever field the staff actually edited, using calendar-day arithmetic (see
+    // their doc comment). Previously this re-derived nights from the raw millisecond gap between
+    // the two datetime pickers, which silently overrode an explicit Nights value and, via
+    // Math.ceil, over-counted by a night whenever the two times of day didn't line up exactly.
+    const nights = Math.max(1, parseInt(f.nights) || 1);
     const childrenCount = parseInt(f.children) || 0;
     try {
       const res = await checkIn.mutateAsync({
@@ -262,16 +343,20 @@ function RoomDetailPageInner() {
               </label>
               <Field label="ID Number *" value={checkInForm.id_number} onChange={(v) => setField('id_number', v)} placeholder="Required — guest ID/passport number" />
               <Field label="ID Document URL" value={checkInForm.id_document_url} onChange={(v) => setField('id_document_url', v)} placeholder="Uploaded scan link (optional)" />
-              <Field label="Nights (if no dates)" type="number" value={checkInForm.nights} onChange={(v) => setField('nights', v)} placeholder="1" />
-              <Field label="Check-In Date & Time" type="datetime-local" value={checkInForm.expected_arrival_at} onChange={(v) => setField('expected_arrival_at', v)} />
-              <Field label="Check-Out Date & Time" type="datetime-local" value={checkInForm.expected_departure_at} onChange={(v) => setField('expected_departure_at', v)} />
+              <Field label="Nights" type="number" value={checkInForm.nights} onChange={setNights} placeholder="1" />
+              <Field label="Check-In Date & Time" type="datetime-local" value={checkInForm.expected_arrival_at} onChange={setArrival} />
+              <Field label="Check-Out Date & Time" type="datetime-local" value={checkInForm.expected_departure_at} onChange={setDeparture} />
               <Field label="Adults" type="number" value={checkInForm.adults} onChange={(v) => setField('adults', v)} placeholder="1" />
               <Field label="Children" type="number" value={checkInForm.children} onChange={(v) => setField('children', v)} placeholder="0" />
             </div>
 
+            <p className="text-[11px] text-muted-foreground">
+              Check-out auto-fills to {checkInNights} night{checkInNights !== 1 ? 's' : ''} from check-in, by {checkoutTimeDefault} on the departure date (this property&apos;s standard checkout time) — edit either field directly and the other stays in sync. A later departure can still be approved afterwards via Late Checkout.
+            </p>
+
             {paymentTiming === 'per_day_split' && (
               <p className="text-xs text-muted-foreground rounded-xl bg-muted/50 px-3 py-2">
-                This property splits the room charge per night — {checkInNights} separate line item{checkInNights !== 1 ? 's' : ''} will be posted to the folio instead of one lump sum.
+                This property bills per night — only the first night is charged now; the remaining {Math.max(checkInNights - 1, 0)} night{checkInNights - 1 !== 1 ? 's' : ''} post automatically to the folio as each day of the stay occurs.
               </p>
             )}
 
@@ -283,25 +368,7 @@ function RoomDetailPageInner() {
                     <span className="text-sm font-bold text-primary tabular-nums">~{formatCurrency(estimatedCheckInTotal, currency)}</span>
                   )}
                 </div>
-                <div className="grid grid-cols-3 gap-2">
-                  {CHECK_IN_PAYMENT_METHODS.map((m) => {
-                    const Icon = m.icon;
-                    return (
-                      <button
-                        key={m.key}
-                        type="button"
-                        onClick={() => setCheckInPaymentMethod(m.key)}
-                        className={cn(
-                          'flex flex-col items-center gap-1 py-2.5 rounded-xl border-2 text-xs font-semibold transition-colors',
-                          checkInPaymentMethod === m.key ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:bg-muted'
-                        )}
-                      >
-                        <Icon className="h-4.5 w-4.5" />
-                        {m.label}
-                      </button>
-                    );
-                  })}
-                </div>
+                <HotelTenderPicker value={checkInPaymentMethod} onChange={setCheckInPaymentMethod} />
                 <label className="block">
                   <span className="text-xs font-medium text-muted-foreground">Reference (optional — M-Pesa code / card approval)</span>
                   <input
@@ -480,14 +547,46 @@ function RoomDetailPageInner() {
             </Card>
           )}
 
-          {/* Empty state — available room, check-in not yet started */}
+          {/* Last guest — shown once the room is no longer occupied but recently had a stay
+              (e.g. straight out of checkout, while status is "cleaning"), so front desk /
+              housekeeping can still see who was just there for a damage report or lost-item
+              claim raised after the fact. */}
+          {!isOccupied && lastGuest && (
+            <Card>
+              <CardContent className="p-5 space-y-2">
+                <p className="text-xs font-semibold uppercase text-muted-foreground tracking-wider">Last Guest</p>
+                <div className="flex items-center justify-between text-sm">
+                  <div>
+                    <p className="font-semibold text-foreground">{[lastGuest.first_name, lastGuest.last_name].filter(Boolean).join(' ') || lastGuest.guest_name}</p>
+                    <p className="text-xs text-muted-foreground">{lastGuest.phone}</p>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Checked out {lastGuest.checked_out_at ? new Date(lastGuest.checked_out_at).toLocaleString() : '—'}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Empty state — status-aware: "available" is the only status that can misleadingly
+              read as ready-to-book if the actual status (cleaning/maintenance/reserved) isn't
+              called out explicitly. */}
           {showEmptyState && (
             <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-border py-16 text-center text-muted-foreground">
               <div className="size-14 rounded-2xl bg-primary/10 flex items-center justify-center">
                 <BedDouble className="h-7 w-7 text-primary" />
               </div>
-              <p className="font-medium text-foreground">This room is available</p>
-              <p className="text-sm max-w-xs">Check in a guest to open their stay, post room charges, and start the folio.</p>
+              <p className="font-medium text-foreground">{ROOM_STATUS_COPY[room.status]?.title ?? 'This room is available'}</p>
+              <p className="text-sm max-w-xs">{ROOM_STATUS_COPY[room.status]?.body ?? 'Check in a guest to open their stay, post room charges, and start the folio.'}</p>
+              {(room.status === 'cleaning' || room.status === 'maintenance') && (
+                <button
+                  onClick={handleMarkAvailable}
+                  disabled={updateRoomStatus.isPending}
+                  className="mt-2 text-xs font-semibold text-primary hover:underline disabled:opacity-50"
+                >
+                  {updateRoomStatus.isPending ? 'Updating…' : 'Mark room available now'}
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -498,7 +597,9 @@ function RoomDetailPageInner() {
             {!isOccupied && !showCheckIn && (
               <button
                 onClick={() => setShowCheckIn(true)}
-                className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-primary text-primary-foreground font-semibold hover:bg-primary/90 transition-colors"
+                disabled={!canCheckIn}
+                title={canCheckIn ? undefined : `Room is ${room.status} — mark it available first`}
+                className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-primary text-primary-foreground font-semibold hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
               >
                 <LogIn className="h-5 w-5" /> Check In Guest
               </button>
@@ -541,6 +642,17 @@ function RoomDetailPageInner() {
               <ShieldAlert className="h-4 w-4" />
               Report Damage
             </button>
+
+            {/* Log Found Item — same "available regardless of occupancy" reasoning as damage
+                reports: most finds happen during post-checkout cleaning, when the room has
+                already gone back to "cleaning"/available and lastGuest is who it belonged to. */}
+            <button
+              onClick={() => setShowLostFound(true)}
+              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-blue-500/30 text-blue-700 dark:text-blue-400 text-sm font-semibold hover:bg-blue-500/10 transition-colors"
+            >
+              <PackageSearch className="h-4 w-4" />
+              Log Found Item
+            </button>
           </div>
         </div>
       </div>
@@ -551,6 +663,15 @@ function RoomDetailPageInner() {
         roomNumber={room.room_number}
         open={showDamageReport}
         onClose={() => setShowDamageReport(false)}
+      />
+
+      <LostFoundModal
+        outletId={room.outlet_id}
+        roomId={roomId}
+        roomGuestId={(guest ?? lastGuest)?.id}
+        roomLabel={room.room_number}
+        open={showLostFound}
+        onClose={() => setShowLostFound(false)}
       />
 
       <CheckoutPanel

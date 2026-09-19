@@ -2,6 +2,8 @@
 
 import { apiClient } from '@/lib/api/client';
 import { useModuleAccess } from '@/hooks/use-module-access';
+import { useSubscription } from '@/hooks/use-subscription';
+import { useHotelOccupancyReport, type HotelOccupancyResult } from '@/hooks/useReports';
 import { cn } from '@/lib/utils';
 import { QuickAction, QuickActionTile, QuickActionGrid, KPICard, RecentOrdersCard, useDashboardSummary, useTenantID, fmt, fmtNum } from './widgets';
 import { CashierOverviewTab } from './cashier-overview-tab';
@@ -12,9 +14,9 @@ import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import {
   ArrowRight, BarChart3, BedDouble, Calendar, ChefHat,
-  ClipboardList, Clock, Coins, Grid3x3, Package,
-  Plus, RefreshCw, ShoppingBag, TrendingUp, Users,
-  Wallet, Wine,
+  ClipboardList, Clock, Coins, Cpu, Grid3x3, Package,
+  Percent, Plus, Presentation, RefreshCw, ShieldAlert, ShoppingBag,
+  Sparkles, TrendingUp, Users, Wallet, Wine,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect } from 'react';
@@ -247,6 +249,9 @@ export function BarDashboard({ orgSlug }: { orgSlug: string }) {
 
 export function ReceptionistDashboard({ orgSlug }: { orgSlug: string }) {
   const tenantID = useTenantID();
+  const { hasModule } = useModuleAccess();
+  const { hasFeature } = useSubscription();
+  const sellsItems = hasModule('new_order');
   const { data: roomsData, isLoading } = useQuery({
     queryKey: ['dashboard-rooms', tenantID],
     queryFn: () => apiClient.get<{ data: any[] }>(`/api/v1/${tenantID}/hotel/rooms`),
@@ -272,10 +277,138 @@ export function ReceptionistDashboard({ orgSlug }: { orgSlug: string }) {
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <QuickAction icon={BedDouble} label="Rooms" desc="Check-in / check-out" href={`/${orgSlug}/hotel/rooms`} accent />
-        <QuickAction icon={Users} label="Facilities" desc="Manage bookings" href={`/${orgSlug}/hotel/facilities`} />
-        <QuickAction icon={Plus} label="New Order" desc="Room service order" href={`/${orgSlug}/order`} />
-        <QuickAction icon={ClipboardList} label="Orders" desc="View active orders" href={`/${orgSlug}/orders`} />
+        <QuickAction icon={Users} label="Bookings" desc="Review & confirm reservations" href={`/${orgSlug}/hotel/bookings`} />
+        {hasFeature('facility_booking') && (
+          <QuickAction icon={Cpu} label="Facilities" desc="Manage bookings" href={`/${orgSlug}/hotel/facilities`} />
+        )}
+        {sellsItems && <QuickAction icon={Plus} label="New Order" desc="Room service order" href={`/${orgSlug}/order`} />}
+        {sellsItems && <QuickAction icon={ClipboardList} label="Orders" desc="View active orders" href={`/${orgSlug}/orders`} />}
       </div>
+    </div>
+  );
+}
+
+/** Admin/manager dashboard for hospitality outlets — replaces the generic AdminDashboard, which
+ *  falls through to a retail-flavored "New Order" CTA + item-category charts that mean nothing
+ *  for a pure-accommodation property (revenue comes from room bookings, not menu sales). Built
+ *  around the SAME hotel-occupancy report /hotel/reports already uses (never a second source of
+ *  truth for room revenue/ADR/RevPAR), plus the generic POS order summary — but the F&B/retail
+ *  section only renders when this outlet actually sells items (hasModule('new_order') etc.,
+ *  respecting the SAME outlet-level disabled_modules toggle the sidebar already honors), so a
+ *  pure-accommodation property like a guest house sees only what applies to it, while a
+ *  full-service hotel (rooms + restaurant + conference + pool) sees all of it. */
+export function HospitalityDashboard({ orgSlug }: { orgSlug: string }) {
+  const { range, preset, setPreset, custom, setCustom } = useDashboardRange();
+  const { hasModule } = useModuleAccess();
+  const { hasFeature } = useSubscription();
+  const { data: summary, isLoading: summaryLoading, refetch, isFetching } = useDashboardSummary(range);
+  const { data: occ, isLoading: occLoading } = useHotelOccupancyReport(range.chartFrom, range.chartTo);
+  const s: Partial<NonNullable<typeof summary>> = summary ?? {};
+  const o: Partial<HotelOccupancyResult> = occ ?? {};
+  const periodSub = range.isSingleDay ? 'today' : 'in range';
+
+  // Whether this outlet actually sells catalog items through the till (F&B/retail) at all —
+  // false for a pure-accommodation property (e.g. new_order/orders/tables/kds all disabled in
+  // OutletSetting.metadata.disabled_modules), true for a full-service hotel with a restaurant/bar.
+  const sellsItems = hasModule('new_order') || hasModule('tables') || hasModule('kds') || hasModule('online_orders');
+  const hasFacilities = hasFeature('facility_booking');
+  const hasConferences = hasFeature('conference_events');
+
+  const breakdown = (o.revenue_by_charge_type ?? []).slice().sort((a, b) => b.amount - a.amount).slice(0, 5);
+  const maxAmount = Math.max(1, ...breakdown.map((b) => b.amount));
+
+  return (
+    <div className="p-6 space-y-6 overflow-x-hidden">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-bold text-foreground font-display">Hospitality Overview</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            {new Date().toLocaleDateString('en-KE', { weekday: 'long', day: 'numeric', month: 'long' })}
+          </p>
+        </div>
+        <div className="flex items-center gap-2 w-full sm:w-auto min-w-0">
+          <DashboardRangeFilter preset={preset} setPreset={setPreset} custom={custom} setCustom={setCustom} />
+          <button onClick={() => refetch()} className="h-9 w-9 shrink-0 rounded-xl border border-border flex items-center justify-center hover:bg-accent transition-colors">
+            <RefreshCw className={cn('h-4 w-4 text-muted-foreground', isFetching && 'animate-spin')} />
+          </button>
+        </div>
+      </div>
+
+      {/* Accommodation KPIs — always the primary block for a hospitality outlet */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <KPICard label="Room Revenue" value={fmt(o.room_revenue ?? 0, s.currency)} sub={range.compareLabel} icon={BedDouble} loading={occLoading} href={`/${orgSlug}/hotel/reports`} />
+        <KPICard label="Occupancy" value={occLoading ? '—' : `${((o.occupancy_rate ?? 0) * 100).toFixed(0)}%`} sub={`${(o.occupied_room_nights ?? 0).toFixed(0)} of ${(o.available_room_nights ?? 0).toFixed(0)} room-nights`} icon={Percent} loading={occLoading} />
+        <KPICard label="ADR" value={fmt(o.adr ?? 0, s.currency)} sub="avg daily rate" icon={Wallet} loading={occLoading} />
+        <KPICard label="RevPAR" value={fmt(o.revpar ?? 0, s.currency)} sub="per available room" icon={TrendingUp} loading={occLoading} />
+      </div>
+
+      {/* F&B / retail KPIs — only for an outlet that actually rings sales through the till */}
+      {sellsItems && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <KPICard label="F&amp;B / Other Sales" value={fmt(s.total_revenue ?? 0, s.currency)} sub={periodSub} icon={Wine} trend={s.revenue_growth} loading={summaryLoading} />
+          <KPICard label="Orders" value={fmtNum(s.total_orders ?? 0)} sub={periodSub} icon={ClipboardList} trend={s.orders_growth} loading={summaryLoading} />
+          <KPICard label="Ancillary (Folio Extras)" value={fmt(o.ancillary_revenue ?? 0, s.currency)} sub="minibar, laundry, damages…" icon={Package} loading={occLoading} />
+          <KPICard label="Active Staff" value={fmtNum(s.active_staff ?? 0)} sub="on shift" icon={Users} loading={summaryLoading} href={`/${orgSlug}/shifts?tab=team`} />
+        </div>
+      )}
+      {!sellsItems && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <KPICard label="Ancillary Revenue" value={fmt(o.ancillary_revenue ?? 0, s.currency)} sub="minibar, laundry, damages…" icon={Package} loading={occLoading} />
+          <KPICard label="Active Staff" value={fmtNum(s.active_staff ?? 0)} sub="on shift" icon={Users} loading={summaryLoading} href={`/${orgSlug}/shifts?tab=team`} />
+        </div>
+      )}
+
+      <div className="space-y-3">
+        <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Quick Actions</p>
+        <QuickActionGrid>
+          <QuickActionTile icon={BedDouble} label="Rooms" href={`/${orgSlug}/hotel/rooms`} accent />
+          <QuickActionTile icon={Users} label="Bookings" href={`/${orgSlug}/hotel/bookings`} tint="blue" />
+          {hasFacilities && <QuickActionTile icon={Cpu} label="Facilities" href={`/${orgSlug}/hotel/facilities`} tint="purple" />}
+          {hasConferences && <QuickActionTile icon={Presentation} label="Conferences" href={`/${orgSlug}/hotel/conference`} tint="teal" />}
+          {sellsItems && <QuickActionTile icon={Plus} label="New Order" href={`/${orgSlug}/order`} tint="rose" />}
+          <QuickActionTile icon={Sparkles} label="Housekeeping" href={`/${orgSlug}/hotel/housekeeping`} tint="amber" />
+          <QuickActionTile icon={ShieldAlert} label="Damage Reports" href={`/${orgSlug}/hotel/damage-reports`} tint="amber" />
+          <QuickActionTile icon={BarChart3} label="Hotel Reports" href={`/${orgSlug}/hotel/reports`} tint="emerald" />
+          <QuickActionTile icon={Wallet} label="Cash Drawer" href={`/${orgSlug}/drawer`} tint="amber" />
+        </QuickActionGrid>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="lg:col-span-2 bg-card border border-border rounded-2xl p-5">
+          <h2 className="text-sm font-semibold text-foreground mb-4">Revenue by Charge Type</h2>
+          {occLoading ? (
+            <div className="space-y-3">{[1, 2, 3].map((i) => <div key={i} className="h-8 bg-muted rounded-lg animate-pulse" />)}</div>
+          ) : breakdown.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No folio charges in this period.</p>
+          ) : (
+            <div className="space-y-2.5">
+              {breakdown.map((b) => (
+                <div key={b.charge_type} className="space-y-1">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-medium text-foreground capitalize">{b.charge_type.replace(/_/g, ' ')}</span>
+                    <span className="text-muted-foreground">{fmt(b.amount, s.currency)}</span>
+                  </div>
+                  <div className="h-2 rounded-full bg-muted overflow-hidden">
+                    <div
+                      className={cn('h-full rounded-full', b.charge_type === 'room_charge' ? 'bg-primary' : 'bg-primary/50')}
+                      style={{ width: `${Math.max(2, (b.amount / maxAmount) * 100)}%` }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="bg-card border border-border rounded-2xl p-5 flex flex-col justify-center gap-3">
+          <Link href={`/${orgSlug}/hotel/reports`} className="text-sm font-semibold text-primary hover:underline flex items-center gap-1.5">
+            Full occupancy &amp; revenue report <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
+          <p className="text-xs text-muted-foreground">{o.total_rooms ?? 0} rooms · {(o.available_room_nights ?? 0).toFixed(0)} room-nights available this period</p>
+        </div>
+      </div>
+
+      {sellsItems && <DashboardCharts range={range} currency={s.currency} />}
+      {sellsItems && <RecentOrdersCard orgSlug={orgSlug} />}
     </div>
   );
 }

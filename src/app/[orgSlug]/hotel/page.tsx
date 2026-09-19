@@ -13,6 +13,7 @@ import {
   Building2,
   CheckCircle,
   Loader2,
+  PackageSearch,
   Presentation,
   ShieldAlert,
   Sparkles,
@@ -185,6 +186,19 @@ function HotelPage() {
           <div>
             <p className="font-semibold text-foreground">Damage Reports</p>
             <p className="text-sm text-muted-foreground">Review &amp; approve guest damage/fine charges</p>
+          </div>
+        </Link>
+
+        <Link
+          href={`/${orgSlug}/hotel/lost-found`}
+          className="group flex items-center gap-4 p-5 rounded-2xl border border-border bg-card hover:border-primary/40 hover:shadow-md transition-all"
+        >
+          <div className="size-12 rounded-xl bg-blue-500/10 flex items-center justify-center group-hover:bg-blue-500/20 transition-colors">
+            <PackageSearch className="h-6 w-6 text-blue-600" />
+          </div>
+          <div>
+            <p className="font-semibold text-foreground">Lost &amp; Found</p>
+            <p className="text-sm text-muted-foreground">Track found items, claims &amp; disposal</p>
           </div>
         </Link>
       </div>

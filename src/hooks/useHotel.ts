@@ -15,6 +15,7 @@ import {
   type UpdateHousekeepingInput,
   type SettleFolioInput,
   type CreateDamageReportInput,
+  type CreateLostFoundItemInput,
 } from '@/lib/api/hotel';
 
 function useTenantSlug() {
@@ -288,6 +289,54 @@ export function useUploadDamageEvidence() {
   const slug = useTenantSlug();
   return useMutation({
     mutationFn: (file: File) => hotelApi.uploadDamageEvidence(slug, file),
+  });
+}
+
+// ─── Lost & found ───────────────────────────────────────────────────────────────
+
+export function useLostFoundItems(params?: { status?: string; category?: string; room_id?: string }) {
+  const slug = useTenantSlug();
+  return useQuery({
+    queryKey: ['lost-found', slug, params ?? {}],
+    queryFn: () => hotelApi.listLostFoundItems(slug, params),
+    enabled: !!slug,
+    staleTime: 30_000,
+  });
+}
+
+export function useCreateLostFoundItem() {
+  const slug = useTenantSlug();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: CreateLostFoundItemInput) => hotelApi.createLostFoundItem(slug, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['lost-found', slug] }),
+  });
+}
+
+export function useClaimLostFoundItem() {
+  const slug = useTenantSlug();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, claimedByName, claimedNotes }: { id: string; claimedByName: string; claimedNotes?: string }) =>
+      hotelApi.claimLostFoundItem(slug, id, { claimed_by_name: claimedByName, claimed_notes: claimedNotes }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['lost-found', slug] }),
+  });
+}
+
+export function useDisposeLostFoundItem() {
+  const slug = useTenantSlug();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, disposition, reason }: { id: string; disposition: 'disposed' | 'donated'; reason: string }) =>
+      hotelApi.disposeLostFoundItem(slug, id, { disposition, reason }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['lost-found', slug] }),
+  });
+}
+
+export function useUploadLostFoundPhoto() {
+  const slug = useTenantSlug();
+  return useMutation({
+    mutationFn: (file: File) => hotelApi.uploadLostFoundPhoto(slug, file),
   });
 }
 

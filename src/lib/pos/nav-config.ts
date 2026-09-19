@@ -104,7 +104,9 @@ export function buildNavGroups(orgSlug: string): NavGroup[] {
         { label: 'Appointments', icon: Calendar, href: '/appointments', moduleKey: 'appointments', permission: [P.APPOINTMENTS_VIEW, P.APPOINTMENTS_ADD, P.APPOINTMENTS_CHANGE, P.APPOINTMENTS_MANAGE], waiterHidden: true },
         { label: 'Service Packages', icon: Package, href: '/packages', moduleKey: 'packages', permission: [P.PACKAGES_VIEW, P.PACKAGES_MANAGE], waiterHidden: true },
         { label: 'Walk-in Queue', icon: ClipboardList, href: '/queue', moduleKey: 'queue', permission: [P.QUEUE_VIEW, P.QUEUE_CHANGE, P.QUEUE_MANAGE], waiterHidden: true },
-        { label: 'Repair', icon: Wrench, href: '/repair', moduleKey: 'repairs', permission: [P.ORDERS_ADD, P.ORDERS_MANAGE], waiterHidden: true },
+        // Repair (device/job-card intake) is a retail-only workflow — hidden for hospitality,
+        // quick_service and services outlets per explicit product decision (2026-09-19).
+        { label: 'Repair', icon: Wrench, href: '/repair', moduleKey: 'repairs', permission: [P.ORDERS_ADD, P.ORDERS_MANAGE], waiterHidden: true, hideForProfiles: ['hospitality', 'quick_service', 'services'] },
         { label: 'Staff Schedule', icon: Users, href: '/staff-schedule', moduleKey: 'staff_schedule', permission: [P.STAFF_VIEW, P.STAFF_MANAGE], waiterHidden: true },
         { label: 'Resources', icon: Sofa, href: '/resources', moduleKey: 'resources', permission: [P.CONFIG_VIEW], waiterHidden: true },
       ],

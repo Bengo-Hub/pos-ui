@@ -7,6 +7,7 @@ import {
   AdminDashboard,
   BarDashboard,
   CashierDashboard,
+  HospitalityDashboard,
   KitchenDashboard,
   QuickServiceDashboard,
   ReceptionistDashboard,
@@ -22,7 +23,7 @@ function hasRole(roles: string[], ...check: string[]): boolean {
 export default function DashboardPage() {
   const { orgSlug } = useParams<{ orgSlug: string }>();
   const user = useAuthStore((s) => s.user);
-  const { isSuperUser, isServices, isRetail, isQuickService } = useModuleAccess();
+  const { isSuperUser, isServices, isRetail, isQuickService, isHospitality } = useModuleAccess();
   const roles = user?.roles ?? [];
 
   const primaryRole =
@@ -48,6 +49,7 @@ export default function DashboardPage() {
       if (isServices)     return <ServicesDashboard orgSlug={orgSlug} />;
       if (isRetail)       return <RetailDashboard orgSlug={orgSlug} />;
       if (isQuickService) return <QuickServiceDashboard orgSlug={orgSlug} />;
+      if (isHospitality)  return <HospitalityDashboard orgSlug={orgSlug} />;
       return <AdminDashboard orgSlug={orgSlug} />;
     case 'receptionist':
       return <ReceptionistDashboard orgSlug={orgSlug} />;
