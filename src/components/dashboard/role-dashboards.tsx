@@ -294,14 +294,19 @@ export function ReceptionistDashboard({ orgSlug }: { orgSlug: string }) {
  *  since room revenue/occupancy/ADR/RevPAR mean nothing for it). Built around the SAME
  *  hotel-occupancy report /hotel/reports already uses (never a second source of truth for room
  *  revenue/ADR/RevPAR), plus the generic POS order summary — but the F&B/retail section only
- *  renders when this outlet actually sells items (hasModule('new_order') etc., respecting the
- *  SAME outlet-level disabled_modules toggle the sidebar already honors), so a pure-accommodation
- *  property like a guest house sees only what applies to it, while a full-service hotel (rooms +
- *  restaurant + conference + pool) sees all of it. */
+ *  renders when this outlet actually sells items (hasModuleForTenant('new_order') etc., respecting
+ *  the SAME outlet-level disabled_modules toggle the sidebar already honors), so a pure-
+ *  accommodation property like a guest house sees only what applies to it, while a full-service
+ *  hotel (rooms + restaurant + conference + pool) sees all of it — combined into one inclusive
+ *  Total Revenue figure up top, since a hotel that also runs a bar/restaurant earns from both and
+ *  neither the room-only nor the till-only number alone answers "how much did this outlet make."
+ *  Every "…ForTenant" check here (not the plain hasModule/hasFeature the sidebar uses for access
+ *  control) is deliberate: this decides what CONTENT to render, which must reflect the outlet's
+ *  real configuration/plan regardless of viewer, not a platform-owner exemption's inflated view. */
 export function HospitalityDashboard({ orgSlug }: { orgSlug: string }) {
   const { range, preset, setPreset, custom, setCustom } = useDashboardRange();
-  const { hasModule } = useModuleAccess();
-  const { hasFeature } = useSubscription();
+  const { hasModuleForTenant } = useModuleAccess();
+  const { hasFeatureForTenant } = useSubscription();
   const { data: summary, isLoading: summaryLoading, refetch, isFetching } = useDashboardSummary(range);
   const { data: occ, isLoading: occLoading } = useHotelOccupancyReport(range.chartFrom, range.chartTo);
   const s: Partial<NonNullable<typeof summary>> = summary ?? {};
@@ -311,9 +316,18 @@ export function HospitalityDashboard({ orgSlug }: { orgSlug: string }) {
   // Whether this outlet actually sells catalog items through the till (F&B/retail) at all —
   // false for a pure-accommodation property (e.g. new_order/orders/tables/kds all disabled in
   // OutletSetting.metadata.disabled_modules), true for a full-service hotel with a restaurant/bar.
-  const sellsItems = hasModule('new_order') || hasModule('tables') || hasModule('kds') || hasModule('online_orders');
-  const hasFacilities = hasFeature('facility_booking');
-  const hasConferences = hasFeature('conference_events');
+  const sellsItems = hasModuleForTenant('new_order') || hasModuleForTenant('tables') || hasModuleForTenant('kds') || hasModuleForTenant('online_orders');
+  const hasFacilities = hasFeatureForTenant('facility_booking');
+  const hasConferences = hasFeatureForTenant('conference_events');
+
+  // Combined revenue across every source this outlet actually earns from — room charges, till
+  // sales, and folio extras (minibar/laundry/damages) are three genuinely non-overlapping streams
+  // (see the Revenue by Charge Type breakdown below), so summing them client-side is safe and needs
+  // no backend change. total_revenue is POS-order-only by design (GetSummary has other, non-hotel
+  // consumers) and room_revenue/ancillary_revenue come from the hotel occupancy report — this is
+  // the one number that answers "how much did this outlet make," inclusive of all of it.
+  const totalRevenue = (s.total_revenue ?? 0) + (o.room_revenue ?? 0) + (o.ancillary_revenue ?? 0);
+  const revenueLoading = summaryLoading || occLoading;
 
   const breakdown = (o.revenue_by_charge_type ?? []).slice().sort((a, b) => b.amount - a.amount).slice(0, 5);
   const maxAmount = Math.max(1, ...breakdown.map((b) => b.amount));
@@ -335,7 +349,23 @@ export function HospitalityDashboard({ orgSlug }: { orgSlug: string }) {
         </div>
       </div>
 
-      {/* Accommodation KPIs — always the primary block for a hospitality outlet */}
+      {/* Inclusive headline number — rooms + F&B + ancillary combined, so a hotel that also runs a
+          bar/restaurant sees its real total instead of only the room figure below. Always shown:
+          for a pure-accommodation outlet this equals Room Revenue + Ancillary. */}
+      <div className="bg-card border border-border rounded-2xl p-5 flex items-center justify-between gap-4">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Total Revenue</p>
+          <p className="text-2xl font-bold text-foreground mt-1">{revenueLoading ? '—' : fmt(totalRevenue, s.currency)}</p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            {range.compareLabel} · rooms{sellsItems ? ' + F&B' : ''} + ancillary
+          </p>
+        </div>
+        <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+          <TrendingUp className="h-6 w-6 text-primary" />
+        </div>
+      </div>
+
+      {/* Accommodation KPIs — the room-specific breakdown of the total above */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <KPICard label="Room Revenue" value={fmt(o.room_revenue ?? 0, s.currency)} sub={range.compareLabel} icon={BedDouble} loading={occLoading} href={`/${orgSlug}/hotel/reports`} />
         <KPICard label="Occupancy" value={occLoading ? '—' : `${((o.occupancy_rate ?? 0) * 100).toFixed(0)}%`} sub={`${(o.occupied_room_nights ?? 0).toFixed(0)} of ${(o.available_room_nights ?? 0).toFixed(0)} room-nights`} icon={Percent} loading={occLoading} />

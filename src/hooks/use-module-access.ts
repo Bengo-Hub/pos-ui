@@ -186,20 +186,14 @@ export function useModuleAccess() {
   const effectiveDisabledModules = effectiveHidden(posSettings?.disabled_modules, posSettings?.disabled_modules_by_role);
   const effectiveHiddenItems = effectiveHidden(posSettings?.hidden_items, posSettings?.hidden_items_by_role);
 
-  /**
-   * Check if a module is enabled for the current outlet.
-   * Superusers always have access.
-   * Regular users must pass both use-case check AND backend toggle (where applicable).
-   * Returns false when use case hasn't resolved yet (isResolved=false).
-   */
-  function hasModule(moduleKey: string): boolean {
-    // Platform owners / superusers are EXEMPT from a tenant's hide settings — they must always be
-    // able to see every module a tenant hid (support, oversight, config on the tenant's behalf).
-    // Checked before the tenant hide gate below.
-    if (isSuperUser) return true;
-    // Tenant admin turned this whole module off (declutter to only the screens they use). Scoped to
-    // THIS tenant's non-superuser users only (never other tenants, never system-wide) — except CORE
-    // modules (e.g. settings), which can never be hidden or you'd lock yourself out.
+  // The real, un-exempted answer: does THIS outlet actually have moduleKey turned on, ignoring
+  // whether the current viewer happens to be a superuser. hasModule() below layers the superuser
+  // bypass on top of this for access-control purposes (so platform owners can still reach/manage a
+  // module a tenant hid); this raw version is for CONTENT decisions — what a dashboard shows,
+  // which quick actions/stats make sense to render — where the answer must reflect the outlet's
+  // real configuration regardless of who's looking, or a platform owner ends up shown F&B/KDS/etc.
+  // widgets for a pure-accommodation guest house that never turned any of that on.
+  function hasModuleForTenant(moduleKey: string): boolean {
     if (effectiveDisabledModules.has(moduleKey) && !CORE_MODULE_KEYS.has(moduleKey)) return false;
     if (!useCase) return false; // not yet resolved — hide everything
     if (!enabledModules.includes(moduleKey as ModuleKey)) return false;
@@ -215,6 +209,20 @@ export function useModuleAccess() {
       if (moduleKey === 'appointments' && !posSettings.enable_appointments)     return false;
     }
     return true;
+  }
+
+  /**
+   * Check if a module is enabled for the current outlet.
+   * Superusers always have access.
+   * Regular users must pass both use-case check AND backend toggle (where applicable).
+   * Returns false when use case hasn't resolved yet (isResolved=false).
+   */
+  function hasModule(moduleKey: string): boolean {
+    // Platform owners / superusers are EXEMPT from a tenant's hide settings — they must always be
+    // able to see every module a tenant hid (support, oversight, config on the tenant's behalf).
+    // Checked before the tenant hide gate below.
+    if (isSuperUser) return true;
+    return hasModuleForTenant(moduleKey);
   }
 
   return {
@@ -235,6 +243,7 @@ export function useModuleAccess() {
 
     // Module check
     hasModule,
+    hasModuleForTenant,
 
     // Outlet-level sidebar visibility overrides (declutter to only the screens they use). These are
     // the EFFECTIVE sets for the current user (flat tenant-wide lists ∪ per-role lists for the user's
