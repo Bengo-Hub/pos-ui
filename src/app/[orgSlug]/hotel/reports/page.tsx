@@ -12,6 +12,8 @@ import { useState } from 'react';
 import { BedDouble, TrendingUp, Wallet, Percent } from 'lucide-react';
 import { ModuleGate } from '@/components/auth/module-gate';
 import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
+import { FeatureGate } from '@bengo-hub/shared-ui-lib/subscription';
+import { FeatureLocked } from '@/components/auth/feature-locked';
 import { Card, CardContent } from '@/components/ui/base';
 import { DateRangePicker, type DateRange } from '@/components/ui/date-range-picker';
 import { OutletFilter } from '@/components/outlet-filter';
@@ -166,7 +168,9 @@ function HotelReportsPage() {
 export default function HotelReportsPageGated() {
   return (
     <ModuleGate moduleKey="hotel" fallback={<ModuleUnavailablePage moduleKey="hotel" />}>
-      <HotelReportsPage />
+      <FeatureGate feature="hotel_module" fallback={<FeatureLocked feature="hotel_module" label="Hotel & Rooms" />}>
+        <HotelReportsPage />
+      </FeatureGate>
     </ModuleGate>
   );
 }

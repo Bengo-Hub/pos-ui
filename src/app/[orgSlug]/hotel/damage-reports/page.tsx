@@ -2,6 +2,8 @@
 
 import { ModuleGate } from '@/components/auth/module-gate';
 import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
+import { FeatureGate } from '@bengo-hub/shared-ui-lib/subscription';
+import { FeatureLocked } from '@/components/auth/feature-locked';
 import {
   useDamageReports,
   useApproveDamageReport,
@@ -201,7 +203,9 @@ function DamageReportsPage() {
 export default function DamageReportsPageGated() {
   return (
     <ModuleGate moduleKey="hotel" fallback={<ModuleUnavailablePage moduleKey="hotel" />}>
-      <DamageReportsPage />
+      <FeatureGate feature="hotel_module" fallback={<FeatureLocked feature="hotel_module" label="Hotel & Rooms" />}>
+        <DamageReportsPage />
+      </FeatureGate>
     </ModuleGate>
   );
 }

@@ -20,6 +20,8 @@ import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { ModuleGate } from '@/components/auth/module-gate';
 import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
+import { FeatureGate } from '@bengo-hub/shared-ui-lib/subscription';
+import { FeatureLocked } from '@/components/auth/feature-locked';
 import { DataTable } from '@bengo-hub/shared-ui-lib/data-table';
 import { buildReconciliationColumns } from '../reconciliation-columns';
 
@@ -260,7 +262,9 @@ function EventDetailPageInner() {
 export default function EventDetailPage() {
   return (
     <ModuleGate moduleKey="hotel" fallback={<ModuleUnavailablePage moduleKey="hotel" />}>
-      <EventDetailPageInner />
+      <FeatureGate feature="conference_events" fallback={<FeatureLocked feature="conference_events" label="Conferences & Events" />}>
+        <EventDetailPageInner />
+      </FeatureGate>
     </ModuleGate>
   );
 }

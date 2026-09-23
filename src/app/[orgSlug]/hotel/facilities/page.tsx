@@ -2,6 +2,8 @@
 
 import { ModuleGate } from '@/components/auth/module-gate';
 import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
+import { FeatureGate } from '@bengo-hub/shared-ui-lib/subscription';
+import { FeatureLocked } from '@/components/auth/feature-locked';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { FacilityFormModal } from '@/components/hotel/facility-form-modal';
 import {
@@ -264,7 +266,9 @@ function FacilitiesPage() {
 export default function FacilitiesPageGated() {
   return (
     <ModuleGate moduleKey="hotel" fallback={<ModuleUnavailablePage moduleKey="hotel" />}>
-      <FacilitiesPage />
+      <FeatureGate feature="facility_booking" fallback={<FeatureLocked feature="facility_booking" label="Facilities" />}>
+        <FacilitiesPage />
+      </FeatureGate>
     </ModuleGate>
   );
 }

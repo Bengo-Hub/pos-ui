@@ -2,6 +2,8 @@
 
 import { ModuleGate } from '@/components/auth/module-gate';
 import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
+import { FeatureGate } from '@bengo-hub/shared-ui-lib/subscription';
+import { FeatureLocked } from '@/components/auth/feature-locked';
 import {
   useHousekeepingTasks,
   useCreateHousekeepingTask,
@@ -226,7 +228,9 @@ function HousekeepingPage() {
 export default function HousekeepingPageGated() {
   return (
     <ModuleGate moduleKey="hotel" fallback={<ModuleUnavailablePage moduleKey="hotel" />}>
-      <HousekeepingPage />
+      <FeatureGate feature="hotel_module" fallback={<FeatureLocked feature="hotel_module" label="Hotel & Rooms" />}>
+        <HousekeepingPage />
+      </FeatureGate>
     </ModuleGate>
   );
 }

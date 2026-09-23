@@ -162,6 +162,13 @@ export function useSubscription() {
     tierOrder: info?.tierOrder ?? subStore.tierOrder ?? null,
     catalog: subStore.catalog ?? {},
   };
+  // Same entitlement snapshot but WITHOUT the isExempt bypass — for the rare case a caller needs
+  // the tenant's own real plan answer regardless of who's viewing (e.g. deciding which dashboard
+  // variant to render). isExempt exists so platform owners/demo/service-charge tenants can still
+  // NAVIGATE into and manage any feature; it should never make a business's own dashboard/data lie
+  // about what that business is actually entitled to (a platform owner browsing a tenant's outlet
+  // must see the same "no hotel module" reality that tenant sees, not an exempted illusion of it).
+  const realEntitlements: SubscriptionEntitlements = { ...entitlements, isExempt: false };
 
   return {
     info,
@@ -178,6 +185,8 @@ export function useSubscription() {
     isDemo,
     // Tier-aware: unlocked when granted OR at/below the tenant's tier (same family) OR uncatalogued.
     hasFeature: (code: string) => isFeatureUnlocked(entitlements, code),
+    // The tenant's own real entitlement, ignoring any viewer exemption — see realEntitlements above.
+    hasFeatureForTenant: (code: string) => isFeatureUnlocked(realEntitlements, code),
     getLimit: (key: string) =>
       isExempt ? Infinity : ((info?.limits?.[key] ?? subStore.limits?.[key] ?? Infinity) as number),
     daysUntilExpiry: subStore.daysUntilExpiry,

@@ -16,6 +16,8 @@ import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { ModuleGate } from '@/components/auth/module-gate';
 import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
+import { FeatureGate } from '@bengo-hub/shared-ui-lib/subscription';
+import { FeatureLocked } from '@/components/auth/feature-locked';
 
 const inputCls ='mt-1 w-full px-4 py-2.5 rounded-xl border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring';
 
@@ -378,7 +380,9 @@ function BookingsPageInner() {
 export default function BookingsPage() {
   return (
     <ModuleGate moduleKey="hotel" fallback={<ModuleUnavailablePage moduleKey="hotel" />}>
-      <BookingsPageInner />
+      <FeatureGate feature="hotel_module" fallback={<FeatureLocked feature="hotel_module" label="Hotel & Rooms" />}>
+        <BookingsPageInner />
+      </FeatureGate>
     </ModuleGate>
   );
 }

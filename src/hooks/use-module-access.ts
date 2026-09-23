@@ -15,6 +15,7 @@
 import { useAuthStore } from '@/store/auth';
 import { useOutletFilterStore } from '@/store/outlet-filter';
 import { usePOSSettings } from './usePOSSettings';
+import { useSubscription } from './use-subscription';
 import { normalizeUseCase } from '@/lib/use-case-config';
 import { CORE_MODULE_KEYS } from '@/lib/pos/nav-config';
 
@@ -123,6 +124,7 @@ export function useModuleAccess() {
 
   // Outlet-level backend module toggles (staleTime 5min — won't re-fetch on every render)
   const { data: posSettings, isLoading: posSettingsLoading } = usePOSSettings();
+  const { hasFeatureForTenant } = useSubscription();
 
   // ── Resolution state (used by gates to avoid flashing "Module Not Available") ──
   // Three distinct situations when there is no concrete use_case yet:
@@ -150,15 +152,18 @@ export function useModuleAccess() {
   const isServices = useCase === 'services';
   const isQuickService = useCase === 'quick_service';
 
-  // Whether THIS outlet actually runs accommodation (rooms/bookings/folio) — the raw
-  // OutletSetting.hotel_module_enabled flag, deliberately WITHOUT the isSuperUser bypass that
-  // hasModule() applies (that bypass exists so platform owners can still see/manage a tenant's
-  // hidden screens, but here we need the real answer for "does this outlet run a hotel" regardless
-  // of who's viewing — otherwise a platform owner browsing a restaurant-only hospitality outlet
-  // would get shown the room-centric dashboard the tenant itself never sees). Many hospitality
-  // outlets (restaurants, cafes, bars) never enable this even though their use_case is
-  // "hospitality" — the use_case only says which module SET applies, not which are turned on.
-  const hotelModuleEnabled = posSettings?.hotel_module_enabled === true;
+  // Whether THIS outlet actually runs accommodation (rooms/bookings/folio) — requires BOTH the
+  // outlet-level OutletSetting.hotel_module_enabled toggle AND the tenant's subscription actually
+  // including the hotel_module feature. Checking the toggle alone isn't enough: an outlet can have
+  // it switched on (e.g. flipped during setup) while the tenant's plan doesn't include hotel_module
+  // at all — the module page itself still gates on subscription (see ModuleGate+FeatureGate on
+  // /hotel/*), so the main dashboard must reach the same conclusion or it shows a room-revenue KPI
+  // block for an outlet that can't actually use any of it. hasFeatureForTenant (not hasFeature) is
+  // deliberate — it ignores the isSuperUser/platform-owner exemption, because this decision is about
+  // what the OUTLET's real business actually is, not what the current viewer is allowed to see; a
+  // platform owner browsing a restaurant-only hospitality outlet must see the same non-hotel reality
+  // the tenant itself sees, not an exemption-inflated illusion of it.
+  const hotelModuleEnabled = posSettings?.hotel_module_enabled === true && hasFeatureForTenant('hotel_module');
 
   // Enabled modules for the current use case (empty until use case resolves)
   const enabledModules: ModuleKey[] = useCase ? USE_CASE_MODULES[useCase] : [];

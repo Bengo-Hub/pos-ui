@@ -2,6 +2,8 @@
 
 import { ModuleGate } from '@/components/auth/module-gate';
 import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
+import { FeatureGate } from '@bengo-hub/shared-ui-lib/subscription';
+import { FeatureLocked } from '@/components/auth/feature-locked';
 
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
@@ -209,7 +211,9 @@ function HotelPage() {
 export default function HotelPageGated() {
   return (
     <ModuleGate moduleKey="hotel" fallback={<ModuleUnavailablePage moduleKey="hotel" />}>
-      <HotelPage />
+      <FeatureGate feature="hotel_module" fallback={<FeatureLocked feature="hotel_module" label="Hotel & Rooms" />}>
+        <HotelPage />
+      </FeatureGate>
     </ModuleGate>
   );
 }

@@ -2,6 +2,8 @@
 
 import { ModuleGate } from '@/components/auth/module-gate';
 import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
+import { FeatureGate } from '@bengo-hub/shared-ui-lib/subscription';
+import { FeatureLocked } from '@/components/auth/feature-locked';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { cn, formatCurrency, SUPPORTED_CURRENCIES } from '@/lib/utils';
 import { useHotelRooms, useCreateRoom, useUpdateRoom, useDeleteRoom, useInventoryServiceItems, useBatchCheckout } from '@/hooks/useHotel';
@@ -447,7 +449,9 @@ function RoomsPage() {
 export default function RoomsPageGated() {
   return (
     <ModuleGate moduleKey="hotel" fallback={<ModuleUnavailablePage moduleKey="hotel" />}>
-      <RoomsPage />
+      <FeatureGate feature="hotel_module" fallback={<FeatureLocked feature="hotel_module" label="Hotel & Rooms" />}>
+        <RoomsPage />
+      </FeatureGate>
     </ModuleGate>
   );
 }

@@ -24,6 +24,8 @@ import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { ModuleGate } from '@/components/auth/module-gate';
 import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
+import { FeatureGate } from '@bengo-hub/shared-ui-lib/subscription';
+import { FeatureLocked } from '@/components/auth/feature-locked';
 import { CheckoutPanel } from '@/components/pos/hotel/checkout-panel';
 import { DamageReportModal } from '@/components/pos/hotel/damage-report-modal';
 import { EditGuestModal } from '@/components/pos/hotel/edit-guest-modal';
@@ -826,7 +828,9 @@ function Field({ label, value, onChange, placeholder, type = 'text' }: {
 export default function RoomDetailPage() {
   return (
     <ModuleGate moduleKey="hotel" fallback={<ModuleUnavailablePage moduleKey="hotel" />}>
-      <RoomDetailPageInner />
+      <FeatureGate feature="hotel_module" fallback={<FeatureLocked feature="hotel_module" label="Hotel & Rooms" />}>
+        <RoomDetailPageInner />
+      </FeatureGate>
     </ModuleGate>
   );
 }
