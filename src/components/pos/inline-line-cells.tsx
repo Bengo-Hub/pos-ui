@@ -114,6 +114,14 @@ export function InlinePriceCell({ price, preset, canDiscount, onCommit, disabled
   className?: string;
   currency?: string;
 }) {
+  // Defensive: a genuinely-free line (unit_price=0) can arrive as `undefined` instead of 0 —
+  // pos-api's ent-generated JSON tags carry `omitempty` on required numeric fields, so a real
+  // zero value is silently OMITTED from the response object, not serialized as 0 (a resumed/
+  // edit-in-place order with a non-billable line hit this live — crashed the whole page on
+  // `.toLocaleString()`, since `undefined` has no properties). Coalescing here protects every
+  // caller of this shared cell, not just the one that surfaced it.
+  price = price ?? 0;
+  preset = preset ?? 0;
   const overridden = Math.abs(price - preset) > 0.004;
   return (
     <span className={cn('inline-flex flex-col items-end leading-tight', className)}>
@@ -196,6 +204,7 @@ export function InlineDiscountCell({ price, unitDiscount = 0, quantity, editable
   className?: string;
   currency?: string;
 }) {
+  price = price ?? 0; // see InlinePriceCell's comment — a real 0 can arrive as undefined
   const lineDiscount = unitDiscount * quantity;
   const base = price + unitDiscount;
   return (
@@ -238,6 +247,7 @@ export function InlineTotalCell({ price, quantity, canDiscount, onCommitPrice, d
   disabled?: boolean;
   className?: string;
 }) {
+  price = price ?? 0; // see InlinePriceCell's comment — a real 0 can arrive as undefined
   const total = price * quantity;
   return (
     <InlineEditCell

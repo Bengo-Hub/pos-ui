@@ -333,16 +333,25 @@ export default function AddSalePage() {
     setResume({ id: o.id, number: o.order_number, total: Number(o.total_amount) || undefined });
     setServedByUserId(o.served_by_user_id || o.user_id || '');
     setServedByName(o.served_by_name || o.cashier_name || '');
-    setLines((o.edges?.lines ?? []).map((l: any) => ({
-      item: { id: l.catalog_item_id, sku: l.sku, name: l.name, price: l.unit_price, category: '' } as CatalogItem,
-      quantity: l.quantity,
-      unitPrice: l.unit_price,
-      preset: l.unit_price, // the persisted price is the floor reference for non-managers
-      priceEdited: true, // keep the draft's prices — don't let profile switching overwrite them
-      lineId: l.id,
-      savedPrice: l.unit_price,
-      savedQty: l.quantity,
-    })));
+    setLines((o.edges?.lines ?? []).map((l: any) => {
+      // A genuinely-free line (unit_price=0, e.g. a non-billable accompaniment) can arrive with
+      // the key MISSING rather than 0 — pos-api's ent-generated JSON carries `omitempty` on
+      // required numeric fields, so a real zero is silently omitted from the response, not
+      // serialized as 0. `?? 0` here (not just at display time) keeps `undefined` out of cart
+      // state entirely, so later save/submit math never turns a line into NaN. See
+      // InlinePriceCell's own comment for the live crash this caused.
+      const unitPrice = l.unit_price ?? 0;
+      return {
+        item: { id: l.catalog_item_id, sku: l.sku, name: l.name, price: unitPrice, category: '' } as CatalogItem,
+        quantity: l.quantity,
+        unitPrice,
+        preset: unitPrice, // the persisted price is the floor reference for non-managers
+        priceEdited: true, // keep the draft's prices — don't let profile switching overwrite them
+        lineId: l.id,
+        savedPrice: unitPrice,
+        savedQty: l.quantity,
+      };
+    }));
     originalLineIdsRef.current = new Set((o.edges?.lines ?? []).map((l: any) => l.id));
     setDiscount(Number(o.discount_total) || 0);
     setSavedDiscount(Number(o.discount_total) || 0);
@@ -391,16 +400,22 @@ export default function AddSalePage() {
     // (remaining <= 0) drops out of the cart. Getting this wrong is what silently deleted a
     // never-touched unit live on order #000141 — see order-lines.ts's doc comment.
     const activeLines = (o.edges?.lines ?? []).filter((l: any) => isLineActive(l));
-    setLines(activeLines.map((l: any) => ({
-      item: { id: l.catalog_item_id, sku: l.sku, name: l.name, price: l.unit_price, category: '' } as CatalogItem,
-      quantity: remainingLineQty(l),
-      unitPrice: l.unit_price,
-      preset: l.unit_price,
-      priceEdited: true,
-      lineId: l.id,
-      savedPrice: l.unit_price,
-      savedQty: remainingLineQty(l),
-    })));
+    setLines(activeLines.map((l: any) => {
+      // See the resume-hydration effect above: a real unit_price=0 line (non-billable) can
+      // arrive with the key missing rather than 0 (pos-api's ent JSON omits a zero-valued
+      // required numeric field) — `?? 0` keeps undefined out of cart state entirely.
+      const unitPrice = l.unit_price ?? 0;
+      return {
+        item: { id: l.catalog_item_id, sku: l.sku, name: l.name, price: unitPrice, category: '' } as CatalogItem,
+        quantity: remainingLineQty(l),
+        unitPrice,
+        preset: unitPrice,
+        priceEdited: true,
+        lineId: l.id,
+        savedPrice: unitPrice,
+        savedQty: remainingLineQty(l),
+      };
+    }));
     if (o.customer_name || o.customer_phone) {
       setCustomer({ name: o.customer_name ?? '', phone: o.customer_phone ?? '', isWalkIn: !o.customer_phone } as SelectedCustomer);
     }
