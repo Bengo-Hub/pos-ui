@@ -288,15 +288,16 @@ export function ReceptionistDashboard({ orgSlug }: { orgSlug: string }) {
   );
 }
 
-/** Admin/manager dashboard for hospitality outlets — replaces the generic AdminDashboard, which
- *  falls through to a retail-flavored "New Order" CTA + item-category charts that mean nothing
- *  for a pure-accommodation property (revenue comes from room bookings, not menu sales). Built
- *  around the SAME hotel-occupancy report /hotel/reports already uses (never a second source of
- *  truth for room revenue/ADR/RevPAR), plus the generic POS order summary — but the F&B/retail
- *  section only renders when this outlet actually sells items (hasModule('new_order') etc.,
- *  respecting the SAME outlet-level disabled_modules toggle the sidebar already honors), so a
- *  pure-accommodation property like a guest house sees only what applies to it, while a
- *  full-service hotel (rooms + restaurant + conference + pool) sees all of it. */
+/** Admin/manager dashboard for hospitality outlets that actually run the hotel/rooms module
+ *  (gated by hotelModuleEnabled in dashboard/page.tsx — a hospitality outlet that's restaurant/
+ *  bar/cafe-only, with the hotel module never turned on, gets the generic AdminDashboard instead,
+ *  since room revenue/occupancy/ADR/RevPAR mean nothing for it). Built around the SAME
+ *  hotel-occupancy report /hotel/reports already uses (never a second source of truth for room
+ *  revenue/ADR/RevPAR), plus the generic POS order summary — but the F&B/retail section only
+ *  renders when this outlet actually sells items (hasModule('new_order') etc., respecting the
+ *  SAME outlet-level disabled_modules toggle the sidebar already honors), so a pure-accommodation
+ *  property like a guest house sees only what applies to it, while a full-service hotel (rooms +
+ *  restaurant + conference + pool) sees all of it. */
 export function HospitalityDashboard({ orgSlug }: { orgSlug: string }) {
   const { range, preset, setPreset, custom, setCustom } = useDashboardRange();
   const { hasModule } = useModuleAccess();

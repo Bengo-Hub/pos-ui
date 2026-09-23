@@ -150,6 +150,16 @@ export function useModuleAccess() {
   const isServices = useCase === 'services';
   const isQuickService = useCase === 'quick_service';
 
+  // Whether THIS outlet actually runs accommodation (rooms/bookings/folio) — the raw
+  // OutletSetting.hotel_module_enabled flag, deliberately WITHOUT the isSuperUser bypass that
+  // hasModule() applies (that bypass exists so platform owners can still see/manage a tenant's
+  // hidden screens, but here we need the real answer for "does this outlet run a hotel" regardless
+  // of who's viewing — otherwise a platform owner browsing a restaurant-only hospitality outlet
+  // would get shown the room-centric dashboard the tenant itself never sees). Many hospitality
+  // outlets (restaurants, cafes, bars) never enable this even though their use_case is
+  // "hospitality" — the use_case only says which module SET applies, not which are turned on.
+  const hotelModuleEnabled = posSettings?.hotel_module_enabled === true;
+
   // Enabled modules for the current use case (empty until use case resolves)
   const enabledModules: ModuleKey[] = useCase ? USE_CASE_MODULES[useCase] : [];
 
@@ -216,6 +226,7 @@ export function useModuleAccess() {
     isRetail,
     isServices,
     isQuickService,
+    hotelModuleEnabled,
 
     // Module check
     hasModule,
