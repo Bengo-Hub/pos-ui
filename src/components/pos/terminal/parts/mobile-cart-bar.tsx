@@ -1,9 +1,10 @@
 'use client';
 
 /**
- * MobileCartBar — the floating "View Cart" pill shown below `lg` while the cashier is browsing the
+ * MobileCartBar — the floating "View Cart" pill shown below `md` while the cashier is browsing the
  * catalog with items already in the cart (terminal-shell hides it whenever the cart is empty or
- * the cart sheet is already open, and hides on lg+ where the cart is a permanent side panel).
+ * the cart sheet is already open, and hides from md+ where the cart is a permanent side panel —
+ * tablet and up get the split view, only phones use this toggle).
  * Completes the `cartOpen`/`setCartOpen` state terminal-context.tsx already scaffolds — see
  * terminal-shell.tsx for how the two panels swap on tap.
  *
@@ -46,7 +47,7 @@ export function MobileCartBar() {
       type="button"
       onClick={() => t.setCartOpen(true)}
       className={cn(
-        'lg:hidden fixed left-3 right-3 z-40 flex items-center justify-between gap-3 rounded-2xl bg-primary text-primary-foreground px-4 py-3 shadow-lg transition-transform motion-reduce:transition-none',
+        'md:hidden fixed left-3 right-3 z-40 flex items-center justify-between gap-3 rounded-2xl bg-primary text-primary-foreground px-4 py-3 shadow-lg transition-transform motion-reduce:transition-none',
         'bottom-[calc(0.75rem_+_env(safe-area-inset-bottom))]',
         pulse && 'scale-[1.02]',
       )}

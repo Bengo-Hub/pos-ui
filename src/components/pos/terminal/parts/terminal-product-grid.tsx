@@ -3,6 +3,13 @@
 /**
  * Terminal product grid — the catalog browsing area (list / image-grid / card display modes) plus
  * pagination. Extracted verbatim from the monolith order page; reads everything from useTerminal().
+ *
+ * The card/image-grid column counts use CONTAINER queries (`@md:`/`@xl:`), not viewport ones —
+ * terminal-shell.tsx marks this component's parent `@container` because, from tablet width up,
+ * this panel only occupies ~42% of the viewport (split view with the cart alongside it), not the
+ * full width a viewport-based `sm:`/`lg:` breakpoint would assume. A container query reflows off
+ * this panel's REAL rendered width regardless of the split ratio or which breakpoint tier put it
+ * there, so the grid never overcrowds a narrow column the way a viewport-based one would.
  */
 
 import { StockBadge } from '@/components/retail/StockBadge';
@@ -33,7 +40,7 @@ function TerminalGridSkeleton({ displayMode }: { displayMode: 'card' | 'list' | 
   }
   if (displayMode === 'image_grid') {
     return (
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 @md:grid-cols-3 @xl:grid-cols-4 gap-3">
         {Array.from({ length: 8 }, (_, i) => (
           <div key={i} className="rounded-2xl border-2 border-border overflow-hidden">
             <Skeleton className="aspect-square rounded-none" />
@@ -47,7 +54,7 @@ function TerminalGridSkeleton({ displayMode }: { displayMode: 'card' | 'list' | 
     );
   }
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+    <div className="grid grid-cols-2 @md:grid-cols-3 @xl:grid-cols-4 gap-3">
       {Array.from({ length: 8 }, (_, i) => (
         <div key={i} className="flex flex-col gap-3 p-4 rounded-2xl border-2 border-border min-h-30">
           <Skeleton className="h-4 w-3/4" />
@@ -179,7 +186,7 @@ export function TerminalProductGrid() {
           </div>
         ) : displayMode === 'image_grid' ? (
           /* ─── IMAGE GRID MODE ─── */
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 @md:grid-cols-3 @xl:grid-cols-4 gap-3">
             {filteredItems.map((item) => {
               const inCart = cart.find((c) => c.id === item.id && !c.selectedModifiers);
               return (
@@ -245,7 +252,7 @@ export function TerminalProductGrid() {
           </div>
         ) : (
           /* ─── CARD MODE (default) — 2-col portrait → 5-col wide desktop ─── */
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 @md:grid-cols-3 @xl:grid-cols-4 gap-3">
             {filteredItems.map((item) => {
               const inCart = cart.find((c) => c.id === item.id && !c.selectedModifiers);
               return (

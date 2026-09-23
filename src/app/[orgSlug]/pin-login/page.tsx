@@ -702,42 +702,49 @@ export default function PINLoginPage() {
               )}
             </div>
 
-            {/* ── SMALL SCREENS (< lg): single active keyboard + toggle ── */}
-            <div className="flex-1 min-h-0 flex flex-col gap-4 lg:hidden overflow-y-auto">
-              <PinLoginSSOButton onClick={goSSO} />
-              <div className="flex flex-col gap-3 rounded-2xl bg-muted/40 border border-border p-2.5 sm:p-4">
-                <div className="flex items-center justify-center gap-2 text-muted-foreground">
-                  <KeyRound className="h-3.5 w-3.5" />
-                  <span className="text-[11px] font-semibold uppercase tracking-[0.18em]">
-                    {keyboardMode === 'numeric' ? 'Enter PIN' : 'Enter passcode'}
-                  </span>
-                </div>
-                {keyboardMode === 'numeric' ? (
-                  <div className="mx-auto w-full max-w-xs">
-                    <PinKeypad
-                      onDigit={handleDigit}
-                      onBackspace={handleBackspace}
-                      onClear={handleClear}
-                      onToggleQwerty={() => setKeyboardMode('qwerty')}
-                      disabled={loginMutation.isPending}
-                      isSubmitting={loginMutation.isPending}
-                      digitsLength={pinDigits.length}
-                      pinLength={PIN_LENGTH}
-                    />
+            {/* ── SMALL SCREENS (< lg, phone AND tablet): single active keyboard + toggle ──
+                On a tall tablet viewport (e.g. iPad portrait) this column previously top-aligned
+                inside its flex-1 slot, leaving a large dead gap below the keypad — `m-auto` on the
+                inner wrapper centers it both ways (the flex container's only other axis-filling
+                child), and the max-w-md cap keeps the SSO button + keypad card a well-proportioned
+                block instead of stretching edge-to-edge across a much wider tablet card panel. */}
+            <div className="flex-1 min-h-0 flex flex-col lg:hidden overflow-y-auto">
+              <div className="m-auto w-full max-w-md flex flex-col gap-4 py-3">
+                <PinLoginSSOButton onClick={goSSO} />
+                <div className="flex flex-col gap-3 rounded-2xl bg-muted/40 border border-border p-3 sm:p-5">
+                  <div className="flex items-center justify-center gap-2 text-muted-foreground">
+                    <KeyRound className="h-3.5 w-3.5" />
+                    <span className="text-[11px] font-semibold uppercase tracking-[0.18em]">
+                      {keyboardMode === 'numeric' ? 'Enter PIN' : 'Enter passcode'}
+                    </span>
                   </div>
-                ) : (
-                  <QwertyKeyboard
-                    onKey={handleKey}
-                    onBackspace={handleBackspace}
-                    onEnter={() => submitPasscode()}
-                    shift={shift}
-                    onToggleShift={() => setShift((s) => !s)}
-                    onToggleNumeric={() => setKeyboardMode('numeric')}
-                    disabled={loginMutation.isPending}
-                  />
-                )}
-                <BiometricButton />
-                {biometricError && <p className="text-center text-xs text-destructive">{biometricError}</p>}
+                  {keyboardMode === 'numeric' ? (
+                    <div className="mx-auto w-full max-w-xs sm:max-w-sm">
+                      <PinKeypad
+                        onDigit={handleDigit}
+                        onBackspace={handleBackspace}
+                        onClear={handleClear}
+                        onToggleQwerty={() => setKeyboardMode('qwerty')}
+                        disabled={loginMutation.isPending}
+                        isSubmitting={loginMutation.isPending}
+                        digitsLength={pinDigits.length}
+                        pinLength={PIN_LENGTH}
+                      />
+                    </div>
+                  ) : (
+                    <QwertyKeyboard
+                      onKey={handleKey}
+                      onBackspace={handleBackspace}
+                      onEnter={() => submitPasscode()}
+                      shift={shift}
+                      onToggleShift={() => setShift((s) => !s)}
+                      onToggleNumeric={() => setKeyboardMode('numeric')}
+                      disabled={loginMutation.isPending}
+                    />
+                  )}
+                  <BiometricButton />
+                  {biometricError && <p className="text-center text-xs text-destructive">{biometricError}</p>}
+                </div>
               </div>
             </div>
 

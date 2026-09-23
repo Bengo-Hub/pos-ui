@@ -373,10 +373,15 @@ export function Header({ onMenuClick, onToggleSidebar, sidebarCollapsed }: Heade
             <PanelLeft className={cn('h-5 w-5 transition-colors', sidebarCollapsed ? 'text-primary' : 'text-slate-500')} />
           </button>
         )}
-        <div className="flex items-center gap-6 min-w-0">
+        <div className="flex items-center gap-3 sm:gap-6 min-w-0">
             {/* Hidden below sm: on the narrowest phones the hamburger + outlet chip already
-                fill the row; adding the brand title crowded them into an overlapping mess. */}
-            <h1 className="hidden sm:block text-lg sm:text-xl font-black tracking-tight text-foreground uppercase truncate max-w-none shrink-0">
+                fill the row; adding the brand title crowded them into an overlapping mess.
+                `truncate` needs an actual bound to do anything — `max-w-none` used to defeat it
+                outright, so on tablet (where the outlet chip below already claims real width) the
+                title had no cap and could contend with its sibling for the same space instead of
+                yielding to it. The outlet chip is the more load-bearing of the two (it answers
+                "which outlet am I in"), so the title concedes width first. */}
+            <h1 className="hidden sm:block text-lg sm:text-xl font-black tracking-tight text-foreground uppercase truncate max-w-28 md:max-w-44 lg:max-w-none shrink-0">
                 {getServiceTitle('POS')}
             </h1>
             <div className="hidden lg:flex relative w-64 max-w-full group shrink-0">

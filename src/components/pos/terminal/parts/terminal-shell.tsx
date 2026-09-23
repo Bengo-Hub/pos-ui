@@ -13,13 +13,25 @@
  * All state/handlers come from useTerminal(); per-use-case differences are driven by cfg
  * (terminalConfigFor) exactly as before, so behaviour is unchanged — only the layout is GoDigital.
  *
- * Mobile (<lg): the order builder + payment bar render as a TRUE fixed-overlay drawer (same
+ * Phone (<md, ~768px): the order builder + payment bar render as a TRUE fixed-overlay drawer (same
  * `fixed inset-0 z-50` pattern as CategoryBrandDrawer), not an in-flow panel swap — this decouples
  * the cart from the shell's own flex/grid height chain entirely, so it always gets the full
  * viewport rather than whatever's left over after the product grid/toolbar. The drawer covers the
  * top icon toolbar (Add Expense/Repair/Register etc. — not needed mid-checkout) but keeps the
  * product search + pricing-profile row, since that's how a cashier keeps adding/re-pricing items
  * while reviewing the cart, not just a catalog-browsing control.
+ *
+ * Tablet+ (md and up, ~768px+): the split view kicks in one tier earlier than it used to (was
+ * lg/1024px) — a portrait tablet (e.g. iPad Air at 820px) has plenty of width for cart + catalog
+ * side by side, and forcing it through the phone-style full-screen drawer toggle left a 1-item
+ * cart with a large dead gap before the payment bar (it always occupied the full viewport height
+ * regardless of content). The cart's own TABLE-vs-CARDS rendering (see cartMinWidth below) stays
+ * gated at lg — a data table needs more than a ~58%-of-768px column can comfortably give it, so
+ * tablet gets the same card list phones use, just alongside the catalog instead of behind a toggle.
+ * The catalog grid itself is a `@container` (Tailwind v4) so its own column count reflows off its
+ * REAL rendered width (roughly 42% of the viewport once split), not the full viewport width — a
+ * naive viewport-based `sm:`/`lg:` breakpoint there would keep demanding 3-4 columns inside a
+ * panel that's now much narrower than a full mobile/desktop screen, overcrowding the cards.
  */
 
 import { useState } from 'react';
@@ -90,8 +102,11 @@ export function TerminalShell() {
         ? 'grid-cols-[minmax(0,1fr)_4rem_6.5rem_4.5rem_3.5rem_4rem_5rem_5.5rem]'
         : 'grid-cols-[minmax(0,1fr)_4rem_6.5rem_4.5rem_3.5rem_5rem_5.5rem]')
     : 'grid-cols-[minmax(0,1fr)_4rem_6.5rem_5rem_5.5rem]';
-  // The table variant is lg+-only now (mobile gets a card list instead — see cartMinWidth's
-  // sibling below). lg+ already fits comfortably in the 58% left column.
+  // The table variant is lg+-only (phone AND tablet get the card list instead — see cartMinWidth's
+  // sibling below). This is intentionally a HIGHER breakpoint than the md: split-view trigger below:
+  // a fixed-column data table needs more room than a ~58%-of-tablet-width column can comfortably
+  // give it, so tablet's split view still renders the cart as cards, only upgrading to the table
+  // once there's genuine desktop width (lg+) to spare.
   const cartMinWidth = canViewCost
     ? (showDiscountCol ? 'min-w-[48rem] lg:min-w-0' : 'min-w-[44rem] lg:min-w-0')
     : 'min-w-[34rem] lg:min-w-0';
@@ -665,25 +680,28 @@ export function TerminalShell() {
         />
       </div>
 
-      {/* ─────────── 2. BODY: order builder (left, lg+ only) + product picker (right) ───────────
-          On lg+ a fixed two-column grid (58% / 42%) keeps the split robust — both panels stay
-          visible at once. Below lg the grid holds ONLY the catalog — the cart is a full-viewport
-          drawer (see #2b below), so it's never squeezed by, or fighting for space with, the
-          catalog/toolbar/payment bar. */}
-      <div className="flex-1 grid grid-rows-1 lg:grid-rows-none lg:grid-cols-[58%_42%] min-h-0 overflow-hidden">
+      {/* ─────────── 2. BODY: order builder (left, md+ only) + product picker (right) ───────────
+          From md+ (tablet and up) a fixed two-column grid (58% / 42%) keeps the split robust — both
+          panels stay visible at once. Below md the grid holds ONLY the catalog — the cart is a
+          full-viewport drawer (see #2b below), so it's never squeezed by, or fighting for space
+          with, the catalog/toolbar/payment bar. */}
+      <div className="flex-1 grid grid-rows-1 md:grid-rows-none md:grid-cols-[58%_42%] min-h-0 overflow-hidden">
 
-        {/* ===== LEFT: ORDER BUILDER (cart) — lg+ only; mobile uses the drawer below instead ===== */}
-        <div className="hidden min-h-0 overflow-hidden lg:flex lg:flex-col lg:border-r border-border">
+        {/* ===== LEFT: ORDER BUILDER (cart) — md+ only; phone uses the drawer below instead ===== */}
+        <div className="hidden min-h-0 overflow-hidden md:flex md:flex-col md:border-r border-border">
           {renderOrderBuilder()}
         </div>
 
-        {/* ===== RIGHT: PRODUCT PICKER (Category/Brands tabs + grid) — always the mobile view;
-            a permanent side panel on lg+ ===== */}
-        <div className="flex flex-col min-h-0 overflow-hidden bg-card/30">
-          {/* Mobile-only quick search — sits above the catalog so a search doesn't require first
+        {/* ===== RIGHT: PRODUCT PICKER (Category/Brands tabs + grid) — always the phone view;
+            a permanent side panel from md+. `@container` lets TerminalProductGrid's own grid-cols
+            react to THIS panel's real width (≈42% of viewport once split) instead of the viewport
+            itself — see the file header comment for why a viewport-based breakpoint overcrowds it
+            here. ===== */}
+        <div className="@container flex flex-col min-h-0 overflow-hidden bg-card/30">
+          {/* Phone-only quick search — sits above the catalog so a search doesn't require first
               opening the cart drawer (previously the ONLY place a search field existed on phone,
               forcing open-cart → search → back-to-catalog just to look an item up mid-browse). */}
-          <div className="lg:hidden shrink-0 px-3 pt-2.5 pb-1 border-b border-border">
+          <div className="md:hidden shrink-0 px-3 pt-2.5 pb-1 border-b border-border">
             {renderSearchInput(false)}
           </div>
           <div className="shrink-0 px-3 py-2.5 flex items-center gap-2 border-b border-border">
@@ -733,18 +751,18 @@ export function TerminalShell() {
         </div>
       </div>
 
-      {/* Mobile-only "View Cart" pill — shown while browsing (cartOpen=false) whenever the cart
-          has items; hidden once the drawer is open (below) or on lg+ (permanent side panel). */}
+      {/* Phone-only "View Cart" pill — shown while browsing (cartOpen=false) whenever the cart
+          has items; hidden once the drawer is open (below) or from md+ (permanent side panel). */}
       {!t.cartOpen && <MobileCartBar />}
 
-      {/* ─────────── 2b. MOBILE CART DRAWER — a TRUE fixed-viewport overlay (matches
+      {/* ─────────── 2b. PHONE CART DRAWER — a TRUE fixed-viewport overlay (matches
           CategoryBrandDrawer's `fixed inset-0 z-50` pattern exactly), not an in-flow panel. This
           is what makes "cart squeezed" impossible: it owns the full viewport, independent of the
           toolbar/product-grid/payment-bar heights beneath it. The top icon toolbar and catalog
           grid are covered (not relevant mid-checkout); the search + pricing-profile row stays,
           since it's how items keep getting added/re-priced while the cart is under review. ────── */}
       {!t.isAddToBill && (
-        <div className={cn('lg:hidden fixed inset-0 z-50 flex-col bg-background', t.cartOpen ? 'flex' : 'hidden')}>
+        <div className={cn('md:hidden fixed inset-0 z-50 flex-col bg-background', t.cartOpen ? 'flex' : 'hidden')}>
           <div className="shrink-0 flex items-center gap-2 px-3 py-2.5 border-b border-border bg-card">
             <button
               type="button"
@@ -763,17 +781,17 @@ export function TerminalShell() {
         </div>
       )}
 
-      {/* Add-to-Bill (hospitality waiter flow): a slim sticky bar, always visible on mobile
+      {/* Add-to-Bill (hospitality waiter flow): a slim sticky bar, always visible below md
           regardless of cartOpen — a waiter tapping several menu items still needs to submit
           without an extra "open cart" tap. */}
       {t.isAddToBill && (
-        <div className="lg:hidden shrink-0 border-t border-border bg-card pb-[env(safe-area-inset-bottom)]">
+        <div className="md:hidden shrink-0 border-t border-border bg-card pb-[env(safe-area-inset-bottom)]">
           {renderAddToBill()}
         </div>
       )}
 
-      {/* ─────────── 3. BOTTOM ACTION BAR (lg+ only — mobile uses the drawer/slim-bar above) ─── */}
-      <div className="hidden lg:block shrink-0 border-t border-border bg-card">
+      {/* ─────────── 3. BOTTOM ACTION BAR (md+ only — phone uses the drawer/slim-bar above) ─── */}
+      <div className="hidden md:block shrink-0 border-t border-border bg-card">
         {t.isAddToBill ? renderAddToBill() : renderPaymentBar()}
       </div>
 
