@@ -78,7 +78,9 @@ const USE_CASE_MODULES: Record<UseCaseType, ModuleKey[]> = {
   // (2026-09-19) — a prior session had made it available to every use case, reversed here.
   hospitality:   [...COMMON_MODULES, 'bar', 'tables', 'reservations', 'kds', 'appointments', 'packages', 'hotel', 'shifts', 'reports', 'online_orders'],
   retail:        [...COMMON_MODULES, 'retail', 'shifts', 'reports', 'layaway', 'loyalty', 'commissions', 'online_orders', 'returns', 'clients', 'repairs'],
-  services:      [...COMMON_MODULES, 'appointments', 'packages', 'shifts', 'reports', 'loyalty', 'commissions', 'clients', 'staff_schedule', 'resources', 'queue'],
+  // online_orders: a services business (printing shop, garage, salon selling products) also gets
+  // online pickup/delivery orders; online service bookings land in Appointments.
+  services:      [...COMMON_MODULES, 'appointments', 'packages', 'shifts', 'reports', 'loyalty', 'commissions', 'clients', 'staff_schedule', 'resources', 'queue', 'online_orders'],
   quick_service: [...COMMON_MODULES, 'kds', 'shifts', 'reports', 'online_orders'],
 };
 

@@ -33,7 +33,12 @@ export interface KDSTicketItem {
   line_id: string;
   sku: string;
   name: string;
-  qty: number;
+  /** pos-api stores `quantity`; `qty` is kept for older tickets/clients. */
+  quantity?: number;
+  qty?: number;
+  /** Selected modifiers ("Milk: Oat", "No onions") and free-text notes for this plate. */
+  modifiers?: string[];
+  notes?: string;
   kds_status?: string;
 }
 
@@ -49,6 +54,8 @@ export interface KDSTicket {
   order_label?: string;
   /** dine_in | takeaway | delivery | room_service | bar_tab — drives the order-type filter */
   order_subtype?: string;
+  /** Customer notes for the whole order (online orders). */
+  order_notes?: string;
   items: KDSTicketItem[];
   received_at: string;
   started_at?: string;

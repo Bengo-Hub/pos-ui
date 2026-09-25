@@ -187,15 +187,28 @@ function TicketCard({ ticket }: { ticket: KDSTicket }) {
       {/* Divider */}
       <div className="h-px bg-border/50 mx-4" />
 
+      {ticket.order_notes && (
+        <p className="mx-4 mt-3 rounded-lg bg-amber-500/15 px-3 py-2 text-xs font-semibold text-amber-300">
+          Note: {ticket.order_notes}
+        </p>
+      )}
+
       {/* Item list */}
       <ul className="flex-1 px-4 py-3 space-y-2">
         {ticket.items.map((item, idx) => (
           <li key={item.line_id ?? idx} className="flex items-start gap-2">
             <ItemDot />
             <span className="font-bold text-foreground text-sm leading-none pt-0.5 shrink-0">
-              {item.qty}×
+              {item.quantity ?? item.qty ?? 1}×
             </span>
-            <span className="text-foreground/80 text-sm leading-tight">{item.name}</span>
+            <span className="text-foreground/80 text-sm leading-tight">
+              {item.name}
+              {(item.modifiers?.length || item.notes) && (
+                <span className="mt-0.5 block text-xs font-semibold text-amber-300">
+                  {[item.modifiers?.join(', '), item.notes].filter(Boolean).join(' | ')}
+                </span>
+              )}
+            </span>
           </li>
         ))}
       </ul>
