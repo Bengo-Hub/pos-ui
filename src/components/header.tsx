@@ -382,7 +382,7 @@ export function Header({ onMenuClick, onToggleSidebar, sidebarCollapsed }: Heade
                 yielding to it. The outlet chip is the more load-bearing of the two (it answers
                 "which outlet am I in"), so the title concedes width first. */}
             <h1 className="hidden sm:block text-lg sm:text-xl font-black tracking-tight text-foreground uppercase truncate max-w-28 md:max-w-44 lg:max-w-none shrink-0">
-                {getServiceTitle('POS')}
+                {getServiceTitle('POS', 'pos')}
             </h1>
             <div className="hidden lg:flex relative w-64 max-w-full group shrink-0">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 group-focus-within:text-primary transition-colors" />
