@@ -14,10 +14,18 @@ import {
 import { Button } from '@/components/ui/button';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { cn, formatCurrency } from '@/lib/utils';
-import { amountDue, isDeliveryOrder, isOnlineOrder, isOrderPaid, type PickupOrder } from '@/lib/api/online-orders';
+import {
+  amountDue,
+  isDeliveryOrder,
+  isOnlineOrder,
+  isOrderPaid,
+  needsCollectionCode,
+  type PickupOrder,
+} from '@/lib/api/online-orders';
 import { useOnlineOrderActions } from '@/hooks/useOnlineOrders';
 
 const MPESA_CODE = /^[A-Z0-9]{10}$/;
+const COLLECTION_CODE = /^\d{6}$/;
 const cleanCode = (v: string) => v.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10);
 
 interface DialogProps {
@@ -35,20 +43,33 @@ export function HandoverDialog({ order, currency, onClose }: DialogProps) {
   const { markCollected } = useOnlineOrderActions();
   const [method, setMethod] = useState<'cash' | 'mpesa'>('cash');
   const [code, setCode] = useState('');
+  const [collectionCode, setCollectionCode] = useState('');
+  const [noCode, setNoCode] = useState(false);
+  const [noCodeReason, setNoCodeReason] = useState('');
   if (!order) return null;
 
   const online = isOnlineOrder(order);
   const paid = isOrderPaid(order);
   const collect = online && !paid;
   const delivery = isDeliveryOrder(order);
+  const askCode = needsCollectionCode(order);
   const due = amountDue(order);
-  const canSubmit = !collect || method === 'cash' || MPESA_CODE.test(code);
+  const codeOk = !askCode || (noCode ? noCodeReason.trim().length >= 3 : COLLECTION_CODE.test(collectionCode));
+  const canSubmit = codeOk && (!collect || method === 'cash' || MPESA_CODE.test(code));
 
   const submit = () => {
+    const handover = askCode
+      ? noCode
+        ? { no_code_reason: noCodeReason.trim() }
+        : { collection_code: collectionCode }
+      : {};
     markCollected.mutate(
       {
         orderID: order.id,
-        body: collect ? { cash_collected: true, payment_method: method, reference: method === 'mpesa' ? code : undefined } : {},
+        body: {
+          ...handover,
+          ...(collect ? { cash_collected: true, payment_method: method, reference: method === 'mpesa' ? code : undefined } : {}),
+        },
       },
       {
         onSuccess: () => {
@@ -70,9 +91,48 @@ export function HandoverDialog({ order, currency, onClose }: DialogProps) {
               ? `Collect ${formatCurrency(due, currency)} before releasing the order.`
               : delivery
                 ? 'Confirm your delivery staff handed the order to the customer.'
-                : 'Confirm the customer has collected the order. Check the name or order number first.'}
+                : askCode
+                  ? 'Ask the customer for the collection code on their order page or message.'
+                  : 'Confirm the customer has collected the order. Check the name or order number first.'}
           </DialogDescription>
         </DialogHeader>
+
+        {askCode && (
+          <div className="space-y-2">
+            {!noCode ? (
+              <div>
+                <label className="text-xs font-semibold uppercase text-muted-foreground">Collection code</label>
+                <input
+                  value={collectionCode}
+                  onChange={(e) => setCollectionCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  inputMode="numeric"
+                  autoFocus
+                  placeholder="6 digits"
+                  className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-center text-lg font-bold tracking-[0.4em]"
+                />
+              </div>
+            ) : (
+              <div>
+                <label className="text-xs font-semibold uppercase text-muted-foreground">How did you check the customer?</label>
+                <input
+                  value={noCodeReason}
+                  onChange={(e) => setNoCodeReason(e.target.value.slice(0, 200))}
+                  autoFocus
+                  placeholder="e.g. phone dead, checked name and phone number"
+                  className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
+                />
+                <p className="mt-1 text-xs text-muted-foreground">This is saved on the order.</p>
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={() => setNoCode((v) => !v)}
+              className="text-xs font-semibold text-primary underline-offset-2 hover:underline"
+            >
+              {noCode ? 'Customer has the code' : 'Customer does not have the code'}
+            </button>
+          </div>
+        )}
 
         {collect && (
           <div className="space-y-3">

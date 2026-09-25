@@ -52,6 +52,10 @@ export interface CollectPayload {
   payment_method?: 'cash' | 'mpesa' | 'card';
   /** M-Pesa code when the customer paid the counter or delivery staff by M-Pesa. */
   reference?: string;
+  /** 6-digit code the pickup customer shows at the counter. */
+  collection_code?: string;
+  /** Why the order was handed over without the code (recorded on the order). */
+  no_code_reason?: string;
 }
 
 function onlineBase(tenantID: string) {
@@ -117,6 +121,9 @@ export const isOnlineOrder = (o: PickupOrder) => !!o.metadata?.online_order_id;
 export const isDeliveryOrder = (o: PickupOrder) =>
   o.order_subtype === 'delivery' || o.metadata?.fulfillment_type === 'delivery';
 export const isManualMpesa = (o: PickupOrder) => o.metadata?.payment_channel === 'mpesa_manual';
+/** A pickup order whose customer must show a collection code. Only its hash is on the order
+ *  (metadata.collection_code_hash); the POS never displays the code itself. */
+export const needsCollectionCode = (o: PickupOrder) => !!o.metadata?.collection_code_hash && !isDeliveryOrder(o);
 /** Waiting for staff to accept it (manual acceptance). A scheduled order accepted early keeps this
  *  status until its prep window but carries metadata.accepted_at. */
 export const isAwaitingAcceptance = (o: PickupOrder) => o.status === 'awaiting_acceptance';
