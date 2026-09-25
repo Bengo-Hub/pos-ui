@@ -8,8 +8,8 @@ import {
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { cn, formatCurrency } from '@/lib/utils';
 import {
-  amountDue, isDeliveryOrder, isManualMpesa, isOnlineOrder, isOrderPaid, isOrderReady,
-  type PickupOrder, type QueueOrderLine,
+  amountDue, isAcceptedForLater, isAwaitingAcceptance, isDeliveryOrder, isManualMpesa, isOnlineOrder,
+  isOrderPaid, isOrderReady, type PickupOrder, type QueueOrderLine,
 } from '@/lib/api/online-orders';
 import { useOnlineOrderActions } from '@/hooks/useOnlineOrders';
 import { usePermissions, P } from '@/hooks/usePermissions';
@@ -121,18 +121,27 @@ const btn = 'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semib
  */
 export function OnlineOrderCard({ order, currency, vocab, onHandover, onVerify, onReject, onAssignRider, onSettle, onAccessories }: CardProps) {
   const { can, canAny } = usePermissions();
-  const { markReady } = useOnlineOrderActions();
+  const { markReady, accept } = useOnlineOrderActions();
+  const awaiting = isAwaitingAcceptance(order);
+  const acceptedForLater = isAcceptedForLater(order);
   const online = isOnlineOrder(order);
   const delivery = isDeliveryOrder(order);
   const paid = isOrderPaid(order);
   const ready = isOrderReady(order);
-  const manage = canAny([P.ORDERS_MANAGE, P.ORDERS_CHANGE]);
+  // Same gate as the pos-api queue routes: the counter's online-orders permission or order change.
+  const manage = canAny([P.ONLINE_ORDERS_CHANGE, P.ORDERS_MANAGE, P.ORDERS_CHANGE]);
   const scheduled = order.metadata?.scheduled_for_label as string | undefined;
   const address = order.metadata?.delivery_address as string | undefined;
   const orderNotes = order.metadata?.order_notes as string | undefined;
   const riderState = DELIVERY_STATE[String(order.metadata?.dispatch_status ?? '')];
   const riderAssigned = !!order.metadata?.rider_id || !!riderState;
   const needsVerify = online && isManualMpesa(order) && !paid;
+
+  const accept_ = () =>
+    accept.mutate(order.id, {
+      onSuccess: () => toast.success(`${order.order_number} accepted${scheduled ? `; it goes to the kitchen before ${scheduled}` : ', sent to the kitchen'}`),
+      onError: async (e) => toast.error(await apiErrorMessage(e, 'Could not accept the order')),
+    });
 
   const ready_ = () =>
     markReady.mutate(order.id, {
@@ -141,7 +150,10 @@ export function OnlineOrderCard({ order, currency, vocab, onHandover, onVerify, 
     });
 
   return (
-    <div className={cn('rounded-2xl border bg-card p-4 space-y-3', needsVerify ? 'border-amber-400/60' : 'border-border')}>
+    <div className={cn(
+      'rounded-2xl border bg-card p-4 space-y-3',
+      awaiting && !acceptedForLater ? 'border-2 border-primary shadow-lg shadow-primary/10' : needsVerify ? 'border-amber-400/60' : 'border-border',
+    )}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
@@ -169,9 +181,11 @@ export function OnlineOrderCard({ order, currency, vocab, onHandover, onVerify, 
         <div className="shrink-0 text-right">
           <span className={cn(
             'rounded-full px-2.5 py-1 text-xs font-semibold',
-            ready ? 'bg-green-500/10 text-green-700 dark:text-green-400' : 'bg-blue-500/10 text-blue-700 dark:text-blue-400',
+            awaiting
+              ? acceptedForLater ? 'bg-blue-500/10 text-blue-700 dark:text-blue-400' : 'bg-primary text-primary-foreground'
+              : ready ? 'bg-green-500/10 text-green-700 dark:text-green-400' : 'bg-blue-500/10 text-blue-700 dark:text-blue-400',
           )}>
-            {ready ? 'Ready' : vocab.preparing}
+            {awaiting ? (acceptedForLater ? `Accepted · for ${scheduled ?? 'later'}` : 'New · accept?') : ready ? 'Ready' : vocab.preparing}
           </span>
           <p className="mt-2 text-xs text-muted-foreground">
             <Clock className="mr-1 inline h-3 w-3" />
@@ -196,6 +210,25 @@ export function OnlineOrderCard({ order, currency, vocab, onHandover, onVerify, 
           <p className="text-sm font-semibold text-foreground">{formatCurrency(Number(order.metadata?.online_grand_total ?? order.total_amount), currency)}</p>
           <PaymentBadge order={order} currency={currency} />
         </div>
+        {awaiting ? (
+          <div className="flex flex-wrap gap-2">
+            {needsVerify && canAny([P.PAYMENTS_ADD, P.ORDERS_CHANGE, P.ORDERS_MANAGE]) && (
+              <button onClick={() => onVerify(order)} className={cn(btn, 'bg-amber-500 text-white hover:bg-amber-600')}>
+                <ShieldCheck className="h-3.5 w-3.5" /> Confirm M-Pesa
+              </button>
+            )}
+            {!acceptedForLater && manage && (
+              <button onClick={accept_} disabled={accept.isPending} className={cn(btn, 'bg-green-600 px-4 text-white hover:bg-green-700')}>
+                {accept.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />} Accept
+              </button>
+            )}
+            {manage && (
+              <button onClick={() => onReject(order)} className={cn(btn, 'text-destructive hover:bg-destructive/10')}>
+                <XCircle className="h-3.5 w-3.5" /> Reject
+              </button>
+            )}
+          </div>
+        ) : (
         <div className="flex flex-wrap gap-2">
           {!online && !paid && vocab.showAccessories && can(P.ORDERS_ADD) && (
             <button onClick={() => onAccessories(order)} className={cn(btn, 'border border-border hover:bg-accent')}>
@@ -233,6 +266,7 @@ export function OnlineOrderCard({ order, currency, vocab, onHandover, onVerify, 
             </button>
           )}
         </div>
+        )}
       </div>
     </div>
   );

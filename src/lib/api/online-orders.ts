@@ -88,6 +88,10 @@ export const onlineOrdersApi = {
   markCollected: (tenantID: string, orderID: string, body: CollectPayload = {}) =>
     apiClient.post(`${onlineBase(tenantID)}/${orderID}/collected`, body),
 
+  /** Accept an online order waiting for acceptance; it goes to the kitchen. */
+  accept: (tenantID: string, orderID: string) =>
+    apiClient.post(`${onlineBase(tenantID)}/${orderID}/accept`, {}),
+
   /** Reject an online order the outlet cannot fulfil (ordering refunds and notifies the customer). */
   reject: (tenantID: string, orderID: string, reason: string) =>
     apiClient.post(`${onlineBase(tenantID)}/${orderID}/reject`, { reason }),
@@ -113,6 +117,10 @@ export const isOnlineOrder = (o: PickupOrder) => !!o.metadata?.online_order_id;
 export const isDeliveryOrder = (o: PickupOrder) =>
   o.order_subtype === 'delivery' || o.metadata?.fulfillment_type === 'delivery';
 export const isManualMpesa = (o: PickupOrder) => o.metadata?.payment_channel === 'mpesa_manual';
+/** Waiting for staff to accept it (manual acceptance). A scheduled order accepted early keeps this
+ *  status until its prep window but carries metadata.accepted_at. */
+export const isAwaitingAcceptance = (o: PickupOrder) => o.status === 'awaiting_acceptance';
+export const isAcceptedForLater = (o: PickupOrder) => isAwaitingAcceptance(o) && !!o.metadata?.accepted_at;
 
 /** Paid already: prepaid online, verified manual M-Pesa, or a POS order settled at the till. */
 export function isOrderPaid(o: PickupOrder): boolean {

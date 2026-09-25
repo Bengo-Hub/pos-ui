@@ -31,6 +31,10 @@ export const P = {
   ORDERS_VIEW_OWN:   'pos.orders.view_own',
   ORDERS_CHANGE:     'pos.orders.change',
   ORDERS_CHANGE_OWN: 'pos.orders.change_own',
+  /** Online orders queue: accept/reject, ready, confirm M-Pesa, hand over, assign rider. Granted to
+   *  the counter roles (cashier, waiter, floor supervisor, receptionist) without pos.orders.change. */
+  ONLINE_ORDERS_VIEW:   'pos.online_orders.view',
+  ONLINE_ORDERS_CHANGE: 'pos.online_orders.change',
   ORDERS_DELETE:     'pos.orders.delete',
   /** Delete ONE'S OWN draft (parked/unpaid) sale — dedicated toggle for the Drafts page Delete
    *  button, independent of ORDERS_ADD/CHANGE_OWN so a tenant admin can revoke it without

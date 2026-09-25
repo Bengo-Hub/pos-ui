@@ -3,7 +3,9 @@
 import { useEffect, useRef } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { onlineOrdersApi, isOnlineOrder, type CollectPayload, type PickupOrder } from '@/lib/api/online-orders';
+import {
+  onlineOrdersApi, isAcceptedForLater, isAwaitingAcceptance, isOnlineOrder, type CollectPayload, type PickupOrder,
+} from '@/lib/api/online-orders';
 import { playKDSTone } from '@/lib/kds-sounds';
 import { useAuthStore } from '@/store/auth';
 
@@ -96,6 +98,10 @@ export function useOnlineOrderActions() {
   const tenantID = useTenantID();
   const invalidate = useInvalidateQueues();
   return {
+    accept: useMutation({
+      mutationFn: (orderID: string) => onlineOrdersApi.accept(tenantID, orderID),
+      onSuccess: invalidate,
+    }),
     markReady: useMutation({
       mutationFn: (orderID: string) => onlineOrdersApi.markReady(tenantID, orderID),
       onSuccess: invalidate,
@@ -125,6 +131,16 @@ export function useOnlineOrderActions() {
  */
 export function useNewOnlineOrderAlert(orders: PickupOrder[], ready: boolean) {
   const seen = useRef<Set<string> | null>(null);
+
+  // Keep ringing every 30 seconds while any order is waiting to be accepted, like a delivery
+  // tablet, so an order is never left unanswered because nobody looked at the screen.
+  const waiting = orders.some((o) => isAwaitingAcceptance(o) && !isAcceptedForLater(o));
+  useEffect(() => {
+    if (!ready || !waiting) return;
+    const timer = setInterval(() => playKDSTone(), 30_000);
+    return () => clearInterval(timer);
+  }, [ready, waiting]);
+
   useEffect(() => {
     if (!ready) return;
     const online = orders.filter(isOnlineOrder);

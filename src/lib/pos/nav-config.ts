@@ -140,7 +140,7 @@ export function buildNavGroups(orgSlug: string): NavGroup[] {
       label: 'Online Orders',
       defaultCollapsed: true,
       items: [
-        { label: 'Pickup Queue', icon: ShoppingBag, href: '/online-orders', moduleKey: 'online_orders', permission: [P.ORDERS_MANAGE, P.ORDERS_CHANGE, P.QUEUE_MANAGE], subFeature: 'online_ordering', subPlan: 'Pro' },
+        { label: 'Online Orders Queue', icon: ShoppingBag, href: '/online-orders', moduleKey: 'online_orders', permission: [P.ONLINE_ORDERS_VIEW, P.ONLINE_ORDERS_CHANGE, P.ORDERS_MANAGE, P.ORDERS_CHANGE, P.QUEUE_MANAGE], subFeature: 'online_ordering', subPlan: 'Pro' },
       ],
     },
     {

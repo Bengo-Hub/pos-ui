@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation';
 import { Bike, History as HistoryIcon, Loader2, Package, QrCode } from 'lucide-react';
 import { ModuleGate } from '@/components/auth/module-gate';
 import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
-import { isOrderPaid, isOrderReady, isOnlineOrder, type PickupOrder } from '@/lib/api/online-orders';
+import { isAwaitingAcceptance, isOrderPaid, isOrderReady, isOnlineOrder, type PickupOrder } from '@/lib/api/online-orders';
 import {
   useDeliveryDispatch, useNewOnlineOrderAlert, usePickupHistory, usePickupOrders,
 } from '@/hooks/useOnlineOrders';
@@ -112,10 +112,15 @@ function OnlineOrdersPage() {
     qc.invalidateQueries({ queryKey: ['pos-orders'] });
   };
 
-  const inPrep = pickupOrders.filter((o) => !isOrderReady(o));
-  const atCounter = pickupOrders.filter((o) => isOrderReady(o));
-  const deliveryPrep = deliveryOrders.filter((o) => !isOrderReady(o));
-  const deliveryReady = deliveryOrders.filter((o) => isOrderReady(o));
+  // Orders waiting to be accepted come first; the rest follow the kitchen/counter flow.
+  const toAccept = (list: PickupOrder[]) => list.filter((o) => isAwaitingAcceptance(o));
+  const live = (list: PickupOrder[]) => list.filter((o) => !isAwaitingAcceptance(o));
+  const pickupToAccept = toAccept(pickupOrders);
+  const deliveryToAccept = toAccept(deliveryOrders);
+  const inPrep = live(pickupOrders).filter((o) => !isOrderReady(o));
+  const atCounter = live(pickupOrders).filter((o) => isOrderReady(o));
+  const deliveryPrep = live(deliveryOrders).filter((o) => !isOrderReady(o));
+  const deliveryReady = live(deliveryOrders).filter((o) => isOrderReady(o));
 
   const TABS = [
     { key: 'pickup' as const, label: vocab.pickupTab, icon: Package, count: pickupOrders.length },
@@ -192,6 +197,9 @@ function OnlineOrdersPage() {
       {tab === 'pickup' && (
         pickupLoading ? <QueueLoading /> : pickupOrders.length === 0 ? <QueueEmpty label="No pickup orders right now." /> : (
           <div className="space-y-8">
+            {pickupToAccept.length > 0 && (
+              <QueueSection title={`New orders to accept (${pickupToAccept.length})`} color="text-primary">{pickupToAccept.map(card)}</QueueSection>
+            )}
             {inPrep.length > 0 && (
               <QueueSection title={`${vocab.preparing} (${inPrep.length})`} color="text-muted-foreground">{inPrep.map(card)}</QueueSection>
             )}
@@ -205,6 +213,9 @@ function OnlineOrdersPage() {
       {tab === 'delivery' && (
         deliveryLoading ? <QueueLoading /> : deliveryOrders.length === 0 ? <QueueEmpty label="No delivery orders right now." /> : (
           <div className="space-y-8">
+            {deliveryToAccept.length > 0 && (
+              <QueueSection title={`New orders to accept (${deliveryToAccept.length})`} color="text-primary">{deliveryToAccept.map(card)}</QueueSection>
+            )}
             {deliveryPrep.length > 0 && (
               <QueueSection title={`${vocab.preparing} (${deliveryPrep.length})`} color="text-muted-foreground">{deliveryPrep.map(card)}</QueueSection>
             )}
