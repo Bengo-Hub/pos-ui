@@ -309,7 +309,8 @@ export const ROLE_PERMISSIONS: Record<string, Permission[]> = {
     // Dedicated draft-only actions (2026-08-28) — see cashier's entry above.
     P.ORDERS_DELETE_OWN, P.ORDERS_RESUME_DRAFT,
     P.CATALOG_VIEW,
-    P.PAYMENTS_VIEW,
+    // The front desk takes deposits, balances at collection and checkout bills (mirror backend seed).
+    P.PAYMENTS_VIEW, P.PAYMENTS_ADD,
     P.TABLES_VIEW,
     P.SESSIONS_ADD, P.SESSIONS_VIEW_OWN,
     P.QUEUE_VIEW, P.QUEUE_CHANGE,
