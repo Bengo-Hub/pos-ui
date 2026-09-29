@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils';
 import { QuickAction, QuickActionTile, QuickActionGrid, KPICard, RecentOrdersCard, useDashboardSummary, useTenantID, fmt, fmtNum } from './widgets';
 import { CashierOverviewTab } from './cashier-overview-tab';
 import { CashierShiftTab } from './cashier-shift-tab';
+import { FrontDeskDashboard } from './front-desk-dashboard';
 import { DashboardRangeFilter, useDashboardRange, type DashboardRange } from './range-filter';
 import { CategoryBreakdownChart, RevenueTrendChart, TopItemsChart } from './charts';
 import { useQuery } from '@tanstack/react-query';
@@ -220,9 +221,9 @@ export function BarDashboard({ orgSlug }: { orgSlug: string }) {
   const router = useRouter();
   const { hasModule } = useModuleAccess();
   useEffect(() => {
-    if (hasModule('kds')) router.replace(`/${orgSlug}/bar`);
+    if (hasModule('bar')) router.replace(`/${orgSlug}/bar`);
   }, [orgSlug, router, hasModule]);
-  if (hasModule('kds')) {
+  if (hasModule('bar')) {
     return (
       <div className="flex-1 flex items-center justify-center">
         <div className="flex flex-col items-center gap-3 text-muted-foreground">
@@ -247,7 +248,19 @@ export function BarDashboard({ orgSlug }: { orgSlug: string }) {
   );
 }
 
+/**
+ * Receptionist home. The role exists on hotel, restaurant, services and retail outlets, so what
+ * it shows follows the OUTLET, not the role: the room front desk only where the outlet actually
+ * runs the hotel module, the outlet's own front desk (job intake, appointments, reservations)
+ * everywhere else.
+ */
 export function ReceptionistDashboard({ orgSlug }: { orgSlug: string }) {
+  const { isHospitality, hotelModuleEnabled, hasModule } = useModuleAccess();
+  if (isHospitality && hotelModuleEnabled && hasModule('hotel')) return <HotelReceptionDashboard orgSlug={orgSlug} />;
+  return <FrontDeskDashboard orgSlug={orgSlug} />;
+}
+
+function HotelReceptionDashboard({ orgSlug }: { orgSlug: string }) {
   const tenantID = useTenantID();
   const { hasModule } = useModuleAccess();
   const { hasFeature } = useSubscription();

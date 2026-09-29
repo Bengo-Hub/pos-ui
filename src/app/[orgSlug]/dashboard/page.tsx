@@ -17,6 +17,7 @@ import {
   ServicesDashboard,
   WaiterDashboard,
 } from '@/components/dashboard/role-dashboards';
+import { ServiceStaffDashboard } from '@/components/dashboard/front-desk-dashboard';
 
 function hasRole(roles: string[], ...check: string[]): boolean {
   return check.some((r) => roles.includes(r));
@@ -44,6 +45,8 @@ export default function DashboardPage() {
       ? 'kitchen'
       : hasRole(roles, 'bar')
       ? 'bar'
+      : hasRole(roles, 'technician', 'stylist', 'therapist')
+      ? 'specialist'
       : 'cashier';
 
   switch (primaryRole) {
@@ -61,8 +64,12 @@ export default function DashboardPage() {
       // status/quick-links page) lives at /hotel regardless, gated by the hotel module itself.
       if (isHospitality && hotelModuleEnabled) return <HospitalityDashboard orgSlug={orgSlug} />;
       return <AdminDashboard orgSlug={orgSlug} />;
+    // Front-of-house and floor roles exist on more than one kind of outlet; each dashboard below
+    // shows only what this outlet's use case and modules run (no hotel rooms on a print shop).
     case 'receptionist':
       return <ReceptionistDashboard orgSlug={orgSlug} />;
+    case 'specialist':
+      return <ServiceStaffDashboard orgSlug={orgSlug} />;
     case 'cashier':
       return <CashierDashboard orgSlug={orgSlug} />;
     case 'waiter':
