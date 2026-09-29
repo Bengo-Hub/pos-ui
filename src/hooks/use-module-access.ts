@@ -15,6 +15,7 @@
 import { useAuthStore } from '@/store/auth';
 import { useOutletFilterStore } from '@/store/outlet-filter';
 import { usePOSSettings } from './usePOSSettings';
+import { useServiceProfiles } from './useServiceJobs';
 import { useSubscription } from './use-subscription';
 import { normalizeUseCase } from '@/lib/use-case-config';
 import { CORE_MODULE_KEYS } from '@/lib/pos/nav-config';
@@ -87,6 +88,10 @@ const USE_CASE_MODULES: Record<UseCaseType, ModuleKey[]> = {
   services:      [...COMMON_MODULES, 'appointments', 'packages', 'shifts', 'reports', 'loyalty', 'commissions', 'clients', 'staff_schedule', 'resources', 'queue', 'online_orders', 'production', 'repairs'],
   quick_service: [...COMMON_MODULES, 'kds', 'shifts', 'reports', 'online_orders'],
 };
+
+// Modules every services outlet uses whatever its trade; each service profile adds its own on
+// top (ServiceProfile.modules from pos-api's registry).
+const SERVICES_BASE_MODULES: ModuleKey[] = [...COMMON_MODULES, 'shifts', 'reports', 'clients', 'online_orders'];
 
 // ─── Hook ───────────────────────────────────────────────────────────────────
 
@@ -171,8 +176,21 @@ export function useModuleAccess() {
   // the tenant itself sees, not an exemption-inflated illusion of it.
   const hotelModuleEnabled = posSettings?.hotel_module_enabled === true && hasFeatureForTenant('hotel_module');
 
+  // A services outlet's sidebar follows its service profile: the modules every services outlet
+  // uses plus the profile's own (pos-api registry), so a print shop shows the production board
+  // and no appointments/queue/packages, and a salon the reverse. No profile yet: the full list.
+  const serviceProfileKey = useCase === 'services' ? posSettings?.service_profile ?? '' : '';
+  const { data: serviceProfiles } = useServiceProfiles(!!serviceProfileKey);
+  const serviceProfileModules = serviceProfileKey
+    ? serviceProfiles?.find((p) => p.key === serviceProfileKey)?.modules
+    : undefined;
+
   // Enabled modules for the current use case (empty until use case resolves)
-  const enabledModules: ModuleKey[] = useCase ? USE_CASE_MODULES[useCase] : [];
+  const enabledModules: ModuleKey[] = !useCase
+    ? []
+    : useCase === 'services' && serviceProfileModules
+      ? [...SERVICES_BASE_MODULES, ...(serviceProfileModules as ModuleKey[])]
+      : USE_CASE_MODULES[useCase];
 
   // ── Per-role sidebar hiding ──────────────────────────────────────────────
   // A tenant admin can hide modules/items for ALL roles (the flat lists) OR for specific roles only

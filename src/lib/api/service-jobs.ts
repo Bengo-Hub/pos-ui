@@ -39,6 +39,10 @@ export interface ServiceProfile {
   default_deposit_percent: number;
   accepts_attachments: boolean;
   design_from_scratch: boolean;
+  /** Specialist staff roles of this trade (the PIN login lists these plus manager/cashier/receptionist). */
+  staff_roles: string[];
+  /** Sidebar modules this trade adds to the services base set (ModuleKey values). */
+  modules: string[];
 }
 
 export interface JobAttachment {

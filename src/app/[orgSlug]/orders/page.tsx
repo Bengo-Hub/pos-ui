@@ -471,8 +471,10 @@ export default function OrdersPage() {
               )}
 
               {/* Print receipt (completed orders) or the current bill (open/unpaid). Cancelled
-                  orders have nothing to print. */}
-              {selectedOrder.status !== 'cancelled' && (
+                  orders have nothing to print. An unpaid services job prints its job ticket
+                  (specs, instructions, deposit, balance) from the job panel instead. */}
+              {selectedOrder.status !== 'cancelled' &&
+                !(selectedOrder.order_subtype === 'service_job' && selectedOrder.status !== 'completed') && (
                 <PrintReceiptButton
                   orderId={selectedOrder.id}
                   label={selectedOrder.status === 'completed' ? 'Print Receipt' : 'Print Bill'}

@@ -49,6 +49,17 @@ gating over one shared page.
 | Delivery Channels | outlets with online ordering | `online_orders` |
 | Booking Policy | hospitality (hotel) | `hotel` |
 
+### Services: type of service business
+
+A `services` outlet picks its service profile on the Modules tab (printing and branding, salon and
+barber, nail parlour, spa, garage, car wash, laundry, tailoring, phone repair, general). The
+profile sets the till workflow and shows only the catalog services of that trade. A job profile
+(printing, garage, laundry, tailoring) adds the Production Board (`/production`, module
+`production`, on the `enable_kds` toggle), the job sheet on the terminal, the job-created deposit
+dialog, the jobs dashboard and the job panel on Orders; its default deposit percent is set on the
+same card. The Phone & Electronics Repair profile shows the Repair module. See pos-api
+`docs/service-profiles.md` for the full workflow.
+
 ## Per-use-case defaults for the Cashier & Terminal policy
 
 Resolved server-side in `pos-api internal/modules/outletpolicy` (outlet override → use-case default):

@@ -54,6 +54,10 @@ interface PINLoginResponse {
 }
 
 interface OutletInfo extends PinLoginOutlet {
+  /** Roles this outlet's PIN login lists (use case + services profile), from pos-api. */
+  staff_roles?: string[];
+  /** A services outlet's sub use case (printing_branding, salon_barber, ...). */
+  service_profile?: string;
   settings?: {
     pin_login_message?: string;
     screensaver_url?: string;
@@ -79,20 +83,24 @@ const TIMEOUT_OPTIONS = [
 // Demo PINs — shown only on codevertex-demo tenant, filtered to the selected outlet's use_case.
 // Pin assignments mirror the seeded demo staff roles in auth-api/cmd/seed/seed_users.go.
 const DEMO_HINTS_ALL = [
-  { pin: '0000', role: 'Admin',      accent: '#ef4444', useCases: ['hospitality', 'quick_service', 'retail', 'services'] },
-  { pin: '1111', role: 'Manager',    accent: '#f97316', useCases: ['hospitality', 'quick_service', 'retail', 'services'] },
-  { pin: '2222', role: 'Cashier',    accent: '#3b82f6', useCases: ['hospitality', 'quick_service', 'retail', 'services'] },
-  { pin: '3333', role: 'Waiter',     accent: '#10b981', useCases: ['hospitality'] },
-  { pin: '4444', role: 'Kitchen',    accent: '#f59e0b', useCases: ['hospitality', 'quick_service'] },
-  { pin: '5555', role: 'Bar',        accent: '#a855f7', useCases: ['hospitality'] },
-  { pin: '6666', role: 'Reception',  accent: '#ec4899', useCases: ['hospitality', 'services'] },
-  { pin: '8888', role: 'Stylist',    accent: '#8b5cf6', useCases: ['services'] },
-  { pin: '9999', role: 'Therapist',  accent: '#06b6d4', useCases: ['services'] },
+  { pin: '0000', role: 'Admin',      key: 'admin',        accent: '#ef4444' },
+  { pin: '1111', role: 'Manager',    key: 'manager',      accent: '#f97316' },
+  { pin: '2222', role: 'Cashier',    key: 'cashier',      accent: '#3b82f6' },
+  { pin: '3333', role: 'Waiter',     key: 'waiter',       accent: '#10b981' },
+  { pin: '4444', role: 'Kitchen',    key: 'kitchen',      accent: '#f59e0b' },
+  { pin: '5555', role: 'Bar',        key: 'bar',          accent: '#a855f7' },
+  { pin: '6666', role: 'Reception',  key: 'receptionist', accent: '#ec4899' },
+  { pin: '7070', role: 'Technician', key: 'technician',   accent: '#14b8a6' },
+  { pin: '8888', role: 'Stylist',    key: 'stylist',      accent: '#8b5cf6' },
+  { pin: '9999', role: 'Therapist',  key: 'therapist',    accent: '#06b6d4' },
 ];
 
-function getDemoHints(useCase: string | undefined | null) {
-  if (!useCase) return DEMO_HINTS_ALL.slice(0, 2); // no outlet yet — show Admin + Manager
-  return DEMO_HINTS_ALL.filter((h) => h.useCases.includes(useCase));
+// Demo hints follow the outlet's own staff roles (pos-api outletpolicy.StaffRolesFor, which
+// accounts for the use case and the services profile), so a print shop never shows the salon's
+// stylist or therapist. Admin is shown on every outlet.
+function getDemoHints(staffRoles: string[] | undefined) {
+  if (!staffRoles || staffRoles.length === 0) return DEMO_HINTS_ALL.slice(0, 2); // no outlet yet: Admin + Manager
+  return DEMO_HINTS_ALL.filter((h) => h.key === 'admin' || staffRoles.includes(h.key));
 }
 
 const WORKFLOW_STEPS = [
@@ -686,7 +694,7 @@ export default function PINLoginPage() {
             workflowSteps={WORKFLOW_STEPS}
           />
         }
-        footer={isDemoTenant && <DemoHints subtitle={useCaseLabel} hints={getDemoHints(useCase)} />}
+        footer={isDemoTenant && <DemoHints subtitle={useCaseLabel} hints={getDemoHints(outletInfo?.staff_roles)} />}
         card={
           <div className="flex-1 min-h-0 flex flex-col gap-3 p-3 sm:p-6">
             <PasscodeField

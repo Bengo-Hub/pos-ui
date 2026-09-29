@@ -69,11 +69,19 @@ export default function AnalyticsReportPage() {
 
   // Tab list follows the outlet's use case: kitchen use cases get KDS Station, everything
   // else gets Register / Products & Brands / Payment Methods.
-  const { isHospitality, isQuickService, isResolved } = useModuleAccess();
+  const { isHospitality, isQuickService, isResolved, hasModuleForTenant } = useModuleAccess();
   const isKitchen = isHospitality || isQuickService;
+  // A services job outlet (printing, garage, laundry) also reports sales by production station.
+  const hasProduction = hasModuleForTenant('production');
   const tabs = useMemo<TabDef[]>(
-    () => [...COMMON_TABS_HEAD, ...(!isResolved || isKitchen ? [KDS_TAB] : REGISTER_TABS), ...COMMON_TABS_TAIL],
-    [isKitchen, isResolved],
+    () => [
+      ...COMMON_TABS_HEAD,
+      ...(!isResolved || isKitchen
+        ? [KDS_TAB]
+        : [...REGISTER_TABS, ...(hasProduction ? [{ ...KDS_TAB, label: 'Production Station' }] : [])]),
+      ...COMMON_TABS_TAIL,
+    ],
+    [isKitchen, isResolved, hasProduction],
   );
   useEffect(() => {
     if (isResolved && !tabs.some((t) => t.id === tab)) setTab('staff');
@@ -86,7 +94,7 @@ export default function AnalyticsReportPage() {
   const staff = useSalesByStaff(range.from, range.to, outletId);
   const hours = useSalesByHour(hourDate, outletId);
   const cats = useSalesByCategory(range.from, range.to, outletId);
-  const kdsStations = useSalesByKDSStation(range.from, range.to, outletId, isKitchen || !isResolved);
+  const kdsStations = useSalesByKDSStation(range.from, range.to, outletId, isKitchen || hasProduction || !isResolved);
   const register = useRegisterDetails(range.from, range.to, outletId, isResolved && !isKitchen);
   const mix = useProductMix(range.from, range.to, outletId);
   const voids = useVoidSummary(range.from, range.to, outletId);

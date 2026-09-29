@@ -86,7 +86,7 @@ const SECTION_ORDER: SettingsSection[] = [
 
 // requireModule    → only shown when the module is enabled (or to superusers).
 // requirePermission → only shown when the caller holds one of the listed permissions.
-const ALL_TABS: { id: Tab; label: string; icon: React.ElementType; group: SettingsSection; requireModule?: string; requirePermission?: string[]; description: string }[] = [
+const ALL_TABS: { id: Tab; label: string; icon: React.ElementType; group: SettingsSection; requireModule?: string | string[]; requirePermission?: string[]; description: string }[] = [
   // General & Localization (shared)
   { id: 'general',          label: 'Outlet Config',      icon: Settings,    group: 'General & Localization', requirePermission: CONFIG_PERMS, description: 'Currency and returns policy' },
   { id: 'display',          label: 'Display',            icon: Monitor,     group: 'General & Localization', requirePermission: CONFIG_PERMS, description: 'Idle-screen screensavers (up to 3, rotating slideshow)' },
@@ -100,7 +100,9 @@ const ALL_TABS: { id: Tab; label: string; icon: React.ElementType; group: Settin
   // Use-Case Modules (surfaced per outlet use case)
   { id: 'modules',          label: 'Modules',            icon: Layers,      group: 'Use-Case Modules', requirePermission: CONFIG_PERMS, description: 'Use case and feature toggles' },
   { id: 'shifts',           label: 'Shifts',             icon: Clock,       group: 'Use-Case Modules', requirePermission: CONFIG_PERMS, description: 'Float rules and shift visibility' },
-  { id: 'kds_stations',     label: 'KDS Stations',       icon: ChefHat,     group: 'Use-Case Modules', requireModule: 'kds', requirePermission: CONFIG_PERMS, description: 'Kitchen and bar display screens' },
+  // Kitchen/bar stations for food outlets; the same stations are the production board's for a
+  // services job outlet (label adapted below).
+  { id: 'kds_stations',     label: 'KDS Stations',       icon: ChefHat,     group: 'Use-Case Modules', requireModule: ['kds', 'production'], requirePermission: CONFIG_PERMS, description: 'Kitchen and bar display screens' },
   { id: 'tables',           label: 'Tables',             icon: Table2,      group: 'Use-Case Modules', requireModule: 'tables', requirePermission: CONFIG_PERMS, description: 'Floor plan and table configuration' },
   { id: 'loyalty',          label: 'Loyalty',            icon: Gift,        group: 'Use-Case Modules', requireModule: 'loyalty', requirePermission: CONFIG_PERMS, description: 'Points, tiers, and earn rates' },
   { id: 'channels',         label: 'Delivery Channels',  icon: Truck,       group: 'Use-Case Modules', requireModule: 'online_orders', requirePermission: CONFIG_PERMS, description: '3rd-party delivery integrations & catalogue sync' },
@@ -118,16 +120,21 @@ const ALL_TABS: { id: Tab; label: string; icon: React.ElementType; group: Settin
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<Tab>('general');
   const user = useAuthStore((s) => s.user);
-  const { isSuperUser, hasModule } = useModuleAccess();
+  const { isSuperUser, hasModule, isServices } = useModuleAccess();
   const { canAny } = usePermissions();
   const isPlatformOwner = isSuperUser || user?.isPlatformOwner;
 
   const visibleTabs = ALL_TABS.filter((t) => {
     if (t.id === 'platform') return isPlatformOwner;
-    if (t.requireModule && !(isSuperUser || hasModule(t.requireModule))) return false;
+    if (t.requireModule) {
+      const mods = Array.isArray(t.requireModule) ? t.requireModule : [t.requireModule];
+      if (!(isSuperUser || mods.some((m) => hasModule(m)))) return false;
+    }
     if (t.requirePermission && !canAny(t.requirePermission)) return false;
     return true;
-  });
+  }).map((t) => (t.id === 'kds_stations' && isServices
+    ? { ...t, label: 'Production Stations', description: 'Production board stations (design, print, workshop)' }
+    : t));
   const canTab = (id: Tab) => visibleTabs.some((t) => t.id === id);
 
   const activeTabDef = visibleTabs.find((t) => t.id === activeTab) ?? visibleTabs[0];
