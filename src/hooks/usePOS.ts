@@ -1179,6 +1179,7 @@ export interface OrderListFilters {
   kdsStationId?: string;    // orders with a line routed to this KDS station
   category?: string;        // orders with a line in this catalog category
   sku?: string;             // orders containing this catalog item (track how a product has sold)
+  orderSubtype?: string;    // e.g. service_job: the services job list and the jobs dashboard
   limit?: number;
   page?: number;
 }
@@ -1220,6 +1221,7 @@ export function useOrders(filters?: OrderListFilters) {
           kds_station_id: filters?.kdsStationId,
           category: filters?.category,
           sku: filters?.sku,
+          order_subtype: filters?.orderSubtype,
           limit: filters?.limit ?? 20,
           page: filters?.page ?? 1,
           sort: 'created_at',
@@ -1435,7 +1437,9 @@ export function useNotifyOrderPayment() {
 
 // 'retail' = a plain walk-in counter sale (retail/pharmacy/services terminals) — the server
 // enum's non-hospitality subtype; dine_in/takeaway/… are hospitality/quick-service concepts.
-export type OrderSubtype = 'dine_in' | 'takeaway' | 'room_service' | 'delivery' | 'bar_tab' | 'retail';
+// 'service_job' = a services job order (printing, garage, laundry) that goes through the production
+// board and is paid at collection.
+export type OrderSubtype = 'dine_in' | 'takeaway' | 'room_service' | 'delivery' | 'bar_tab' | 'retail' | 'service_job';
 
 interface CreateOrderInput {
   outletId: string;

@@ -45,6 +45,9 @@ import {
     type CatalogItem, type OrderSubtype,
 } from '@/hooks/usePOS';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
+import { useOutletServiceProfile } from '@/hooks/useServiceJobs';
+import { cleanSpecs, emptyJobDraft, jobDraftToMetadata, type JobDraft } from '@/components/jobs/job-draft';
+import type { ServiceProfile } from '@/lib/api/service-jobs';
 import { useSaleSessions, type SaleSessionControls } from '@/hooks/useSaleSessions';
 import { apiClient } from '@/lib/api/client';
 import { apiErrorMessage } from '@/lib/api/error-message';
@@ -160,6 +163,8 @@ export interface CartItem extends MenuItem {
    *  Small pizza paired to a bought Large). Its quantity is kept in lockstep with the triggering
    *  buy line and it's priced to free by the happy-hour discount — the cashier never adds it. */
   promoFree?: boolean;
+  /** Services job line spec sheet (size, material, vehicle reg...) keyed by the profile spec fields. */
+  jobSpecs?: Record<string, string>;
 }
 
 export type DisplayMode = 'card' | 'list' | 'image_grid';
@@ -397,6 +402,23 @@ export interface TerminalContextValue {
   saleSessions: SaleSessionControls;
   /** Customer to seed the LoyaltyPanel with for the active tab (reflects the tab's attached customer). */
   initialSelectedCustomer: SelectedCustomer | null;
+
+  // ── services job orders (printing, garage, laundry, tailoring) ──
+  /** The outlet's service profile when its workflow is a job order, else null. */
+  jobProfile: ServiceProfile | null;
+  jobDepositPercent: number;
+  jobDraft: JobDraft;
+  setJobDraft: (d: JobDraft) => void;
+  setLineJobSpecs: (index: number, specs: Record<string, string>) => void;
+  /** The job just created at reception (drives the job-created dialog), null when closed. */
+  jobCreated: JobCreatedInfo | null;
+  setJobCreated: (v: JobCreatedInfo | null) => void;
+}
+
+export interface JobCreatedInfo {
+  orderId: string;
+  orderNumber: string;
+  total: number;
 }
 
 const TerminalContext = createContext<TerminalContextValue | null>(null);
@@ -647,7 +669,15 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
   const isHospitality = ['hospitality', 'quick_service', 'hotel'].includes((outlet?.use_case ?? '').toLowerCase());
   // Retail/pharmacy/services tills book plain counter sales as 'retail' (displayed "Walk-in") —
   // never the server's 'dine_in' default, which is a hospitality/quick-service concept.
-  const defaultOrderSubtype = isHospitality ? undefined : ('retail' as const);
+  // A job-workflow services outlet (printing, garage, laundry, tailoring) books every sale as a
+  // job order: it opens with production-board tickets and is paid at collection.
+  const outletServiceProfile = useOutletServiceProfile();
+  const jobProfile = outletServiceProfile.isJobWorkflow ? outletServiceProfile.profile : null;
+  const defaultOrderSubtype: OrderSubtype | undefined = jobProfile
+    ? 'service_job'
+    : isHospitality ? undefined : 'retail';
+  const [jobDraft, setJobDraft] = useState<JobDraft>(emptyJobDraft);
+  const [jobCreated, setJobCreated] = useState<JobCreatedInfo | null>(null);
   const [currentOrderCourses, setCurrentOrderCourses] = useState<CourseValue[]>([]);
   const [firedCourses, setFiredCourses] = useState(0);
   const [firingCourse, setFiringCourse] = useState<number | null>(null);
@@ -1326,6 +1356,13 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
     // to the NEXT sale. customerResetSeq remounts the LoyaltyPanel (its picker state is local).
     setLoyaltyState(null);
     setCustomerResetSeq((s) => s + 1);
+    // A job sheet belongs to the job it was written for.
+    setJobDraft(emptyJobDraft());
+  };
+
+  // Services job: set one cart line's spec sheet (size, material, vehicle reg...).
+  const setLineJobSpecs = (index: number, specs: Record<string, string>) => {
+    setCart((prev) => prev.map((it, i) => (i === index ? { ...it, jobSpecs: specs } : it)));
   };
 
   // Apply or clear a manual order-level discount (KES amount). promotionId is set only when the
@@ -1514,6 +1551,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
       // pos-api persists these straight to POSLineModifier with no second catalog lookup.
       ...(item.selectedModifierDetails?.length ? { modifiers: item.selectedModifierDetails } : {}),
       ...(item.notes ? { notes: item.notes } : {}),
+      ...(cleanSpecs(item.jobSpecs) ? { job_specs: cleanSpecs(item.jobSpecs) } : {}),
       ...(item.serialNumber ? { serial_number: item.serialNumber } : {}),
       // Selling-price guardrails so the backend hard-blocks out-of-band prices (manager override).
       ...(item.minSellingPrice != null ? { min_price: item.minSellingPrice } : {}),
@@ -1573,6 +1611,33 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
     });
   }, [isHospitality, posSettings, tableName, kdsStationsData, effectiveQtyFor]);
 
+  // Order-level metadata for a new order: delivery dropoff details for a delivery, the job sheet
+  // for a services job order.
+  const buildOrderMetadata = (): Record<string, unknown> | undefined => {
+    if (orderSubtype === 'delivery') {
+      return {
+        ...(deliveryInfo.address ? { delivery_address: deliveryInfo.address } : {}),
+        ...(deliveryInfo.notes ? { delivery_notes: deliveryInfo.notes } : {}),
+      };
+    }
+    if (jobProfile) return { job: jobDraftToMetadata(jobDraft) };
+    return undefined;
+  };
+
+  // A job order needs a customer phone (to call or message when it is ready) and every required
+  // spec on every line. Returns the problem to show, or null when the job can be created.
+  const jobValidationError = (): string | null => {
+    if (!jobProfile) return null;
+    if (!loyaltyState?.customerPhone) return `Attach the customer (with a phone number) before creating the ${jobProfile.job_label.toLowerCase()}.`;
+    const required = (jobProfile.spec_fields ?? []).filter((f) => f.required);
+    for (const line of cart) {
+      for (const f of required) {
+        if (!line.jobSpecs?.[f.key]?.trim()) return `${line.name}: fill in ${f.label}.`;
+      }
+    }
+    return null;
+  };
+
   const handlePlaceOrder = () => {
     if (cart.length === 0) return;
     // Re-entrancy guard: this is reachable both from a button (whose disabled state a caller may
@@ -1605,6 +1670,12 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
           onError: async (e) => toast.error(await apiErrorMessage(e, 'Failed to add items to bill. Please try again.')),
         }
       );
+      return;
+    }
+
+    const jobError = jobValidationError();
+    if (jobError) {
+      toast.error(jobError);
       return;
     }
 
@@ -1641,12 +1712,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
         businessDate: saleDate || undefined,
         // Delivery orders carry the dropoff details so pos-api can build a logistics delivery task
         // when a rider is dispatched. Address/notes come from the customer capture step.
-        metadata: orderSubtype === 'delivery'
-          ? {
-              ...(deliveryInfo.address ? { delivery_address: deliveryInfo.address } : {}),
-              ...(deliveryInfo.notes ? { delivery_notes: deliveryInfo.notes } : {}),
-            }
-          : undefined,
+        metadata: buildOrderMetadata(),
         lines: orderLines,
       },
       {
@@ -1914,6 +1980,11 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
     // `busyKey`/`anyBusy` at the button level, but guarding at the source too means a future
     // caller can't reintroduce this class of bug by forgetting to wire that.
     if (createOrder.isPending) return null;
+    const jobError = jobValidationError();
+    if (jobError) {
+      toast.error(jobError);
+      return null;
+    }
     if (isHospitality && !orderSubtype) {
       toast.error('Please select Dine-In or Takeaway before placing the order.');
       return null;
@@ -1937,12 +2008,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
         approvalToken: approval?.approvalToken,
         approvalCode: approval?.code,
         businessDate: saleDate || undefined,
-        metadata: orderSubtype === 'delivery'
-          ? {
-              ...(deliveryInfo.address ? { delivery_address: deliveryInfo.address } : {}),
-              ...(deliveryInfo.notes ? { delivery_notes: deliveryInfo.notes } : {}),
-            }
-          : undefined,
+        metadata: buildOrderMetadata(),
         lines: orderLines,
       });
       const orderId = data.id || data.order_id || '';
@@ -1977,11 +2043,19 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
       toast.error(await apiErrorMessage(e, 'Failed to create order. Please try again.'));
       return null;
     }
-  }, [cart, isHospitality, orderSubtype, tableId, coversParam, loyaltyDiscount, loyaltyState, orderLines, outlet, createOrder, assignTable, router, orgSlug, saleDate]);
+  }, [cart, isHospitality, orderSubtype, tableId, coversParam, loyaltyDiscount, loyaltyState, orderLines, outlet, createOrder, assignTable, router, orgSlug, saleDate, buildOrderMetadata, jobValidationError]);
 
   // unpaid=true → dine-in send-to-kitchen or COD: show the order-placed dialog (no receipt yet).
   // unpaid=false → tender settled: reuse handlePaymentConfirmed (receipt + table release + reset).
   const handleInlineSettled = useCallback((ord: CreatedOrder, opts?: { unpaid?: boolean }) => {
+    if (opts?.unpaid && jobProfile) {
+      // Services job created at reception: it is on the production board now. The job-created
+      // dialog offers the deposit and the job ticket print; the balance is paid at collection.
+      setJobCreated({ orderId: ord.orderId, orderNumber: ord.orderNumber, total });
+      clearCart();
+      setCartOpen(false);
+      return;
+    }
     if (opts?.unpaid) {
       // Send-to-Kitchen (dine-in) / COD: print kitchen + bar STATION tickets per the outlet's
       // printer setup. The customer bill is NOT printed here — OrderPlacedDialog owns the bill
@@ -1997,7 +2071,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
     }
     // Pass the just-settled order through so the receipt fetch uses its id directly (no state race).
     handlePaymentConfirmed(ord);
-  }, [handlePaymentConfirmed, cart, printStationTicketsForLines]);
+  }, [handlePaymentConfirmed, cart, printStationTicketsForLines, jobProfile, total]);
 
   // Multiple Pay → the order already exists (created by the bar); open the split modal against it.
   const handleInlineSplit = useCallback((_ord: CreatedOrder) => {
@@ -2060,6 +2134,10 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
     handleReceiptClose,
     saleSessions,
     initialSelectedCustomer,
+    jobProfile,
+    jobDepositPercent: outletServiceProfile.depositPercent,
+    jobDraft, setJobDraft, setLineJobSpecs,
+    jobCreated, setJobCreated,
   };
 
   return <TerminalContext.Provider value={value}>{children}</TerminalContext.Provider>;

@@ -64,6 +64,8 @@ export interface InlinePaymentBarProps {
   disabled?: boolean;
   /** dine-in shows Send-to-Kitchen; everything else shows tender buttons. */
   mode?: 'pay' | 'send_to_kitchen';
+  /** Label of the single send_to_kitchen button (default "Place Order"; a services job uses "Create Job"). */
+  sendLabel?: string;
   /** True when a real customer is selected (loyalty phone attached). Credit Sale requires one. */
   hasCustomer?: boolean;
   /** Attached customer's usable stored credit (KES, from useClientCredit's balance_due — already
@@ -126,7 +128,7 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
     total, tenantSlug, profile, isHospitality, allowCOD = false, customerEmail,
     tenderId = NIL_TENDER, disabled = false, mode = 'pay', layout = 'panel', hasCustomer = true,
     customerCreditAvailable = 0, loyaltyAccount = null,
-    createOrderAsync, onSettled, onDraft, onQuotation, onCancel, onSplit, draftPending = false,
+    createOrderAsync, onSettled, onDraft, onQuotation, onCancel, onSplit, draftPending = false, sendLabel = 'Place Order',
   } = props;
 
   // Credit Sale and Quotation are back-office/manager actions — same permission that approves sale
@@ -505,7 +507,7 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
             className="w-full min-h-12 rounded-xl bg-primary text-primary-foreground font-bold flex items-center justify-center gap-2 disabled:opacity-40 hover:bg-primary/90 transition-colors"
           >
             {anyBusy ? <Loader2 className="h-5 w-5 animate-spin" /> : <ChefHat className="h-5 w-5" />}
-            Place Order
+            {sendLabel}
           </button>
         </div>
       ) : layout === 'bar' ? (

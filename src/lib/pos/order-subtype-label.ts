@@ -37,6 +37,9 @@ export function orderSubtypeBadge(order: BadgeOrder, useCase?: string | null): s
   const subtype = (order.order_subtype ?? order.order_type ?? '').toLowerCase();
   if (isOnlineOrder(order)) return 'Online';
 
+  // Services job order (printing, garage, laundry): raised at reception, produced, paid at collection.
+  if (subtype === 'service_job') return 'Job';
+
   const uc = (useCase ?? '').toLowerCase();
   const hospitality = uc === 'hospitality' || uc === 'quick_service' || uc === 'hotel';
   if (!hospitality) {

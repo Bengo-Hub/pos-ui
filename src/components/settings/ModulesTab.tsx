@@ -15,6 +15,7 @@ import { useAuthStore } from '@/store/auth';
 import { buildNavGroups, CORE_MODULE_KEYS, type NavItem } from '@/lib/pos/nav-config';
 import type { UpdatePOSModulesInput } from '@/lib/api/settings';
 import { Toggle } from './shared';
+import { ServiceProfilePicker } from './ServiceProfilePicker';
 
 // Backend feature flags that some sidebar modules ALSO drive (not just visibility). Toggling such a
 // module writes both the disabled_modules list (visibility) and the functional flag, so hiding a
@@ -24,6 +25,8 @@ type BackendFlagKey =
 const BACKEND_FLAG: Record<string, BackendFlagKey> = {
   hotel: 'hotel_module_enabled',
   kds: 'enable_kds',
+  // The services production board runs on the same outlet toggle as the kitchen display.
+  production: 'enable_kds',
   appointments: 'enable_appointments',
   layaway: 'layaway_enabled',
 };
@@ -34,7 +37,7 @@ const MODULE_LABELS: Record<string, string> = {
   new_order: 'Point of Sale', orders: 'Sales & Orders', layaway: 'Layaway', returns: 'Returns',
   tables: 'Tables', reservations: 'Reservations', appointments: 'Appointments', packages: 'Service Packages',
   queue: 'Walk-in Queue', repairs: 'Repairs', staff_schedule: 'Staff Schedule', resources: 'Resources',
-  kds: 'Kitchen Display (KDS)', hotel: 'Hotel / Rooms', online_orders: 'Online Orders',
+  kds: 'Kitchen Display (KDS)', production: 'Production Board', hotel: 'Hotel / Rooms', online_orders: 'Online Orders',
   reports: 'Reports & Analytics',
   loyalty: 'Loyalty', commissions: 'Commissions', settings: 'Settings',
 };
@@ -42,7 +45,7 @@ const MODULE_LABELS: Record<string, string> = {
 const USE_CASES = [
   { id: 'hospitality', label: 'Hospitality', icon: UtensilsCrossed, description: 'Restaurants, cafes, hotels — tables, kitchen display, room billing.' },
   { id: 'retail', label: 'Retail', icon: ShoppingCart, description: 'Supermarkets, hardware, fashion — barcode scanning and inventory.' },
-  { id: 'services', label: 'Services', icon: Wrench, description: 'Salons, spas, repair shops — appointments, clients, scheduling.' },
+  { id: 'services', label: 'Services', icon: Wrench, description: 'Printing, salons, spas, garages, laundry, tailoring, repairs: pick the type of service business below.' },
   { id: 'quick_service', label: 'Quick Service', icon: ChefHat, description: 'Fast-food, food courts, kiosks — simple order flow + KDS.' },
 ];
 
@@ -257,6 +260,9 @@ export function ModulesTab() {
           </span>
         )}
       </div>
+
+      {/* Services sub use case (printing, salon, garage, ...) for an outlet already on services. */}
+      {resolvedUseCase === 'services' && activeUC === 'services' && <ServiceProfilePicker canEdit={canEdit} />}
 
       {/* Hiding scope: all roles (tenant-wide) or a specific role */}
       {showTree && (

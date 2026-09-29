@@ -104,9 +104,9 @@ export function buildNavGroups(orgSlug: string): NavGroup[] {
         { label: 'Appointments', icon: Calendar, href: '/appointments', moduleKey: 'appointments', permission: [P.APPOINTMENTS_VIEW, P.APPOINTMENTS_ADD, P.APPOINTMENTS_CHANGE, P.APPOINTMENTS_MANAGE], waiterHidden: true },
         { label: 'Service Packages', icon: Package, href: '/packages', moduleKey: 'packages', permission: [P.PACKAGES_VIEW, P.PACKAGES_MANAGE], waiterHidden: true },
         { label: 'Walk-in Queue', icon: ClipboardList, href: '/queue', moduleKey: 'queue', permission: [P.QUEUE_VIEW, P.QUEUE_CHANGE, P.QUEUE_MANAGE], waiterHidden: true },
-        // Repair (device/job-card intake) is a retail-only workflow — hidden for hospitality,
-        // quick_service and services outlets per explicit product decision (2026-09-19).
-        { label: 'Repair', icon: Wrench, href: '/repair', moduleKey: 'repairs', permission: [P.ORDERS_ADD, P.ORDERS_MANAGE], waiterHidden: true, hideForProfiles: ['hospitality', 'quick_service', 'services'] },
+        // Repair (device job-card intake): retail outlets, plus a services outlet running the
+        // Phone & Electronics Repair profile (use-module-access gates that on service_profile).
+        { label: 'Repair', icon: Wrench, href: '/repair', moduleKey: 'repairs', permission: [P.ORDERS_ADD, P.ORDERS_MANAGE], waiterHidden: true, hideForProfiles: ['hospitality', 'quick_service'] },
         { label: 'Staff Schedule', icon: Users, href: '/staff-schedule', moduleKey: 'staff_schedule', permission: [P.STAFF_VIEW, P.STAFF_MANAGE], waiterHidden: true },
         { label: 'Resources', icon: Sofa, href: '/resources', moduleKey: 'resources', permission: [P.CONFIG_VIEW], waiterHidden: true },
       ],
@@ -116,6 +116,8 @@ export function buildNavGroups(orgSlug: string): NavGroup[] {
       defaultCollapsed: true,
       items: [
         { label: 'KDS', icon: ChefHat, href: '/kds', moduleKey: 'kds', permission: [P.KDS_VIEW, P.KDS_CHANGE, P.KDS_MANAGE] },
+        // Services job workflow (printing, garage, laundry, tailoring): jobs by production stage.
+        { label: 'Production Board', icon: ClipboardList, href: '/production', moduleKey: 'production', permission: [P.KDS_VIEW, P.KDS_CHANGE, P.KDS_MANAGE] },
       ],
     },
     {

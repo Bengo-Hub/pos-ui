@@ -46,7 +46,9 @@ export type ModuleKey =
   | 'queue'
   | 'repairs'
   | 'reservations'
-  | 'packages';
+  | 'packages'
+  // Services job workflow (printing, garage, laundry, tailoring): the production board.
+  | 'production';
 
 // ─── Use-case types ─────────────────────────────────────────────────────────
 export type UseCaseType =
@@ -80,7 +82,9 @@ const USE_CASE_MODULES: Record<UseCaseType, ModuleKey[]> = {
   retail:        [...COMMON_MODULES, 'retail', 'shifts', 'reports', 'layaway', 'loyalty', 'commissions', 'online_orders', 'returns', 'clients', 'repairs'],
   // online_orders: a services business (printing shop, garage, salon selling products) also gets
   // online pickup/delivery orders; online service bookings land in Appointments.
-  services:      [...COMMON_MODULES, 'appointments', 'packages', 'shifts', 'reports', 'loyalty', 'commissions', 'clients', 'staff_schedule', 'resources', 'queue', 'online_orders'],
+  // production: the job production board (job-workflow service profiles, gated on enable_kds which
+  // the profile switches on). repairs: the device repair job card, for the device_repair profile.
+  services:      [...COMMON_MODULES, 'appointments', 'packages', 'shifts', 'reports', 'loyalty', 'commissions', 'clients', 'staff_schedule', 'resources', 'queue', 'online_orders', 'production', 'repairs'],
   quick_service: [...COMMON_MODULES, 'kds', 'shifts', 'reports', 'online_orders'],
 };
 
@@ -209,6 +213,8 @@ export function useModuleAccess() {
       if (moduleKey === 'kds'          && !posSettings.enable_kds)              return false;
       if (moduleKey === 'bar'          && !posSettings.enable_kds)              return false; // bar shares KDS toggle
       if (moduleKey === 'appointments' && !posSettings.enable_appointments)     return false;
+      if (moduleKey === 'production'   && !posSettings.enable_kds)              return false;
+      if (moduleKey === 'repairs' && useCase === 'services' && posSettings.service_profile !== 'device_repair') return false;
     }
     return true;
   }

@@ -1,6 +1,8 @@
 'use client';
 
 import { useModuleAccess } from '@/hooks/use-module-access';
+import { useOutletServiceProfile } from '@/hooks/useServiceJobs';
+import { JobsDashboard } from '@/components/dashboard/jobs-dashboard';
 import { useAuthStore } from '@/store/auth';
 import { useParams } from 'next/navigation';
 import {
@@ -24,6 +26,7 @@ export default function DashboardPage() {
   const { orgSlug } = useParams<{ orgSlug: string }>();
   const user = useAuthStore((s) => s.user);
   const { isSuperUser, isServices, isRetail, isQuickService, isHospitality, hotelModuleEnabled } = useModuleAccess();
+  const serviceProfile = useOutletServiceProfile();
   const roles = user?.roles ?? [];
 
   const primaryRole =
@@ -46,7 +49,8 @@ export default function DashboardPage() {
   switch (primaryRole) {
     case 'admin':
     case 'manager':
-      if (isServices)     return <ServicesDashboard orgSlug={orgSlug} />;
+      // A job-workflow services outlet (printing, garage, laundry) runs on its job book.
+      if (isServices)     return serviceProfile.isJobWorkflow ? <JobsDashboard orgSlug={orgSlug} /> : <ServicesDashboard orgSlug={orgSlug} />;
       if (isRetail)       return <RetailDashboard orgSlug={orgSlug} />;
       if (isQuickService) return <QuickServiceDashboard orgSlug={orgSlug} />;
       // Room/accommodation KPIs only belong on the main dashboard once this outlet actually runs

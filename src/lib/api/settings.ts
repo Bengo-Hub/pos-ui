@@ -127,6 +127,10 @@ export interface POSSettings {
   hidden_items?: string[];
   disabled_modules_by_role?: Record<string, string[]>;
   hidden_items_by_role?: Record<string, string[]>;
+  /** Services sub use case (printing_branding, salon_barber, ...), empty until an admin picks one. */
+  service_profile?: string;
+  /** Default job deposit (percent of the job total) the cashier is prompted to collect. */
+  job_deposit_percent?: number;
   /** A paired Local Print Agent polled the server recently: the till should rely on server-side
    *  background print jobs (queue) and skip its own client-side auto-printing. */
   print_agent_online?: boolean;
@@ -245,6 +249,9 @@ export const posSettingsApi = {
 
   patchTables: (tenantID: string, body: { table_max_occupation_minutes?: number }) =>
     apiClient.patch<POSSettings>(`${settingsBase(tenantID)}/tables`, body),
+
+  patchServiceProfile: (tenantID: string, body: { service_profile?: string; job_deposit_percent?: number }) =>
+    apiClient.patch<POSSettings>(`${settingsBase(tenantID)}/service-profile`, body),
 
   patchOutletConfig: (tenantID: string, body: { use_case?: string | null }) =>
     apiClient.patch<POSSettings>(`${settingsBase(tenantID)}/outlet`, body),

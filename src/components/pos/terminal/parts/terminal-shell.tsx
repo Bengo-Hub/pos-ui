@@ -50,6 +50,7 @@ import { StockCell } from '@/components/pos/stock-cell';
 import { TerminalProductGrid } from '@/components/pos/terminal/parts/terminal-product-grid';
 import { TerminalModals } from '@/components/pos/terminal/parts/terminal-modals';
 import { InlinePaymentBar } from '@/components/pos/terminal/inline-payment-bar';
+import { JobDetailsPanel } from '@/components/jobs/job-details-panel';
 import { useTerminal } from '@/components/pos/terminal/terminal-context';
 import { CostHeaderToggle, MaskedCost } from '@/components/pos/cost-price';
 import { InlineDiscountCell, InlineMarginCell, InlinePriceCell, InlineTotalCell } from '@/components/pos/inline-line-cells';
@@ -206,6 +207,10 @@ export function TerminalShell() {
           </div>
         ) : null}
 
+        {/* Services job sheet (printing, garage, laundry, tailoring): due date, instructions,
+            reference media and per-item specs on top of the catalog services picked. */}
+        {t.jobProfile && !t.isAddToBill && <JobDetailsPanel />}
+
         {/* Order type (hospitality/quick-service) keeps its own row. */}
         {cfg.showOrderType && (
           <OrderTypeSelector
@@ -248,7 +253,7 @@ export function TerminalShell() {
         ) : (
           <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
             <ShoppingCart className="h-3.5 w-3.5" />
-            {t.isAddToBill ? 'Adding to Bill' : cfg.terminalTitle}
+            {t.isAddToBill ? 'Adding to Bill' : t.jobProfile ? `New ${t.jobProfile.job_label}` : cfg.terminalTitle}
             {t.cartItemCount > 0 && <span className="text-primary">· {t.cartItemCount}</span>}
           </div>
         )}
@@ -641,7 +646,10 @@ export function TerminalShell() {
       customerCreditAvailable={t.customerCreditAvailable}
       loyaltyAccount={t.loyaltyRedeemInfo}
       disabled={cart.length === 0}
-      mode={t.isHospitality && t.orderSubtype === 'dine_in' ? 'send_to_kitchen' : 'pay'}
+      // A services job goes to production unpaid (a deposit is offered right after); dine-in
+      // goes to the kitchen. Both create the order without taking payment here.
+      mode={t.jobProfile || (t.isHospitality && t.orderSubtype === 'dine_in') ? 'send_to_kitchen' : 'pay'}
+      sendLabel={t.jobProfile ? `Create ${t.jobProfile.job_label}` : undefined}
       createOrderAsync={t.createOrderAsync}
       onSettled={t.handleInlineSettled}
       onDraft={t.handlePark}

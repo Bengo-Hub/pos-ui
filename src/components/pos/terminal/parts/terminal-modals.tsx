@@ -28,6 +28,7 @@ import { ApplyDiscountModal } from '@/components/pos/discounts/apply-discount-mo
 import { OrderTaxModal } from '@/components/pos/order-tax-modal';
 import { LinePriceModal } from '@/components/pos/line-price-modal';
 import { OrderPlacedDialog } from '@/components/pos/order-placed-dialog';
+import { JobCreatedDialog } from '@/components/jobs/job-created-dialog';
 import { RegisterDetailsModal, RecentTransactionsModal, SellReturnModal } from '@/components/pos/terminal/toolbar-modals';
 import { resolveBillProfile } from '@/lib/pos/printer-stations';
 import { useTerminal } from '@/components/pos/terminal/terminal-context';
@@ -227,6 +228,20 @@ export function TerminalModals() {
         // the SERVER print queue — client auto-printing it again would double-print.
         autoPrint={Boolean((t.posSettings as any)?.auto_print_order) && !(t.posSettings as any)?.print_agent_online}
       />
+
+      {t.jobCreated && (
+        <JobCreatedDialog
+          open={!!t.jobCreated}
+          onClose={() => t.setJobCreated(null)}
+          orderId={t.jobCreated.orderId}
+          orderNumber={t.jobCreated.orderNumber}
+          total={t.jobCreated.total}
+          depositPercent={t.jobDepositPercent}
+          profile={t.jobProfile}
+          tenantId={t.user?.tenant_id ?? ''}
+          tenantSlug={t.user?.tenant_slug ?? t.orgSlug}
+        />
+      )}
 
       <OrderPlacedDialog
         open={t.orderPlacedOpen}

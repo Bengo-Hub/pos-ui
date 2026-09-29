@@ -21,7 +21,7 @@ const POS_SETTINGS = getDataset('pos-settings');
  *  so an offline reload right after saving never serves the pre-save settings. outletID must
  *  match whatever the read hook (usePOSSettings) is currently keyed on — pos-settings is
  *  outlet-scoped (POSSettings.outlet_id, resolved server-side from X-Outlet-ID). */
-function writeSettingsCaches(qc: ReturnType<typeof useQueryClient>, tenantID: string, outletID: string | undefined, data: POSSettings) {
+export function writeSettingsCaches(qc: ReturnType<typeof useQueryClient>, tenantID: string, outletID: string | undefined, data: POSSettings) {
   qc.setQueryData(POS_SETTINGS.queryKey(tenantID, outletID), data);
   void import('@/lib/db/kv-cache').then(({ setKV, kvKey }) => setKV(kvKey('pos-settings', tenantID, outletID), tenantID, data));
 }

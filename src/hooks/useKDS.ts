@@ -1,6 +1,7 @@
 'use client';
 
 import { apiClient } from '@/lib/api/client';
+import type { JobHeader } from '@/lib/api/service-jobs';
 import { useAuthStore } from '@/store/auth';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
@@ -40,6 +41,8 @@ export interface KDSTicketItem {
   modifiers?: string[];
   notes?: string;
   kds_status?: string;
+  /** Services job lines: the spec sheet captured at reception (size, material, vehicle reg...). */
+  job_specs?: Record<string, string>;
 }
 
 export interface KDSTicket {
@@ -56,6 +59,14 @@ export interface KDSTicket {
   order_subtype?: string;
   /** Customer notes for the whole order (online orders). */
   order_notes?: string;
+  /** Services job orders: customer, payment position and the job header (stage, due, brief, attachments). */
+  job?: {
+    customer_name?: string;
+    customer_phone?: string;
+    total_amount: number;
+    paid_total: number;
+    details?: JobHeader;
+  };
   items: KDSTicketItem[];
   received_at: string;
   started_at?: string;
@@ -201,6 +212,9 @@ export interface KDSTicketsFilter {
   stationId?: string;
   status?: KDSTicketStatus;
   source?: OrderSource;
+  /** Recency window in hours (server default 24). 0 shows every active ticket: a services
+   *  production board holds multi-day jobs that must not drop off after a day. */
+  sinceHours?: number;
 }
 
 export function useKDSTickets(filter?: KDSTicketsFilter) {
@@ -212,6 +226,7 @@ export function useKDSTickets(filter?: KDSTicketsFilter) {
         ...(filter?.stationId ? { station_id: filter.stationId } : {}),
         ...(filter?.status ? { status: filter.status } : {}),
         ...(filter?.source ? { order_source: filter.source } : {}),
+        ...(filter?.sinceHours != null ? { since_hours: String(filter.sinceHours) } : {}),
       }),
     enabled: !!tenantID,
     staleTime: 5_000,

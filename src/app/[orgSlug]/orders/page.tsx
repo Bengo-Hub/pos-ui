@@ -8,6 +8,7 @@ import { ReceiptShareButtons } from '@/components/pos/sales/receipt-share-action
 import { SplitPaymentModal } from '@/components/pos/split-payment-modal';
 import { VoidBillButton } from '@/components/pos/void-bill-button';
 import { VoidLineButton } from '@/components/pos/void-line-button';
+import { OrderJobPanel } from '@/components/jobs/order-job-panel';
 import { Badge, Button, Card, CardContent, CardHeader } from '@/components/ui/base';
 import { useOrders, useReleaseTable } from '@/hooks/usePOS';
 import { P, usePermissions } from '@/hooks/usePermissions';
@@ -70,6 +71,11 @@ export default function OrdersPage() {
   const [paymentOpen, setPaymentOpen] = useState(false);
   const releaseTable = useReleaseTable();
   const selCurrency = selectedOrder?.currency ?? 'KES';
+  // What is still owed on the selected order: a part-paid bill (a job deposit, an earlier split
+  // payment) is collected for its balance, not its full total.
+  const selOutstanding = selectedOrder
+    ? Math.max(0, (selectedOrder.total_amount ?? 0) - (selectedOrder.paid_total ?? 0))
+    : 0;
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedCustomer(customer.trim()), 350);
@@ -351,6 +357,7 @@ export default function OrdersPage() {
               </Button>
             </CardHeader>
             <CardContent className="space-y-4">
+              <OrderJobPanel order={selectedOrder} />
               {selectedOrder.edges?.lines && selectedOrder.edges.lines.length > 0 && (
                 <div className="space-y-2">
                   <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Items</p>
@@ -456,8 +463,8 @@ export default function OrdersPage() {
                   <Button className="w-full gap-2" onClick={() => setPaymentOpen(true)}>
                     <CreditCard className="h-4 w-4" />
                     Collect Payment
-                    {(selectedOrder.total_amount ?? 0) > 0 && (
-                      <span className="ml-auto font-bold text-sm">{formatCurrency(selectedOrder.total_amount ?? 0, selCurrency)}</span>
+                    {selOutstanding > 0 && (
+                      <span className="ml-auto font-bold text-sm">{formatCurrency(selOutstanding, selCurrency)}</span>
                     )}
                   </Button>
                 </Can>
@@ -526,7 +533,7 @@ export default function OrdersPage() {
           onClose={() => setPaymentOpen(false)}
           orderId={selectedOrder.id}
           orderNumber={selectedOrder.order_number}
-          total={selectedOrder.total_amount ?? 0}
+          total={selOutstanding}
           tenantSlug={orgSlug}
           tenantId={user?.tenant_id ?? ''}
           orderLines={(selectedOrder.edges?.lines ?? []).map((line: any, i: number) => ({

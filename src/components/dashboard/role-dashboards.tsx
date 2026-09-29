@@ -32,7 +32,7 @@ function greeting(): string {
 /** Shared analytics block (trend + category + top items) — every manager/admin-facing role
  *  dashboard below renders the same three charts against whatever range its own filter picked,
  *  so this stays a single place to add/reorder dashboard BI widgets. */
-function DashboardCharts({ range, currency }: { range: DashboardRange; currency?: string }) {
+export function DashboardCharts({ range, currency }: { range: DashboardRange; currency?: string }) {
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
