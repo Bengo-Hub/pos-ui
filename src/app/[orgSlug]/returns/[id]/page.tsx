@@ -20,7 +20,8 @@ import { ReceiptPreview } from '@/components/pos/receipt-preview';
 import { useReceiptAfterSale } from '@/hooks/use-receipt-after-sale';
 import { resolveBillProfile } from '@/lib/pos/printer-stations';
 import { DataTable } from '@bengo-hub/shared-ui-lib/data-table';
-import { buildReturnLineColumns, type ReturnLine } from './return-lines-columns';
+import { buildReturnLineColumns, returnLineLocations, type ReturnLine } from './return-lines-columns';
+import { RestockStatusCard } from '@/components/pos/returns/restock-status-card';
 
 interface ReturnDetail {
   id: string;
@@ -151,7 +152,11 @@ export default function ReturnDetailPage() {
   // Exchange completion: replacement items + the top-up payment flow for a dearer swap.
   const [exchangeLines, setExchangeLines] = useState<ExchangeLine[]>([]);
   const [topUpOrder, setTopUpOrder] = useState<{ id: string; number: string; total: number } | null>(null);
-  const lineColumns = useMemo(() => buildReturnLineColumns(currency), [currency]);
+  // "Returned To" shows where inventory put each item back; only meaningful once completed.
+  const lineColumns = useMemo(
+    () => buildReturnLineColumns(currency, ret?.status === 'completed' ? returnLineLocations(ret.metadata) : undefined),
+    [currency, ret?.status, ret?.metadata],
+  );
   // Completion receipt. A refund/store-credit return is its own document (pos-api's returns
   // receipt endpoint renders it with the REFUND framing) and is NOT a fiscalised sale, so it
   // uses showReceiptFromEndpoint. An exchange instead raises a normal fully-paid replacement
@@ -287,6 +292,11 @@ export default function ReturnDetailPage() {
           </div>
         )}
       </div>
+
+      {/* Where the returned goods went back into stock (reported by inventory). */}
+      {ret.status === 'completed' && (
+        <RestockStatusCard returnId={ret.id} metadata={ret.metadata} canRetry={canManageOrders} />
+      )}
 
       {/* ── Action panel — sits right under the summary; returned items render below it ── */}
 

@@ -304,7 +304,12 @@ export function InitiateReturnModal({
           lines: returnLines,
         },
       },
-      { onSuccess: onClose },
+      {
+        onSuccess: onClose,
+        // Surface the server's reason (e.g. "only 1 left to return on this sale") instead of a
+        // generic failure: the API validates every line against the original sale.
+        onError: async (err) => toast.error(await apiErrorMessage(err, 'Failed to initiate return')),
+      },
     );
   }
 
@@ -418,12 +423,15 @@ export function InitiateReturnModal({
                               <td className="px-3 py-2.5 text-center">
                                 <input
                                   type="number"
-                                  min={1}
+                                  min={0.01}
+                                  step="any"
                                   max={line.quantity ?? 1}
                                   value={sel.qty}
                                   disabled={!sel.checked}
                                   onChange={(e) => {
-                                    const v = Math.min(Math.max(1, parseInt(e.target.value) || 1), line.quantity ?? 1);
+                                    // Fractional quantities (kg, litres) are returnable too.
+                                    const parsed = parseFloat(e.target.value);
+                                    const v = Math.min(Math.max(0.01, Number.isFinite(parsed) ? parsed : 1), line.quantity ?? 1);
                                     setSelectedLines((prev) => ({ ...prev, [line.id]: { ...prev[line.id], qty: v } }));
                                   }}
                                   className="w-16 text-center bg-background border border-border rounded-lg py-1 px-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary/40 disabled:opacity-40"
@@ -563,7 +571,7 @@ export function InitiateReturnModal({
             />
           </div>
 
-          {isError && <p className="text-xs text-red-500">Failed to initiate return. Please try again.</p>}
+          {isError && <p className="text-xs text-red-500">The return was not saved. See the message above and adjust.</p>}
 
           <div className="flex gap-3 pt-1">
             <button

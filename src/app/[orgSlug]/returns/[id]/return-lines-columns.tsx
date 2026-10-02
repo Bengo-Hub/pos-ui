@@ -16,7 +16,20 @@ export interface ReturnLine {
   reason?: string;
 }
 
-export function buildReturnLineColumns(currency: string): DataTableColumn<ReturnLine>[] {
+export { returnLineLocations } from '@/components/pos/returns/restock-status-card';
+
+export function buildReturnLineColumns(
+  currency: string,
+  locationFor?: (sku?: string) => string,
+): DataTableColumn<ReturnLine>[] {
+  const locationCol: DataTableColumn<ReturnLine>[] = locationFor
+    ? [{
+        key: 'location',
+        header: 'Returned To',
+        accessor: (l) => locationFor(l.sku),
+        render: (l) => <span className="text-xs font-medium">{locationFor(l.sku)}</span>,
+      }]
+    : [];
   return [
     {
       key: 'name',
@@ -38,6 +51,7 @@ export function buildReturnLineColumns(currency: string): DataTableColumn<Return
       accessor: (l) => l.quantity,
       render: (l) => <span>{l.quantity}</span>,
     },
+    ...locationCol,
     {
       key: 'unit_price',
       header: 'Unit Price',

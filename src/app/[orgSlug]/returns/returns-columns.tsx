@@ -4,6 +4,7 @@
 // platform's <page>-columns.tsx convention.
 
 import { cn } from '@/lib/utils';
+import { returnLineLocations } from '@/components/pos/returns/restock-status-card';
 import type { DataTableColumn } from '@bengo-hub/shared-ui-lib/data-table';
 
 export interface ReturnItem {
@@ -23,6 +24,15 @@ export interface ReturnItem {
   refund_method?: string;
   created_at: string;
   line_items?: { name: string; qty: number; unit_price: number }[];
+  // Restock outcome from inventory (restock_status, restock_locations, ...), see pos-api returns/restock.go.
+  metadata?: Record<string, any>;
+}
+
+// Where the returned goods went: the warehouse(s) inventory restocked into once completed.
+function returnedTo(ret: ReturnItem): string {
+  if (ret.status === 'rejected') return '—';
+  if (ret.status !== 'completed') return 'Awaiting completion';
+  return returnLineLocations(ret.metadata)();
 }
 
 export const STATUS_CONFIG: Record<ReturnItem['status'], { label: string; className: string }> = {
@@ -89,6 +99,18 @@ export function buildReturnsColumns(cb: ReturnsColumnCallbacks): DataTableColumn
           <span className={cn('text-[10px] font-bold px-2 py-0.5 rounded-full border border-transparent', cfg.className)}>
             {cfg.label}
           </span>
+        );
+      },
+    },
+    {
+      key: 'returned_to',
+      header: 'Returned To',
+      accessor: (ret) => returnedTo(ret),
+      render: (ret) => {
+        const label = returnedTo(ret);
+        const confirmed = ret.status === 'completed' && Array.isArray(ret.metadata?.restock_locations) && ret.metadata!.restock_locations.length > 0;
+        return (
+          <span className={cn('text-xs', confirmed ? 'font-medium' : 'text-muted-foreground')}>{label}</span>
         );
       },
     },
