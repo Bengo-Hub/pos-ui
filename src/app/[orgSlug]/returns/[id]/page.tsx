@@ -12,7 +12,7 @@ import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { usePermissions, P } from '@/hooks/usePermissions';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
-import { allowedRefundChannels, defaultRefundChannel, refundChannelAdvisory, REFUND_CHANNELS } from '@/lib/returns-policy';
+import { allowedRefundChannels, defaultRefundChannel, refundChannelAdvisory, REFUND_CHANNELS, restockByPolicy } from '@/lib/returns-policy';
 import { ExchangeLinesPicker, exchangeTotal, type ExchangeLine } from '@/components/pos/returns/exchange-lines-picker';
 import { SplitPaymentModal } from '@/components/pos/split-payment-modal';
 import { CustomerDetailsModal } from '@/components/pos/customers/customer-details-modal';
@@ -108,7 +108,7 @@ function useCompleteReturn(returnId: string) {
   const tenantID = useAuthStore((s) => s.user?.tenant_id ?? '');
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (payload: { notes?: string; refund_channel?: string; exchange_lines?: any[] }) =>
+    mutationFn: (payload: { notes?: string; refund_channel?: string; exchange_lines?: any[]; restock?: boolean }) =>
       apiClient.post<CompleteReturnResponse>(`/api/v1/${tenantID}/pos/returns/${returnId}/complete`, payload),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['return', tenantID, returnId] });
@@ -147,6 +147,8 @@ export default function ReturnDetailPage() {
   const [refundChannel, setRefundChannel] = useState('');
   // Completion-time notes + optional refund-channel confirm (till step).
   const [completeNotes, setCompleteNotes] = useState('');
+  // Restock choice at completion; null follows the outlet's restock policy for the reason code.
+  const [restockOverride, setRestockOverride] = useState<boolean | null>(null);
   const [completeChannel, setCompleteChannel] = useState('');
   const [customerOpen, setCustomerOpen] = useState(false);
   // Exchange completion: replacement items + the top-up payment flow for a dearer swap.
@@ -200,6 +202,7 @@ export default function ReturnDetailPage() {
   // always snapped back into the allowed set.
   const effectiveChannel = validChannel(refundChannel || ret.refund_channel || policyDefault);
   const effectiveCompleteChannel = validChannel(completeChannel || ret.refund_channel || policyDefault);
+  const restock = restockOverride ?? restockByPolicy(ret.reason_code, posSettings?.return_no_restock_reasons);
   const channelLabel = (v: string) => REFUND_CHANNELS.find((c) => c.value === v)?.label ?? v.replace('_', ' ');
   // Stage RBAC: managers approve/reject; a cashier/manager at the till completes an approved return.
   const canApprove = canManageOrders;
@@ -384,9 +387,9 @@ export default function ReturnDetailPage() {
           </div>
           <div className="rounded-xl bg-emerald-50 border border-emerald-100 px-4 py-3 text-xs text-emerald-800">
             {isExchange ? (
-              <>Completing will restock the returned items and raise the replacement sale — a dearer replacement collects the difference at the till; a cheaper one refunds the leftover.</>
+              <>Completing will {restock ? 'restock' : 'write off'} the returned items and raise the replacement sale. A dearer replacement collects the difference at the till; a cheaper one refunds the leftover.</>
             ) : (
-              <>Completing will restock the returned items
+              <>Completing will {restock ? 'restock' : 'write off (not restock)'} the returned items
                 {ret.refund_amount > 0 && (
                   <> and settle a <span className="font-semibold">{formatCurrency(ret.refund_amount, currency)}</span> {ret.return_type === 'store_credit' ? 'store credit' : 'refund'} via <span className="font-semibold">{channelLabel(effectiveCompleteChannel)}</span></>
                 )}.
@@ -422,6 +425,22 @@ export default function ReturnDetailPage() {
               )}
             </div>
           )}
+          <label className="flex items-start gap-2.5 cursor-pointer rounded-xl border border-border px-3 py-2.5">
+            <input
+              type="checkbox"
+              checked={restock}
+              onChange={(e) => setRestockOverride(e.target.checked)}
+              className="mt-0.5 h-4 w-4 rounded border-border accent-primary"
+            />
+            <span className="text-xs">
+              <span className="font-medium text-foreground">Put items back into stock</span>{' '}
+              <span className="text-muted-foreground">
+                {restock
+                  ? 'They return to the branch they were sold from and can be sold again.'
+                  : 'Unticked: the items are written off (damaged, defective or expired goods are not restocked by default).'}
+              </span>
+            </span>
+          </label>
           <div>
             <label className="text-xs font-semibold text-muted-foreground">Notes (optional)</label>
             <textarea
@@ -436,6 +455,7 @@ export default function ReturnDetailPage() {
             onClick={() => complete.mutate(
               {
                 notes: completeNotes,
+                restock,
                 ...(showChannelPicker ? { refund_channel: effectiveCompleteChannel } : {}),
                 ...(isExchange
                   ? {

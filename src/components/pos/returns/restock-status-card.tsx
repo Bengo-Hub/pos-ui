@@ -27,6 +27,7 @@ type RestockStatus =
   | 'already_restocked'
   | 'nothing_to_restock'
   | 'skipped_not_entitled'
+  | 'not_restocked'
   | 'pending'
   | 'failed';
 
@@ -35,6 +36,7 @@ const STATUS_VIEW: Record<RestockStatus | 'unconfirmed', { label: string; tone: 
   already_restocked:    { label: 'Back in stock',              tone: 'bg-emerald-500/10 text-emerald-700 border-emerald-200', icon: CheckCircle2 },
   nothing_to_restock:   { label: 'No stock to return',         tone: 'bg-muted text-muted-foreground border-border',          icon: CheckCircle2 },
   skipped_not_entitled: { label: 'Not restocked (no inventory sync on plan)', tone: 'bg-muted text-muted-foreground border-border', icon: AlertTriangle },
+  not_restocked:        { label: 'Written off (not restocked)', tone: 'bg-muted text-muted-foreground border-border',          icon: AlertTriangle },
   pending:              { label: 'Restock in progress',        tone: 'bg-amber-500/10 text-amber-700 border-amber-200',       icon: Clock },
   failed:               { label: 'Restock failed',             tone: 'bg-red-500/10 text-red-600 border-red-200',             icon: AlertTriangle },
   unconfirmed:          { label: 'Restock not confirmed',      tone: 'bg-amber-500/10 text-amber-700 border-amber-200',       icon: AlertTriangle },
@@ -42,7 +44,7 @@ const STATUS_VIEW: Record<RestockStatus | 'unconfirmed', { label: string; tone: 
 
 const lineLocation = (l: RestockLine) => l.location || l.outlet_name || l.warehouse_name || '';
 
-const SETTLED = new Set<string>(['restocked', 'already_restocked', 'nothing_to_restock', 'skipped_not_entitled']);
+const SETTLED = new Set<string>(['restocked', 'already_restocked', 'nothing_to_restock', 'skipped_not_entitled', 'not_restocked']);
 
 // returnLineLocations maps a returned SKU to the location(s), meaning outlet/branch, it went back to, from
 // metadata.restock_lines. A recipe item restocks its ingredients rather than its own SKU, so a
@@ -69,6 +71,7 @@ export function returnLineLocations(metadata?: Record<string, any>): (sku?: stri
     if (status === 'failed') return 'Restock failed';
     if (status === 'nothing_to_restock') return 'Not a stock item';
     if (status === 'skipped_not_entitled') return 'Not restocked';
+    if (status === 'not_restocked') return 'Written off (not restocked)';
     return 'Not confirmed';
   };
 }

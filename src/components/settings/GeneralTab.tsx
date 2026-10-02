@@ -13,6 +13,7 @@ import { convertCurrency } from '@/lib/api/currency';
 import { useAuthStore } from '@/store/auth';
 import { CurrencyChangeConfirmModal } from '@bengo-hub/shared-ui-lib';
 import { inputClass, labelClass } from './shared';
+import { DEFAULT_NO_RESTOCK_REASONS, RETURN_REASON_OPTIONS } from '@/lib/returns-policy';
 
 export function GeneralTab() {
   const { tenant, isLoading: brandingLoading } = useTenantBranding();
@@ -42,6 +43,7 @@ export function GeneralTab() {
   const [allowPriceAboveBase, setAllowPriceAboveBase] = useState(true);
   const [requireApprovalBelowBase, setRequireApprovalBelowBase] = useState(true);
   const [restrictCreditSaleRefund, setRestrictCreditSaleRefund] = useState(true);
+  const [noRestockReasons, setNoRestockReasons] = useState<string[]>(DEFAULT_NO_RESTOCK_REASONS);
 
   useEffect(() => {
     if (settings) {
@@ -53,6 +55,7 @@ export function GeneralTab() {
       setAllowPriceAboveBase(settings.allow_price_above_base ?? true);
       setRequireApprovalBelowBase(settings.require_approval_below_base ?? true);
       setRestrictCreditSaleRefund(settings.restrict_credit_sale_refund_to_offset ?? true);
+      setNoRestockReasons(settings.return_no_restock_reasons ?? DEFAULT_NO_RESTOCK_REASONS);
     }
   }, [settings]);
 
@@ -95,6 +98,7 @@ export function GeneralTab() {
       allow_price_above_base: allowPriceAboveBase,
       require_approval_below_base: requireApprovalBelowBase,
       restrict_credit_sale_refund_to_offset: restrictCreditSaleRefund,
+      return_no_restock_reasons: noRestockReasons,
     });
   };
 
@@ -316,6 +320,31 @@ export function GeneralTab() {
                         </span>
                       </span>
                     </label>
+                  </div>
+                  <div className="space-y-2 pt-2 border-t border-border">
+                    <label className={labelClass}>Don&rsquo;t put back into stock when returned as</label>
+                    <p className="text-xs text-muted-foreground">
+                      Items returned for these reasons are written off instead of going back into sellable stock. A manager
+                      can still change this for a single return when completing it.
+                    </p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {RETURN_REASON_OPTIONS.map((opt) => (
+                        <label key={opt.value} className="flex items-center gap-2 text-xs cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={noRestockReasons.includes(opt.value)}
+                            onChange={(e) =>
+                              setNoRestockReasons((prev) =>
+                                e.target.checked ? [...prev, opt.value] : prev.filter((r) => r !== opt.value),
+                              )
+                            }
+                            disabled={!canEdit}
+                            className="h-4 w-4 rounded border-border accent-primary"
+                          />
+                          {opt.label}
+                        </label>
+                      ))}
+                    </div>
                   </div>
                 </CardContent>
               </Card>

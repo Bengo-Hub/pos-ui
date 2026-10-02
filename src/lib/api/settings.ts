@@ -96,6 +96,9 @@ export interface POSSettings {
    *  customer's balance (never cash/mpesa/bank/cheque/store_credit) — the anti-phantom-debt
    *  guard. Opt out to let cashiers choose any refund channel for such a return. */
   restrict_credit_sale_refund_to_offset: boolean;
+  /** Return reason codes whose goods are written off instead of restocked. Defaults to
+   *  damaged/defective/expired; a manager can override per return when completing it. */
+  return_no_restock_reasons?: string[];
   /** Max order discount % a cashier may apply without manager approval (100 = no limit). */
   max_discount_percent: number;
   /** Max order discount AMOUNT (currency) without approval (0 = no amount limit). Exceeding EITHER limit triggers the step-up. */
@@ -178,6 +181,7 @@ export interface UpdatePOSSettingsInput {
   printer_profiles?: PrinterProfile[];
   return_window_days?: number;
   restrict_credit_sale_refund_to_offset?: boolean;
+  return_no_restock_reasons?: string[];
   max_discount_percent?: number;
   max_discount_amount?: number;
   discount_limit_type?: 'percent' | 'amount';

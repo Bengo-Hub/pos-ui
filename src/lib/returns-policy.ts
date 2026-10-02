@@ -72,3 +72,22 @@ export function defaultRefundChannel(returnType: string, onAccount?: boolean): s
   if (returnType === 'store_credit') return 'store_credit';
   return 'cash';
 }
+
+// Restock policy (mirrors pos-api returns/restock_policy.go): goods returned for these reasons
+// cannot be resold, so by default they are written off instead of going back into stock. The
+// outlet can change the list in Settings; a manager can override per return when completing it.
+export const RETURN_REASON_OPTIONS: { value: string; label: string }[] = [
+  { value: 'damaged',      label: 'Damaged item' },
+  { value: 'defective',    label: 'Defective item' },
+  { value: 'expired',      label: 'Expired product' },
+  { value: 'wrong_item',   label: 'Wrong item' },
+  { value: 'changed_mind', label: 'Changed mind' },
+  { value: 'other',        label: 'Other' },
+];
+export const DEFAULT_NO_RESTOCK_REASONS = ['damaged', 'defective', 'expired'];
+
+/** restockByPolicy: no reason code (e.g. an Edit-Sale correction) always restocks. */
+export function restockByPolicy(reasonCode?: string | null, noRestockReasons?: string[] | null): boolean {
+  if (!reasonCode) return true;
+  return !(noRestockReasons ?? DEFAULT_NO_RESTOCK_REASONS).includes(reasonCode);
+}
