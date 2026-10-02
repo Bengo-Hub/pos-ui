@@ -11,7 +11,7 @@ import { apiClient } from '@/lib/api/client';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { useEffectiveOnline } from '@/lib/connectivity';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
-import { allowedRefundChannels, defaultRefundChannel, refundChannelAdvisory } from '@/lib/returns-policy';
+import { allowedRefundChannels, defaultRefundChannel, refundChannelAdvisory, restockByPolicy, RETURN_REASON_OPTIONS } from '@/lib/returns-policy';
 import { cn, formatCurrency } from '@/lib/utils';
 import { orderDisplayDate } from '@/components/pos/sales/sales-shared';
 import { useAuthStore } from '@/store/auth';
@@ -97,23 +97,6 @@ export function useInitiateReturn() {
   });
 }
 
-export const RETURN_REASONS = [
-  'Defective / damaged',
-  'Wrong item received',
-  'Changed mind',
-  'Duplicate purchase',
-  'Item not as described',
-  'Other',
-];
-export const REASON_CODES: { value: string; label: string }[] = [
-  { value: '',             label: '— Select code —'  },
-  { value: 'changed_mind', label: 'Changed mind'      },
-  { value: 'defective',    label: 'Defective item'    },
-  { value: 'damaged',      label: 'Damaged item'      },
-  { value: 'wrong_item',   label: 'Wrong item'        },
-  { value: 'expired',      label: 'Expired product'   },
-  { value: 'other',        label: 'Other'             },
-];
 // "Store Credit" is deliberately NOT its own Return Type button — it used to sit alongside
 // Refund/Exchange here AND appear again in the Refund Method row below, so a cashier could pick
 // either "Return Type: Store Credit" or "Return Type: Refund" + "Method: Store Credit" for the
@@ -156,8 +139,10 @@ export function InitiateReturnModal({
   const foundOrdersRef = useRef<Map<string, any>>(new Map());
 
   const [returnType, setReturnType] = useState('refund');
-  const [reason, setReason] = useState(RETURN_REASONS[0]);
-  const [reasonCode, setReasonCode] = useState('');
+  const [reasonCode, setReasonCode] = useState(RETURN_REASON_OPTIONS[0].value);
+  const [reasonNotes, setReasonNotes] = useState('');
+  const reasonLabel = RETURN_REASON_OPTIONS.find((r) => r.value === reasonCode)?.label ?? reasonCode;
+  const reason = reasonNotes.trim() ? `${reasonLabel}: ${reasonNotes.trim()}` : reasonLabel;
   const [refundChannel, setRefundChannel] = useState('cash');
   const [returnDate, setReturnDate] = useState(() => new Date().toISOString().slice(0, 10));
   // Exchange top-up: amount to collect from the customer when the replacement is pricier than the
@@ -532,29 +517,35 @@ export function InitiateReturnModal({
             </div>
           )}
 
-          {/* Reason */}
-          <div className="grid grid-cols-2 gap-4">
+          {/* Reason: ONE field. It used to be a free "Return Reason" plus a separate optional
+              "Reason Code", which let a return read "Changed mind" with code "Damaged item".
+              The code drives the refund-method and restock rules, so it is the only choice;
+              anything extra goes in Notes. */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="text-xs font-semibold text-muted-foreground">Return Reason</label>
-              <select
-                value={reason}
-                onChange={(e) => setReason(e.target.value)}
-                className="mt-1 w-full bg-background border border-border rounded-xl py-2.5 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
-              >
-                {RETURN_REASONS.map((r) => <option key={r} value={r}>{r}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-muted-foreground">
-                Reason Code <span className="font-normal">(optional)</span>
-              </label>
+              <label className="text-xs font-semibold text-muted-foreground">Reason</label>
               <select
                 value={reasonCode}
                 onChange={(e) => setReasonCode(e.target.value)}
                 className="mt-1 w-full bg-background border border-border rounded-xl py-2.5 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
               >
-                {REASON_CODES.map((rc) => <option key={rc.value} value={rc.value}>{rc.label}</option>)}
+                {RETURN_REASON_OPTIONS.map((rc) => <option key={rc.value} value={rc.value}>{rc.label}</option>)}
               </select>
+              {!restockByPolicy(reasonCode, posSettings?.return_no_restock_reasons) && (
+                <p className="text-[11px] text-amber-700 mt-1.5">Items returned for this reason are written off, not put back into stock.</p>
+              )}
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground">
+                Notes <span className="font-normal">(optional)</span>
+              </label>
+              <input
+                type="text"
+                value={reasonNotes}
+                onChange={(e) => setReasonNotes(e.target.value)}
+                placeholder="e.g. screen cracked on arrival"
+                className="mt-1 w-full bg-background border border-border rounded-xl py-2.5 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+              />
             </div>
           </div>
 

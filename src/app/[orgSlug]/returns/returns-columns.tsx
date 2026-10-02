@@ -24,6 +24,8 @@ export interface ReturnItem {
   refund_method?: string;
   created_at: string;
   line_items?: { name: string; qty: number; unit_price: number }[];
+  // Branch the return belongs to (location means outlet), resolved by pos-api for every status.
+  outlet_name?: string;
   // Restock outcome from inventory (restock_status, restock_locations, ...), see pos-api returns/restock.go.
   metadata?: Record<string, any>;
 }
@@ -101,6 +103,13 @@ export function buildReturnsColumns(cb: ReturnsColumnCallbacks): DataTableColumn
           </span>
         );
       },
+    },
+    {
+      key: 'outlet',
+      header: 'Outlet',
+      sortable: true,
+      accessor: (ret) => ret.outlet_name ?? '',
+      render: (ret) => <span className="text-xs font-medium">{ret.outlet_name || '—'}</span>,
     },
     {
       key: 'returned_to',

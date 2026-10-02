@@ -33,6 +33,8 @@ interface ReturnDetail {
   // Original buyer, resolved by pos-api from the order — shown + deep-linked to the client profile.
   customer_name?: string;
   customer_phone?: string;
+  // Branch the return belongs to (location means outlet), resolved by pos-api.
+  outlet_name?: string;
   return_type: 'refund' | 'exchange' | 'store_credit';
   status: 'pending' | 'approved' | 'rejected' | 'completed';
   reason?: string;
@@ -209,61 +211,63 @@ export default function ReturnDetailPage() {
   const canComplete = canAny([P.ORDERS_CHANGE_OWN, P.ORDERS_CHANGE, P.ORDERS_MANAGE]);
 
   return (
-    <div className="p-6 max-w-3xl mx-auto space-y-6">
+    // Full width like the Returns list (the shell adds no padding; pages own p-*). No max-w
+    // column: a narrow centred column left large dead margins on desktop.
+    <div className="p-4 sm:p-6 space-y-5">
       {/* Back + header */}
-      <div className="flex items-center gap-4">
+      <div className="flex flex-wrap items-center gap-3 sm:gap-4">
         <button
           onClick={() => router.push(`/${orgSlug}/returns`)}
-          className="h-9 w-9 rounded-xl border border-border flex items-center justify-center hover:bg-accent transition-colors"
+          aria-label="Back to returns"
+          className="h-9 w-9 shrink-0 rounded-xl border border-border flex items-center justify-center hover:bg-accent transition-colors"
         >
           <ArrowLeft className="h-4 w-4" />
         </button>
-        <div className="flex-1">
-          <div className="flex items-center gap-3">
-            <div className="h-9 w-9 rounded-xl bg-primary/10 flex items-center justify-center">
-              <RotateCcw className="h-4 w-4 text-primary" />
-            </div>
-            <div>
-              <h1 className="text-xl font-bold">{ret.return_number}</h1>
-              <p className="text-xs text-muted-foreground">{new Date(ret.created_at).toLocaleString()}</p>
-            </div>
+        <div className="flex min-w-0 flex-1 items-center gap-3">
+          <div className="h-9 w-9 shrink-0 rounded-xl bg-primary/10 flex items-center justify-center">
+            <RotateCcw className="h-4 w-4 text-primary" />
+          </div>
+          <div className="min-w-0">
+            <h1 className="text-lg sm:text-xl font-bold truncate">Return {ret.return_number}</h1>
+            <p className="text-xs text-muted-foreground">
+              {new Date(ret.created_at).toLocaleString()}
+              {ret.outlet_name ? ` · ${ret.outlet_name}` : ''}
+            </p>
           </div>
         </div>
-        <span className={cn('text-xs font-bold px-3 py-1 rounded-full border', cfg.className)}>
+        <span className={cn('text-xs font-bold px-3 py-1 rounded-full border shrink-0', cfg.className)}>
           {cfg.label}
         </span>
       </div>
 
-      {/* Summary card */}
-      <div className="rounded-2xl border border-border bg-card p-5 grid grid-cols-2 md:grid-cols-3 gap-4">
+      {/* Summary strip: wraps from 2 columns on phones up to 6 on wide screens. */}
+      <div className="rounded-2xl border border-border bg-card p-4 sm:p-5 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-x-4 gap-y-4">
+        <div>
+          <p className="text-xs text-muted-foreground">Refund Amount</p>
+          <p className="text-base font-bold text-success mt-0.5">{formatCurrency(ret.refund_amount, currency)}</p>
+        </div>
         <div>
           <p className="text-xs text-muted-foreground">Return Type</p>
           <p className="text-sm font-semibold capitalize mt-0.5">{ret.return_type.replace('_', ' ')}</p>
         </div>
         <div>
-          <p className="text-xs text-muted-foreground">Refund Amount</p>
-          <p className="text-sm font-bold text-success mt-0.5">{formatCurrency(ret.refund_amount, currency)}</p>
-        </div>
-        <div>
-          <p className="text-xs text-muted-foreground">Reason Code</p>
+          <p className="text-xs text-muted-foreground">Reason</p>
           <p className="text-sm font-semibold mt-0.5">
-            {ret.reason_code ? REASON_CODE_LABELS[ret.reason_code] ?? ret.reason_code : '—'}
+            {ret.reason_code ? REASON_CODE_LABELS[ret.reason_code] ?? ret.reason_code : ret.reason || '—'}
           </p>
         </div>
         {ret.return_type !== 'exchange' && (
           <div>
             <p className="text-xs text-muted-foreground">Refund Method</p>
             <p className="text-sm font-semibold capitalize mt-0.5">
-              {ret.refund_channel ? ret.refund_channel.replace('_', ' ') : '—'}
+              {ret.refund_channel ? channelLabel(ret.refund_channel) : '—'}
             </p>
           </div>
         )}
-        {ret.reason && (
-          <div className="col-span-2 md:col-span-3">
-            <p className="text-xs text-muted-foreground">Reason</p>
-            <p className="text-sm mt-0.5">{ret.reason}</p>
-          </div>
-        )}
+        <div>
+          <p className="text-xs text-muted-foreground">Outlet</p>
+          <p className="text-sm font-semibold mt-0.5 truncate">{ret.outlet_name || '—'}</p>
+        </div>
         <div>
           <p className="text-xs text-muted-foreground">Original Order</p>
           {ret.order_number ? (
@@ -294,14 +298,26 @@ export default function ReturnDetailPage() {
             </p>
           </div>
         )}
+        {/* Free-text notes only when they add something beyond the reason label. */}
+        {ret.reason && (!ret.reason_code || ret.reason !== (REASON_CODE_LABELS[ret.reason_code] ?? '')) && (
+          <div className="col-span-2 sm:col-span-3 lg:col-span-4 xl:col-span-6">
+            <p className="text-xs text-muted-foreground">Notes</p>
+            <p className="text-sm mt-0.5 break-words">{ret.reason}</p>
+          </div>
+        )}
       </div>
+
+      {/* Two columns on wide screens: returned items (main) beside the actions and stock status
+          (sticky). Stacks on smaller screens with the actions first, where the user acts. */}
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(360px,420px)] items-start">
+      <aside className="space-y-5 xl:order-2 xl:sticky xl:top-4 min-w-0">
 
       {/* Where the returned goods went back into stock (reported by inventory). */}
       {ret.status === 'completed' && (
         <RestockStatusCard returnId={ret.id} metadata={ret.metadata} canRetry={canManageOrders} />
       )}
 
-      {/* ── Action panel — sits right under the summary; returned items render below it ── */}
+      {/* ── Action panel ── */}
 
       {/* Stage 1: Pending → manager approves or rejects */}
       {isPending && canApprove && (
@@ -543,22 +559,30 @@ export default function ReturnDetailPage() {
       {ret.status === 'completed' && (
         <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 flex items-center gap-3">
           <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0" />
-          <p className="text-sm text-emerald-800">This return has been completed. The refund was settled and the items restocked.</p>
+          <p className="text-sm text-emerald-800">
+            Completed. The refund was settled
+            {ret.metadata?.restock_decision === 'write_off' ? ' and the items were written off (not restocked).' : ' and the items were sent back to stock.'}
+          </p>
         </div>
       )}
       {ret.status === 'rejected' && (
-        <div className="rounded-2xl border border-red-200 bg-red-50 p-4 flex items-center gap-3">
+        <div className="rounded-2xl border border-red-200 bg-red-50 p-4 flex items-start gap-3">
           <XCircle className="h-5 w-5 text-red-600 shrink-0" />
-          <p className="text-sm text-red-700">This return was rejected.</p>
+          <div className="text-sm text-red-700">
+            <p>This return was rejected.</p>
+            {ret.metadata?.rejection_notes && <p className="mt-1 text-red-600/90">{ret.metadata.rejection_notes}</p>}
+          </div>
         </div>
       )}
+      </aside>
 
-      {/* Return lines — below the action panel per the QA layout note */}
-      {lines.length > 0 && (
-        <div className="rounded-2xl border border-border overflow-hidden bg-card">
-          <div className="px-4 py-3 border-b border-border bg-accent/20">
-            <p className="text-sm font-bold">Returned Items</p>
-          </div>
+      {/* Returned items: the main column */}
+      <section className="min-w-0 xl:order-1 rounded-2xl border border-border overflow-hidden bg-card">
+        <div className="px-4 py-3 border-b border-border bg-accent/20 flex items-center justify-between gap-2">
+          <p className="text-sm font-bold">Returned Items</p>
+          <span className="text-xs text-muted-foreground">{lines.length} item{lines.length === 1 ? '' : 's'}</span>
+        </div>
+        {lines.length > 0 ? (
           <div className="px-2 pb-2">
             <DataTable<ReturnLine>
               columns={lineColumns}
@@ -567,8 +591,11 @@ export default function ReturnDetailPage() {
               storageKey="return-lines-col-prefs"
             />
           </div>
-        </div>
-      )}
+        ) : (
+          <p className="px-4 py-6 text-sm text-muted-foreground">No items on this return.</p>
+        )}
+      </section>
+      </div>
       {customerOpen && ret.customer_phone && (
         <CustomerDetailsModal
           customerName={ret.customer_name}
