@@ -19,7 +19,7 @@ import { MpesaLogo } from '@/components/pos/mpesa-logo';
 import { C2BPaymentMatcher } from '@/components/pos/c2b-payment-matcher';
 import {
   Banknote, ChefHat, Coins, CreditCard, FileText, Gift, Hash, Loader2, NotebookPen,
-  Building2, Truck, Wallet, SplitSquareHorizontal, X, CheckCircle2,
+  Building2, Truck, Wallet, SplitSquareHorizontal, X, CheckCircle2, Smartphone,
 } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
@@ -37,7 +37,7 @@ import { useHotelRooms } from '@/hooks/useHotel';
 import { hotelApi } from '@/lib/api/hotel';
 import type { TerminalProfile } from '@/lib/use-case-config';
 import {
-  paymentActionsFor, tenderMethodFor, isImmediateTender, customerCreditAction,
+  paymentActionsFor, tenderMethodFor, allowedMethodsFor, isImmediateTender, customerCreditAction,
   hasRedeemableLoyalty, canRedeemLoyaltyFor, loyaltyPointsToRedeem, loyaltyRedeemAction,
   type TenderKey, type TenderTone, type LoyaltyRedeemInfo,
 } from '@/lib/pos/terminal-actions';
@@ -113,6 +113,10 @@ function tenderIcon(key: TenderKey) {
     case 'mpesa_stk': return MpesaLogo;
     case 'mpesa_c2b': return MpesaLogo;
     case 'wallet': return Wallet;
+    case 'mobile_money': return Smartphone;
+    case 'card_payhero': return CreditCard;
+    case 'bank_deposit': return Building2;
+    case 'paybill_offline': return MpesaLogo;
     case 'on_account': return NotebookPen;
     case 'customer_credit': return Coins;
     case 'cod': return Truck;
@@ -141,9 +145,9 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
 
   const roundedTotal = Math.max(0, Math.ceil(total));
   const isOnline = useEffectiveOnline();
-  const { data: gateways } = usePOSGateways();
   const { data: posSettings } = usePOSSettings();
   const currency = (posSettings as any)?.currency ?? 'KES';
+  const { data: gateways } = usePOSGateways(currency);
   const { autoOpenOnSettle } = useCashDrawer();
   const createIntent = useCreatePaymentIntent();
   // Manual-PDQ policy: when the outlet requires an approval ref, the cashier must enter it before
@@ -159,7 +163,8 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
   // Online-gateway handoff (treasury pay modal) state.
   const [intentId, setIntentId] = useState('');
   const [initiateUrl, setInitiateUrl] = useState('');
-  const [gatewayMethod, setGatewayMethod] = useState<'mpesa' | 'card' | 'wallet' | null>(null);
+  // The pay-page methods of the gateway handoff (allowedMethodsFor), e.g. "mpesa" or "mtn_momo,airtel_money".
+  const [gatewayMethod, setGatewayMethod] = useState<string | null>(null);
   // Room charge.
   const [roomSearch, setRoomSearch] = useState('');
 
@@ -281,7 +286,7 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
           setBusyKey(null);
           setIntentId(data.payment_intent_id);
           setInitiateUrl(data.initiate_url);
-          setGatewayMethod(method as 'mpesa' | 'card' | 'wallet');
+          setGatewayMethod(allowedMethodsFor(key, gateways));
           setCapture(key);
         },
         onError: async (e: any) => {
@@ -290,7 +295,7 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
         },
       },
     );
-  }, [ensureOrder, createIntent, roundedTotal, tenderId]);
+  }, [ensureOrder, createIntent, roundedTotal, tenderId, gateways]);
 
   // ── Dispatch a tender button ─────────────────────────────────────────────────
   const onPick = useCallback(async (key: TenderKey) => {
@@ -362,6 +367,10 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
       case 'mpesa_stk':
       case 'card_online':
       case 'wallet':
+      case 'mobile_money':
+      case 'card_payhero':
+      case 'bank_deposit':
+      case 'paybill_offline':
         await startGateway(key);
         return;
       case 'loyalty_points': {
