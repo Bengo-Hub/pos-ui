@@ -1,11 +1,9 @@
 import withPWAInit from "@ducanh2912/next-pwa";
 import type { NextConfig } from "next";
 
-// Uniform offline strategy across every Codevertex frontend: next-pwa generates the service
-// worker on each `next build --webpack` (so it always reflects the latest deploy and the browser
-// can detect updates → shared PwaUpdater banner). next-pwa auto-bundles src/worker/index.ts
-// (our background-sync bridge). NetworkFirst navigations serve the real cached page offline so
-// the terminal still boots and reads the IndexedDB queue during an outage.
+// Offline + caching: the committed hand-written service worker at public/sw.js (registered by
+// the shared OfflineBar) is the single source of truth; public/sw-media.js adds the bounded
+// media cache. next-pwa stays installed but disabled, so a build never overwrites public/sw.js.
 const withPWA = withPWAInit({
   dest: "public",
   // next-pwa DISABLED: under output:standalone its generated SW activated slowly (~50s precache)
@@ -20,23 +18,6 @@ const withPWA = withPWAInit({
     skipWaiting: false, // PwaUpdater activates the waiting worker on the user's click
     clientsClaim: true,
     cleanupOutdatedCaches: true,
-    runtimeCaching: [
-      {
-        urlPattern: ({ request }: { request: Request }) => request.mode === "navigate",
-        handler: "NetworkFirst",
-        options: { cacheName: "pages", networkTimeoutSeconds: 3, expiration: { maxEntries: 64 } },
-      },
-      {
-        urlPattern: /\/_next\/static\/.*/i,
-        handler: "CacheFirst",
-        options: { cacheName: "next-static", expiration: { maxEntries: 256 } },
-      },
-      {
-        urlPattern: /\.(?:js|css|woff2?|ttf|otf|png|jpg|jpeg|svg|gif|webp|ico)$/i,
-        handler: "StaleWhileRevalidate",
-        options: { cacheName: "assets", expiration: { maxEntries: 256 } },
-      },
-    ],
   },
 });
 
@@ -72,7 +53,9 @@ const nextConfig: NextConfig = {
     // hero photos like the customer-facing ordering app) so cards resolve fast on
     // constrained in-store wifi — see [[project_pos_load_speed]].
     formats: ["image/avif", "image/webp"],
-    minimumCacheTTL: 86400,
+    // Upload names are content-unique; 7 days keeps the optimizer cache warm while still letting
+    // the few manually replaced images refresh within the week.
+    minimumCacheTTL: 604800,
     deviceSizes: [384, 640, 750],
     imageSizes: [48, 64, 96, 128, 192],
   },
