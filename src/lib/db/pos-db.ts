@@ -31,6 +31,9 @@ export interface OfflineCatalogItem {
   // never holds it). undefined for non-managers / items with no cost.
   cost_price?: number;
   non_billable?: boolean;
+  /** Staff availability toggle (manual 86). false = marked unavailable; the till still sells it
+   *  but shows an "Unavailable" badge. Stock levels never set this (manual-only availability). */
+  is_available?: boolean;
   // On-hand stock SNAPSHOT (inventory on_hand projected onto the catalog) so the In-Stock cart
   // column paints on the cache-first/offline path too. Volatile — the fresh online sweep updates it.
   stock_quantity?: number;

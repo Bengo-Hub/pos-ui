@@ -419,6 +419,7 @@ export function toOfflineCatalogRows(tenantID: string, outletID: string, items: 
     stock_quantity: i.stock_quantity,
     unit: i.unit,
     kds_station_id: i.kds_station_id,
+    is_available: i.is_available,
     cached_at: now,
   }));
 }
@@ -497,6 +498,7 @@ export function offlineToCatalogItem(c: OfflineCatalogItem): CatalogItem {
     cost_price: c.cost_price,
     non_billable: c.non_billable,
     stock_quantity: c.stock_quantity,
+    is_available: c.is_available,
     unit: c.unit,
     kds_station_id: c.kds_station_id,
   };

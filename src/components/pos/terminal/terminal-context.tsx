@@ -87,6 +87,9 @@ export interface MenuItem {
   prices?: Record<string, number>;
   /** True when `price` came from the default tier because the selected profile has no own price. */
   priceIsFallback?: boolean;
+  /** False when staff marked the item unavailable (manual 86). Informational on the till: the
+   *  item stays sellable and shows an "Unavailable" badge. Never driven by stock levels. */
+  isAvailable?: boolean;
   /** Hard selling-price guardrails from inventory; enforced server-side at sale. */
   minSellingPrice?: number;
   maxSellingPrice?: number;
@@ -870,6 +873,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
       nonBillable,
       prices: tierPrices,
       priceIsFallback,
+      isAvailable: item.is_available !== false,
       minSellingPrice: typeof item.min_selling_price === 'number' ? item.min_selling_price : undefined,
       maxSellingPrice: typeof item.max_selling_price === 'number' ? item.max_selling_price : undefined,
       // Only present when pos-api served cost to a manager (pos.catalog.view_cost / pos.orders.manage).

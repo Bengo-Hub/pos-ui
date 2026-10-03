@@ -152,6 +152,14 @@ export function TerminalProductGrid() {
                       ) : item.modifierGroups?.length ? (
                         <span className="text-[10px] text-primary">Has options</span>
                       ) : null}
+                      {item.isAvailable === false && (
+                        <span
+                          className="block text-[10px] font-semibold text-amber-600 dark:text-amber-400"
+                          title="Marked unavailable by staff. You can still sell it."
+                        >
+                          Unavailable
+                        </span>
+                      )}
                       {cfg.showStockBadge && item.stockQuantity !== undefined && (
                         <span className="block mt-0.5">
                           <StockBadge quantity={item.stockQuantity} itemType={item.item_type} />
@@ -209,8 +217,14 @@ export function TerminalProductGrid() {
                       loading="lazy"
                     />
                   </div>
-                  {/* Availability dot */}
-                  <span className="absolute top-2 left-2 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-background" />
+                  {/* Availability dot: amber when staff marked the item unavailable (still sellable) */}
+                  <span
+                    className={cn(
+                      'absolute top-2 left-2 h-2.5 w-2.5 rounded-full ring-2 ring-background',
+                      item.isAvailable === false ? 'bg-amber-500' : 'bg-emerald-500',
+                    )}
+                    title={item.isAvailable === false ? 'Marked unavailable by staff' : undefined}
+                  />
                   {inCart && (
                     <div className="absolute top-2 right-2 h-7 w-7 rounded-full bg-primary text-primary-foreground text-xs font-bold flex items-center justify-center shadow-lg">
                       {inCart.quantity}
@@ -270,7 +284,10 @@ export function TerminalProductGrid() {
                 >
                   {/* Top row: availability dot + quantity badge */}
                   <div className="flex items-center justify-between w-full mb-2">
-                    <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                    <span
+                      className={cn('h-2 w-2 rounded-full', item.isAvailable === false ? 'bg-amber-500' : 'bg-emerald-500')}
+                      title={item.isAvailable === false ? 'Marked unavailable by staff' : undefined}
+                    />
                     {inCart && (
                       <span className="h-6 w-6 rounded-full bg-primary text-primary-foreground text-xs font-bold flex items-center justify-center">
                         {inCart.quantity}
