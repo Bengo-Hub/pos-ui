@@ -141,7 +141,9 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
   const { can } = usePermissions();
   const canPrivileged = can('pos.orders.manage');
   // C2B "Simulate" trigger (sandbox testing aid) shows for the demo tenant only.
-  const { isDemo } = useSubscription();
+  const { isDemo, hasFeature } = useSubscription();
+  // Room charge only when the plan has the hotel module (else the rooms call is a 403 toast).
+  const canChargeRoom = isHospitality && hasFeature('hotel_module');
 
   const roundedTotal = Math.max(0, Math.ceil(total));
   const isOnline = useEffectiveOnline();
@@ -185,7 +187,7 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
   const canRedeemLoyalty = hasCustomer && isOnline && hasRedeemableLoyalty(loyaltyAccount);
   const redeemToOrder = useRedeemToOrder(loyaltyAccount?.accountId ?? '');
   const actions = useMemo(() => {
-    const base = paymentActionsFor(profile, gateways, { isHospitality, isOnline, allowCOD })
+    const base = paymentActionsFor(profile, gateways, { isHospitality: canChargeRoom, isOnline, allowCOD })
       .filter((a) => a.key !== 'on_account' || canCreditSale);
     const extras = [];
     if (hasCustomerCredit) extras.push(customerCreditAction(customerCreditAvailable, currency));
@@ -194,7 +196,7 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
     const splitIdx = base.findIndex((a) => a.key === 'split');
     if (splitIdx === -1) return [...base, ...extras];
     return [...base.slice(0, splitIdx), ...extras, ...base.slice(splitIdx)];
-  }, [profile, gateways, isHospitality, isOnline, allowCOD, canCreditSale, hasCustomerCredit, customerCreditAvailable, canRedeemLoyalty, loyaltyAccount, currency]);
+  }, [profile, gateways, canChargeRoom, isOnline, allowCOD, canCreditSale, hasCustomerCredit, customerCreditAvailable, canRedeemLoyalty, loyaltyAccount, currency]);
   // Back-office profiles (retail/services) get Draft + Quotation; hospitality/QSR do not.
   // Quotation is additionally manager-gated (canPrivileged).
   const isBackOffice = profile === 'retail' || profile === 'services';

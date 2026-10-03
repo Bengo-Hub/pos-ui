@@ -127,7 +127,8 @@ export function loyaltyRedeemAction(info: LoyaltyRedeemInfo, currency = 'KES'): 
 // alongside each button already carries the brand, so repeating it in text next to a sibling pair
 // of M-Pesa buttons (STK Push / C2B) would be redundant.
 const MPESA_STK: TenderAction = { key: 'mpesa_stk', label: 'STK Push', sublabel: 'Prompt to phone', tone: 'mpesa', online: true, requiresGateway: 'mpesa' };
-const MPESA_C2B: TenderAction = { key: 'mpesa_c2b', label: 'C2B', sublabel: 'Customer paid the till', tone: 'mpesa', online: true, requiresGateway: 'mpesa' };
+// C2B reads Daraja till confirmations, so it needs Daraja behind M-Pesa (not PayHero alone).
+const MPESA_C2B: TenderAction = { key: 'mpesa_c2b', label: 'C2B', sublabel: 'Customer paid the till', tone: 'mpesa', online: true, requiresGateway: 'mpesa_c2b' };
 const CARD_ONLINE: TenderAction = { key: 'card_online', label: 'Paystack', sublabel: 'Paystack secure page', tone: 'card', online: true, requiresGateway: 'paystack' };
 const WALLET: TenderAction = { key: 'wallet', label: 'Wallet', sublabel: 'Airtel Money & more', tone: 'wallet', online: true, requiresGateway: 'wallet' };
 const COD: TenderAction = { key: 'cod', label: 'Cash on Delivery', sublabel: 'Collect on delivery', tone: 'cod', online: true, requiresGateway: 'cod' };
@@ -140,6 +141,8 @@ const PAYBILL_OFFLINE: TenderAction = { key: 'paybill_offline', label: 'Paybill'
 
 export interface GatewayFlags {
   mpesa?: boolean;
+  /** Daraja backs M-Pesa, so a customer's direct till payment can be matched (C2B). */
+  mpesa_c2b?: boolean;
   paystack?: boolean;
   wallet?: boolean;
   cod?: boolean;

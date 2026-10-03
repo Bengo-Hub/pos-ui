@@ -118,7 +118,10 @@ export function POSPaymentModal({
   // Pay-page methods for the current gateway handoff (overrides the allowedMethods prop).
   const [handoffMethods, setHandoffMethods] = useState<string | undefined>(undefined);
   // C2B "Simulate" trigger (sandbox testing aid) shows for the demo tenant only.
-  const { isDemo } = useSubscription();
+  const { isDemo, hasFeature } = useSubscription();
+  // Room charge needs the hotel module on the plan; without it there are no rooms to charge and
+  // the rooms call is a 403 (the "Subscription limit reached" toast on every Multiple Pay open).
+  const canChargeRoom = isHospitality && hasFeature('hotel_module');
 
   // SSE-based payment detection: fires as soon as pos-api records the payment,
   // eliminating polling latency for M-Pesa STK push confirmations.
@@ -130,7 +133,8 @@ export function POSPaymentModal({
     }
   }, [streamStatus, step, onPaymentConfirmed]);
   const { data: occupiedRooms = [], isLoading: roomsLoading } = useHotelRooms(
-    isHospitality && step === 'room_select' ? 'occupied' : undefined
+    'occupied',
+    canChargeRoom && step === 'room_select',
   );
 
   const postRoomCharge = useMutation({
@@ -579,7 +583,7 @@ export function POSPaymentModal({
                         onClick={handleComplimentary}
                       />
                     )}
-                    {isHospitality && (
+                    {canChargeRoom && (
                       <PayBadge
                         icon={<Building2 className="h-4 w-4" />}
                         color="text-indigo-600"
@@ -616,7 +620,7 @@ export function POSPaymentModal({
                           onClick={() => handleDigital('mpesa')}
                         />
                       )}
-                      {gateways?.mpesa && (
+                      {gateways?.mpesa_c2b && (
                         <PayBadge
                           icon={<MpesaLogo className="h-4 w-7 rounded" />}
                           color="text-green-700"

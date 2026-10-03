@@ -25,12 +25,15 @@ function useTenantSlug() {
 
 // ─── Rooms ──────────────────────────────────────────────────────────────────
 
-export function useHotelRooms(status?: string) {
+/** Rooms, optionally by status. Pass enabled=false to skip the fetch: an undefined status means
+ *  "all rooms", not "don't fetch", and a fetch on a plan without hotel_module is a 403 that pops
+ *  the "Subscription limit reached" toast. */
+export function useHotelRooms(status?: string, enabled = true) {
   const slug = useTenantSlug();
   return useQuery({
     queryKey: ['hotel-rooms', slug, status],
     queryFn: () => hotelApi.listRooms(slug, status),
-    enabled: !!slug,
+    enabled: !!slug && enabled,
     staleTime: 30_000,
     refetchInterval: 60_000,
   });

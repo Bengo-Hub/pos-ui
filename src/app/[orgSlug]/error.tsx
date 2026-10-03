@@ -1,7 +1,7 @@
 'use client';
 
 import { Button, Card, CardContent } from '@/components/ui/base';
-import { isStaleChunkError, reloadOnce } from '@/components/stale-chunk-recovery';
+import { recoverFromError } from '@/components/stale-chunk-recovery';
 import { AlertTriangle } from 'lucide-react';
 import { useEffect } from 'react';
 
@@ -18,7 +18,7 @@ import { useEffect } from 'react';
 export default function OrgSegmentError({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
   useEffect(() => {
     console.error(error);
-    if (isStaleChunkError(error)) reloadOnce();
+    recoverFromError(error);
   }, [error]);
 
   return (

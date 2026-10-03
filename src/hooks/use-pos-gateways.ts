@@ -18,15 +18,21 @@ export interface POSGateways {
   payhero_card: boolean;
   payhero_bank: boolean;
   payhero_offline: boolean;
+  /** "daraja" or "payhero": the account behind M-Pesa (absent when M-Pesa is off). */
+  mpesa_provider?: string;
+  /** Daraja backs M-Pesa, so C2B till matching works. */
+  mpesa_c2b: boolean;
 }
 
-// complimentary and the new Uganda/Kenya rails are deliberately false here — unlike mpesa/
-// paystack/wallet/cod, they're opt-in per tenant and must never flash on before the real
-// per-tenant toggle value loads from treasury (matches the backend's fail-closed default).
-const ALL_ENABLED: POSGateways = {
-  mpesa: true, paystack: true, wallet: true, cod: true, complimentary: false,
+// Fail closed until treasury answers: every gateway tender is off. This used to start with M-Pesa
+// and Paystack on, so a tenant who never enabled them saw STK Push, C2B and Paystack flash on
+// the till (and stay on whenever treasury was unreachable). Cash, Card (PDQ) and Credit Sale are
+// not gateway-backed and always show.
+const NONE_ENABLED: POSGateways = {
+  mpesa: false, paystack: false, wallet: false, cod: false, complimentary: false,
   mtn_momo: false, airtel_money: false, bank_transfer: false,
   mobile_money: false, payhero_card: false, payhero_bank: false, payhero_offline: false,
+  mpesa_c2b: false,
 };
 
 /** The tenant's online payment rails. currency (the outlet's) decides which PayHero rails exist
@@ -39,6 +45,6 @@ export function usePOSGateways(currency?: string) {
     queryFn: () => apiClient.get<POSGateways>(`/api/v1/${tenantID}/pos/gateways${cur ? `?currency=${cur}` : ''}`),
     enabled: !!tenantID,
     staleTime: 5 * 60_000,
-    placeholderData: ALL_ENABLED,
+    placeholderData: NONE_ENABLED,
   });
 }

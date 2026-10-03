@@ -34,6 +34,43 @@ export function isStaleChunkError(reason: unknown): boolean {
   );
 }
 
+/** True for a raw chunk-load failure; false for the downstream #185 alone, which a genuine render
+ *  loop also throws. */
+function isRawChunkError(reason: unknown): boolean {
+  return isStaleChunkError(reason) && !/Minified React error #185/.test(String((reason as { message?: unknown })?.message ?? reason));
+}
+
+/**
+ * Whether the running bundle is really stale: one of this page's own chunk scripts is gone from
+ * the server (a deploy replaced it). A real render loop (#185 with the bundle still current) used
+ * to trigger a reload every 30s, which cashiers saw as the terminal "refreshing by itself".
+ */
+async function bundleIsStale(): Promise<boolean> {
+  const src = Array.from(document.querySelectorAll<HTMLScriptElement>('script[src*="/_next/static/chunks/"]'))
+    .map((s) => s.src)
+    .find(Boolean);
+  if (!src) return false;
+  try {
+    const res = await fetch(src, { method: 'HEAD', cache: 'no-store' });
+    return res.status === 404;
+  } catch {
+    return false; // offline: reloading would not help
+  }
+}
+
+/** Reloads for a chunk error; for a bare #185 only after confirming the bundle is stale. */
+export function recoverFromError(reason: unknown) {
+  if (!isStaleChunkError(reason)) return;
+  if (isRawChunkError(reason)) {
+    reloadOnce();
+    return;
+  }
+  void bundleIsStale().then((stale) => {
+    if (stale) reloadOnce();
+    else console.error('Render loop (React #185) on a current bundle; not reloading', reason);
+  });
+}
+
 export function reloadOnce() {
   try {
     const last = Number(sessionStorage.getItem(RELOAD_FLAG_KEY) || 0);
@@ -75,10 +112,10 @@ export function reloadOnce() {
 export function StaleChunkRecovery() {
   useEffect(() => {
     const onRejection = (event: PromiseRejectionEvent) => {
-      if (isStaleChunkError(event.reason)) reloadOnce();
+      recoverFromError(event.reason);
     };
     const onError = (event: ErrorEvent) => {
-      if (isStaleChunkError(event.error)) reloadOnce();
+      recoverFromError(event.error);
     };
     window.addEventListener('unhandledrejection', onRejection);
     // Capture phase: a failed <script>/<link> resource load fires a non-bubbling 'error' event
