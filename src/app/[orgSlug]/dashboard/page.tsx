@@ -5,6 +5,7 @@ import { useOutletServiceProfile } from '@/hooks/useServiceJobs';
 import { JobsDashboard } from '@/components/dashboard/jobs-dashboard';
 import { useAuthStore } from '@/store/auth';
 import { useParams } from 'next/navigation';
+import { AnnouncementBanner } from '@bengo-hub/shared-ui-lib/announcements';
 import {
   AdminDashboard,
   BarDashboard,
@@ -26,8 +27,7 @@ function hasRole(roles: string[], ...check: string[]): boolean {
 export default function DashboardPage() {
   const { orgSlug } = useParams<{ orgSlug: string }>();
   const user = useAuthStore((s) => s.user);
-  const { isSuperUser, isServices, isRetail, isQuickService, isHospitality, hotelModuleEnabled } = useModuleAccess();
-  const serviceProfile = useOutletServiceProfile();
+  const { isSuperUser } = useModuleAccess();
   const roles = user?.roles ?? [];
 
   const primaryRole =
@@ -49,6 +49,24 @@ export default function DashboardPage() {
       ? 'specialist'
       : 'cashier';
 
+  return (
+    <>
+      {/* Platform "what's new" banners (PayHero and later updates); admin-only ones for admins. */}
+      <AnnouncementBanner
+        service="pos"
+        orgSlug={orgSlug}
+        viewerKey={user?.id || user?.email}
+        isAdmin={primaryRole === 'admin'}
+        className="mx-4 mt-4 sm:mx-6 sm:mt-6"
+      />
+      <RoleDashboard primaryRole={primaryRole} orgSlug={orgSlug} />
+    </>
+  );
+}
+
+function RoleDashboard({ primaryRole, orgSlug }: { primaryRole: string; orgSlug: string }) {
+  const { isServices, isRetail, isQuickService, isHospitality, hotelModuleEnabled } = useModuleAccess();
+  const serviceProfile = useOutletServiceProfile();
   switch (primaryRole) {
     case 'admin':
     case 'manager':

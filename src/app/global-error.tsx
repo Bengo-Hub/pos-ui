@@ -1,6 +1,6 @@
 'use client';
 
-import { recoverFromError } from '@/components/stale-chunk-recovery';
+import { recoverFromError } from '@bengo-hub/shared-ui-lib/offline';
 import { useEffect } from 'react';
 
 /**
@@ -9,7 +9,7 @@ import { useEffect } from 'react';
  * requires this file to render its own <html>/<body> since it replaces the entire root layout.
  * Kept deliberately dependency-free (no Tailwind/theme/UI-kit) since whatever broke the app is
  * exactly the kind of thing that could also be why THIS fallback fails to render — see
- * stale-chunk-recovery.tsx for the stale-bundle-after-a-deploy scenario this mainly exists for.
+ * shared-ui-lib's offline/stale-chunk-recovery for the stale-bundle-after-a-deploy scenario this mainly exists for.
  */
 export default function GlobalError({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
   useEffect(() => {

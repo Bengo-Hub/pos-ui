@@ -9,7 +9,7 @@ import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/reac
 import { ReactNode, useState } from 'react';
 import { useEffectiveOnline } from '@/lib/connectivity';
 import { getCachedCatalog, getSyncStatusCounts } from '@/lib/db/pos-db';
-import { OfflineBar } from '@bengo-hub/shared-ui-lib/offline';
+import { OfflineBar, StaleChunkRecovery } from '@bengo-hub/shared-ui-lib/offline';
 import { revalidateFullCatalog, useCatalogVersionSync, offlineToCatalogItem, FULL_CATALOG_QUERY_KEY } from '@/hooks/usePOS';
 import { Footer } from '@/components/footer';
 import { SubscriptionBanner } from '@/components/subscription/subscription-banner';
@@ -22,7 +22,6 @@ import { TerminalSessionExpiryWarning } from '@/components/pos/terminal-session-
 import { StartShiftGate } from '@/components/pos/start-shift-gate';
 import { RouteGuard } from '@/components/auth/route-guard';
 import { TerminalIdleScreensaver } from '@/components/pos/terminal-idle-screensaver';
-import { StaleChunkRecovery } from '@/components/stale-chunk-recovery';
 import { triggerSyncNow } from '@/hooks/use-sync-offline-orders';
 import { cn } from '@/lib/utils';
 import { useBackgroundSync } from '@/lib/sync/background-sync';

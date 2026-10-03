@@ -1,7 +1,7 @@
 'use client';
 
 import { Button, Card, CardContent } from '@/components/ui/base';
-import { recoverFromError } from '@/components/stale-chunk-recovery';
+import { recoverFromError } from '@bengo-hub/shared-ui-lib/offline';
 import { AlertTriangle } from 'lucide-react';
 import { useEffect } from 'react';
 
@@ -9,7 +9,7 @@ import { useEffect } from 'react';
  * Catches any render-time error inside a tenant route that no inner try/catch or query
  * error-state handled — with no error boundary anywhere in the app this was previously an
  * unrecoverable blank/broken screen (Next's built-in fallback). Most of those crashes are the
- * stale-bundle-after-a-deploy scenario documented in stale-chunk-recovery.tsx (a long-open tab's
+ * stale-bundle-after-a-deploy scenario documented in shared-ui-lib's offline/stale-chunk-recovery (a long-open tab's
  * runtime requests a chunk the now-redeployed server no longer has, surfacing several retries
  * later as React's own "Maximum update depth exceeded" rather than the original fetch failure)
  * — auto-reload once for that signature so the user never sees this screen for it. Anything
