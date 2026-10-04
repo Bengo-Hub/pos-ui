@@ -7,7 +7,7 @@
  * a role dashboard stays in sync with a single selection.
  */
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { format, subDays } from 'date-fns';
 import { DateRangePicker, type DateRange } from '@/components/ui/date-range-picker';
 import type { Granularity } from '@/hooks/useReports';
@@ -67,22 +67,21 @@ export interface DashboardRange {
   isSingleDay: boolean;
 }
 
-function computeRange(preset: RangePreset, custom: DateRange): DashboardRange {
+function computeRange(preset: RangePreset, custom: DateRange, today: string): DashboardRange {
   if (preset === 'day') {
-    const today = todayISO();
     return { preset, chartFrom: today, chartTo: today, granularity: 'day', compareLabel: 'vs yesterday', isSingleDay: true };
   }
   if (preset === 'custom') {
-    const from = custom.from || todayISO();
-    const to = custom.to || todayISO();
+    const from = custom.from || today;
+    const to = custom.to || today;
     return {
       preset, from, to, chartFrom: from, chartTo: to,
       granularity: pickGranularity(from, to), compareLabel: 'vs previous period', isSingleDay: from === to,
     };
   }
   const days = PRESET_DAYS[preset];
-  const to = todayISO();
-  const from = fmt(subDays(new Date(), days - 1));
+  const to = today;
+  const from = fmt(subDays(new Date(`${today}T00:00:00`), days - 1));
   return {
     preset, from, to, chartFrom: from, chartTo: to,
     granularity: pickGranularity(from, to), compareLabel: 'vs previous period', isSingleDay: false,
@@ -92,7 +91,11 @@ function computeRange(preset: RangePreset, custom: DateRange): DashboardRange {
 export function useDashboardRange() {
   const [preset, setPreset] = useState<RangePreset>('day');
   const [custom, setCustom] = useState<DateRange>({ from: todayISO(), to: todayISO() });
-  const range = computeRange(preset, custom);
+  // Memoized so every chart and query below gets the same range object until the preset, the
+  // custom dates or the calendar day change. A fresh object per render re-rendered every chart on
+  // each dashboard refetch. `today` is an input so the presets still roll over at midnight.
+  const today = todayISO();
+  const range = useMemo(() => computeRange(preset, custom, today), [preset, custom, today]);
   return { range, preset, setPreset, custom, setCustom };
 }
 

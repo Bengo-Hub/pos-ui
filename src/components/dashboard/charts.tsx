@@ -12,6 +12,7 @@ import {
   Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Pie, PieChart,
   ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts';
+import { useCallback, useMemo } from 'react';
 import { BarChart3, Clock, Package, Tag } from 'lucide-react';
 import { useDailyBreakdown, useSalesByCategory, useSalesByHour, useTopItems } from '@/hooks/useReports';
 import { useEffectiveOutletID } from '@/hooks/usePOS';
@@ -51,6 +52,29 @@ export function ChartCard({ title, icon: Icon, loading, empty, height = 'h-64', 
 export const axisTick = { fontSize: 11, fill: 'hsl(var(--muted-foreground))' };
 export const tooltipStyle = { background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8, fontSize: 12 };
 
+// recharts 3 keeps each chart's axes and tooltip in an internal store and re-registers them
+// whenever a prop changes identity. Inline objects and lambdas changed identity on every
+// dashboard refetch, and those store dispatches piled up into React error #185 (maximum update
+// depth). Static props live here as constants; data and formatters are memoized per chart.
+const trendMargin = { left: 0, right: 8, top: 4, bottom: 4 };
+const topItemsMargin = { left: 8, right: 16, top: 4, bottom: 4 };
+const barCursor = { fill: 'hsl(var(--accent))' };
+const areaCursor = { stroke: 'hsl(var(--primary))', strokeWidth: 1 };
+const verticalBarRadius: [number, number, number, number] = [4, 4, 0, 0];
+const horizontalBarRadius: [number, number, number, number] = [0, 4, 4, 0];
+
+/** Stable axis and tooltip formatters for one currency. */
+function useChartFormatters(currency: string) {
+  const fmt = useMemo(() => fmtFor(currency), [currency]);
+  const axisFormatter = useCallback((v: number) => fmt(v), [fmt]);
+  const revenueTooltip = useCallback((v: unknown) => [fmt(Number(v ?? 0)), 'Revenue'] as [string, string], [fmt]);
+  const namedTooltip = useCallback(
+    (v: unknown, _n: unknown, item: any) => [fmt(Number(v ?? 0)), item?.payload?.name ?? 'Revenue'] as [string, string],
+    [fmt],
+  );
+  return { fmt, axisFormatter, revenueTooltip, namedTooltip };
+}
+
 /** Shortens a category-axis label to a single line — recharts wraps a category tick's text
  *  across multiple tspans when it doesn't fit the axis width, and with 6-8 rows sharing a fixed
  *  chart height that wrapped 2nd line bleeds into the row above/below it (the overlapping labels
@@ -63,33 +87,41 @@ function truncateLabel(name: string, max = 14): string {
 /** Revenue over time — hour-of-day bars for the "Day" preset (a single day has no meaningful
  *  daily trend), otherwise a bucketed area chart sized to the selected range's granularity. */
 export function RevenueTrendChart({ range, currency = 'KES' }: { range: DashboardRange; currency?: string }) {
-  const fmt = fmtFor(currency);
+  const { axisFormatter, revenueTooltip } = useChartFormatters(currency);
   const outletId = useEffectiveOutletID() || undefined;
   const hourQuery = useSalesByHour(range.chartTo, outletId);
   const dailyQuery = useDailyBreakdown(range.chartFrom, range.chartTo, !range.isSingleDay, range.granularity, outletId);
+  const hourData = useMemo(
+    () => (hourQuery.data ?? []).map((r) => ({ label: `${String(r.hour).padStart(2, '0')}:00`, revenue: r.revenue })),
+    [hourQuery.data],
+  );
+  const dailyData = useMemo(
+    () => (dailyQuery.data ?? []).map((r) => ({ label: r.date.slice(5), revenue: r.revenue })),
+    [dailyQuery.data],
+  );
 
   if (range.isSingleDay) {
-    const data = (hourQuery.data ?? []).map((r) => ({ label: `${String(r.hour).padStart(2, '0')}:00`, revenue: r.revenue }));
+    const data = hourData;
     return (
       <ChartCard title="Revenue by Hour" icon={Clock} loading={hourQuery.isLoading} empty={!data.some((d) => d.revenue > 0)}>
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={data} margin={{ left: 0, right: 8, top: 4, bottom: 4 }}>
+          <BarChart data={data} margin={trendMargin}>
             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
             <XAxis dataKey="label" tick={axisTick} axisLine={false} tickLine={false} interval={2} />
-            <YAxis tickFormatter={(v) => fmt(v)} tick={axisTick} axisLine={false} tickLine={false} width={70} />
-            <Tooltip cursor={{ fill: 'hsl(var(--accent))' }} contentStyle={tooltipStyle} formatter={(v) => [fmt(Number(v ?? 0)), 'Revenue']} />
-            <Bar dataKey="revenue" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} maxBarSize={28} />
+            <YAxis tickFormatter={axisFormatter} tick={axisTick} axisLine={false} tickLine={false} width={70} />
+            <Tooltip cursor={barCursor} contentStyle={tooltipStyle} formatter={revenueTooltip} />
+            <Bar dataKey="revenue" fill="hsl(var(--primary))" radius={verticalBarRadius} maxBarSize={28} />
           </BarChart>
         </ResponsiveContainer>
       </ChartCard>
     );
   }
 
-  const data = (dailyQuery.data ?? []).map((r) => ({ label: r.date.slice(5), revenue: r.revenue }));
+  const data = dailyData;
   return (
     <ChartCard title="Revenue Trend" icon={BarChart3} loading={dailyQuery.isLoading} empty={!data.some((d) => d.revenue > 0)}>
       <ResponsiveContainer width="100%" height="100%">
-        <AreaChart data={data} margin={{ left: 0, right: 8, top: 4, bottom: 4 }}>
+        <AreaChart data={data} margin={trendMargin}>
           <defs>
             <linearGradient id="revenueTrendFill" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.35} />
@@ -98,8 +130,8 @@ export function RevenueTrendChart({ range, currency = 'KES' }: { range: Dashboar
           </defs>
           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
           <XAxis dataKey="label" tick={axisTick} axisLine={false} tickLine={false} minTickGap={16} />
-          <YAxis tickFormatter={(v) => fmt(v)} tick={axisTick} axisLine={false} tickLine={false} width={70} />
-          <Tooltip cursor={{ stroke: 'hsl(var(--primary))', strokeWidth: 1 }} contentStyle={tooltipStyle} formatter={(v) => [fmt(Number(v ?? 0)), 'Revenue']} />
+          <YAxis tickFormatter={axisFormatter} tick={axisTick} axisLine={false} tickLine={false} width={70} />
+          <Tooltip cursor={areaCursor} contentStyle={tooltipStyle} formatter={revenueTooltip} />
           <Area type="monotone" dataKey="revenue" stroke="hsl(var(--primary))" strokeWidth={2} fill="url(#revenueTrendFill)" />
         </AreaChart>
       </ResponsiveContainer>
@@ -110,16 +142,17 @@ export function RevenueTrendChart({ range, currency = 'KES' }: { range: Dashboar
 /** Revenue share by category — top 5 slices + an "Other" bucket for the rest, so a long tail of
  *  categories never renders as an unreadable 20-slice donut. */
 export function CategoryBreakdownChart({ range, currency = 'KES' }: { range: DashboardRange; currency?: string }) {
-  const fmt = fmtFor(currency);
+  const { fmt, namedTooltip } = useChartFormatters(currency);
   const outletId = useEffectiveOutletID() || undefined;
   const query = useSalesByCategory(range.chartFrom, range.chartTo, outletId);
-  const rows = [...(query.data ?? [])].sort((a, b) => b.revenue - a.revenue);
-  const top = rows.slice(0, 5);
-  const otherRevenue = rows.slice(5).reduce((s, r) => s + r.revenue, 0);
-  const data = [
-    ...top.map((r) => ({ name: r.category_name, revenue: r.revenue })),
-    ...(otherRevenue > 0 ? [{ name: 'Other', revenue: otherRevenue }] : []),
-  ];
+  const data = useMemo(() => {
+    const rows = [...(query.data ?? [])].sort((a, b) => b.revenue - a.revenue);
+    const otherRevenue = rows.slice(5).reduce((s, r) => s + r.revenue, 0);
+    return [
+      ...rows.slice(0, 5).map((r) => ({ name: r.category_name, revenue: r.revenue })),
+      ...(otherRevenue > 0 ? [{ name: 'Other', revenue: otherRevenue }] : []),
+    ];
+  }, [query.data]);
 
   return (
     <ChartCard title="Sales by Category" icon={Tag} loading={query.isLoading} empty={!data.length}>
@@ -129,12 +162,12 @@ export function CategoryBreakdownChart({ range, currency = 'KES' }: { range: Das
             <Pie data={data} dataKey="revenue" nameKey="name" innerRadius="55%" outerRadius="90%" paddingAngle={2}>
               {data.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} stroke="hsl(var(--card))" />)}
             </Pie>
-            <Tooltip contentStyle={tooltipStyle} formatter={(v, _n, item: any) => [fmt(Number(v ?? 0)), item?.payload?.name]} />
+            <Tooltip contentStyle={tooltipStyle} formatter={namedTooltip} />
           </PieChart>
         </ResponsiveContainer>
         <div className="flex-1 min-w-0 space-y-1.5 overflow-y-auto max-h-full pr-1">
           {data.map((d, i) => (
-            <div key={d.name} className="flex items-center gap-2 text-xs">
+            <div key={`${d.name}-${i}`} className="flex items-center gap-2 text-xs">
               <span className="h-2 w-2 rounded-full shrink-0" style={{ background: CHART_COLORS[i % CHART_COLORS.length] }} />
               <span className="truncate flex-1 text-muted-foreground">{d.name}</span>
               <span className="font-semibold tabular-nums shrink-0">{fmt(d.revenue)}</span>
@@ -149,29 +182,32 @@ export function CategoryBreakdownChart({ range, currency = 'KES' }: { range: Das
 /** Top-selling items by revenue in the selected range — same single-hue horizontal-bar style as
  *  the Reports > Product Mix tab's category/station charts. */
 export function TopItemsChart({ range, currency = 'KES' }: { range: DashboardRange; currency?: string }) {
-  const fmt = fmtFor(currency);
+  const { axisFormatter, namedTooltip } = useChartFormatters(currency);
   const outletId = useEffectiveOutletID() || undefined;
   const query = useTopItems(range.chartFrom, range.chartTo, 8, outletId);
-  const data = [...(query.data ?? [])]
-    .sort((a, b) => b.revenue - a.revenue)
-    .slice(0, 8)
-    .map((d) => ({ ...d, shortName: truncateLabel(d.name) }));
+  const data = useMemo(
+    () => [...(query.data ?? [])]
+      .sort((a, b) => b.revenue - a.revenue)
+      .slice(0, 8)
+      .map((d) => ({ ...d, shortName: truncateLabel(d.name) })),
+    [query.data],
+  );
 
   return (
     <ChartCard title="Top Selling Items" icon={Package} loading={query.isLoading} empty={!data.length} height="h-72">
       <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={data} layout="vertical" margin={{ left: 8, right: 16, top: 4, bottom: 4 }} barCategoryGap="22%">
+        <BarChart data={data} layout="vertical" margin={topItemsMargin} barCategoryGap="22%">
           <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="hsl(var(--border))" />
-          <XAxis type="number" tickFormatter={(v) => fmt(v)} tick={axisTick} axisLine={false} tickLine={false} />
+          <XAxis type="number" tickFormatter={axisFormatter} tick={axisTick} axisLine={false} tickLine={false} />
           <YAxis type="category" dataKey="shortName" width={92} interval={0} tick={axisTick} axisLine={false} tickLine={false} />
           <Tooltip
-            cursor={{ fill: 'hsl(var(--accent))' }}
+            cursor={barCursor}
             contentStyle={tooltipStyle}
             // Show the FULL (untruncated) item name in the tooltip — the axis label is shortened
             // to keep every row on one line, but nothing is actually lost.
-            formatter={(v, _n, item: any) => [fmt(Number(v ?? 0)), item?.payload?.name ?? 'Revenue']}
+            formatter={namedTooltip}
           />
-          <Bar dataKey="revenue" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} maxBarSize={20} />
+          <Bar dataKey="revenue" fill="hsl(var(--primary))" radius={horizontalBarRadius} maxBarSize={20} />
         </BarChart>
       </ResponsiveContainer>
     </ChartCard>
