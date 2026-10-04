@@ -11,7 +11,8 @@ export type SubscriptionErrorCode =
   | 'usage_limit_exceeded'
   | 'device_limit_reached'
   | 'plan_upgrade_required'
-  | 'service_not_subscribed';
+  | 'service_not_subscribed'
+  | 'support_fee_overdue';
 
 export interface ApiError {
   status: number;
@@ -56,6 +57,7 @@ const SUBSCRIPTION_CODES = new Set<SubscriptionErrorCode>([
   'device_limit_reached',
   'plan_upgrade_required',
   'service_not_subscribed',
+  'support_fee_overdue',
 ]);
 
 export function isSubscriptionError(data: any): data is SubscriptionError {
@@ -105,6 +107,8 @@ const SUBSCRIPTION_MESSAGES: Record<SubscriptionErrorCode, string> = {
   device_limit_reached: 'Device limit reached. Upgrade your plan to add more devices.',
   plan_upgrade_required: 'An upgrade is required to access this feature.',
   service_not_subscribed: 'This service is not included in your current plan.',
+  support_fee_overdue:
+    'Your support invoice is overdue. Viewing still works; pay the invoice to create, edit or delete again.',
 };
 
 export function subscriptionErrorMessage(data: any): string {
