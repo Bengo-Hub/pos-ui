@@ -193,9 +193,32 @@ mounts the shared `<C2BPaymentMatcher>` (`components/pos/c2b-payment-matcher.tsx
    the POS order server-side in one request.
 5. The rare multi-match case (two customers paying the identical amount) falls back to a pick-one list.
 
-### Card / Wallet / MTN Mobile Money / Airtel Money (Paystack-backed gateways)
+### PayHero (`tender_method: "payhero"`, `TenderKey: "payhero"`, 2026-10-05)
+PayHero is its own gateway, like Paystack, shown as one tender with PayHero's logo alone (the mark
+carries the name; `aria-label` and the tooltip keep it) when `usePOSGateways` reports `payhero`.
+Its sublabel lists the rails from `payhero_methods` (`payheroSublabel`). Same `TreasuryPaymentModal`
+handoff as STK Push with `allowedMethods: "payhero"`: the pay page opens `PayHeroPaymentModal`,
+where the customer picks M-PESA, Airtel Money, MTN MoMo, card or another rail for the outlet's
+currency, and every rail is initiated with `gateway: "payhero"` so it never falls back to Daraja.
+STK Push and C2B above are Daraja only (`mpesa`, `mpesa_c2b`). This one tender replaced the
+Mobile Money, Paybill, Card (PayHero) and Bank Deposit tenders, which looked like Daraja tenders
+and mostly never opened the pay page.
+
+### Card (Paystack) / Wallet
 Same `TreasuryPaymentModal` handoff as M-Pesa STK Push above, with `allowedMethods` set to the
-relevant gateway (`card`, `wallet`, `mtn_momo`, `airtel_money`).
+gateway (`card`, `wallet`).
+
+### Tender marks
+Provider logos (M-Pesa, PayHero, Paystack, Airtel, MTN) and the Cash, Card (PDQ) and Multiple Pay
+marks (`CashMark`, `CardMark`, `SplitPayMark`, drawn in PayHero's disc style) come only from
+`@bengo-hub/shared-ui-lib` (`brand-logos`, v0.1.97). Wide logos get a wide slot, disc marks a size
+up (`iconClass` in `inline-payment-bar.tsx`); no app keeps its own logo copy.
+
+### Delete Sale (2026-10-05)
+`SalesActionsMenu` shows **Delete Sale** (permission `pos.orders.delete`) on completed sales, and
+for platform owners also on open or pending-payment sales with nothing paid (their own test sales
+on a tenant). pos-api's `saledelete` enforces the same rule (`AllowUnpaidOpen` from
+`httpware.IsPlatformOwner`); tenant staff void open sales instead.
 
 ### Room Charge (hospitality)
 `POST /hotel/rooms/{roomId}/folio/charges` via `hotelApi.postFolioCharge()` — posts directly to the
