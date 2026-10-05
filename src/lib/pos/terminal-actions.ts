@@ -27,14 +27,11 @@ export type TenderKey =
   | 'split' // multiple/split payment
   | 'customer_credit' // settle from the customer's existing stored credit (negative AR balance_due)
   | 'loyalty_points' // pay-with-points (posts a completed payment on the tenant's Loyalty tender)
-  // PayHero rails (treasury pay page): mobile money on any network the outlet's country has
-  // (MTN, Airtel, others), card hosted checkout, bank deposit, and the offline paybill.
-  | 'mobile_money'
-  | 'card_payhero'
-  | 'bank_deposit'
-  | 'paybill_offline';
+  // PayHero, its own gateway like Paystack: one tender opening the PayHero modal on the pay page,
+  // where the customer picks M-Pesa, Airtel, card or another rail the outlet's country has.
+  | 'payhero';
 
-export type TenderTone = 'cash' | 'card' | 'mpesa' | 'wallet' | 'credit' | 'room' | 'cod' | 'split' | 'loyalty';
+export type TenderTone = 'cash' | 'card' | 'mpesa' | 'wallet' | 'credit' | 'room' | 'cod' | 'split' | 'loyalty' | 'payhero';
 
 export interface TenderAction {
   key: TenderKey;
@@ -126,33 +123,43 @@ export function loyaltyRedeemAction(info: LoyaltyRedeemInfo, currency = 'KES'): 
 // Gateway-gated, online tenders. Labels deliberately omit "M-Pesa" — the MpesaLogo icon rendered
 // alongside each button already carries the brand, so repeating it in text next to a sibling pair
 // of M-Pesa buttons (STK Push / C2B) would be redundant.
+// STK Push and C2B are Daraja (the tenant's own M-Pesa paybill or till); PayHero's M-Pesa is
+// inside the PayHero tender.
 const MPESA_STK: TenderAction = { key: 'mpesa_stk', label: 'STK Push', sublabel: 'Prompt to phone', tone: 'mpesa', online: true, requiresGateway: 'mpesa' };
-// C2B reads Daraja till confirmations, so it needs Daraja behind M-Pesa (not PayHero alone).
+// C2B reads Daraja till confirmations.
 const MPESA_C2B: TenderAction = { key: 'mpesa_c2b', label: 'C2B', sublabel: 'Customer paid the till', tone: 'mpesa', online: true, requiresGateway: 'mpesa_c2b' };
 const CARD_ONLINE: TenderAction = { key: 'card_online', label: 'Paystack', sublabel: 'Paystack secure page', tone: 'card', online: true, requiresGateway: 'paystack' };
 const WALLET: TenderAction = { key: 'wallet', label: 'Wallet', sublabel: 'Airtel Money & more', tone: 'wallet', online: true, requiresGateway: 'wallet' };
 const COD: TenderAction = { key: 'cod', label: 'Cash on Delivery', sublabel: 'Collect on delivery', tone: 'cod', online: true, requiresGateway: 'cod' };
 const ROOM: TenderAction = { key: 'room', label: 'Charge to Room', sublabel: 'Post to guest folio', tone: 'room', online: true };
 
-const MOBILE_MONEY: TenderAction = { key: 'mobile_money', label: 'Mobile Money', sublabel: 'MTN, Airtel & more', tone: 'wallet', online: true, requiresAny: ['mtn_momo', 'airtel_money', 'mobile_money'] };
-const CARD_PAYHERO: TenderAction = { key: 'card_payhero', label: 'Card', sublabel: 'Secure checkout page', tone: 'card', online: true, requiresGateway: 'payhero_card' };
-const BANK_DEPOSIT: TenderAction = { key: 'bank_deposit', label: 'Bank Deposit', sublabel: 'Customer pays the bank', tone: 'card', online: true, requiresAny: ['payhero_bank', 'bank_transfer'] };
-const PAYBILL_OFFLINE: TenderAction = { key: 'paybill_offline', label: 'Paybill', sublabel: 'No phone prompt', tone: 'mpesa', online: true, requiresGateway: 'payhero_offline' };
+const PAYHERO: TenderAction = { key: 'payhero', label: 'PayHero', sublabel: 'M-Pesa & more', tone: 'payhero', online: true, requiresGateway: 'payhero' };
+
+// Short names of PayHero's rails for the tender's sublabel.
+const PAYHERO_RAIL_NAMES: Record<string, string> = {
+  mpesa: 'M-Pesa', payhero_offline: 'Paybill', airtel_money: 'Airtel', mtn_momo: 'MTN',
+  payhero_momo: 'Mobile money', payhero_card: 'Card', payhero_bank: 'Bank',
+};
+
+/** "M-Pesa, Airtel & Card": what the PayHero tender takes, from the rails treasury reports. */
+export function payheroSublabel(methods: string[] | undefined): string {
+  const names = (methods ?? []).map((m) => PAYHERO_RAIL_NAMES[m]).filter(Boolean);
+  if (names.length === 0) return PAYHERO.sublabel;
+  if (names.length === 1) return names[0];
+  return `${names.slice(0, -1).join(', ')} & ${names[names.length - 1]}`;
+}
 
 export interface GatewayFlags {
+  /** Daraja M-Pesa (the tenant's own paybill or till). */
   mpesa?: boolean;
   /** Daraja backs M-Pesa, so a customer's direct till payment can be matched (C2B). */
   mpesa_c2b?: boolean;
   paystack?: boolean;
   wallet?: boolean;
   cod?: boolean;
-  mtn_momo?: boolean;
-  airtel_money?: boolean;
-  mobile_money?: boolean;
-  bank_transfer?: boolean;
-  payhero_card?: boolean;
-  payhero_bank?: boolean;
-  payhero_offline?: boolean;
+  /** PayHero, with the rails it takes in the outlet's currency. */
+  payhero?: boolean;
+  payhero_methods?: string[];
 }
 
 /**
@@ -172,7 +179,8 @@ export function paymentActionsFor(
   // hospitality, quick_service or services, which settle at the point of sale.
   const allowCredit = profile === 'retail';
 
-  const ordered: TenderAction[] = [CASH, CARD_PDQ, MPESA_STK, MPESA_C2B, PAYBILL_OFFLINE, MOBILE_MONEY, CARD_ONLINE, CARD_PAYHERO, BANK_DEPOSIT, WALLET];
+  const payhero = { ...PAYHERO, sublabel: payheroSublabel(g.payhero_methods) };
+  const ordered: TenderAction[] = [CASH, CARD_PDQ, MPESA_STK, MPESA_C2B, payhero, CARD_ONLINE, WALLET];
   if (allowCredit) ordered.push(ON_ACCOUNT);
   ordered.push(SPLIT);
 
@@ -184,7 +192,7 @@ export function paymentActionsFor(
 
   return ordered.filter((a) => {
     if (a.online && !isOnline) return a.key === 'card_pdq'; // PDQ works offline (manual ref); others need net
-    if (a.requiresAny) return a.requiresAny.some((k) => Boolean(g[k]));
+    if (a.requiresAny) return a.requiresAny.some((k) => k !== 'payhero_methods' && Boolean(g[k]));
     if (!a.requiresGateway) return true;
     return Boolean(g[a.requiresGateway]);
   });
@@ -203,10 +211,7 @@ export function tenderMethodFor(key: TenderKey): string {
     case 'on_account': return 'on_account';
     case 'room': return 'room_charge';
     case 'customer_credit': return 'customer_credit';
-    case 'mobile_money': return 'mobile_money';
-    case 'card_payhero': return 'payhero_card';
-    case 'bank_deposit': return 'payhero_bank';
-    case 'paybill_offline': return 'payhero_offline';
+    case 'payhero': return 'payhero'; // the rail is chosen in the PayHero modal
     case 'loyalty_points': return 'loyalty_points'; // never routed through createIntent — see useRedeemToOrder
     default: return 'cash';
   }
@@ -218,21 +223,10 @@ export function isImmediateTender(key: TenderKey): boolean {
 }
 
 /**
- * The pay-page methods a gateway tender hands off to (TreasuryPaymentModal allowedMethods). Mobile
- * money lists every network the tenant has, so the customer picks theirs on the pay page; bank
- * deposit prefers PayHero's bank rail over the manual bank transfer.
+ * The pay-page gateway a tender hands off to (TreasuryPaymentModal allowedMethods): the one
+ * gateway the cashier picked, so the pay page opens it directly. PayHero opens its modal with
+ * every rail it takes; the customer picks theirs there.
  */
-export function allowedMethodsFor(key: TenderKey, gateways: GatewayFlags | undefined): string {
-  const g = gateways ?? {};
-  switch (key) {
-    case 'mobile_money': {
-      const nets = (['mtn_momo', 'airtel_money'] as const).filter((m) => g[m]) as string[];
-      if (g.mobile_money) nets.push('payhero_momo');
-      return nets.join(',') || 'payhero_momo';
-    }
-    case 'bank_deposit':
-      return g.payhero_bank ? 'payhero_bank' : 'bank_transfer';
-    default:
-      return tenderMethodFor(key);
-  }
+export function allowedMethodsFor(key: TenderKey): string {
+  return tenderMethodFor(key);
 }

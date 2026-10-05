@@ -13,9 +13,8 @@
  * Send-to-Kitchen button instead of tender buttons (payment happens later from the bill).
  */
 
-import { TreasuryPaymentModal } from '@bengo-hub/shared-ui-lib';
+import { MpesaLogo, PayHeroLogo, TreasuryPaymentModal } from '@bengo-hub/shared-ui-lib';
 import { cn } from '@/lib/utils';
-import { MpesaLogo } from '@/components/pos/mpesa-logo';
 import { C2BPaymentMatcher } from '@/components/pos/c2b-payment-matcher';
 import {
   Banknote, ChefHat, Coins, CreditCard, FileText, Gift, Hash, Loader2, NotebookPen,
@@ -103,7 +102,16 @@ const TONES: Record<TenderTone, { text: string; bg: string; ring: string }> = {
   cod:   { text: 'text-amber-700',   bg: 'bg-amber-500/10',   ring: 'hover:border-amber-500/50' },
   split: { text: 'text-violet-700',  bg: 'bg-violet-500/10',  ring: 'hover:border-violet-500/50' },
   loyalty: { text: 'text-fuchsia-700', bg: 'bg-fuchsia-500/10', ring: 'hover:border-fuchsia-500/50' },
+  payhero: { text: 'text-teal-700', bg: 'bg-teal-500/10', ring: 'hover:border-teal-500/50' },
 };
+
+// PayHero's official mark (the "PH" circles); like MpesaLogo it is wider than tall.
+function PayHeroIcon({ className }: { className?: string }) {
+  return <PayHeroLogo className={className} />;
+}
+
+// Brand marks wider than the square lucide icons need a wider slot.
+const isWideLogo = (key: TenderKey) => key === 'mpesa_stk' || key === 'mpesa_c2b' || key === 'payhero';
 
 function tenderIcon(key: TenderKey) {
   switch (key) {
@@ -113,10 +121,7 @@ function tenderIcon(key: TenderKey) {
     case 'mpesa_stk': return MpesaLogo;
     case 'mpesa_c2b': return MpesaLogo;
     case 'wallet': return Wallet;
-    case 'mobile_money': return Smartphone;
-    case 'card_payhero': return CreditCard;
-    case 'bank_deposit': return Building2;
-    case 'paybill_offline': return MpesaLogo;
+    case 'payhero': return PayHeroIcon;
     case 'on_account': return NotebookPen;
     case 'customer_credit': return Coins;
     case 'cod': return Truck;
@@ -288,7 +293,7 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
           setBusyKey(null);
           setIntentId(data.payment_intent_id);
           setInitiateUrl(data.initiate_url);
-          setGatewayMethod(allowedMethodsFor(key, gateways));
+          setGatewayMethod(allowedMethodsFor(key));
           setCapture(key);
         },
         onError: async (e: any) => {
@@ -297,7 +302,7 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
         },
       },
     );
-  }, [ensureOrder, createIntent, roundedTotal, tenderId, gateways]);
+  }, [ensureOrder, createIntent, roundedTotal, tenderId]);
 
   // ── Dispatch a tender button ─────────────────────────────────────────────────
   const onPick = useCallback(async (key: TenderKey) => {
@@ -369,10 +374,7 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
       case 'mpesa_stk':
       case 'card_online':
       case 'wallet':
-      case 'mobile_money':
-      case 'card_payhero':
-      case 'bank_deposit':
-      case 'paybill_offline':
+      case 'payhero':
         await startGateway(key);
         return;
       case 'loyalty_points': {
@@ -488,8 +490,8 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
         />
       )}
 
-      {/* Treasury gateway handoff (M-Pesa STK / Paystack card / Wallet). */}
-      {(capture === 'mpesa_stk' || capture === 'card_online' || capture === 'wallet') && order && intentId && (
+      {/* Treasury gateway handoff (M-Pesa STK / Paystack / PayHero / Wallet). */}
+      {(capture === 'mpesa_stk' || capture === 'card_online' || capture === 'wallet' || capture === 'payhero') && order && intentId && (
         <TreasuryPaymentModal
           open
           onOpenChange={(o: boolean) => { if (!o) reset(); }}
@@ -534,10 +536,10 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
             const Icon = tenderIcon(a.key);
             const tone = TONES[a.tone];
             const isBusy = busyKey === a.key;
-            // MpesaLogo is a wide wordmark (~1.88:1), not a square icon — a square box
-            // letterboxes it down to an illegible sliver, so it needs a wider slot than the
+            // MpesaLogo and the PayHero mark are wider than tall, not square icons — a square box
+            // letterboxes them down to an illegible sliver, so they need a wider slot than the
             // other (genuinely square) lucide tender icons share here.
-            const isMpesa = a.key === 'mpesa_stk' || a.key === 'mpesa_c2b';
+            const isMpesa = isWideLogo(a.key);
             return (
               <button
                 key={a.key}
@@ -574,9 +576,9 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
                 const Icon = tenderIcon(a.key);
                 const tone = TONES[a.tone];
                 const isBusy = busyKey === a.key;
-                // See the "bar" layout above — MpesaLogo is a wide wordmark, needs a wider slot
-                // than the square lucide icons the other tenders share.
-                const isMpesa = a.key === 'mpesa_stk' || a.key === 'mpesa_c2b';
+                // See the "bar" layout above — wide brand marks need a wider slot than the
+                // square lucide icons the other tenders share.
+                const isMpesa = isWideLogo(a.key);
                 return (
                   <button
                     key={a.key}

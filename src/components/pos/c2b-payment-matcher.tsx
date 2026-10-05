@@ -32,7 +32,7 @@ import { useListC2BPayments, useClaimC2BPayment, useSimulateC2BPayment, type C2B
 import { formatCurrency } from '@/lib/utils';
 import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api/error-message';
-import { MpesaLogo } from '@/components/pos/mpesa-logo';
+import { MpesaLogo } from '@bengo-hub/shared-ui-lib';
 import { formatTransTime } from '@/lib/pos/c2b-format';
 
 const SEARCH_TIMEOUT_MS = 20_000;

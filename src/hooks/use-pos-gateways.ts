@@ -5,21 +5,16 @@ import { useAuthStore } from '@/store/auth';
 import { useQuery } from '@tanstack/react-query';
 
 export interface POSGateways {
+  /** Daraja M-Pesa (the tenant's own paybill or till): STK Push and C2B. */
   mpesa: boolean;
   paystack: boolean;
   wallet: boolean;
   cod: boolean;
   complimentary: boolean;
-  mtn_momo: boolean;
-  airtel_money: boolean;
-  bank_transfer: boolean;
-  // PayHero rails treasury offers for the outlet's currency.
-  mobile_money: boolean;
-  payhero_card: boolean;
-  payhero_bank: boolean;
-  payhero_offline: boolean;
-  /** "daraja" or "payhero": the account behind M-Pesa (absent when M-Pesa is off). */
-  mpesa_provider?: string;
+  /** PayHero, its own gateway like Paystack: one tender opening the PayHero modal. */
+  payhero: boolean;
+  /** PayHero's rails in the outlet's currency (mpesa, airtel_money, payhero_card, ...). */
+  payhero_methods?: string[];
   /** Daraja backs M-Pesa, so C2B till matching works. */
   mpesa_c2b: boolean;
 }
@@ -30,9 +25,7 @@ export interface POSGateways {
 // not gateway-backed and always show.
 const NONE_ENABLED: POSGateways = {
   mpesa: false, paystack: false, wallet: false, cod: false, complimentary: false,
-  mtn_momo: false, airtel_money: false, bank_transfer: false,
-  mobile_money: false, payhero_card: false, payhero_bank: false, payhero_offline: false,
-  mpesa_c2b: false,
+  payhero: false, payhero_methods: [], mpesa_c2b: false,
 };
 
 /** The tenant's online payment rails. currency (the outlet's) decides which PayHero rails exist

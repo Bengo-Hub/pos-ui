@@ -1,8 +1,7 @@
 'use client';
 
-import { TreasuryPaymentModal } from '@bengo-hub/shared-ui-lib';
+import { MpesaLogo, PayHeroLogo, TreasuryPaymentModal } from '@bengo-hub/shared-ui-lib';
 import { cn } from '@/lib/utils';
-import { MpesaLogo } from '@/components/pos/mpesa-logo';
 import { C2BPaymentMatcher } from '@/components/pos/c2b-payment-matcher';
 import {
   Banknote,
@@ -38,7 +37,7 @@ import { ApprovalDialog, type ApprovalResult } from '@/components/pos/approval-d
 import { useHotelRooms } from '@/hooks/useHotel';
 import { hotelApi, type Room } from '@/lib/api/hotel';
 import { useRedeemToOrder } from '@/hooks/useLoyalty';
-import { canRedeemLoyaltyFor, loyaltyPointsToRedeem, type LoyaltyRedeemInfo } from '@/lib/pos/terminal-actions';
+import { canRedeemLoyaltyFor, loyaltyPointsToRedeem, payheroSublabel, type LoyaltyRedeemInfo } from '@/lib/pos/terminal-actions';
 import { useSubscription } from '@/hooks/use-subscription';
 
 export interface POSPaymentModalProps {
@@ -600,8 +599,7 @@ export function POSPaymentModal({
                 </div>
 
                 {/* ── Online gateways (treasury-synced) ────────────────── */}
-                {isOnline && (gateways?.mpesa || gateways?.paystack || gateways?.wallet || gateways?.mtn_momo || gateways?.airtel_money || gateways?.bank_transfer
-                  || gateways?.mobile_money || gateways?.payhero_card || gateways?.payhero_bank || gateways?.payhero_offline) && (
+                {isOnline && (gateways?.mpesa || gateways?.paystack || gateways?.wallet || gateways?.payhero) && (
                   <div>
                     <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2.5 flex items-center gap-1.5">
                       <Zap className="h-3 w-3 text-primary" />
@@ -656,88 +654,18 @@ export function POSPaymentModal({
                           onClick={() => handleDigital('wallet')}
                         />
                       )}
-                      {gateways?.mtn_momo && (
+                      {/* PayHero is its own gateway, like Paystack: one badge opening the PayHero
+                          modal, where the customer picks M-Pesa, Airtel, card or another rail. */}
+                      {gateways?.payhero && (
                         <PayBadge
-                          icon={<Smartphone className="h-4 w-4" />}
-                          color="text-amber-600"
-                          bg="bg-amber-500/10"
-                          label="MTN Mobile Money"
-                          sub="Prompt to phone"
+                          icon={<PayHeroLogo className="h-4 w-7" />}
+                          color="text-teal-700"
+                          bg="bg-teal-500/10"
+                          label="PayHero"
+                          sub={payheroSublabel(gateways.payhero_methods)}
                           disabled={false}
                           loading={createIntent.isPending}
-                          onClick={() => handleDigital('mtn_momo', 'mtn_momo')}
-                        />
-                      )}
-                      {gateways?.airtel_money && (
-                        <PayBadge
-                          icon={<Smartphone className="h-4 w-4" />}
-                          color="text-red-600"
-                          bg="bg-red-500/10"
-                          label="Airtel Money"
-                          sub="Prompt to phone"
-                          disabled={false}
-                          loading={createIntent.isPending}
-                          onClick={() => handleDigital('airtel_money', 'airtel_money')}
-                        />
-                      )}
-                      {gateways?.bank_transfer && (
-                        <PayBadge
-                          icon={<Building2 className="h-4 w-4" />}
-                          color="text-indigo-600"
-                          bg="bg-indigo-500/10"
-                          label="Bank Transfer"
-                          sub="e.g. Equity Bank Uganda"
-                          disabled={false}
-                          loading={createIntent.isPending}
-                          onClick={() => handleDigital('bank_transfer', gateways?.payhero_bank ? 'payhero_bank' : 'bank_transfer')}
-                        />
-                      )}
-                      {gateways?.mobile_money && (
-                        <PayBadge
-                          icon={<Smartphone className="h-4 w-4" />}
-                          color="text-emerald-600"
-                          bg="bg-emerald-500/10"
-                          label="Mobile Money"
-                          sub="Other networks"
-                          disabled={false}
-                          loading={createIntent.isPending}
-                          onClick={() => handleDigital('mobile_money', 'payhero_momo')}
-                        />
-                      )}
-                      {gateways?.payhero_card && (
-                        <PayBadge
-                          icon={<CreditCard className="h-4 w-4" />}
-                          color="text-blue-700"
-                          bg="bg-blue-500/10"
-                          label="Card"
-                          sub="Secure checkout page"
-                          disabled={false}
-                          loading={createIntent.isPending}
-                          onClick={() => handleDigital('payhero_card', 'payhero_card')}
-                        />
-                      )}
-                      {gateways?.payhero_bank && (
-                        <PayBadge
-                          icon={<Building2 className="h-4 w-4" />}
-                          color="text-indigo-700"
-                          bg="bg-indigo-500/10"
-                          label="Bank Deposit"
-                          sub="Customer pays the bank"
-                          disabled={false}
-                          loading={createIntent.isPending}
-                          onClick={() => handleDigital('payhero_bank', 'payhero_bank')}
-                        />
-                      )}
-                      {gateways?.payhero_offline && (
-                        <PayBadge
-                          icon={<MpesaLogo className="h-4 w-7 rounded" />}
-                          color="text-green-700"
-                          bg="bg-green-500/10"
-                          label="Paybill"
-                          sub="No phone prompt"
-                          disabled={false}
-                          loading={createIntent.isPending}
-                          onClick={() => handleDigital('payhero_offline', 'payhero_offline')}
+                          onClick={() => handleDigital('payhero', 'payhero')}
                         />
                       )}
                     </div>
