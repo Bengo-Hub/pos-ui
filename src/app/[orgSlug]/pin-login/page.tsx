@@ -49,6 +49,8 @@ interface PINLoginResponse {
     outlet_id: string;
     outlet_use_case?: string;
     is_hq_user?: boolean;
+    /** The tenant is the platform tenant, or this person is a platform admin (auth-api). */
+    is_platform_owner?: boolean;
     pin_hash?: string; // returned only to this device, cached for offline PIN re-login
   };
 }
@@ -327,7 +329,9 @@ export default function PINLoginPage() {
       permissions:     data.user.permissions ?? [],
       tenant_id:       data.user.tenant_id,
       tenant_slug:     orgSlug,
-      isPlatformOwner: false,
+      // pos-api asks auth whether this person is a platform admin (same rule as their SSO
+      // token), so platform-owner-only actions show for them on a PIN session too.
+      isPlatformOwner: data.user.is_platform_owner === true,
       isSuperUser:     false,
     });
     const sessionOutlet = outletInfo ?? (data.user.outlet_id ? {
