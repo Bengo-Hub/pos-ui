@@ -1,6 +1,6 @@
 'use client';
 
-import { MpesaLogo, PayHeroLogo, TreasuryPaymentModal } from '@bengo-hub/shared-ui-lib';
+import { CardMark, CashMark, MpesaLogo, PayHeroLogo, TreasuryPaymentModal } from '@bengo-hub/shared-ui-lib';
 import { cn } from '@/lib/utils';
 import { C2BPaymentMatcher } from '@/components/pos/c2b-payment-matcher';
 import {
@@ -504,9 +504,8 @@ export function POSPaymentModal({
                   </p>
                   <div className="flex flex-wrap gap-2.5">
                     <PayBadge
-                      icon={<Banknote className="h-4 w-4" />}
-                      color="text-emerald-600"
-                      bg="bg-emerald-500/10"
+                      icon={<CashMark className="h-8 w-8" />}
+                      bare
                       label="Cash"
                       sub="Accept cash"
                       disabled={false}
@@ -524,9 +523,8 @@ export function POSPaymentModal({
                       onClick={() => setStep('manual')}
                     />
                     <PayBadge
-                      icon={<CreditCard className="h-4 w-4" />}
-                      color="text-blue-600"
-                      bg="bg-blue-500/10"
+                      icon={<CardMark className="h-8 w-8" />}
+                      bare
                       label="Card (PDQ)"
                       sub="Swipe on terminal"
                       disabled={false}
@@ -658,10 +656,9 @@ export function POSPaymentModal({
                           modal, where the customer picks M-Pesa, Airtel, card or another rail. */}
                       {gateways?.payhero && (
                         <PayBadge
-                          icon={<PayHeroLogo className="h-4 w-7" />}
-                          color="text-teal-700"
-                          bg="bg-teal-500/10"
-                          label="PayHero"
+                          icon={<PayHeroLogo className="h-7 w-12" />}
+                          bare
+                          ariaLabel="PayHero"
                           sub={payheroSublabel(gateways.payhero_methods)}
                           disabled={false}
                           loading={createIntent.isPending}
@@ -1025,12 +1022,16 @@ export function POSPaymentModal({
 // inline. Replaces the old large card tiles so the method list reads as one organised row of
 // badges rather than a grid of bulky cards.
 function PayBadge({
-  icon, color, bg, label, sub, disabled, loading, offlineBadge, onClick,
+  icon, color = '', bg = '', label, ariaLabel, bare = false, sub, disabled, loading, offlineBadge, onClick,
 }: {
   icon: React.ReactNode;
-  color: string;
-  bg: string;
-  label: string;
+  color?: string;
+  bg?: string;
+  /** Omit when the logo already says the name (PayHero, M-Pesa); pass ariaLabel instead. */
+  label?: string;
+  ariaLabel?: string;
+  /** The icon brings its own colour and shape (shared-ui-lib marks and logos): no tinted disc. */
+  bare?: boolean;
   sub: string;
   disabled: boolean;
   loading: boolean;
@@ -1042,6 +1043,7 @@ function PayBadge({
       onClick={onClick}
       disabled={disabled || loading}
       title={offlineBadge ? 'Requires internet' : sub}
+      aria-label={label ? undefined : ariaLabel}
       className={cn(
         'group inline-flex items-center gap-2.5 rounded-full border pl-2 pr-4 py-1.5 transition-all active:scale-95',
         disabled || loading
@@ -1049,11 +1051,11 @@ function PayBadge({
           : 'border-border hover:border-primary/50 hover:bg-accent/40'
       )}
     >
-      <span className={cn('h-8 w-8 rounded-full flex items-center justify-center shrink-0', bg, color)}>
+      <span className={cn('h-8 flex items-center justify-center shrink-0', bare ? 'min-w-8' : 'w-8 rounded-full', !bare && bg, color)}>
         {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : icon}
       </span>
       <span className="text-left leading-tight">
-        <span className="block text-sm font-bold">{label}</span>
+        {label && <span className="block text-sm font-bold">{label}</span>}
         <span className="block text-[10px] text-muted-foreground">
           {offlineBadge ? 'Requires internet' : sub}
         </span>

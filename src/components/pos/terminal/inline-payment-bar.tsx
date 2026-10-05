@@ -13,7 +13,7 @@
  * Send-to-Kitchen button instead of tender buttons (payment happens later from the bill).
  */
 
-import { MpesaLogo, PayHeroLogo, TreasuryPaymentModal } from '@bengo-hub/shared-ui-lib';
+import { CardMark, CashMark, MpesaLogo, PayHeroLogo, SplitPayMark, TreasuryPaymentModal } from '@bengo-hub/shared-ui-lib';
 import { cn } from '@/lib/utils';
 import { C2BPaymentMatcher } from '@/components/pos/c2b-payment-matcher';
 import {
@@ -112,11 +112,22 @@ function PayHeroIcon({ className }: { className?: string }) {
 
 // Brand marks wider than the square lucide icons need a wider slot.
 const isWideLogo = (key: TenderKey) => key === 'mpesa_stk' || key === 'mpesa_c2b' || key === 'payhero';
+// Disc marks (shared-ui-lib, PayHero's style) carry their own colour and sit a size up.
+const isDiscMark = (key: TenderKey) => key === 'cash' || key === 'card_pdq' || key === 'split';
+// The mark already says the name, so the button shows the logo alone (aria-label carries it).
+const isLogoOnly = (key: TenderKey) => key === 'payhero';
+
+/** Icon box classes per kind: wide brand logo, disc mark or square lucide icon. */
+function iconClass(key: TenderKey, size: 'bar' | 'panel'): string {
+  if (isWideLogo(key)) return size === 'bar' ? (isLogoOnly(key) ? 'h-6 w-11 shrink-0' : 'h-4 w-7 shrink-0') : 'h-6 w-11';
+  if (isDiscMark(key)) return size === 'bar' ? 'h-6 w-6 shrink-0' : 'h-8 w-8';
+  return size === 'bar' ? 'h-4 w-4 shrink-0' : 'h-5 w-5';
+}
 
 function tenderIcon(key: TenderKey) {
   switch (key) {
-    case 'cash': return Banknote;
-    case 'card_pdq': return CreditCard;
+    case 'cash': return CashMark;
+    case 'card_pdq': return CardMark;
     case 'card_online': return CreditCard;
     case 'mpesa_stk': return MpesaLogo;
     case 'mpesa_c2b': return MpesaLogo;
@@ -126,7 +137,7 @@ function tenderIcon(key: TenderKey) {
     case 'customer_credit': return Coins;
     case 'cod': return Truck;
     case 'room': return Building2;
-    case 'split': return SplitSquareHorizontal;
+    case 'split': return SplitPayMark;
     case 'loyalty_points': return Gift;
     default: return CreditCard;
   }
@@ -537,9 +548,9 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
             const tone = TONES[a.tone];
             const isBusy = busyKey === a.key;
             // MpesaLogo and the PayHero mark are wider than tall, not square icons — a square box
-            // letterboxes them down to an illegible sliver, so they need a wider slot than the
-            // other (genuinely square) lucide tender icons share here.
-            const isMpesa = isWideLogo(a.key);
+            // letterboxes them down to an illegible sliver, so they get a wider slot (iconClass);
+            // the disc marks sit a size up. A logo that already says the name stands alone.
+            const logoOnly = isLogoOnly(a.key);
             return (
               <button
                 key={a.key}
@@ -547,15 +558,17 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
                 type="button"
                 disabled={disabled || anyBusy}
                 onClick={() => onPick(a.key)}
-                title={a.sublabel}
+                title={logoOnly ? `${a.label}: ${a.sublabel}` : a.sublabel}
+                aria-label={logoOnly ? a.label : undefined}
                 className={cn(
-                  'inline-flex items-center gap-2 rounded-full px-4 py-2 min-h-11 text-sm font-bold transition-all',
+                  'inline-flex items-center gap-2 rounded-full py-2 min-h-11 text-sm font-bold transition-all',
+                  logoOnly ? 'px-3' : isDiscMark(a.key) ? 'pl-2 pr-4' : 'px-4',
                   'hover:brightness-95 active:scale-95 disabled:opacity-40 disabled:pointer-events-none',
                   tone.bg, tone.text,
                 )}
               >
-                {isBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Icon className={isMpesa ? 'h-4 w-7 shrink-0' : 'h-4 w-4 shrink-0'} />}
-                <span className="whitespace-nowrap">{a.label}</span>
+                {isBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Icon className={iconClass(a.key, 'bar')} />}
+                {!logoOnly && <span className="whitespace-nowrap">{a.label}</span>}
               </button>
             );
           })}
@@ -577,8 +590,9 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
                 const tone = TONES[a.tone];
                 const isBusy = busyKey === a.key;
                 // See the "bar" layout above — wide brand marks need a wider slot than the
-                // square lucide icons the other tenders share.
+                // square lucide icons the other tenders share; disc marks bring their own colour.
                 const isMpesa = isWideLogo(a.key);
+                const disc = isDiscMark(a.key);
                 return (
                   <button
                     key={a.key}
@@ -592,10 +606,10 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
                       tone.ring,
                     )}
                   >
-                    <span className={cn('h-10 rounded-lg flex items-center justify-center shrink-0', isMpesa ? 'w-16' : 'w-10', tone.bg, tone.text)}>
-                      {isBusy ? <Loader2 className="h-5 w-5 animate-spin" /> : <Icon className={isMpesa ? 'h-5 w-9' : 'h-5 w-5'} />}
+                    <span className={cn('h-10 rounded-lg flex items-center justify-center shrink-0', isMpesa ? 'w-16' : 'w-10', !disc && tone.bg, tone.text)}>
+                      {isBusy ? <Loader2 className="h-5 w-5 animate-spin" /> : <Icon className={iconClass(a.key, 'panel')} />}
                     </span>
-                    <span className="text-xs font-bold text-center leading-tight">{a.label}</span>
+                    <span className="text-xs font-bold text-center leading-tight">{isLogoOnly(a.key) ? a.sublabel : a.label}</span>
                   </button>
                 );
               })}
