@@ -99,6 +99,12 @@ export function SalesActionsMenu({ order, orgSlug, onView, onEditShipping, onVie
 
   const isDelivery = order.order_subtype === 'delivery' || order.order_type === 'delivery';
   const isFinal = order.status === 'completed';
+  // A platform owner can also delete an open sale nothing was paid on (their own test sales on a
+  // tenant); pos-api allows exactly this for platform owners. Tenant staff void open sales.
+  const isPlatformAdmin = authUser?.isPlatformOwner === true || authUser?.isSuperUser === true;
+  const isUnpaidOpen = ['open', 'pending_payment'].includes(order.status)
+    && Number(order.total_paid ?? order.paid_total ?? 0) <= 0.009;
+  const showDeleteSale = isFinal || (isPlatformAdmin && isUnpaidOpen);
   const linesLocked = ['completed', 'cancelled', 'voided', 'refunded'].includes(order.status);
   // Edit Sale's REAL backend gate (saleedit orchestrator.go) is narrower than "any correction
   // history" (that's Delete Sale's gate, order.has_correction_history, used above) — a sale
@@ -198,7 +204,7 @@ export function SalesActionsMenu({ order, orgSlug, onView, onEditShipping, onVie
               this after confirming a dialog that promises unconditional deletion — is the fix
               for a live report where an admin couldn't tell why Delete kept failing on sales
               they'd already corrected via Edit Sale/a return. */}
-          {isFinal && canDeleteSale && onDeleteSale && (
+          {showDeleteSale && canDeleteSale && onDeleteSale && (
             order.has_correction_history ? (
               <button
                 className={`${item} opacity-50 cursor-not-allowed`}
