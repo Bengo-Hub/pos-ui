@@ -1,6 +1,7 @@
 'use client';
 
 import { useModuleAccess } from '@/hooks/use-module-access';
+import { usePOSGateways } from '@/hooks/use-pos-gateways';
 import { useOutletServiceProfile } from '@/hooks/useServiceJobs';
 import { JobsDashboard } from '@/components/dashboard/jobs-dashboard';
 import { useAuthStore } from '@/store/auth';
@@ -49,6 +50,12 @@ export default function DashboardPage() {
       ? 'specialist'
       : 'cashier';
 
+  // payhero_active picks the "how to use it" text of a PayHero announcement over "how to ask for
+  // it"; undefined until treasury answers, so the banner never flashes the wrong one. Same cached
+  // query the till uses.
+  const gateways = usePOSGateways();
+  const payheroActive = gateways.isPlaceholderData ? (gateways.isError ? false : undefined) : !!gateways.data?.payhero;
+
   return (
     <>
       {/* Platform "what's new" banners (PayHero and later updates); admin-only ones for admins. */}
@@ -57,6 +64,7 @@ export default function DashboardPage() {
         orgSlug={orgSlug}
         viewerKey={user?.id || user?.email}
         isAdmin={primaryRole === 'admin'}
+        flags={{ payhero_active: payheroActive }}
         className="mx-4 mt-4 sm:mx-6 sm:mt-6"
       />
       <RoleDashboard primaryRole={primaryRole} orgSlug={orgSlug} />
