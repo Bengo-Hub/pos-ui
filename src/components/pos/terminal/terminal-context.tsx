@@ -55,6 +55,7 @@ import { computePairAutoAdd, describeAutoApplyAnnouncement } from '@/lib/pos/aut
 import { applyRoundOff, computeCartTax } from '@/lib/pos/cart-tax';
 import { bogoFreeUnitsForSku, computeHappyHour, type HHLine, type HappyHourResult } from '@/lib/pos/happy-hour';
 import { printKitchenBarTickets } from '@/lib/pos/kitchen-bar-print';
+import { chitLabelFor } from '@/lib/kds/board';
 import { selectedFromLoyalty, type SaleSessionSnapshot } from '@/lib/pos/sale-session';
 import type { LoyaltyRedeemInfo } from '@/lib/pos/terminal-actions';
 import { isFractionalUnit, normalizeQuantity } from '@/lib/pos/units';
@@ -1588,6 +1589,8 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
       orderNumber,
       tableRef: tableName ? `Table ${tableName}` : '',
       bannerLabel: banner,
+      // Same order-type line the server chit prints (TAKEAWAY, DELIVERY, DINE-IN...).
+      chitLabel: chitLabelFor({ subtype: orderSubtype ?? defaultOrderSubtype, customerName: loyaltyState?.customerName }),
       lines: ticketLines.map((c) => {
         const eff = effectiveQtyFor(c);
         return {
@@ -1613,7 +1616,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
         toast.info(`Ticket print skipped (no printer): ${[...new Set(res.skipped)].join(', ')} — check Settings → Receipt.`);
       }
     });
-  }, [isHospitality, posSettings, tableName, kdsStationsData, effectiveQtyFor]);
+  }, [isHospitality, posSettings, tableName, kdsStationsData, effectiveQtyFor, orderSubtype, defaultOrderSubtype, loyaltyState?.customerName]);
 
   // Order-level metadata for a new order: delivery dropoff details for a delivery, the job sheet
   // for a services job order.

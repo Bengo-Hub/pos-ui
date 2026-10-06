@@ -3,7 +3,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildBoard, ticketChannel, activeStations } from '../src/lib/kds/board.ts';
+import { buildBoard, ticketChannel, activeStations, chitLabelFor, orderChannel } from '../src/lib/kds/board.ts';
 
 let n = 0;
 const ticket = (station: string, channel: string, extra: Record<string, unknown> = {}) => ({
@@ -69,6 +69,19 @@ test('older servers without channel are classified like pos-api', () => {
   assert.equal(ticketChannel({ ...ticket('k', ''), channel: undefined, order_source: 'online', order_subtype: 'takeaway' }), 'online_pickup');
   assert.equal(ticketChannel({ ...ticket('k', ''), channel: undefined, order_source: 'pos', order_subtype: 'takeaway' }), 'takeaway');
   assert.equal(ticketChannel({ ...ticket('k', ''), channel: undefined }), 'dine_in');
+});
+
+test('chit label matches the server chit for every route', () => {
+  assert.deepEqual(chitLabelFor({ subtype: 'dine_in' }), { orderType: 'DINE-IN', details: ['Source: POS'] });
+  assert.deepEqual(chitLabelFor({ subtype: 'takeaway', customerName: 'Achieng' }), { orderType: 'TAKEAWAY', details: ['Source: POS', 'For: Achieng'] });
+  assert.deepEqual(chitLabelFor({ subtype: 'dine_in', customerName: 'Walk in' }).details, ['Source: POS']);
+  assert.deepEqual(
+    chitLabelFor({ subtype: 'delivery', metadata: { online_order_id: 'x', online_order_no: '000045', fulfillment_type: 'delivery', scheduled_for_label: 'Fri 18:30', order_notes: 'no onions' } }),
+    { orderType: 'ONLINE DELIVERY', details: ['Source: Online store #000045', 'Ready by: Fri 18:30', 'Note: no onions'] },
+  );
+  assert.equal(chitLabelFor({ subtype: 'takeaway', metadata: { online_order_id: 'x' } }).orderType, 'ONLINE PICKUP');
+  assert.equal(chitLabelFor({}).orderType, 'DINE-IN');
+  assert.equal(orderChannel('room_service', null), 'room_service');
 });
 
 test('only active stations, in sort order', () => {

@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/base';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { useKDSStations } from '@/hooks/useKDS';
 import { printKitchenBarTickets, type TicketLine } from '@/lib/pos/kitchen-bar-print';
+import { chitLabelFor } from '@/lib/kds/board';
 
 interface OrderLineLike {
   name?: string;
@@ -27,6 +28,10 @@ interface ReprintStationTicketsButtonProps {
   orderNumber: string;
   tableRef?: string;
   lines: OrderLineLike[];
+  /** Order subtype, metadata and customer: the reprint carries the same order-type label as the original chit. */
+  orderSubtype?: string;
+  metadata?: Record<string, unknown> | null;
+  customerName?: string | null;
   className?: string;
 }
 
@@ -41,7 +46,7 @@ interface ReprintStationTicketsButtonProps {
  * Self-hides when the outlet has no live KDS stations (retail/non-hospitality use cases never had
  * kitchen tickets to begin with).
  */
-export function ReprintStationTicketsButton({ orderNumber, tableRef, lines, className }: ReprintStationTicketsButtonProps) {
+export function ReprintStationTicketsButton({ orderNumber, tableRef, lines, orderSubtype, metadata, customerName, className }: ReprintStationTicketsButtonProps) {
   const { data: posSettings } = usePOSSettings();
   const { data: stationsData } = useKDSStations();
   const [printing, setPrinting] = useState(false);
@@ -70,6 +75,7 @@ export function ReprintStationTicketsButton({ orderNumber, tableRef, lines, clas
       const res = await printKitchenBarTickets({
         orderNumber,
         tableRef,
+        chitLabel: chitLabelFor({ subtype: orderSubtype, metadata, customerName }),
         lines: ticketLines,
         kdsStations: stations,
         stations: (posSettings as { printer_profiles?: unknown[] } | undefined)?.printer_profiles as never[] ?? [],

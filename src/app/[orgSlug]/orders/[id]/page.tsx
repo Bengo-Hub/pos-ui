@@ -112,6 +112,9 @@ export default function OrderDetailPage() {
               orderNumber={order.order_number}
               tableRef={order.table_reference ? `Table ${order.table_reference}` : ''}
               lines={lines}
+              orderSubtype={(order as any).order_subtype}
+              metadata={(order as any).metadata}
+              customerName={(order as any).customer_name}
             />
           )}
           {/* Manager: generate a one-time code to authorize a remote void (shown to managers only). */}

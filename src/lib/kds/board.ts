@@ -36,6 +36,51 @@ export function channelLabel(channel: KDSChannel): string {
   return KDS_CHANNELS.find((c) => c.key === channel)?.label ?? channel;
 }
 
+/**
+ * The channel of an order from its subtype and metadata, the same rule as pos-api's orderchannel.Of:
+ * an online order (metadata.online_order_id) is online pickup or online delivery, anything else
+ * keeps its POS subtype, and no subtype means dine-in.
+ */
+export function orderChannel(subtype?: string | null, metadata?: Record<string, unknown> | null): KDSChannel {
+  const online = typeof metadata?.online_order_id === 'string' && (metadata.online_order_id as string).trim() !== '';
+  const st = subtype || 'dine_in';
+  if (online) {
+    const ft = metadata?.fulfillment_type;
+    return (ft ? ft === 'delivery' : st === 'delivery') ? 'online_delivery' : 'online_pickup';
+  }
+  return CHANNEL_KEYS.has(st) ? (st as KDSChannel) : 'dine_in';
+}
+
+const COUNTER_HANDOVER = new Set<KDSChannel>(['takeaway', 'delivery', 'online_pickup', 'online_delivery']);
+
+/**
+ * What a kitchen/bar chit prints about the order besides its items, matching pos-api's
+ * printing.StationOrderLabel: the order type in capitals and lines for the source, the customer to
+ * call for a counter handover, a promised time and the order note.
+ */
+export function chitLabelFor(order: {
+  subtype?: string | null;
+  metadata?: Record<string, unknown> | null;
+  customerName?: string | null;
+}): { orderType: string; details: string[] } {
+  const channel = orderChannel(order.subtype, order.metadata);
+  const meta = order.metadata ?? {};
+  const details: string[] = [];
+  if (channel === 'online_pickup' || channel === 'online_delivery') {
+    const no = typeof meta.online_order_no === 'string' ? meta.online_order_no.trim() : '';
+    details.push(no ? `Source: Online store #${no}` : 'Source: Online store');
+  } else {
+    details.push('Source: POS');
+  }
+  const name = order.customerName?.trim();
+  if (name && COUNTER_HANDOVER.has(channel)) details.push(`For: ${name}`);
+  if (typeof meta.scheduled_for_label === 'string' && meta.scheduled_for_label.trim()) {
+    details.push(`Ready by: ${meta.scheduled_for_label.trim()}`);
+  }
+  if (typeof meta.order_notes === 'string' && meta.order_notes.trim()) details.push(`Note: ${meta.order_notes.trim()}`);
+  return { orderType: channelLabel(channel).toUpperCase(), details };
+}
+
 /** The ticket fields the board logic reads. */
 export interface BoardTicket {
   id: string;

@@ -88,7 +88,10 @@ function OnlineOrdersPage() {
   const orgSlug = (useParams()?.orgSlug as string) || '';
   const qc = useQueryClient();
   const { useCase } = useModuleAccess();
-  const vocab = useCase === 'retail' ? RETAIL_VOCAB : HOSPITALITY_VOCAB;
+  // Kitchen outlets prepare orders; shops (retail, and goods sold by a services outlet) pick and
+  // pack them. Same split as pos-api's outletpolicy.WorkflowFor.
+  const kitchenOutlet = useCase === 'hospitality' || useCase === 'quick_service';
+  const vocab = kitchenOutlet ? HOSPITALITY_VOCAB : RETAIL_VOCAB;
   const { data: posSettings } = usePOSSettings();
   const currency = (posSettings as any)?.currency ?? 'KES';
 
@@ -166,7 +169,7 @@ function OnlineOrdersPage() {
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-sm font-semibold bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
             >
-              <QrCode className="h-4 w-4" /> {useCase === 'retail' ? 'Catalogue PDF' : 'Menu PDF'}
+              <QrCode className="h-4 w-4" /> {kitchenOutlet ? 'Menu PDF' : 'Catalogue PDF'}
             </a>
             <a
               href={`${POS_API_BASE}/api/v1/${tenantID}/pos/outlets/${outletId}/menu.html`}
@@ -174,7 +177,7 @@ function OnlineOrdersPage() {
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-sm font-semibold border border-border hover:bg-accent transition-colors"
             >
-              {useCase === 'retail' ? 'Web catalogue' : 'Web menu'}
+              {kitchenOutlet ? 'Web menu' : 'Web catalogue'}
             </a>
           </div>
         )}
