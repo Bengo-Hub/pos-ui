@@ -22,6 +22,7 @@ interface CatalogItem {
   minPlanCode?: string;
   minTierLabel?: string;
   minTierOrder?: number;
+  byFamily?: FeatureCatalogEntry['byFamily'];
 }
 
 export function SubscriptionEntitlementsProvider({ children }: { children: ReactNode }) {
@@ -50,6 +51,8 @@ export function SubscriptionEntitlementsProvider({ children }: { children: React
         minPlanCode: f.minPlanCode,
         minTierLabel: f.minTierLabel,
         minTierOrder: f.minTierOrder,
+        // The tenant's own plan family's unlocking plan is resolved from this by the shared gates.
+        byFamily: f.byFamily,
         serviceTag: f.serviceTag,
         label: f.label,
       };

@@ -83,23 +83,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => apiClient.setOn401(null);
   }, [queryClient, logout, orgSlug, router]);
 
-  // Wire subscription 403 → sonner toast with upgrade action
+  // No global toast for a subscription 403 (a feature not on the plan): features the plan lacks
+  // stay shown and locked where they live (sidebar badge, FeatureLock buttons, FeatureLocked
+  // pages), so a gated request never pops a toast.
   useEffect(() => {
-    apiClient.setOnSubscription403((data) => {
-      const message = subscriptionErrorMessage(data);
-      toast.error('Subscription limit reached', {
-        description: message,
-        duration: 8000,
-        action: orgSlug
-          ? {
-              label: 'Upgrade plan',
-              onClick: () => router.push(`/${orgSlug}/settings/billing`),
-            }
-          : undefined,
-      });
-    });
-    return () => apiClient.setOnSubscription403(null);
-  }, [orgSlug, router]);
+    apiClient.setOnSubscription403(null);
+  }, []);
 
   // Wire 402 grace-period write-blocked → sonner toast with renew action (reads still work;
   // this only fires on a rejected create/edit/delete attempt — see pos-api's SubscriptionGate).
