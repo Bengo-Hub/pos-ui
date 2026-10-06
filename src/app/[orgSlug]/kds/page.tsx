@@ -16,11 +16,23 @@ import {
   useCallWaiter,
   useClearBoard,
 } from '@/hooks/useKDS';
-import type { KDSTicket, KDSStation, OrderSource } from '@/hooks/useKDS';
+import type { KDSTicket, KDSStation } from '@/hooks/useKDS';
+import {
+  activeStations,
+  buildBoard,
+  channelLabel,
+  isActiveTicket,
+  ticketChannel,
+  type ChannelChip,
+  type ChannelFilter,
+  type KDSChannel,
+} from '@/lib/kds/board';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { toast } from 'sonner';
 import {
+  BedDouble,
   Beer,
+  Bike,
   CheckCircle,
   ChefHat,
   Circle,
@@ -31,6 +43,7 @@ import {
   MonitorPlay,
   PhoneCall,
   PlayCircle,
+  ShoppingBag,
   Snowflake,
   Trash2,
   Utensils,
@@ -62,21 +75,26 @@ function cardBorderClass(minutes: number, status: string): string {
   return 'border-border/50 bg-card/60';
 }
 
-// ─── Source Badge ─────────────────────────────────────────────────────────────
+// ─── Channel Badge ────────────────────────────────────────────────────────────
 
-function SourceBadge({ source }: { source?: OrderSource }) {
-  if (source === 'online') {
-    return (
-      <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-md bg-purple-500/20 text-purple-300 border border-purple-500/30 font-semibold">
-        <Globe className="h-2.5 w-2.5" />
-        Online
-      </span>
-    );
-  }
+const CHANNEL_STYLE: Record<KDSChannel, { icon: React.ReactNode; cls: string }> = {
+  dine_in:         { icon: <Utensils className="h-2.5 w-2.5" />,    cls: 'bg-cyan-500/15 text-cyan-700 dark:text-cyan-300 border-cyan-500/30' },
+  takeaway:        { icon: <ShoppingBag className="h-2.5 w-2.5" />, cls: 'bg-orange-500/15 text-orange-700 dark:text-orange-300 border-orange-500/30' },
+  delivery:        { icon: <Bike className="h-2.5 w-2.5" />,        cls: 'bg-sky-500/15 text-sky-700 dark:text-sky-300 border-sky-500/30' },
+  online_pickup:   { icon: <Globe className="h-2.5 w-2.5" />,       cls: 'bg-purple-500/15 text-purple-700 dark:text-purple-300 border-purple-500/30' },
+  online_delivery: { icon: <Globe className="h-2.5 w-2.5" />,       cls: 'bg-fuchsia-500/15 text-fuchsia-700 dark:text-fuchsia-300 border-fuchsia-500/30' },
+  room_service:    { icon: <BedDouble className="h-2.5 w-2.5" />,   cls: 'bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border-indigo-500/30' },
+  bar_tab:         { icon: <Beer className="h-2.5 w-2.5" />,        cls: 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30' },
+  retail:          { icon: <ShoppingBag className="h-2.5 w-2.5" />, cls: 'bg-muted text-muted-foreground border-border' },
+  service_job:     { icon: <Layers className="h-2.5 w-2.5" />,      cls: 'bg-muted text-muted-foreground border-border' },
+};
+
+function ChannelBadge({ channel }: { channel: KDSChannel }) {
+  const style = CHANNEL_STYLE[channel];
   return (
-    <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-md bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 font-semibold">
-      <Utensils className="h-2.5 w-2.5" />
-      POS
+    <span className={cn('inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-md border font-semibold', style.cls)}>
+      {style.icon}
+      {channelLabel(channel)}
     </span>
   );
 }
@@ -166,15 +184,17 @@ function TicketCard({ ticket }: { ticket: KDSTicket }) {
             <span className="text-xl font-bold text-foreground font-display tracking-tight">
               #{ticket.order_number}
             </span>
-            <SourceBadge source={ticket.order_source} />
-            {ticket.order_label && (
-              <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
-                {ticket.order_label}
-              </span>
-            )}
+            <ChannelBadge channel={ticketChannel(ticket)} />
           </div>
           <StatusBadge status={ticket.status} />
         </div>
+
+        {/* Where it goes: table/room/online route, and who to call for a counter handover. */}
+        {(ticket.order_label || ticket.customer_name) && (
+          <p className="text-sm font-semibold text-foreground/80 truncate">
+            {[ticket.order_label, ticket.customer_name].filter(Boolean).join(' · ')}
+          </p>
+        )}
 
         {/* Timer */}
         <div className={cn('flex items-center gap-1.5 text-xs', timerClasses(mins))}>
@@ -260,48 +280,44 @@ function TicketCard({ ticket }: { ticket: KDSTicket }) {
   );
 }
 
-// ─── Source Filter Bar ────────────────────────────────────────────────────────
+// ─── Channel Filter ───────────────────────────────────────────────────────────
+// The board's only order filter. Chips come from buildBoard, so each count is exactly the number of
+// cards the chip shows at the station being viewed.
 
-type SourceFilter = 'all' | OrderSource;
-
-function SourceFilterBar({
+function ChannelFilterBar({
+  chips,
   value,
   onChange,
-  posCnt,
-  onlineCnt,
 }: {
-  value: SourceFilter;
-  onChange: (v: SourceFilter) => void;
-  posCnt: number;
-  onlineCnt: number;
+  chips: ChannelChip[];
+  value: ChannelFilter;
+  onChange: (v: ChannelFilter) => void;
 }) {
-  const btn = (v: SourceFilter, label: string, count: number, icon: React.ReactNode) => (
-    <button
-      key={v}
-      onClick={() => onChange(v)}
-      className={cn(
-        'flex items-center gap-2 text-xs font-semibold px-4 py-2.5 rounded-xl border transition-all min-h-11 touch-manipulation whitespace-nowrap',
-        value === v
-          ? 'bg-primary text-primary-foreground border-primary shadow-md shadow-primary/20'
-          : 'bg-card text-muted-foreground border-border hover:border-border/80 hover:text-foreground'
-      )}
-    >
-      {icon}
-      {label}
-      <span className={cn(
-        'ml-1 px-1.5 py-0.5 rounded text-[10px] font-bold',
-        value === v ? 'bg-white/20' : 'bg-muted text-muted-foreground'
-      )}>
-        {count}
-      </span>
-    </button>
-  );
-
   return (
-    <div className="flex items-center gap-2 overflow-x-auto scrollbar-none pb-0.5">
-      {btn('all',    'All Orders',    posCnt + onlineCnt, <ChefHat className="h-3.5 w-3.5" />)}
-      {btn('pos',    'POS / Dine-in', posCnt,             <Utensils className="h-3.5 w-3.5" />)}
-      {btn('online', 'Online Orders', onlineCnt,          <Globe className="h-3.5 w-3.5" />)}
+    <div className="flex items-center gap-2 overflow-x-auto scrollbar-none pb-0.5" role="tablist" aria-label="Order type">
+      {chips.map((chip) => {
+        const active = value === chip.key;
+        return (
+          <button
+            key={chip.key}
+            role="tab"
+            aria-selected={active}
+            onClick={() => onChange(chip.key)}
+            className={cn(
+              'flex items-center gap-1.5 text-xs font-semibold px-3.5 py-2 rounded-xl border transition-all min-h-10 touch-manipulation whitespace-nowrap shrink-0',
+              active
+                ? 'bg-primary text-primary-foreground border-primary shadow-md shadow-primary/20'
+                : 'bg-card text-muted-foreground border-border hover:text-foreground',
+            )}
+          >
+            {chip.key === 'all' ? <ChefHat className="h-3.5 w-3.5" /> : CHANNEL_STYLE[chip.key].icon}
+            {chip.label}
+            <span className={cn('ml-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold', active ? 'bg-primary-foreground/20' : 'bg-muted')}>
+              {chip.count}
+            </span>
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -379,8 +395,7 @@ function StationTab({
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 function KDSPage() {
-  const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all');
-  const [typeFilter, setTypeFilter] = useState<string>('all');
+  const [channel, setChannel] = useState<ChannelFilter>('all');
   const [selectedStation, setSelectedStation] = useState<string | null>(null);
   const [confirmClear, setConfirmClear] = useState(false);
   const user = useAuthStore((s) => s.user);
@@ -395,59 +410,31 @@ function KDSPage() {
 
   const isLoading = stationsLoading || ticketsLoading;
 
-  const posCnt    = allTickets.filter((t) => t.order_source !== 'online').length;
-  const onlineCnt = allTickets.filter((t) => t.order_source === 'online').length;
+  const liveStations = useMemo(() => activeStations(stations), [stations]);
 
-  const filteredTickets = allTickets.filter((t) => {
-    if (sourceFilter === 'pos'    && t.order_source === 'online') return false;
-    if (sourceFilter === 'online' && t.order_source !== 'online') return false;
-    // Order-type filter (dine-in / takeaway / delivery / room-service / bar).
-    if (typeFilter !== 'all' && (t.order_subtype || 'dine_in') !== typeFilter) return false;
-    return true;
-  });
-
-  // Counts per order type for the filter chips (over the source-filtered set).
-  const typeSourceTickets = allTickets.filter((t) =>
-    sourceFilter === 'all' ? true : sourceFilter === 'online' ? t.order_source === 'online' : t.order_source !== 'online',
-  );
-  const typeCount = (st: string) => typeSourceTickets.filter((t) => (t.order_subtype || 'dine_in') === st).length;
-  const ORDER_TYPE_FILTERS: { key: string; label: string }[] = [
-    { key: 'all', label: 'All Types' },
-    { key: 'dine_in', label: 'Dine-in' },
-    { key: 'takeaway', label: 'Takeaway' },
-    { key: 'delivery', label: 'Delivery' },
-    { key: 'room_service', label: 'Room Service' },
-    { key: 'bar_tab', label: 'Bar' },
-  ];
-
-  const activeStations = stations.filter((s) => s.is_active).sort((a, b) => a.sort_order - b.sort_order);
-
-  const ticketsForStation = (station: KDSStation) =>
-    filteredTickets
-      .filter((t) => t.station_id === station.id)
-      .sort((a, b) => a.priority - b.priority || new Date(a.received_at).getTime() - new Date(b.received_at).getTime());
-
-  // Active tickets for each station (not served/voided)
-  const activeFor = (station: KDSStation) =>
-    ticketsForStation(station).filter((t) => t.status !== 'served' && t.status !== 'voided');
-
-  // Role-aware default: bar user → bar station, kitchen user → kitchen station, else first.
+  // Role-aware default: a bar user opens on the bar station, kitchen staff on the kitchen.
   const roleDefaultStationId = useMemo(() => {
-    const primaryRole = user?.roles?.[0];
-    const preferredType = defaultStationTypeForRole(primaryRole);
+    const preferredType = defaultStationTypeForRole(user?.roles?.[0]);
     if (!preferredType) return null;
-    return activeStations.find((s) => s.station_type === preferredType)?.id ?? null;
-  }, [activeStations, user?.roles]);
+    return liveStations.find((s) => s.station_type === preferredType)?.id ?? null;
+  }, [liveStations, user?.roles]);
 
-  const currentStationId = selectedStation ?? roleDefaultStationId ?? activeStations[0]?.id ?? null;
-  const currentStation = activeStations.find((s) => s.id === currentStationId);
-  const currentTickets = currentStation ? activeFor(currentStation) : [];
+  const currentStationId =
+    (selectedStation && liveStations.some((s) => s.id === selectedStation) ? selectedStation : null) ??
+    roleDefaultStationId ??
+    liveStations[0]?.id ??
+    null;
+  const currentStation = liveStations.find((s) => s.id === currentStationId);
+
+  // Every chip, tab count and card comes from this one pass over the ticket list.
+  const board = useMemo(() => buildBoard(allTickets, currentStationId, channel), [allTickets, currentStationId, channel]);
+  const activeTotal = board.chips[0]?.count ?? 0;
 
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col">
       {/* ── Top header bar ── */}
       <div className="shrink-0 px-6 pt-5 pb-4 border-b border-border bg-background space-y-4">
-        {/* Title + live badge + source filter */}
+        {/* Title + live badge */}
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div className="flex items-center gap-3">
             <div>
@@ -461,7 +448,7 @@ function KDSPage() {
             </span>
             {/* Manager: bulk-clear the board (serve all active tickets) — for printer-only kitchens
                 with no device to bump tickets one by one, or to clear a cluttered board. */}
-            {can(P.ORDERS_MANAGE) && allTickets.length > 0 && (
+            {can(P.ORDERS_MANAGE) && allTickets.some(isActiveTicket) && (
               <button
                 onClick={() => setConfirmClear(true)}
                 disabled={clearBoard.isPending}
@@ -473,50 +460,25 @@ function KDSPage() {
               </button>
             )}
           </div>
-          <SourceFilterBar
-            value={sourceFilter}
-            onChange={setSourceFilter}
-            posCnt={posCnt}
-            onlineCnt={onlineCnt}
-          />
         </div>
 
-        {/* Order-type filter chips (dine-in / takeaway / delivery / room / bar). */}
-        <div className="flex gap-2 overflow-x-auto scrollbar-none pb-0.5">
-          {ORDER_TYPE_FILTERS.map((f) => {
-            const count = f.key === 'all' ? filteredTickets.length : typeCount(f.key);
-            if (f.key !== 'all' && count === 0) return null;
-            const active = typeFilter === f.key;
-            return (
-              <button
-                key={f.key}
-                onClick={() => setTypeFilter(f.key)}
-                className={cn(
-                  'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors shrink-0',
-                  active ? 'bg-primary text-primary-foreground border-primary' : 'bg-card text-muted-foreground border-border hover:bg-accent',
-                )}
-              >
-                {f.label}
-                <span className={cn('px-1.5 rounded-full text-[10px]', active ? 'bg-primary-foreground/20' : 'bg-muted')}>{count}</span>
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Station tabs */}
-        {activeStations.length > 1 && (
+        {/* Station tabs: counts follow the selected order type. */}
+        {liveStations.length > 1 && (
           <div className="flex gap-2 overflow-x-auto scrollbar-none pb-0.5">
-            {activeStations.map((station) => (
+            {liveStations.map((station) => (
               <StationTab
                 key={station.id}
                 station={station}
-                activeCount={activeFor(station).length}
+                activeCount={board.stationCounts[station.id] ?? 0}
                 isSelected={station.id === currentStationId}
                 onClick={() => setSelectedStation(station.id)}
               />
             ))}
           </div>
         )}
+
+        {/* Order type for the station being viewed. */}
+        <ChannelFilterBar chips={board.chips} value={channel} onChange={setChannel} />
       </div>
 
       {/* ── Ticket grid ── */}
@@ -526,7 +488,7 @@ function KDSPage() {
             <Loader2 className="h-10 w-10 animate-spin text-primary" />
             <p className="text-muted-foreground text-sm">Loading tickets…</p>
           </div>
-        ) : activeStations.length === 0 ? (
+        ) : liveStations.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-64 text-muted-foreground gap-4">
             <MonitorPlay className="h-16 w-16 opacity-15" />
             <div className="text-center">
@@ -534,46 +496,29 @@ function KDSPage() {
               <p className="text-sm mt-1">Set up stations in Settings to use the Kitchen Display System.</p>
             </div>
           </div>
-        ) : activeStations.length === 1 ? (
-          /* Single station — responsive grid */
-          <>
-            {currentTickets.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-64 text-center gap-4">
-                <div className="h-20 w-20 rounded-2xl border-2 border-dashed border-border flex items-center justify-center">
-                  <ChefHat className="h-10 w-10 text-muted-foreground/30" />
-                </div>
-                <p className="text-muted-foreground font-medium">No active tickets</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                {currentTickets.map((ticket) => (
-                  <TicketCard key={ticket.id} ticket={ticket} />
-                ))}
-              </div>
-            )}
-          </>
         ) : (
-          /* Multi-station — show selected station's tickets */
           <>
             {currentStation && (
               <div className="mb-4 flex items-center gap-2">
                 <MonitorPlay className="h-4 w-4 text-muted-foreground" />
                 <h2 className="text-sm font-bold text-foreground/70 uppercase tracking-wider">{currentStation.name}</h2>
                 <span className="text-xs text-muted-foreground ml-auto">
-                  {currentTickets.length} ticket{currentTickets.length !== 1 ? 's' : ''}
+                  {board.tickets.length} of {activeTotal} ticket{activeTotal !== 1 ? 's' : ''}
                 </span>
               </div>
             )}
-            {currentTickets.length === 0 ? (
+            {board.tickets.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-64 text-center gap-4">
                 <div className="h-20 w-20 rounded-2xl border-2 border-dashed border-border flex items-center justify-center">
                   <ChefHat className="h-10 w-10 text-muted-foreground/30" />
                 </div>
-                <p className="text-muted-foreground font-medium">No active tickets for this station</p>
+                <p className="text-muted-foreground font-medium">
+                  {channel === 'all' ? 'No active tickets' : `No ${channelLabel(channel).toLowerCase()} tickets`}
+                </p>
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                {currentTickets.map((ticket) => (
+                {board.tickets.map((ticket) => (
                   <TicketCard key={ticket.id} ticket={ticket} />
                 ))}
               </div>

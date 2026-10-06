@@ -4,6 +4,7 @@ import { apiClient } from '@/lib/api/client';
 import type { JobHeader } from '@/lib/api/service-jobs';
 import { useAuthStore } from '@/store/auth';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import type { KDSChannel } from '@/lib/kds/board';
 
 function useTenantID() {
   return useAuthStore((s) => s.user?.tenant_id ?? '');
@@ -53,10 +54,15 @@ export interface KDSTicket {
   status: KDSTicketStatus;
   /** Source of the order: 'pos' for in-restaurant, 'online' for ordering-backend orders */
   order_source?: OrderSource;
-  /** Table number or online channel label (e.g. "Table 5", "Online - Uber Eats") */
+  /** How the order reaches the customer (pos-api orderchannel); the board groups on this only. */
+  channel?: KDSChannel;
+  /** Route label: "Table 5", "Room 204", "Online delivery for Fri 18:30". */
   order_label?: string;
-  /** dine_in | takeaway | delivery | room_service | bar_tab — drives the order-type filter */
+  /** POS order subtype stored on the ticket. */
   order_subtype?: string;
+  table_reference?: string;
+  /** Customer name for takeaway, delivery and online orders (the counter calls them by name). */
+  customer_name?: string;
   /** Customer notes for the whole order (online orders). */
   order_notes?: string;
   /** Services job orders: customer, payment position and the job header (stage, due, brief, attachments). */
@@ -178,40 +184,13 @@ export function useSetCatalogItemKDSStation() {
   });
 }
 
-// ─── Kitchen Queue ────────────────────────────────────────────────────────────
-
-export function useKitchenQueue() {
-  const tenantID = useTenantID();
-  return useQuery({
-    queryKey: ['kds-kitchen', tenantID],
-    queryFn: () =>
-      apiClient.get<{ data: KDSTicket[] }>(`${basePath(tenantID)}/kitchen`),
-    enabled: !!tenantID,
-    staleTime: 5_000,
-    refetchInterval: 5_000,
-  });
-}
-
-// ─── Bar Queue ───────────────────────────────────────────────────────────────
-
-export function useBarQueue() {
-  const tenantID = useTenantID();
-  return useQuery({
-    queryKey: ['kds-bar', tenantID],
-    queryFn: () =>
-      apiClient.get<{ data: KDSTicket[] }>(`${basePath(tenantID)}/bar`),
-    enabled: !!tenantID,
-    staleTime: 5_000,
-    refetchInterval: 5_000,
-  });
-}
-
-// ─── All Tickets (with station + source filter) ───────────────────────────────
+// ─── Tickets ──────────────────────────────────────────────────────────────────
+// One list per outlet. The board filters by station and channel on the client (lib/kds/board)
+// so every count it shows comes from the same rows.
 
 export interface KDSTicketsFilter {
   stationId?: string;
   status?: KDSTicketStatus;
-  source?: OrderSource;
   /** Recency window in hours (server default 24). 0 shows every active ticket: a services
    *  production board holds multi-day jobs that must not drop off after a day. */
   sinceHours?: number;
@@ -225,7 +204,6 @@ export function useKDSTickets(filter?: KDSTicketsFilter) {
       apiClient.get<{ data: KDSTicket[] }>(`${basePath(tenantID)}/tickets`, {
         ...(filter?.stationId ? { station_id: filter.stationId } : {}),
         ...(filter?.status ? { status: filter.status } : {}),
-        ...(filter?.source ? { order_source: filter.source } : {}),
         ...(filter?.sinceHours != null ? { since_hours: String(filter.sinceHours) } : {}),
       }),
     enabled: !!tenantID,
@@ -236,67 +214,26 @@ export function useKDSTickets(filter?: KDSTicketsFilter) {
 
 // ─── Ticket Actions ───────────────────────────────────────────────────────────
 
-export function useStartTicket() {
+/** One mutation shape for every ticket transition; each refreshes the board list. */
+function useTicketTransition(action: 'start' | 'ready' | 'serve') {
   const tenantID = useTenantID();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (ticketId: string) =>
-      apiClient.post(`${basePath(tenantID)}/tickets/${ticketId}/start`),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['kds-tickets'] });
-      qc.invalidateQueries({ queryKey: ['kds-kitchen'] });
-      qc.invalidateQueries({ queryKey: ['kds-bar'] });
-    },
+      apiClient.post(`${basePath(tenantID)}/tickets/${ticketId}/${action}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['kds-tickets'] }),
   });
 }
 
-export function useReadyTicket() {
-  const tenantID = useTenantID();
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (ticketId: string) =>
-      apiClient.post(`${basePath(tenantID)}/tickets/${ticketId}/ready`),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['kds-tickets'] });
-      qc.invalidateQueries({ queryKey: ['kds-kitchen'] });
-      qc.invalidateQueries({ queryKey: ['kds-bar'] });
-    },
-  });
-}
-
-export function useServeTicket() {
-  const tenantID = useTenantID();
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (ticketId: string) =>
-      apiClient.post(`${basePath(tenantID)}/tickets/${ticketId}/serve`),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['kds-tickets'] });
-      qc.invalidateQueries({ queryKey: ['kds-kitchen'] });
-      qc.invalidateQueries({ queryKey: ['kds-bar'] });
-    },
-  });
-}
+export const useStartTicket = () => useTicketTransition('start');
+export const useReadyTicket = () => useTicketTransition('ready');
+export const useServeTicket = () => useTicketTransition('serve');
 
 export function useCallWaiter() {
   const tenantID = useTenantID();
   return useMutation({
     mutationFn: (ticketId: string) =>
       apiClient.post(`${basePath(tenantID)}/tickets/${ticketId}/call-waiter`),
-  });
-}
-
-export function useVoidTicket() {
-  const tenantID = useTenantID();
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (ticketId: string) =>
-      apiClient.post(`${basePath(tenantID)}/tickets/${ticketId}/void`),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['kds-tickets'] });
-      qc.invalidateQueries({ queryKey: ['kds-kitchen'] });
-      qc.invalidateQueries({ queryKey: ['kds-bar'] });
-    },
   });
 }
 
@@ -310,15 +247,6 @@ export function useClearBoard() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: () => apiClient.post<{ cleared: number }>(`${basePath(tenantID)}/tickets/clear`, {}),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['kds-tickets'] });
-      qc.invalidateQueries({ queryKey: ['kds-kitchen'] });
-      qc.invalidateQueries({ queryKey: ['kds-bar'] });
-    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['kds-tickets'] }),
   });
-}
-
-/** @deprecated Use useReadyTicket instead */
-export function useBumpTicket() {
-  return useReadyTicket();
 }

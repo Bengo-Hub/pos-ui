@@ -244,10 +244,12 @@ export function useModuleAccess() {
    * Returns false when use case hasn't resolved yet (isResolved=false).
    */
   function hasModule(moduleKey: string): boolean {
-    // Platform owners / superusers are EXEMPT from a tenant's hide settings — they must always be
-    // able to see every module a tenant hid (support, oversight, config on the tenant's behalf).
-    // Checked before the tenant hide gate below.
-    if (isSuperUser) return true;
+    // Platform owners / superusers are exempt from what a TENANT controls (the hide lists and the
+    // outlet module toggles) so they can reach and configure a module a tenant switched off. They
+    // are NOT exempt from what the outlet's business is: a hospitality outlet has no services
+    // production board and a print shop has no tables, whoever is looking. Without an outlet
+    // context (platform screens) there is no use case to respect, so everything stays reachable.
+    if (isSuperUser) return !useCase || enabledModules.includes(moduleKey as ModuleKey) || CORE_MODULE_KEYS.has(moduleKey);
     return hasModuleForTenant(moduleKey);
   }
 

@@ -5,7 +5,9 @@ import { useParams } from 'next/navigation';
 import { Bike, History as HistoryIcon, Loader2, Package, QrCode } from 'lucide-react';
 import { ModuleGate } from '@/components/auth/module-gate';
 import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
-import { isAwaitingAcceptance, isOrderPaid, isOrderReady, isOnlineOrder, type PickupOrder } from '@/lib/api/online-orders';
+import {
+  dispatchStatus, hasLeftOutlet, isAwaitingAcceptance, isOrderPaid, isOrderReady, isOnlineOrder, type PickupOrder,
+} from '@/lib/api/online-orders';
 import {
   useDeliveryDispatch, useNewOnlineOrderAlert, usePickupHistory, usePickupOrders,
 } from '@/hooks/useOnlineOrders';
@@ -119,8 +121,11 @@ function OnlineOrdersPage() {
   const deliveryToAccept = toAccept(deliveryOrders);
   const inPrep = live(pickupOrders).filter((o) => !isOrderReady(o));
   const atCounter = live(pickupOrders).filter((o) => isOrderReady(o));
-  const deliveryPrep = live(deliveryOrders).filter((o) => !isOrderReady(o));
-  const deliveryReady = live(deliveryOrders).filter((o) => isOrderReady(o));
+  const deliveredToSettle = live(deliveryOrders).filter((o) => dispatchStatus(o) === 'delivered');
+  const outForDelivery = live(deliveryOrders).filter((o) => hasLeftOutlet(o) && dispatchStatus(o) !== 'delivered');
+  const atOutlet = live(deliveryOrders).filter((o) => !hasLeftOutlet(o));
+  const deliveryPrep = atOutlet.filter((o) => !isOrderReady(o));
+  const deliveryReady = atOutlet.filter((o) => isOrderReady(o));
 
   const TABS = [
     { key: 'pickup' as const, label: vocab.pickupTab, icon: Package, count: pickupOrders.length },
@@ -221,6 +226,12 @@ function OnlineOrdersPage() {
             )}
             {deliveryReady.length > 0 && (
               <QueueSection title={`Ready for the rider (${deliveryReady.length})`} color="text-purple-700 dark:text-purple-400">{deliveryReady.map(card)}</QueueSection>
+            )}
+            {outForDelivery.length > 0 && (
+              <QueueSection title={`Out for delivery (${outForDelivery.length})`} color="text-blue-700 dark:text-blue-400">{outForDelivery.map(card)}</QueueSection>
+            )}
+            {deliveredToSettle.length > 0 && (
+              <QueueSection title={`Delivered, to settle or close (${deliveredToSettle.length})`} color="text-amber-700 dark:text-amber-400">{deliveredToSettle.map(card)}</QueueSection>
             )}
           </div>
         )

@@ -23,6 +23,8 @@ export interface PickupOrder {
   customer_name?: string;
   customer_phone?: string;
   total_amount: number;
+  /** Sum of completed till payments (pos-api keeps it in step with every payment). */
+  paid_total?: number;
   created_at: string;
   metadata?: Record<string, any>;
   edges?: { lines?: QueueOrderLine[] };
@@ -132,8 +134,16 @@ export const isAcceptedForLater = (o: PickupOrder) => isAwaitingAcceptance(o) &&
 /** Paid already: prepaid online, verified manual M-Pesa, or a POS order settled at the till. */
 export function isOrderPaid(o: PickupOrder): boolean {
   if (isOnlineOrder(o)) return o.metadata?.prepaid === true || o.metadata?.payment_status === 'paid';
+  // Same rule pos-api applies at handover: till payments cover the total (half-cent tolerance).
+  if (typeof o.paid_total === 'number' && o.total_amount > 0) return o.paid_total + 0.005 >= o.total_amount;
   return o.status === 'completed' || o.status === 'paid' || o.metadata?.payment_status === 'paid';
 }
+
+/** Rider progress on a delivery (metadata.dispatch_status), shared by online and till deliveries. */
+export const dispatchStatus = (o: PickupOrder) => String(o.metadata?.dispatch_status ?? '');
+/** The rider has the order or has delivered it: it can no longer be reassigned. */
+export const hasLeftOutlet = (o: PickupOrder) =>
+  ['picked_up', 'out_for_delivery', 'en_route_dropoff', 'arrived_dropoff', 'delivered'].includes(dispatchStatus(o));
 
 /** The kitchen / packing is done and the order waits at the counter. */
 export function isOrderReady(o: PickupOrder): boolean {

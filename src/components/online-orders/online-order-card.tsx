@@ -8,8 +8,8 @@ import {
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { cn, formatCurrency } from '@/lib/utils';
 import {
-  amountDue, isAcceptedForLater, isAwaitingAcceptance, isDeliveryOrder, isManualMpesa, isOnlineOrder,
-  isOrderPaid, isOrderReady, type PickupOrder, type QueueOrderLine,
+  amountDue, dispatchStatus, hasLeftOutlet, isAcceptedForLater, isAwaitingAcceptance, isDeliveryOrder,
+  isManualMpesa, isOnlineOrder, isOrderPaid, isOrderReady, type PickupOrder, type QueueOrderLine,
 } from '@/lib/api/online-orders';
 import { useOnlineOrderActions } from '@/hooks/useOnlineOrders';
 import { usePermissions, P } from '@/hooks/usePermissions';
@@ -36,17 +36,25 @@ export const RETAIL_VOCAB: QueueVocabulary = {
   showAccessories: false,
 };
 
+// Rider progress labels. Online deliveries get these from ordering; till deliveries from pos-api's
+// logistics subscriber (dispatched, rider_arriving, delivered, delivery_failed, dispatch_cancelled).
 const DELIVERY_STATE: Record<string, string> = {
+  dispatched: 'Waiting for a rider',
   rider_assigned: 'Rider assigned',
   rider_accepted: 'Rider on the way to you',
+  rider_arriving: 'Rider on the way to you',
   en_route_pickup: 'Rider on the way to you',
   arrived_pickup: 'Rider is at the counter',
   picked_up: 'Out for delivery',
   out_for_delivery: 'Out for delivery',
   en_route_dropoff: 'Out for delivery',
   arrived_dropoff: 'Rider at the customer',
+  delivered: 'Delivered',
   needs_rider: 'Needs a new rider',
+  delivery_failed: 'Delivery failed, send it again',
+  dispatch_cancelled: 'Dispatch cancelled, send it again',
 };
+const DELIVERY_PROBLEM = new Set(['needs_rider', 'delivery_failed', 'dispatch_cancelled']);
 
 function modifierLabels(meta?: Record<string, any>): string[] {
   const raw = meta?.modifiers;
@@ -133,9 +141,16 @@ export function OnlineOrderCard({ order, currency, vocab, onHandover, onVerify, 
   const scheduled = order.metadata?.scheduled_for_label as string | undefined;
   const address = order.metadata?.delivery_address as string | undefined;
   const orderNotes = order.metadata?.order_notes as string | undefined;
-  const riderState = DELIVERY_STATE[String(order.metadata?.dispatch_status ?? '')];
-  const riderAssigned = !!order.metadata?.rider_id || !!riderState;
+  const dispatch = dispatchStatus(order);
+  const riderState = DELIVERY_STATE[dispatch];
+  const riderAssigned = !!order.metadata?.rider_id;
+  const delivered = dispatch === 'delivered';
+  const riderName = order.metadata?.rider_name as string | undefined;
+  const riderPhone = order.metadata?.rider_phone as string | undefined;
+  const codCollected = order.metadata?.cod_collected === true;
   const needsVerify = online && isManualMpesa(order) && !paid;
+  // A till order is settled once it is ready at the counter, or once the rider has delivered it.
+  const canSettle = !online && !paid && (ready || delivered) && order.total_amount > 0;
 
   const accept_ = () =>
     accept.mutate(order.id, {
@@ -200,8 +215,23 @@ export function OnlineOrderCard({ order, currency, vocab, onHandover, onVerify, 
         <p className="flex items-start gap-1.5 text-xs text-muted-foreground"><MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0" />{address}</p>
       )}
       {delivery && riderState && (
-        <p className={cn('flex items-center gap-1.5 text-xs font-medium', order.metadata?.dispatch_status === 'needs_rider' ? 'text-destructive' : 'text-green-700 dark:text-green-400')}>
-          <UserCheck className="h-3.5 w-3.5" /> {riderState}
+        <div className={cn('flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-medium', DELIVERY_PROBLEM.has(dispatch) ? 'text-destructive' : 'text-green-700 dark:text-green-400')}>
+          <span className="flex items-center gap-1.5"><UserCheck className="h-3.5 w-3.5" /> {riderState}{riderName && !DELIVERY_PROBLEM.has(dispatch) ? ` · ${riderName}` : ''}</span>
+          {riderPhone && !DELIVERY_PROBLEM.has(dispatch) && (
+            <a href={`tel:${riderPhone}`} className="flex items-center gap-1 text-muted-foreground hover:text-foreground">
+              <Phone className="h-3 w-3" /> {riderPhone}
+            </a>
+          )}
+          {order.metadata?.dispatch_reason && DELIVERY_PROBLEM.has(dispatch) && (
+            <span className="text-muted-foreground">{String(order.metadata.dispatch_reason)}</span>
+          )}
+        </div>
+      )}
+      {!online && delivered && !paid && (
+        <p className="rounded-lg bg-amber-500/10 px-3 py-2 text-xs font-medium text-amber-800 dark:text-amber-300">
+          {codCollected
+            ? `Rider collected ${formatCurrency(Number(order.metadata?.cod_amount_collected ?? order.total_amount), currency)} by ${order.metadata?.cod_method === 'mpesa' ? `M-Pesa ${order.metadata?.cod_reference ?? ''}` : 'cash'}. Settle it here when the rider hands it in.`
+            : 'Delivered but not paid yet. Settle it here.'}
         </p>
       )}
 
@@ -245,19 +275,20 @@ export function OnlineOrderCard({ order, currency, vocab, onHandover, onVerify, 
               <ShieldCheck className="h-3.5 w-3.5" /> Confirm M-Pesa
             </button>
           )}
-          {!online && ready && !paid && can(P.PAYMENTS_ADD) && order.total_amount > 0 && (
+          {canSettle && can(P.PAYMENTS_ADD) && (
             <button onClick={() => onSettle(order)} className={cn(btn, 'bg-primary text-primary-foreground hover:bg-primary/90')}>
               <Wallet className="h-3.5 w-3.5" /> Settle
             </button>
           )}
-          {delivery && manage && !['picked_up', 'out_for_delivery', 'en_route_dropoff', 'arrived_dropoff'].includes(String(order.metadata?.dispatch_status ?? '')) && (
+          {delivery && manage && !hasLeftOutlet(order) && (
             <button onClick={() => onAssignRider(order)} className={cn(btn, 'border border-border hover:bg-accent')}>
               <Bike className="h-3.5 w-3.5" /> {riderAssigned ? 'Reassign rider' : 'Assign rider'}
             </button>
           )}
-          {ready && manage && !needsVerify && (online || paid) && (
+          {(ready || delivered) && manage && !needsVerify && (online || paid) && (
             <button onClick={() => onHandover(order)} className={cn(btn, 'bg-primary text-primary-foreground hover:bg-primary/90')}>
-              <Package className="h-3.5 w-3.5" /> {delivery ? 'Delivered (own staff)' : online && !paid ? 'Collect & hand over' : 'Hand over'}
+              <Package className="h-3.5 w-3.5" />
+              {delivery ? (delivered ? 'Close order' : 'Delivered (own staff)') : online && !paid ? 'Collect & hand over' : 'Hand over'}
             </button>
           )}
           {online && manage && (
