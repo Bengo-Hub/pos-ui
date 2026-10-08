@@ -109,8 +109,21 @@ export function ReceiptTab() {
   // Per-card in-flight state for the "Ping printer" button (keyed by profile id).
   const [pingingId, setPingingId] = useState<string | null>(null);
 
-  // Probe the local print agent once so the status pill and setup help reflect reality.
-  useEffect(() => { void agentAvailable().then(setAgentUp); }, []);
+  // Printers installed on THIS computer, as the local print agent sees them (Windows spooler
+  // names). null = not loaded (agent down or not asked yet), so no "not installed" warning shows.
+  const [installed, setInstalled] = useState<string[] | null>(null);
+
+  // Probe the local print agent once so the status pill and setup help reflect reality, and load
+  // its installed printers so USB/OS cards can pick one without running Detect first.
+  useEffect(() => {
+    void agentAvailable().then(async (up) => {
+      setAgentUp(up);
+      if (!up) return;
+      const names = await localAgentPrinters();
+      setInstalled(names);
+      if (names.length) setDiscovered((prev) => Array.from(new Set([...names, ...prev])));
+    });
+  }, []);
 
   // The printers shown: fixed Customer/Bill (+ Waiter where table service) then one per active KDS
   // station — so printers are auto-created from and linked to the live KDS stations, not hardcoded.
@@ -122,7 +135,7 @@ export function ReceiptTab() {
       ? stations.map((s): PrinterCard => ({
           id: s.id,
           label: s.name,
-          desc: (s.category_filter?.length ? '' : 'All categories') + ` · ${s.station_type}`,
+          desc: (s.category_filter?.length ? '' : 'No categories assigned') + ` · ${s.station_type}`,
           categories: s.category_filter,
           station: s,
         }))
@@ -155,6 +168,7 @@ export function ReceiptTab() {
     try {
       const [res, up, localNames] = await Promise.all([discoverPrinters(), agentAvailable(), localAgentPrinters()]);
       setAgentUp(up);
+      if (up) setInstalled(localNames);
       // Local-agent OS printers included so a USB profile can be bound to its exact spooler name.
       const merged = Array.from(new Set([...res.printers, ...localNames]));
       setDiscovered((prev) => Array.from(new Set([...merged, ...prev])));
@@ -588,19 +602,31 @@ export function ReceiptTab() {
                   </div>
                 </div>
 
-                {/* Fields that depend on the connection type. */}
-                {conn === 'os' && (
+                {/* Fields that depend on the connection type. A USB or OS printer is printed by the
+                    local agent through its Windows printer name, so both pick from the printers
+                    installed on this computer. */}
+                {(conn === 'os' || conn === 'usb') && (
                   <div className="space-y-1">
-                    <label className={labelClass}>Printer (from Detect)</label>
+                    <label className={labelClass}>Printer on this computer</label>
                     <select
                       value={currentName || ''}
                       onChange={(e) => patchProfile(card, { printer_name: e.target.value })}
                       disabled={!canEdit}
                       className={inputClass}
                     >
-                      <option value="">Select a detected printer…</option>
-                      {names.map((n) => <option key={n} value={n}>{n}</option>)}
+                      <option value="">{names.length ? 'Select a printer…' : 'No printers found: start the print agent or Detect Printers'}</option>
+                      {names.map((n) => (
+                        <option key={n} value={n}>
+                          {n}{installed && !installed.includes(n) ? ' (not installed here)' : ''}
+                        </option>
+                      ))}
                     </select>
+                    {installed && currentName && currentName !== 'browser' && !installed.includes(currentName) && (
+                      <p className="text-[11px] text-destructive">
+                        &quot;{currentName}&quot; is not installed on this computer, so jobs for this printer fail. Pick the
+                        right printer above and Save.
+                      </p>
+                    )}
                   </div>
                 )}
                 {conn === 'network' && (
@@ -668,10 +694,11 @@ export function ReceiptTab() {
                 )}
                 {conn === 'usb' && (
                   <div className="flex items-center gap-2">
-                    <Button type="button" variant="outline" onClick={() => handlePairUSB(card)} disabled={!canEdit} className="gap-2 h-8 text-xs">
-                      <Usb className="h-3.5 w-3.5" /> {currentName ? 'Re-pair USB' : 'Pair USB'}
+                    {/* Browser USB pairing is only for terminals without the print agent; it stores the
+                        device's USB name, which the agent cannot print to. */}
+                    <Button type="button" variant="ghost" onClick={() => handlePairUSB(card)} disabled={!canEdit} className="gap-2 h-7 text-[11px]">
+                      <Usb className="h-3.5 w-3.5" /> Pair in browser (no print agent)
                     </Button>
-                    {currentName && <span className="text-xs text-muted-foreground truncate">{currentName}</span>}
                   </div>
                 )}
                 {conn === 'bluetooth' && (
