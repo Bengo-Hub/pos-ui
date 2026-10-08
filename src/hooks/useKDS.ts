@@ -29,6 +29,28 @@ export interface KDSStation {
   sort_order: number;
   is_active: boolean;
   category_filter: string[];
+  /** Categories this station effectively owns (pos-api kdsroute): its filter entries plus every
+   *  sub-category inheriting from them. Empty when inactive or the category tree is unavailable;
+   *  the print router then matches on category_filter alone. */
+  category_routes?: string[];
+  /** Filter entries matching no current inventory category (renamed or deleted). */
+  stale_filters?: string[];
+}
+
+/** Per-outlet routing summary returned with the station list. */
+export interface KDSRoutingSummary {
+  outlet_id: string;
+  /** Categories no station claims; they fall to fallback_station_id. */
+  unclaimed_categories: string[];
+  fallback_station_id?: string;
+  /** False when inventory's category tree could not be loaded (coverage then unknown). */
+  tree_loaded: boolean;
+}
+
+export interface KDSStationsResponse {
+  data: KDSStation[];
+  total?: number;
+  routing?: KDSRoutingSummary[];
 }
 
 export interface KDSTicketItem {
@@ -108,7 +130,7 @@ export function useKDSStations(enabled = true) {
   return useQuery({
     queryKey: ['kds-stations', tenantID],
     queryFn: () =>
-      apiClient.get<{ data: KDSStation[] }>(`${basePath(tenantID)}/stations`),
+      apiClient.get<KDSStationsResponse>(`${basePath(tenantID)}/stations`),
     enabled: !!tenantID && enabled,
     staleTime: 60_000,
   });
@@ -120,7 +142,7 @@ export function useAllKDSStations() {
   return useQuery({
     queryKey: ['kds-stations-all', tenantID],
     queryFn: () =>
-      apiClient.get<{ data: KDSStation[] }>(`${basePath(tenantID)}/stations`, { all: 'true' }),
+      apiClient.get<KDSStationsResponse>(`${basePath(tenantID)}/stations`, { all: 'true' }),
     enabled: !!tenantID,
     staleTime: 30_000,
   });
@@ -132,7 +154,10 @@ export function useCreateKDSStation() {
   return useMutation({
     mutationFn: (input: CreateKDSStationInput) =>
       apiClient.post<KDSStation>(`${basePath(tenantID)}/stations`, input),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['kds-stations', tenantID] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['kds-stations'] });
+      qc.invalidateQueries({ queryKey: ['kds-stations-all'] });
+    },
   });
 }
 
@@ -164,7 +189,7 @@ export function useDeleteKDSStation() {
 
 // ─── Item → Station assignment ────────────────────────────────────────────────
 // The priority-1 explicit routing override (POSCatalogOverride.kds_station_id) — wins over both
-// the hot-beverage guard and category_filter matching in resolveStationForLine. Distinct base
+// category matching and the hot-beverage guess in pos-api's kdsroute.Router. Distinct base
 // path from the /kds/* routes above: this hits the catalog endpoints (pos-api's CatalogHandler).
 
 export interface SetCatalogItemKDSStationInput {

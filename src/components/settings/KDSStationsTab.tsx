@@ -1,15 +1,16 @@
 'use client';
 
 import { useState } from 'react';
-import { Bell, Check, ChefHat, Loader2, Pencil, Play, Plus, Trash2, X } from 'lucide-react';
+import { AlertTriangle, Bell, Check, ChefHat, Loader2, Pencil, Play, Plus, Trash2, X } from 'lucide-react';
 import { Button, Card, CardContent } from '@/components/ui/base';
 import { KDS_TONES, getKDSTone, setKDSTone, playKDSTone, type KDSToneId } from '@/lib/kds-sounds';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import {
   useAllKDSStations, useCreateKDSStation, useUpdateKDSStation, useDeleteKDSStation,
-  type KDSStationType,
+  type KDSStation, type KDSStationType,
 } from '@/hooks/useKDS';
 import { useCategories } from '@/hooks/usePOS';
+import { normaliseCategoryKey } from '@/lib/kds/routing';
 import { usePermissions } from '@/hooks/usePermissions';
 import { P } from '@/lib/rbac/permissions';
 import { useAuthStore } from '@/store/auth';
@@ -52,22 +53,33 @@ function StationTypeSelect({ value, onChange }: { value: KDSStationType; onChang
   );
 }
 
-// Merge the live inventory categories with any values already selected on a station so that
-// stale filters (a category that no longer exists in inventory) still render and can be removed.
-function mergeCategories(live: string[], selected: string[]): string[] {
-  const seen = new Set(live.map((c) => c.toLowerCase()));
-  const extra = selected.filter((c) => !seen.has(c.toLowerCase()));
-  return [...live, ...extra];
+// Merge category name lists by normalised key (the server's matching rule), keeping the first
+// spelling, so stale filters (a category renamed or deleted in inventory) still render and can
+// be removed, while "Coffee" and a stale "Coffees" never show as two chips.
+function mergeCategories(...lists: string[][]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const list of lists) {
+    for (const c of list) {
+      const k = normaliseCategoryKey(c);
+      if (!k || seen.has(k)) continue;
+      seen.add(k);
+      out.push(c);
+    }
+  }
+  return out;
 }
 
 // CategoryChips renders the category filter picker. Chips already claimed by ANOTHER station are
-// shown deactivated so the same category cannot be routed to two stations.
+// shown deactivated so the same category cannot be routed to two stations; filter entries that no
+// longer match an inventory category are marked so they can be replaced.
 function CategoryChips({
-  categories, selected, usedElsewhere, onToggle, loading,
+  categories, selected, usedElsewhere, stale, onToggle, loading,
 }: {
   categories: string[];
   selected: string[];
-  usedElsewhere: Set<string>; // lowercased category names claimed by other stations
+  usedElsewhere: Set<string>; // normalised category keys claimed by other stations
+  stale?: Set<string>; // normalised keys of filter entries missing from inventory
   onToggle: (cat: string) => void;
   loading?: boolean;
 }) {
@@ -80,28 +92,50 @@ function CategoryChips({
   return (
     <div className="flex flex-wrap gap-2">
       {categories.map((cat) => {
-        const isSel = selected.includes(cat);
-        const blocked = !isSel && usedElsewhere.has(cat.toLowerCase());
+        const key = normaliseCategoryKey(cat);
+        const isSel = selected.some((s) => normaliseCategoryKey(s) === key);
+        const blocked = !isSel && usedElsewhere.has(key);
+        const isStale = stale?.has(key) ?? false;
         return (
           <button
             key={cat}
             type="button"
             disabled={blocked}
-            title={blocked ? 'Already assigned to another station' : undefined}
+            title={
+              blocked ? 'Already assigned to another station'
+                : isStale ? 'No inventory category has this name any more. It routes nothing; remove it.'
+                : undefined
+            }
             onClick={() => onToggle(cat)}
-            className={`px-3 py-1 rounded-full text-xs font-semibold border transition-colors ${
-              isSel
+            className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold border transition-colors ${
+              isSel && isStale
+                ? 'bg-destructive/10 text-destructive border-destructive'
+                : isSel
                 ? 'bg-primary text-primary-foreground border-primary'
                 : blocked
                 ? 'border-border/40 text-muted-foreground/40 line-through cursor-not-allowed'
                 : 'border-border text-muted-foreground hover:border-primary'
             }`}
           >
+            {isStale && <AlertTriangle className="h-3 w-3" />}
             {cat}
           </button>
         );
       })}
     </div>
+  );
+}
+
+// InheritedCoverage lists the sub-categories a station owns through a parent section it claims
+// (server-computed category_routes minus the station's own filter entries).
+function InheritedCoverage({ station }: { station: KDSStation }) {
+  const own = new Set((station.category_filter ?? []).map(normaliseCategoryKey));
+  const inherited = (station.category_routes ?? []).filter((c) => !own.has(normaliseCategoryKey(c)));
+  if (inherited.length === 0) return null;
+  return (
+    <p className="mt-1 text-[11px] text-muted-foreground">
+      Also covers: {inherited.join(', ')}
+    </p>
   );
 }
 
@@ -123,16 +157,33 @@ export function KDSStationsTab() {
   const [confirmDelete, setConfirmDelete] = useState<StationRef | null>(null);
 
   const stations = data?.data ?? [];
-  const liveCategories = (categoriesData ?? []).map((c) => c.name);
+  // This outlet's routing summary (the list is outlet-scoped by the X-Outlet-ID header).
+  const routing = (data?.routing ?? []).find((r) => !outlet?.id || r.outlet_id === outlet.id) ?? data?.routing?.[0];
+  // Every inventory category, parent sections included (from the server's routing coverage),
+  // plus the till's sellable list as a fallback when the tree could not be loaded.
+  const liveCategories = mergeCategories(
+    stations.flatMap((s) => s.category_routes ?? []),
+    routing?.unclaimed_categories ?? [],
+    (categoriesData ?? []).map((c) => c.name),
+  );
+  const staleOf = (s: { stale_filters?: string[] }) =>
+    new Set((s.stale_filters ?? []).map(normaliseCategoryKey));
+  const fallbackStation = stations.find((s) => s.id === routing?.fallback_station_id);
 
-  // Categories claimed by other stations (lowercased). excludeId keeps a station from
-  // conflicting with itself when editing. Drives chip deactivation to prevent duplicates.
+  // Categories claimed by other stations (normalised keys, the server's conflict rule). excludeId
+  // keeps a station from conflicting with itself when editing. Drives chip deactivation.
   const usedByOthers = (excludeId?: string) =>
     new Set(
       stations
         .filter((s) => s.id !== excludeId)
-        .flatMap((s) => (s.category_filter ?? []).map((c) => c.toLowerCase())),
+        .flatMap((s) => (s.category_filter ?? []).map(normaliseCategoryKey)),
     );
+  const toggleIn = (list: string[], cat: string) => {
+    const k = normaliseCategoryKey(cat);
+    return list.some((c) => normaliseCategoryKey(c) === k)
+      ? list.filter((c) => normaliseCategoryKey(c) !== k)
+      : [...list, cat];
+  };
 
   const handleCreate = async () => {
     if (!form.name.trim()) return;
@@ -241,18 +292,13 @@ export function KDSStationsTab() {
               </div>
             </div>
             <div className="space-y-1">
-              <label className={labelClass}>Category Filters (leave empty to show all)</label>
+              <label className={labelClass}>Categories (a section also covers its sub-categories)</label>
               <CategoryChips
                 categories={mergeCategories(liveCategories, form.category_filter)}
                 selected={form.category_filter}
                 usedElsewhere={usedByOthers()}
-                loading={catsLoading}
-                onToggle={(cat) => setForm((f) => ({
-                  ...f,
-                  category_filter: f.category_filter.includes(cat)
-                    ? f.category_filter.filter((c) => c !== cat)
-                    : [...f.category_filter, cat],
-                }))}
+                loading={catsLoading && liveCategories.length === 0}
+                onToggle={(cat) => setForm((f) => ({ ...f, category_filter: toggleIn(f.category_filter, cat) }))}
               />
             </div>
             <div className="flex gap-2 justify-end">
@@ -263,6 +309,16 @@ export function KDSStationsTab() {
             </div>
           </CardContent>
         </Card>
+      )}
+
+      {stations.length > 0 && routing && routing.tree_loaded && routing.unclaimed_categories.length > 0 && (
+        <div className="rounded-xl border border-border bg-muted/40 p-3 text-xs">
+          <p className="font-semibold text-foreground">
+            Not assigned to a station ({routing.unclaimed_categories.length})
+            {fallbackStation ? `: these go to ${fallbackStation.name}` : ''}
+          </p>
+          <p className="mt-1 text-muted-foreground">{routing.unclaimed_categories.join(', ')}</p>
+        </div>
       )}
 
       {stations.length === 0 && !showForm && (
@@ -301,18 +357,14 @@ export function KDSStationsTab() {
                     </div>
                   </div>
                   <div className="space-y-1">
-                    <label className={labelClass}>Category Filters</label>
+                    <label className={labelClass}>Categories (a section also covers its sub-categories)</label>
                     <CategoryChips
-                      categories={mergeCategories(liveCategories, editForm.category_filter)}
+                      categories={mergeCategories(editForm.category_filter, liveCategories)}
                       selected={editForm.category_filter}
                       usedElsewhere={usedByOthers(station.id)}
-                      loading={catsLoading}
-                      onToggle={(cat) => setEditForm((f) => ({
-                        ...f,
-                        category_filter: f.category_filter.includes(cat)
-                          ? f.category_filter.filter((c) => c !== cat)
-                          : [...f.category_filter, cat],
-                      }))}
+                      stale={staleOf(station)}
+                      loading={catsLoading && liveCategories.length === 0}
+                      onToggle={(cat) => setEditForm((f) => ({ ...f, category_filter: toggleIn(f.category_filter, cat) }))}
                     />
                   </div>
                   <div className="flex gap-2 justify-end">
@@ -348,11 +400,25 @@ export function KDSStationsTab() {
                     <div className="flex flex-wrap gap-1 mt-1">
                       {(station.category_filter ?? []).length > 0
                         ? (station.category_filter ?? []).map((c) => (
-                          <span key={c} className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded-full font-semibold">{c}</span>
+                          staleOf(station).has(normaliseCategoryKey(c))
+                            ? (
+                              <span key={c} title="No inventory category has this name any more. It routes nothing."
+                                className="inline-flex items-center gap-1 text-[10px] bg-destructive/10 text-destructive px-2 py-0.5 rounded-full font-semibold">
+                                <AlertTriangle className="h-3 w-3" />{c}
+                              </span>
+                            )
+                            : <span key={c} className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded-full font-semibold">{c}</span>
                         ))
-                        : <span className="text-[10px] text-muted-foreground">All categories</span>
+                        : <span className="text-[10px] text-muted-foreground">No categories</span>
                       }
                     </div>
+                    <InheritedCoverage station={station} />
+                    {(station.stale_filters?.length ?? 0) > 0 && (
+                      <p className="mt-1 text-[11px] text-destructive">
+                        {station.stale_filters!.length === 1 ? 'One category name no longer exists' : `${station.stale_filters!.length} category names no longer exist`} in
+                        inventory, so items in the renamed category go to another station. Edit the station and pick the current name.
+                      </p>
+                    )}
                   </div>
                   <span className="text-xs text-muted-foreground tabular-nums">#{station.sort_order}</span>
                   {canEdit && (
