@@ -1,6 +1,7 @@
 'use client';
 
 import { PwaInstallPrompt } from '@bengo-hub/shared-ui-lib/offline';
+import { serviceAppName } from '@bengo-hub/shared-ui-lib/branding';
 import { toast } from 'sonner';
 import { useTenantBranding } from '@/providers/tenant-branding-provider';
 
@@ -30,10 +31,9 @@ export function PWARegistration() {
   // ManifestInjector in org-shell), so the browser already has the correct
   // tenant manifest when evaluating install criteria and capturing the icon.
 
-  // App name = tenant's first word + service, e.g. "Urban POS". Keeps installed
-  // apps distinguishable when several Bengo apps are installed for one tenant.
-  const tenantFirstWord = tenant?.orgName?.trim().split(/\s+/)[0];
-  const appName = tenantFirstWord ? `${tenantFirstWord} POS` : 'Codevertex POS';
+  // App name = tenant brand word + service, e.g. "The Urban POS" (shared rule, see
+  // shared-ui-lib branding). Keeps installed apps distinguishable for one tenant.
+  const appName = serviceAppName(tenant?.orgName, 'POS', 'Codevertex');
 
   return (
     <PwaInstallPrompt
