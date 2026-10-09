@@ -36,7 +36,7 @@ import { computePairAutoAdd, describeAutoApplyAnnouncement } from '@/lib/pos/aut
 import { applyRoundOff, computeCartTax } from '@/lib/pos/cart-tax';
 import { isFractionalUnit, parseQuantityInput } from '@/lib/pos/units';
 import { isLineActive, remainingLineQty } from '@/lib/pos/order-lines';
-import { resolveBillProfile } from '@/lib/pos/printer-stations';
+import { autoPrintsCustomerCopy, resolveBillProfile } from '@/lib/pos/printer-stations';
 import { useReceiptAfterSale } from '@/hooks/use-receipt-after-sale';
 import { cn, formatCurrency } from '@/lib/utils';
 import { useAuthStore } from '@/store/auth';
@@ -1737,7 +1737,7 @@ export default function AddSalePage() {
         printerProfile={resolveBillProfile((posSettings as any)?.printer_profiles)}
         tenantId={tenantId}
         orderId={receiptOrderId}
-        autoPrint={Boolean((posSettings as any)?.auto_print_order) && !(posSettings as any)?.print_agent_online}
+        autoPrint={autoPrintsCustomerCopy(posSettings as any) && !(posSettings as any)?.print_agent_online}
       />
     </div>
   );

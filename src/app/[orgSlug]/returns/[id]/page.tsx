@@ -18,7 +18,7 @@ import { SplitPaymentModal } from '@/components/pos/split-payment-modal';
 import { CustomerDetailsModal } from '@/components/pos/customers/customer-details-modal';
 import { ReceiptPreview } from '@/components/pos/receipt-preview';
 import { useReceiptAfterSale } from '@/hooks/use-receipt-after-sale';
-import { resolveBillProfile } from '@/lib/pos/printer-stations';
+import { autoPrintsCustomerCopy, resolveBillProfile } from '@/lib/pos/printer-stations';
 import { DataTable } from '@bengo-hub/shared-ui-lib/data-table';
 import { buildReturnLineColumns, returnLineLocations, type ReturnLine } from './return-lines-columns';
 import { RestockStatusCard } from '@/components/pos/returns/restock-status-card';
@@ -613,7 +613,7 @@ export default function ReturnDetailPage() {
         printerProfile={resolveBillProfile((posSettings as any)?.printer_profiles)}
         tenantId={tenantId}
         orderId={receiptOrderId}
-        autoPrint={Boolean((posSettings as any)?.auto_print_order) && !(posSettings as any)?.print_agent_online}
+        autoPrint={autoPrintsCustomerCopy(posSettings as any) && !(posSettings as any)?.print_agent_online}
       />
     </div>
   );

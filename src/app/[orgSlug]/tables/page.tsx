@@ -19,7 +19,7 @@ import { Can } from '@/components/auth/can';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { useAuthStore } from '@/store/auth';
 import { useReceiptAfterSale } from '@/hooks/use-receipt-after-sale';
-import { resolveBillProfile } from '@/lib/pos/printer-stations';
+import { autoPrintsCustomerCopy, resolveBillProfile } from '@/lib/pos/printer-stations';
 import { apiClient } from '@/lib/api/client';
 import {
   Calendar,
@@ -885,7 +885,7 @@ function MyBillsTab({ orgSlug }: { orgSlug: string }) {
         printerProfile={resolveBillProfile((posSettings as any)?.printer_profiles)}
         tenantId={user?.tenant_id ?? ''}
         orderId={receiptOrderId}
-        autoPrint={Boolean((posSettings as any)?.auto_print_order) && !(posSettings as any)?.print_agent_online}
+        autoPrint={autoPrintsCustomerCopy(posSettings as any) && !(posSettings as any)?.print_agent_online}
       />
     </div>
   );

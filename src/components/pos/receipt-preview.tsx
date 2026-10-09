@@ -147,7 +147,8 @@ interface ReceiptPreviewProps {
   /** Tenant UUID + order id — needed to build ESC/POS bytes for silent network printing. */
   tenantId?: string;
   orderId?: string;
-  /** Outlet auto_print_order: silently print once on open (never a browser dialog). */
+  /** Silently print once on open (never a browser dialog). Callers pass
+   *  autoPrintsCustomerCopy(settings): outlet auto_print_order AND the bill printer's own toggle. */
   autoPrint?: boolean;
 }
 

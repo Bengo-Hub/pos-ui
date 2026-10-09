@@ -14,7 +14,7 @@ import {
   type RecordPaymentInput,
 } from '@/hooks/useLayaway';
 import { useReceiptAfterSale } from '@/hooks/use-receipt-after-sale';
-import { resolveBillProfile } from '@/lib/pos/printer-stations';
+import { autoPrintsCustomerCopy, resolveBillProfile } from '@/lib/pos/printer-stations';
 import { cn, formatCurrency } from '@/lib/utils';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { useAuthStore } from '@/store/auth';
@@ -404,7 +404,7 @@ function LayawayDetailPage() {
         printerProfile={resolveBillProfile((posSettings as any)?.printer_profiles)}
         tenantId={tenantId}
         orderId={receiptOrderId}
-        autoPrint={Boolean((posSettings as any)?.auto_print_order) && !(posSettings as any)?.print_agent_online}
+        autoPrint={autoPrintsCustomerCopy(posSettings as any) && !(posSettings as any)?.print_agent_online}
       />
     </div>
   );

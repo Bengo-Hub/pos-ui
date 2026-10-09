@@ -4,7 +4,7 @@ import { apiClient } from '@/lib/api/client';
 import { useKDSStations } from '@/hooks/useKDS';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { useAuthStore } from '@/store/auth';
-import { resolveBillProfile, hasRealPrinter, BILL_PROFILE_ID } from '@/lib/pos/printer-stations';
+import { autoPrintsCustomerCopy, resolveBillProfile, hasRealPrinter, BILL_PROFILE_ID } from '@/lib/pos/printer-stations';
 import { printProfileHtml, fetchReceiptEscposHex } from '@/lib/pos/printer-discovery';
 import { enqueuePrintJob, waitForPrintJobs } from '@/lib/pos/print-jobs';
 import { renderReceiptHtml, buildReceiptDocument, printReceiptDocument } from '@/lib/pos/receipt-html';
@@ -60,6 +60,9 @@ export function OrderPlacedDialog({ open, orderNumber, orderId, tenantId, orgSlu
     [posSettings],
   );
   const printerConfigured = hasRealPrinter(billProfile);
+  // Outlet auto_print_order AND the bill printer's own Auto-print toggle (same gate as the server
+  // queue). It used to read only the outlet switch, so the bill auto-printed with the toggle off.
+  const autoPrint = autoPrintsCustomerCopy(posSettings as Parameters<typeof autoPrintsCustomerCopy>[0]);
 
   // Finish the order. On a shared terminal (autoLogout) this bounces to pin-login so the next
   // waiter signs in; on a dedicated terminal it just closes and the operator stays signed in.
@@ -207,11 +210,11 @@ export function OrderPlacedDialog({ open, orderNumber, orderId, tenantId, orgSlu
       setBrowserPrompt(null);
       return;
     }
-    if (posSettings?.auto_print_order && !autoFiredRef.current) {
+    if (autoPrint && !autoFiredRef.current) {
       autoFiredRef.current = true;
       void handlePrintRef.current(true);
     }
-  }, [open, posSettings?.auto_print_order]);
+  }, [open, autoPrint]);
 
   if (!open) return null;
 
@@ -255,7 +258,7 @@ export function OrderPlacedDialog({ open, orderNumber, orderId, tenantId, orgSlu
 
   // Auto-print enabled → suppress the manual popup; show only a brief printing indicator while the
   // silent job is dispatched (the confirmation modal above handles the no-printer case).
-  if (posSettings?.auto_print_order) {
+  if (autoPrint) {
     return printing ? (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
         <div className="bg-card rounded-3xl border border-border shadow-2xl px-8 py-6 flex items-center gap-3">

@@ -47,6 +47,25 @@ export function anyRealPrinter(profiles?: PrinterProfile[] | null): boolean {
   return (profiles ?? []).some((p) => hasRealPrinter(p));
 }
 
+/** A printer card's own Auto-print toggle allows automatic jobs. A profile saved without the
+ *  toggle counts as on (same as pos-api PrinterProfile.AutoPrintEnabled). */
+export function autoPrintsOn(p?: PrinterProfile | null): boolean {
+  return p?.auto_print !== false;
+}
+
+/**
+ * The single gate for every AUTOMATIC customer copy the till prints itself (the bill when an order
+ * is posted, the receipt when a sale is paid): the outlet's auto_print_order switch AND the bill
+ * printer's own Auto-print toggle. Mirrors pos-api printing.AutoBillProfile, so the till and the
+ * print agent queue agree. Manual Print Bill / Print Receipt ignore it.
+ */
+export function autoPrintsCustomerCopy(
+  settings?: { auto_print_order?: boolean | null; printer_profiles?: PrinterProfile[] | null } | null,
+): boolean {
+  if (!settings?.auto_print_order) return false;
+  return autoPrintsOn(resolveBillProfile(settings.printer_profiles));
+}
+
 /**
  * Resolve the profile the customer bill should print to. Operators often assign a printer only to
  * a kitchen station (or the waiter copy) and leave the Bill card unset — the bill must still reach

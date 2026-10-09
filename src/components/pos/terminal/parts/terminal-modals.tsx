@@ -30,7 +30,7 @@ import { LinePriceModal } from '@/components/pos/line-price-modal';
 import { OrderPlacedDialog } from '@/components/pos/order-placed-dialog';
 import { JobCreatedDialog } from '@/components/jobs/job-created-dialog';
 import { RegisterDetailsModal, RecentTransactionsModal, SellReturnModal } from '@/components/pos/terminal/toolbar-modals';
-import { resolveBillProfile } from '@/lib/pos/printer-stations';
+import { autoPrintsCustomerCopy, resolveBillProfile } from '@/lib/pos/printer-stations';
 import { useTerminal } from '@/components/pos/terminal/terminal-context';
 import { rbacApi } from '@/lib/api/rbac';
 import { AlertTriangle } from 'lucide-react';
@@ -226,7 +226,7 @@ export function TerminalModals() {
         orderId={t.receiptOrderId}
         // When a Local Print Agent is online, payment finalization already enqueued the receipt on
         // the SERVER print queue — client auto-printing it again would double-print.
-        autoPrint={Boolean((t.posSettings as any)?.auto_print_order) && !(t.posSettings as any)?.print_agent_online}
+        autoPrint={autoPrintsCustomerCopy(t.posSettings as any) && !(t.posSettings as any)?.print_agent_online}
       />
 
       {t.jobCreated && (
