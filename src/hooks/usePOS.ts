@@ -1347,6 +1347,64 @@ export function useUpdateQuotation() {
   });
 }
 
+/** A named delivery area from logistics (fee is what logistics charges inside it). */
+export interface DeliveryArea {
+  id: string;
+  name: string;
+  fee: number;
+  free: boolean;
+  aliases?: string[];
+  center?: { lat: number; lng: number };
+}
+
+/** Logistics' delivery quote; `fee` is authoritative and pos-api re-quotes it on save. */
+export interface DeliveryQuote {
+  serviceable: boolean;
+  reason?: string;
+  fee: number;
+  free: boolean;
+  currency: string;
+  distance_km?: number;
+  zone?: { id: string; name: string };
+}
+
+/** The tenant's delivery areas (logistics owns them) for the terminal's area picker. */
+export function useDeliveryAreas(outletId: string | undefined, enabled = true) {
+  const tenantID = useTenantID();
+  return useQuery({
+    queryKey: ['pos-delivery-areas', tenantID, outletId],
+    queryFn: async () => {
+      const data = await apiClient.get<{ areas?: DeliveryArea[] }>(
+        `${basePath(tenantID)}/delivery-areas`,
+        { outlet_id: outletId },
+        { suppressErrorToast: true },
+      );
+      return (data?.areas ?? []).sort((a, b) => a.name.localeCompare(b.name));
+    },
+    enabled: enabled && !!tenantID,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+/** Live delivery fee for a dropoff point, from the same quote online checkout uses. */
+export function useDeliveryQuote(point: { lat: number; lng: number } | null, outletId: string | undefined, orderTotal: number) {
+  const tenantID = useTenantID();
+  // Round the total so typing quantities does not refetch on every cent.
+  const total = Math.round(orderTotal);
+  return useQuery({
+    queryKey: ['pos-delivery-quote', tenantID, outletId, point?.lat, point?.lng, total],
+    queryFn: async () => {
+      return apiClient.get<DeliveryQuote>(
+        `${basePath(tenantID)}/delivery-quote`,
+        { lat: point!.lat, lng: point!.lng, outlet_id: outletId, order_total: total },
+        { suppressErrorToast: true },
+      );
+    },
+    enabled: !!tenantID && !!point,
+    staleTime: 60 * 1000,
+  });
+}
+
 /** Edit Shipping (All-Sales action) — updates shipping status/address/charges. */
 export function useUpdateShipping() {
   const tenantID = useTenantID();

@@ -51,6 +51,7 @@ import { TerminalProductGrid } from '@/components/pos/terminal/parts/terminal-pr
 import { TerminalModals } from '@/components/pos/terminal/parts/terminal-modals';
 import { InlinePaymentBar } from '@/components/pos/terminal/inline-payment-bar';
 import { JobDetailsPanel } from '@/components/jobs/job-details-panel';
+import { DeliveryPanel } from '@/components/pos/terminal/parts/delivery-panel';
 import { useTerminal } from '@/components/pos/terminal/terminal-context';
 import { CostHeaderToggle, MaskedCost } from '@/components/pos/cost-price';
 import { InlineDiscountCell, InlineMarginCell, InlinePriceCell, InlineTotalCell } from '@/components/pos/inline-line-cells';
@@ -221,6 +222,9 @@ export function TerminalShell() {
             useCase={t.outlet?.use_case}
           />
         )}
+
+        {/* Delivery orders: area, address and notes; the fee comes from logistics. */}
+        {cfg.showOrderType && t.orderSubtype === 'delivery' && !t.isAddToBill && <DeliveryPanel />}
 
         {/* Hardware scale (retail/pharmacy) */}
         {cfg.showScale && t.scaleDeviceId && (

@@ -56,7 +56,7 @@ import { applyRoundOff, computeCartTax } from '@/lib/pos/cart-tax';
 import { bogoFreeUnitsForSku, computeHappyHour, type HHLine, type HappyHourResult } from '@/lib/pos/happy-hour';
 import { printKitchenBarTickets } from '@/lib/pos/kitchen-bar-print';
 import { chitLabelFor } from '@/lib/kds/board';
-import { selectedFromLoyalty, type SaleSessionSnapshot } from '@/lib/pos/sale-session';
+import { selectedFromLoyalty, emptyDeliveryInfo, type DeliveryInfo, type SaleSessionSnapshot } from '@/lib/pos/sale-session';
 import type { LoyaltyRedeemInfo } from '@/lib/pos/terminal-actions';
 import { isFractionalUnit, normalizeQuantity } from '@/lib/pos/units';
 import { P } from '@/lib/rbac/permissions';
@@ -296,8 +296,10 @@ export interface TerminalContextValue {
   // ── order type / table ──
   orderSubtype: OrderSubtype | null;
   setOrderSubtype: (s: OrderSubtype | null) => void;
-  deliveryInfo: { address: string; notes: string };
-  setDeliveryInfo: (v: { address: string; notes: string }) => void;
+  deliveryInfo: DeliveryInfo;
+  setDeliveryInfo: (v: DeliveryInfo) => void;
+  /** Outlet the order is rung up at (the delivery pickup point). */
+  orderOutletID: string;
   tableId: string;
   tableName: string;
 
@@ -631,7 +633,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
   const [saleDate, setSaleDate] = useState('');
 
   // Delivery dropoff details — captured for delivery orders so a logistics rider can be dispatched.
-  const [deliveryInfo, setDeliveryInfo] = useState<{ address: string; notes: string }>({ address: '', notes: '' });
+  const [deliveryInfo, setDeliveryInfo] = useState<DeliveryInfo>(emptyDeliveryInfo());
 
   // Modifier modal
   const [modifierItem, setModifierItem] = useState<MenuItem | null>(null);
@@ -819,7 +821,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
     setCharges(s.charges ?? {});
     setLoyaltyState(s.loyaltyState ?? null);
     setOrderSubtype(s.orderSubtype ?? null);
-    setDeliveryInfo(s.deliveryInfo ?? { address: '', notes: '' });
+    setDeliveryInfo(s.deliveryInfo ?? emptyDeliveryInfo());
     if (s.pricingProfile) setPricingProfile(s.pricingProfile);
     ageVerifiedRef.current = s.ageVerified ?? false;
     // Remount the customer/loyalty panel so its chip reflects THIS tab's attached customer.
@@ -1622,9 +1624,15 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
   // for a services job order.
   const buildOrderMetadata = (): Record<string, unknown> | undefined => {
     if (orderSubtype === 'delivery') {
+      // The area pin lets pos-api price the delivery from logistics and the rider navigate.
+      const address = [deliveryInfo.address, deliveryInfo.areaName].filter(Boolean).join(', ');
       return {
-        ...(deliveryInfo.address ? { delivery_address: deliveryInfo.address } : {}),
+        ...(address ? { delivery_address: address } : {}),
         ...(deliveryInfo.notes ? { delivery_notes: deliveryInfo.notes } : {}),
+        ...(deliveryInfo.lat != null && deliveryInfo.lng != null
+          ? { delivery_lat: deliveryInfo.lat, delivery_lng: deliveryInfo.lng }
+          : {}),
+        ...(deliveryInfo.areaName ? { delivery_area: deliveryInfo.areaName } : {}),
       };
     }
     if (jobProfile) return { job: jobDraftToMetadata(jobDraft) };
@@ -2115,7 +2123,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
     updateQuantity, setLineQuantity, incrementCartLine, removeFromCart, clearCart, bogoFreeFor, updateCourse, setItemSeat,
     pricingProfile, pricingTiers, repricing, repriceCart,
     loyaltyState, setLoyaltyState, customerResetSeq, scaleDeviceId, customerCreditAvailable, loyaltyRedeemInfo,
-    orderSubtype, setOrderSubtype, deliveryInfo, setDeliveryInfo, tableId, tableName,
+    orderSubtype, setOrderSubtype, deliveryInfo, setDeliveryInfo, orderOutletID, tableId, tableName,
     saleDate, setSaleDate,
     billOrderTotal,
     handlePlaceOrder, handlePark, handleResumeParked, createOrderAsync,

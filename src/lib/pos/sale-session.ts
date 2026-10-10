@@ -15,6 +15,18 @@ import { WALK_IN_CUSTOMER, type SelectedCustomer } from '@/components/pos/custom
 import type { OrderSubtype } from '@/hooks/usePOS';
 
 /** Everything that makes one cart tab distinct — snapshotted on switch, restored on return. */
+/** Delivery dropoff for a till delivery order. The area pin is priced by logistics. */
+export interface DeliveryInfo {
+  address: string;
+  notes: string;
+  areaId?: string;
+  areaName?: string;
+  lat?: number;
+  lng?: number;
+}
+
+export const emptyDeliveryInfo = (): DeliveryInfo => ({ address: '', notes: '' });
+
 export interface SaleSessionSnapshot {
   cart: CartItem[];
   manualDiscount: number;
@@ -27,7 +39,7 @@ export interface SaleSessionSnapshot {
   charges: Record<string, number>;
   loyaltyState: LoyaltyState | null;
   orderSubtype: OrderSubtype | null;
-  deliveryInfo: { address: string; notes: string };
+  deliveryInfo: DeliveryInfo;
   pricingProfile: string;
   ageVerified: boolean;
 }
@@ -53,7 +65,7 @@ export function emptySnapshot(): SaleSessionSnapshot {
     charges: {},
     loyaltyState: null,
     orderSubtype: null,
-    deliveryInfo: { address: '', notes: '' },
+    deliveryInfo: emptyDeliveryInfo(),
     pricingProfile: '',
     ageVerified: false,
   };
