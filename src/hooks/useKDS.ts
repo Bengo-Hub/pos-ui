@@ -122,9 +122,10 @@ export interface UpdateKDSStationInput {
 
 /** Active stations only (for KDS display). */
 // `enabled` lets callers skip the fetch entirely when the outlet's use-case/plan can never satisfy
-// the backend's RequireUseCase("hospitality","quick_service")/RequireFeature("kds") gate (e.g. a
-// retail-only plan) — calling it anyway is a guaranteed 403, and every failed attempt independently
-// fires the app's subscription-403 toast, not just the first.
+// the backend's RequireUseCase("hospitality","quick_service","services") gate (e.g. a retail
+// outlet) — calling it anyway is a guaranteed 403, and every failed attempt independently fires the
+// app's subscription-403 toast, not just the first. Stations are NOT plan-gated (only the live
+// display routes need the "kds" feature), so never pass hasFeature('kds') here.
 export function useKDSStations(enabled = true) {
   const tenantID = useTenantID();
   return useQuery({

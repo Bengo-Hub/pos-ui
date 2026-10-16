@@ -504,6 +504,7 @@ export function RetailDashboard({ orgSlug }: { orgSlug: string }) {
 export function QuickServiceDashboard({ orgSlug }: { orgSlug: string }) {
   const tenantID = useTenantID();
   const { hasModule } = useModuleAccess();
+  const { hasFeature } = useSubscription();
   const { range, preset, setPreset, custom, setCustom } = useDashboardRange();
   const { data: summary, isLoading, refetch, isFetching } = useDashboardSummary(range);
   const s = summary ?? {};
@@ -511,7 +512,7 @@ export function QuickServiceDashboard({ orgSlug }: { orgSlug: string }) {
   const { data: kdsData } = useQuery({
     queryKey: ['dashboard-kds-queue', tenantID],
     queryFn: () => apiClient.get<any>(`/api/v1/${tenantID}/pos/kds/tickets?status=pending`),
-    enabled: !!tenantID && hasModule('kds'), refetchInterval: 30_000, retry: false,
+    enabled: !!tenantID && hasModule('kds') && hasFeature('kds'), refetchInterval: 30_000, retry: false,
   });
   const queueDepth = kdsData?.meta?.total ?? kdsData?.data?.length ?? 0;
 

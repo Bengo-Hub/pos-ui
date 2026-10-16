@@ -543,9 +543,10 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
   const taxRate = (posSettings?.vat_enabled === false ? 0 : (posSettings?.vat_rate ?? 0)) / 100;
   // Live KDS stations — drive per-station ticket routing/printing (same category_filter routing the
   // kitchen displays use), so a ticket prints on the printer of the station it was routed to. Only
-  // fetched for outlets whose use-case AND plan can actually reach pos-api's /kds/stations route —
-  // otherwise this is a guaranteed 403 on every terminal load (see kdsUseCaseOk above).
-  const { data: kdsStationsData } = useKDSStations(kdsUseCaseOk && hasFeature('kds'));
+  // fetched for outlets whose use-case can reach pos-api's /kds/stations route (see kdsUseCaseOk
+  // above). Deliberately NOT plan-gated: stations route chits on every plan, only the live KDS
+  // display needs the "kds" feature. Gating this made Starter tenants print bar items in the kitchen.
+  const { data: kdsStationsData } = useKDSStations(kdsUseCaseOk);
   // Active loyalty program — used to tell the cashier how many points the customer just earned,
   // and (paired with loyaltyAccountData above) to gate/settle the "Redeem Points" tender. Loyalty
   // is deliberately a retail/services/pharmacy concept (see loyaltyUseCaseOk above) — hospitality/

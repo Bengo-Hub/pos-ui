@@ -2,6 +2,8 @@
 
 import { ModuleGate } from '@/components/auth/module-gate';
 import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
+import { FeatureGate } from '@bengo-hub/shared-ui-lib/subscription';
+import { FeatureLocked } from '@/components/auth/feature-locked';
 
 import { Badge } from '@/components/ui/base';
 import { cn, formatElapsed } from '@/lib/utils';
@@ -551,7 +553,10 @@ function KDSPage() {
 export default function KDSPageGated() {
   return (
     <ModuleGate moduleKey="kds" fallback={<ModuleUnavailablePage moduleKey="kds" />}>
-      <KDSPage />
+      {/* The live display is a plan feature; station routing/configuration is not (see pos-api router). */}
+      <FeatureGate feature="kds" fallback={<FeatureLocked feature="kds" label="Kitchen Display" />}>
+        <KDSPage />
+      </FeatureGate>
     </ModuleGate>
   );
 }
