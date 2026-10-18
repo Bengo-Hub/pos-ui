@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import {
-  ChefHat, Clock, CreditCard, DatabaseBackup, Gift, Key, Layers, Monitor, Percent, Receipt, Truck,
+  ChefHat, Clock, CreditCard, Gift, Key, Layers, Monitor, Percent, Receipt, Truck,
   Settings, ShieldCheck, Table2, Users, Hash, Pill,
 } from 'lucide-react';
 import { useAuthStore } from '@/store/auth';
@@ -31,7 +31,6 @@ import { DevicesTab } from '@/components/settings/DevicesTab';
 import { CardTerminalTab } from '@/components/settings/CardTerminalTab';
 import { ChannelsTab } from '@/components/settings/ChannelsTab';
 import { BookingPolicyTab } from '@/components/settings/BookingPolicyTab';
-import { BackupsTab } from '@/components/settings/BackupsTab';
 import { CashierPolicyTab } from '@/components/settings/CashierPolicyTab';
 
 type Tab =
@@ -54,8 +53,7 @@ type Tab =
   | 'booking_policy'
   | 'platform'
   | 'team'
-  | 'audit'
-  | 'backups';
+  | 'audit';
 
 // Permission groups for settings surfaces. Config screens require a config permission;
 // the Team tab requires a users permission. Admins (wildcard) and managers (pos.config.* /
@@ -110,7 +108,6 @@ const ALL_TABS: { id: Tab; label: string; icon: React.ElementType; group: Settin
   // Team & Security (shared)
   { id: 'team',             label: 'Team',               icon: Users,       group: 'Team & Security', requirePermission: TEAM_PERMS, description: 'Staff members, roles, and permissions' },
   { id: 'audit',            label: 'Loss Prevention',    icon: ShieldCheck, group: 'Team & Security', requirePermission: AUDIT_PERMS, description: 'Audit trail + per-cashier exception report' },
-  { id: 'backups',          label: 'Backups',            icon: DatabaseBackup, group: 'Team & Security', requirePermission: CONFIG_PERMS, description: 'Opt in to daily automatic backups and set retention' },
   // Platform (owner-only) + account
   { id: 'subscription',     label: 'Subscription',       icon: Key,         group: 'Platform', requirePermission: CONFIG_PERMS, description: 'Your POS plan, limits, and features (view only)' },
   { id: 'devices',          label: 'Devices',            icon: Monitor,     group: 'Platform', requirePermission: CONFIG_PERMS, description: 'POS terminals linked to this outlet (view only)' },
@@ -215,7 +212,6 @@ export default function SettingsPage() {
         {activeTab === 'booking_policy'   && <BookingPolicyTab />}
         {activeTab === 'team'             && canTab('team') && <TeamTab />}
         {activeTab === 'audit'            && canTab('audit') && <AuditTab />}
-        {activeTab === 'backups'          && canTab('backups') && <BackupsTab />}
         {activeTab === 'platform'         && isPlatformOwner && <PlatformTab />}
       </div>
     </div>
