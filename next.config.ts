@@ -48,6 +48,9 @@ const nextConfig: NextConfig = {
       { protocol: "https", hostname: "inventoryapi.codevertexitsolutions.com", pathname: "/media/**" },
       { protocol: "http", hostname: "localhost", port: "4001", pathname: "/media/**" },
       { protocol: "http", hostname: "127.0.0.1", port: "4001", pathname: "/media/**" },
+      // Shared public media bucket (Cloudflare R2) since 2026-10-17: product images, tenant
+      // logos and avatars uploaded through any service.
+      { protocol: "https", hostname: "media.codevertexafrica.com", pathname: "/**" },
     ],
     // Modern formats + a size ladder tuned for small POS grid thumbnails (not full-bleed
     // hero photos like the customer-facing ordering app) so cards resolve fast on
