@@ -31,6 +31,7 @@ import {
   Users,
 } from 'lucide-react';
 import { useState } from 'react';
+import { useHideProfit } from '@/hooks/useHideProfit';
 
 // Each drill-down granularity drives BOTH the trend bucket size and how far back the report
 // range spans (enough buckets to be a meaningful trend). Buckets: day/week/month/quarter/
@@ -105,13 +106,14 @@ function ReportsPage() {
   const currency = sales?.currency ?? 'KES';
   const money = (n: number) => `${currency} ${n.toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
 
+  const hideProfit = useHideProfit();
   const kpis = sales
     ? [
         { label: 'Total Revenue', value: money(sales.total_revenue), icon: DollarSign, color: 'text-green-600 bg-green-500/10' },
         { label: 'Orders', value: sales.order_count.toString(), icon: ShoppingCart, color: 'text-blue-600 bg-blue-500/10' },
         { label: 'Gross Profit', value: `${money(sales.gross_profit)} (${(sales.gross_margin_pct ?? 0).toFixed(1)}%)`, icon: Coins, color: 'text-amber-600 bg-amber-500/10' },
         { label: 'Refunds', value: money(refunds?.total_refunded ?? 0), icon: TrendingDown, color: 'text-red-600 bg-red-500/10' },
-      ]
+      ].filter((k) => !hideProfit || k.label !== 'Gross Profit')
     : [];
 
   const maxRevenue = daily.reduce((m, r) => Math.max(m, r.revenue), 1);
@@ -221,7 +223,7 @@ function ReportsPage() {
                   { label: 'Tax Collected', amount: sales.total_tax },
                   { label: 'Discounts Given', amount: sales.total_discount },
                   { label: 'Gross Profit', amount: sales.gross_profit },
-                ].map(({ label, amount }) => (
+                ].filter((row) => !hideProfit || row.label !== 'Gross Profit').map(({ label, amount }) => (
                   <div key={label} className="flex justify-between text-sm">
                     <span className="text-muted-foreground">{label}</span>
                     <span className="font-medium">{money(amount)}</span>

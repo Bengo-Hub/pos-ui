@@ -10,6 +10,7 @@ import { useOrders, useOrdersSummary, useBulkVoidOrders, useDeleteSale, prefetch
 import { useCloseOnAccount } from '@/hooks/use-close-on-account';
 import { useStaffList } from '@/hooks/useStaff';
 import { usePermissions, P } from '@/hooks/usePermissions';
+import { useHideProfit } from '@/hooks/useHideProfit';
 import { useAuthStore } from '@/store/auth';
 import { useOutletFilterStore } from '@/store/outlet-filter';
 import { useOwnScope } from '@/lib/rbac/scope';
@@ -65,6 +66,8 @@ export function SalesListView({ orgSlug, fixedSource, title, subtitle }: {
   // Bulk void is a manager authority — same pos.orders.manage gate the server route enforces
   // (the <Can>/usePermissions convention; this is UX, the server is the boundary).
   const { can } = usePermissions();
+  // Profit and margin columns: hidden from cashiers where the outlet's quick config says so.
+  const hideProfit = useHideProfit();
   const canBulkVoid = can(P.ORDERS_MANAGE);
   const effectiveTitle = ownOnly ? (fixedSource ? 'My POS Sales' : 'My Sales') : title;
   const effectiveSubtitle = ownOnly ? 'Sales you rang up. Managers can see all sales.' : subtitle;
@@ -241,7 +244,7 @@ export function SalesListView({ orgSlug, fixedSource, title, subtitle }: {
     );
   };
 
-  const columns = useMemo<DataTableColumn<any>[]>(() => [
+  const columns = useMemo<DataTableColumn<any>[]>(() => ([
     {
       key: 'action', header: 'Action', exportable: false, mobileAction: true,
       render: (o) => (
@@ -380,7 +383,8 @@ export function SalesListView({ orgSlug, fixedSource, title, subtitle }: {
       accessor: (o) => o.item_count ?? (o.edges?.lines?.length ?? 0),
       render: (o) => <span className="text-xs">{o.item_count ?? (o.edges?.lines?.length ?? 0)}</span>,
     },
-  ], [orgSlug, ownOnly, staffNameByUserId, outletNameById, fixedSource, patchFilters]);
+  ] as DataTableColumn<any>[]).filter((c) => !hideProfit || (c.key !== 'profit' && c.key !== 'margin')),
+  [orgSlug, ownOnly, staffNameByUserId, outletNameById, fixedSource, patchFilters, hideProfit]);
 
   return (
     <div className="p-6 space-y-6">

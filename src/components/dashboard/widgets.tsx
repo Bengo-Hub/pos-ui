@@ -6,10 +6,12 @@ import { useOutletFilterStore } from '@/store/outlet-filter';
 import { orderSubtypeBadge } from '@/lib/pos/order-subtype-label';
 import { cn } from '@/lib/utils';
 import { useQuery } from '@tanstack/react-query';
+import { useHideProfit } from '@/hooks/useHideProfit';
 import {
   ArrowRight,
   ClipboardList,
   Clock,
+  Coins,
   ShoppingBag,
   TrendingUp,
   UtensilsCrossed,
@@ -155,6 +157,16 @@ export function QuickActionGrid({ children }: { children: React.ReactNode }) {
 }
 
 // ── KPI card ──────────────────────────────────────────────────────────────────
+
+/** The dashboards' Gross Profit card. Renders nothing for a user the outlet hides profit from. */
+export function GrossProfitCard({ s, loading }: { s: any; loading?: boolean }) {
+  const hideProfit = useHideProfit();
+  if (hideProfit) return null;
+  return (
+    <KPICard label="Gross Profit" value={fmt(s.gross_profit ?? 0, s.currency)} sub={`${(s.gross_margin_pct ?? 0).toFixed(1)}% margin`}
+      icon={Coins} trend={s.gross_profit_growth} loading={loading} />
+  );
+}
 
 export function KPICard({
   label,

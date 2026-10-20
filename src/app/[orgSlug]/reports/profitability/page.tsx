@@ -5,6 +5,7 @@ import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
 import { Card, CardContent } from '@/components/ui/base';
 import { useMostProfitable, useProfitabilityGrouped, type ProfitabilityGroupBy } from '@/hooks/useReports';
 import { useEffectiveOutletID } from '@/hooks/usePOS';
+import { useHideProfit } from '@/hooks/useHideProfit';
 import { ReportExportButtons } from '@/components/reports/report-document-button';
 import { DateRangePicker, type DateRange } from '@/components/ui/date-range-picker';
 import { SalesListView } from '@/components/pos/sales/sales-list-view';
@@ -231,6 +232,9 @@ function ProfitabilityContent() {
 }
 
 export default function ProfitabilityPage() {
+  // The page is nothing but profit and margin; the API refuses it too for these users.
+  const hideProfit = useHideProfit();
+  if (hideProfit) return <ModuleUnavailablePage />;
   return (
     <ModuleGate moduleKey="reports" fallback={<ModuleUnavailablePage />}>
       <ProfitabilityContent />

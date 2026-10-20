@@ -23,6 +23,7 @@ import { DateRangePicker, type DateRange } from '@/components/ui/date-range-pick
 import { Card, CardContent } from '@/components/ui/base';
 import { cn } from '@/lib/utils';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
+import { useHideProfit } from '@/hooks/useHideProfit';
 import { DataTable, type DataTableColumn } from '@bengo-hub/shared-ui-lib/data-table';
 
 function isoDaysAgo(days: number): string {
@@ -60,6 +61,7 @@ export default function AnalyticsReportPage() {
   const [range, setRange] = useState<DateRange>({ from: isoDaysAgo(30), to: todayISO() });
   const [tab, setTab] = useState<TabId>('staff');
   const { data: posSettings } = usePOSSettings();
+  const hideProfit = useHideProfit();
   const currency = (posSettings as any)?.currency ?? 'KES';
   const fmt = fmtFor(currency);
 
@@ -185,8 +187,8 @@ export default function AnalyticsReportPage() {
       { label: 'Orders', value: orders.toLocaleString() },
       { label: 'Peak Hour', value: peak ? `${String(peak.hour).padStart(2, '0')}:00` : '—' },
       { label: 'Profit Margin', value: revenue ? `${((profit / revenue) * 100).toFixed(1)}%` : '—' },
-    ];
-  }, [hours.data]);
+    ].filter((c) => !hideProfit || c.label !== 'Profit Margin');
+  }, [hours.data, hideProfit]);
 
   const categoryStats = useMemo(() => {
     const rows = cats.data ?? [];
@@ -286,11 +288,11 @@ export default function AnalyticsReportPage() {
         <>
           <StatCards items={hourStats} />
           <Section title="Sales by Hour" icon={Clock} loading={hours.isLoading} error={hours.error}
-            head={['Hour', 'Orders', 'Revenue', 'Profit', 'Margin']}
-            rows={(hours.data ?? []).map((r) => [
-              `${String(r.hour).padStart(2, '0')}:00`, String(r.order_count), fmt(r.revenue),
-              fmt(r.profit ?? 0), `${(r.margin_pct ?? 0).toFixed(1)}%`,
-            ])}
+            head={hideProfit ? ['Hour', 'Orders', 'Revenue'] : ['Hour', 'Orders', 'Revenue', 'Profit', 'Margin']}
+            rows={(hours.data ?? []).map((r) => {
+              const base = [`${String(r.hour).padStart(2, '0')}:00`, String(r.order_count), fmt(r.revenue)];
+              return hideProfit ? base : [...base, fmt(r.profit ?? 0), `${(r.margin_pct ?? 0).toFixed(1)}%`];
+            })}
             filters={
               <label className="flex items-center gap-2 text-xs text-muted-foreground">
                 Day

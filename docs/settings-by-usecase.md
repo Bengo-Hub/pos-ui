@@ -72,3 +72,26 @@ Resolved server-side in `pos-api internal/modules/outletpolicy` (outlet override
 
 Any outlet can override any of these from the **Cashier & Terminal** tab; "Use default" clears the
 override and re-inherits the value above.
+
+## Hiding profit and margin from cashiers (2026-10-20)
+
+Same family as the Drafts Delete and Resume toggles: a plain boolean in the outlet settings
+metadata, `hide_profit_margin_for_cashier`, set from **Cashier policy > Profit and margin**. Absent
+means shown, so every tenant keeps its columns until it opts in; boi-enterprises has it on for its
+outlets. "Cashier" means any user without `pos.orders.manage`, so custom non-manager roles are
+covered and managers, admins, superusers and platform owners never lose the figures.
+
+- **API** (`pos-api internal/http/middleware/profit_visibility.go`): `HideProfitForCashier` sits on
+  the order read routes and the reports groups. For an affected caller it removes `profit`,
+  `margin_pct`, `gross_profit`, `gross_margin_pct`, `gross_profit_growth`, `unit_cost`,
+  `cost_price`, `food_cost_pct`, `total_missing_cogs` and `skus_missing_cost` from every JSON
+  response at any depth, answers 403 `profit_hidden` on the profit-only documents (most profitable,
+  profitability grouped, sales by hour document), and sets `ProfitHidden(ctx)` so the All Sales,
+  Daily Sales and Sales by Staff documents and the daily CSV leave their profit columns out. Other
+  documents that only mention profit in passing are not trimmed.
+- **UI**: `useHideProfit()` drives the sales table Profit and Margin columns, the dashboard Gross
+  Profit card (`GrossProfitCard`), the reports and analytics profit figures, the Profitability
+  nav entry and page, and the terminal and Add Sale cost and margin columns. While settings load a
+  non-manager sees none of them.
+- **Applying it to a tenant**: tick the box in Cashier policy for each outlet, or PUT
+  `hide_profit_margin_for_cashier: true` to `/pos/outlets/{outletID}/settings`.

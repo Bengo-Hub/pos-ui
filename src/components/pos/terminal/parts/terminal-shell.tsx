@@ -57,6 +57,7 @@ import { CostHeaderToggle, MaskedCost } from '@/components/pos/cost-price';
 import { InlineDiscountCell, InlineMarginCell, InlinePriceCell, InlineTotalCell } from '@/components/pos/inline-line-cells';
 import { searchPlaceholderFor } from '@/lib/use-case-config';
 import { isFractionalUnit, parseQuantityInput } from '@/lib/pos/units';
+import { useHideProfit } from '@/hooks/useHideProfit';
 import { cn, formatCurrency } from '@/lib/utils';
 import {
   Ban, ChefHat, ChevronLeft, Flame, Grid3x3, Image as ImageIcon, LayoutGrid, LayoutList, Loader2,
@@ -76,7 +77,9 @@ export function TerminalShell() {
   // header eye reveals/hides the whole column (customers can see the screen).
   // Cost/margin is a retail/pharmacy insight only (cfg.showCostMargin) — hospitality/QSR/
   // services terminals never show the columns, whatever the role.
-  const canViewCost = cfg.showCostMargin && (t.can('pos.catalog.view_cost') || t.can('pos.orders.manage'));
+  // An outlet that hides profit and margin from cashiers (Settings > Cashier policy) hides cost too.
+  const hideProfit = useHideProfit();
+  const canViewCost = cfg.showCostMargin && !hideProfit && (t.can('pos.catalog.view_cost') || t.can('pos.orders.manage'));
   const [costRevealed, setCostRevealed] = useState(false);
   // Price/margin/discount editing policy: managers/admins (pos.orders.manage) edit any of the
   // three freely (markdown = inline discount, any raise). Non-managers get the pencil at all

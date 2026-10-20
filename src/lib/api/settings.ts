@@ -153,6 +153,10 @@ export interface POSSettings {
   hide_draft_delete_for_cashier: boolean;
   /** Same as above, for the Resume button. */
   hide_draft_resume_for_cashier: boolean;
+  /** Quick config: hide profit, margin and unit cost from non-manager-tier ("cashier") users at
+   *  this outlet, on every table, report and the terminal. Plain boolean, default false (shown);
+   *  boi-enterprises has it on. pos-api strips the figures too (HideProfitForCashier). */
+  hide_profit_margin_for_cashier: boolean;
   updated_at: string;
 }
 
@@ -218,6 +222,7 @@ export interface UpdatePOSSettingsInput {
   // Quick config — plain booleans, no tri-state reset (see POSSettings above).
   hide_draft_delete_for_cashier?: boolean;
   hide_draft_resume_for_cashier?: boolean;
+  hide_profit_margin_for_cashier?: boolean;
 }
 
 export interface UpdatePOSModulesInput {

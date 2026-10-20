@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Loader2, Lock, Eye, LogOut, LayoutGrid, FileX } from 'lucide-react';
+import { Loader2, Lock, Eye, EyeOff, LogOut, LayoutGrid, FileX } from 'lucide-react';
 import { Button, Card, CardContent, CardHeader } from '@/components/ui/base';
 import { usePOSSettings, useUpdatePOSSettings } from '@/hooks/usePOSSettings';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -44,6 +44,7 @@ export function CashierPolicyTab() {
   // Quick config: plain booleans, no per-use-case default to reset to (unlike the three above).
   const [hideDraftDelete, setHideDraftDelete] = useState(false);
   const [hideDraftResume, setHideDraftResume] = useState(false);
+  const [hideProfitMargin, setHideProfitMargin] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const overrides = settings?.cashier_policy_overrides ?? {};
@@ -56,6 +57,7 @@ export function CashierPolicyTab() {
     setTerminalSurface(overrides['cashier_terminal_surface'] ? settings.cashier_terminal_surface : '');
     setHideDraftDelete(!!settings.hide_draft_delete_for_cashier);
     setHideDraftResume(!!settings.hide_draft_resume_for_cashier);
+    setHideProfitMargin(!!settings.hide_profit_margin_for_cashier);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settings]);
 
@@ -69,6 +71,7 @@ export function CashierPolicyTab() {
         cashier_terminal_surface: terminalSurface === '' ? 'default' : terminalSurface,
         hide_draft_delete_for_cashier: hideDraftDelete,
         hide_draft_resume_for_cashier: hideDraftResume,
+        hide_profit_margin_for_cashier: hideProfitMargin,
       });
     } finally {
       setSaving(false);
@@ -218,6 +221,27 @@ export function CashierPolicyTab() {
             <input type="checkbox" checked={hideDraftResume} disabled={!canEdit}
               onChange={(e) => setHideDraftResume(e.target.checked)} />
             Hide the <span className="font-medium">Resume</span> button for cashiers
+          </label>
+        </CardContent>
+      </Card>
+
+      {/* Profit and margin visibility. Same rule as the Drafts buttons above: applies to any
+          non-manager-tier user, managers/admins always see the figures. pos-api enforces it. */}
+      <Card>
+        <CardHeader>
+          <h3 className="text-base font-bold flex items-center gap-2">
+            <EyeOff className="h-4 w-4 text-primary" /> Profit and margin
+          </h3>
+          <p className="text-sm text-muted-foreground">
+            Cashiers see sales, totals and stock as usual, but no profit, margin or cost on any table,
+            report or the till. Managers/admins are never affected.
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={hideProfitMargin} disabled={!canEdit}
+              onChange={(e) => setHideProfitMargin(e.target.checked)} />
+            Hide <span className="font-medium">profit and margin</span> from cashiers
           </label>
         </CardContent>
       </Card>

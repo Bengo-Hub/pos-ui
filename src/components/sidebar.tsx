@@ -3,6 +3,7 @@
 import { useModuleAccess } from '@/hooks/use-module-access';
 import { useSubscription } from '@/hooks/use-subscription';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useHideProfit } from '@/hooks/useHideProfit';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { useOwnScope } from '@/lib/rbac/scope';
 import { isPlatformOwner as checkPlatformOwner } from '@/lib/auth/permissions';
@@ -182,6 +183,7 @@ export function Sidebar({ open = false, onClose, collapsed = false }: SidebarPro
   // ── Nav groups ────────────────────────────────────────────────────────────
 
   const isWaiter = !isHQUser && userRoles.includes('waiter');
+  const hideProfit = useHideProfit();
   // The hospitality-cashier menu surface is now CONFIGURABLE per outlet (cashier_terminal_surface):
   // 'full_till' (default) shows the POS Terminal + Add Sale + Tables so a hospitality cashier can
   // ring sales AND settle bills; 'bills_only' hides those `cashierHospHidden` items so they work
@@ -239,6 +241,8 @@ export function Sidebar({ open = false, onClose, collapsed = false }: SidebarPro
           // pos.orders.view/manage) keeps the bill/sales surfaces — each still enforces its own
           // permission below, so this only un-hides what they're actually granted.
           if (isWaiter && !elevatedBills && item.waiterHidden) return false;
+          // Profit-only pages (Profitability) vanish for users the outlet hides profit from.
+          if (hideProfit && item.profitOnly) return false;
           // Hospitality cashier with the 'bills_only' terminal surface: hide the fast terminal /
           // add-sale items (they settle from Tables/Orders). 'full_till' (default) shows them.
           if (isCashierBillsOnly && item.cashierHospHidden) return false;

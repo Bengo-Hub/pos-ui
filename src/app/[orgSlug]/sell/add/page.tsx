@@ -24,6 +24,7 @@ import { usePermissions, P } from '@/hooks/usePermissions';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { useAddOrderLines, useCreateOrder, useCreatePaymentIntent, useEditOrderLine, useEditSale, useFullCatalog, useOrder, usePricingTiers, searchMenuItems, useSetOrderDiscount, useUpdateSaleInfo, useVoidOrderLine, type CatalogItem, type EditSaleLine } from '@/hooks/usePOS';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
+import { useHideProfit } from '@/hooks/useHideProfit';
 import { useStaffAdmin, useStaffSearch } from '@/hooks/useStaff';
 import { SearchableCombobox } from '@bengo-hub/shared-ui-lib/combobox';
 import { SearchAddTable, type SearchAddOption } from '@bengo-hub/shared-ui-lib/search-add-table';
@@ -246,7 +247,9 @@ export default function AddSalePage() {
   // Values render MASKED by default (customers can see the screen); the header eye toggle
   // reveals/hides the whole column. Same gate as pos-api's cost serialization
   // (pos.catalog.view_cost OR pos.orders.manage) so the column never renders empty.
-  const canViewCost = canAny(['pos.catalog.view_cost', 'pos.orders.manage']);
+  // An outlet that hides profit and margin from cashiers (Settings > Cashier policy) hides cost too.
+  const hideProfit = useHideProfit();
+  const canViewCost = !hideProfit && canAny(['pos.catalog.view_cost', 'pos.orders.manage']);
   const [costRevealed, setCostRevealed] = useState(false);
   const [quotationSaving, setQuotationSaving] = useState(false);
 

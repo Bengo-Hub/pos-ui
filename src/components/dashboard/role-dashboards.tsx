@@ -5,7 +5,7 @@ import { useModuleAccess } from '@/hooks/use-module-access';
 import { useSubscription } from '@/hooks/use-subscription';
 import { useHotelOccupancyReport, type HotelOccupancyResult } from '@/hooks/useReports';
 import { cn } from '@/lib/utils';
-import { QuickAction, QuickActionTile, QuickActionGrid, KPICard, RecentOrdersCard, useDashboardSummary, useTenantID, fmt, fmtNum } from './widgets';
+import { QuickAction, QuickActionTile, QuickActionGrid, KPICard, GrossProfitCard, RecentOrdersCard, useDashboardSummary, useTenantID, fmt, fmtNum } from './widgets';
 import { CashierOverviewTab } from './cashier-overview-tab';
 import { CashierShiftTab } from './cashier-shift-tab';
 import { FrontDeskDashboard } from './front-desk-dashboard';
@@ -15,7 +15,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import {
   ArrowRight, BarChart3, BedDouble, Calendar, ChefHat,
-  ClipboardList, Clock, Coins, Cpu, Grid3x3, Package,
+  ClipboardList, Clock, Cpu, Grid3x3, Package,
   Percent, Plus, Presentation, RefreshCw, ShieldAlert, ShoppingBag,
   Sparkles, TrendingUp, Users, Wallet, Wine,
 } from 'lucide-react';
@@ -71,7 +71,7 @@ export function AdminDashboard({ orgSlug }: { orgSlug: string }) {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <KPICard label="Revenue" value={fmt(s.total_revenue ?? 0, s.currency)} sub={range.compareLabel} icon={TrendingUp} trend={s.revenue_growth} loading={isLoading} />
         <KPICard label="Orders" value={fmtNum(s.total_orders ?? 0)} sub={periodSub} icon={ClipboardList} trend={s.orders_growth} loading={isLoading} />
-        <KPICard label="Gross Profit" value={fmt(s.gross_profit ?? 0, s.currency)} sub={`${(s.gross_margin_pct ?? 0).toFixed(1)}% margin`} icon={Coins} trend={s.gross_profit_growth} loading={isLoading} />
+        <GrossProfitCard s={s} loading={isLoading} />
         <KPICard label="Active Staff" value={fmtNum(s.active_staff ?? 0)} sub="on shift" icon={Users} loading={isLoading} href={`/${orgSlug}/shifts?tab=team`} />
       </div>
       <div className="space-y-3">
@@ -482,7 +482,7 @@ export function RetailDashboard({ orgSlug }: { orgSlug: string }) {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <KPICard label="Revenue" value={fmt(s.total_revenue ?? 0, s.currency)} sub={range.compareLabel} icon={TrendingUp} trend={s.revenue_growth} loading={isLoading} />
         <KPICard label="Transactions" value={fmtNum(s.total_orders ?? 0)} sub={periodSub} icon={ClipboardList} trend={s.orders_growth} loading={isLoading} />
-        <KPICard label="Gross Profit" value={fmt(s.gross_profit ?? 0, s.currency)} sub={`${(s.gross_margin_pct ?? 0).toFixed(1)}% margin`} icon={Coins} trend={s.gross_profit_growth} loading={isLoading} />
+        <GrossProfitCard s={s} loading={isLoading} />
         <KPICard label="Items Sold" value={fmtNum(s.items_sold ?? 0)} sub={`units ${periodSub}`} icon={Package} loading={isLoading} />
       </div>
       <div className="space-y-3">
@@ -535,7 +535,7 @@ export function QuickServiceDashboard({ orgSlug }: { orgSlug: string }) {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <KPICard label="Orders" value={fmtNum(s.total_orders ?? 0)} sub={periodSub} icon={ClipboardList} trend={s.orders_growth} loading={isLoading} />
         <KPICard label="Revenue" value={fmt(s.total_revenue ?? 0, s.currency)} sub={range.compareLabel} icon={TrendingUp} trend={s.revenue_growth} loading={isLoading} />
-        <KPICard label="Gross Profit" value={fmt(s.gross_profit ?? 0, s.currency)} sub={`${(s.gross_margin_pct ?? 0).toFixed(1)}% margin`} icon={Coins} trend={s.gross_profit_growth} loading={isLoading} />
+        <GrossProfitCard s={s} loading={isLoading} />
         <KPICard label="Kitchen Queue" value={fmtNum(queueDepth)} sub="pending tickets" icon={ChefHat} loading={isLoading} />
       </div>
       <div className="space-y-3">
@@ -588,7 +588,7 @@ export function ServicesDashboard({ orgSlug }: { orgSlug: string }) {
         <KPICard label="Appointments Today" value={fmtNum(todayAppts.length)} sub="total booked" icon={Calendar} loading={apptLoading} />
         <KPICard label="Active / Confirmed" value={fmtNum(confirmedCount)} sub="in progress + confirmed" icon={Users} loading={apptLoading} />
         <KPICard label="Revenue" value={fmt(s.total_revenue ?? 0, s.currency)} sub={range.compareLabel} icon={TrendingUp} trend={s.revenue_growth} loading={isLoading} />
-        <KPICard label="Gross Profit" value={fmt(s.gross_profit ?? 0, s.currency)} sub={`${(s.gross_margin_pct ?? 0).toFixed(1)}% margin`} icon={Coins} trend={s.gross_profit_growth} loading={isLoading} />
+        <GrossProfitCard s={s} loading={isLoading} />
       </div>
       <div className="space-y-3">
         <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Quick Actions</p>
