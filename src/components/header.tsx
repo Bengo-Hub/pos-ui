@@ -2,6 +2,7 @@
 
 import { usePermissions } from '@/hooks/usePermissions';
 import { useCloseShift, useCurrentShift } from '@/hooks/useShifts';
+import { useSubscription } from '@/hooks/use-subscription';
 import { apiClient } from '@/lib/api/client';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { canAccessAllOutlets } from '@/lib/auth/outlet-access';
@@ -328,10 +329,15 @@ export function Header({ onMenuClick, onToggleSidebar, sidebarCollapsed }: Heade
   // The App Store shows every real service to every authenticated user in the tenant — each
   // destination service already enforces its own RBAC + subscription gating on arrival, so
   // pre-filtering the directory here just hid apps that were actually reachable.
+  // A service outside the plan stays visible as "Not in your plan" with a link to the plans page
+  // (shared-ui-lib default), so tenants discover the rest of the suite without hitting a 403.
+  const { activeServiceTags } = useSubscription();
   const services = useVisibleServices({
     orgSlug,
     urls: SERVICE_URLS,
     canManageLinks: true,
+    activeServiceTags,
+    upgradeUrl: SERVICE_URLS.subscriptions ? `${SERVICE_URLS.subscriptions}/${orgSlug}` : null,
   });
 
   const { data: currentShift } = useCurrentShift();

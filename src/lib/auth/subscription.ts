@@ -17,6 +17,9 @@ export interface SubscriptionInfo {
   /** product_code of every currently-active per-product subscription line — drives which
    *  apps the shared-ui-lib app-switcher shows (see useVisibleServices' activeServiceTags). */
   activeProducts?: string[];
+  /** Service tags the plan covers (subscriptions active_service_tags). The app-switcher marks every
+   *  other service "Not in your plan". Undefined while unknown, which shows all services. */
+  activeServiceTags?: string[];
 }
 
 /**
@@ -57,6 +60,7 @@ export async function fetchSubscriptionInfo(
       trialEndsAt: sub.trial_ends_at ?? sub.trialEndsAt,
       currentPeriodEnd: sub.current_period_end ?? sub.currentPeriodEnd,
       activeProducts: sub.active_products ?? sub.activeProducts ?? [],
+      activeServiceTags: sub.active_service_tags ?? sub.activeServiceTags,
     };
   } catch {
     return null;

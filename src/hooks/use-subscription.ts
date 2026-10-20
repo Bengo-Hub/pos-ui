@@ -196,6 +196,8 @@ export function useSubscription() {
     // plan entitlement — a tenant can be entitled to a product and still have turned it off).
     // Exempt tenants (platform owner/demo/service-charge) see every app.
     activeProducts: isExempt ? undefined : (info?.activeProducts ?? []),
+    // Service tags the plan covers; undefined (all services shown) when exempt or not loaded yet.
+    activeServiceTags: isExempt ? undefined : info?.activeServiceTags,
     store: subStore,
   };
 }
