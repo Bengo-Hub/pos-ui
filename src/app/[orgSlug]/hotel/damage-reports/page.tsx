@@ -14,6 +14,7 @@ import { usePermissions, P } from '@/hooks/usePermissions';
 import type { DamageReport } from '@/lib/api/hotel';
 import { cn, formatCurrency } from '@/lib/utils';
 import { resolveMediaUrl } from '@/lib/screensaver';
+import { MediaImage } from '@bengo-hub/shared-ui-lib/media';
 import { CheckCircle2, Loader2, ShieldAlert, X, XCircle } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
@@ -158,7 +159,7 @@ function DamageReportsPage() {
                 <div className="mt-3 flex flex-wrap gap-2">
                   {report.evidence_urls.map((url) => (
                     <a key={url} href={resolveMediaUrl(url)} target="_blank" rel="noopener noreferrer">
-                      <img src={resolveMediaUrl(url)} alt="Damage evidence" className="h-16 w-16 rounded-lg object-cover border border-border hover:opacity-80 transition-opacity" />
+                      <MediaImage src={resolveMediaUrl(url)} displayWidth={64} fit="cover" aspect={1} alt="Damage evidence" className="h-16 w-16 rounded-lg object-cover border border-border hover:opacity-80 transition-opacity" />
                     </a>
                   ))}
                 </div>

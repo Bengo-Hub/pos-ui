@@ -1,5 +1,6 @@
 'use client';
 
+import { MediaImage } from '@bengo-hub/shared-ui-lib/media';
 import { cn } from '@/lib/utils';
 import { X } from 'lucide-react';
 
@@ -90,8 +91,7 @@ export function CategoryBrandDrawer({
               )}
             >
               {e.image_url && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={e.image_url} alt={e.name} className="h-10 w-10 object-contain rounded-lg" />
+                <MediaImage src={e.image_url} alt={e.name} displayWidth={40} className="h-10 w-10 object-contain rounded-lg" />
               )}
               <span className="line-clamp-2">{e.name}</span>
             </button>

@@ -11,6 +11,7 @@
 
 import { useEffect, useState } from 'react';
 import { Loader2 } from 'lucide-react';
+import { MediaImage } from '@bengo-hub/shared-ui-lib/media';
 import { useTenantBranding } from '@/providers/tenant-branding-provider';
 
 const MIN_VISIBLE_MS = 900;
@@ -45,7 +46,7 @@ export function PwaSplashScreen() {
       }`}
     >
       {tenant?.logoUrl ? (
-        <img src={tenant.logoUrl} alt={tenant?.orgName ?? 'Codevertex POS'} className="max-h-24 max-w-[60%] object-contain" />
+        <MediaImage src={tenant.logoUrl} alt={tenant?.orgName ?? 'Codevertex POS'} displayWidth={320} loading="eager" className="max-h-24 max-w-[60%] object-contain" />
       ) : (
         <p className="text-2xl font-black uppercase tracking-tight text-foreground">Codevertex POS</p>
       )}

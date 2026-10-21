@@ -6,8 +6,11 @@
 // Keeps product/menu images, logos and covers on the device so screens paint from cache instead
 // of re-downloading from the API pod on every view (Cloudflare then serves the rest from the edge).
 //
-//   - Which requests: GET images from our API hosts' /media/ tree, and Next's same-origin image
-//     optimizer (/_next/image). Everything else is left to sw.js.
+//   - Which requests: GET images from the shared object storage host (media.codevertexafrica.com,
+//     including its Cloudflare-resized /cdn-cgi/image/ variants), our API hosts' /media/ tree, and
+//     Next's same-origin image optimizer (/_next/image). Everything else is left to sw.js.
+//     Private files never come from these hosts (they are presigned links on the storage
+//     endpoint), and anything marked no-store or private is skipped anyway.
 //   - Cross-origin <img> loads are opaque, and browsers pad each opaque cache entry by megabytes
 //     of quota, so the worker re-fetches media in CORS mode (the APIs send
 //     Access-Control-Allow-Origin: * on /media) and only ever stores non-opaque 200 responses.
@@ -22,11 +25,14 @@
 const MEDIA_CACHE = 'cv-media-v1';
 const MEDIA_MAX_ENTRIES = 400;
 const MEDIA_HOST = /(^|\.)codevertexafrica\.com$/;
+const STORAGE_HOST = 'media.codevertexafrica.com';
 
 function isMediaRequest(request, url) {
   if (request.method !== 'GET') return false;
   if (url.origin === self.location.origin) return url.pathname === '/_next/image';
-  return MEDIA_HOST.test(url.hostname) && url.pathname.startsWith('/media/');
+  if (url.hostname === STORAGE_HOST) return true;
+  return MEDIA_HOST.test(url.hostname) &&
+    (url.pathname.startsWith('/media/') || url.pathname.startsWith('/cdn-cgi/image/'));
 }
 
 function storable(response) {

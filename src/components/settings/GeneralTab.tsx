@@ -12,6 +12,7 @@ import { SUPPORTED_CURRENCIES, CURRENCY_META } from '@/lib/utils';
 import { convertCurrency } from '@/lib/api/currency';
 import { useAuthStore } from '@/store/auth';
 import { CurrencyChangeConfirmModal } from '@bengo-hub/shared-ui-lib';
+import { MediaImage } from '@bengo-hub/shared-ui-lib/media';
 import { inputClass, labelClass } from './shared';
 import { DEFAULT_NO_RESTOCK_REASONS, RETURN_REASON_OPTIONS } from '@/lib/returns-policy';
 
@@ -116,7 +117,7 @@ export function GeneralTab() {
           <CardContent>
             <div className="flex items-center gap-4 flex-wrap">
               {tenant.logoUrl && (
-                <img src={tenant.logoUrl} alt={tenant.name ?? ''} className="h-10 object-contain rounded" />
+                <MediaImage src={tenant.logoUrl} alt={tenant.name ?? ''} displayWidth={160} className="h-10 object-contain rounded" />
               )}
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold">{tenant.orgName ?? tenant.name}</p>

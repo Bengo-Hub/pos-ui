@@ -1,5 +1,6 @@
 "use client";
 
+import { mediaImageLoaderFor } from "@bengo-hub/shared-ui-lib/media";
 import Image from "next/image";
 import { ImageOff } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -70,6 +71,8 @@ export function ProductImage({
 
   const imageProps = {
     src: resolved,
+    // Zone images are resized by Cloudflare at the edge; anything else keeps Next's optimizer.
+    loader: mediaImageLoaderFor(resolved),
     alt,
     onLoad: () => setIsLoaded(true),
     onError: () => setLoadError(true),

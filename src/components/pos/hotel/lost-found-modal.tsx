@@ -12,6 +12,7 @@ import { toast } from 'sonner';
 import { useCreateLostFoundItem, useUploadLostFoundPhoto } from '@/hooks/useHotel';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { resolveMediaUrl } from '@/lib/screensaver';
+import { MediaImage } from '@bengo-hub/shared-ui-lib/media';
 
 const CATEGORIES: { value: string; label: string }[] = [
   { value: 'electronics', label: 'Electronics' },
@@ -155,7 +156,7 @@ export function LostFoundModal({ outletId, roomId, roomGuestId, roomLabel, open,
               <div className="mt-2 grid grid-cols-4 gap-2">
                 {photoUrls.map((url) => (
                   <div key={url} className="relative group">
-                    <img src={resolveMediaUrl(url)} alt="Found item" className="h-16 w-16 rounded-lg object-cover border border-border" />
+                    <MediaImage src={resolveMediaUrl(url)} displayWidth={64} fit="cover" aspect={1} alt="Found item" className="h-16 w-16 rounded-lg object-cover border border-border" />
                     <button
                       type="button"
                       aria-label="Remove photo"

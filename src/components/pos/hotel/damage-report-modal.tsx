@@ -14,6 +14,7 @@ import { toast } from 'sonner';
 import { useCreateDamageReport, useUploadDamageEvidence } from '@/hooks/useHotel';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { resolveMediaUrl } from '@/lib/screensaver';
+import { MediaImage } from '@bengo-hub/shared-ui-lib/media';
 
 interface DamageReportModalProps {
   roomId: string;
@@ -136,7 +137,7 @@ export function DamageReportModal({ roomId, roomNumber, open, onClose }: DamageR
               <div className="mt-2 grid grid-cols-4 gap-2">
                 {evidenceUrls.map((url) => (
                   <div key={url} className="relative group">
-                    <img src={resolveMediaUrl(url)} alt="Damage evidence" className="h-16 w-16 rounded-lg object-cover border border-border" />
+                    <MediaImage src={resolveMediaUrl(url)} displayWidth={64} fit="cover" aspect={1} alt="Damage evidence" className="h-16 w-16 rounded-lg object-cover border border-border" />
                     <button
                       type="button"
                       aria-label="Remove photo"
