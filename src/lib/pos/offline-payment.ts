@@ -9,6 +9,7 @@
  */
 
 import { savePendingPayment, getOfflineOrderByLocalId } from '@/lib/db/pos-db';
+import { useAuthStore } from '@/store/auth';
 
 export interface QueueOfflinePaymentArgs {
   orderId: string;
@@ -31,6 +32,7 @@ export async function queueOfflinePayment({
   await savePendingPayment({
     server_order_id: localOrder ? undefined : orderId,
     local_order_id: localOrder ? orderId : undefined,
+    collected_by_user_id: useAuthStore.getState().user?.id,
     tender_id: tenderId,
     tender_method: method,
     amount,

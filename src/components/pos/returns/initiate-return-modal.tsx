@@ -205,13 +205,17 @@ export function InitiateReturnModal({
       const cached = await getKV<{ data: any[] }>(key);
       const q = query.trim().toLowerCase();
       const rows = (cached?.data ?? []).filter((o: any) =>
-        String(o.order_number ?? '').toLowerCase().includes(q),
+        String(o.order_number ?? '').toLowerCase().includes(q)
+        || String(o.customer_name ?? '').toLowerCase().includes(q)
+        || String(o.customer_phone ?? '').toLowerCase().includes(q),
       );
       return rows.slice(0, 8).map(toOption);
     }
+    // q matches the invoice/receipt number OR the customer's name or phone (pos-api
+    // allSalesOrderFilters).
     const res = await apiClient.get<{ data: any[] }>(
       `/api/v1/${tenantID}/pos/orders`,
-      { order_number: query, limit: 8 } as any,
+      { q: query.trim(), limit: 8 } as any,
     );
     const rows: any[] = (res as any)?.data ?? [];
     return rows.map(toOption);
@@ -329,8 +333,8 @@ export function InitiateReturnModal({
                 value={comboValue}
                 onChange={handleComboChange}
                 onRemoteSearch={searchOrders}
-                placeholder={loadingInitial ? 'Loading sale…' : 'Search by order # or receipt number…'}
-                searchPlaceholder="Type order # or receipt number…"
+                placeholder={loadingInitial ? 'Loading sale…' : 'Search by order #, receipt no. or customer…'}
+                searchPlaceholder="Type order #, receipt no., customer name or phone…"
                 emptyText="No matching sales"
                 disabled={loadingInitial}
                 clearable

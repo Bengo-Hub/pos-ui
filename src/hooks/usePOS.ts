@@ -17,6 +17,7 @@ import {
   type OfflineOrderLine,
 } from '@/lib/db/pos-db';
 import { useEffectiveOnline } from '@/lib/connectivity';
+import { deviceSnapshot } from '@/lib/device-identity';
 import { v4 as uuidv4 } from 'uuid';
 
 // Get tenant ID from auth store
@@ -1583,7 +1584,14 @@ export function useCreateOrder() {
         }));
         const subtotal = lines.reduce((s, l) => s + l.total_price, 0);
         const totalAmount = Math.max(0, subtotal - (data.discountAmount ?? 0));
+        const cashier = useAuthStore.getState().user;
         await saveDraftOrder({
+          rung_up_by_user_id: cashier?.id,
+          rung_up_by_name: cashier?.fullName,
+          rung_up_device: deviceSnapshot(),
+          order_subtype: data.orderSubtype,
+          customer_name: data.customerName,
+          customer_phone: data.customerPhone,
           local_id: localId,
           tenant_id: tenantID,
           tenant_slug: tenantSlug,

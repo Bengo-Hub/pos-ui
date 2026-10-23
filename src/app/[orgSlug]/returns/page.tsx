@@ -9,25 +9,29 @@ import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api/client';
 import { useMemo, useState, useEffect } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { Plus, RefreshCw, RotateCcw } from 'lucide-react';
+import { Plus, RefreshCw, RotateCcw, Search } from 'lucide-react';
+import { useDebounced } from '@/hooks/use-debounced';
 import { cn } from '@/lib/utils';
 import { DataTable } from '@bengo-hub/shared-ui-lib/data-table';
 import { DateRangePicker, type DateRange } from '@/components/ui/date-range-picker';
 import { buildReturnsColumns, type ReturnItem } from './returns-columns';
 
-function useReturns(status: string, from?: string, to?: string) {
+function useReturns(status: string, from?: string, to?: string, q?: string) {
   const user = useAuthStore((s) => s.user);
   const tenantID = user?.tenant_id ?? '';
   return useQuery({
-    queryKey: ['returns', tenantID, status, from, to],
+    queryKey: ['returns', tenantID, status, from, to, q],
     queryFn: () =>
       apiClient.get<{ data: ReturnItem[] }>(`/api/v1/${tenantID}/pos/returns`, {
         ...(status ? { status } : {}),
         ...(from ? { from } : {}),
         ...(to ? { to } : {}),
+        // Return number, or the sale's invoice number, customer name or phone.
+        ...(q ? { q } : {}),
       }),
     enabled: !!tenantID,
     staleTime: 60_000,
+    placeholderData: (prev) => prev,
   });
 }
 
@@ -51,7 +55,11 @@ function ReturnsPage() {
   const [deepLinkOrderNumber, setDeepLinkOrderNumber] = useState('');
   const [customerModal, setCustomerModal] = useState<{ name?: string | null; phone: string } | null>(null);
   const [range, setRange] = useState<DateRange>({ from: '', to: '' });
-  const { data, isLoading, refetch, isFetching } = useReturns(statusFilter, range.from || undefined, range.to || undefined);
+  const [search, setSearch] = useState('');
+  const debouncedSearch = useDebounced(search.trim(), 350);
+  const { data, isLoading, refetch, isFetching } = useReturns(
+    statusFilter, range.from || undefined, range.to || undefined, debouncedSearch.length >= 2 ? debouncedSearch : undefined,
+  );
   const returns = data?.data ?? [];
   const params = useParams<{ orgSlug: string }>();
   const router = useRouter();
@@ -130,7 +138,20 @@ function ReturnsPage() {
             </button>
           ))}
         </div>
-        <DateRangePicker value={range} onChange={setRange} className="w-60" />
+        <div className="flex flex-wrap gap-2 items-center">
+          <div className="relative">
+            <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+            <input
+              type="search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Customer name, phone, order or return no."
+              aria-label="Search returns"
+              className="h-10 w-72 max-w-full pl-9 pr-3 rounded-xl bg-card border border-border text-sm focus:ring-1 focus:ring-primary outline-none"
+            />
+          </div>
+          <DateRangePicker value={range} onChange={setRange} className="w-60" />
+        </div>
       </div>
 
       <DataTable<ReturnItem>
@@ -144,7 +165,7 @@ function ReturnsPage() {
         emptyState={
           <div className="flex flex-col items-center justify-center gap-2 text-muted-foreground">
             <RotateCcw className="h-10 w-10 opacity-30" />
-            <p className="font-medium">No return requests found</p>
+            <p className="font-medium">{debouncedSearch ? `No returns match "${debouncedSearch}"` : 'No return requests found'}</p>
           </div>
         }
       />

@@ -8,16 +8,7 @@ import {
 } from '@/hooks/usePOS';
 import { getCachedCatalog, cacheCatalogItems, type OfflineCatalogItem } from '@/lib/db/pos-db';
 import { appendSyncLog } from '@/lib/db/kv-cache';
-
-/** Debounce a fast-changing value (search input) so we don't refetch on every keystroke. */
-function useDebounced<T>(value: T, delayMs: number): T {
-  const [debounced, setDebounced] = useState(value);
-  useEffect(() => {
-    const t = setTimeout(() => setDebounced(value), delayMs);
-    return () => clearTimeout(t);
-  }, [value, delayMs]);
-  return debounced;
-}
+import { useDebounced } from '@/hooks/use-debounced';
 
 type ReconcileStatus = 'in-sync' | 'mismatched' | 'not-cached';
 

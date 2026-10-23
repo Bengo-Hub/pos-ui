@@ -27,14 +27,14 @@ gating over one shared page.
 | Tab | Purpose | Gate |
 |-----|---------|------|
 | Team | Staff, base roles, **extra (additive) roles** — incl. making a waiter a "super waiter" (floor_supervisor) | `pos.users.*` |
-| Loss Prevention | Audit trail + per-cashier exceptions | `pos.config.manage` / `pos.reports.*` |
+| Loss Prevention | Per-staff exception report (incl. failed PINs, offline sales synced under another login, and the devices/IPs each person signed in from) + audit trail with device, IP and order columns, filterable by action, staff, device or IP, and order no. | `pos.config.manage` / `pos.reports.*` |
 | Backups | Daily automatic backups + retention | `pos.config.*` |
 
 ### Platform (owner / account)
 | Tab | Purpose | Gate |
 |-----|---------|------|
 | Subscription | Plan, limits, features (view only) | `pos.config.*` |
-| Devices | POS terminals linked to the outlet (view only) | `pos.config.*` |
+| Devices | Name this browser ("This device"), plus the POS terminals linked to the outlet and the browsers that signed in on each | `pos.config.*` |
 | Platform | Admin / tenant management | platform-owner only |
 
 ## Use-Case Modules (surfaced only for a matching outlet)

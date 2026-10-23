@@ -121,6 +121,16 @@ export interface OfflineOrder extends SyncState {
   total_amount: number;
   lines: OfflineOrderLine[];
   created_at: string; // device-clock time the sale was rung up (becomes offline_created_at server-side)
+  // Who rang the sale up and on which browser, captured at ring-up. The sync may run hours later
+  // under a different login, so pos-api credits the sale from these (when the user id is an
+  // active staff member) instead of whoever is logged in at sync time. Absent on sales queued
+  // by older builds.
+  rung_up_by_user_id?: string;
+  rung_up_by_name?: string;
+  rung_up_device?: { client_id: string; device_name?: string; user_agent?: string };
+  order_subtype?: string;
+  customer_name?: string;
+  customer_phone?: string;
   server_order_id?: string; // filled after successful sync
   // Cash payment info — stored together so sync worker can record payment after creating order
   pending_payment?: {
@@ -149,6 +159,9 @@ export interface OfflinePayment extends SyncState {
   // offline cash-with-change sale's receipt still shows "Tendered"/"Change" (see pos-api's
   // cashPaymentData). Undefined for every other tender.
   amount_tendered?: number;
+  // Who took the payment, replayed as offlineCollectedBy so the cash counts in their shift
+  // (pos-api honours it only for an offline order credited to that same person).
+  collected_by_user_id?: string;
   tenant_slug: string;
   tenant_id?: string;
   created_at: string;

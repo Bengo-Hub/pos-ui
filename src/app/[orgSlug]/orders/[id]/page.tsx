@@ -15,6 +15,8 @@ import { useParams, useRouter } from 'next/navigation';
 import { formatCurrency } from '@/lib/utils';
 import { DataTable } from '@bengo-hub/shared-ui-lib/data-table';
 import { buildOrderLineColumns } from './order-line-columns';
+import { OrderOriginCard } from './order-origin-card';
+import { asTrail, deviceLabel } from '@/lib/client-trail';
 
 export default function OrderDetailPage() {
   const params = useParams();
@@ -183,22 +185,31 @@ export default function OrderDetailPage() {
                 <h2 className="font-bold text-base">Payments</h2>
               </div>
               <div className="divide-y divide-border">
-                {payments.map((p: any, i: number) => (
+                {payments.map((p: any, i: number) => {
+                  // Payments carry the method in payment_data.method and their time in occurred_at.
+                  const method: string = p.payment_data?.method ?? p.payment_method ?? '';
+                  const at: string | undefined = p.occurred_at ?? p.created_at;
+                  const via = deviceLabel(asTrail(p.payment_data?.client));
+                  return (
                   <div key={p.id ?? i} className="flex items-center justify-between gap-3 px-5 py-3 text-sm">
                     <div className="min-w-0">
-                      <p className="capitalize font-medium truncate">{(p.payment_method ?? '').replace(/_/g, ' ') || '—'}</p>
+                      <p className="capitalize font-medium truncate">{method.replace(/_/g, ' ') || '—'}</p>
                       <p className="text-xs text-muted-foreground">
-                        {p.created_at ? new Date(p.created_at).toLocaleString() : '—'}
+                        {at ? new Date(at).toLocaleString() : '—'}
                       </p>
+                      {via && <p className="text-xs text-muted-foreground truncate">via {via}</p>}
                     </div>
                     <span className="font-mono font-semibold text-green-600 shrink-0">
                       {fmt(p.amount ?? 0)}
                     </span>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
+
+          <OrderOriginCard metadata={(order as any).metadata} />
         </aside>
       </div>
     </div>

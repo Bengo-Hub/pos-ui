@@ -1,6 +1,7 @@
 import axios, { AxiosInstance, AxiosResponse, InternalAxiosRequestConfig } from 'axios';
 import { isSubscriptionError } from '@/lib/api/error-handler';
 import { isNetworkShapedError, reportNetworkFailure, reportNetworkSuccess } from '@/lib/connectivity';
+import { deviceIdentityHeaders } from '@/lib/device-identity';
 
 declare module 'axios' {
   export interface AxiosRequestConfig {
@@ -35,6 +36,10 @@ class ApiClient {
     private handleRequest = (config: InternalAxiosRequestConfig) => {
         if (this.accessToken) {
             config.headers.Authorization = `Bearer ${this.accessToken}`;
+        }
+        // Which browser this is (client id + optional device name), for the audit trail.
+        for (const [k, v] of Object.entries(deviceIdentityHeaders())) {
+            config.headers[k] = v;
         }
         if (!this.platformOwner) {
             if (this.tenantId) {
@@ -209,7 +214,7 @@ class ApiClient {
       if (this.tenantSlug) h['X-Tenant-Slug'] = this.tenantSlug;
     }
     if (this.outletId) h['X-Outlet-ID'] = this.outletId;
-    return h;
+    return { ...h, ...deviceIdentityHeaders() };
   }
 
   public get<T>(url: string, params?: any, config?: { suppressErrorToast?: boolean; timeout?: number }): Promise<T> {

@@ -203,6 +203,20 @@ async function syncOrders(tenantID: string): Promise<number> {
           lines: order.lines,
           client_reference: order.local_id,
           offline_created_at: order.created_at,
+          // Credit the sale to whoever rang it up, not whoever is logged in now (pos-api
+          // verifies the id is an active staff member and records both).
+          offline: order.rung_up_by_user_id
+            ? {
+                rung_up_by_user_id: order.rung_up_by_user_id,
+                rung_up_by_name: order.rung_up_by_name,
+                client_id: order.rung_up_device?.client_id,
+                device_name: order.rung_up_device?.device_name,
+                user_agent: order.rung_up_device?.user_agent,
+              }
+            : undefined,
+          order_subtype: order.order_subtype,
+          customer_name: order.customer_name,
+          customer_phone: order.customer_phone,
         },
         idem(order.local_id),
       );
@@ -221,6 +235,7 @@ async function syncOrders(tenantID: string): Promise<number> {
               amount: order.pending_payment.amount,
               currency: order.currency,
               externalRef: order.pending_payment.external_ref,
+              offlineCollectedBy: order.rung_up_by_user_id,
             },
             idem(`pay-${order.local_id}`),
           );
@@ -262,6 +277,7 @@ async function syncPayments(tenantID: string): Promise<number> {
           currency: payment.currency,
           externalRef: payment.external_ref,
           amountTendered: payment.amount_tendered,
+          offlineCollectedBy: payment.collected_by_user_id,
         },
         idem(`pay-${payment.local_order_id ?? orderId}-${payment.tender_method}-${payment.external_ref ?? payment.amount}`),
       );
