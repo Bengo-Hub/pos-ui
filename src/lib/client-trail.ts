@@ -40,10 +40,43 @@ export function kindLabel(kind?: string): string {
   return (kind && KIND_LABEL[kind]) || 'Unknown device';
 }
 
-/** "Chrome 138 on Android" */
+// Most specific token first: Edge, Opera and Samsung Internet also claim "Chrome", and every
+// Chromium browser also claims "Safari". Mirrors pos-api clientinfo.uaBrowser.
+const BROWSER_TOKENS: [RegExp, string][] = [
+  [/Edg(?:A|iOS)?\/(\d+)/, 'Edge'], [/OPR\/(\d+)/, 'Opera'], [/SamsungBrowser\/(\d+)/, 'Samsung Internet'],
+  [/(?:Firefox|FxiOS)\/(\d+)/, 'Firefox'], [/(?:CriOS|Chrome)\/(\d+)/, 'Chrome'],
+];
+
+/**
+ * Short app name for a raw user agent: "Mozilla/5.0 (Windows NT 10.0; ...) ... Edg/156.0.0.0"
+ * becomes { browser: "Edge 156", os: "Windows" }. Used only when the server-parsed fields are
+ * missing; the raw string itself is never shown.
+ */
+export function parseUserAgent(ua?: string): { browser?: string; os?: string } {
+  if (!ua) return {};
+  let browser: string | undefined;
+  for (const [re, name] of BROWSER_TOKENS) {
+    const m = ua.match(re);
+    if (m) { browser = `${name} ${m[1]}`; break; }
+  }
+  if (!browser && /Safari\//.test(ua)) {
+    const v = ua.match(/Version\/(\d+)/);
+    browser = v ? `Safari ${v[1]}` : 'Safari';
+  }
+  const os = /Android/.test(ua) ? 'Android'
+    : /iPhone|iPad|iPod/.test(ua) ? 'iOS'
+    : /Windows/.test(ua) ? 'Windows'
+    : /CrOS/.test(ua) ? 'ChromeOS'
+    : /Macintosh|Mac OS X/.test(ua) ? 'macOS'
+    : /Linux|X11/.test(ua) ? 'Linux' : undefined;
+  return { browser, os };
+}
+
+/** "Edge 156 on Windows" */
 export function browserLabel(t?: ClientTrail | null): string {
   if (!t) return '';
-  return [t.browser, t.os].filter(Boolean).join(' on ');
+  const parsed = t.browser && t.os ? {} : parseUserAgent(t.user_agent);
+  return [t.browser ?? parsed.browser, t.os ?? parsed.os].filter(Boolean).join(' on ');
 }
 
 /** The best short name: the set device name, else "Phone · Chrome 155 on Android". */

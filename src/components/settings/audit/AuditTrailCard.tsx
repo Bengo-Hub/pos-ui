@@ -83,7 +83,7 @@ export function AuditTrailCard({ rows, total, loading, onPickClient }: Props) {
                         </td>
                         <td className="px-3 py-3 text-xs">
                           {c ? (
-                            <button className="flex items-center gap-1.5 hover:underline text-left" title={c.user_agent}
+                            <button className="flex items-center gap-1.5 hover:underline text-left" title={browserLabel(c) || undefined}
                               onClick={(ev) => { ev.stopPropagation(); onPickClient(c.client_id, c.client_id ? undefined : c.ip); }}>
                               <KindIcon kind={c.device_kind} className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                               <span className="truncate max-w-48">{deviceLabel(c) || 'Unknown device'}</span>
@@ -116,7 +116,6 @@ export function AuditTrailCard({ rows, total, loading, onPickClient }: Props) {
                                     {browserLabel(c) && <p className="text-muted-foreground">{browserLabel(c)}</p>}
                                     {c.client_id && <p className="text-muted-foreground font-mono">Browser ID {shortClientId(c.client_id)}</p>}
                                     {c.ip && <p className="text-muted-foreground font-mono">IP {c.ip}</p>}
-                                    {c.user_agent && <p className="text-muted-foreground break-all">{c.user_agent}</p>}
                                   </>
                                 ) : <p className="text-muted-foreground">Not recorded (entry predates device tracking).</p>}
                                 {e.reason && <p className="pt-1"><span className="text-muted-foreground">Reason:</span> {e.reason}</p>}

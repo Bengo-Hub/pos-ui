@@ -94,7 +94,7 @@ function ClientRow({ c, isThis }: { c: DeviceClient; isThis: boolean }) {
           <span className="text-sm font-medium truncate">{deviceLabel(c) || 'Unknown device'}</span>
           {isThis && <Badge variant="success">This device</Badge>}
         </div>
-        <p className="text-xs text-muted-foreground truncate" title={c.user_agent}>
+        <p className="text-xs text-muted-foreground truncate">
           {[c.device_name ? `${kindLabel(c.device_kind)} · ${browserLabel(c)}` : null, c.ip ? `IP ${c.ip}` : null]
             .filter(Boolean).join(' · ')}
         </p>
