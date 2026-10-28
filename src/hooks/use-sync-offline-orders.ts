@@ -25,9 +25,6 @@ import {
   getPendingSyncDrawerCloses,
   markDrawerCloseSynced,
   markDrawerCloseSyncFailed,
-  getPendingETIMSSubmissions,
-  markETIMSSubmissionSynced,
-  markETIMSSubmissionFailed,
   resolveServerOrderId,
   resolveServerDrawerId,
 } from '@/lib/db/pos-db';
@@ -75,8 +72,7 @@ export function useSyncOfflineOrders() {
         (await syncPayments(tenantID)) +
         (await syncVoids(tenantID)) +
         (await syncReturns(tenantID)) +
-        (await syncDrawerCloses(tenantID)) +
-        (await syncETIMSQueue(tenantID));
+        (await syncDrawerCloses(tenantID));
 
       if (synced > 0) {
         qc.invalidateQueries({ queryKey: ['pos-orders'] });
@@ -148,7 +144,9 @@ function isTerminal(err: any): boolean {
     reportAuthSyncBlocked();
     return false;
   }
-  return typeof s === 'number' && s >= 400 && s < 500 && s !== 408 && s !== 429;
+  // 409 means the same Idempotency-Key is still being processed (or was left mid-request and is
+  // reclaimed by pos-api after two minutes); retrying later replays the stored result.
+  return typeof s === 'number' && s >= 400 && s < 500 && s !== 408 && s !== 409 && s !== 429;
 }
 
 function errMsg(err: any): string {
@@ -354,26 +352,6 @@ async function syncReturns(tenantID: string): Promise<number> {
     }
   }
   return attempted;
-}
-
-// ── eTIMS queue sync ───────────────────────────────────────────────────────────
-
-async function syncETIMSQueue(tenantID: string): Promise<number> {
-  const rows = await getPendingETIMSSubmissions();
-  for (const sub of rows) {
-    try {
-      await apiClient.post(
-        `/api/v1/${tenantID}/treasury/etims/queue`,
-        { order_id: sub.order_id, invoice_data: sub.invoice_data },
-      );
-      await markETIMSSubmissionSynced(sub.id!);
-      logPush('etims', `Order ${sub.order_id}`);
-    } catch (err: any) {
-      await markETIMSSubmissionFailed(sub.id!, errMsg(err));
-      logPush('etims', `Order ${sub.order_id}`, err);
-    }
-  }
-  return rows.length;
 }
 
 // ── Drawer close sync ──────────────────────────────────────────────────────────

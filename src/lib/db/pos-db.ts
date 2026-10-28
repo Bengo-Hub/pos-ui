@@ -724,22 +724,6 @@ export async function getSnapshot<T = any>(key: string): Promise<T | undefined> 
   return row?.data as T | undefined;
 }
 
-// ── eTIMS queue helpers ────────────────────────────────────────────────────────
-
-export async function queueETIMSSubmission(
-  submission: Omit<OfflineETIMSSubmission, 'id'>
-): Promise<number> {
-  return posDB.etimsQueue.add(submission);
-}
-
-export async function getPendingETIMSSubmissions(): Promise<OfflineETIMSSubmission[]> {
-  return (await posDB.etimsQueue.toArray()).filter((s) => !s.synced);
-}
-
-export async function markETIMSSubmissionSynced(id: number): Promise<void> {
-  await posDB.etimsQueue.update(id, { synced: true, status: 'submitted', error: undefined });
-}
-
-export async function markETIMSSubmissionFailed(id: number, error: string): Promise<void> {
-  await posDB.etimsQueue.update(id, { status: 'failed', error });
-}
+// The etimsQueue table above stays in the schema versions (removing a table from a Dexie version
+// breaks existing installs) but nothing writes to it: sales are fiscalised by treasury once the
+// order syncs, so the browser never queues eTIMS submissions itself.
