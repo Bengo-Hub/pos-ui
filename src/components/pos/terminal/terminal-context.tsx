@@ -59,6 +59,7 @@ import { chitLabelFor } from '@/lib/kds/board';
 import { selectedFromLoyalty, emptyDeliveryInfo, type DeliveryInfo, type SaleSessionSnapshot } from '@/lib/pos/sale-session';
 import type { LoyaltyRedeemInfo } from '@/lib/pos/terminal-actions';
 import { isFractionalUnit, normalizeQuantity } from '@/lib/pos/units';
+import { findVariantByScanCode, variantLineItem, variantLineName } from '@/lib/pos/variants';
 import { P } from '@/lib/rbac/permissions';
 import { terminalConfigFor, type TerminalConfig } from '@/lib/use-case-config';
 import { useAuthStore } from '@/store/auth';
@@ -74,6 +75,9 @@ export interface ItemVariant {
   price: number;
   attributes?: Record<string, string>;
   barcode?: string;
+  /** The variant's own on-hand stock (display only; stock never blocks a sale). */
+  onHand?: number;
+  imageUrl?: string;
 }
 
 export interface MenuItem {
@@ -898,6 +902,8 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
               price: v.price ?? 0,
               attributes: v.attributes ?? undefined,
               barcode: v.barcode ?? undefined,
+              onHand: typeof v.on_hand === 'number' ? v.on_hand : undefined,
+              imageUrl: v.image_url ?? undefined,
             }))
         : undefined,
       image: item.image_url,
@@ -1162,21 +1168,11 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
     [addItemToCart]
   );
 
-  // Variant chosen from the picker: build a variant-flavored line (variant price/sku/barcode +
-  // "<item> — <variant>" name) and either open modifiers for it or add it straight to the cart.
+  // Variant chosen from the picker or scanned: the line is the variant's own child item
+  // (lib/pos/variants.ts variantLineItem), then modifiers open for it or it goes to the cart.
   const handleVariantChosen = useCallback(
     (item: MenuItem, variant: ItemVariant, qty = 1) => {
-      const variantItem: MenuItem = {
-        ...item,
-        // Use a composite id so distinct variants of the same item are separate cart lines.
-        id: `${item.id}::${variant.id}`,
-        name: `${item.name} — ${variant.name}`,
-        sku: variant.sku || item.sku,
-        barcode: variant.barcode,
-        price: variant.price,
-        hasVariants: false,
-        variants: undefined,
-      };
+      const variantItem = variantLineItem(item, variant);
       setVariantItem(null);
       if (variantItem.modifierGroups?.length) {
         setModifierItem(variantItem);
@@ -1248,9 +1244,13 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
       if (e.key === 'Enter' && barcodeBuffer.length >= 4) {
         const match = findByScanCode(menuItems, barcodeBuffer);
+        const variantMatch = match ? undefined : findVariantByScanCode(menuItems, barcodeBuffer);
         if (match) {
           handleItemTap(match);
           toast.success(`Scanned: ${match.name}`);
+        } else if (variantMatch) {
+          handleVariantChosen(variantMatch.item, variantMatch.variant);
+          toast.success(`Scanned: ${variantLineName(variantMatch.item, variantMatch.variant)}`);
         } else {
           toast.error(`No item found for barcode: ${barcodeBuffer}`);
         }
@@ -1275,7 +1275,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
       window.removeEventListener('keydown', handleKeyDown);
       clearTimeout(timer);
     };
-  }, [barcodeBuffer, menuItems, handleItemTap, cfg.keyboardCheckout]);
+  }, [barcodeBuffer, menuItems, handleItemTap, handleVariantChosen, cfg.keyboardCheckout]);
 
   // Handle Enter in the search box to attempt barcode lookup
   const handleSearchKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -1287,9 +1287,18 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
         handleItemTap(match);
         toast.success(`Scanned: ${match.name}`);
         e.preventDefault();
+        return;
+      }
+      // A variant's own barcode or SKU adds that exact size/colour.
+      const variantMatch = findVariantByScanCode(menuItems, searchQuery);
+      if (variantMatch) {
+        handleSearchChange('');
+        handleVariantChosen(variantMatch.item, variantMatch.variant);
+        toast.success(`Scanned: ${variantLineName(variantMatch.item, variantMatch.variant)}`);
+        e.preventDefault();
       }
     }
-  }, [searchQuery, menuItems, handleItemTap]);
+  }, [searchQuery, menuItems, handleItemTap, handleVariantChosen, handleSearchChange]);
 
   // ─── Cart Operations ────────────────────────────────────────────────────
 

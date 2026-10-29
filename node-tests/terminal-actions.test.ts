@@ -12,10 +12,13 @@ test('no gateways: only cash, PDQ and split (nothing treasury-backed flashes on)
   assert.deepEqual(keys({}), ['cash', 'card_pdq', 'split']);
 });
 
-test('M-Pesa on PayHero (urban-loft): STK push and offline paybill, no Daraja C2B', () => {
-  const k = keys({ mpesa: true, mpesa_c2b: false, payhero_offline: true });
+// Since aec5139 the paybill is one of PayHero's rails inside a single PayHero tender, not a
+// separate "paybill_offline" button.
+test('M-Pesa on PayHero (urban-loft): STK push and one PayHero tender carrying the paybill, no Daraja C2B', () => {
+  const k = keys({ mpesa: true, mpesa_c2b: false, payhero: true, payhero_methods: ['mpesa', 'payhero_offline'] });
   assert.ok(k.includes('mpesa_stk'));
-  assert.ok(k.includes('paybill_offline'));
+  assert.ok(k.includes('payhero'));
+  assert.ok(!k.includes('paybill_offline'));
   assert.ok(!k.includes('mpesa_c2b'));
 });
 

@@ -43,3 +43,16 @@ This register is the **retail** use-case surface. Hide hospitality controls (cou
 kitchen-order unless the outlet enables it), show only retail product categories/filters, and source
 category/tax/UOM options from the retail taxonomy. Driven by per-outlet `useCaseConfig` (see
 `inventory-service/inventory-ui/docs/use-case-pages.md`). Gate every action as `permission AND use_case`.
+## Variants: sizes and colours (2026-10-29)
+Each variant is its own inventory item (child), created in inventory-ui's matrix editor, which is
+the only use-case gate (`CatalogScope.showVariants`: retail, manufacturing, general, wholesale).
+The till stays data-driven: a product with `variants[]` opens the picker, one with modifier groups
+opens modifiers, so there is no separate terminal flag to keep in sync.
+- Picker (`parts/variant-picker-modal.tsx`): two axes show as a colour by size grid with each
+  cell's price and stock; other shapes show one row of choices per axis. Stock is shown, never
+  enforced.
+- The cart line is the child item (`lib/pos/variants.ts` `variantLineItem`): the child id as
+  `catalog_item_id` (the old `"<item>::<variant>"` id got a 400 from pos-api), the child's SKU,
+  barcode, price, image and stock, and no parent price limits (pos-api enforces the child's own).
+- Scanning or typing a variant's barcode or SKU adds that exact variant
+  (`findVariantByScanCode`); pos-api stamps `metadata.variant` on the line server side.
