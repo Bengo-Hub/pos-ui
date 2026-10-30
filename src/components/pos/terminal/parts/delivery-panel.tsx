@@ -117,7 +117,10 @@ export function DeliveryPanel() {
             )}
             {notServiceable && (
               <p className="mt-1 flex items-center gap-1 text-xs text-destructive">
-                <AlertTriangle className="h-3.5 w-3.5" /> This area is outside the delivery areas.
+                <AlertTriangle className="h-3.5 w-3.5" />
+                {quote.data?.reason === 'at_outlet'
+                  ? 'This is the outlet itself. Ring it up as a takeaway instead.'
+                  : 'This area is outside the delivery areas.'}
               </p>
             )}
           </div>
