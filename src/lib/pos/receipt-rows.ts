@@ -69,6 +69,17 @@ const PROVIDER_FOOTER_FALLBACK = {
   contact: 'www.codevertexafrica.com  ·  info@codevertexafrica.com  ·  +254 742 201 368',
 };
 
+/** The "VAT included" rows printed under the total: one per rate, on what the customer paid, from
+ *  pos-api's vat_summary (the figures treasury books and KRA receives). Mirrors pos-api's
+ *  layouts.vatSummaryRows; only for an outlet that charges VAT. */
+export function vatSummaryRows(receipt: ReceiptData): { label: string; amount: number }[] {
+  if (receipt.vat_enabled === false) return [];
+  return (receipt.vat_summary ?? []).map((r) => ({
+    label: `VAT ${r.rate}% on ${r.taxable.toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+    amount: r.tax,
+  }));
+}
+
 /** Builds the ordered receipt body: items → totals → payment → eTIMS → HOW TO PAY → served-by →
  *  footer. Excludes the top branding block (logo/tenant/outlet name/address), which callers render
  *  directly from plain string props — those don't need derivation and carry no drift risk. */
@@ -126,6 +137,9 @@ export function buildReceiptRows(receipt: ReceiptData): ReceiptRow[] {
   // "REFUND TOTAL" on a return/refund document, "TOTAL" on a sale — mirrors pos-api's
   // layouts.totalLabel so the client-printed slip matches the server HTML/PDF exactly.
   rows.push({ kind: 'total', label: receipt.is_return ? 'REFUND TOTAL' : 'TOTAL', amount: receipt.total_amount });
+  for (const v of vatSummaryRows(receipt)) {
+    rows.push({ kind: 'money', label: v.label, amount: v.amount });
+  }
   // Payment method — with the settle date beside it ("cash (14-07-2026)") when known.
   const methodLabel = (receipt.payment_method ?? 'cash').replace(/_/g, ' ');
   const paymentDate = receipt.payment_date

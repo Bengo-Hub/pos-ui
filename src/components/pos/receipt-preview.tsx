@@ -114,6 +114,8 @@ export interface ReceiptData {
   receipt_footer?: string;
   vat_enabled?: boolean;
   vat_rate?: number;
+  /** VAT in the sale by rate, on what was paid (pos-api ReceiptView.VatSummary). */
+  vat_summary?: { rate: number; taxable: number; tax: number }[];
   paper_width?: string; // '58mm' | '80mm'
   // payment display (populated from OutletSetting when show_payment_info_on_receipt=true)
   payment_methods?: {

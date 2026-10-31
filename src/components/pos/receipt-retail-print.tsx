@@ -14,7 +14,7 @@
 
 import type { CSSProperties } from 'react';
 import type { ReceiptData } from './receipt-preview';
-import { buildReceiptRows } from '@/lib/pos/receipt-rows';
+import { buildReceiptRows, vatSummaryRows } from '@/lib/pos/receipt-rows';
 import { resolveReceiptDisplayName } from '@/lib/pos/receipt-branding';
 
 interface RetailReceiptPrintProps {
@@ -162,6 +162,7 @@ export function RetailReceiptPrint({ receipt, tenantName, outletName, logoUrl }:
         {chargeEntries.length === 0 && (receipt.charges_total ?? 0) > 0 && trow('Charges(+):', money(currency, receipt.charges_total ?? 0))}
         {(receipt.round_off ?? 0) > 0 && trow('Round Off:', money(currency, receipt.round_off ?? 0))}
         {trow(receipt.is_return ? 'REFUND TOTAL:' : 'TOTAL:', money(currency, receipt.total_amount), true)}
+        {vatSummaryRows(receipt).map((v) => trow(v.label, money(currency, v.amount), false, `vat-${v.label}`))}
         {methodLabel && (receipt.amount_paid ?? receipt.amount_tendered) > 0 &&
           trow(methodLabel, money(currency, receipt.amount_paid ?? receipt.amount_tendered))}
         {trow('AMOUNT PAID', money(currency, receipt.amount_paid ?? receipt.amount_tendered))}
