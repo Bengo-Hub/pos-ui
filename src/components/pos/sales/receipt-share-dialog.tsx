@@ -6,18 +6,20 @@ import { Button } from '@/components/ui/button';
 import { useNotifySale } from '@/hooks/usePOS';
 import { toast } from 'sonner';
 
-type Channel = 'sms' | 'email' | 'whatsapp';
+// Only email and WhatsApp are active channels; SMS reaches nobody.
+type Channel = 'email' | 'whatsapp';
 
 const inputCls = 'h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus:ring-1 focus:ring-ring focus:outline-none';
 const selectCls = inputCls;
 
 /**
  * ReceiptShareDialog — the "Send Notification" action: sends the customer their receipt via
- * notifications-service (SMS, email, or the WhatsApp Business API), each carrying a durable
+ * notifications-service (email or the WhatsApp Business API), each carrying a durable
  * public download link. Prefills the contact from the order's own phone/email, but the cashier
  * can always type a different one (e.g. the sale has no email on file, or the customer wants it
  * sent to someone else). Distinct from the "Share via WhatsApp" wa.me quick action, which opens
- * the cashier's own WhatsApp app instead of sending server-side.
+ * the cashier's own WhatsApp app instead of sending server-side. A WhatsApp send for a business
+ * with no WhatsApp plan or credit is refused by pos-api (402) and its message is shown as is.
  */
 export function ReceiptShareDialog({
   open, onOpenChange, orderId, defaultPhone, defaultEmail,
@@ -37,12 +39,12 @@ export function ReceiptShareDialog({
   onManualSend?: (value: string) => void;
   title?: string;
 }) {
-  const [channel, setChannel] = useState<Channel>(forcedChannel ?? (defaultPhone ? 'sms' : 'email'));
+  const [channel, setChannel] = useState<Channel>(forcedChannel ?? (defaultEmail || !defaultPhone ? 'email' : 'whatsapp'));
   const [phone, setPhone] = useState(defaultPhone ?? '');
   const [email, setEmail] = useState(defaultEmail ?? '');
   const notify = useNotifySale();
 
-  const needsPhone = channel === 'sms' || channel === 'whatsapp';
+  const needsPhone = channel === 'whatsapp';
   const canSend = needsPhone ? phone.trim().length > 0 : email.trim().length > 0;
 
   function handleSend() {
@@ -82,7 +84,6 @@ export function ReceiptShareDialog({
               <div>
                 <label className="text-xs font-medium text-muted-foreground mb-1 block">Channel</label>
                 <select className={selectCls} value={channel} onChange={(e) => setChannel(e.target.value as Channel)}>
-                  <option value="sms">SMS</option>
                   <option value="email">Email</option>
                   <option value="whatsapp">WhatsApp</option>
                 </select>

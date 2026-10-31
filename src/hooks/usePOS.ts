@@ -1418,11 +1418,11 @@ export function useUpdateShipping() {
 }
 
 /** New Sale Notification / receipt-share (All-Sales action) — (re)sends the customer their
- * receipt via SMS, email, or WhatsApp (each carries a durable public download link). */
+ * receipt by email or WhatsApp (each carries a durable public download link). */
 export function useNotifySale() {
   const tenantID = useTenantID();
   return useMutation({
-    mutationFn: (data: { orderId: string; phone?: string; email?: string; channel?: 'sms' | 'email' | 'whatsapp' }) =>
+    mutationFn: (data: { orderId: string; phone?: string; email?: string; channel?: 'email' | 'whatsapp' }) =>
       apiClient.post(`${basePath(tenantID)}/orders/${data.orderId}/notify`, {
         phone: data.phone, email: data.email, channel: data.channel,
       }),
