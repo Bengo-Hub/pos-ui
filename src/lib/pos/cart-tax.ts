@@ -19,6 +19,8 @@
  * `total = subtotal + tax`. Inclusive lines never inflate the total.
  */
 
+import { roundMoney, splitTax } from '@bengo-hub/shared-ui-lib/tax';
+
 export interface CartTaxLine {
   /** Gross line amount as rung up: (unit price + modifier total) * quantity. */
   gross: number;
@@ -50,37 +52,37 @@ export function computeCartTax(lines: CartTaxLine[], fallbackRatePct: number): C
   let inclusiveTax = 0;
 
   for (const line of lines) {
-    const gross = line.gross;
+    const gross = roundMoney(line.gross);
     subtotal += gross;
 
     const hasInfo = typeof line.taxRate === 'number';
-    const rate = (hasInfo ? (line.taxRate as number) : fallbackRatePct) / 100;
-    if (rate <= 0) continue;
+    const ratePct = hasInfo ? (line.taxRate as number) : fallbackRatePct;
+    if (ratePct <= 0) continue;
 
+    // VAT is rounded on each line with the platform's shared calculator, exactly as pos-api's
+    // ComputeLineTax does, so the till and the stored order agree to the cent.
+    const { tax } = splitTax(gross, ratePct, !!line.taxInclusive);
     if (line.taxInclusive) {
-      // Tax already inside `gross` — surface the embedded portion, add nothing to the total.
-      inclusiveTax += gross - gross / (1 + rate);
+      inclusiveTax += tax; // already inside the gross; adds nothing to the total
     } else {
-      // Exclusive (real treasury rate) OR legacy fallback — add this line's own tax.
-      addedTax += gross * rate;
+      addedTax += tax;
     }
   }
 
-  // Components stay at 2dp; the single whole-number rounding happens ONCE at the order level
-  // via applyRoundOff (rounding per-component and again on the total would double-round).
-  const tax = round2(addedTax);
-  const sub = round2(subtotal);
+  // The single whole-number rounding of the payable happens once at the order level (applyRoundOff).
+  const tax = roundMoney(addedTax);
+  const sub = roundMoney(subtotal);
   return {
     subtotal: sub,
     tax,
-    inclusiveTax: round2(inclusiveTax),
-    total: round2(sub + tax),
+    inclusiveTax: roundMoney(inclusiveTax),
+    total: roundMoney(sub + tax),
   };
 }
 
-/** round2 normalizes a float to 2 decimal places (money components). */
+/** round2 normalizes a float to 2 decimal places, half away from zero (money components). */
 export function round2(n: number): number {
-  return Math.round(n * 100) / 100;
+  return roundMoney(n);
 }
 
 export interface RoundOffResult {
