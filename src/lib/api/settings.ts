@@ -58,6 +58,8 @@ export interface POSSettings {
   currency: string;
   vat_enabled: boolean;
   vat_rate: number;
+  /** Treasury tax code charged on items with no tax code of their own; empty when none picked. */
+  fallback_tax_code?: string;
   printer_type: string;
   printer_ip?: string | null;
   paper_width: string;
@@ -173,6 +175,7 @@ export interface UpdatePOSSettingsInput {
   currency?: string;
   vat_enabled?: boolean;
   vat_rate?: number;
+  fallback_tax_code?: string;
   printer_type?: string;
   printer_ip?: string | null;
   paper_width?: string;

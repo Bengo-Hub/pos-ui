@@ -54,14 +54,15 @@ export function TaxTab() {
     }
   }, [settings]);
 
-  // Preselect a code once the tax-code list has loaded and nothing is selected yet: prefer
-  // whatever rate is already saved (so a reload reflects the real stored config), else fall
-  // back to the non-VAT code (tenant not VAT-enabled) or the default VAT code (enabled).
+  // Preselect a code once the tax-code list has loaded and nothing is selected yet: the saved
+  // fallback code, else a code matching the saved rate (outlets saved before the code was
+  // stored), else the non-VAT code (VAT off) or the default VAT code (VAT on).
   useEffect(() => {
     if (taxCodesLoading || codes.length === 0 || selectedCode || !settings) return;
+    const saved = settings.fallback_tax_code ? codes.find((c) => c.code === settings.fallback_tax_code) : undefined;
     const savedRate = settings.vat_rate;
     const byRate = typeof savedRate === 'number' ? codes.find((c) => c.rate === savedRate) : undefined;
-    const preset = byRate ?? (vatEnabled ? findVatCode(codes) : findNonVatCode(codes));
+    const preset = saved ?? byRate ?? (vatEnabled ? findVatCode(codes) : findNonVatCode(codes));
     if (preset) setSelectedCode(preset.code);
   }, [codes, taxCodesLoading, selectedCode, settings, vatEnabled]);
 
@@ -92,6 +93,7 @@ export function TaxTab() {
     updateSettings.mutate({
       vat_rate: parseFloat(vatRate) || 0,
       vat_enabled: vatEnabled,
+      fallback_tax_code: selectedCode,
     });
   };
 
@@ -145,8 +147,9 @@ export function TaxTab() {
               />
               <p className="text-xs text-muted-foreground">
                 Pulled live from Treasury. Applied <span className="font-medium">only</span> to items
-                that have no Treasury tax code of their own yet, and used as the VAT% label on
-                receipts. Items enriched from Treasury ignore this and use their own rate.
+                that have no Treasury tax code of their own yet, with this code&apos;s rate and KRA
+                band, and used as the VAT% label on receipts. Items enriched from Treasury ignore
+                this and use their own rate.
               </p>
             </div>
             <div className="flex items-center justify-between pt-1">
