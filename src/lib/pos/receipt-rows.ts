@@ -71,10 +71,15 @@ const PROVIDER_FOOTER_FALLBACK = {
 
 /** The "VAT included" rows printed under the total: one per rate, on what the customer paid, from
  *  pos-api's vat_summary (the figures treasury books and KRA receives). Mirrors pos-api's
- *  layouts.vatSummaryRows; only for an outlet that charges VAT. */
+ *  layouts.vatSummaryRows; only for an outlet that charges VAT, and only when it adds to the VAT
+ *  line above the total (several rates, or a discount making the VAT paid differ). One rate with
+ *  the same VAT would print the same figure twice (pos-api saletax.SummaryAddsDetail). */
 export function vatSummaryRows(receipt: ReceiptData): { label: string; amount: number }[] {
-  if (receipt.vat_enabled === false) return [];
-  return (receipt.vat_summary ?? []).map((r) => ({
+  const rows = receipt.vat_summary ?? [];
+  if (receipt.vat_enabled === false || rows.length === 0) return [];
+  const cents = (v: number) => Math.round(v * 100);
+  if (rows.length === 1 && cents(rows[0].tax) === cents(receipt.tax_amount ?? 0)) return [];
+  return rows.map((r) => ({
     label: `VAT ${r.rate}% on ${r.taxable.toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
     amount: r.tax,
   }));
