@@ -9,6 +9,7 @@
  *    customer must be made whole, so STORE CREDIT is not offered.
  *  - a return against an unpaid on-account (credit) sale must OFFSET the customer's
  *    balance — paying out cash would refund money the business never received.
+ *  - a sale paid in full has no balance to offset, so "Reduce customer credit" is not offered.
  */
 
 export interface RefundChannelOption {
@@ -46,6 +47,8 @@ export function allowedRefundChannels(reasonCode?: string, onAccount?: boolean, 
     // reducing it (see returns_policy.go validateRefundChannel; matches the server 1:1 so the
     // cashier never picks an option the backend will 422 on).
     if (onAccount && restrictOnAccount && ch.value !== 'offset_invoice') return false;
+    // A sale paid in full left nothing owing, so there is no balance to reduce (server refuses it).
+    if (!onAccount && ch.value === 'offset_invoice') return false;
     if (ch.value === 'store_credit' && reasonCode && STORE_CREDIT_BLOCKED_REASONS.has(reasonCode)) return false;
     return true;
   });
