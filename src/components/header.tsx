@@ -12,7 +12,7 @@ import { useTenantBranding } from '@/providers/tenant-branding-provider';
 import { useAuthStore } from '@/store/auth';
 import { useOutletFilterStore } from '@/store/outlet-filter';
 import { useQuery } from '@tanstack/react-query';
-import { Building2, Check, ChevronDown, Loader2, LogOut, MapPin, Menu, PanelLeft, Search, Settings, Square, User } from 'lucide-react';
+import { Building2, Check, ChevronDown, Loader2, LogOut, MapPin, Menu, PanelLeft, Settings, Square, User } from 'lucide-react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
@@ -390,13 +390,6 @@ export function Header({ onMenuClick, onToggleSidebar, sidebarCollapsed }: Heade
             <h1 className="hidden sm:block text-lg sm:text-xl font-black tracking-tight text-foreground uppercase truncate max-w-28 md:max-w-44 lg:max-w-none shrink-0">
                 {getServiceTitle('POS', 'pos')}
             </h1>
-            <div className="hidden lg:flex relative w-64 max-w-full group shrink-0">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 group-focus-within:text-primary transition-colors" />
-              <input
-                placeholder="Search orders, tables..."
-                className="w-full h-10 bg-slate-50 dark:bg-white/5 border-none rounded-xl py-1.5 pl-10 pr-4 text-sm focus:ring-1 focus:ring-primary/30 transition-all outline-none"
-              />
-            </div>
         </div>
         <HeaderOutletChip />
       </div>
