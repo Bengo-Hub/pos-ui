@@ -11,16 +11,20 @@
  * added is covered by a live deal.
  */
 import type { Discount as HappyHourPromotion } from '@/lib/api/discounts';
+import { bogoOwners, newestFirst, ownsBuySku } from '@/lib/pos/happy-hour';
 
 const norm = (s?: string) => (s ?? '').trim().toLowerCase();
 
-/** The one active promo (if any) covering a SKU — on either side of a cross-item pairing. */
+/** The active promo covering a SKU (on either side of a cross-item pairing): the newest one, and
+ *  never a "buy X get Y" deal whose buy item a newer deal owns. */
 export function findPromoForSku(sku: string, activeHappyHours: HappyHourPromotion[]): HappyHourPromotion | undefined {
-  return activeHappyHours.find((p) => {
+  const owners = bogoOwners(activeHappyHours);
+  return newestFirst(activeHappyHours).find((p) => {
     const r = p.rule;
     if (!r) return false;
     if (r.scope_type === 'all') return true;
     if (r.scope_type !== 'item') return false;
+    if ((r.scope_ids ?? []).includes(sku) && !ownsBuySku(p, sku, owners)) return false;
     return (r.scope_ids ?? []).includes(sku) || (r.get_scope_ids ?? []).includes(sku);
   });
 }
@@ -54,29 +58,33 @@ export function computePairAutoAdd<T extends PairAutoAddLine>(
   activeHappyHours: HappyHourPromotion[],
   resolveNewLine: (sku: string) => Omit<T, 'quantity' | 'promoFree'> | undefined,
 ): PairAutoAddResult<T> {
-  const pairRules = activeHappyHours
-    .map((p) => p.rule)
-    .filter((r): r is NonNullable<typeof r> =>
-      !!r && r.discount_type === 'bogo' && r.scope_type === 'item'
-      && !!r.get_pair_map && Object.keys(r.get_pair_map).length > 0);
+  const pairPromos = newestFirst(activeHappyHours).filter((p) => {
+    const r = p.rule;
+    return !!r && r.discount_type === 'bogo' && r.scope_type === 'item'
+      && !!r.get_pair_map && Object.keys(r.get_pair_map).length > 0;
+  });
+  const owners = bogoOwners(activeHappyHours);
 
-  if (pairRules.length === 0) {
-    const hasFree = cart.some((c) => c.promoFree);
-    return { changed: hasFree, next: hasFree ? cart.filter((c) => !c.promoFree) : cart, announcements: [] };
-  }
-
-  // lower(buySku) -> { getSku, buy, get }; first active rule wins on a conflicting key. A
-  // self-mapped entry (buySku === getSku, e.g. "buy 1 Vege Burger get 1 more free") is a
-  // legitimate deal shape — kept in the map, but earned below is computed on a buy+get cycle
-  // for it, never buy alone (see the denom comment).
+  // lower(buySku) -> { getSku, buy, get }. A buy item a newer deal of any shape owns is left out,
+  // so an everyday "large gets a small free" does not auto-add a small while today's "large gets a
+  // large free" is on (bogoOwners). Between pair deals that started together, the first listed
+  // keeps the key. A self-mapped entry (buySku === getSku, e.g. "buy 1 Vege Burger get 1 more
+  // free") is a legitimate deal shape, kept in the map, but earned below is computed on a buy+get
+  // cycle for it, never buy alone (see the denom comment).
   const pair = new Map<string, { getSku: string; buy: number; get: number }>();
-  for (const r of pairRules) {
+  for (const p of pairPromos) {
+    const r = p.rule!;
     const buy = Math.max(1, r.buy_quantity ?? 1);
     const get = Math.max(1, r.get_quantity ?? 1);
     for (const [bk, gk] of Object.entries(r.get_pair_map ?? {})) {
       const key = bk.toLowerCase();
-      if (!pair.has(key)) pair.set(key, { getSku: gk, buy, get });
+      if (!pair.has(key) && ownsBuySku(p, key, owners)) pair.set(key, { getSku: gk, buy, get });
     }
+  }
+
+  if (pair.size === 0) {
+    const hasFree = cart.some((c) => c.promoFree);
+    return { changed: hasFree, next: hasFree ? cart.filter((c) => !c.promoFree) : cart, announcements: [] };
   }
 
   // Earned free units per get SKU, from buy-line quantities (real lines only, not free lines).

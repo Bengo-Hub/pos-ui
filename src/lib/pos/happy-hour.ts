@@ -30,6 +30,46 @@ export interface HappyHourResult {
 const norm = (s?: string) => (s ?? '').trim().toLowerCase();
 const trimNum = (n: number) => (Number.isInteger(n) ? String(n) : String(n));
 
+/** When a deal started (start_at defaults to its creation time); 0 when unknown. */
+const startMs = (p: HappyHourPromotion) => (p.start_at ? Date.parse(p.start_at) || 0 : 0);
+
+/** Deals with the most recently started first, as pos-api promotions.newestFirst orders them. */
+export function newestFirst(promos: HappyHourPromotion[]): HappyHourPromotion[] {
+  return [...promos].sort((a, b) => startMs(b) - startMs(a) || (a.id < b.id ? 1 : a.id > b.id ? -1 : 0));
+}
+
+/** The lowercased "buy" side of an item-scoped BOGO rule: the get_pair_map keys for a
+ *  corresponding-pair deal, otherwise scope_ids. Empty for every other rule. */
+export function bogoBuySkus(rule?: PromotionRule | null): Set<string> {
+  if (!rule || rule.discount_type !== 'bogo' || rule.scope_type !== 'item') return new Set();
+  const pairKeys = Object.keys(rule.get_pair_map ?? {});
+  return new Set((pairKeys.length > 0 ? pairKeys : rule.scope_ids ?? []).map(norm).filter(Boolean));
+}
+
+/**
+ * Which "buy X get Y" deal owns each item when several cover it: the newest (latest start). Maps
+ * lower(buy SKU) to that deal's start. A deal that started earlier never earns from an item a newer
+ * one covers, so today's "buy a large get a large free" takes the large pizzas from an everyday "buy
+ * a large get a small free". Deals that started at the same moment are not ranked (the better saving
+ * wins per item). Mirrors pos-api promotions.combineTimedDiscounts.
+ */
+export function bogoOwners(promos: HappyHourPromotion[]): Map<string, number> {
+  const owners = new Map<string, number>();
+  for (const p of promos) {
+    const start = startMs(p);
+    for (const sku of bogoBuySkus(p.rule)) {
+      if (!owners.has(sku) || start > owners.get(sku)!) owners.set(sku, start);
+    }
+  }
+  return owners;
+}
+
+/** Whether a deal may earn from this buy SKU (no newer deal owns it). */
+export function ownsBuySku(p: HappyHourPromotion, sku: string, owners: Map<string, number>): boolean {
+  const owner = owners.get(norm(sku));
+  return owner === undefined || owner <= startMs(p);
+}
+
 function evalRule(rule: PromotionRule, lines: HHLine[], currency = 'KES'): { total: number; bySku: Record<string, HHLineResult> } {
   if (rule.discount_type === 'bogo') return calcBogo(rule, lines);
 
@@ -212,36 +252,6 @@ function round2(n: number): number {
 }
 
 /**
- * Corresponding-pair auto-add: for a buy SKU (e.g. a Large pizza), return the mapped free "get" SKU
- * (the matching Small) and how many units to auto-add for a given bought quantity, across all active
- * pair-map BOGO promos. Returns null when the SKU isn't the "buy" side of any active corresponding
- * pair deal. The terminal uses this to auto-add the free Small as its own line and keep its quantity
- * synced to the Large (see terminal-context reconcileCrossItemFreebies).
- */
-export function correspondingFreeForSku(
-  sku: string, boughtQty: number, promos: HappyHourPromotion[],
-): { getSku: string; freeQty: number; promoName: string } | null {
-  if (boughtQty <= 0) return null;
-  const s = norm(sku);
-  let best: { getSku: string; freeQty: number; promoName: string } | null = null;
-  for (const p of promos) {
-    const r = p.rule;
-    if (!r || r.discount_type !== 'bogo' || r.scope_type !== 'item') continue;
-    const map = r.get_pair_map ?? {};
-    // Match case-insensitively but return the map's stored get SKU verbatim.
-    const key = Object.keys(map).find((k) => norm(k) === s);
-    if (!key) continue;
-    const buy = Math.max(1, r.buy_quantity ?? 1);
-    const get = Math.max(1, r.get_quantity ?? 1);
-    const freeQty = Math.floor(boughtQty / buy) * get;
-    if (freeQty > 0 && (!best || freeQty > best.freeQty)) {
-      best = { getSku: map[key], freeQty, promoName: p.name };
-    }
-  }
-  return best;
-}
-
-/**
  * BOGO auto-add: for a SAME-SKU "Buy B Get G" item, how many FREE (or discounted-"get") units
  * to add to the cart for a given PAID quantity. Returns 0 for non-BOGO promos, unscoped items,
  * AND cross-item BOGO rules (get_scope_ids set) — a cross-item deal's "get" item is a genuinely
@@ -256,12 +266,14 @@ export function correspondingFreeForSku(
 export function bogoFreeUnitsForSku(sku: string, paidQty: number, promos: HappyHourPromotion[]): number {
   if (paidQty <= 0) return 0;
   const s = norm(sku);
+  const owners = bogoOwners(promos);
   let best = 0;
   for (const p of promos) {
     const r = p.rule;
     if (!r || r.discount_type !== 'bogo' || r.scope_type !== 'item') continue;
     if ((r.get_scope_ids ?? []).length > 0) continue; // cross-item — never auto-add
     if (!(r.scope_ids ?? []).map(norm).includes(s)) continue;
+    if (!ownsBuySku(p, s, owners)) continue; // a newer deal owns this item
     const buy = Math.max(1, r.buy_quantity ?? 1);
     const get = Math.max(1, r.get_quantity ?? 1);
     const free = Math.floor(paidQty / buy) * get;
@@ -273,7 +285,8 @@ export function bogoFreeUnitsForSku(sku: string, paidQty: number, promos: HappyH
 /**
  * Combined happy-hour discount for the cart. ALL active promos STACK — each discounts its own
  * scoped items, summed — mirroring pos-api's combineTimedDiscounts. A SKU covered by two promos
- * takes only the better one (no double-dip); storewide/unattributed discounts add on top. This
+ * takes only the better one (no double-dip), and a "buy X get Y" deal never earns from an item a
+ * newer deal owns (bogoOwners); storewide/unattributed discounts add on top. This
  * replaces the old "single best promo wins" behaviour that dropped every deal but the largest on an
  * order carrying items from two promotions (e.g. a cocktail deal + a pizza deal on one docket).
  */
@@ -281,9 +294,13 @@ export function computeHappyHour(lines: HHLine[], promos: HappyHourPromotion[], 
   const combined: Record<string, HHLineResult> = {};
   const names: string[] = [];
   let storewide = 0;
-  for (const p of promos) {
+  const owners = bogoOwners(promos);
+  for (const p of newestFirst(promos)) {
     if (!p.rule) continue;
-    const r = evalRule(p.rule, lines, currency);
+    // A BOGO deal only earns from the buy items no newer deal owns.
+    const buy = bogoBuySkus(p.rule);
+    const own = buy.size === 0 ? lines : lines.filter((l) => !buy.has(norm(l.sku)) || ownsBuySku(p, l.sku, owners));
+    const r = evalRule(p.rule, own, currency);
     if (r.total <= 0) continue;
     const skus = Object.keys(r.bySku);
     let contributed = false;
