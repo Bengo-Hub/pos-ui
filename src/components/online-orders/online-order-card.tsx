@@ -285,10 +285,12 @@ export function OnlineOrderCard({ order, currency, vocab, onHandover, onVerify, 
               <Bike className="h-3.5 w-3.5" /> {riderAssigned ? 'Reassign rider' : 'Assign rider'}
             </button>
           )}
-          {(ready || delivered) && manage && !needsVerify && (online || paid) && (
+          {/* A delivery order is delivered only through logistics (the rider's proof of delivery);
+              the counter can close it once that has happened, never declare it delivered. */}
+          {(delivery ? delivered : ready) && manage && !needsVerify && (online || paid) && (
             <button onClick={() => onHandover(order)} className={cn(btn, 'bg-primary text-primary-foreground hover:bg-primary/90')}>
               <Package className="h-3.5 w-3.5" />
-              {delivery ? (delivered ? 'Close order' : 'Delivered (own staff)') : online && !paid ? 'Collect & hand over' : 'Hand over'}
+              {delivery ? 'Close order' : online && !paid ? 'Collect & hand over' : 'Hand over'}
             </button>
           )}
           {online && manage && (

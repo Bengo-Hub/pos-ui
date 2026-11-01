@@ -35,8 +35,8 @@ interface DialogProps {
 }
 
 /**
- * HandoverDialog closes an order at the counter: the customer collects it, or (for an online delivery
- * the outlet delivers with its own staff) it was delivered. For an order that is not paid yet the
+ * HandoverDialog closes an order at the counter: the customer collects it, or a delivery order the
+ * rider already delivered through logistics is closed. For an order that is not paid yet the
  * cashier records how the money was taken (cash or M-Pesa with its code) before it is released.
  */
 export function HandoverDialog({ order, currency, onClose }: DialogProps) {
@@ -73,7 +73,7 @@ export function HandoverDialog({ order, currency, onClose }: DialogProps) {
       },
       {
         onSuccess: () => {
-          toast.success(delivery ? `${order.order_number} delivered` : `${order.order_number} handed over`);
+          toast.success(delivery ? `${order.order_number} closed` : `${order.order_number} handed over`);
           onClose();
         },
         onError: async (e) => toast.error(await apiErrorMessage(e, 'Could not complete the handover')),
@@ -85,12 +85,12 @@ export function HandoverDialog({ order, currency, onClose }: DialogProps) {
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>{delivery ? `Delivered ${order.order_number}` : `Hand over ${order.order_number}`}</DialogTitle>
+          <DialogTitle>{delivery ? `Close ${order.order_number}` : `Hand over ${order.order_number}`}</DialogTitle>
           <DialogDescription>
             {collect
               ? `Collect ${formatCurrency(due, currency)} before releasing the order.`
               : delivery
-                ? 'Confirm your delivery staff handed the order to the customer.'
+                ? 'The rider has delivered this order. Close it to move it to history.'
                 : askCode
                   ? 'Ask the customer for the collection code on their order page or message.'
                   : 'Confirm the customer has collected the order. Check the name or order number first.'}
