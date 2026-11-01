@@ -68,9 +68,9 @@ export function computePairAutoAdd<T extends PairAutoAddLine>(
   // lower(buySku) -> { getSku, buy, get }. A buy item a newer deal of any shape owns is left out,
   // so an everyday "large gets a small free" does not auto-add a small while today's "large gets a
   // large free" is on (bogoOwners). Between pair deals that started together, the first listed
-  // keeps the key. A self-mapped entry (buySku === getSku, e.g. "buy 1 Vege Burger get 1 more
-  // free") is a legitimate deal shape, kept in the map, but earned below is computed on a buy+get
-  // cycle for it, never buy alone (see the denom comment).
+  // keeps the key. A self-mapped entry (buySku === getSku, e.g. "buy 1 Large get the same Large
+  // free") is a legitimate deal shape: its free units are auto-added as their own line like any
+  // other pair.
   const pair = new Map<string, { getSku: string; buy: number; get: number }>();
   for (const p of pairPromos) {
     const r = p.rule!;
@@ -94,26 +94,31 @@ export function computePairAutoAdd<T extends PairAutoAddLine>(
     const k = norm(c.sku);
     if (pair.has(k)) buyQtyBySku.set(k, (buyQtyBySku.get(k) ?? 0) + c.quantity);
   }
+  // Only PAID lines are counted (free lines are skipped above), so every buy_quantity paid units
+  // earn get_quantity free ones, for a self-pair too: "buy one large get the same large free" rings
+  // one large and auto-adds the free one, the same way a same-SKU BOGO adds its free units
+  // (bogoFreeUnitsForSku). Pricing is a separate step that pools paid and free units of the SKU,
+  // which is where a self-pair needs the buy+get cycle (calcCorrespondingPairBogo and pos-api's
+  // calculateCorrespondingPairBOGO, the BURGER DAY fix of 2026-08-15). Applying that cycle here
+  // made a self-pair earn nothing until two were rung (Urban Loft Pizza Bogo, 2026-11-01).
   const earnedByGetSku = new Map<string, number>();
+  const selfPaired = new Set<string>();
   for (const [bk, q] of buyQtyBySku) {
     const info = pair.get(bk)!;
     const gk = norm(info.getSku);
-    // A self-pair (gk === bk) draws its "buy" and "get" units from the exact same physical
-    // stack, so the earning cycle must be buy+get (mirroring the same-SKU BOGO math), never
-    // buy alone — with buy alone, every unit bought would earn a free credit against itself,
-    // zeroing the item's own price outright regardless of quantity (the Urban Loft "BURGER
-    // DAY" bug, 2026-08-15).
-    const denom = gk === bk ? info.buy + info.get : info.buy;
-    const earned = Math.floor(q / denom) * info.get;
+    if (gk === bk) selfPaired.add(gk);
+    const earned = Math.floor(q / info.buy) * info.get;
     if (earned <= 0) continue;
     earnedByGetSku.set(gk, (earnedByGetSku.get(gk) ?? 0) + earned);
   }
-  // Manually-present (non-free) quantity of each earned get SKU — don't auto-add on top of it.
+  // Manually-present (non-free) quantity of each earned get SKU, so the free item a cashier rang
+  // themselves is not added again. A self-paired SKU's paid units are the buys themselves, never
+  // a manually-rung free one.
   const manualByGetSku = new Map<string, number>();
   for (const c of cart) {
     if (c.promoFree) continue;
     const k = norm(c.sku);
-    if (earnedByGetSku.has(k)) manualByGetSku.set(k, (manualByGetSku.get(k) ?? 0) + c.quantity);
+    if (earnedByGetSku.has(k) && !selfPaired.has(k)) manualByGetSku.set(k, (manualByGetSku.get(k) ?? 0) + c.quantity);
   }
   const targetAuto = new Map<string, number>();
   for (const [gk, earned] of earnedByGetSku) {
