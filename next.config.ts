@@ -42,10 +42,7 @@ const nextConfig: NextConfig = {
       },
       // Catalog item images: pos-api's catalog sync passes through inventory-api's
       // already-fully-resolved image_url as-is (see [[inventory-media-image-convention]]).
-      // Both live hostnames are whitelisted since some pre-existing rows were stored
-      // against codevertexitsolutions.com (a real second Codevertex domain, not a typo).
       { protocol: "https", hostname: "inventoryapi.codevertexafrica.com", pathname: "/media/**" },
-      { protocol: "https", hostname: "inventoryapi.codevertexitsolutions.com", pathname: "/media/**" },
       { protocol: "http", hostname: "localhost", port: "4001", pathname: "/media/**" },
       { protocol: "http", hostname: "127.0.0.1", port: "4001", pathname: "/media/**" },
       // Shared public media bucket (Cloudflare R2) since 2026-10-17: product images, tenant

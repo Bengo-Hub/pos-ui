@@ -43,7 +43,7 @@ test.describe('POS UI SSO login and landing', () => {
     if (!alreadyAuthed) {
       await ssoLogin.click({ timeout: 15_000 }).catch(() => {});
       const onAccounts = await page
-        .waitForURL(/accounts\.codevertexitsolutions\.com/, { timeout: 20_000 })
+        .waitForURL(/accounts\.codevertexafrica\.com/, { timeout: 20_000 })
         .then(() => true)
         .catch(() => false);
       if (onAccounts) {
@@ -51,7 +51,7 @@ test.describe('POS UI SSO login and landing', () => {
         await page.getByRole('textbox', { name: /password/i }).first().fill(PASSWORD);
         // The accounts page renders more than one "Sign in" control (form submit + SSO header).
         await page.getByRole('button', { name: /sign in/i }).first().click();
-        await page.waitForURL(/pos\.codevertexitsolutions\.com|localhost/, { timeout: 40_000 }).catch(() => {});
+        await page.waitForURL((url) => /^(?:pos\.codevertexafrica\.com|localhost)$/.test(url.hostname), { timeout: 40_000 }).catch(() => {});
       }
     }
 

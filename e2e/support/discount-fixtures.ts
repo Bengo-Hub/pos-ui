@@ -77,12 +77,12 @@ export async function ssoLogin(page: Page) {
   if (alreadyAuthed) return;
   const ssoLoginBtn = page.locator('button:not([disabled])', { hasText: /^Login$/ }).locator('visible=true').first();
   await ssoLoginBtn.click({ timeout: 15_000 }).catch(() => {});
-  const onAccounts = await page.waitForURL(/accounts\.codevertexitsolutions\.com/, { timeout: 20_000 }).then(() => true).catch(() => false);
+  const onAccounts = await page.waitForURL(/accounts\.codevertexafrica\.com/, { timeout: 20_000 }).then(() => true).catch(() => false);
   if (onAccounts) {
     await page.getByRole('textbox', { name: /email/i }).first().fill(SSO_EMAIL);
     await page.getByRole('textbox', { name: /password/i }).first().fill(SSO_PASSWORD);
     await page.getByRole('button', { name: /sign in/i }).first().click();
-    await page.waitForURL(/pos\.codevertexitsolutions\.com|pos\.codevertexafrica\.com|localhost/, { timeout: 40_000 }).catch(() => {});
+    await page.waitForURL((url) => /^(?:pos\.codevertexafrica\.com|localhost)$/.test(url.hostname), { timeout: 40_000 }).catch(() => {});
   }
   const authedContent = page.getByRole('link', { name: /dashboard|profile/i })
     .or(page.getByText(/dashboard|start shift|select outlet|switch outlet|point of sale|welcome/i));
