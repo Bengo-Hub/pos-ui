@@ -12,7 +12,7 @@ import { useStaffList } from '@/hooks/useStaff';
 import { usePermissions, P } from '@/hooks/usePermissions';
 import { useHideProfit } from '@/hooks/useHideProfit';
 import { useAuthStore } from '@/store/auth';
-import { useOutletFilterStore } from '@/store/outlet-filter';
+import { useOutletFilterStore, useListOutletId } from '@/store/outlet-filter';
 import { useOwnScope } from '@/lib/rbac/scope';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { SellDetailsModal } from '@/components/pos/sell-details-modal';
@@ -58,7 +58,9 @@ export function SalesListView({ orgSlug, fixedSource, title, subtitle }: {
   // so /sell/add?edit_inplace=<id> paints the cart immediately instead of blanking on a cold fetch.
   const handlePrefetchOrder = useCallback((o: any) => prefetchOrder(qc, tenantId, o.id), [qc, tenantId]);
   const outlets = useOutletFilterStore((s) => s.outlets);
-  const selectedOutlet = useOutletFilterStore((s) => s.selectedOutlet);
+  // The scope the header names: drill-down outlet, All Outlets, or the session's own outlet.
+  const listOutletId = useListOutletId();
+  const globalOutlet = listOutletId === 'all' ? '' : listOutletId;
   const outletNameById = useMemo(() => Object.fromEntries(outlets.map((o) => [o.id, o.name])), [outlets]);
 
   // view_own-only principals get the scoped "My Sales" view (server enforces the scoping).
@@ -81,18 +83,19 @@ export function SalesListView({ orgSlug, fixedSource, title, subtitle }: {
   const [search, setSearch] = useState(searchParams.get('invoice') ?? '');
   const [filterState, setFilterState] = useState<SalesFilterState>({
     // The page's Outlets filter PRESELECTS the globally selected outlet (top-nav switcher).
-    outletId: selectedOutlet?.id ?? '', customer: '', paymentStatus: '', paymentMethod: '',
+    outletId: globalOutlet, customer: '', paymentStatus: '', paymentMethod: '',
     shippingStatus: '', userId: '', source: '', subscriptions: false,
     range: { from: '', to: '' }, minTotal: '', maxTotal: '', itemSku: '', itemLabel: '',
   });
 
-  // Follow the global switcher: changing the drilled-in outlet re-scopes this page too.
-  useEffect(() => {
-    const globalOutlet = selectedOutlet?.id ?? '';
+  // Follow the global switcher: changing the drilled-in outlet re-scopes this page too. Adjusted
+  // during render (React's pattern for state that follows a changing value), not in an effect.
+  const [followedOutlet, setFollowedOutlet] = useState(globalOutlet);
+  if (followedOutlet !== globalOutlet) {
+    setFollowedOutlet(globalOutlet);
     setFilterState((f) => (f.outletId === globalOutlet ? f : { ...f, outletId: globalOutlet }));
     setPage(1);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedOutlet?.id]);
+  }
 
   // Modals + bulk selection
   const [detailId, setDetailId] = useState<string | null>(null);
@@ -203,12 +206,12 @@ export function SalesListView({ orgSlug, fixedSource, title, subtitle }: {
 
   // Edit a FINALIZED sale: opens the true in-place editor directly — nothing is reversed just
   // to open it (only Save actually reduces/reverses whatever was actually removed/lowered).
-  const handleEditFinalizedSale = (order: any) => {
+  const handleEditFinalizedSale = useCallback((order: any) => {
     // Carry this list's own route back so Add Sale can return here (All Sales vs POS-only
     // Sales both render this component) once the edit is saved, instead of always landing on
     // a blank Add Sale screen.
     router.push(`/${orgSlug}/sell/add?edit_inplace=${order.id}&return_to=${encodeURIComponent(pathname)}`);
-  };
+  }, [router, orgSlug, pathname]);
 
   const handlePutOnAccount = () => {
     if (!putOnAccountOrder) return;
@@ -384,7 +387,7 @@ export function SalesListView({ orgSlug, fixedSource, title, subtitle }: {
       render: (o) => <span className="text-xs">{o.item_count ?? (o.edges?.lines?.length ?? 0)}</span>,
     },
   ] as DataTableColumn<any>[]).filter((c) => !hideProfit || (c.key !== 'profit' && c.key !== 'margin')),
-  [orgSlug, ownOnly, staffNameByUserId, outletNameById, fixedSource, patchFilters, hideProfit]);
+  [orgSlug, ownOnly, staffNameByUserId, outletNameById, fixedSource, patchFilters, hideProfit, handleEditFinalizedSale, handlePrefetchOrder]);
 
   return (
     <div className="p-6 space-y-6">

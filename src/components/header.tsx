@@ -100,7 +100,7 @@ function HeaderOutletChip() {
   const user = useAuthStore((s) => s.user);
   const session = useAuthStore((s) => s.session);
   const authOutlet = useAuthStore((s) => s.outlet);
-  const { selectedOutlet, outlets, setOutlets, selectOutlet } = useOutletFilterStore();
+  const { selectedOutlet, allOutlets, outlets, setOutlets, selectOutlet } = useOutletFilterStore();
   const [open, setOpen] = useState(false);
   const [outletSearch, setOutletSearch] = useState('');
   // The dropdown portals to <body> anchored off this button — the header's overflow/stacking
@@ -146,13 +146,18 @@ function HeaderOutletChip() {
       id: o.id, code: o.code, name: o.name, useCase: o.use_case, isHq: o.is_hq,
     }));
     setOutlets(mapped);
-    apiClient.setOutletID(selectedOutlet?.id ?? authOutlet?.id ?? null);
+    apiClient.setOutletID(selectedOutlet?.id ?? (allOutlets ? null : authOutlet?.id ?? null));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetchedOutlets]);
 
-  const activeOutlet = selectedOutlet ?? (authOutlet ? { id: authOutlet.id, code: authOutlet.code, name: authOutlet.name, useCase: authOutlet.use_case } : null);
+  // The label always names the scope the lists actually load (useListOutletId): the drill-down
+  // outlet, "All Outlets" when chosen, else the session's own outlet. It used to fall back to the
+  // home outlet even after All Outlets was picked, so the header named a branch while the sales
+  // list showed every branch.
+  const homeOutlet = authOutlet ? { id: authOutlet.id, code: authOutlet.code, name: authOutlet.name, useCase: authOutlet.use_case } : null;
+  const activeOutlet = selectedOutlet ?? (allOutlets ? null : homeOutlet);
   const activeName = activeOutlet?.name ?? (canSwitch ? 'All Outlets' : 'Select Outlet');
-  const activeUseCase = activeOutlet?.useCase ?? authOutlet?.use_case ?? '';
+  const activeUseCase = activeOutlet?.useCase ?? (allOutlets ? '' : authOutlet?.use_case ?? '');
 
   // Admins/managers always get the switcher (even with no home outlet of their own — e.g. a
   // superuser); staff without any outlet context show nothing.
@@ -242,11 +247,11 @@ function HeaderOutletChip() {
                   useAuthStore.getState().setSelectedOutletId(null);
                   setOpen(false);
                 }}
-                className={cn('w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted transition-colors text-left', !selectedOutlet && 'bg-primary/5 text-primary')}
+                className={cn('w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted transition-colors text-left', !activeOutlet && 'bg-primary/5 text-primary')}
               >
                 <Building2 className="h-3.5 w-3.5 shrink-0" />
                 <span className="flex-1">All Outlets</span>
-                {!selectedOutlet && <Check className="h-3.5 w-3.5 shrink-0" />}
+                {!activeOutlet && <Check className="h-3.5 w-3.5 shrink-0" />}
               </button>
               {outlets
                 .filter((o) =>
@@ -254,7 +259,7 @@ function HeaderOutletChip() {
                   o.name.toLowerCase().includes(outletSearch.toLowerCase()) ||
                   (o.code ?? '').toLowerCase().includes(outletSearch.toLowerCase()))
                 .map((o) => {
-                const isActive = selectedOutlet?.id === o.id;
+                const isActive = activeOutlet?.id === o.id;
                 return (
                   <button
                     key={o.id}

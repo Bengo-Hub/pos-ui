@@ -5,7 +5,7 @@ import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
 import { Button } from '@/components/ui/base';
 import { CreateLayawayModal } from '@/components/pos/layaway/create-layaway-modal';
 import { useLayawayPlans } from '@/hooks/useLayaway';
-import { useOutletFilterStore } from '@/store/outlet-filter';
+import { useOutletFilterStore, useListOutletId } from '@/store/outlet-filter';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { SearchableCombobox } from '@bengo-hub/shared-ui-lib/combobox';
 import { cn } from '@/lib/utils';
@@ -25,11 +25,12 @@ function LayawayListPage() {
   // Branch filter (QA req 7a): filter plans by outlet; "" = all branches.
   // Preselects + follows the globally selected outlet (top-nav switcher).
   const outlets = useOutletFilterStore((s) => s.outlets);
-  const selectedOutlet = useOutletFilterStore((s) => s.selectedOutlet);
-  const [outletFilter, setOutletFilter] = useState(selectedOutlet?.id ?? '');
+  const listOutletId = useListOutletId();
+  const globalOutlet = listOutletId === 'all' ? '' : listOutletId;
+  const [outletFilter, setOutletFilter] = useState(globalOutlet);
   useEffect(() => {
-    setOutletFilter(selectedOutlet?.id ?? '');
-  }, [selectedOutlet?.id]);
+    setOutletFilter(globalOutlet);
+  }, [globalOutlet]);
   const outletNameById = useMemo(() => Object.fromEntries(outlets.map((o) => [o.id, o.name])), [outlets]);
 
   const [range, setRange] = useState<DateRange>({ from: '', to: '' });

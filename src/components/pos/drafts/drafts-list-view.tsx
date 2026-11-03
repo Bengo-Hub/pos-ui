@@ -8,7 +8,7 @@ import { DataTable, type DataTableColumn } from '@bengo-hub/shared-ui-lib/data-t
 import { useOrders, useDeleteDraft, useBulkDeleteDrafts, type OrderListFilters } from '@/hooks/usePOS';
 import { useStaffList } from '@/hooks/useStaff';
 import { useAuthStore } from '@/store/auth';
-import { useOutletFilterStore } from '@/store/outlet-filter';
+import { useListOutletId } from '@/store/outlet-filter';
 import { useOwnScope } from '@/lib/rbac/scope';
 import { usePermissions, P } from '@/hooks/usePermissions';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
@@ -53,7 +53,8 @@ export function DraftsListView({ orgSlug }: { orgSlug: string }) {
   const user = useAuthStore((s) => s.user);
   const tenantId = user?.tenant_id ?? '';
   const currentUserId = user?.id ?? '';
-  const selectedOutlet = useOutletFilterStore((s) => s.selectedOutlet);
+  // The scope the header names: drill-down outlet, All Outlets, or the session's own outlet.
+  const listOutletId = useListOutletId();
 
   // Own-only cashiers see only their own drafts (server-enforced) and must not filter by cashier.
   const { ownOnly } = useOwnScope();
@@ -89,7 +90,7 @@ export function DraftsListView({ orgSlug }: { orgSlug: string }) {
 
   // Staff list still powers the "Created By" FILTER dropdown; row display uses the
   // server-resolved cashier_name (staff lookup only as fallback for empty values).
-  const staffQ = useStaffList(tenantId, selectedOutlet?.id || undefined);
+  const staffQ = useStaffList(tenantId, listOutletId === 'all' ? undefined : listOutletId);
   const staff = ((staffQ.data as any)?.data ?? staffQ.data ?? []) as any[];
   const staffNameByUserId = useMemo(
     () => Object.fromEntries(staff.map((s: any) => [s.user_id, s.name])),
@@ -101,7 +102,7 @@ export function DraftsListView({ orgSlug }: { orgSlug: string }) {
 
   const filters: OrderListFilters = useMemo(() => ({
     status: 'draft',
-    outletId: selectedOutlet?.id ?? 'all',
+    outletId: listOutletId,
     from: rangeBound(filterState.range.from, filterState.range.fromTime) || undefined,
     to: rangeBound(filterState.range.to, filterState.range.toTime) || undefined,
     customer: filterState.customer.trim() || undefined,
@@ -109,7 +110,7 @@ export function DraftsListView({ orgSlug }: { orgSlug: string }) {
     orderNumber: search.trim() || undefined,
     page,
     limit: pageSize,
-  }), [selectedOutlet?.id, filterState, search, page, pageSize]);
+  }), [listOutletId, filterState, search, page, pageSize]);
 
   const { data, isLoading, refetch, isFetching } = useOrders(filters);
   const rows: any[] = data?.data ?? [];

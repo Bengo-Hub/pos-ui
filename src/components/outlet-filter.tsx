@@ -29,7 +29,7 @@ export function OutletFilter({ className }: { className?: string }) {
   // outlet switcher (see canAccessAllOutlets), so the two never drift out of sync again.
   const canFilter = canAccessAllOutlets(user);
 
-  const { selectedOutlet, outlets, setOutlets, selectOutlet, clearOutlet } = useOutletFilterStore();
+  const { selectedOutlet, allOutlets, outlets, setOutlets, selectOutlet } = useOutletFilterStore();
 
   const tenantId = user?.tenant_id ?? '';
 
@@ -53,13 +53,13 @@ export function OutletFilter({ className }: { className?: string }) {
     }
   }, [fetchedOutlets, setOutlets]);
 
-  // Sync selected outlet → apiClient X-Outlet-ID header.
-  // When drill-down is cleared (null), fall back to the user's home outlet
-  // so non-HQ queries still get scoped to their assigned outlet.
+  // Sync selected outlet → apiClient X-Outlet-ID header. With no drill-down the user's home
+  // outlet applies, so non-HQ queries stay on their assigned outlet; the explicit All Outlets
+  // choice clears the header, the same as the top-nav switcher.
   const homeOutletId = useAuthStore((s) => s.outlet?.id ?? null);
   useEffect(() => {
-    apiClient.setOutletID(selectedOutlet?.id ?? homeOutletId);
-  }, [selectedOutlet, homeOutletId]);
+    apiClient.setOutletID(selectedOutlet?.id ?? (allOutlets ? null : homeOutletId));
+  }, [selectedOutlet, allOutlets, homeOutletId]);
 
   if (!canFilter || outlets.length === 0) return null;
 
@@ -74,7 +74,8 @@ export function OutletFilter({ className }: { className?: string }) {
         }))}
         value={selectedOutlet?.id ?? ''}
         onChange={(value) => {
-          if (!value) { clearOutlet(); return; }
+          // Clearing is the "All Outlets" placeholder, the same choice as the header's All Outlets.
+          if (!value) { selectOutlet(null); return; }
           const o = outlets.find((x) => x.id === value);
           if (o) selectOutlet(o);
         }}

@@ -42,6 +42,47 @@ export function getStoredOutletId(slug?: string): string {
   }
 }
 
+/**
+ * Admin/manager outlet drill-down (top-nav switcher), kept per browser tab in sessionStorage so a
+ * reload keeps the branch the user picked instead of silently widening every list to all
+ * outlets. Slug-scoped like the stored outlet above. `all` is the explicit "All Outlets" choice.
+ */
+const POS_OUTLET_DRILLDOWN_KEY = 'pos-outlet-drilldown';
+
+export interface StoredDrillDown<T> {
+  outlet: T | null;
+  all: boolean;
+}
+
+export function getStoredDrillDown<T>(slug?: string): StoredDrillDown<T> | null {
+  if (typeof window === 'undefined') return null;
+  const scope = slug || currentSlug();
+  try {
+    const raw = sessionStorage.getItem(POS_OUTLET_DRILLDOWN_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as StoredDrillDown<T> & { slug?: string };
+    if (!parsed || parsed.slug !== scope) return null;
+    return { outlet: parsed.outlet ?? null, all: !!parsed.all };
+  } catch {
+    return null;
+  }
+}
+
+/** Persist the drill-down for the current org slug; null clears it. */
+export function setStoredDrillDown<T>(value: StoredDrillDown<T> | null, slug?: string): void {
+  if (typeof window === 'undefined') return;
+  const scope = slug || currentSlug();
+  try {
+    if (value && scope && (value.outlet || value.all)) {
+      sessionStorage.setItem(POS_OUTLET_DRILLDOWN_KEY, JSON.stringify({ slug: scope, ...value }));
+    } else {
+      sessionStorage.removeItem(POS_OUTLET_DRILLDOWN_KEY);
+    }
+  } catch {
+    /* storage disabled */
+  }
+}
+
 /** Persist (or clear, with null) the last-selected outlet for the given org slug. */
 export function setStoredOutletId(id: string | null, slug?: string): void {
   if (typeof window === 'undefined') return;

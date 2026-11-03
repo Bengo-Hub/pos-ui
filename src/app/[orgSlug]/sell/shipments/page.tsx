@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { Search, Truck } from 'lucide-react';
 import { useOrders, type OrderListFilters } from '@/hooks/usePOS';
-import { useOutletFilterStore } from '@/store/outlet-filter';
+import { useOutletFilterStore, useListOutletId } from '@/store/outlet-filter';
 import { usePermissions, P } from '@/hooks/usePermissions';
 import { SellDetailsModal } from '@/components/pos/sell-details-modal';
 import { EditShippingModal } from '@/components/pos/sales/edit-shipping-modal';
@@ -35,7 +35,8 @@ export default function ShipmentsPage() {
   const { canAny } = usePermissions();
   const canEdit = canAny([P.ORDERS_CHANGE_OWN, P.ORDERS_CHANGE, P.ORDERS_MANAGE]);
 
-  const selectedOutlet = useOutletFilterStore((s) => s.selectedOutlet);
+  // The scope the header names: drill-down outlet, All Outlets, or the session's own outlet.
+  const listOutletId = useListOutletId();
   const outlets = useOutletFilterStore((s) => s.outlets);
   const outletNameById = useMemo(() => Object.fromEntries(outlets.map((o) => [o.id, o.name])), [outlets]);
 
@@ -48,14 +49,14 @@ export default function ShipmentsPage() {
   const [range, setRange] = useState<DateRange>({ from: '', to: '' });
 
   const filters: OrderListFilters = useMemo(() => ({
-    outletId: selectedOutlet?.id || 'all',
+    outletId: listOutletId,
     shippingStatus: tab,
     orderNumber: search.trim() || undefined,
     from: range.from || undefined,
     to: range.to || undefined,
     page,
     limit: pageSize,
-  }), [selectedOutlet?.id, tab, search, range, page, pageSize]);
+  }), [listOutletId, tab, search, range, page, pageSize]);
 
   const { data, isLoading, isError, refetch } = useOrders(filters);
   const rows: any[] = data?.data ?? [];

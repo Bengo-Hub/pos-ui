@@ -82,6 +82,19 @@ src/app/
 | Request headers | `Authorization: Bearer {token}`, `X-Tenant-Slug`, `X-Outlet-ID` |
 | SSO | Auth-api OIDC PKCE flow; tokens stored in Zustand (persisted to localStorage) |
 
+### Outlet scope for admins and managers (2026-11-03)
+
+The header outlet chip has three states, held in `store/outlet-filter.ts`: a drill-down outlet,
+the explicit "All Outlets" choice, or neither, which means the session's own outlet. The chip
+always names the scope the lists load. List and report pages read it through `useListOutletId()`
+(drill-down id, `all`, or the home outlet), never by falling back to `all` on their own; before
+this the chip named the login outlet while the sales, drafts and shipments lists loaded every
+branch. The drill-down is kept per browser tab in sessionStorage (slug-scoped), restored after a
+reload, and cleared on sign-out or when another account signs in. Staff without all-outlet access
+never restore one. pos-api applies the X-Outlet-ID rule to `?outlet_id=` on the All-Sales list,
+summary and export too: `all` only for HQ-level callers, another outlet only when the caller is
+assigned to it; otherwise the request falls back to the caller's outlet context.
+
 ### Access Tiers
 
 | Role | Access | UI scope |
