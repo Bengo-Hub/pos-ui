@@ -17,7 +17,7 @@ import {
 } from '@/hooks/useReports';
 import { ReportExportButtons } from '@/components/reports/report-document-button';
 import { OutletFilter } from '@/components/outlet-filter';
-import { useOutletFilterStore } from '@/store/outlet-filter';
+import { useListOutletId } from '@/store/outlet-filter';
 import { useModuleAccess } from '@/hooks/use-module-access';
 import { DateRangePicker, type DateRange } from '@/components/ui/date-range-picker';
 import { Card, CardContent } from '@/components/ui/base';
@@ -65,9 +65,9 @@ export default function AnalyticsReportPage() {
   const currency = (posSettings as any)?.currency ?? 'KES';
   const fmt = fmtFor(currency);
 
-  // Shared outlet filter — HQ/admin users only (OutletFilter itself hides for regular staff).
-  const selectedOutlet = useOutletFilterStore((s) => s.selectedOutlet);
-  const outletId = selectedOutlet?.id;
+  // The scope the header and the OutletFilter name: an outlet, "all" (every outlet, HQ-level
+  // callers only; the server enforces it), or the session's own outlet.
+  const outletId = useListOutletId();
 
   // Tab list follows the outlet's use case: kitchen use cases get KDS Station, everything
   // else gets Register / Products & Brands / Payment Methods.

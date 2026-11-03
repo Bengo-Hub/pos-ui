@@ -17,7 +17,7 @@ import { FeatureLocked } from '@/components/auth/feature-locked';
 import { Card, CardContent } from '@/components/ui/base';
 import { DateRangePicker, type DateRange } from '@/components/ui/date-range-picker';
 import { OutletFilter } from '@/components/outlet-filter';
-import { useOutletFilterStore } from '@/store/outlet-filter';
+import { useListOutletId } from '@/store/outlet-filter';
 import { useHotelOccupancyReport, useHotelOccupancyTrend } from '@/hooks/useReports';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { cn } from '@/lib/utils';
@@ -67,8 +67,8 @@ function StatCard({ icon: Icon, label, value, hint }: { icon: React.ElementType;
 
 function HotelReportsPage() {
   const [range, setRange] = useState<DateRange>({ from: isoDaysAgo(30), to: todayISO() });
-  const selectedOutlet = useOutletFilterStore((s) => s.selectedOutlet);
-  const outletId = selectedOutlet?.id;
+  // The scope the header and the OutletFilter name, "all" included (server-enforced).
+  const outletId = useListOutletId();
   const { data: posSettings } = usePOSSettings();
   const currency = (posSettings as any)?.currency ?? 'KES';
   const fmt = (n: number) => `${currency} ${(n ?? 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;

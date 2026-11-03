@@ -91,9 +91,15 @@ always names the scope the lists load. List and report pages read it through `us
 this the chip named the login outlet while the sales, drafts and shipments lists loaded every
 branch. The drill-down is kept per browser tab in sessionStorage (slug-scoped), restored after a
 reload, and cleared on sign-out or when another account signs in. Staff without all-outlet access
-never restore one. pos-api applies the X-Outlet-ID rule to `?outlet_id=` on the All-Sales list,
-summary and export too: `all` only for HQ-level callers, another outlet only when the caller is
-assigned to it; otherwise the request falls back to the caller's outlet context.
+never restore one. Analytics, hotel reports and the dashboard KPI card read the same scope and
+send it as `outlet_id` (the dashboard query key carries it, so switching outlet refetches).
+
+pos-api resolves `?outlet_id=` with one rule, `outletmw.RequestOutletScope`, used by the
+All-Sales list, summary and export and by every analytics, register, KDS, hotel and PDF report:
+`all` is every outlet for HQ-level callers only, a named outlet counts only when the caller may
+see it, and anything else falls back to the caller's outlet context (header, token outlet, else
+HQ). Without `outlet_id=all` a report is never tenant-wide, because the outlet context always
+resolves to some outlet.
 
 ### Access Tiers
 

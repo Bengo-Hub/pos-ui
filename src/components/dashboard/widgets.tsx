@@ -2,7 +2,7 @@
 
 import { apiClient } from '@/lib/api/client';
 import { useAuthStore } from '@/store/auth';
-import { useOutletFilterStore } from '@/store/outlet-filter';
+import { useOutletFilterStore, useListOutletId } from '@/store/outlet-filter';
 import { orderSubtypeBadge } from '@/lib/pos/order-subtype-label';
 import { cn } from '@/lib/utils';
 import { useQuery } from '@tanstack/react-query';
@@ -48,9 +48,15 @@ export function fmtNum(n: number): string {
 export function useDashboardSummary(range?: { from?: string; to?: string }) {
   const tenantID = useTenantID();
   const { from, to } = range ?? {};
+  // The outlet the header names (or "all"), in the key too: switching outlet used to keep
+  // showing the previous outlet's KPIs until the cache went stale.
+  const outletId = useListOutletId();
   return useQuery({
-    queryKey: ['dashboard-summary', tenantID, from, to],
-    queryFn: () => apiClient.get<any>(`/api/v1/${tenantID}/pos/reports/summary`, from && to ? { from, to } : undefined),
+    queryKey: ['dashboard-summary', tenantID, outletId, from, to],
+    queryFn: () => apiClient.get<any>(`/api/v1/${tenantID}/pos/reports/summary`, {
+      outlet_id: outletId,
+      ...(from && to ? { from, to } : {}),
+    }),
     enabled: !!tenantID,
     staleTime: 2 * 60_000,
     retry: false,
