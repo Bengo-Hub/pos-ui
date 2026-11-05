@@ -1,9 +1,9 @@
 'use client';
 
 import { useMemo } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { SettlementModal, SETTLE_CREDIT_SALE_METHODS } from '@bengo-hub/shared-ui-lib/payments';
+import { SettlementModal, SETTLE_CREDIT_SALE_METHODS, usableSettlementMethods, type UsableSettlementMethods } from '@bengo-hub/shared-ui-lib/payments';
 import { apiClient } from '@/lib/api/client';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { useTenders } from '@/hooks/usePOS';
@@ -40,6 +40,14 @@ export function RecordPaymentModal({
   const tenantID = useAuthStore((s) => s.user?.tenant_id ?? '');
   const qc = useQueryClient();
   const { data: tendersData } = useTenders();
+  // Gateway methods show only when this tenant switched that gateway on; offline methods always show.
+  const { data: usable } = useQuery({
+    queryKey: ['pos-settlement-methods', tenantID],
+    queryFn: () => apiClient.get<UsableSettlementMethods>(`/api/v1/${tenantID}/pos/settlement-methods`),
+    enabled: !!tenantID,
+    staleTime: 5 * 60_000,
+  });
+  const methods = useMemo(() => usableSettlementMethods(SETTLE_CREDIT_SALE_METHODS, usable), [usable]);
 
   const outstanding = useMemo(() => {
     const due = order.amount_due ?? Math.max((order.total_amount ?? 0) - (order.total_paid ?? order.paid_total ?? 0), 0);
@@ -103,7 +111,7 @@ export function RecordPaymentModal({
       amountValue={outstanding}
       defaultAmount={outstanding}
       allowOverpayment
-      methods={SETTLE_CREDIT_SALE_METHODS}
+      methods={methods}
       isPending={mutation.isPending}
       onClose={onClose}
       onSubmit={(input) =>
