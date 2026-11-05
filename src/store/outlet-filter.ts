@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { useAuthStore } from '@/store/auth';
 import { apiClient } from '@/lib/api/client';
-import { canAccessAllOutlets } from '@/lib/auth/outlet-access';
+import { canAccessAllOutlets, tokenOutletLimit } from '@/lib/auth/outlet-access';
 import { getStoredDrillDown, setStoredDrillDown } from '@/lib/auth/outlet-storage';
 
 export interface OutletOption {
@@ -86,12 +86,18 @@ export function useListOutletId(): string {
 // view. Only admins/managers keep one; for anyone else the stored value is ignored and cleared.
 function restoreDrillDown() {
   const { user, session } = useAuthStore.getState();
-  if (!session || !user || !canAccessAllOutlets(user)) {
+  const limit = tokenOutletLimit(session?.accessToken);
+  if (!session || !user || (limit.length === 0 && !canAccessAllOutlets(user))) {
     setStoredDrillDown(null);
     return;
   }
   const stored = getStoredDrillDown<OutletOption>(user.tenant_slug);
   if (!stored) return;
+  // A limit set after this was stored: All Outlets, or an outlet they no longer hold, does not apply.
+  if (limit.length > 0 && !(stored.outlet && limit.includes(stored.outlet.id))) {
+    setStoredDrillDown(null);
+    return;
+  }
   useOutletFilterStore.setState({ selectedOutlet: stored.outlet, allOutlets: !stored.outlet && stored.all });
   useAuthStore.getState().setSelectedOutletId(stored.outlet?.id ?? null);
 }

@@ -4,7 +4,7 @@ import { useAuthStore } from '@/store/auth';
 import { useOutletFilterStore, type OutletOption } from '@/store/outlet-filter';
 import { fetchOutlets, type OutletListItem } from '@/lib/api/outlets';
 import { apiClient } from '@/lib/api/client';
-import { canAccessAllOutlets } from '@/lib/auth/outlet-access';
+import { canAccessAllOutlets, tokenOutletLimit } from '@/lib/auth/outlet-access';
 import { SearchableCombobox } from '@bengo-hub/shared-ui-lib/combobox';
 import { useQuery } from '@tanstack/react-query';
 import { useParams } from 'next/navigation';
@@ -27,7 +27,11 @@ export function OutletFilter({ className }: { className?: string }) {
 
   // HQ/admin/manager users can drill into specific outlets — same role gate as the header
   // outlet switcher (see canAccessAllOutlets), so the two never drift out of sync again.
-  const canFilter = canAccessAllOutlets(user);
+  // A manager limited to certain outlets (the list comes back filtered) switches among theirs, with
+  // no All Outlets choice since the server would answer with one outlet only.
+  const accessToken = useAuthStore((s) => s.session?.accessToken);
+  const limited = tokenOutletLimit(accessToken).length > 0;
+  const canFilter = limited || canAccessAllOutlets(user);
 
   const { selectedOutlet, allOutlets, outlets, setOutlets, selectOutlet } = useOutletFilterStore();
 
@@ -79,8 +83,8 @@ export function OutletFilter({ className }: { className?: string }) {
           const o = outlets.find((x) => x.id === value);
           if (o) selectOutlet(o);
         }}
-        placeholder="All Outlets"
-        clearable
+        placeholder={limited ? 'Select outlet' : 'All Outlets'}
+        clearable={!limited}
       />
     </div>
   );

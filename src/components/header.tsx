@@ -5,7 +5,7 @@ import { useCloseShift, useCurrentShift } from '@/hooks/useShifts';
 import { useSubscription } from '@/hooks/use-subscription';
 import { apiClient } from '@/lib/api/client';
 import { apiErrorMessage } from '@/lib/api/error-message';
-import { canAccessAllOutlets } from '@/lib/auth/outlet-access';
+import { canAccessAllOutlets, tokenOutletLimit } from '@/lib/auth/outlet-access';
 import { P } from '@/lib/rbac/permissions';
 import { cn } from '@/lib/utils';
 import { useTenantBranding } from '@/providers/tenant-branding-provider';
@@ -128,7 +128,9 @@ function HeaderOutletChip() {
   // selectOutlet below), which pos-api's OutletContextMiddleware already honors for admin/manager
   // roles regardless of session type — there's no re-authentication involved, so there's no
   // reason to block PIN sessions from it.
-  const canSwitch = canAccessAllOutlets(user);
+  // A manager limited to certain outlets switches among theirs, with no All Outlets choice.
+  const limited = tokenOutletLimit(session?.accessToken).length > 0;
+  const canSwitch = limited || canAccessAllOutlets(user);
 
   const tenantId = user?.tenant_id ?? '';
   const tenantSlug = user?.tenant_slug ?? '';
@@ -155,8 +157,8 @@ function HeaderOutletChip() {
   // home outlet even after All Outlets was picked, so the header named a branch while the sales
   // list showed every branch.
   const homeOutlet = authOutlet ? { id: authOutlet.id, code: authOutlet.code, name: authOutlet.name, useCase: authOutlet.use_case } : null;
-  const activeOutlet = selectedOutlet ?? (allOutlets ? null : homeOutlet);
-  const activeName = activeOutlet?.name ?? (canSwitch ? 'All Outlets' : 'Select Outlet');
+  const activeOutlet = selectedOutlet ?? (allOutlets && !limited ? null : homeOutlet);
+  const activeName = activeOutlet?.name ?? (canSwitch && !limited ? 'All Outlets' : 'Select Outlet');
   const activeUseCase = activeOutlet?.useCase ?? (allOutlets ? '' : authOutlet?.use_case ?? '');
 
   // Admins/managers always get the switcher (even with no home outlet of their own — e.g. a
@@ -236,7 +238,7 @@ function HeaderOutletChip() {
               </p>
             )}
             <div className="max-h-64 overflow-y-auto py-1">
-              <button
+              {!limited && <button
                 type="button"
                 onClick={() => {
                   selectOutlet(null);
@@ -252,7 +254,7 @@ function HeaderOutletChip() {
                 <Building2 className="h-3.5 w-3.5 shrink-0" />
                 <span className="flex-1">All Outlets</span>
                 {!activeOutlet && <Check className="h-3.5 w-3.5 shrink-0" />}
-              </button>
+              </button>}
               {outlets
                 .filter((o) =>
                   !outletSearch ||
