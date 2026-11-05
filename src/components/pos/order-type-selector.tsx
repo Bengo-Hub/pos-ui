@@ -2,6 +2,7 @@
 
 import { cn } from '@/lib/utils';
 import { type OrderSubtype } from '@/hooks/usePOS';
+import { useSubscription } from '@/hooks/use-subscription';
 import { UtensilsCrossed, ShoppingBag, BedDouble, Bike, GlassWater } from 'lucide-react';
 
 interface OrderTypeSelectorProps {
@@ -24,6 +25,7 @@ interface SubtypeOption {
   label: string;
   icon: React.ReactNode;
   useCases?: string[]; // if set, only show for these use cases
+  feature?: string; // if set, only show when the plan includes it
 }
 
 const OPTIONS: SubtypeOption[] = [
@@ -49,6 +51,8 @@ const OPTIONS: SubtypeOption[] = [
     value: 'delivery',
     label: 'Delivery',
     icon: <Bike className="h-4 w-4" />,
+    // Delivery is priced and dispatched by logistics, which tier 1 plans do not include.
+    feature: 'basic_logistics_access',
   },
   {
     value: 'bar_tab',
@@ -66,8 +70,10 @@ export function OrderTypeSelector({
   useCase,
   className,
 }: OrderTypeSelectorProps) {
+  const { hasFeature } = useSubscription();
   const uc = (useCase ?? '').toLowerCase();
   const visibleOptions = OPTIONS.filter((opt) => {
+    if (opt.feature && !hasFeature(opt.feature)) return false;
     if (!opt.useCases) return true;
     return opt.useCases.some((u) => uc.includes(u));
   });
