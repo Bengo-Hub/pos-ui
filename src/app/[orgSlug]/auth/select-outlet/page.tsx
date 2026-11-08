@@ -63,11 +63,15 @@ function SelectOutletContent() {
 
   const redirect = useCallback((path: string) => router.replace(path), [router]);
 
+  // Wait for the saved state to load: a hard reload starts at 'idle' before it does, and going to
+  // SSO then would sign a cashier in again and open a new session for nothing.
+  const hasHydrated = useAuthStore((s) => s._hasHydrated);
+  const hasSession = useAuthStore((s) => !!s.session);
   useEffect(() => {
-    if (status === 'idle') {
+    if (hasHydrated && !hasSession && status === 'idle') {
       useAuthStore.getState().redirectToSSO(orgSlug, window.location.href);
     }
-  }, [status, orgSlug]);
+  }, [hasHydrated, hasSession, status, orgSlug]);
 
   const handleSelect = useCallback(
     (outlet: OutletInfo) => {
