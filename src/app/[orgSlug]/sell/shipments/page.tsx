@@ -10,6 +10,7 @@ import { SellDetailsModal } from '@/components/pos/sell-details-modal';
 import { EditShippingModal } from '@/components/pos/sales/edit-shipping-modal';
 import { cn } from '@/lib/utils';
 import { DataTable } from '@bengo-hub/shared-ui-lib/data-table';
+import { useDebouncedValue } from '@bengo-hub/shared-ui-lib/search';
 import { DateRangePicker, type DateRange } from '@/components/ui/date-range-picker';
 import { buildShipmentColumns } from './shipments-columns';
 
@@ -48,17 +49,20 @@ export default function ShipmentsPage() {
   const [shippingOrder, setShippingOrder] = useState<any>(null);
   const [range, setRange] = useState<DateRange>({ from: '', to: '' });
 
+  // The invoice search refetches only once typing pauses.
+  const debouncedSearch = useDebouncedValue(search);
+
   const filters: OrderListFilters = useMemo(() => ({
     outletId: listOutletId,
     shippingStatus: tab,
-    orderNumber: search.trim() || undefined,
+    orderNumber: debouncedSearch.trim() || undefined,
     from: range.from || undefined,
     to: range.to || undefined,
     page,
     limit: pageSize,
-  }), [listOutletId, tab, search, range, page, pageSize]);
+  }), [listOutletId, tab, debouncedSearch, range, page, pageSize]);
 
-  const { data, isLoading, isError, refetch } = useOrders(filters);
+  const { data, isLoading, isError, refetch } = useOrders(filters, { keepPrevious: true });
   const rows: any[] = data?.data ?? [];
   const total = data?.meta?.total ?? (data as any)?.total ?? rows.length;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));

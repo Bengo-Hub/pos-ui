@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from 'react';
 import { Loader2, Minus, Plus, Search, ShoppingCart, Trash2, X } from 'lucide-react';
+import { useDebouncedValue } from '@bengo-hub/shared-ui-lib/search';
 import { useMenuItems, useCreateOrder } from '@/hooks/usePOS';
 import { SplitPaymentModal } from './split-payment-modal';
 import { apiErrorMessage } from '@/lib/api/error-message';
@@ -34,6 +35,8 @@ export function WalkInSaleModal({ open, onClose, tenantSlug }: WalkInSaleModalPr
 
   const [cart, setCart] = useState<CartLine[]>([]);
   const [search, setSearch] = useState('');
+  // The drug search waits for a pause in typing; the box itself updates on every key.
+  const debouncedSearch = useDebouncedValue(search.trim());
   const [completedOrder, setCompletedOrder] = useState<CompletedOrder | null>(null);
 
   // 'pharmaceutical' matches the category the New Prescription drug picker searches
@@ -42,7 +45,7 @@ export function WalkInSaleModal({ open, onClose, tenantSlug }: WalkInSaleModalPr
   const { data: drugData, isFetching } = useMenuItems({
     itemType: 'GOODS',
     category: 'pharmaceutical',
-    search: search || undefined,
+    search: debouncedSearch || undefined,
     limit: 30,
   });
 

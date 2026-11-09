@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Loader2, Plus, Search, X } from 'lucide-react';
+import { createSearchRunner, useDebouncedValue, useLatestRef } from '@bengo-hub/shared-ui-lib/search';
 import type { DiscountItemRef } from './discount-form-types';
 
 /**
@@ -11,8 +12,40 @@ import type { DiscountItemRef } from './discount-form-types';
  * it has. Ported from the retired hotel happy-hour editor.
  */
 
-export type SearchItemsFn = (query: string) => Promise<DiscountItemRef[]>;
+/** `ctx.signal` fires when a newer search replaces this one; pass it to the request. */
+export type SearchItemsFn = (query: string, ctx?: { signal?: AbortSignal }) => Promise<DiscountItemRef[]>;
 export type FetchCategoryItemsFn = (category: string) => Promise<DiscountItemRef[]>;
+
+/**
+ * Debounced, latest-wins item search for the pickers below. The term waits for a pause in
+ * typing, each new term aborts the request before it, and a late reply never overwrites
+ * newer results.
+ */
+function useItemSearch(search: string, searchItems: SearchItemsFn) {
+  const raw = search.trim();
+  const term = useDebouncedValue(raw);
+  const searchRef = useLatestRef(searchItems);
+  const runner = useMemo(
+    () => createSearchRunner<DiscountItemRef[]>(() => (q, ctx) => searchRef.current(q, ctx)),
+    [searchRef],
+  );
+  const [results, setResults] = useState<DiscountItemRef[]>([]);
+  const [fetching, setFetching] = useState(false);
+
+  useEffect(() => () => runner.cancel(), [runner]);
+  useEffect(() => {
+    if (!term) { runner.cancel(); setResults([]); setFetching(false); return; }
+    setFetching(true);
+    void runner.run(term).then((outcome) => {
+      if (outcome.status === 'stale') return;
+      setResults(outcome.status === 'ok' ? outcome.value : []);
+      setFetching(false);
+    });
+  }, [term, runner]);
+
+  // Busy while the pause runs as well, so "No matching items" never flashes for old results.
+  return { results, busy: fetching || raw !== term };
+}
 
 /** Multi-select item scope picker (chip list + debounced search). */
 export function ScopeItemPicker({ selected, onChange, searchItems }: {
@@ -21,21 +54,9 @@ export function ScopeItemPicker({ selected, onChange, searchItems }: {
   searchItems: SearchItemsFn;
 }) {
   const [search, setSearch] = useState('');
-  const [results, setResults] = useState<DiscountItemRef[]>([]);
-  const [busy, setBusy] = useState(false);
-
-  useEffect(() => {
-    if (!search.trim()) { setResults([]); return; }
-    const t = setTimeout(async () => {
-      setBusy(true);
-      try {
-        const found = await searchItems(search.trim());
-        setResults(found.filter((i) => !selected.some((s) => s.sku === i.sku)));
-      } catch { setResults([]); }
-      setBusy(false);
-    }, 250);
-    return () => clearTimeout(t);
-  }, [search, searchItems, selected]);
+  const { results: found, busy } = useItemSearch(search, searchItems);
+  // Already-picked items are hidden from the results without searching again.
+  const results = found.filter((i) => !selected.some((s) => s.sku === i.sku));
 
   return (
     <div className="space-y-2">
@@ -130,19 +151,8 @@ export function SingleItemSelect({ value, placeholder, onChange, searchItems }: 
   searchItems: SearchItemsFn;
 }) {
   const [search, setSearch] = useState('');
-  const [results, setResults] = useState<DiscountItemRef[]>([]);
-  const [busy, setBusy] = useState(false);
+  const { results, busy } = useItemSearch(search, searchItems);
   const [open, setOpen] = useState(false);
-
-  useEffect(() => {
-    if (!search.trim()) { setResults([]); return; }
-    const t = setTimeout(async () => {
-      setBusy(true);
-      try { setResults(await searchItems(search.trim())); } catch { setResults([]); }
-      setBusy(false);
-    }, 250);
-    return () => clearTimeout(t);
-  }, [search, searchItems]);
 
   if (value) {
     return (

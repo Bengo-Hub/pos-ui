@@ -17,7 +17,7 @@ export function useClientSearch(phone?: string, name?: string, email?: string) {
   const tenantID = useTenantID();
   return useQuery({
     queryKey: ['pos-clients', tenantID, phone, name, email],
-    queryFn: () => clientsApi.searchAccounts(tenantID, phone || undefined, name || undefined, email || undefined),
+    queryFn: ({ signal }) => clientsApi.searchAccounts(tenantID, phone || undefined, name || undefined, email || undefined, signal),
     enabled: !!tenantID && !!(phone || name || email),
     staleTime: 30_000,
   });

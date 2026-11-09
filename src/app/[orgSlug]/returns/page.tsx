@@ -10,7 +10,7 @@ import { apiClient } from '@/lib/api/client';
 import { useMemo, useState, useEffect } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { Plus, RefreshCw, RotateCcw, Search } from 'lucide-react';
-import { useDebounced } from '@/hooks/use-debounced';
+import { useDebouncedValue } from '@bengo-hub/shared-ui-lib/search';
 import { cn } from '@/lib/utils';
 import { DataTable } from '@bengo-hub/shared-ui-lib/data-table';
 import { DateRangePicker, type DateRange } from '@/components/ui/date-range-picker';
@@ -56,7 +56,7 @@ function ReturnsPage() {
   const [customerModal, setCustomerModal] = useState<{ name?: string | null; phone: string } | null>(null);
   const [range, setRange] = useState<DateRange>({ from: '', to: '' });
   const [search, setSearch] = useState('');
-  const debouncedSearch = useDebounced(search.trim(), 350);
+  const debouncedSearch = useDebouncedValue(search.trim());
   const { data, isLoading, refetch, isFetching } = useReturns(
     statusFilter, range.from || undefined, range.to || undefined, debouncedSearch.length >= 2 ? debouncedSearch : undefined,
   );

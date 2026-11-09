@@ -15,6 +15,7 @@
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
+import { createSearchRunner, useDebouncedCallback, useLatestRef } from '@bengo-hub/shared-ui-lib/search';
 
 import { COURSES, type CourseValue } from '@/components/pos/course-selector';
 import { type SelectedCustomer } from '@/components/pos/customer-search';
@@ -731,11 +732,31 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
   // The normal path is instant client-side search over the full catalog. A stale or partial
   // offline catalog must not make a valid inventory item look nonexistent, so query the POS API
   // when the local catalog has no match. This is deliberately debounced and only runs on a local
-  // miss, avoiding a request per keystroke for terminals with a complete cache.
+  // miss, avoiding a request per keystroke for terminals with a complete cache. Each remote
+  // search aborts the one before it, so a slow older reply never replaces newer results.
+  const remoteScopeRef = useLatestRef({ tenantID, orderOutletID });
+  const remoteRunner = useMemo(
+    () => createSearchRunner<CatalogItem[]>(() => (query, { signal }) =>
+      searchMenuItems(remoteScopeRef.current.tenantID, remoteScopeRef.current.orderOutletID, query, 50, signal)),
+    [remoteScopeRef],
+  );
+  const runRemoteSearch = useDebouncedCallback((query: string) => {
+    void remoteRunner.run(query).then((outcome) => {
+      if (outcome.status === 'stale') return;
+      setRemoteSearchItems(outcome.status === 'ok' ? outcome.value : []);
+    });
+  });
+  useEffect(() => () => remoteRunner.cancel(), [remoteRunner]);
+
   useEffect(() => {
+    const stopRemoteSearch = () => {
+      runRemoteSearch.cancel();
+      remoteRunner.cancel();
+      setRemoteSearchItems([]);
+    };
     const query = searchQuery.trim();
     if (!query) {
-      setRemoteSearchItems([]);
+      stopRemoteSearch();
       return;
     }
     const localItems = catalogItems ?? [];
@@ -746,25 +767,11 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
       (item.barcode ?? '').toLowerCase().includes(normalized),
     );
     if (hasLocalMatch || !tenantID) {
-      setRemoteSearchItems([]);
+      stopRemoteSearch();
       return;
     }
-
-    let cancelled = false;
-    const timer = window.setTimeout(() => {
-      void searchMenuItems(tenantID, orderOutletID, query, 50)
-        .then((items) => {
-          if (!cancelled) setRemoteSearchItems(items);
-        })
-        .catch(() => {
-          if (!cancelled) setRemoteSearchItems([]);
-        });
-    }, 250);
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timer);
-    };
-  }, [catalogItems, orderOutletID, searchQuery, tenantID]);
+    runRemoteSearch(query);
+  }, [catalogItems, orderOutletID, searchQuery, tenantID, runRemoteSearch, remoteRunner]);
 
   const createOrder = useCreateOrder();
   // Set true when the cashier confirms the age prompt for an age-restricted item;

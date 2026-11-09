@@ -14,8 +14,9 @@
  * debtor (credit sales, layaway, quotations) should disallow walk-in via `requireRealCustomer`.
  */
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Loader2, UserPlus, UserRound, X, Search } from 'lucide-react';
+import { useDebouncedSearch } from '@bengo-hub/shared-ui-lib/search';
 import { toast } from 'sonner';
 import { useClientSearch, useClientCredit, useClientCreditByIdentifier, useCreateLoyaltyAccount } from '@/hooks/useClients';
 import { classifySearchQuery, type LoyaltyAccount } from '@/lib/api/clients';
@@ -64,17 +65,14 @@ interface CustomerSearchProps {
 }
 
 export function CustomerSearch({ value, onChange, requireRealCustomer = false, requiredForLabel = 'a credit sale', onSelectAccount, layout = 'stack', extra }: CustomerSearchProps) {
-  const [query, setQuery] = useState('');
-  const [debounced, setDebounced] = useState('');
+  // The box updates on every key; `debounced` (the searched term) waits for a pause, and
+  // Enter searches at once.
+  const search = useDebouncedSearch();
+  const debounced = search.term;
   const [showAdd, setShowAdd] = useState(false);
   const [newName, setNewName] = useState('');
   const [newPhone, setNewPhone] = useState('');
   const [newEmail, setNewEmail] = useState('');
-
-  useEffect(() => {
-    const t = setTimeout(() => setDebounced(query), 400);
-    return () => clearTimeout(t);
-  }, [query]);
 
   // Classify the free-text query into name / phone / email; phones search by the 9-digit
   // national number so any stored format matches.
@@ -103,8 +101,7 @@ export function CustomerSearch({ value, onChange, requireRealCustomer = false, r
   const credit = accountCredit ?? identifierCredit;
 
   const select = (c: SelectedCustomer) => {
-    setQuery('');
-    setDebounced('');
+    search.clear();
     setShowAdd(false);
     setNewName('');
     setNewPhone('');
@@ -263,8 +260,7 @@ export function CustomerSearch({ value, onChange, requireRealCustomer = false, r
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <input
             type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            {...search.inputProps}
             placeholder="Search by name, phone or email"
             className="w-full bg-background border border-border rounded-xl py-2.5 pl-10 pr-9 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
           />

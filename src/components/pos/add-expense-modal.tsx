@@ -16,6 +16,7 @@ import {
   useExpenseNumberPreview,
 } from '@/hooks/usePOS';
 import { TypeaheadInput } from '@/components/ui/typeahead-input';
+import { useDebouncedValue } from '@bengo-hub/shared-ui-lib/search';
 import { AccountForm, EMPTY_ACCOUNT_FORM, isAccountFormValid, SUPPORTED_CURRENCIES, CURRENCY_META, resolveDefaultAccount } from '@bengo-hub/shared-ui-lib/payments';
 
 interface AddExpenseModalProps {
@@ -65,11 +66,7 @@ export function AddExpenseModal({ open, onClose }: AddExpenseModalProps) {
   // Debounce "expense for" into the supplier search so suggestions come from the backend's
   // filtered match rather than only ever the first unfiltered page — a supplier whose name
   // sorts past that first page previously never showed up in the typeahead at all.
-  const [expenseForDebounced, setExpenseForDebounced] = useState('');
-  useEffect(() => {
-    const t = setTimeout(() => setExpenseForDebounced(expenseFor.trim()), 300);
-    return () => clearTimeout(t);
-  }, [expenseFor]);
+  const expenseForDebounced = useDebouncedValue(expenseFor.trim());
   const suppliers = useExpenseSuppliers(expenseForDebounced || undefined);
   const nextNumberPreview = useExpenseNumberPreview();
   const supplierOptions = useMemo(

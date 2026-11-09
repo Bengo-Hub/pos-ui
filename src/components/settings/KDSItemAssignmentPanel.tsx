@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Loader2, Search, Utensils, X } from 'lucide-react';
 import { Button, Card, CardContent } from '@/components/ui/base';
+import { useDebouncedValue } from '@bengo-hub/shared-ui-lib/search';
 import { useMenuItems } from '@/hooks/usePOS';
 import { useAllKDSStations, useSetCatalogItemKDSStation } from '@/hooks/useKDS';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -30,10 +31,12 @@ export function KDSItemAssignmentPanel() {
   const { data: stationsData, isLoading: stationsLoading } = useAllKDSStations();
   const stations = (stationsData?.data ?? []).filter((s) => s.is_active);
 
+  // The item search waits for a pause in typing; the box itself updates on every key.
+  const term = useDebouncedValue(query.trim());
   const { data: itemsData, isFetching: itemsLoading } = useMenuItems({
-    search: query,
+    search: term,
     limit: 20,
-    enabled: query.trim().length >= 2,
+    enabled: term.length >= 2,
   });
   const items = itemsData?.data ?? [];
 

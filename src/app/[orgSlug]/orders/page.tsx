@@ -18,6 +18,7 @@ import { cn, formatCurrency } from '@/lib/utils';
 import { useAuthStore } from '@/store/auth';
 import { TrackingIframeModal } from '@bengo-hub/shared-ui-lib';
 import { DataTable, type DataTableColumn } from '@bengo-hub/shared-ui-lib/data-table';
+import { useDebouncedValue } from '@bengo-hub/shared-ui-lib/search';
 import { useQueryClient } from '@tanstack/react-query';
 import {
     CreditCard,
@@ -54,7 +55,6 @@ export default function OrdersPage() {
   const isRetail = outletUseCase === 'retail';
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   // Advanced filters (all server-side via useOrders — reuses the existing /orders query params).
   const [showFilters, setShowFilters] = useState(false);
@@ -63,7 +63,6 @@ export default function OrdersPage() {
   const [paymentMethod, setPaymentMethod] = useState('all');
   const [source, setSource] = useState('all');
   const [customer, setCustomer] = useState('');
-  const [debouncedCustomer, setDebouncedCustomer] = useState('');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
@@ -77,14 +76,9 @@ export default function OrdersPage() {
     ? Math.max(0, (selectedOrder.total_amount ?? 0) - (selectedOrder.paid_total ?? 0))
     : 0;
 
-  useEffect(() => {
-    const t = setTimeout(() => setDebouncedCustomer(customer.trim()), 350);
-    return () => clearTimeout(t);
-  }, [customer]);
-  useEffect(() => {
-    const t = setTimeout(() => setDebouncedSearch(searchQuery.trim()), 350);
-    return () => clearTimeout(t);
-  }, [searchQuery]);
+  // Typed filters refetch only once typing pauses; the inputs update on every key.
+  const debouncedCustomer = useDebouncedValue(customer.trim());
+  const debouncedSearch = useDebouncedValue(searchQuery.trim());
 
   // Any change to a server-side filter → back to page 1.
   useEffect(() => {

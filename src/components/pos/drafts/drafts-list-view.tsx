@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Search, FileText, ArrowRight, RefreshCw, Trash2, Filter } from 'lucide-react';
 import { Button, Card, CardContent, CardHeader } from '@/components/ui/base';
 import { DataTable, type DataTableColumn } from '@bengo-hub/shared-ui-lib/data-table';
+import { useDebouncedValue } from '@bengo-hub/shared-ui-lib/search';
 import { useOrders, useDeleteDraft, useBulkDeleteDrafts, type OrderListFilters } from '@/hooks/usePOS';
 import { useStaffList } from '@/hooks/useStaff';
 import { useAuthStore } from '@/store/auth';
@@ -100,19 +101,23 @@ export function DraftsListView({ orgSlug }: { orgSlug: string }) {
   const del = useDeleteDraft();
   const bulkDel = useBulkDeleteDrafts();
 
+  // The draft # search and the customer filter refetch only once typing pauses.
+  const debouncedSearch = useDebouncedValue(search);
+  const debouncedCustomer = useDebouncedValue(filterState.customer);
+
   const filters: OrderListFilters = useMemo(() => ({
     status: 'draft',
     outletId: listOutletId,
     from: rangeBound(filterState.range.from, filterState.range.fromTime) || undefined,
     to: rangeBound(filterState.range.to, filterState.range.toTime) || undefined,
-    customer: filterState.customer.trim() || undefined,
+    customer: debouncedCustomer.trim() || undefined,
     userId: filterState.userId || undefined,
-    orderNumber: search.trim() || undefined,
+    orderNumber: debouncedSearch.trim() || undefined,
     page,
     limit: pageSize,
-  }), [listOutletId, filterState, search, page, pageSize]);
+  }), [listOutletId, filterState, debouncedSearch, debouncedCustomer, page, pageSize]);
 
-  const { data, isLoading, refetch, isFetching } = useOrders(filters);
+  const { data, isLoading, refetch, isFetching } = useOrders(filters, { keepPrevious: true });
   const rows: any[] = data?.data ?? [];
   const total = data?.meta?.total ?? (data as any)?.total ?? rows.length;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));

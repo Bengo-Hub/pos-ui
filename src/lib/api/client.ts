@@ -116,6 +116,12 @@ class ApiClient {
     }
 
     private handleError = async (error: any) => {
+        // A request cancelled on purpose (a newer search replaced it, or the component went
+        // away) says nothing about the network or the server: skip the connectivity signal,
+        // the toasts and the callbacks, and just pass the cancellation on.
+        if (axios.isCancel(error)) {
+            return Promise.reject(error);
+        }
         // Feed the effective-connectivity signal: transport failures (timeout/unreachable/
         // gateway) count towards effectively-offline; any real HTTP response counts as
         // reachable even when it is an error status.
@@ -217,7 +223,11 @@ class ApiClient {
     return { ...h, ...deviceIdentityHeaders() };
   }
 
-  public get<T>(url: string, params?: any, config?: { suppressErrorToast?: boolean; timeout?: number }): Promise<T> {
+  /**
+   * `config.signal` cancels the request when it fires (react-query passes one to every
+   * queryFn, the shared search runner passes one to every search callback).
+   */
+  public get<T>(url: string, params?: any, config?: { suppressErrorToast?: boolean; timeout?: number; signal?: AbortSignal }): Promise<T> {
     return this.instance.get<T>(url, { params, ...config }).then((res: AxiosResponse<T>) => res.data);
   }
 

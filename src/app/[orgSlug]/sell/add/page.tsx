@@ -558,7 +558,7 @@ export default function AddSalePage() {
   // source the POS terminal uses) once it's ready; cold-start-only fallback hits the server via
   // searchMenuItems. Already-added items are excluded via SearchAddTable's `excludeIds` below,
   // not here, so a re-search after removing a line can surface it again.
-  const searchCatalog = useCallback(async (q: string): Promise<CatalogSearchOption[]> => {
+  const searchCatalog = useCallback(async (q: string, ctx?: { signal?: AbortSignal }): Promise<CatalogSearchOption[]> => {
     const query = q.trim().toLowerCase();
     const toOption = (it: CatalogItem): CatalogSearchOption => ({
       id: it.id,
@@ -581,7 +581,7 @@ export default function AddSalePage() {
       }
       return out;
     }
-    const items = await searchMenuItems(tenantId, outletId, query, 25);
+    const items = await searchMenuItems(tenantId, outletId, query, 25, ctx?.signal);
     return items.map(toOption);
   }, [fullCatalog, catalogReady, pricingProfile, currency, tenantId, outletId]);
 

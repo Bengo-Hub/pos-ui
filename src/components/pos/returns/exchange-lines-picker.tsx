@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Loader2, Minus, Plus, Search, Trash2 } from 'lucide-react';
+import { useDebouncedValue } from '@bengo-hub/shared-ui-lib/search';
 import { useMenuItems, type CatalogItem } from '@/hooks/usePOS';
 
 export interface ExchangeLine {
@@ -27,9 +28,11 @@ export function ExchangeLinesPicker({ lines, onChange, returnedValue, currency =
   currency?: string;
 }) {
   const [search, setSearch] = useState('');
+  // The catalog search waits for a pause in typing; the box itself updates on every key.
+  const debouncedSearch = useDebouncedValue(search.trim());
   const fmt = fmtFor(currency);
-  const { data: catalog, isFetching } = useMenuItems({ search: search || undefined, limit: 15 });
-  const results: CatalogItem[] = search ? (catalog?.data ?? []) : [];
+  const { data: catalog, isFetching } = useMenuItems({ search: debouncedSearch || undefined, limit: 15 });
+  const results: CatalogItem[] = search && debouncedSearch ? (catalog?.data ?? []) : [];
 
   const add = (item: CatalogItem) => {
     const idx = lines.findIndex((l) => l.item.id === item.id);

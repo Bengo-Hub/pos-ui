@@ -14,7 +14,7 @@ export function useDiscounts(status: string = 'all', opts: DiscountListOpts = {}
   const slug = useTenantSlug();
   return useQuery({
     queryKey: ['discounts', slug, status, opts.q ?? '', opts.page ?? 1, opts.limit ?? 100],
-    queryFn: () => discountsApi.list(slug, status, opts),
+    queryFn: ({ signal }) => discountsApi.list(slug, status, opts, signal),
     enabled: !!slug,
     staleTime: 60_000,
     placeholderData: (prev) => prev,

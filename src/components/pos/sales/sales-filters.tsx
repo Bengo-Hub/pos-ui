@@ -141,7 +141,7 @@ export function SalesFilters({ state, onChange, outlets, staff, fixedSource, hid
             value={state.itemSku}
             valueLabel={state.itemLabel}
             onChange={(value, option) => onChange({ itemSku: value, itemLabel: option?.label ?? '' })}
-            onRemoteSearch={async (q) => (await searchCatalogItemsAdapter(q)).map((i) => ({ value: i.sku, label: i.name, hint: i.sku }))}
+            onRemoteSearch={async (q, ctx) => (await searchCatalogItemsAdapter(q, ctx)).map((i) => ({ value: i.sku, label: i.name, hint: i.sku }))}
             placeholder="All items"
             searchPlaceholder="Search products…"
             clearable

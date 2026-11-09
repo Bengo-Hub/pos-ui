@@ -140,13 +140,15 @@ export interface DiscountListOpts {
 
 export const discountsApi = {
   /** status: 'active' | 'inactive' | 'all' (default) — 'all' lists every status for management. */
-  list: (tenantSlug: string, status: string = 'all', opts: DiscountListOpts = {}) => {
+  list: (tenantSlug: string, status: string = 'all', opts: DiscountListOpts = {}, signal?: AbortSignal) => {
     const params = new URLSearchParams({ status });
     params.set('limit', String(opts.limit ?? 100));
     if (opts.page && opts.page > 1) params.set('page', String(opts.page));
     if (opts.q?.trim()) params.set('q', opts.q.trim());
     return apiClient.get<DiscountListResponse>(
       `/api/v1/${tenantSlug}/pos/promotions?${params.toString()}`,
+      undefined,
+      { signal },
     );
   },
 

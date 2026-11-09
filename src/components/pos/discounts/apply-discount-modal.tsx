@@ -41,11 +41,16 @@ const round2 = (v: number) => Math.round(v * 100) / 100;
  * POS catalog. Exported so every pos-ui host of the form (Sell → Discounts page, this apply
  * modal) shares ONE adapter instead of re-implementing it.
  */
-export async function searchCatalogItemsAdapter(query: string): Promise<DiscountItemRef[]> {
+export async function searchCatalogItemsAdapter(
+  query: string,
+  ctx?: { signal?: AbortSignal },
+): Promise<DiscountItemRef[]> {
   const { apiClient } = await import('@/lib/api/client');
   const tenantID = useAuthStore.getState().user?.tenant_id ?? '';
   const res = await apiClient.get<{ data: Array<{ sku: string; name: string }> }>(
     `/api/v1/${tenantID}/pos/catalog/items?search=${encodeURIComponent(query)}&limit=25`,
+    undefined,
+    { signal: ctx?.signal },
   );
   return ((res as any)?.data ?? []).map((i: any) => ({ sku: i.sku, name: i.name }));
 }

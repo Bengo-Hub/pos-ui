@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Percent, Plus, Search } from 'lucide-react';
+import { useDebouncedValue } from '@bengo-hub/shared-ui-lib/search';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { usePermissions, P } from '@/hooks/usePermissions';
@@ -57,10 +58,9 @@ export default function DiscountsPage() {
   // (promotions ?q= name filter), so matches surface from the full set — never just the
   // currently fetched page.
   const [search, setSearch] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const debouncedSearch = useDebouncedValue(search);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
-  useEffect(() => { const t = setTimeout(() => setDebouncedSearch(search), 300); return () => clearTimeout(t); }, [search]);
 
   const { data, isLoading, isError, refetch } = useDiscounts('all', { q: debouncedSearch, page, limit: pageSize });
   const discounts: Discount[] = (data as any)?.data ?? [];

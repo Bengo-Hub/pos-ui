@@ -52,11 +52,12 @@ export const clientsApi = {
   // (NOT `{ accounts }`). Read `data` (falling back to `accounts`/array) and re-expose it as
   // `accounts` so callers get a stable shape — reading `.accounts` off the raw envelope always
   // yielded undefined, which is why customer search reported "not found" for real customers.
-  searchAccounts: (tenantID: string, phone?: string, name?: string, email?: string) =>
+  searchAccounts: (tenantID: string, phone?: string, name?: string, email?: string, signal?: AbortSignal) =>
     apiClient
       .get<{ data?: LoyaltyAccount[]; accounts?: LoyaltyAccount[]; total?: number } | LoyaltyAccount[]>(
         `${base(tenantID)}/loyalty/accounts`,
-        { phone, name, email }
+        { phone, name, email },
+        { signal },
       )
       .then((res) => {
         const accounts = Array.isArray(res) ? res : res.data ?? res.accounts ?? [];

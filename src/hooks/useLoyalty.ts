@@ -142,18 +142,21 @@ export function useLoyaltyAccounts(search?: string | CustomerSearchParams) {
     params && (params.phone || params.name || params.email)
       ? { ...(params.phone ? { phone: params.phone } : {}), ...(params.name ? { name: params.name } : {}), ...(params.email ? { email: params.email } : {}) }
       : undefined;
-  return useQuery({
+  return useQuery<LoyaltyAccount[]>({
     queryKey: ['loyalty-accounts', tenantID, query?.phone, query?.name, query?.email],
-    queryFn: () =>
+    queryFn: ({ signal }) =>
       apiClient
         .get<PaginatedResponse<LoyaltyAccount>>(
           `${base(tenantID)}/accounts`,
           query,
+          { signal },
         )
         .then((res) => (Array.isArray(res) ? res : res.data ?? []))
         .then((list) => list.map(normalizeAccount)),
     enabled: !!tenantID,
     staleTime: 15_000,
+    // Searching keeps the current accounts on screen until the new matches arrive.
+    placeholderData: (prev: LoyaltyAccount[] | undefined) => prev,
   });
 }
 

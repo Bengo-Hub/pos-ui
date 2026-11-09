@@ -2,7 +2,7 @@
 
 import { apiClient } from '@/lib/api/client';
 import { useAuthStore } from '@/store/auth';
-import { useQuery, useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useQuery, useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { useRef } from 'react';
 import {
@@ -199,10 +199,11 @@ export function useExpenseSuppliers(search?: string) {
   const tenantID = useTenantID();
   return useQuery({
     queryKey: ['pos-expense-suppliers', tenantID, search ?? ''],
-    queryFn: () =>
+    queryFn: ({ signal }) =>
       apiClient.get<{ data?: ExpenseSupplier[]; total?: number }>(
         `${basePath(tenantID)}/expenses/suppliers`,
         search ? { search } : undefined,
+        { signal },
       ),
     enabled: !!tenantID,
     staleTime: 60_000,
@@ -448,14 +449,14 @@ export function useMenuItems(filters?: {
   return useQuery({
     // outletID keys the cache because the server list is outlet-scoped (use-case filtered).
     queryKey: ['pos-catalog-items', tenantID, outletID, filters?.category, filters?.search, filters?.itemType, page, limit],
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const res = await apiClient.get<PaginatedResponse<CatalogItem>>(`${basePath(tenantID)}/catalog/items`, {
         category: filters?.category,
         search: filters?.search,
         item_type: filters?.itemType,
         page,
         limit,
-      });
+      }, { signal });
       // Keep the offline catalog cache fresh as the cashier browses (prices/availability).
       cacheCatalogPage(tenantID, outletID, res?.data);
       return res;
@@ -470,9 +471,15 @@ export function useMenuItems(filters?: {
  *  plain async function for callers that can't use a hook (e.g. SearchAddTable's `onSearch`,
  *  which is invoked from a debounced effect, not render). Used only until the offline full
  *  catalog (useFullCatalog) is ready; once it is, callers filter that client-side instead. */
-export async function searchMenuItems(tenantID: string, outletID: string, search: string, limit = 25): Promise<CatalogItem[]> {
+export async function searchMenuItems(
+  tenantID: string,
+  outletID: string,
+  search: string,
+  limit = 25,
+  signal?: AbortSignal,
+): Promise<CatalogItem[]> {
   if (!tenantID || !search.trim()) return [];
-  const res = await apiClient.get<PaginatedResponse<CatalogItem>>(`${basePath(tenantID)}/catalog/items`, { search, limit });
+  const res = await apiClient.get<PaginatedResponse<CatalogItem>>(`${basePath(tenantID)}/catalog/items`, { search, limit }, { signal });
   cacheCatalogPage(tenantID, outletID, res?.data);
   return res?.data ?? [];
 }
@@ -1196,12 +1203,19 @@ function isDefaultOrderList(filters?: OrderListFilters): boolean {
   return (page ?? 1) === 1 && Object.values(rest).every((v) => v === undefined || v === '' || v === false);
 }
 
-export function useOrders(filters?: OrderListFilters) {
+/** Options for list hooks driven by a search box or live filters. */
+export interface ListQueryOptions {
+  /** Keep the current rows on screen while the next filter's rows load (no flicker to empty). */
+  keepPrevious?: boolean;
+}
+
+export function useOrders(filters?: OrderListFilters, options: ListQueryOptions = {}) {
   const tenantID = useTenantID();
   const outletID = useEffectiveOutletID();
   return useQuery({
     queryKey: ['pos-orders', tenantID, filters],
-    queryFn: async () => {
+    placeholderData: options.keepPrevious ? keepPreviousData : undefined,
+    queryFn: async ({ signal }) => {
       const fetchList = () =>
       apiClient.get<{ data: POSOrder[]; total: number; meta?: { total: number; page: number; limit: number } }>(
         `${basePath(tenantID)}/orders`,
@@ -1230,6 +1244,7 @@ export function useOrders(filters?: OrderListFilters) {
           sort: 'created_at',
           order: 'desc',
         },
+        { signal },
       );
       // Offline resilience for the default "latest sales" list only: write it through to
       // the recent-orders dataset online, serve that cache when the network is out. Filtered
@@ -1243,7 +1258,8 @@ export function useOrders(filters?: OrderListFilters) {
         return res;
       } catch (err) {
         const { isNetworkShapedError } = await import('@/lib/connectivity');
-        if (isNetworkShapedError(err)) {
+        // A cancelled request (signal fired) is not an outage: never answer it from the cache.
+        if (!signal.aborted && isNetworkShapedError(err)) {
           const cached = await getKV<Awaited<ReturnType<typeof fetchList>>>(cacheKey);
           if (cached !== undefined) return cached;
         }
@@ -1275,13 +1291,14 @@ export interface OrdersSummary {
 
 /** Totals for the sales list footer. Deliberately page-INDEPENDENT: the query key drops
  *  page/limit so paging through the list never refetches (or changes) the grand totals. */
-export function useOrdersSummary(filters?: OrderListFilters) {
+export function useOrdersSummary(filters?: OrderListFilters, options: ListQueryOptions = {}) {
   const tenantID = useTenantID();
   // Strip pagination from the cache key — the summary spans all pages of a given filter set.
   const { page: _page, limit: _limit, ...scope } = filters ?? {};
   return useQuery({
     queryKey: ['pos-orders-summary', tenantID, scope],
-    queryFn: () =>
+    placeholderData: options.keepPrevious ? keepPreviousData : undefined,
+    queryFn: ({ signal }) =>
       apiClient.get<OrdersSummary>(`${basePath(tenantID)}/orders/summary`, {
         status: filters?.status,
         staff_id: filters?.staffId,
@@ -1301,7 +1318,7 @@ export function useOrdersSummary(filters?: OrderListFilters) {
         kds_station_id: filters?.kdsStationId,
         category: filters?.category,
         sku: filters?.sku,
-      }),
+      }, { signal }),
     enabled: !!tenantID,
     staleTime: 15_000,
     networkMode: 'always',

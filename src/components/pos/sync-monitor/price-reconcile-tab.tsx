@@ -8,7 +8,7 @@ import {
 } from '@/hooks/usePOS';
 import { getCachedCatalog, cacheCatalogItems, type OfflineCatalogItem } from '@/lib/db/pos-db';
 import { appendSyncLog } from '@/lib/db/kv-cache';
-import { useDebounced } from '@/hooks/use-debounced';
+import { useDebouncedValue } from '@bengo-hub/shared-ui-lib/search';
 
 type ReconcileStatus = 'in-sync' | 'mismatched' | 'not-cached';
 
@@ -29,7 +29,7 @@ interface ReconcileRow {
  */
 export function PriceReconcileTab({ tenantID, outletID }: { tenantID: string; outletID: string }) {
   const [search, setSearch] = useState('');
-  const debouncedSearch = useDebounced(search, 300);
+  const debouncedSearch = useDebouncedValue(search);
   const [cachedBySku, setCachedBySku] = useState<Map<string, OfflineCatalogItem>>(new Map());
   const [syncingSku, setSyncingSku] = useState<string | null>(null);
   const [syncingAll, setSyncingAll] = useState(false);

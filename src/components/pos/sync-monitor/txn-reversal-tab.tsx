@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useDebouncedSearch } from '@bengo-hub/shared-ui-lib/search';
 import {
   AlertTriangle, ArrowLeftRight, CheckCircle2, ChevronDown, ChevronRight, Loader2,
   MinusCircle, RefreshCw, Search, ShieldAlert, XCircle,
@@ -103,8 +104,9 @@ export function TxnReversalTab({ tenantID }: { tenantID: string }) {
   const outlets: any[] = Array.isArray(outletsData) ? outletsData : ((outletsData as any)?.data ?? []);
 
   // ── Order picker ──
-  const [searchQuery, setSearchQuery] = useState('');
-  const [debouncedQuery, setDebouncedQuery] = useState('');
+  // The box updates on every key; the order search waits for a pause (Enter searches at once).
+  const search = useDebouncedSearch();
+  const debouncedQuery = search.term;
   const [statusFilter, setStatusFilter] = useState('completed');
   const [selectedOrder, setSelectedOrder] = useState<any | null>(null);
   const [selectedLines, setSelectedLines] = useState<Record<string, { checked: boolean; qty: number }>>({});
@@ -114,31 +116,25 @@ export function TxnReversalTab({ tenantID }: { tenantID: string }) {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [result, setResult] = useState<Reversal | null>(null);
 
-  useEffect(() => {
-    const t = setTimeout(() => setDebouncedQuery(searchQuery), 400);
-    return () => clearTimeout(t);
-  }, [searchQuery]);
-
   // Switching tenant/outlet invalidates any in-progress selection.
   function changeScope(nextTenant: string, nextOutlet: string) {
     setScopeTenantID(nextTenant);
     setOutletID(nextOutlet);
     setSelectedOrder(null);
     setSelectedLines({});
-    setSearchQuery('');
-    setDebouncedQuery('');
+    search.clear();
     setResult(null);
   }
 
   const { data: searchData, isFetching: searching } = useQuery({
     queryKey: ['reversal-order-search', activeTenantID, outletID, debouncedQuery, statusFilter],
-    queryFn: () =>
+    queryFn: ({ signal }) =>
       apiClient.get<{ data: any[] }>(`/api/v1/${activeTenantID}/pos/orders`, {
         order_number: debouncedQuery,
         status: statusFilter || undefined,
         outlet_id: outletID || undefined,
         limit: 8,
-      }),
+      }, { signal }),
     enabled: !!activeTenantID && debouncedQuery.length >= 2 && !selectedOrder,
     staleTime: 30_000,
   });
@@ -151,7 +147,7 @@ export function TxnReversalTab({ tenantID }: { tenantID: string }) {
 
   function handleSelectOrder(order: any) {
     setSelectedOrder(order);
-    setSearchQuery(order.order_number ?? order.id);
+    search.setValue(order.order_number ?? order.id);
     setResult(null);
     const init: Record<string, { checked: boolean; qty: number }> = {};
     (order.edges?.lines ?? [])
@@ -162,8 +158,7 @@ export function TxnReversalTab({ tenantID }: { tenantID: string }) {
 
   function clearOrder() {
     setSelectedOrder(null);
-    setSearchQuery('');
-    setDebouncedQuery('');
+    search.clear();
     setSelectedLines({});
     setResult(null);
   }
@@ -271,8 +266,8 @@ export function TxnReversalTab({ tenantID }: { tenantID: string }) {
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                 <input
-                  value={searchQuery}
-                  onChange={(e) => { setSearchQuery(e.target.value); if (selectedOrder) clearOrder(); }}
+                  {...search.inputProps}
+                  onChange={(e) => { search.setValue(e.target.value); if (selectedOrder) clearOrder(); }}
                   placeholder="Search order number (e.g. POS-8DC685D5A983)…"
                   className="w-full rounded-xl border border-border bg-background pl-9 pr-3 py-2 text-sm"
                 />

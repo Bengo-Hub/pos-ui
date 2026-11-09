@@ -6,6 +6,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import { RefreshCw, Search, Undo2, XCircle } from 'lucide-react';
 import { DataTable, type DataTableColumn } from '@bengo-hub/shared-ui-lib/data-table';
+import { useDebouncedValue } from '@bengo-hub/shared-ui-lib/search';
 import { useOrders, useOrdersSummary, useBulkVoidOrders, useDeleteSale, prefetchOrder, type OrderListFilters } from '@/hooks/usePOS';
 import { useCloseOnAccount } from '@/hooks/use-close-on-account';
 import { useStaffList } from '@/hooks/useStaff';
@@ -123,30 +124,37 @@ export function SalesListView({ orgSlug, fixedSource, title, subtitle }: {
   const bulkVoid = useBulkVoidOrders();
   const closeOnAccount = useCloseOnAccount();
 
+  // Typed filters (invoice search, customer, amount bounds) update their inputs on every key,
+  // but the list and the totals footer only refetch once typing pauses.
+  const debouncedSearch = useDebouncedValue(search);
+  const debouncedCustomer = useDebouncedValue(filterState.customer);
+  const debouncedMinTotal = useDebouncedValue(filterState.minTotal);
+  const debouncedMaxTotal = useDebouncedValue(filterState.maxTotal);
+
   const filters: OrderListFilters = useMemo(() => ({
     // This page shows every sale (no status filter); "all" outlets unless narrowed.
     outletId: filterState.outletId || 'all',
     from: rangeBound(filterState.range.from, filterState.range.fromTime) || undefined,
     to: rangeBound(filterState.range.to, filterState.range.toTime) || undefined,
-    customer: filterState.customer.trim() || undefined,
+    customer: debouncedCustomer.trim() || undefined,
     paymentStatus: filterState.paymentStatus || undefined,
     paymentMethod: filterState.paymentMethod || undefined,
     shippingStatus: filterState.shippingStatus || undefined,
     userId: filterState.userId || undefined,
     source: fixedSource ?? (filterState.source || undefined),
     subscriptions: filterState.subscriptions || undefined,
-    minTotal: filterState.minTotal === '' ? undefined : filterState.minTotal,
-    maxTotal: filterState.maxTotal === '' ? undefined : filterState.maxTotal,
-    orderNumber: search.trim() || undefined,
+    minTotal: debouncedMinTotal === '' ? undefined : debouncedMinTotal,
+    maxTotal: debouncedMaxTotal === '' ? undefined : debouncedMaxTotal,
+    orderNumber: debouncedSearch.trim() || undefined,
     sku: filterState.itemSku || undefined,
     page,
     limit: pageSize,
-  }), [filterState, fixedSource, search, page, pageSize]);
+  }), [filterState, fixedSource, debouncedSearch, debouncedCustomer, debouncedMinTotal, debouncedMaxTotal, page, pageSize]);
 
-  const { data, isLoading, refetch, isFetching } = useOrders(filters);
+  const { data, isLoading, refetch, isFetching } = useOrders(filters, { keepPrevious: true });
   // Grand totals across the whole filtered set (all pages), fetched independently of the
   // paginated list so the footer stays put while the user pages through rows.
-  const { data: summary, refetch: refetchSummary } = useOrdersSummary(filters);
+  const { data: summary, refetch: refetchSummary } = useOrdersSummary(filters, { keepPrevious: true });
   // Manual fallback: no push event invalidates ['pos-orders']/['pos-orders-summary'] today (the
   // notifications WS only nudges catalog/credit/KDS caches), so a sale rung up on another till —
   // or a payment confirmed from treasury — won't appear here until this is clicked or re-navigated to.

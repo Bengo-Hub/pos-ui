@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Search, Plus } from 'lucide-react';
+import { useDebouncedValue } from '@bengo-hub/shared-ui-lib/search';
 import { useMenuItems, type CatalogItem } from '@/hooks/usePOS';
 import { useAddRepairPart } from '@/hooks/useRepairs';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
@@ -20,7 +21,9 @@ interface RepairPartsPickerProps {
  */
 export function RepairPartsPicker({ jobID, disabled }: RepairPartsPickerProps) {
   const [search, setSearch] = useState('');
-  const { data, isLoading } = useMenuItems({ search: search || undefined, limit: 20 });
+  // The catalog search waits for a pause in typing; the box itself updates on every key.
+  const debouncedSearch = useDebouncedValue(search.trim());
+  const { data, isLoading } = useMenuItems({ search: debouncedSearch || undefined, limit: 20 });
   const addPart = useAddRepairPart();
   const { data: posSettings } = usePOSSettings();
   const currency = (posSettings as any)?.currency ?? 'KES';

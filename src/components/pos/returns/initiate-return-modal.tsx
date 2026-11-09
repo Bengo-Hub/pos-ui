@@ -193,7 +193,7 @@ export function InitiateReturnModal({
     };
   }
 
-  async function searchOrders(query: string): Promise<ComboboxOption[]> {
+  async function searchOrders(query: string, ctx?: { signal?: AbortSignal }): Promise<ComboboxOption[]> {
     if (!tenantID || query.trim().length < 2) return [];
     if (!isOnline) {
       // Offline fallback: search the last 20 synced orders already cached for this outlet
@@ -216,6 +216,7 @@ export function InitiateReturnModal({
     const res = await apiClient.get<{ data: any[] }>(
       `/api/v1/${tenantID}/pos/orders`,
       { q: query.trim(), limit: 8 } as any,
+      { signal: ctx?.signal },
     );
     const rows: any[] = (res as any)?.data ?? [];
     return rows.map(toOption);

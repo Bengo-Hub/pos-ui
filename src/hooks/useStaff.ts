@@ -14,7 +14,7 @@ export function useStaffList(tenantId: string, outletId?: string) {
 export function useStaffAdmin(tenantId: string, opts?: { enabled?: boolean; search?: string }) {
   return useQuery({
     queryKey: ['staff-admin', tenantId, opts?.search ?? ''],
-    queryFn: () => staffApi.listAdmin(tenantId, opts?.search),
+    queryFn: ({ signal }) => staffApi.listAdmin(tenantId, opts?.search, signal),
     enabled: !!tenantId && (opts?.enabled ?? true),
     staleTime: 30_000,
   });
@@ -24,12 +24,15 @@ export function useStaffAdmin(tenantId: string, opts?: { enabled?: boolean; sear
  * Stable `onRemoteSearch` callback for any staff-assignment combobox (layaway party,
  * shift-rotation slot, staff-credit sale) — GET /pos/staff/admin?search=…, the same
  * endpoint `useStaffAdmin` prefetches page 1 of, so a staff member sorting past that
- * first page (default limit 20) is still found once typed.
+ * first page (default limit 20) is still found once typed. The combobox passes a signal
+ * that fires when a newer keystroke replaces this search; it cancels the request.
  */
-export function useStaffSearch(tenantId: string): (query: string) => Promise<ComboboxOption[]> {
+export function useStaffSearch(
+  tenantId: string,
+): (query: string, ctx?: { signal?: AbortSignal }) => Promise<ComboboxOption[]> {
   return useCallback(
-    async (query: string) => {
-      const res = await staffApi.listAdmin(tenantId, query);
+    async (query: string, ctx?: { signal?: AbortSignal }) => {
+      const res = await staffApi.listAdmin(tenantId, query, ctx?.signal);
       return res.data.map((s) => ({ value: s.id, label: s.name, hint: s.role || undefined }));
     },
     [tenantId],

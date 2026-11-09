@@ -10,16 +10,18 @@ import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { DataTable } from '@bengo-hub/shared-ui-lib/data-table';
+import { useDebouncedSearch } from '@bengo-hub/shared-ui-lib/search';
 import { buildLoyaltyColumns } from './loyalty-columns';
 
 function LoyaltyPage() {
   const params = useParams();
   const orgSlug = params?.orgSlug as string;
-  const [search, setSearch] = useState('');
+  // The box updates on every key; the accounts query waits for a pause (Enter searches at once).
+  const search = useDebouncedSearch();
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState({ customer_name: '', customer_phone: '' });
 
-  const { data: accounts = [], isLoading } = useLoyaltyAccounts(search || undefined);
+  const { data: accounts = [], isLoading } = useLoyaltyAccounts(search.term || undefined);
   const createMutation = useCreateLoyaltyAccount();
   const columns = useMemo(() => buildLoyaltyColumns({ orgSlug }), [orgSlug]);
 
@@ -61,8 +63,7 @@ function LoyaltyPage() {
         <input
           type="text"
           placeholder="Search by phone number…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          {...search.inputProps}
           className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-1 focus:ring-primary"
         />
       </div>
