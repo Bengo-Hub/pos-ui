@@ -95,7 +95,8 @@ export async function refreshTokens(refreshToken: string): Promise<{
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ refresh_token: refreshToken, client_id: SSO_CLIENT_ID }),
   });
-  if (!response.ok) throw new Error('Token refresh failed');
+  // The status tells the shared refresher a refused session (sign in again) from an outage.
+  if (!response.ok) throw Object.assign(new Error('Token refresh failed'), { status: response.status });
   return response.json();
 }
 

@@ -5,8 +5,10 @@ import { LimitReachedModal } from '@/components/subscription/limit-reached-modal
 import { useMe } from '@/hooks/useMe';
 import { apiClient } from '@/lib/api/client';
 import { parseLimitInfo, subscriptionErrorMessage } from '@/lib/api/error-handler';
+import { AUTH_STORAGE_KEY } from '@/lib/auth/token-refresh';
 import { useAuthStore } from '@/store/auth';
 import { useLimitModal } from '@/store/limit-modal';
+import { watchSessionAcrossTabs } from '@bengo-hub/shared-ui-lib/auth';
 import { useMaintenanceStore } from '@/store/maintenance';
 import { useQueryClient } from '@tanstack/react-query';
 import { useParams, usePathname, useRouter } from 'next/navigation';
@@ -51,6 +53,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!_hasHydrated) return;
     initialize();
   }, [initialize, _hasHydrated]);
+
+  // Another tab renewed or replaced the session: load it here and point the API client at the
+  // new token, so this tab neither sends a rotated-away token nor writes its stale copy back.
+  useEffect(
+    () =>
+      watchSessionAcrossTabs(AUTH_STORAGE_KEY, () => {
+        void Promise.resolve(useAuthStore.persist.rehydrate()).then(() => {
+          const token = useAuthStore.getState().session?.accessToken;
+          if (token) apiClient.setAccessToken(token);
+        });
+      }),
+    [],
+  );
 
   // Register 401 handler. Terminal sessions redirect to pin-login instead of SSO.
   useEffect(() => {

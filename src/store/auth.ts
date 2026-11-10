@@ -190,7 +190,7 @@ export const useAuthStore = create<AuthState>()(
         // full SSO sign-in; a known profile is kept. Dynamic import: token-refresh imports this store.
         const expiringOnLoad = !session.expiresAt || Date.now() >= new Date(session.expiresAt).getTime() - 60_000;
         const renewedOnLoad = session.refreshToken && expiringOnLoad
-          ? await (await import('@/lib/auth/token-refresh')).refreshAccessToken()
+          ? await (await import('@/lib/auth/token-refresh')).refreshAccessToken(session.accessToken)
           : null;
         if (renewedOnLoad) {
           apiClient.setAccessToken(renewedOnLoad);

@@ -136,8 +136,9 @@ class ApiClient {
 
             const url: string = error.config?.url ?? '';
             if (!url.includes('/auth/me') && !error.config?._retried) {
+                const sent = String(error.config?.headers?.Authorization ?? '').replace(/^Bearer\s+/i, '');
                 const { refreshAccessToken } = await import('@/lib/auth/token-refresh');
-                const newToken = await refreshAccessToken();
+                const newToken = await refreshAccessToken(sent || this.accessToken);
 
                 if (newToken) {
                     this.accessToken = newToken;
@@ -146,6 +147,10 @@ class ApiClient {
                     return this.instance.request(error.config);
                 }
 
+                this.on401Callback?.();
+            } else if (error.config?._retried) {
+                // Even a freshly renewed token was refused: the session is unusable, so send the
+                // person to sign in instead of leaving a page where every save fails.
                 this.on401Callback?.();
             }
         }
