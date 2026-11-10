@@ -29,10 +29,10 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api/client';
 import { apiErrorMessage } from '@/lib/api/error-message';
-import { useAuthStore } from '@/store/auth';
+import { useTenantId } from '@/hooks/useTenantId';
 
 function useStaffList() {
-  const tenantID = useAuthStore((s) => s.user?.tenant_id ?? '');
+  const tenantID = useTenantId() ?? '';
   return useQuery({
     queryKey: ['staff-members', tenantID],
     queryFn: () => apiClient.get<{ data: { id: string; full_name: string }[] }>(`/api/v1/${tenantID}/pos/staff`),

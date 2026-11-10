@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { rbacApi } from '@/lib/api/rbac';
 import { usePermissions, P } from '@/hooks/usePermissions';
 import { useAuthStore } from '@/store/auth';
+import { useTenantId } from '@/hooks/useTenantId';
 
 // Same manager (override) roles the backend gates on for minting an approval code.
 const MANAGER_ROLES = ['admin', 'manager', 'pos_admin', 'store_manager', 'owner', 'super_admin', 'superuser'];
@@ -31,7 +32,7 @@ interface GenerateApprovalCodeButtonProps {
  */
 export function GenerateApprovalCodeButton({ className }: GenerateApprovalCodeButtonProps) {
   const { can } = usePermissions();
-  const tenantId = useAuthStore((s) => s.user?.tenant_id ?? '');
+  const tenantId = useTenantId() ?? '';
   const outletId = useAuthStore((s) => s.selectedOutletId || s.outlet?.id || '');
   const role = (useAuthStore((s) => s.user?.roles?.[0]) ?? '') as string;
   const isManager = MANAGER_ROLES.includes(role) || can(P.ORDERS_MANAGE);

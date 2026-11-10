@@ -1,6 +1,7 @@
 'use client';
 
 import { useAuthStore } from '@/store/auth';
+import { useTenantId } from '@/hooks/useTenantId';
 import { useOutletFilterStore, type OutletOption } from '@/store/outlet-filter';
 import { fetchOutlets, type OutletListItem } from '@/lib/api/outlets';
 import { apiClient } from '@/lib/api/client';
@@ -35,7 +36,7 @@ export function OutletFilter({ className }: { className?: string }) {
 
   const { selectedOutlet, allOutlets, outlets, setOutlets, selectOutlet } = useOutletFilterStore();
 
-  const tenantId = user?.tenant_id ?? '';
+  const tenantId = useTenantId() ?? '';
 
   const { data: fetchedOutlets = [] } = useQuery<OutletListItem[]>({
     queryKey: ['outlet_list', tenantId],

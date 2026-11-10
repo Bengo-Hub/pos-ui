@@ -33,6 +33,7 @@ import { usePOSGateways } from '@/hooks/use-pos-gateways';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useSubscription } from '@/hooks/use-subscription';
 import { useHotelRooms } from '@/hooks/useHotel';
+import { useTenantId } from '@/hooks/useTenantId';
 import { hotelApi } from '@/lib/api/hotel';
 import type { TerminalProfile } from '@/lib/use-case-config';
 import {
@@ -150,6 +151,8 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
     customerCreditAvailable = 0, loyaltyAccount = null,
     createOrderAsync, onSettled, onDraft, onQuotation, onCancel, onSplit, draftPending = false, sendLabel = 'Place Order',
   } = props;
+  // The tenant the page names; offline payments queue under it.
+  const pageTenantId = useTenantId() ?? '';
 
   // Credit Sale and Quotation are back-office/manager actions — same permission that approves sale
   // returns (pos.orders.manage). Ordinary cashiers must not ring a sale onto a customer's account or
@@ -253,7 +256,7 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
     // payment.
     const queueOffline = async () => {
       try {
-        await queueOfflinePaymentRecord({ orderId: ord.orderId, tenderId, method, amount: roundedTotal, currency, tenantSlug, externalRef, amountTendered });
+        await queueOfflinePaymentRecord({ orderId: ord.orderId, tenderId, method, amount: roundedTotal, currency, tenantSlug, tenantId: pageTenantId, externalRef, amountTendered });
         autoOpenOnSettle(method);
         toast.success('Saved offline — will sync when back online.');
         finish(ord);
@@ -289,7 +292,7 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
         },
       },
     );
-  }, [ensureOrder, createIntent, roundedTotal, tenderId, finish, autoOpenOnSettle, isOnline, tenantSlug, currency]);
+  }, [ensureOrder, createIntent, roundedTotal, tenderId, finish, autoOpenOnSettle, isOnline, tenantSlug, currency, pageTenantId]);
 
   // ── Online gateway tenders (M-Pesa STK / Paystack card / Wallet) ─────────────
   const startGateway = useCallback(async (key: TenderKey) => {
@@ -759,9 +762,10 @@ function RoomCapture({ amount, currency, orderNumber, tenantSlug, search, onSear
   amount: number; currency: string; orderNumber: string; tenantSlug: string; search: string; onSearch: (v: string) => void; onCancel: () => void; onCharged: () => void;
 }) {
   const { data: rooms = [], isLoading } = useHotelRooms('occupied');
+  const pageTenantId = useTenantId() ?? '';
   const post = useMutation({
     mutationFn: (roomId: string) =>
-      hotelApi.postFolioCharge(tenantSlug, roomId, { description: `Bill ${orderNumber}`, amount, charge_type: 'restaurant' }),
+      hotelApi.postFolioCharge(pageTenantId, roomId, { description: `Bill ${orderNumber}`, amount, charge_type: 'restaurant' }),
     onSuccess: onCharged,
     onError: async (e: any) => toast.error(await apiErrorMessage(e, 'Failed to post charge to room.')),
   });

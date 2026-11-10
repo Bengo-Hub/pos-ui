@@ -29,6 +29,7 @@ import { useEffect } from 'react';
 import { usePathname, useParams } from 'next/navigation';
 import { useNotificationStream } from '@/hooks/use-notification-stream';
 import { useAuthStore } from '@/store/auth';
+import { useTenantId } from '@/hooks/useTenantId';
 import { apiClient } from '@/lib/api/client';
 import { resolveActiveOutlet } from '@/lib/auth/outlet-resolver';
 
@@ -76,7 +77,7 @@ function BackgroundSyncWorker() {
  */
 function CatalogPrewarm() {
   const queryClient = useQueryClient();
-  const tenantID = useAuthStore((s) => (s.user as any)?.tenant_id ?? '');
+  const tenantID = useTenantId() ?? '';
   // The catalog is OUTLET-scoped (use-case filtered server-side) — cache keys and the
   // IndexedDB read must carry the effective outlet so outlets never see each other's menu.
   const outletID = useAuthStore(

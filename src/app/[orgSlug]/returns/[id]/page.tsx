@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api/client';
 import { useAuthStore } from '@/store/auth';
+import { useTenantId } from '@/hooks/useTenantId';
 import { useMemo, useState } from 'react';
 import { ArrowLeft, CheckCircle2, Info, Loader2, PackageCheck, RotateCcw, ShieldCheck, XCircle } from 'lucide-react';
 import { cn, formatCurrency } from '@/lib/utils';
@@ -70,7 +71,7 @@ const REASON_CODE_LABELS: Record<string, string> = {
 };
 
 function useReturnDetail(returnId: string) {
-  const tenantID = useAuthStore((s) => s.user?.tenant_id ?? '');
+  const tenantID = useTenantId() ?? '';
   return useQuery({
     queryKey: ['return', tenantID, returnId],
     queryFn: () => apiClient.get<ReturnDetail>(`/api/v1/${tenantID}/pos/returns/${returnId}`),
@@ -80,7 +81,7 @@ function useReturnDetail(returnId: string) {
 }
 
 function useApproveReturn(returnId: string) {
-  const tenantID = useAuthStore((s) => s.user?.tenant_id ?? '');
+  const tenantID = useTenantId() ?? '';
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (payload: { action: 'approve' | 'reject'; notes?: string; refund_channel?: string }) =>
@@ -107,7 +108,7 @@ interface CompleteReturnResponse {
 }
 
 function useCompleteReturn(returnId: string) {
-  const tenantID = useAuthStore((s) => s.user?.tenant_id ?? '');
+  const tenantID = useTenantId() ?? '';
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (payload: { notes?: string; refund_channel?: string; exchange_lines?: any[]; restock?: boolean }) =>
@@ -165,7 +166,7 @@ export default function ReturnDetailPage() {
   // receipt endpoint renders it with the REFUND framing) and is NOT a fiscalised sale, so it
   // uses showReceiptFromEndpoint. An exchange instead raises a normal fully-paid replacement
   // order, which the ordinary order receipt already renders correctly — showReceiptForOrder.
-  const tenantId = useAuthStore((s) => s.user?.tenant_id ?? '');
+  const tenantId = useTenantId() ?? '';
   const authUser = useAuthStore((s) => s.user);
   const {
     receiptData, receiptOpen, receiptOrderId,

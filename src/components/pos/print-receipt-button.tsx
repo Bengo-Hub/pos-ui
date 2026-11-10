@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/base';
 import { apiClient } from '@/lib/api/client';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { useAuthStore } from '@/store/auth';
+import { useTenantId } from '@/hooks/useTenantId';
 import { useTenantBranding } from '@/providers/tenant-branding-provider';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { resolveBillProfile } from '@/lib/pos/printer-stations';
@@ -40,7 +41,7 @@ export function PrintReceiptButton({
   disabled,
 }: PrintReceiptButtonProps) {
   const user = useAuthStore((s) => s.user);
-  const tenantId = user?.tenant_id ?? '';
+  const tenantId = useTenantId() ?? '';
   const { tenant } = useTenantBranding();
   const tenantName = tenant?.orgName || tenant?.name || undefined;
   const { data: posSettings } = usePOSSettings();

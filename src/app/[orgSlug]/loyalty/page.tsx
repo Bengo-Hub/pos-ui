@@ -9,6 +9,7 @@ import { useParams } from 'next/navigation';
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api/error-message';
+import { normalizeKePhone } from '@/lib/phone';
 import { DataTable } from '@bengo-hub/shared-ui-lib/data-table';
 import { useDebouncedSearch } from '@bengo-hub/shared-ui-lib/search';
 import { buildLoyaltyColumns } from './loyalty-columns';
@@ -27,12 +28,14 @@ function LoyaltyPage() {
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
-    if (!form.customer_name || !form.customer_phone) {
-      toast.error('Name and phone are required');
+    // Same phone normalisation as the till customer form, so the CRM sees one canonical number.
+    const phone = normalizeKePhone(form.customer_phone);
+    if (!form.customer_name || !phone) {
+      toast.error('Name and a valid phone are required');
       return;
     }
     try {
-      await createMutation.mutateAsync(form);
+      await createMutation.mutateAsync({ ...form, customer_phone: phone });
       toast.success('Account created');
       setShowCreate(false);
       setForm({ customer_name: '', customer_phone: '' });

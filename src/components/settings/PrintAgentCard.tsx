@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 
 import { Button, Card, CardContent, CardHeader } from '@/components/ui/base';
 import { useAuthStore } from '@/store/auth';
+import { useTenantId } from '@/hooks/useTenantId';
 import { useOutletFilterStore } from '@/store/outlet-filter';
 import { AGENT_BASE } from '@/lib/pos/printer-discovery';
 import {
@@ -24,7 +25,7 @@ const POS_API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'https://posapi.codevert
  * can log out instantly.
  */
 export function PrintAgentCard({ canEdit }: { canEdit: boolean }) {
-  const tenantId = useAuthStore((s) => s.user?.tenant_id ?? '');
+  const tenantId = useTenantId() ?? '';
   const authOutlet = useAuthStore((s) => s.outlet);
   const selectedOutlet = useOutletFilterStore((s) => s.selectedOutlet);
   const outletId = selectedOutlet?.id || authOutlet?.id || '';

@@ -34,6 +34,11 @@ class ApiClient {
     }
 
     private handleRequest = (config: InternalAxiosRequestConfig) => {
+        // A write whose path has an empty tenant segment means the page tenant is not resolved
+        // yet; fail clearly instead of posting to /api/v1//...
+        if ((config.method ?? 'get').toLowerCase() !== 'get' && /\/api\/v1\/\//.test(config.url ?? '')) {
+            throw new Error('Organisation not loaded yet');
+        }
         if (this.accessToken) {
             config.headers.Authorization = `Bearer ${this.accessToken}`;
         }

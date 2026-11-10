@@ -12,6 +12,7 @@ import { useModuleAccess } from '@/hooks/use-module-access';
 import { useRbacRoles } from '@/hooks/useRbac';
 import { P } from '@/lib/rbac/permissions';
 import { useAuthStore } from '@/store/auth';
+import { useTenantId } from '@/hooks/useTenantId';
 import { buildNavGroups, CORE_MODULE_KEYS, type NavItem } from '@/lib/pos/nav-config';
 import type { UpdatePOSModulesInput } from '@/lib/api/settings';
 import { Toggle } from './shared';
@@ -70,7 +71,7 @@ export function ModulesTab() {
   const { useCase: resolvedUseCase, enabledModules, isSuperUser } = useModuleAccess();
   const setOutlet = useAuthStore((s) => s.setOutlet);
   const outlet = useAuthStore((s) => s.outlet);
-  const tenantId = useAuthStore((s) => s.user?.tenant_id ?? '');
+  const tenantId = useTenantId() ?? '';
   const { data: roles = [] } = useRbacRoles(tenantId);
   const canEdit = can(P.CONFIG_MANAGE) || can(P.CONFIG_CHANGE) || isSuperUser;
 

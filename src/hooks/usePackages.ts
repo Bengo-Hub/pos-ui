@@ -1,11 +1,11 @@
 'use client';
 
 import { apiClient } from '@/lib/api/client';
-import { useAuthStore } from '@/store/auth';
+import { useTenantId } from '@/hooks/useTenantId';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 function useTenantID() {
-  return useAuthStore((s) => s.user?.tenant_id ?? '');
+  return useTenantId() ?? '';
 }
 
 function basePath(tenantID: string) {

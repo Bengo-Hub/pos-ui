@@ -53,6 +53,7 @@ import { InlinePaymentBar } from '@/components/pos/terminal/inline-payment-bar';
 import { JobDetailsPanel } from '@/components/jobs/job-details-panel';
 import { DeliveryPanel } from '@/components/pos/terminal/parts/delivery-panel';
 import { useTerminal } from '@/components/pos/terminal/terminal-context';
+import { usePageTenantSlug, useTenantId } from '@/hooks/useTenantId';
 import { CostHeaderToggle, MaskedCost } from '@/components/pos/cost-price';
 import { InlineDiscountCell, InlineMarginCell, InlinePriceCell, InlineTotalCell } from '@/components/pos/inline-line-cells';
 import { searchPlaceholderFor } from '@/lib/use-case-config';
@@ -66,6 +67,9 @@ import {
 
 export function TerminalShell() {
   const t = useTerminal();
+  const pageTenantId = useTenantId() ?? '';
+  // The viewed tenant's slug, so gateway tenders charge through that tenant's gateways.
+  const pageTenantSlug = usePageTenantSlug();
   const { cfg, cart } = t;
   const router = useRouter();
   const currency = (t.posSettings as any)?.currency ?? 'KES';
@@ -232,7 +236,7 @@ export function TerminalShell() {
         {/* Hardware scale (retail/pharmacy) */}
         {cfg.showScale && t.scaleDeviceId && (
           <ScaleDisplay
-            tenantSlug={t.user?.tenant_slug ?? t.orgSlug}
+            tenantSlug={pageTenantId}
             deviceId={t.scaleDeviceId}
             onAddToCart={t.handleScaleAddToCart}
           />
@@ -643,7 +647,7 @@ export function TerminalShell() {
     <InlinePaymentBar
       layout="bar"
       total={t.total}
-      tenantSlug={t.user?.tenant_slug ?? ''}
+      tenantSlug={pageTenantSlug}
       profile={cfg.profile}
       isHospitality={t.isHospitality}
       // COD is delivery-only (paid to the rider on delivery) — never for takeaway/counter/dine-in.

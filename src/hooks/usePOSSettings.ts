@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { posSettingsApi, type POSSettings, type UpdatePOSModulesInput, type UpdatePOSSettingsInput } from '@/lib/api/settings';
 
 export type { POSSettings } from '@/lib/api/settings';
-import { useAuthStore } from '@/store/auth';
+import { useTenantId } from '@/hooks/useTenantId';
 import { useEffectiveOutletID } from '@/hooks/usePOS';
 import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api/error-message';
@@ -12,7 +12,7 @@ import { cacheFirst } from '@/lib/offline/cache-first';
 import { getDataset, datasetCacheOpts } from '@/lib/offline/datasets';
 
 function useTenantID() {
-  return useAuthStore((s) => s.user?.tenant_id ?? '');
+  return useTenantId() ?? '';
 }
 
 const POS_SETTINGS = getDataset('pos-settings');

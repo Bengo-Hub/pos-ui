@@ -2,6 +2,8 @@
 
 import { apiClient } from '@/lib/api/client';
 import { useAuthStore } from '@/store/auth';
+import { useTenantId } from '@/hooks/useTenantId';
+import { useParams } from 'next/navigation';
 import { keepPreviousData, useQuery, useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { useRef } from 'react';
@@ -22,11 +24,15 @@ import { v4 as uuidv4 } from 'uuid';
 
 // Get tenant ID from auth store
 function useTenantID() {
-  return useAuthStore((s) => s.user?.tenant_id ?? '');
+  return useTenantId() ?? '';
 }
 
+// Slug stamped on offline records. It follows the page tenant so it matches the record's
+// tenant_id; no pos-api path is built from it.
 function useTenantSlug() {
-  return useAuthStore((s) => s.user?.tenant_slug ?? s.user?.tenant_id ?? '');
+  const own = useAuthStore((s) => s.user?.tenant_slug ?? s.user?.tenant_id ?? '');
+  const pageSlug = (useParams()?.orgSlug as string) || '';
+  return pageSlug || own;
 }
 
 function useOutletID() {

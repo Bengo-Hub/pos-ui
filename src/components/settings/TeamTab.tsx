@@ -11,6 +11,7 @@ import {
 import { usePermissions } from '@/hooks/usePermissions';
 import { useRbacRoles } from '@/hooks/useRbac';
 import { useAuthStore } from '@/store/auth';
+import { useTenantId } from '@/hooks/useTenantId';
 import { fetchOutlets } from '@/lib/api/outlets';
 import { isPlatformOwner as checkIsPlatformOwner } from '@/lib/auth/permissions';
 import { purgeUserAccount } from '@/lib/auth/admin-actions';
@@ -62,7 +63,7 @@ const EMP_TYPE_LABELS: Record<string, string> = {
 
 export function TeamTab() {
   const user = useAuthStore((s) => s.user);
-  const tenantId = user?.tenant_id ?? '';
+  const tenantId = useTenantId() ?? '';
   const roles = user?.roles ?? [];
 
   const { data, isLoading } = useStaffAdmin(tenantId);

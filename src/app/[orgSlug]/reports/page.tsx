@@ -13,7 +13,7 @@ import {
   downloadReportCSV,
   type Granularity,
 } from '@/hooks/useReports';
-import { useAuthStore } from '@/store/auth';
+import { useTenantId } from '@/hooks/useTenantId';
 import { useEffectiveOutletID } from '@/hooks/usePOS';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
@@ -75,7 +75,7 @@ function bucketLabel(dateISO: string, gran: Granularity): string {
 }
 
 function ReportsPage() {
-  const tenantID = useAuthStore((s) => s.user?.tenant_id ?? '');
+  const tenantID = useTenantId() ?? '';
   const orgSlug = (useParams()?.orgSlug as string) || '';
   const outletId = useEffectiveOutletID() || undefined;
   const [gran, setGran] = useState<Granularity>('day');

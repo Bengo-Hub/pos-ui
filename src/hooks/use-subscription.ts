@@ -39,11 +39,11 @@ export function useSubscription() {
   const lookupRetries = useRef(0);
 
   const tenantSlug = user?.tenant_slug as string | undefined;
-  // Platform-owner-ness comes ONLY from the server-derived flag (+ the codevertex slug as a
-  // defensive fallback) — a tenant superuser/admin is NOT a platform owner and must not bypass
-  // subscription gating (platform SEC-3 policy: otherwise any tenant admin unlocks paid features
-  // for free). `roles` is intentionally unused here now; it still drives real RBAC elsewhere.
-  const isPlatformOwner = !!(user as any)?.is_platform_owner || !!(user as any)?.isPlatformOwner || tenantSlug === 'codevertex';
+  // Platform-owner-ness comes ONLY from the server-derived claim, never from the tenant slug —
+  // a tenant superuser/admin (or a terminal on the platform tenant) is NOT a platform owner and
+  // must not bypass subscription gating. PIN sessions get their gating exemption from the
+  // sub_exempt token claim below. `roles` still drives real RBAC elsewhere.
+  const isPlatformOwner = !!(user as any)?.is_platform_owner || !!(user as any)?.isPlatformOwner;
   const isServiceCharge = (user as any)?.billing_mode === 'service_charge';
   const isDemo = !!(user as any)?.is_demo || tenantSlug === 'codevertex-demo';
   // Platform-granted per-tenant exemption (sub_exempt JWT claim) — decoded straight from the
@@ -69,7 +69,7 @@ export function useSubscription() {
     const tenantId = user.tenant_id;
     const slug = tenantSlug ?? '';
 
-    if (!tenantId || isPlatformOwner) {
+    if (!tenantId || isPlatformOwner || isSubExempt) {
       const platformInfo = {
         status: 'active', planCode: 'enterprise', planName: 'Enterprise', features: [], limits: {},
       };
@@ -128,7 +128,7 @@ export function useSubscription() {
         );
       })
       .catch(() => handleLookupFailure());
-  }, [status, session?.accessToken, user, subscriptionInfo, setSubscriptionInfo, tenantSlug, isPlatformOwner]);
+  }, [status, session?.accessToken, user, subscriptionInfo, setSubscriptionInfo, tenantSlug, isPlatformOwner, isSubExempt]);
 
   // Defense-in-depth freshness, independent of the real-time WS push (use-notification-stream's
   // "entitlements_changed" handler already re-arms this on a grant/revoke/plan change — this is

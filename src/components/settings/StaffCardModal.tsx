@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/base';
 import { staffApi } from '@/lib/api/staff';
 import type { StaffMember } from '@/lib/api/staff';
 import { useAuthStore } from '@/store/auth';
+import { useTenantId } from '@/hooks/useTenantId';
 import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api/error-message';
 
@@ -18,7 +19,7 @@ import { apiErrorMessage } from '@/lib/api/error-message';
  */
 export function StaffCardModal({ staff, open, onClose }: { staff: StaffMember | null; open: boolean; onClose: () => void }) {
   const user = useAuthStore((s) => s.user);
-  const tenantId = user?.tenant_id ?? '';
+  const tenantId = useTenantId() ?? '';
   const [qr, setQr] = useState<string | null>(null);
   const [canApprove, setCanApprove] = useState(false);
   const [loading, setLoading] = useState(false);

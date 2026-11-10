@@ -18,6 +18,9 @@ export interface QueueOfflinePaymentArgs {
   amount: number;
   currency: string;
   tenantSlug: string;
+  // The tenant the page names (useTenantId()); an owner's payment on another tenant's page
+  // must sync under that tenant. Overridden by the queued order's own tenant when it matches one.
+  tenantId: string;
   externalRef?: string;
   // Raw cash physically handed over (cash tender only) — carried through to the sync worker so
   // an offline cash-with-change sale still shows "Tendered"/"Change" on its receipt once synced
@@ -26,9 +29,13 @@ export interface QueueOfflinePaymentArgs {
 }
 
 export async function queueOfflinePayment({
-  orderId, tenderId, method, amount, currency, tenantSlug, externalRef, amountTendered,
+  orderId, tenderId, method, amount, currency, tenantSlug, tenantId, externalRef, amountTendered,
 }: QueueOfflinePaymentArgs): Promise<void> {
   const localOrder = await getOfflineOrderByLocalId(orderId);
+  // A payment for a queued offline order must carry that order's tenant.
+  const tenant_id = localOrder?.tenant_id || tenantId;
+  // Never queue a payment without a tenant; the sync worker would not know where to post it.
+  if (!tenant_id) throw new Error('Organisation not loaded yet');
   await savePendingPayment({
     server_order_id: localOrder ? undefined : orderId,
     local_order_id: localOrder ? orderId : undefined,
@@ -40,6 +47,7 @@ export async function queueOfflinePayment({
     external_ref: externalRef,
     amount_tendered: amountTendered,
     tenant_slug: tenantSlug,
+    tenant_id,
     created_at: new Date().toISOString(),
     synced: false,
   });

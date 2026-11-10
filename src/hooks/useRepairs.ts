@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useAuthStore } from '@/store/auth';
+import { useTenantId } from '@/hooks/useTenantId';
 import {
   repairsApi,
   type RepairStatus,
@@ -23,7 +23,7 @@ export type {
 export { REPAIR_STATUSES, REPAIR_STATUS_LABELS } from '@/lib/api/repairs';
 
 function useTenantID() {
-  return useAuthStore((s) => s.user?.tenant_id ?? '');
+  return useTenantId() ?? '';
 }
 
 /** List repair jobs, optionally filtered by status. */

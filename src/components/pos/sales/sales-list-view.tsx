@@ -13,6 +13,7 @@ import { useStaffList } from '@/hooks/useStaff';
 import { usePermissions, P } from '@/hooks/usePermissions';
 import { useHideProfit } from '@/hooks/useHideProfit';
 import { useAuthStore } from '@/store/auth';
+import { useTenantId } from '@/hooks/useTenantId';
 import { useOutletFilterStore, useListOutletId } from '@/store/outlet-filter';
 import { useOwnScope } from '@/lib/rbac/scope';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
@@ -52,7 +53,7 @@ export function SalesListView({ orgSlug, fixedSource, title, subtitle }: {
   subtitle: string;
 }) {
   const user = useAuthStore((s) => s.user);
-  const tenantId = user?.tenant_id ?? '';
+  const tenantId = useTenantId() ?? '';
   const qc = useQueryClient();
   // Warms the ['pos-order', tenantId, id] cache the moment a row's actions menu is hovered/opened —
   // by the time Edit Sale is actually clicked, the order detail fetch is often already resolved,

@@ -33,8 +33,7 @@ export default function PlatformPage() {
   const searchParams = useSearchParams();
 
   // Platform-owner-only. A tenant `admin` is NOT a platform owner; only the
-  // is_platform_owner claim, the superuser role, or the codevertex tenant (verified via
-  // the server-returned tenant slug, not the URL) qualifies. See isPlatformOwner().
+  // is_platform_owner claim or the superuser role qualifies. See isPlatformOwner().
   const isPlatformOwner = checkPlatformOwner(user);
 
   const [activeTab, setActiveTab] = useState<TabKey>('devices');

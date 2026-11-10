@@ -1,11 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useAuthStore } from '@/store/auth';
+import { useTenantId } from '@/hooks/useTenantId';
 import { discountsApi, type ApplyPromoLine, type DiscountInput, type DiscountListOpts } from '@/lib/api/discounts';
 
 // Matches useHotel's resolution: the tenant path segment is the tenant UUID (httpware
 // resolves both, but every existing promotions call sends the id — stay consistent).
 function useTenantSlug() {
-  return useAuthStore((s) => s.user?.tenant_id ?? '');
+  return useTenantId() ?? '';
 }
 
 /** All discounts (every kind + status) — the Sell → Discounts management list.

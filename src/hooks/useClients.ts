@@ -3,14 +3,14 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { clientsApi } from '@/lib/api/clients';
 import { apiClient } from '@/lib/api/client';
-import { useAuthStore } from '@/store/auth';
+import { useTenantId } from '@/hooks/useTenantId';
 
 // NOTE: the Clients DIRECTORY lives in treasury-ui (/customers — the central customers page
 // with balances, credit terms and account filters); the POS nav links out to it. These hooks
 // only serve in-terminal flows: the checkout customer picker and the credit-sale hint.
 
 function useTenantID() {
-  return useAuthStore((s) => s.user?.tenant_id ?? '');
+  return useTenantId() ?? '';
 }
 
 export function useClientSearch(phone?: string, name?: string, email?: string) {

@@ -6,6 +6,7 @@ import { PINKeypad } from '@/components/pos/pin-keypad';
 import { BarcodeScannerInput } from '@/components/pos/barcode-scanner-input';
 import { rbacApi } from '@/lib/api/rbac';
 import { useAuthStore } from '@/store/auth';
+import { useTenantId } from '@/hooks/useTenantId';
 
 export interface ApprovalResult {
   approvalToken?: string;
@@ -34,7 +35,7 @@ interface ApprovalDialogProps {
  */
 export function ApprovalDialog({ open, action, description, confirmLabel = 'Authorize', onApproved, onClose }: ApprovalDialogProps) {
   const user = useAuthStore((s) => s.user);
-  const tenantId = user?.tenant_id ?? '';
+  const tenantId = useTenantId() ?? '';
   const selectedOutletId = useAuthStore((s) => s.selectedOutletId);
   const outlet = useAuthStore((s) => s.outlet);
   const outletId = selectedOutletId || outlet?.id || '';

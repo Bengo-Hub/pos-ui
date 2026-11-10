@@ -9,6 +9,7 @@ import { useDebouncedValue } from '@bengo-hub/shared-ui-lib/search';
 import { useOrders, useDeleteDraft, useBulkDeleteDrafts, type OrderListFilters } from '@/hooks/usePOS';
 import { useStaffList } from '@/hooks/useStaff';
 import { useAuthStore } from '@/store/auth';
+import { useTenantId } from '@/hooks/useTenantId';
 import { useListOutletId } from '@/store/outlet-filter';
 import { useOwnScope } from '@/lib/rbac/scope';
 import { usePermissions, P } from '@/hooks/usePermissions';
@@ -52,7 +53,7 @@ interface DraftsFilterState {
  */
 export function DraftsListView({ orgSlug }: { orgSlug: string }) {
   const user = useAuthStore((s) => s.user);
-  const tenantId = user?.tenant_id ?? '';
+  const tenantId = useTenantId() ?? '';
   const currentUserId = user?.id ?? '';
   // The scope the header names: drill-down outlet, All Outlets, or the session's own outlet.
   const listOutletId = useListOutletId();

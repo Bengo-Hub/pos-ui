@@ -163,7 +163,8 @@ export interface OfflinePayment extends SyncState {
   // (pos-api honours it only for an offline order credited to that same person).
   collected_by_user_id?: string;
   tenant_slug: string;
-  tenant_id?: string;
+  // Always set for newly queued payments. Rows queued before this was required may lack it.
+  tenant_id: string;
   created_at: string;
 }
 

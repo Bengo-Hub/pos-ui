@@ -41,6 +41,7 @@ import { autoPrintsCustomerCopy, resolveBillProfile } from '@/lib/pos/printer-st
 import { useReceiptAfterSale } from '@/hooks/use-receipt-after-sale';
 import { cn, formatCurrency } from '@/lib/utils';
 import { useAuthStore } from '@/store/auth';
+import { useTenantId } from '@/hooks/useTenantId';
 import { FeatureLock, useFeatureUpgrade } from '@bengo-hub/shared-ui-lib/subscription';
 import { Check, Loader2, Minus, Plus, ShoppingCart, Tag, Trash2, Truck, User, Users, X } from 'lucide-react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
@@ -96,7 +97,7 @@ export default function AddSalePage() {
   const orgSlug = (params?.orgSlug as string) || '';
   const outlet = useAuthStore((s) => s.outlet);
   const outletId = outlet?.id ?? '';
-  const tenantId = useAuthStore((s) => s.user?.tenant_id ?? '');
+  const tenantId = useTenantId() ?? '';
   const { data: posSettings } = usePOSSettings();
   // Legacy-fallback VAT for lines with NO inventory/treasury tax info. Mirrors pos-api's
   // outletFallbackTaxRate exactly: VAT disabled in POS settings → 0 (the server charges nothing,

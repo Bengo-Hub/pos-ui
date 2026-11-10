@@ -42,7 +42,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Maintenance state is session-owned. Never carry a tenant's lock through logout or into a
   // platform-owner session, even when the next login uses the same browser and tenant.
   useEffect(() => {
-    if (!user || user.isPlatformOwner === true || user.tenant_slug === 'codevertex') {
+    if (!user || user.isPlatformOwner === true) {
       useMaintenanceStore.getState().clear();
     }
   }, [user]);
@@ -153,7 +153,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (isKiosk) return;
       const { user } = useAuthStore.getState();
       const tenantId = user?.tenant_id;
-      const isPlatformOwner = user?.isPlatformOwner === true || user?.tenant_slug === 'codevertex';
+      const isPlatformOwner = user?.isPlatformOwner === true;
       if (!tenantId || isPlatformOwner) return;
       useMaintenanceStore.getState().show(tenantId, data);
     });

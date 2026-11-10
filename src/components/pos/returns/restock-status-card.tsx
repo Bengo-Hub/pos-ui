@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 import { apiClient } from '@/lib/api/client';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { cn } from '@/lib/utils';
-import { useAuthStore } from '@/store/auth';
+import { useTenantId } from '@/hooks/useTenantId';
 
 // Restock tracking written by pos-api into the return's metadata when inventory-api reports
 // back on inventory.return.restocked (see pos-api internal/modules/returns/restock.go).
@@ -85,7 +85,7 @@ export function RestockStatusCard({
   metadata?: Record<string, any>;
   canRetry: boolean;
 }) {
-  const tenantID = useAuthStore((s) => s.user?.tenant_id ?? '');
+  const tenantID = useTenantId() ?? '';
   const qc = useQueryClient();
   const status = (metadata?.restock_status as RestockStatus | undefined) ?? 'unconfirmed';
   const view = STATUS_VIEW[status] ?? STATUS_VIEW.unconfirmed;

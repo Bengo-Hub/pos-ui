@@ -165,8 +165,7 @@ export function Sidebar({ open = false, onClose, collapsed = false }: SidebarPro
   const { ownOnly: ownScope } = useOwnScope();
   const { hasFeature, isLoading: subLoading, info: subInfo } = useSubscription();
   // Platform-owner-only (device fleet, platform config, licensing). A tenant `admin` is
-  // NOT a platform owner — only the is_platform_owner claim, the superuser role, or the
-  // codevertex tenant (verified via the server-returned tenant slug, not the URL) qualifies.
+  // NOT a platform owner — only the is_platform_owner claim or the superuser role qualifies.
   const isPlatformOwner = checkPlatformOwner(user);
 
   // HQ users (admin/manager/superuser) can switch between outlets; everyone else is locked to their outlet.

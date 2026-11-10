@@ -5,6 +5,7 @@ import { Check, Monitor } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { useAuthStore } from '@/store/auth';
+import { useTenantId } from '@/hooks/useTenantId';
 import { apiClient } from '@/lib/api/client';
 import { Badge, Button, Card, CardContent, CardHeader } from '@/components/ui/base';
 import { KindIcon } from '@/components/ui/kind-icon';
@@ -117,7 +118,7 @@ function ClientRow({ c, isThis }: { c: DeviceClient; isThis: boolean }) {
  */
 export function DevicesTab() {
   const user = useAuthStore((s) => s.user);
-  const tenantID = user?.tenant_id ?? '';
+  const tenantID = useTenantId() ?? '';
   const { clientId: thisClient } = useDeviceIdentity();
 
   const { data, isLoading, refetch, isFetching } = useQuery<{ data: POSDevice[]; total: number }>({

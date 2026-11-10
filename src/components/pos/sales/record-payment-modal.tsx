@@ -7,7 +7,7 @@ import { SettlementModal, SETTLE_CREDIT_SALE_METHODS, usableSettlementMethods, t
 import { apiClient } from '@/lib/api/client';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { useTenders } from '@/hooks/usePOS';
-import { useAuthStore } from '@/store/auth';
+import { useTenantId } from '@/hooks/useTenantId';
 
 const FALLBACK_TENDER_ID = '00000000-0000-0000-0000-000000000000';
 
@@ -37,7 +37,7 @@ export function RecordPaymentModal({
   onClose: () => void;
   onDone?: () => void;
 }) {
-  const tenantID = useAuthStore((s) => s.user?.tenant_id ?? '');
+  const tenantID = useTenantId() ?? '';
   const qc = useQueryClient();
   const { data: tendersData } = useTenders();
   // Gateway methods show only when this tenant switched that gateway on; offline methods always show.

@@ -5,6 +5,7 @@ import { Download, FileUp, Loader2, Upload, CheckCircle2, AlertTriangle } from '
 import { toast } from 'sonner';
 import { Card, CardContent } from '@/components/ui/base';
 import { useAuthStore } from '@/store/auth';
+import { useTenantId } from '@/hooks/useTenantId';
 import { useFullCatalog } from '@/hooks/usePOS';
 import { usePermissions, P } from '@/hooks/usePermissions';
 import { apiClient } from '@/lib/api/client';
@@ -71,7 +72,7 @@ function parseCSV(text: string): string[][] {
 
 export default function ImportSalesPage() {
   const outlet = useAuthStore((s) => s.outlet);
-  const tenantId = useAuthStore((s) => s.user?.tenant_id ?? '');
+  const tenantId = useTenantId() ?? '';
   const { can } = usePermissions();
   const canImport = can(P.ORDERS_MANAGE);
 

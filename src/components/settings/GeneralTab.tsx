@@ -10,7 +10,7 @@ import { useModuleAccess } from '@/hooks/use-module-access';
 import { P } from '@/lib/rbac/permissions';
 import { SUPPORTED_CURRENCIES, CURRENCY_META } from '@/lib/utils';
 import { convertCurrency } from '@/lib/api/currency';
-import { useAuthStore } from '@/store/auth';
+import { useTenantId } from '@/hooks/useTenantId';
 import { CurrencyChangeConfirmModal } from '@bengo-hub/shared-ui-lib';
 import { MediaImage } from '@bengo-hub/shared-ui-lib/media';
 import { inputClass, labelClass } from './shared';
@@ -27,7 +27,7 @@ export function GeneralTab() {
   // accept returns of consumed food/drinks, so the return-window field is irrelevant there.
   const showReturnWindow = isRetail;
 
-  const tenantID = useAuthStore((s) => s.user?.tenant_id ?? '');
+  const tenantID = useTenantId() ?? '';
   const [currency, setCurrency] = useState('KES');
   // Currency-change confirmation: selecting a new currency never applies immediately — it stages
   // the pick, fetches the live rate from treasury (via pos-api's currency proxy), and only commits

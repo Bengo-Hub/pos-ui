@@ -10,11 +10,13 @@ import { PosToolbar } from '@/components/pos/terminal/pos-toolbar';
 import { CategoryNav } from '@/components/pos/category-nav';
 import { ScaleDisplay } from '@/components/retail/ScaleDisplay';
 import { useTerminal } from '@/components/pos/terminal/terminal-context';
+import { useTenantId } from '@/hooks/useTenantId';
 import { cn, formatCurrency } from '@/lib/utils';
 import { Grid3x3, Image as ImageIcon, LayoutList, Search, X } from 'lucide-react';
 
 export function TerminalHeader() {
   const t = useTerminal();
+  const pageTenantId = useTenantId() ?? '';
   const { cfg } = t;
   const currency = (t.posSettings as any)?.currency ?? 'KES';
 
@@ -116,7 +118,7 @@ export function TerminalHeader() {
       {cfg.showScale && t.scaleDeviceId && (
         <div className="px-4 pb-3 shrink-0">
           <ScaleDisplay
-            tenantSlug={t.user?.tenant_slug ?? t.orgSlug}
+            tenantSlug={pageTenantId}
             deviceId={t.scaleDeviceId}
             onAddToCart={t.handleScaleAddToCart}
           />

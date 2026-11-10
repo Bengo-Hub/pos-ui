@@ -16,6 +16,7 @@ import { CustomerSearch, type SelectedCustomer } from '@/components/pos/customer
 import { useCreateLayaway, type CreateLayawayInput, type LayawayPlan } from '@/hooks/useLayaway';
 import { useStaffAdmin, useStaffSearch } from '@/hooks/useStaff';
 import { useAuthStore } from '@/store/auth';
+import { useTenantId } from '@/hooks/useTenantId';
 import { useOutletFilterStore } from '@/store/outlet-filter';
 import { cn } from '@/lib/utils';
 import { apiErrorMessage } from '@/lib/api/error-message';
@@ -34,7 +35,7 @@ interface CreateLayawayModalProps {
 }
 
 export function CreateLayawayModal({ open, onClose, onCreated }: CreateLayawayModalProps) {
-  const tenantId = useAuthStore((s) => s.user?.tenant_id ?? '');
+  const tenantId = useTenantId() ?? '';
   const authOutlet = useAuthStore((s) => s.outlet);
   const outlets = useOutletFilterStore((s) => s.outlets);
 

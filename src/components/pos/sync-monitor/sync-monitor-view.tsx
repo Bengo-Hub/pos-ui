@@ -57,7 +57,7 @@ export function SyncMonitorView() {
   const tenantID = useAuthStore((s) => s.user?.tenant_id ?? '');
   // Txn Reversals is a platform-owner data-repair tool (initiated on tenant request) —
   // the tab is hidden for everyone else, and the API is platform-owner-gated server-side.
-  // Uses the CANONICAL isPlatformOwner() helper (claim OR superuser role OR codevertex slug)
+  // Uses the CANONICAL isPlatformOwner() helper (claim OR superuser role)
   // — the old strict `user.isPlatformOwner === true` check missed login paths that only set
   // roles/slug, hiding the tab on some outlets/use cases.
   const user = useAuthStore((s) => s.user);

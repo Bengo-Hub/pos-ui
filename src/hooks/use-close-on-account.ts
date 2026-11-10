@@ -2,7 +2,7 @@
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api/client';
-import { useAuthStore } from '@/store/auth';
+import { useTenantId } from '@/hooks/useTenantId';
 
 /** Whether a sale still owes money and is NOT already booked on account (so it can be put on account). */
 export function canPutOnAccount(order: any): boolean {
@@ -20,7 +20,7 @@ export function canPutOnAccount(order: any): boolean {
  * server resolves the customer + enforces the credit limit.
  */
 export function useCloseOnAccount() {
-  const tenantID = useAuthStore((s) => s.user?.tenant_id ?? '');
+  const tenantID = useTenantId() ?? '';
   const qc = useQueryClient();
 
   return useMutation({

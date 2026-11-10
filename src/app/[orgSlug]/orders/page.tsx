@@ -16,6 +16,7 @@ import { orderSubtypeBadge } from '@/lib/pos/order-subtype-label';
 import { useOwnScope } from '@/lib/rbac/scope';
 import { cn, formatCurrency } from '@/lib/utils';
 import { useAuthStore } from '@/store/auth';
+import { useTenantId } from '@/hooks/useTenantId';
 import { TrackingIframeModal } from '@bengo-hub/shared-ui-lib';
 import { DataTable, type DataTableColumn } from '@bengo-hub/shared-ui-lib/data-table';
 import { useDebouncedValue } from '@bengo-hub/shared-ui-lib/search';
@@ -45,6 +46,7 @@ export default function OrdersPage() {
   const { orgSlug } = useParams<{ orgSlug: string }>();
   const { can, canAny } = usePermissions();
   const user = useAuthStore((s) => s.user);
+  const pageTenantId = useTenantId() ?? '';
   const outlet = useAuthStore((s) => s.outlet);
   const queryClient = useQueryClient();
 
@@ -531,7 +533,7 @@ export default function OrdersPage() {
           orderNumber={selectedOrder.order_number}
           total={selOutstanding}
           tenantSlug={orgSlug}
-          tenantId={user?.tenant_id ?? ''}
+          tenantId={pageTenantId}
           orderLines={(selectedOrder.edges?.lines ?? []).map((line: any, i: number) => ({
             id: line.id ?? String(i),
             name: line.name ?? line.item_name ?? 'Item',

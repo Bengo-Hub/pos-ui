@@ -1,7 +1,7 @@
 'use client';
 
 import { apiClient } from '@/lib/api/client';
-import { useAuthStore } from '@/store/auth';
+import { useTenantId } from '@/hooks/useTenantId';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 export interface HeldItem {
@@ -19,7 +19,7 @@ export interface HeldItem {
 }
 
 function useTenantID() {
-  return useAuthStore((s) => s.user?.tenant_id ?? '');
+  return useTenantId() ?? '';
 }
 const base = (tid: string) => `/api/v1/${tid}/pos`;
 

@@ -1,7 +1,7 @@
 'use client';
 
 import { apiClient } from '@/lib/api/client';
-import { useAuthStore } from '@/store/auth';
+import { useTenantId } from '@/hooks/useTenantId';
 import { useQuery } from '@tanstack/react-query';
 
 export interface POSGateways {
@@ -31,7 +31,7 @@ const NONE_ENABLED: POSGateways = {
 /** The tenant's online payment rails. currency (the outlet's) decides which PayHero rails exist
  *  (e.g. MTN and Airtel for UGX). */
 export function usePOSGateways(currency?: string) {
-  const tenantID = useAuthStore((s) => s.user?.tenant_id ?? '');
+  const tenantID = useTenantId() ?? '';
   const cur = (currency ?? '').toUpperCase();
   return useQuery({
     queryKey: ['pos-gateways', tenantID, cur],

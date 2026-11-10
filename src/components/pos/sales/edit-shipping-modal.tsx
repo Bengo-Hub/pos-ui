@@ -7,7 +7,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/base';
 import { useUpdateShipping } from '@/hooks/usePOS';
 import { apiClient } from '@/lib/api/client';
-import { useAuthStore } from '@/store/auth';
+import { useTenantId } from '@/hooks/useTenantId';
 import { usePermissions, P } from '@/hooks/usePermissions';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { ModalFrame } from './sales-shared';
@@ -23,7 +23,7 @@ import {
 export function EditShippingModal({ order, onClose }: { order: any; onClose: () => void }) {
   const update = useUpdateShipping();
   const qc = useQueryClient();
-  const tenantId = useAuthStore((s) => s.user?.tenant_id ?? '');
+  const tenantId = useTenantId() ?? '';
   const { canAny } = usePermissions();
   const canDispatch = canAny([P.ORDERS_CHANGE, P.ORDERS_MANAGE]);
 

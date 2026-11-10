@@ -10,6 +10,7 @@ import { P } from '@/lib/rbac/permissions';
 import { cn } from '@/lib/utils';
 import { useTenantBranding } from '@/providers/tenant-branding-provider';
 import { useAuthStore } from '@/store/auth';
+import { useTenantId } from '@/hooks/useTenantId';
 import { useOutletFilterStore } from '@/store/outlet-filter';
 import { useQuery } from '@tanstack/react-query';
 import { Building2, Check, ChevronDown, Loader2, LogOut, MapPin, Menu, PanelLeft, Settings, Square, User } from 'lucide-react';
@@ -132,8 +133,10 @@ function HeaderOutletChip() {
   const limited = tokenOutletLimit(session?.accessToken).length > 0;
   const canSwitch = limited || canAccessAllOutlets(user);
 
-  const tenantId = user?.tenant_id ?? '';
-  const tenantSlug = user?.tenant_slug ?? '';
+  // A platform owner on another tenant's page switches that tenant's outlets.
+  const tenantId = useTenantId() ?? '';
+  const pageSlug = (useParams()?.orgSlug as string) || '';
+  const tenantSlug = user?.isPlatformOwner && pageSlug ? pageSlug : (user?.tenant_slug ?? '');
 
   const { data: fetchedOutlets = [], isLoading: outletsLoading } = useQuery<OutletListItem[]>({
     queryKey: ['header-outlet-list', tenantId, tenantSlug],

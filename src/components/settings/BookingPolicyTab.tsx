@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api/client';
-import { useAuthStore } from '@/store/auth';
+import { useTenantId } from '@/hooks/useTenantId';
 import { usePermissions, P } from '@/hooks/usePermissions';
 import { Loader2, ShieldAlert } from 'lucide-react';
 import { toast } from 'sonner';
@@ -41,7 +41,7 @@ const base = (tenant: string) => `/api/v1/${tenant}/pos/settings/booking-policy`
  * Backed by OutletSetting.metadata.booking_policy and enforced by pos-api on amend/cancel.
  */
 export function BookingPolicyTab() {
-  const tenantID = useAuthStore((s) => s.user?.tenant_id ?? '');
+  const tenantID = useTenantId() ?? '';
   const qc = useQueryClient();
   const { can } = usePermissions();
   const canManage = can(P.CONFIG_MANAGE) || can(P.CONFIG_CHANGE);

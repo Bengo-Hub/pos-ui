@@ -10,7 +10,7 @@ import { ReportDocumentButton } from '@/components/reports/report-document-butto
 import { cn, formatCurrency } from '@/lib/utils';
 import { Download, Receipt } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import { useAuthStore } from '@/store/auth';
+import { useTenantId } from '@/hooks/useTenantId';
 import { DataTable } from '@bengo-hub/shared-ui-lib/data-table';
 import { buildTaxReportColumns } from './tax-report-columns';
 
@@ -23,7 +23,7 @@ function periodRange(p: 'today' | 'week' | 'month') {
 }
 
 function TaxReportContent() {
-  const tenantID = useAuthStore((s) => s.user?.tenant_id ?? '');
+  const tenantID = useTenantId() ?? '';
   const [period, setPeriod] = useState<'today' | 'week' | 'month'>('month');
   const { from, to } = periodRange(period);
   const outletId = useEffectiveOutletID() || undefined;

@@ -15,6 +15,7 @@
 
 import { apiClient } from '@/lib/api/client';
 import { useAuthStore } from '@/store/auth';
+import { getActiveTenantId } from '@/hooks/useTenantId';
 import type { PrinterProfile } from '@/lib/api/settings';
 import { paperOf } from '@/lib/pos/printer-stations';
 
@@ -54,8 +55,15 @@ export interface DiscoverResult {
 let qzPromise: Promise<any | null> | null = null;
 let configured = false;
 
+// The signed-in tenant: used for QZ certificate/signing, which pairs this browser with QZ Tray
+// (per device, not per viewed page).
 function tenantSlug(): string {
   try { return useAuthStore.getState().user?.tenant_id ?? ''; } catch { return ''; }
+}
+
+// The tenant the page names: used for tenant data (network printer discovery, test tickets).
+function pageTenant(): string {
+  return getActiveTenantId() ?? '';
 }
 
 /** Lazily import qz-tray, wire cert/signature promises to pos-api, and connect. Returns null when the
@@ -204,7 +212,7 @@ export async function requestBluetoothPrinter(): Promise<DiscoveredDevice | null
  *  (on-prem); a cloud deployment returns { enabled: false } and we silently fall back to QZ/USB/BT. */
 async function detectBackend(): Promise<{ devices: DiscoveredDevice[]; note?: string }> {
   if (typeof window === 'undefined') return { devices: [] };
-  const slug = tenantSlug();
+  const slug = pageTenant();
   if (!slug) return { devices: [] };
   try {
     const res = await apiClient.get<{
@@ -625,7 +633,7 @@ export async function pingNetworkPrinter(host: string, port = 9100): Promise<Pin
  *  browser relays these to the Local Print Agent (or QZ) for a SILENT background test print — no
  *  browser print dialog. Returns null on failure (caller falls back to the browser window). */
 export async function fetchTestTicketEscposHex(station: string, paper: string): Promise<string | null> {
-  const slug = tenantSlug();
+  const slug = pageTenant();
   if (!slug) return null;
   try {
     const res = await apiClient.post<{ escpos_hex?: string }>(

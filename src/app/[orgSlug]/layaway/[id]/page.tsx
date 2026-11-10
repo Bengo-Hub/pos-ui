@@ -18,6 +18,7 @@ import { autoPrintsCustomerCopy, resolveBillProfile } from '@/lib/pos/printer-st
 import { cn, formatCurrency } from '@/lib/utils';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { useAuthStore } from '@/store/auth';
+import { useTenantId } from '@/hooks/useTenantId';
 import { AlertTriangle, Loader2, PackageCheck, X } from 'lucide-react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -57,7 +58,7 @@ function LayawayDetailPage() {
   //  · the ordinary SALE receipt for the POSOrder that Complete / Hand Over raises.
   // Only the last is a fiscalised sale, so only it goes through showReceiptForOrder (which runs
   // the eTIMS merge); the two plan slips use the generic showReceiptFromEndpoint.
-  const tenantId = useAuthStore((s) => s.user?.tenant_id ?? '');
+  const tenantId = useTenantId() ?? '';
   const authUser = useAuthStore((s) => s.user);
   const {
     receiptData, receiptOpen, receiptOrderId,

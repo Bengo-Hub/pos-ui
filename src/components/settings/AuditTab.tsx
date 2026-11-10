@@ -2,6 +2,7 @@
 
 import { usePosAuditLogs, usePosExceptions } from '@/hooks/useAudit';
 import { useAuthStore } from '@/store/auth';
+import { useTenantId } from '@/hooks/useTenantId';
 import { Loader2, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { ACTION_FILTERS, actorLabel } from './audit/actions';
@@ -22,7 +23,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
  */
 export function AuditTab() {
   const user = useAuthStore((s) => s.user);
-  const tenantId = user?.tenant_id ?? '';
+  const tenantId = useTenantId() ?? '';
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [action, setAction] = useState('');

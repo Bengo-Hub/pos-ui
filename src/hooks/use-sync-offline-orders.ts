@@ -153,6 +153,20 @@ function errMsg(err: any): string {
   return err?.response?.data?.error ?? err?.message ?? 'sync failed';
 }
 
+/**
+ * The tenant a queued record syncs under. Legacy rows saved before tenant_id was recorded
+ * have no tenant_id key and fall back to the signed-in tenant. A record whose tenant_id key
+ * is present but empty returns undefined: it is left queued and never posted, so it cannot
+ * land in the wrong tenant.
+ */
+function recordTenant(record: object, kind: string, fallback: string): string | undefined {
+  if (!('tenant_id' in record)) return fallback;
+  const tid = (record as { tenant_id?: string }).tenant_id;
+  if (tid) return tid;
+  console.warn(`[offline-sync] queued ${kind} has an empty tenant_id; left queued, not posted`);
+  return undefined;
+}
+
 /** Sync-monitor activity feed — every replayed (or failed) push is logged, best-effort. */
 function logPush(entity: string, detail: string, err?: any) {
   void import('@/lib/db/kv-cache').then(({ appendSyncLog }) =>
@@ -169,11 +183,15 @@ function logPush(entity: string, detail: string, err?: any) {
 // ── Drawer session sync ────────────────────────────────────────────────────────
 
 async function syncDrawerSessions(tenantID: string): Promise<number> {
-  const rows = await getPendingSyncDrawerSessions();
-  for (const session of rows) {
+  let attempted = 0;
+  for (const session of await getPendingSyncDrawerSessions()) {
+    // Each record carries the tenant it was created under; never re-stamp it.
+    const tid = recordTenant(session, 'drawer session', tenantID);
+    if (!tid) continue;
+    attempted++;
     try {
       const res: any = await apiClient.post(
-        `/api/v1/${tenantID}/pos/drawers/open`,
+        `/api/v1/${tid}/pos/drawers/open`,
         { outletId: session.outlet_id, startingCash: session.starting_cash },
         idem(session.local_id),
       );
@@ -184,17 +202,21 @@ async function syncDrawerSessions(tenantID: string): Promise<number> {
       logPush('drawer_open', `Float ${session.starting_cash.toFixed(2)}`, err);
     }
   }
-  return rows.length;
+  return attempted;
 }
 
 // ── Order sync ─────────────────────────────────────────────────────────────────
 
 async function syncOrders(tenantID: string): Promise<number> {
-  const rows = await getPendingSyncOrders();
-  for (const order of rows) {
+  let attempted = 0;
+  for (const order of await getPendingSyncOrders()) {
+    // Each record carries the tenant it was created under; never re-stamp it.
+    const tid = recordTenant(order, 'order', tenantID);
+    if (!tid) continue;
+    attempted++;
     try {
       const res: any = await apiClient.post(
-        `/api/v1/${tenantID}/pos/orders`,
+        `/api/v1/${tid}/pos/orders`,
         {
           outlet_id: order.outlet_id,
           currency: order.currency,
@@ -226,7 +248,7 @@ async function syncOrders(tenantID: string): Promise<number> {
       if (serverOrderId && order.pending_payment) {
         try {
           await apiClient.post(
-            `/api/v1/${tenantID}/pos/orders/${serverOrderId}/payments/intent`,
+            `/api/v1/${tid}/pos/orders/${serverOrderId}/payments/intent`,
             {
               tenderMethod: order.pending_payment.tender_method,
               tenderId: order.pending_payment.tender_id,
@@ -246,7 +268,7 @@ async function syncOrders(tenantID: string): Promise<number> {
       logPush('order', `Sale ${order.currency} ${order.total_amount.toFixed(2)}`, err);
     }
   }
-  return rows.length;
+  return attempted;
 }
 
 // ── Payment sync ───────────────────────────────────────────────────────────────
@@ -263,11 +285,14 @@ async function syncPayments(tenantID: string): Promise<number> {
       orderId = await resolveServerOrderId(payment.local_order_id);
     }
     if (!orderId) continue;
+    // Legacy rows queued before tenant_id was recorded fall back to the signed-in tenant.
+    const tid = recordTenant(payment, 'payment', tenantID);
+    if (!tid) continue;
     attempted++;
 
     try {
       await apiClient.post(
-        `/api/v1/${tenantID}/pos/orders/${orderId}/payments/intent`,
+        `/api/v1/${tid}/pos/orders/${orderId}/payments/intent`,
         {
           tenderMethod: payment.tender_method,
           tenderId: payment.tender_id,
@@ -297,17 +322,19 @@ async function syncVoids(tenantID: string): Promise<number> {
     let orderId = v.server_order_id;
     if (!orderId && v.local_order_id) orderId = await resolveServerOrderId(v.local_order_id);
     if (!orderId) continue;
+    const tid = recordTenant(v, 'void', tenantID);
+    if (!tid) continue;
     attempted++;
     try {
       if (v.line_id) {
         await apiClient.post(
-          `/api/v1/${tenantID}/pos/orders/${orderId}/lines/${v.line_id}/void`,
+          `/api/v1/${tid}/pos/orders/${orderId}/lines/${v.line_id}/void`,
           { reason: v.reason, approval_token: v.approval_token },
           idem(v.local_id),
         );
       } else {
         await apiClient.patch(
-          `/api/v1/${tenantID}/pos/orders/${orderId}/void`,
+          `/api/v1/${tid}/pos/orders/${orderId}/void`,
           { reason: v.reason, approval_token: v.approval_token },
           idem(v.local_id),
         );
@@ -330,10 +357,12 @@ async function syncReturns(tenantID: string): Promise<number> {
     let orderId = r.server_order_id;
     if (!orderId && r.local_order_id) orderId = await resolveServerOrderId(r.local_order_id);
     if (!orderId) continue;
+    const tid = recordTenant(r, 'return', tenantID);
+    if (!tid) continue;
     attempted++;
     try {
       await apiClient.post(
-        `/api/v1/${tenantID}/pos/orders/${orderId}/returns`,
+        `/api/v1/${tid}/pos/orders/${orderId}/returns`,
         {
           outlet_id: r.outlet_id,
           return_type: r.return_type,
@@ -367,11 +396,13 @@ async function syncDrawerCloses(tenantID: string): Promise<number> {
       drawerId = await resolveServerDrawerId(close.local_drawer_id);
     }
     if (!drawerId) continue; // session not synced yet — retry next pass
+    const tid = recordTenant(close, 'drawer close', tenantID);
+    if (!tid) continue;
     attempted++;
 
     try {
       await apiClient.post(
-        `/api/v1/${tenantID}/pos/drawers/${drawerId}/close`,
+        `/api/v1/${tid}/pos/drawers/${drawerId}/close`,
         { endingCash: close.ending_cash },
         idem(`close-${drawerId}`),
       );

@@ -3,6 +3,7 @@
 import { ModuleGate } from '@/components/auth/module-gate';
 import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
 import { useAuthStore } from '@/store/auth';
+import { useTenantId } from '@/hooks/useTenantId';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api/client';
 import { useParams } from 'next/navigation';
@@ -42,7 +43,7 @@ const HOURS = Array.from({ length: 13 }, (_, i) => i + 7); // 7am – 7pm
 
 function useStaff() {
   const user = useAuthStore((s) => s.user);
-  const tenantID = user?.tenant_id ?? '';
+  const tenantID = useTenantId() ?? '';
   return useQuery({
     queryKey: ['staff-members', tenantID],
     queryFn: () => apiClient.get<{ data: StaffMember[] }>(`/api/v1/${tenantID}/pos/staff`),
@@ -53,7 +54,7 @@ function useStaff() {
 
 function useAppointmentsByWeek(weekStart: string) {
   const user = useAuthStore((s) => s.user);
-  const tenantID = user?.tenant_id ?? '';
+  const tenantID = useTenantId() ?? '';
   return useQuery({
     queryKey: ['appointments-week', tenantID, weekStart],
     queryFn: () => apiClient.get<{ data: Appointment[] }>(`/api/v1/${tenantID}/pos/appointments?week=${weekStart}`),

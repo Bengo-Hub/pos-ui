@@ -15,9 +15,10 @@ import { normalizeUseCase } from '@/lib/use-case-config';
 import { usePOSSettings, writeSettingsCaches } from '@/hooks/usePOSSettings';
 import { useEffectiveOutletID } from '@/hooks/usePOS';
 import { useAuthStore } from '@/store/auth';
+import { useTenantId } from '@/hooks/useTenantId';
 
 function useTenantID() {
-  return useAuthStore((s) => s.user?.tenant_id ?? '');
+  return useTenantId() ?? '';
 }
 
 /** The services sub use case registry. Static per deploy, so it is cached for a long time. */

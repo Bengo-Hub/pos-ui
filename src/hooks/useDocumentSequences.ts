@@ -7,11 +7,11 @@ import {
   type UpdateDocumentSequenceInput,
 } from '@/lib/api/document-sequences';
 import { apiErrorMessage } from '@/lib/api/error-message';
-import { useAuthStore } from '@/store/auth';
+import { useTenantId } from '@/hooks/useTenantId';
 import { toast } from 'sonner';
 
 function useTenantID() {
-  return useAuthStore((s) => s.user?.tenant_id ?? '');
+  return useTenantId() ?? '';
 }
 
 export function useDocumentSequences() {

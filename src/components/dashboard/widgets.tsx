@@ -2,6 +2,7 @@
 
 import { apiClient } from '@/lib/api/client';
 import { useAuthStore } from '@/store/auth';
+import { useTenantId } from '@/hooks/useTenantId';
 import { useOutletFilterStore, useListOutletId } from '@/store/outlet-filter';
 import { orderSubtypeBadge } from '@/lib/pos/order-subtype-label';
 import { cn } from '@/lib/utils';
@@ -22,7 +23,7 @@ import React from 'react';
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 export function useTenantID() {
-  return useAuthStore((s) => s.user?.tenant_id ?? '');
+  return useTenantId() ?? '';
 }
 
 // currency defaults to KES only as a last resort (a tenant summary that hasn't loaded yet) —

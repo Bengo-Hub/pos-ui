@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/base';
 import { useUpdateSaleInfo } from '@/hooks/usePOS';
 import { useStaffList } from '@/hooks/useStaff';
-import { useAuthStore } from '@/store/auth';
+import { useTenantId } from '@/hooks/useTenantId';
 import { CustomerSearch, WALK_IN_CUSTOMER, type SelectedCustomer } from '@/components/pos/customer-search';
 import { ModalFrame } from './sales-shared';
 
@@ -21,7 +21,7 @@ import { ModalFrame } from './sales-shared';
  * rather than a bespoke input, so "search existing or add missing" behaves identically here.
  */
 export function EditSaleInfoModal({ order, onClose }: { order: any; onClose: () => void }) {
-  const tenantId = useAuthStore((s) => s.user?.tenant_id ?? '');
+  const tenantId = useTenantId() ?? '';
   const { data: staffResp } = useStaffList(tenantId, order.outlet_id);
   const staff = staffResp?.data ?? [];
 

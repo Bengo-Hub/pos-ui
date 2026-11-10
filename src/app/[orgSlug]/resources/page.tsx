@@ -3,6 +3,7 @@
 import { ModuleGate } from '@/components/auth/module-gate';
 import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
 import { useAuthStore } from '@/store/auth';
+import { useTenantId } from '@/hooks/useTenantId';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api/client';
 import { useState } from 'react';
@@ -29,7 +30,7 @@ const STATUS_CONFIG: Record<Resource['status'], { label: string; className: stri
 
 function useResources(typeFilter: string) {
   const user = useAuthStore((s) => s.user);
-  const tenantID = user?.tenant_id ?? '';
+  const tenantID = useTenantId() ?? '';
   return useQuery({
     queryKey: ['resources', tenantID, typeFilter],
     queryFn: () =>
@@ -44,7 +45,7 @@ function useResources(typeFilter: string) {
 
 function useUpdateResourceStatus() {
   const user = useAuthStore((s) => s.user);
-  const tenantID = user?.tenant_id ?? '';
+  const tenantID = useTenantId() ?? '';
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, status }: { id: string; status: Resource['status'] }) =>

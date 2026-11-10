@@ -8,15 +8,15 @@ import { apiErrorMessage } from '@/lib/api/error-message';
 import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useStaffList, useSetStaffPIN } from '@/hooks/useStaff';
-import { useAuthStore } from '@/store/auth';
+import { useTenantId } from '@/hooks/useTenantId';
 import { P } from '@/lib/rbac/permissions';
 
-function useTenantId() {
-  return useAuthStore((s) => s.user?.tenant_id ?? '');
+function useTenantID() {
+  return useTenantId() ?? '';
 }
 
 export default function PinManagementPage() {
-  const tenantId = useTenantId();
+  const tenantId = useTenantID();
   const { can } = usePermissions();
 
   if (!can(P.STAFF_MANAGE)) {

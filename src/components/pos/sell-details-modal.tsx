@@ -13,7 +13,7 @@ import { useOrder } from '@/hooks/usePOS';
 import { apiClient } from '@/lib/api/client';
 import { isLineVoided, remainingLineQty } from '@/lib/pos/order-lines';
 import { cn, formatCurrency } from '@/lib/utils';
-import { useAuthStore } from '@/store/auth';
+import { useTenantId } from '@/hooks/useTenantId';
 import { useQuery } from '@tanstack/react-query';
 import { Banknote, Loader2, Pencil, RotateCcw, Undo2, X } from 'lucide-react';
 import Link from 'next/link';
@@ -56,7 +56,7 @@ export function SellDetailsModal({ orderId, orgSlug, onClose }: { orderId: strin
   const { data: order, isLoading } = useOrder(orderId);
   const currency = (order as any)?.currency ?? 'KES';
   const money = (n: number | undefined | null) => formatCurrency(n ?? 0, currency);
-  const tenantID = useAuthStore((s) => s.user?.tenant_id ?? '');
+  const tenantID = useTenantId() ?? '';
   const { can, canAny } = usePermissions();
   const canReturn = canAny([P.ORDERS_CHANGE_OWN, P.ORDERS_CHANGE, P.ORDERS_MANAGE]);
   // Edit Sale Info (served-by + customer correction) — same admin/manager tier the backend

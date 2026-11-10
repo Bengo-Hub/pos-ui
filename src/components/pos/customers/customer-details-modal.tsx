@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils';
 import { apiClient } from '@/lib/api/client';
 import { clientsApi, type LoyaltyAccount } from '@/lib/api/clients';
 import { useClientCreditByIdentifier } from '@/hooks/useClients';
-import { useAuthStore } from '@/store/auth';
+import { useTenantId } from '@/hooks/useTenantId';
 import { RecordPaymentModal } from '@/components/pos/sales/record-payment-modal';
 import { orderDisplayDate } from '@/components/pos/sales/sales-shared';
 
@@ -40,7 +40,7 @@ export function CustomerDetailsModal({
   customerPhone: string;
   onClose: () => void;
 }) {
-  const tenantID = useAuthStore((s) => s.user?.tenant_id ?? '');
+  const tenantID = useTenantId() ?? '';
   const [payOrder, setPayOrder] = useState<any | null>(null);
 
   // Loyalty/CRM account for this phone → the key the credit proxy needs.

@@ -1,17 +1,17 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useAuthStore } from '@/store/auth';
+import { useTenantId } from '@/hooks/useTenantId';
 import { shiftsApi, type SessionSummary, type ShiftHistoryParams } from '@/lib/api/shifts';
 import { getSnapshot, cacheSnapshot } from '@/lib/db/pos-db';
 import { isEffectivelyOnline, isNetworkShapedError } from '@/lib/connectivity';
 
-function useTenantId() {
-  return useAuthStore((s) => s.user?.tenant_id ?? '');
+function useTenantID() {
+  return useTenantId() ?? '';
 }
 
 export function useCurrentShift() {
-  const tenantId = useTenantId();
+  const tenantId = useTenantID();
   return useQuery({
     queryKey: ['shift-current', tenantId],
     // Offline (incl. cold-start and weak-wifi "effectively offline"): serve the last-known
@@ -42,7 +42,7 @@ export function useCurrentShift() {
 }
 
 export function useSessionSummary(enabled: boolean) {
-  const tenantId = useTenantId();
+  const tenantId = useTenantID();
   return useQuery<SessionSummary | null>({
     queryKey: ['shift-summary', tenantId],
     queryFn: () => shiftsApi.getSummary(tenantId),
@@ -54,7 +54,7 @@ export function useSessionSummary(enabled: boolean) {
 }
 
 export function useShiftHistory(params?: ShiftHistoryParams) {
-  const tenantId = useTenantId();
+  const tenantId = useTenantID();
   return useQuery({
     queryKey: ['shift-history', tenantId, params],
     queryFn: () => shiftsApi.getHistory(tenantId, params),
@@ -65,7 +65,7 @@ export function useShiftHistory(params?: ShiftHistoryParams) {
 }
 
 export function useOpenShift() {
-  const tenantId = useTenantId();
+  const tenantId = useTenantID();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (opening_float: number) => shiftsApi.open(tenantId, opening_float),
@@ -77,7 +77,7 @@ export function useOpenShift() {
 }
 
 export function useCloseShift() {
-  const tenantId = useTenantId();
+  const tenantId = useTenantID();
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (payload: { closing_float: number; notes?: string }) =>

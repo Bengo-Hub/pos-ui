@@ -32,6 +32,7 @@ import { JobCreatedDialog } from '@/components/jobs/job-created-dialog';
 import { RegisterDetailsModal, RecentTransactionsModal, SellReturnModal } from '@/components/pos/terminal/toolbar-modals';
 import { autoPrintsCustomerCopy, resolveBillProfile } from '@/lib/pos/printer-stations';
 import { useTerminal } from '@/components/pos/terminal/terminal-context';
+import { usePageTenantSlug, useTenantId } from '@/hooks/useTenantId';
 import { rbacApi } from '@/lib/api/rbac';
 import { AlertTriangle } from 'lucide-react';
 import { useState } from 'react';
@@ -41,6 +42,9 @@ import { useQueryClient } from '@tanstack/react-query';
 export function TerminalModals() {
   const t = useTerminal();
   const { cfg } = t;
+  const pageTenantId = useTenantId() ?? '';
+  // The viewed tenant's slug, so gateway tenders charge through that tenant's gateways.
+  const pageTenantSlug = usePageTenantSlug();
   const queryClient = useQueryClient();
 
   // Manager-PIN step-up state for voiding an order when the cashier is not a manager.
@@ -120,8 +124,8 @@ export function TerminalModals() {
         orderId={t.currentOrderId}
         orderNumber={t.currentOrderNumber}
         total={t.resumeTotal ?? t.total}
-        tenantSlug={t.user?.tenant_slug ?? ''}
-        tenantId={t.user?.tenant_id ?? ''}
+        tenantSlug={pageTenantSlug}
+        tenantId={pageTenantId}
         orderLines={t.currentOrderLines}
         isHospitality={t.isHospitality}
         customerCreditAvailable={t.customerCreditAvailable}
@@ -222,7 +226,7 @@ export function TerminalModals() {
         open={t.receiptOpen}
         onClose={t.handleReceiptClose}
         printerProfile={resolveBillProfile((t.posSettings as any)?.printer_profiles)}
-        tenantId={t.user?.tenant_id ?? ''}
+        tenantId={pageTenantId}
         orderId={t.receiptOrderId}
         // When a Local Print Agent is online, payment finalization already enqueued the receipt on
         // the SERVER print queue — client auto-printing it again would double-print.
@@ -238,8 +242,8 @@ export function TerminalModals() {
           total={t.jobCreated.total}
           depositPercent={t.jobDepositPercent}
           profile={t.jobProfile}
-          tenantId={t.user?.tenant_id ?? ''}
-          tenantSlug={t.user?.tenant_slug ?? t.orgSlug}
+          tenantId={pageTenantId}
+          tenantSlug={pageTenantSlug}
         />
       )}
 
@@ -247,7 +251,7 @@ export function TerminalModals() {
         open={t.orderPlacedOpen}
         orderNumber={t.orderPlacedNumber}
         orderId={t.orderPlacedId}
-        tenantId={t.user?.tenant_id ?? ''}
+        tenantId={pageTenantId}
         orgSlug={t.orgSlug}
         onClose={() => t.setOrderPlacedOpen(false)}
         autoLogout={t.autoLogoutAfterSale}
@@ -292,7 +296,7 @@ export function TerminalModals() {
               if (approval.code && !approval.approvalToken) {
                 try {
                   const res = await rbacApi.verifyApprovalCode(
-                    t.user?.tenant_id ?? '', 'catalog.oos_override', approval.code,
+                    pageTenantId, 'catalog.oos_override', approval.code,
                     t.outlet?.id ?? '',
                   );
                   if (!res?.approved) { toast.error('Invalid or expired approval code'); return; }

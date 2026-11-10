@@ -8,6 +8,7 @@ import { useAllShiftOverrides } from '@/hooks/useShiftOverrides';
 import { useLeaveRequests } from '@/hooks/useLeaveRequests';
 import { useAllActiveRotationDetails } from '@/hooks/useShiftRotations';
 import { useAuthStore } from '@/store/auth';
+import { useTenantId } from '@/hooks/useTenantId';
 import { useOutletFilterStore } from '@/store/outlet-filter';
 import type { StaffMember } from '@/lib/api/staff';
 import type { ShiftOverride } from '@/lib/api/shift-overrides';
@@ -186,7 +187,7 @@ function StaffScheduleRow({
 
 export function ShiftPlannerPanel() {
   const user = useAuthStore((s) => s.user);
-  const tenantId = user?.tenant_id ?? '';
+  const tenantId = useTenantId() ?? '';
   // Scope the planner to the CURRENT outlet so staff/roles from other outlets & use cases don't
   // mix (e.g. a Pharmacist/Therapist appearing on a hospitality outlet's roster). When an HQ admin
   // has drilled into an outlet, use that; otherwise the operator's home outlet.

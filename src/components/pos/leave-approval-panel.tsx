@@ -5,6 +5,7 @@ import { CheckCircle, XCircle, Loader2, CalendarCheck } from 'lucide-react';
 import { useLeaveRequests, useUpdateLeaveStatus } from '@/hooks/useLeaveRequests';
 import { useStaffAdmin } from '@/hooks/useStaff';
 import { useAuthStore } from '@/store/auth';
+import { useTenantId } from '@/hooks/useTenantId';
 import { Card, CardContent } from '@/components/ui/base';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { toast } from 'sonner';
@@ -109,7 +110,7 @@ function LeaveCard({
 
 export function LeaveApprovalPanel() {
   const user = useAuthStore((s) => s.user);
-  const tenantId = user?.tenant_id ?? '';
+  const tenantId = useTenantId() ?? '';
   const [statusFilter, setStatusFilter] = useState<LeaveStatus | undefined>('pending');
 
   const { data: leaves = [], isLoading } = useLeaveRequests(statusFilter);

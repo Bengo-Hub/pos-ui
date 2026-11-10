@@ -7,10 +7,10 @@ import {
   onlineOrdersApi, isAcceptedForLater, isAwaitingAcceptance, isOnlineOrder, type CollectPayload, type PickupOrder,
 } from '@/lib/api/online-orders';
 import { playKDSTone } from '@/lib/kds-sounds';
-import { useAuthStore } from '@/store/auth';
+import { useTenantId } from '@/hooks/useTenantId';
 
 function useTenantID() {
-  return useAuthStore((s) => s.user?.tenant_id ?? '');
+  return useTenantId() ?? '';
 }
 
 /** Query key factory keeps the queue keys consistent across components. */

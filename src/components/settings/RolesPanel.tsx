@@ -5,6 +5,7 @@ import { Loader2, Lock, Pencil, Plus, Save, Search, Shield, Trash2, X } from 'lu
 import { Button, Card, CardContent, CardHeader } from '@/components/ui/base';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { useAuthStore } from '@/store/auth';
+import { useTenantId } from '@/hooks/useTenantId';
 import {
   useCreateRole, useDeleteRole, useRbacPermissions, useRbacRoles, useRolePermissions,
   useSetRolePermissions, useUpdateRole,
@@ -32,7 +33,7 @@ const actionLabel = (a: string) => ACTION_LABELS[a] ?? a.replace(/_/g, ' ');
  */
 export function RolesPanel() {
   const user = useAuthStore((s) => s.user);
-  const tenantId = user?.tenant_id ?? '';
+  const tenantId = useTenantId() ?? '';
   const { canManageStaff, isSuperuser } = usePermissions();
   const roles = user?.roles ?? [];
   const isAdminLevel = isSuperuser || roles.some((r) => ['admin', 'owner', 'superuser', 'super_admin'].includes(r));

@@ -2,7 +2,7 @@
 
 import { ModuleGate } from '@/components/auth/module-gate';
 import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
-import { useAuthStore } from '@/store/auth';
+import { useTenantId } from '@/hooks/useTenantId';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api/client';
 import { cn, formatCurrency } from '@/lib/utils';
@@ -17,7 +17,7 @@ import { buildStaffCreditColumns, type StaffCreditLink } from './staff-credit-co
 const FEATURE = 'staff_fund_from_salary';
 
 function useStaffCredit(from?: string, to?: string) {
-  const tenantID = useAuthStore((s) => s.user?.tenant_id ?? '');
+  const tenantID = useTenantId() ?? '';
   return useQuery({
     queryKey: ['staff-credit', tenantID, from, to],
     queryFn: () => apiClient.get<{ data: StaffCreditLink[] }>(`/api/v1/${tenantID}/pos/staff-credit`, {

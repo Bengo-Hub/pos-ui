@@ -1,7 +1,7 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useAuthStore } from '@/store/auth';
+import { useTenantId } from '@/hooks/useTenantId';
 import {
   hotelApi,
   type CreateRoomInput,
@@ -20,7 +20,7 @@ import {
 } from '@/lib/api/hotel';
 
 function useTenantSlug() {
-  return useAuthStore((s) => s.user?.tenant_id ?? '');
+  return useTenantId() ?? '';
 }
 
 // ─── Rooms ──────────────────────────────────────────────────────────────────

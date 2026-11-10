@@ -6,6 +6,7 @@ import { useAuthStore } from '@/store/auth';
 import { useParams } from 'next/navigation';
 import { useCreateOrder } from '@/hooks/usePOS';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
+import { usePageTenantSlug } from '@/hooks/useTenantId';
 import { SplitPaymentModal } from '@/components/pos/split-payment-modal';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import {
@@ -29,7 +30,8 @@ interface RepairDetailPanelProps {
 export function RepairDetailPanel({ jobID }: RepairDetailPanelProps) {
   const params = useParams();
   const orgSlug = params?.orgSlug as string;
-  const tenantSlug = useAuthStore((s) => s.user?.tenant_slug ?? orgSlug);
+  // The viewed tenant's slug, so gateway tenders charge through that tenant's gateways.
+  const tenantSlug = usePageTenantSlug() || orgSlug;
   const outletId = useAuthStore((s) => s.outlet?.id ?? '');
 
   const { data, isLoading } = useRepair(jobID);

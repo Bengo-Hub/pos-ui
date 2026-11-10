@@ -2,7 +2,7 @@
 
 import { cn } from '@/lib/utils';
 import { webhooksApi, type WebhookSubscription, type WebhookDelivery, type CreateWebhookInput } from '@/lib/api/webhooks';
-import { useAuthStore } from '@/store/auth';
+import { useTenantId } from '@/hooks/useTenantId';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { usePermissions, P } from '@/hooks/usePermissions';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
@@ -128,7 +128,7 @@ function WebhookRow({ webhook, tenantID }: { webhook: WebhookSubscription; tenan
 
 /** Webhooks management UI — embedded as a tab in POS Settings. */
 export function WebhooksTab() {
-  const tenantID = useAuthStore((s) => s.user?.tenant_id ?? '');
+  const tenantID = useTenantId() ?? '';
   const qc = useQueryClient();
   const { can } = usePermissions();
 

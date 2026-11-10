@@ -18,6 +18,7 @@ import { useOwnScope } from '@/lib/rbac/scope';
 import { Can } from '@/components/auth/can';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { useAuthStore } from '@/store/auth';
+import { useTenantId } from '@/hooks/useTenantId';
 import { useReceiptAfterSale } from '@/hooks/use-receipt-after-sale';
 import { autoPrintsCustomerCopy, resolveBillProfile } from '@/lib/pos/printer-stations';
 import { apiClient } from '@/lib/api/client';
@@ -478,6 +479,7 @@ function MyBillsTab({ orgSlug }: { orgSlug: string }) {
   const router = useRouter();
   const { can, isSuperuser } = usePermissions();
   const user = useAuthStore((s) => s.user);
+  const pageTenantId = useTenantId() ?? '';
   const outlet = useAuthStore((s) => s.outlet);
   const queryClient = useQueryClient();
   const releaseTable = useReleaseTable();
@@ -487,7 +489,7 @@ function MyBillsTab({ orgSlug }: { orgSlug: string }) {
   // (useReceiptAfterSale), so a bill settled from this tab prints an identical receipt.
   const {
     receiptData, receiptOpen, receiptOrderId, showReceiptForOrder, closeReceipt,
-  } = useReceiptAfterSale(user?.tenant_id ?? '', user?.fullName || user?.email);
+  } = useReceiptAfterSale(pageTenantId, user?.fullName || user?.email);
   // Shared-terminal auto-logout after a completed sale (auto_logout_after_sale policy) — mirrors
   // terminal-context's identically-named memo/callback. Settling a bill from My Bills is a real
   // sale-completion surface (hit constantly by hospitality/quick_service — the two profiles that
@@ -840,7 +842,7 @@ function MyBillsTab({ orgSlug }: { orgSlug: string }) {
           orderId={splitOrder.id}
           orderNumber={splitOrder.order_number}
           total={splitOrder.total_amount ?? 0}
-          tenantId={user?.tenant_id ?? ''}
+          tenantId={pageTenantId}
           tenantSlug={orgSlug}
           isHospitality={isHospitality}
           orderLines={(splitOrder.edges?.lines ?? splitOrder.lines ?? [])
@@ -868,7 +870,7 @@ function MyBillsTab({ orgSlug }: { orgSlug: string }) {
             queryClient.invalidateQueries({ queryKey: ['pos-orders'] });
             queryClient.invalidateQueries({ queryKey: ['pos-tables'] });
             try {
-              const fresh = await apiClient.get<any>(`/api/v1/${user?.tenant_id}/pos/orders/${splitOrder.id}`);
+              const fresh = await apiClient.get<any>(`/api/v1/${pageTenantId}/pos/orders/${splitOrder.id}`);
               setSplitOrder(fresh);
             } catch {
               setSplitOrder(null);
@@ -883,7 +885,7 @@ function MyBillsTab({ orgSlug }: { orgSlug: string }) {
         open={receiptOpen}
         onClose={handleReceiptClose}
         printerProfile={resolveBillProfile((posSettings as any)?.printer_profiles)}
-        tenantId={user?.tenant_id ?? ''}
+        tenantId={pageTenantId}
         orderId={receiptOrderId}
         autoPrint={autoPrintsCustomerCopy(posSettings as any) && !(posSettings as any)?.print_agent_online}
       />

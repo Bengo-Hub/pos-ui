@@ -22,6 +22,7 @@ import { AccessoriesModal } from '@/components/pos/accessories-modal';
 import { useModuleAccess } from '@/hooks/use-module-access';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { useAuthStore } from '@/store/auth';
+import { useTenantId } from '@/hooks/useTenantId';
 import { useQueryClient } from '@tanstack/react-query';
 import { cn, formatCurrency } from '@/lib/utils';
 
@@ -83,7 +84,7 @@ function HistoryCard({ order, currency }: { order: PickupOrder; currency: string
 }
 
 function OnlineOrdersPage() {
-  const tenantID = useAuthStore((s) => s.user?.tenant_id ?? '');
+  const tenantID = useTenantId() ?? '';
   const outletId = useAuthStore((s) => s.outlet?.id ?? '');
   const orgSlug = (useParams()?.orgSlug as string) || '';
   const qc = useQueryClient();

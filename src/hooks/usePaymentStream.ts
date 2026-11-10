@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useAuthStore } from '@/store/auth';
+import { useTenantId } from '@/hooks/useTenantId';
 import { apiClient } from '@/lib/api/client';
 
 export type PaymentStreamStatus = 'idle' | 'waiting' | 'paid' | 'timeout';
@@ -19,7 +19,7 @@ const POLL_DELAYS_MS = [0, 3000, 5000, 8000, 13000, 21000, 21000, 21000, 21000, 
  * `{ status }` shape the old SSE hook did, so callers are unchanged.
  */
 export function usePaymentStream(orderId: string | null) {
-  const tenantID = useAuthStore((s) => s.user?.tenant_id ?? '');
+  const tenantID = useTenantId() ?? '';
   const [status, setStatus] = useState<PaymentStreamStatus>('idle');
 
   useEffect(() => {

@@ -7,7 +7,7 @@ import { usePOSSettings, useUpdatePOSSettings } from '@/hooks/usePOSSettings';
 import { usePermissions } from '@/hooks/usePermissions';
 import { P } from '@/lib/rbac/permissions';
 import { banksApi, type BankOption } from '@/lib/api/banks';
-import { useAuthStore } from '@/store/auth';
+import { useTenantId } from '@/hooks/useTenantId';
 import { Toggle, inputClass, labelClass } from './shared';
 
 export function PaymentDisplayTab() {
@@ -51,7 +51,7 @@ export function PaymentDisplayTab() {
 
   // Bank verification (Paystack via pos-api → treasury S2S): pick a bank + verify the account
   // number to confirm the holder name printed on receipts.
-  const tenantID = useAuthStore((s) => s.user?.tenant_id ?? '');
+  const tenantID = useTenantId() ?? '';
   const [banks, setBanks] = useState<BankOption[]>([]);
   const [bankCode, setBankCode] = useState('');
   const [verifying, setVerifying] = useState(false);

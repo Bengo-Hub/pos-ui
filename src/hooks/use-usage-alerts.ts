@@ -16,7 +16,7 @@ export function useUsageAlerts(): UsageAlert[] {
   // are an account-owner/admin concern, not a POS terminal one.
   const isTerminalSession = useAuthStore((s) => s.isTerminalSession);
   const isPlatformOwner =
-    !!(user as any)?.is_platform_owner || (user as any)?.tenant_slug === 'codevertex';
+    !!(user as any)?.is_platform_owner || !!(user as any)?.isPlatformOwner;
 
   const { data } = useQuery<UsageAlert[]>({
     queryKey: ['usage-alerts', (user as any)?.tenant_id],

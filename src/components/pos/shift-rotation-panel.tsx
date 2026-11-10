@@ -8,6 +8,7 @@ import {
 } from '@/hooks/useShiftRotations';
 import { useStaffAdmin, useStaffSearch } from '@/hooks/useStaff';
 import { useAuthStore } from '@/store/auth';
+import { useTenantId } from '@/hooks/useTenantId';
 import { Card, CardContent } from '@/components/ui/base';
 import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api/error-message';
@@ -31,7 +32,7 @@ interface SlotManagerProps {
 function SlotManager({ rotation, staffNames, staffIds }: SlotManagerProps) {
   const { data, isLoading } = useShiftRotationDetail(rotation.id);
   const upsert = useUpsertRotationSlots(rotation.id);
-  const tenantId = useAuthStore((s) => s.user?.tenant_id) ?? '';
+  const tenantId = useTenantId() ?? '';
   const searchStaff = useStaffSearch(tenantId);
 
   const [showForm, setShowForm] = useState(false);
@@ -322,7 +323,7 @@ function RotationCard({
 
 export function ShiftRotationPanel() {
   const user = useAuthStore((s) => s.user);
-  const tenantId = user?.tenant_id ?? '';
+  const tenantId = useTenantId() ?? '';
 
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState({ name: '', cycle_days: '14', start_date: todayStr() });

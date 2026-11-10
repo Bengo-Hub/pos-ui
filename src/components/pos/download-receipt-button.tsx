@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/base';
 import { apiClient } from '@/lib/api/client';
 import { apiErrorMessage } from '@/lib/api/error-message';
-import { useAuthStore } from '@/store/auth';
+import { useTenantId } from '@/hooks/useTenantId';
 
 interface DownloadReceiptButtonProps {
   orderId: string;
@@ -24,7 +24,7 @@ interface DownloadReceiptButtonProps {
  * reliable "just get me the file" path when the print pipeline itself is the thing that's broken.
  */
 export function DownloadReceiptButton({ orderId, orderNumber, label = 'Download PDF', variant = 'outline', size = 'sm', className }: DownloadReceiptButtonProps) {
-  const tenantId = useAuthStore((s) => s.user?.tenant_id ?? '');
+  const tenantId = useTenantId() ?? '';
   const [loading, setLoading] = useState(false);
 
   const handleClick = async () => {

@@ -6,6 +6,7 @@ import { PdfPreview, useDocumentPreview } from '@bengo-hub/shared-ui-lib/documen
 
 import { apiClient } from '@/lib/api/client';
 import { useAuthStore } from '@/store/auth';
+import { useTenantId } from '@/hooks/useTenantId';
 import { Button } from '@/components/ui/base';
 import { cn } from '@/lib/utils';
 
@@ -44,7 +45,7 @@ export function ReportDocumentButton({
   className,
   disabled,
 }: ReportDocumentButtonProps) {
-  const tenantID = useAuthStore((s) => s.user?.tenant_id ?? '');
+  const tenantID = useTenantId() ?? '';
   const { openPreview, previewProps } = useDocumentPreview({ onError: (m) => toast.error(m) });
 
   const handleClick = () => {
@@ -99,7 +100,7 @@ export function ReportCsvButton({
   className,
   disabled,
 }: ReportCsvButtonProps) {
-  const tenantID = useAuthStore((s) => s.user?.tenant_id ?? '');
+  const tenantID = useTenantId() ?? '';
 
   const handleClick = async () => {
     if (!tenantID) {

@@ -5,6 +5,7 @@ import { CustomerDetailsModal } from '@/components/pos/customers/customer-detail
 import { InitiateReturnModal } from '@/components/pos/returns/initiate-return-modal';
 import { ModuleUnavailablePage } from '@/components/auth/module-unavailable';
 import { useAuthStore } from '@/store/auth';
+import { useTenantId } from '@/hooks/useTenantId';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api/client';
 import { useMemo, useState, useEffect } from 'react';
@@ -18,7 +19,7 @@ import { buildReturnsColumns, type ReturnItem } from './returns-columns';
 
 function useReturns(status: string, from?: string, to?: string, q?: string) {
   const user = useAuthStore((s) => s.user);
-  const tenantID = user?.tenant_id ?? '';
+  const tenantID = useTenantId() ?? '';
   return useQuery({
     queryKey: ['returns', tenantID, status, from, to, q],
     queryFn: () =>

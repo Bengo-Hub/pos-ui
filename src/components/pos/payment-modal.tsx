@@ -29,6 +29,7 @@ import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { formatCurrency } from '@/lib/utils';
 import { useEffectiveOnline } from '@/lib/connectivity';
 import { usePaymentStream } from '@/hooks/usePaymentStream';
+import { useTenantId } from '@/hooks/useTenantId';
 import { queueOfflinePayment as queueOfflinePaymentRecord } from '@/lib/pos/offline-payment';
 import { usePOSGateways } from '@/hooks/use-pos-gateways';
 import { CreditSaleDetailsModal, type CreditSaleDetails } from '@/components/pos/credit-sale-details-modal';
@@ -136,9 +137,11 @@ export function POSPaymentModal({
     canChargeRoom && step === 'room_select',
   );
 
+  // The tenant the page names; pos-api paths use its UUID, never the signed-in user's slug.
+  const pageTenantId = useTenantId() ?? '';
   const postRoomCharge = useMutation({
     mutationFn: ({ roomId }: { roomId: string }) =>
-      hotelApi.postFolioCharge(tenantSlug, roomId, {
+      hotelApi.postFolioCharge(pageTenantId, roomId, {
         description: `Restaurant bill ${orderNumber}`,
         amount: roundedTotal,
         charge_type: 'restaurant',
@@ -179,8 +182,8 @@ export function POSPaymentModal({
   // Queue an offline payment via the shared queueOfflinePaymentRecord (see [[offline-payment.ts]]).
   const queueOfflinePayment = useCallback(
     (method: string, externalRef?: string, amountTendered?: number) =>
-      queueOfflinePaymentRecord({ orderId, tenderId, method, amount: roundedTotal, currency, tenantSlug, externalRef, amountTendered }),
-    [orderId, tenderId, roundedTotal, currency, tenantSlug],
+      queueOfflinePaymentRecord({ orderId, tenderId, method, amount: roundedTotal, currency, tenantSlug, tenantId: pageTenantId, externalRef, amountTendered }),
+    [orderId, tenderId, roundedTotal, currency, tenantSlug, pageTenantId],
   );
 
   const handleCashConfirm = useCallback(async () => {

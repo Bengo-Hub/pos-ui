@@ -1,11 +1,11 @@
 'use client';
 
 import { useQuery, useQueries, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useAuthStore } from '@/store/auth';
+import { useTenantId } from '@/hooks/useTenantId';
 import { shiftRotationsApi, type CreateRotationInput, type RotationSlotInput, type ShiftRotation, type ShiftRotationSlot } from '@/lib/api/shift-rotations';
 
 function useTenantID() {
-  return useAuthStore((s) => s.user?.tenant_id ?? '');
+  return useTenantId() ?? '';
 }
 
 export function useShiftRotations(activeOnly = false) {

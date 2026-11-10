@@ -11,6 +11,7 @@ import { usePOSSettings, useUpdatePOSSettings } from '@/hooks/usePOSSettings';
 import { resolveMediaUrl, isVideoUrl, DEFAULT_SCREENSAVERS } from '@/lib/screensaver';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useAuthStore } from '@/store/auth';
+import { useTenantId } from '@/hooks/useTenantId';
 import { P } from '@/lib/rbac/permissions';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { inputClass, labelClass } from './shared';
@@ -26,7 +27,7 @@ const ACCEPT = 'image/png,image/jpeg,image/webp,video/mp4';
  * gradient, when nothing is uploaded.
  */
 export function DisplayTab() {
-  const tenantID = useAuthStore((s) => s.user?.tenant_id ?? '');
+  const tenantID = useTenantId() ?? '';
   const orgSlug = useAuthStore((s) => s.user?.tenant_slug ?? '');
   const { can } = usePermissions();
   const canEdit = can(P.CONFIG_CHANGE) || can(P.CONFIG_MANAGE);

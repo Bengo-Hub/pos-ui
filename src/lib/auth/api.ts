@@ -177,7 +177,7 @@ export async function fetchProfile(accessToken: string): Promise<{
     permissions: data.permissions ?? [],
     tenant_id: data.tenant_id ?? data.primary_tenant ?? '',
     tenant_slug: slug,
-    isPlatformOwner: data.is_platform_owner === true || slug === 'codevertex',
+    isPlatformOwner: data.is_platform_owner === true,
     isSuperUser: roles.includes('superuser'),
   };
 }

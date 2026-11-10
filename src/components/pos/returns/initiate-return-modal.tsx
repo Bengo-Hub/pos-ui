@@ -15,6 +15,8 @@ import { allowedRefundChannels, defaultRefundChannel, refundChannelAdvisory, res
 import { cn, formatCurrency } from '@/lib/utils';
 import { orderDisplayDate } from '@/components/pos/sales/sales-shared';
 import { useAuthStore } from '@/store/auth';
+import { useTenantId } from '@/hooks/useTenantId';
+import { useParams } from 'next/navigation';
 
 export interface ReturnLinePayload {
   order_line_id: string;
@@ -40,8 +42,9 @@ export interface InitiateReturnPayload {
 
 export function useInitiateReturn() {
   const user = useAuthStore((s) => s.user);
-  const tenantID = user?.tenant_id ?? '';
-  const tenantSlug = user?.tenant_slug ?? tenantID;
+  const tenantID = useTenantId() ?? '';
+  // Stamped on the offline record only; follows the page tenant like tenant_id does.
+  const tenantSlug = (useParams()?.orgSlug as string) || user?.tenant_slug || tenantID;
   const outletID = (user as (typeof user & { outlet_id?: string }) | null)?.outlet_id ?? '';
   const isOnline = useEffectiveOnline();
   const qc = useQueryClient();
@@ -122,7 +125,7 @@ export function InitiateReturnModal({
   initialOrderNumber?: string;
 }) {
   const user = useAuthStore((s) => s.user);
-  const tenantID = user?.tenant_id ?? '';
+  const tenantID = useTenantId() ?? '';
   const outletID = (user as (typeof user & { outlet_id?: string }) | null)?.outlet_id ?? '';
   const isOnline = useEffectiveOnline();
   const { data: posSettings } = usePOSSettings();

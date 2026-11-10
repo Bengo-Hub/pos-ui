@@ -64,6 +64,7 @@ import { findVariantByScanCode, variantLineItem, variantLineName } from '@/lib/p
 import { P } from '@/lib/rbac/permissions';
 import { terminalConfigFor, type TerminalConfig } from '@/lib/use-case-config';
 import { useAuthStore } from '@/store/auth';
+import { useTenantId } from '@/hooks/useTenantId';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -484,6 +485,8 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
   const searchParams = useSearchParams();
   const orgSlug = (params?.orgSlug as string) || '';
   const user = useAuthStore((s) => s.user);
+  // The tenant the page names (a platform owner works in the viewed tenant, not their own).
+  const pageTenantId = useTenantId() ?? '';
   const outlet = useAuthStore((s) => s.outlet);
   // The outlet ORDERS post against — follows the HQ drill-down switcher (selectedOutletId),
   // falling back to the session's home outlet. Must match the outlet the catalog is scoped
@@ -670,7 +673,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
   const {
     receiptData, receiptOpen, receiptOrderId,
     showReceiptForOrder, closeReceipt, setReceiptData, setReceiptOpen,
-  } = useReceiptAfterSale(user?.tenant_id ?? '', user?.fullName || user?.email);
+  } = useReceiptAfterSale(pageTenantId, user?.fullName || user?.email);
 
   // Order placed dialog (dine-in + add-to-bill success)
   const [orderPlacedOpen, setOrderPlacedOpen] = useState(false);
@@ -727,7 +730,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
   // complete set below — so filters never operate on a single paginated page.
   const { data: catalogItems, isLoading: menuLoading } = useFullCatalog();
   const [remoteSearchItems, setRemoteSearchItems] = useState<CatalogItem[]>([]);
-  const tenantID = user?.tenant_id ?? '';
+  const tenantID = pageTenantId;
 
   // The normal path is instant client-side search over the full catalog. A stale or partial
   // offline catalog must not make a valid inventory item look nonexistent, so query the POS API
@@ -1121,7 +1124,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
       // Only when the profile price isn't in the local map do we resolve it from inventory-api —
       // e.g. a tier with quantity-break pricing not included in the bulk payload.
       const defaultCode = (pricingTiers.find((tt) => tt.is_default) ?? pricingTiers[0])?.code;
-      const tenantId = user?.tenant_id ?? '';
+      const tenantId = pageTenantId;
       const hasLocalProfilePrice =
         !!item.prices && typeof item.prices[pricingProfile] === 'number' && item.prices[pricingProfile] > 0;
       if (!mods && !serialNumber && tenantId && pricingProfile && pricingProfile !== defaultCode && !hasLocalProfilePrice) {
@@ -1420,7 +1423,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
   const repriceCart = useCallback(
     async (profile: string) => {
       setPricingProfile(profile);
-      const tenantId = user?.tenant_id ?? '';
+      const tenantId = pageTenantId;
       if (cart.length === 0 || !tenantId) return;
       setRepricing(true);
       try {
@@ -1534,7 +1537,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
   const handleFireCourse = async (course: number) => {
     if (!currentOrderId || firingCourse !== null) return;
     setFiringCourse(course);
-    const tenantId = user?.tenant_id ?? '';
+    const tenantId = pageTenantId;
     try {
       await apiClient.post(`/api/v1/${tenantId}/pos/orders/${currentOrderId}/fire-course`, { course });
       setFiredCourses(course);
@@ -1942,7 +1945,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
   // Refetch the current order's lines from the server (e.g. after a replace-item changed them
   // under the open split modal) so the modal keeps working against fresh line ids in place.
   const refreshCurrentOrderLines = useCallback(async () => {
-    const tenantId = user?.tenant_id ?? '';
+    const tenantId = pageTenantId;
     if (!tenantId || !currentOrderId) return;
     try {
       const fresh = await apiClient.get<any>(`/api/v1/${tenantId}/pos/orders/${currentOrderId}`);

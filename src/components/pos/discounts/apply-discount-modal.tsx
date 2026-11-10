@@ -5,6 +5,7 @@ import { BadgePercent, Loader2, Percent, Plus, Tag, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn, formatCurrency } from '@/lib/utils';
 import { useAuthStore } from '@/store/auth';
+import { getActiveTenantId } from '@/hooks/useTenantId';
 import { usePermissions } from '@/hooks/usePermissions';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { useApplyPromoCode, useCreateDiscount, useDiscounts } from '@/hooks/useDiscounts';
@@ -46,7 +47,8 @@ export async function searchCatalogItemsAdapter(
   ctx?: { signal?: AbortSignal },
 ): Promise<DiscountItemRef[]> {
   const { apiClient } = await import('@/lib/api/client');
-  const tenantID = useAuthStore.getState().user?.tenant_id ?? '';
+  const tenantID = getActiveTenantId();
+  if (!tenantID) return [];
   const res = await apiClient.get<{ data: Array<{ sku: string; name: string }> }>(
     `/api/v1/${tenantID}/pos/catalog/items?search=${encodeURIComponent(query)}&limit=25`,
     undefined,
@@ -61,7 +63,8 @@ export async function searchCatalogItemsAdapter(
  */
 export async function fetchCategoryItemsAdapter(category: string): Promise<DiscountItemRef[]> {
   const { apiClient } = await import('@/lib/api/client');
-  const tenantID = useAuthStore.getState().user?.tenant_id ?? '';
+  const tenantID = getActiveTenantId();
+  if (!tenantID) return [];
   const res = await apiClient.get<{ data: Array<{ sku: string; name: string }> }>(
     `/api/v1/${tenantID}/pos/catalog/items?category=${encodeURIComponent(category)}&limit=200`,
   );
