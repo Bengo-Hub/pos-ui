@@ -794,7 +794,9 @@ export function TerminalShell() {
           <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
             {renderOrderBuilder()}
           </div>
-          <div className="shrink-0 border-t border-border bg-card pb-[env(safe-area-inset-bottom)]">
+          {/* Capped and scrollable: a tall tender list or an open code panel must never squeeze
+              the cart lines (price edits) or push Split and the code entry off the screen. */}
+          <div className="shrink-0 max-h-[50dvh] overflow-y-auto overscroll-contain border-t border-border bg-card pb-[env(safe-area-inset-bottom)]">
             {renderPaymentBar()}
           </div>
         </div>

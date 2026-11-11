@@ -13,14 +13,14 @@
  * Send-to-Kitchen button instead of tender buttons (payment happens later from the bill).
  */
 
-import { CardMark, CashMark, MpesaLogo, PayHeroLogo, SplitPayMark, TreasuryPaymentModal } from '@bengo-hub/shared-ui-lib';
+import { AirtelMoneyLogo, CardMark, CashMark, MpesaLogo, MtnMomoLogo, PayHeroLogo, SplitPayMark, TreasuryPaymentModal } from '@bengo-hub/shared-ui-lib';
 import { cn } from '@/lib/utils';
 import { C2BPaymentMatcher } from '@/components/pos/c2b-payment-matcher';
 import {
-  Banknote, ChefHat, Coins, CreditCard, FileText, Gift, Hash, Loader2, NotebookPen,
-  Building2, Truck, Wallet, SplitSquareHorizontal, X, CheckCircle2, Smartphone,
+  Banknote, ChefHat, Coins, CreditCard, FileText, Gift, Loader2, NotebookPen,
+  Building2, Truck, Wallet, SplitSquareHorizontal, X, CheckCircle2,
 } from 'lucide-react';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { useCreatePaymentIntent } from '@/hooks/usePOS';
 import { formatCurrency } from '@/lib/utils';
@@ -124,9 +124,9 @@ function PayHeroIcon({ className }: { className?: string }) {
 }
 
 // Brand marks wider than the square lucide icons need a wider slot.
-const isWideLogo = (key: TenderKey) => key === 'mpesa_stk' || key === 'mpesa_c2b' || key === 'payhero';
+const isWideLogo = (key: TenderKey) => key === 'mpesa_stk' || key === 'mpesa_c2b' || key === 'mpesa_code' || key === 'payhero';
 // Disc marks (shared-ui-lib, PayHero's style) carry their own colour and sit a size up.
-const isDiscMark = (key: TenderKey) => key === 'cash' || key === 'card_pdq' || key === 'split';
+const isDiscMark = (key: TenderKey) => key === 'cash' || key === 'card_pdq' || key === 'split' || key === 'mtn_momo_code' || key === 'airtel_money_code';
 // The mark already says the name, so the button shows the logo alone (aria-label carries it).
 const isLogoOnly = (key: TenderKey) => key === 'payhero';
 
@@ -152,9 +152,9 @@ function tenderIcon(key: TenderKey) {
     case 'room': return Building2;
     case 'split': return SplitPayMark;
     case 'loyalty_points': return Gift;
-    case 'mpesa_code': return Hash;
-    case 'mtn_momo_code': return Smartphone;
-    case 'airtel_money_code': return Smartphone;
+    case 'mpesa_code': return MpesaLogo;
+    case 'mtn_momo_code': return MtnMomoLogo;
+    case 'airtel_money_code': return AirtelMoneyLogo;
     case 'other_manual': return Banknote;
     default: return CreditCard;
   }
@@ -199,6 +199,12 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
   // Manual code tenders (M-Pesa / MTN / Airtel code) and the Other tender's label.
   const [manualCode, setManualCode] = useState('');
   const [otherLabel, setOtherLabel] = useState('');
+  // The M-Pesa, MTN and Airtel code tenders share one "Mobile Money Code" pill that opens this
+  // network picker, so the bar stays short on a phone and the cart keeps its room.
+  const [codePickerOpen, setCodePickerOpen] = useState(false);
+  // Capture panels open above the tender pills; on a phone the footer scrolls, so bring the
+  // opened panel into view instead of letting it appear off-screen.
+  const captureRef = useRef<HTMLDivElement>(null);
   const [order, setOrder] = useState<CreatedOrder | null>(null);
   // Online-gateway handoff (treasury pay modal) state.
   const [intentId, setIntentId] = useState('');
@@ -242,7 +248,7 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
 
   const reset = useCallback(() => {
     setCapture(null); setBusyKey(null); setCashTendered(''); setCardRef('');
-    setManualCode(''); setOtherLabel('');
+    setManualCode(''); setOtherLabel(''); setCodePickerOpen(false);
     setOrder(null); setIntentId(''); setInitiateUrl(''); setGatewayMethod(null); setRoomSearch('');
   }, []);
 
@@ -471,9 +477,29 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
   // before the first one's response clears the cart (see handlePark's own re-entrancy guard).
   const draftBusy = anyBusy || draftPending;
 
+  // Bar layout: when more than one code tender is offered they collapse into one pill.
+  const codeActions = actions.filter((a) => CODE_CAPTURE[a.key]);
+  const groupCodes = codeActions.length > 1;
+  const barActions = groupCodes ? actions.filter((a) => !CODE_CAPTURE[a.key]) : actions;
+  const codeGroupIndex = groupCodes ? actions.findIndex((a) => CODE_CAPTURE[a.key]) : -1;
+
+  useEffect(() => {
+    if (capture || codePickerOpen) captureRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }, [capture, codePickerOpen]);
+
   return (
     <div className="border-t border-border bg-card/95 backdrop-blur">
       {/* ── Inline capture surfaces ────────────────────────────────────────── */}
+      <div ref={captureRef} />
+      {codePickerOpen && !capture && (
+        <MobileMoneyCodePicker
+          options={codeActions.map((a) => a.key)}
+          total={roundedTotal}
+          currency={currency}
+          onPick={(key) => { setCodePickerOpen(false); onPick(key); }}
+          onCancel={() => setCodePickerOpen(false)}
+        />
+      )}
       {capture === 'cash' && (
         <CashCapture
           total={roundedTotal}
@@ -602,7 +628,32 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
         <div className="flex flex-wrap items-center gap-2 px-3 py-2.5">
           {isBackOffice && <BadgeBtn icon={FileText} label="Draft" onClick={onDraft} disabled={disabled || draftBusy} />}
           {showQuotation && <BadgeBtn icon={FileText} label="Quotation" onClick={onQuotation} disabled={draftBusy} />}
-          {actions.map((a) => {
+          {(groupCodes
+            ? [...barActions.slice(0, codeGroupIndex), null, ...barActions.slice(codeGroupIndex)]
+            : barActions
+          ).map((a) => {
+            if (a === null) {
+              const isBusy = codeActions.some((c) => c.key === busyKey);
+              return (
+                <button
+                  key="mobile-money-code"
+                  data-testid="pos-tender-mobile-money-code"
+                  type="button"
+                  disabled={disabled || anyBusy}
+                  onClick={() => { setCapture(null); setCodePickerOpen((o) => !o); }}
+                  title="Enter an M-Pesa, MTN MoMo or Airtel Money code"
+                  aria-expanded={codePickerOpen}
+                  className={cn(
+                    'inline-flex items-center gap-2 rounded-full pl-2 pr-4 py-2 min-h-11 text-sm font-bold transition-all',
+                    'hover:brightness-95 active:scale-95 disabled:opacity-40 disabled:pointer-events-none',
+                    TONES.mpesa.bg, TONES.mpesa.text, codePickerOpen && 'ring-2 ring-green-500/50',
+                  )}
+                >
+                  {isBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <MobileMoneyMarks keys={codeActions.map((c) => c.key)} />}
+                  <span className="whitespace-nowrap">Mobile Money Code</span>
+                </button>
+              );
+            }
             const Icon = tenderIcon(a.key);
             const tone = TONES[a.tone];
             const isBusy = busyKey === a.key;
@@ -809,6 +860,65 @@ function CardRefCapture({ total, currency, value, requireRef, onChange, busy, on
         {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <CheckCircle2 className="h-5 w-5" />}
         Confirm Card Payment
       </button>
+    </div>
+  );
+}
+
+// Small overlapping official marks for the networks the outlet offers, shown on the grouped pill.
+function MobileMoneyMarks({ keys }: { keys: TenderKey[] }) {
+  return (
+    <span className="flex items-center -space-x-1.5 shrink-0">
+      {keys.includes('mpesa_code') && (
+        <span className="h-6 w-9 rounded-full bg-white ring-1 ring-border flex items-center justify-center">
+          <MpesaLogo className="h-3.5 w-7" />
+        </span>
+      )}
+      {keys.includes('mtn_momo_code') && <MtnMomoLogo className="h-6 w-6 rounded-full ring-1 ring-border" />}
+      {keys.includes('airtel_money_code') && (
+        <span className="h-6 w-6 rounded-full bg-white ring-1 ring-border flex items-center justify-center">
+          <AirtelMoneyLogo className="h-4 w-4" />
+        </span>
+      )}
+    </span>
+  );
+}
+
+const NETWORK_TILES: Partial<Record<TenderKey, { name: string; hint: string; logo: React.ReactNode }>> = {
+  mpesa_code: { name: 'M-Pesa', hint: 'Code from the M-Pesa SMS', logo: <MpesaLogo className="h-8 w-16" /> },
+  mtn_momo_code: { name: 'MTN MoMo', hint: 'MTN transaction ID', logo: <MtnMomoLogo className="h-10 w-10 rounded-lg" /> },
+  airtel_money_code: { name: 'Airtel Money', hint: 'Airtel transaction ID', logo: <AirtelMoneyLogo className="h-9 w-9" /> },
+};
+
+// Network picker behind the grouped "Mobile Money Code" pill: one large tile per network with
+// its official logo; picking one opens that network's code capture.
+function MobileMoneyCodePicker({ options, total, currency, onPick, onCancel }: {
+  options: TenderKey[]; total: number; currency: string; onPick: (key: TenderKey) => void; onCancel: () => void;
+}) {
+  return (
+    <div className="p-3 border-b border-border bg-green-500/5 space-y-2">
+      <div className="flex items-center justify-between">
+        <span className="text-sm font-bold">Mobile money code · {formatCurrency(total, currency)}</span>
+        <button onClick={onCancel} aria-label="Close" className="h-7 w-7 rounded-lg flex items-center justify-center hover:bg-accent"><X className="h-4 w-4" /></button>
+      </div>
+      <div className={cn('grid gap-2', options.length >= 3 ? 'grid-cols-3' : 'grid-cols-2')}>
+        {options.map((key) => {
+          const tile = NETWORK_TILES[key];
+          if (!tile) return null;
+          return (
+            <button
+              key={key}
+              type="button"
+              data-testid={`pos-code-network-${key}`}
+              onClick={() => onPick(key)}
+              className="flex flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-border bg-background px-2 py-3 min-h-24 hover:border-green-500/50 active:scale-95 transition-all"
+            >
+              <span className="h-10 flex items-center justify-center">{tile.logo}</span>
+              <span className="text-xs font-bold leading-tight">{tile.name}</span>
+              <span className="text-[10px] text-muted-foreground leading-tight text-center">{tile.hint}</span>
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }
