@@ -25,6 +25,7 @@ import type { OrderLineItem } from '@/components/pos/split-payment-modal';
 import { isStockTracked } from '@/components/pos/stock-cell';
 import type { CreatedOrder } from '@/components/pos/terminal/inline-payment-bar';
 import type { LoyaltyState } from '@/components/retail/LoyaltyPanel';
+import { nextLoyaltyAccountId, onLoyaltyMerge } from '@/lib/pos/loyalty-merged';
 import { useReceiptAfterSale } from '@/hooks/use-receipt-after-sale';
 import { useSubscription } from '@/hooks/use-subscription';
 import { useClientCredit } from '@/hooks/useClients';
@@ -517,6 +518,15 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
   // Retail loyalty panel (customer lookup + points redemption) — absorbed from /retail into the
   // adaptive terminal; its redeemDiscount applies as an order discount and posts the customer.
   const [loyaltyState, setLoyaltyState] = useState<LoyaltyState | null>(null);
+  // pos-api merged this customer's duplicate loyalty accounts while the sale was open: a redeem
+  // answered 409 loyalty_account_merged (see useLoyalty). Switch the attached customer to the
+  // surviving account so its balance reloads and the cashier only presses redeem again.
+  useEffect(() => onLoyaltyMerge((merged) => {
+    setLoyaltyState((s) => {
+      const next = s ? nextLoyaltyAccountId(s.accountId, merged) : null;
+      return s && next ? { ...s, accountId: next } : s;
+    });
+  }), []);
   // Stored-credit tender: the attached customer's treasury store_credit_balance (money the
   // BUSINESS owes the CUSTOMER, e.g. from a return issued as store credit) — tracked
   // independently of balance_due (which is always >= 0 post-Phase-B; the old "-balance_due"

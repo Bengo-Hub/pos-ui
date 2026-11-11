@@ -3,6 +3,7 @@
 import { apiClient } from '@/lib/api/client';
 import { classifySearchQuery, type CustomerSearchParams } from '@/lib/api/clients';
 import { useTenantId } from '@/hooks/useTenantId';
+import { announceLoyaltyMerge, mergedLoyaltySurvivor } from '@/lib/pos/loyalty-merged';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 function useTenantID() {
@@ -196,6 +197,20 @@ export function useEarnPoints(accountId: string) {
   });
 }
 
+/**
+ * On a 409 "loyalty_account_merged" (the till still held a duplicate account that pos-api has
+ * merged), refresh the cached account and tell the terminal and loyalty panel to switch to the
+ * survivor, so the cashier only has to press redeem again. The caller's own error toast still runs.
+ */
+function handleMergedAccount(qc: ReturnType<typeof useQueryClient>, tenantID: string, err: unknown) {
+  const merged = mergedLoyaltySurvivor(err);
+  if (!merged) return;
+  qc.invalidateQueries({ queryKey: ['loyalty-account', tenantID, merged.shellId] });
+  qc.invalidateQueries({ queryKey: ['loyalty-account', tenantID, merged.survivorId] });
+  qc.invalidateQueries({ queryKey: ['loyalty-accounts', tenantID] });
+  announceLoyaltyMerge(merged);
+}
+
 export function useRedeemPoints(accountId: string) {
   const tenantID = useTenantID();
   const qc = useQueryClient();
@@ -203,6 +218,7 @@ export function useRedeemPoints(accountId: string) {
     mutationFn: (data: { points: number; order_id?: string; notes?: string }) =>
       apiClient.post(`${base(tenantID)}/accounts/${accountId}/redeem`, data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['loyalty-account', tenantID, accountId] }),
+    onError: (err) => handleMergedAccount(qc, tenantID, err),
   });
 }
 
@@ -220,6 +236,7 @@ export function useRedeemToOrder(accountId: string) {
     mutationFn: (data: { points: number; order_id: string; notes?: string }) =>
       apiClient.post(`${base(tenantID)}/accounts/${accountId}/redeem-to-order`, data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['loyalty-account', tenantID, accountId] }),
+    onError: (err) => handleMergedAccount(qc, tenantID, err),
   });
 }
 

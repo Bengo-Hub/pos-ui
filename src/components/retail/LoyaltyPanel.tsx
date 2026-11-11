@@ -13,6 +13,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
+import { nextLoyaltyAccountId, onLoyaltyMerge } from '@/lib/pos/loyalty-merged';
 import { Gift, Loader2, UserPlus } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api/error-message';
@@ -74,6 +75,18 @@ export function LoyaltyPanel({ onStateChange, orderId, layout = 'stack', initial
   // account reads as `hasLoyaltyAccount = false` after a tab switch, which wrongly shows
   // "Register" again (and used to error on submit before the account already-exists case was
   // made idempotent server-side).
+  // pos-api merged this customer's duplicate loyalty accounts and a redeem answered 409
+  // loyalty_account_merged (see useLoyalty): drop the stale row and point the chip at the
+  // surviving account, so the hydration below loads its balance and redeem works on the next tap.
+  useEffect(() => onLoyaltyMerge((merged) => {
+    const current = accountRef.current?.id || selected.accountId;
+    const next = nextLoyaltyAccountId(current, merged);
+    if (!next) return;
+    accountRef.current = null;
+    setAccount(null);
+    setSelected((s) => ({ ...s, accountId: next }));
+  }), [selected.accountId]);
+
   const needsHydration = !account && !!selected.accountId && !selected.isWalkIn;
   const { data: hydrated } = useLoyaltyAccount(needsHydration ? selected.accountId! : '');
   useEffect(() => {
