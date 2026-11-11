@@ -1,4 +1,5 @@
 import { apiClient } from './client';
+import { pinLoginBody } from '@/lib/offline/staff-profile-merge';
 
 export interface StaffMember {
   id: string;
@@ -22,6 +23,15 @@ export interface StaffProfile {
   role: string;
   tenant_id: string;
   outlet_id: string;
+  has_pin: boolean;
+}
+
+/** One row of the public PIN profile list (GET /pos/auth/pin/profile): no user id, no role. */
+export interface PinProfile {
+  staff_id: string;
+  name: string;
+  initials: string;
+  tenant_id: string;
   has_pin: boolean;
 }
 
@@ -82,14 +92,15 @@ export const staffApi = {
 
   profiles: (tenantId: string, outletId?: string) => {
     const params = outletId ? `?outlet_id=${outletId}` : '';
-    return apiClient.get<{ data: StaffProfile[] }>(`${staffBase(tenantId)}/auth/pin/profile${params}`);
+    return apiClient.get<{ data: PinProfile[] }>(`${staffBase(tenantId)}/auth/pin/profile${params}`);
   },
 
   setPin: (tenantId: string, userId: string, pin: string) =>
     apiClient.post<{ message: string }>(`${staffBase(tenantId)}/auth/pin/set`, { user_id: userId, pin }),
 
-  verifyPin: (tenantId: string, userId: string, pin: string) =>
-    apiClient.post<{ token: string }>(`${staffBase(tenantId)}/auth/pin`, { user_id: userId, pin }),
+  // PIN sign-in by the opaque staff id from the picker; pos-api's user_id form is deprecated.
+  verifyPin: (tenantId: string, staffId: string, pin: string) =>
+    apiClient.post<{ token: string }>(`${staffBase(tenantId)}/auth/pin`, pinLoginBody(staffId, pin)),
 
   // Mint the signed manager-card token embedded in a staff member's printable QR card.
   cardToken: (tenantId: string, userId: string) =>

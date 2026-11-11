@@ -436,15 +436,19 @@ export const useAuthStore = create<AuthState>()(
         // back in. Best-effort; never let a cache-write failure break the live session.
         try {
           const { cacheStaffProfile, getCachedStaffProfile } = await import('@/lib/db/pos-db');
+          const { pinHashAfterPermissionRefresh } = await import('@/lib/offline/staff-profile-merge');
           const existing = await getCachedStaffProfile(current.id);
           await cacheStaffProfile({
             user_id: current.id,
+            staff_id: existing?.staff_id,
             tenant_id: current.tenant_id,
             name: current.fullName ?? existing?.name ?? '',
             email: current.email ?? existing?.email ?? '',
             roles: nextRoles,
             permissions: svcProfile.permissions,
-            pin_hash: existing?.pin_hash,
+            // Never keep an offline PIN next to newly granted permissions: after a raise the
+            // cached PIN may be one a manager chose before it (pos-api clears it server side too).
+            pin_hash: pinHashAfterPermissionRefresh(existing, svcProfile.permissions ?? []),
             cached_at: new Date().toISOString(),
           });
         } catch {

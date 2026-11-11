@@ -17,6 +17,7 @@ import { useBiometric } from '@/hooks/use-biometric';
 import { apiClient } from '@/lib/api/client';
 import { useAuthStore } from '@/store/auth';
 import { getCachedStaffProfiles, cacheStaffProfile, type CachedStaffProfile } from '@/lib/db/pos-db';
+import { cacheRowFromLogin, type PinProfileListItem } from '@/lib/offline/staff-profile-merge';
 import { Screensaver } from '@/components/pos/screensaver';
 import { buildScreensaverMedia } from '@/lib/screensaver';
 import { LiveClock } from '@/components/pos/live-clock';
@@ -27,14 +28,8 @@ import { cn } from '@/lib/utils';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
-interface StaffProfile {
-  user_id: string;
-  name: string;
-  role?: string;
-  tenant_id: string;
-  outlet_id: string;
-  has_pin: boolean;
-}
+// The public PIN profile list: staff id, name, initials, tenant id, has_pin. No user id or role.
+type StaffProfile = PinProfileListItem;
 
 interface PINLoginResponse {
   access_token: string;
@@ -42,6 +37,8 @@ interface PINLoginResponse {
   expires_in: number;
   user: {
     user_id: string;
+    /** Opaque staff id; keys the offline cache row for profile refreshes. */
+    staff_id?: string;
     name: string;
     role?: string;
     permissions?: string[];
@@ -309,17 +306,11 @@ export default function PINLoginPage() {
   function handleLoginSuccess(data: PINLoginResponse) {
     // Cache this user's profile WITH their pin_hash so they can re-login offline (e.g. after
     // a mid-outage reload/logout). Only users who have signed in on this device are cacheable.
-    if (data.user.pin_hash) {
-      void cacheStaffProfile({
-        user_id:     data.user.user_id,
-        tenant_id:   data.user.tenant_id,
-        name:        data.user.name,
-        email:       '',
-        roles:       data.user.role ? [data.user.role] : [],
-        permissions: data.user.permissions ?? [],
-        pin_hash:    data.user.pin_hash,
-        cached_at:   new Date().toISOString(),
-      });
+    // The row carries the staff id so the public profile list (which has no user ids) can
+    // refresh its name later.
+    const cacheRow = cacheRowFromLogin(data.user, new Date().toISOString());
+    if (cacheRow) {
+      void cacheStaffProfile(cacheRow);
     }
     setTerminalSession(data.access_token, {
       id:              data.user.user_id,

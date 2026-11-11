@@ -257,7 +257,13 @@ export interface OfflineETIMSSubmission {
 // ── Staff / Auth ───────────────────────────────────────────────────────────────
 
 export interface CachedStaffProfile {
-  user_id: string; // PK
+  user_id: string; // PK, from this person's own login response
+  /**
+   * Opaque staff id (since 2026-11-11). The public PIN profile list matches rows by it, since it
+   * no longer carries user ids. Absent on rows cached before then; the next online login adds it.
+   * Not indexed, so no schema version change: refreshes filter the tenant's rows in memory.
+   */
+  staff_id?: string;
   tenant_id: string;
   name: string;
   email: string;
