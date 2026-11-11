@@ -123,6 +123,8 @@ export interface ReceiptData {
     mpesa_account_reference?: string;
     mpesa_till?: string;
     mpesa_pochi?: string;
+    airtel_money_number?: string;
+    mtn_momo_number?: string;
     bank_name?: string;
     bank_account_number?: string;
     bank_account_name?: string;

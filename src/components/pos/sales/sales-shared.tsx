@@ -35,7 +35,18 @@ export const orderDisplayDate = (o: any, includeTime = true): string => {
 // simple list-column case.
 export { PAYMENT_METHOD_LABELS };
 
-export const prettyMethod = (m: string) => getPaymentMethodLabel(m);
+// Manual tender labels kept here so they show before the shared-ui-lib pin carries them.
+const MANUAL_TENDER_LABELS: Record<string, string> = {
+  mtn_momo_manual: 'MTN MoMo (Code)',
+  airtel_money_manual: 'Airtel Money (Code)',
+  other_manual: 'Other',
+};
+
+export const prettyMethod = (m: string) => MANUAL_TENDER_LABELS[(m || '').toLowerCase()] ?? getPaymentMethodLabel(m);
+
+/** prettyMethod for one payment: an Other payment shows the cashier's label, "Other (label)". */
+export const prettyPaymentMethod = (m: string, label?: string | null) =>
+  (m || '').toLowerCase() === 'other_manual' && label?.trim() ? `Other (${label.trim()})` : prettyMethod(m);
 
 // The Payment Method filter options — the real `payment_data.method` values the POS terminal
 // stamps (see terminal-actions.tenderMethodFor + payment-modal), NOT tender rows. The POS reuses one
@@ -45,6 +56,9 @@ export const PAYMENT_METHOD_OPTIONS: { value: string; label: string }[] = [
   { value: 'cash', label: 'Cash' },
   { value: 'mpesa', label: 'M-Pesa' },
   { value: 'mpesa_manual', label: 'M-Pesa (Code)' },
+  { value: 'mtn_momo_manual', label: 'MTN MoMo (Code)' },
+  { value: 'airtel_money_manual', label: 'Airtel Money (Code)' },
+  { value: 'other_manual', label: 'Other' },
   { value: 'card', label: 'Card' },
   { value: 'card_manual', label: 'Card / PDQ' },
   { value: 'wallet', label: 'Wallet' },

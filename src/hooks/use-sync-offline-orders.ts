@@ -255,6 +255,7 @@ async function syncOrders(tenantID: string): Promise<number> {
               amount: order.pending_payment.amount,
               currency: order.currency,
               externalRef: order.pending_payment.external_ref,
+              paymentLabel: order.pending_payment.payment_label,
               offlineCollectedBy: order.rung_up_by_user_id,
             },
             idem(`pay-${order.local_id}`),
@@ -300,9 +301,11 @@ async function syncPayments(tenantID: string): Promise<number> {
           currency: payment.currency,
           externalRef: payment.external_ref,
           amountTendered: payment.amount_tendered,
+          paymentLabel: payment.payment_label,
           offlineCollectedBy: payment.collected_by_user_id,
         },
-        idem(`pay-${payment.local_order_id ?? orderId}-${payment.tender_method}-${payment.external_ref ?? payment.amount}`),
+        // The label keeps two "Other" split lines of the same amount and no reference apart.
+        idem(`pay-${payment.local_order_id ?? orderId}-${payment.tender_method}-${payment.external_ref ?? payment.amount}${payment.payment_label ? `-${payment.payment_label}` : ''}`),
       );
       await markPaymentSynced(payment.id!);
       logPush('payment', `${payment.tender_method} ${payment.amount.toFixed(2)}`);

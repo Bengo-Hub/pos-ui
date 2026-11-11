@@ -29,9 +29,60 @@ export type TenderKey =
   | 'loyalty_points' // pay-with-points (posts a completed payment on the tenant's Loyalty tender)
   // PayHero, its own gateway like Paystack: one tender opening the PayHero modal on the pay page,
   // where the customer picks M-Pesa, Airtel, card or another rail the outlet's country has.
-  | 'payhero';
+  | 'payhero'
+  // Manual codes the cashier reads off the customer's phone. They settle at once and work offline.
+  | 'mpesa_code' // pos-api mpesa_manual
+  | 'mtn_momo_code' // pos-api mtn_momo_manual
+  | 'airtel_money_code' // pos-api airtel_money_manual
+  | 'other_manual'; // any other way to pay, named by the cashier
 
-export type TenderTone = 'cash' | 'card' | 'mpesa' | 'wallet' | 'credit' | 'room' | 'cod' | 'split' | 'loyalty' | 'payhero';
+export type TenderTone = 'cash' | 'card' | 'mpesa' | 'wallet' | 'credit' | 'room' | 'cod' | 'split' | 'loyalty' | 'payhero' | 'mtn' | 'airtel' | 'other';
+
+/** Manual tenders that take a transaction code. */
+export type ManualCodeMethod = 'mpesa_manual' | 'mtn_momo_manual' | 'airtel_money_manual';
+
+/** MTN MoMo and Airtel Money transaction IDs, checked after trimming and uppercasing.
+ *  Same rule as pos-api. */
+export const MANUAL_TXN_ID_RE = /^[A-Z0-9][A-Z0-9.-]{5,29}$/;
+export const PAYMENT_LABEL_MIN = 2;
+export const PAYMENT_LABEL_MAX = 40;
+export const OTHER_REF_MAX = 40;
+
+export function normalizeManualCode(value: string): string {
+  return value.trim().toUpperCase();
+}
+
+/** True when the code may be sent for this method. M-Pesa codes only need to be present. */
+export function isValidManualCode(method: ManualCodeMethod, value: string): boolean {
+  const code = normalizeManualCode(value);
+  if (!code) return false;
+  if (method === 'mpesa_manual') return true;
+  return MANUAL_TXN_ID_RE.test(code);
+}
+
+export function isValidPaymentLabel(value: string): boolean {
+  // Count characters the way pos-api does (runes), so an emoji is one, not two.
+  const n = [...value.trim()].length;
+  return n >= PAYMENT_LABEL_MIN && n <= PAYMENT_LABEL_MAX;
+}
+
+/** Copy for each manual code tender's capture step. */
+export const MANUAL_CODE_TENDERS: Record<ManualCodeMethod, { title: string; network: string; placeholder: string; maxLength: number }> = {
+  mpesa_manual: { title: 'M-Pesa Code', network: 'M-Pesa', placeholder: 'e.g. QB234ABCDE', maxLength: 20 },
+  mtn_momo_manual: { title: 'MTN MoMo Code', network: 'MTN', placeholder: 'e.g. 12345678901', maxLength: 30 },
+  airtel_money_manual: { title: 'Airtel Money Code', network: 'Airtel', placeholder: 'e.g. CI251111.1530.A12345', maxLength: 30 },
+};
+
+/** "Customer pays MTN 077..." line for the capture step, from the outlet's payment settings. */
+export function manualCodePayToLine(
+  method: ManualCodeMethod,
+  settings?: { mtn_momo_number?: string | null; airtel_money_number?: string | null } | null,
+): string | null {
+  const number = method === 'mtn_momo_manual' ? settings?.mtn_momo_number
+    : method === 'airtel_money_manual' ? settings?.airtel_money_number
+    : null;
+  return number ? `Customer pays ${MANUAL_CODE_TENDERS[method].network} ${number}` : null;
+}
 
 export interface TenderAction {
   key: TenderKey;
@@ -51,6 +102,10 @@ const CASH: TenderAction = { key: 'cash', label: 'Cash', sublabel: 'Cash drawer'
 const CARD_PDQ: TenderAction = { key: 'card_pdq', label: 'Card (PDQ)', sublabel: 'Swipe / insert on terminal', tone: 'card' };
 const SPLIT: TenderAction = { key: 'split', label: 'Multiple Pay', sublabel: 'Split the bill', tone: 'split' };
 const ON_ACCOUNT: TenderAction = { key: 'on_account', label: 'Credit Sale', sublabel: 'On account (AR)', tone: 'credit', online: true };
+const MPESA_CODE: TenderAction = { key: 'mpesa_code', label: 'M-Pesa Code', sublabel: 'Enter the M-Pesa code', tone: 'mpesa' };
+const MTN_CODE: TenderAction = { key: 'mtn_momo_code', label: 'MTN MoMo Code', sublabel: 'Enter the MTN code', tone: 'mtn' };
+const AIRTEL_CODE: TenderAction = { key: 'airtel_money_code', label: 'Airtel Money Code', sublabel: 'Enter the Airtel code', tone: 'airtel' };
+const OTHER_MANUAL: TenderAction = { key: 'other_manual', label: 'Other', sublabel: 'Name how they paid', tone: 'other' };
 
 /**
  * Store-credit tender — NOT part of `paymentActionsFor()` because its visibility is data-driven
@@ -180,7 +235,7 @@ export function paymentActionsFor(
   const allowCredit = profile === 'retail';
 
   const payhero = { ...PAYHERO, sublabel: payheroSublabel(g.payhero_methods) };
-  const ordered: TenderAction[] = [CASH, CARD_PDQ, MPESA_STK, MPESA_C2B, payhero, CARD_ONLINE, WALLET];
+  const ordered: TenderAction[] = [CASH, CARD_PDQ, MPESA_CODE, MTN_CODE, AIRTEL_CODE, OTHER_MANUAL, MPESA_STK, MPESA_C2B, payhero, CARD_ONLINE, WALLET];
   if (allowCredit) ordered.push(ON_ACCOUNT);
   ordered.push(SPLIT);
 
@@ -213,13 +268,18 @@ export function tenderMethodFor(key: TenderKey): string {
     case 'customer_credit': return 'customer_credit';
     case 'payhero': return 'payhero'; // the rail is chosen in the PayHero modal
     case 'loyalty_points': return 'loyalty_points'; // never routed through createIntent — see useRedeemToOrder
+    case 'mpesa_code': return 'mpesa_manual';
+    case 'mtn_momo_code': return 'mtn_momo_manual';
+    case 'airtel_money_code': return 'airtel_money_manual';
+    case 'other_manual': return 'other_manual';
     default: return 'cash';
   }
 }
 
 /** Tenders that settle immediately at the point of sale (no gateway round-trip). */
 export function isImmediateTender(key: TenderKey): boolean {
-  return key === 'cash' || key === 'card_pdq' || key === 'on_account' || key === 'customer_credit';
+  return key === 'cash' || key === 'card_pdq' || key === 'on_account' || key === 'customer_credit'
+    || key === 'mpesa_code' || key === 'mtn_momo_code' || key === 'airtel_money_code' || key === 'other_manual';
 }
 
 /**

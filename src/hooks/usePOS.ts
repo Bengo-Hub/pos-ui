@@ -2205,6 +2205,7 @@ export function useCreatePaymentIntent() {
       approvalToken,
       approvalCode,
       amountTendered,
+      paymentLabel,
     }: {
       orderId: string;
       tenderMethod: string;
@@ -2225,6 +2226,8 @@ export function useCreatePaymentIntent() {
       // is what makes "Tendered"/"Change" show up on the printed receipt (see pos-api's
       // cashPaymentData) — without it, the server only ever knows the amount actually applied.
       amountTendered?: number;
+      // How the customer paid, for the "other_manual" tender (2 to 40 characters).
+      paymentLabel?: string;
     }) =>
       apiClient.post<PaymentIntentResult>(`${basePath(tenantID)}/orders/${orderId}/payments/intent`, {
         tenderMethod,
@@ -2239,6 +2242,7 @@ export function useCreatePaymentIntent() {
         approvalToken,
         approvalCode,
         amountTendered,
+        paymentLabel,
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['pos-orders'] });

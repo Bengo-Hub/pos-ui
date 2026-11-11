@@ -7,7 +7,7 @@ import { InitiateReturnModal } from '@/components/pos/returns/initiate-return-mo
 import { EditSaleInfoModal } from '@/components/pos/sales/edit-sale-info-modal';
 import { ReceiptShareButtons } from '@/components/pos/sales/receipt-share-actions';
 import { RecordPaymentModal } from '@/components/pos/sales/record-payment-modal';
-import { prettyMethod, isBackdatedOrder, orderDisplayDate } from '@/components/pos/sales/sales-shared';
+import { prettyMethod, prettyPaymentMethod, isBackdatedOrder, orderDisplayDate } from '@/components/pos/sales/sales-shared';
 import { P, usePermissions } from '@/hooks/usePermissions';
 import { useOrder } from '@/hooks/usePOS';
 import { apiClient } from '@/lib/api/client';
@@ -257,7 +257,7 @@ export function SellDetailsModal({ orderId, orgSlug, onClose }: { orderId: strin
                           <td className="px-3 py-2">{p.occurred_at ? new Date(p.occurred_at).toLocaleDateString('en-KE') : '—'}</td>
                           <td className="px-3 py-2">{p.external_reference || (p.id ? String(p.id).slice(0, 10) : '—')}</td>
                           <td className="px-3 py-2 text-right tabular-nums">{money(p.amount)}</td>
-                          <td className="px-3 py-2">{prettyMethod(p.payment_data?.method || p.payment_data?.mode || '')}</td>
+                          <td className="px-3 py-2">{prettyPaymentMethod(p.payment_data?.method || p.payment_data?.mode || '', p.payment_data?.payment_label)}</td>
                         </tr>
                       ))}
                     </tbody>

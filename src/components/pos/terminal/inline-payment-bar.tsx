@@ -39,7 +39,9 @@ import type { TerminalProfile } from '@/lib/use-case-config';
 import {
   paymentActionsFor, tenderMethodFor, allowedMethodsFor, isImmediateTender, customerCreditAction,
   hasRedeemableLoyalty, canRedeemLoyaltyFor, loyaltyPointsToRedeem, loyaltyRedeemAction,
-  type TenderKey, type TenderTone, type LoyaltyRedeemInfo,
+  isValidManualCode, isValidPaymentLabel, normalizeManualCode, manualCodePayToLine, MANUAL_CODE_TENDERS,
+  OTHER_REF_MAX, PAYMENT_LABEL_MAX,
+  type TenderKey, type TenderTone, type LoyaltyRedeemInfo, type ManualCodeMethod,
 } from '@/lib/pos/terminal-actions';
 import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api/error-message';
@@ -104,6 +106,16 @@ const TONES: Record<TenderTone, { text: string; bg: string; ring: string }> = {
   split: { text: 'text-violet-700',  bg: 'bg-violet-500/10',  ring: 'hover:border-violet-500/50' },
   loyalty: { text: 'text-fuchsia-700', bg: 'bg-fuchsia-500/10', ring: 'hover:border-fuchsia-500/50' },
   payhero: { text: 'text-teal-700', bg: 'bg-teal-500/10', ring: 'hover:border-teal-500/50' },
+  mtn:   { text: 'text-yellow-700',  bg: 'bg-yellow-500/10',  ring: 'hover:border-yellow-500/50' },
+  airtel:{ text: 'text-red-700',     bg: 'bg-red-500/10',     ring: 'hover:border-red-500/50' },
+  other: { text: 'text-slate-700',   bg: 'bg-slate-500/10',   ring: 'hover:border-slate-500/50' },
+};
+
+// Inline tender keys that capture a transaction code, with the pos-api method each one records.
+const CODE_CAPTURE: Partial<Record<TenderKey, ManualCodeMethod>> = {
+  mpesa_code: 'mpesa_manual',
+  mtn_momo_code: 'mtn_momo_manual',
+  airtel_money_code: 'airtel_money_manual',
 };
 
 // PayHero's official mark (the "PH" circles); like MpesaLogo it is wider than tall.
@@ -140,6 +152,10 @@ function tenderIcon(key: TenderKey) {
     case 'room': return Building2;
     case 'split': return SplitPayMark;
     case 'loyalty_points': return Gift;
+    case 'mpesa_code': return Hash;
+    case 'mtn_momo_code': return Smartphone;
+    case 'airtel_money_code': return Smartphone;
+    case 'other_manual': return Banknote;
     default: return CreditCard;
   }
 }
@@ -180,6 +196,9 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
   const [busyKey, setBusyKey] = useState<TenderKey | null>(null);
   const [cashTendered, setCashTendered] = useState('');
   const [cardRef, setCardRef] = useState('');
+  // Manual code tenders (M-Pesa / MTN / Airtel code) and the Other tender's label.
+  const [manualCode, setManualCode] = useState('');
+  const [otherLabel, setOtherLabel] = useState('');
   const [order, setOrder] = useState<CreatedOrder | null>(null);
   // Online-gateway handoff (treasury pay modal) state.
   const [intentId, setIntentId] = useState('');
@@ -223,6 +242,7 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
 
   const reset = useCallback(() => {
     setCapture(null); setBusyKey(null); setCashTendered(''); setCardRef('');
+    setManualCode(''); setOtherLabel('');
     setOrder(null); setIntentId(''); setInitiateUrl(''); setGatewayMethod(null); setRoomSearch('');
   }, []);
 
@@ -244,7 +264,8 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
   // against a 1,820 bill. Undefined for every other tender. This is what lets the printed
   // receipt show "Tendered"/"Change" (pos-api's cashPaymentData) instead of just the amount
   // applied — see CashCapture below, the only caller that ever passes it.
-  const settleImmediate = useCallback(async (key: TenderKey, externalRef?: string, creditDetails?: CreditSaleDetails, amountTendered?: number) => {
+  // paymentLabel: how the customer paid, for the Other tender only.
+  const settleImmediate = useCallback(async (key: TenderKey, externalRef?: string, creditDetails?: CreditSaleDetails, amountTendered?: number, paymentLabel?: string) => {
     setBusyKey(key);
     const ord = await ensureOrder();
     if (!ord) { setBusyKey(null); return; }
@@ -256,7 +277,7 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
     // payment.
     const queueOffline = async () => {
       try {
-        await queueOfflinePaymentRecord({ orderId: ord.orderId, tenderId, method, amount: roundedTotal, currency, tenantSlug, tenantId: pageTenantId, externalRef, amountTendered });
+        await queueOfflinePaymentRecord({ orderId: ord.orderId, tenderId, method, amount: roundedTotal, currency, tenantSlug, tenantId: pageTenantId, externalRef, amountTendered, paymentLabel });
         autoOpenOnSettle(method);
         toast.success('Saved offline — will sync when back online.');
         finish(ord);
@@ -276,6 +297,7 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
         paymentDueDate: creditDetails?.dueDate, creditNotes: creditDetails?.notes || undefined,
         applyStoreCredit: creditDetails?.applyStoreCredit,
         amountTendered,
+        paymentLabel,
       },
       {
         onSuccess: () => { autoOpenOnSettle(method); finish(ord); },
@@ -328,6 +350,14 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
       case 'card_pdq':
         setCardRef('');
         setCapture('card_pdq');
+        return;
+      case 'mpesa_code':
+      case 'mtn_momo_code':
+      case 'airtel_money_code':
+      case 'other_manual':
+        setManualCode('');
+        setOtherLabel('');
+        setCapture(key);
         return;
       case 'on_account':
         // A credit sale must be booked against a real customer account (never the walk-in ghost) —
@@ -465,6 +495,32 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
           busy={anyBusy}
           onCancel={reset}
           onConfirm={() => settleImmediate('card_pdq', cardRef.trim() || undefined)}
+        />
+      )}
+      {capture && CODE_CAPTURE[capture] && (
+        <ManualCodeCapture
+          method={CODE_CAPTURE[capture]!}
+          total={roundedTotal}
+          currency={currency}
+          value={manualCode}
+          onChange={setManualCode}
+          payTo={manualCodePayToLine(CODE_CAPTURE[capture]!, posSettings)}
+          busy={anyBusy}
+          onCancel={reset}
+          onConfirm={() => settleImmediate(capture, normalizeManualCode(manualCode))}
+        />
+      )}
+      {capture === 'other_manual' && (
+        <OtherTenderCapture
+          total={roundedTotal}
+          currency={currency}
+          label={otherLabel}
+          onLabelChange={setOtherLabel}
+          reference={manualCode}
+          onReferenceChange={setManualCode}
+          busy={anyBusy}
+          onCancel={reset}
+          onConfirm={() => settleImmediate('other_manual', manualCode.trim() || undefined, undefined, undefined, otherLabel.trim())}
         />
       )}
       {capture === 'mpesa_c2b' && order && (
@@ -752,6 +808,74 @@ function CardRefCapture({ total, currency, value, requireRef, onChange, busy, on
       >
         {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <CheckCircle2 className="h-5 w-5" />}
         Confirm Card Payment
+      </button>
+    </div>
+  );
+}
+
+// Inline capture for a manual code tender (M-Pesa, MTN MoMo or Airtel Money code). The cashier
+// reads the code off the customer's SMS. MTN and Airtel codes must match the pos-api format.
+function ManualCodeCapture({ method, total, currency, value, onChange, payTo, busy, onConfirm, onCancel }: {
+  method: ManualCodeMethod; total: number; currency: string; value: string; onChange: (v: string) => void;
+  payTo: string | null; busy: boolean; onConfirm: () => void; onCancel: () => void;
+}) {
+  const copy = MANUAL_CODE_TENDERS[method];
+  const valid = isValidManualCode(method, value);
+  const showFormatHint = method !== 'mpesa_manual' && value.trim() !== '' && !valid;
+  return (
+    <div className="p-3 border-b border-border bg-green-500/5 space-y-2">
+      <div className="flex items-center justify-between">
+        <span className="text-sm font-bold">{copy.title} · {formatCurrency(total, currency)}</span>
+        <button onClick={onCancel} className="h-7 w-7 rounded-lg flex items-center justify-center hover:bg-accent"><X className="h-4 w-4" /></button>
+      </div>
+      {payTo && <p className="text-xs font-semibold text-foreground">{payTo}</p>}
+      <input
+        type="text" autoFocus value={value} placeholder={copy.placeholder} maxLength={copy.maxLength}
+        onChange={(e) => onChange(e.target.value.toUpperCase())}
+        onKeyDown={(e) => { if (e.key === 'Enter' && valid && !busy) onConfirm(); }}
+        className="w-full bg-background border border-border rounded-xl py-2.5 px-3 text-base font-semibold tracking-widest uppercase focus:ring-2 focus:ring-green-500/40 focus:outline-none"
+      />
+      {showFormatHint && <p className="text-[11px] text-amber-600">Use 6 to 30 letters or digits. Dots and dashes are fine.</p>}
+      <button
+        type="button" disabled={busy || !valid} onClick={onConfirm}
+        className="w-full min-h-11 rounded-xl bg-green-600 text-white font-bold flex items-center justify-center gap-2 disabled:opacity-40 hover:bg-green-700 transition-colors"
+      >
+        {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <CheckCircle2 className="h-5 w-5" />}
+        Confirm {copy.network}
+      </button>
+    </div>
+  );
+}
+
+// Inline capture for the Other tender: a required label (how they paid) and an optional reference.
+function OtherTenderCapture({ total, currency, label, onLabelChange, reference, onReferenceChange, busy, onConfirm, onCancel }: {
+  total: number; currency: string; label: string; onLabelChange: (v: string) => void;
+  reference: string; onReferenceChange: (v: string) => void; busy: boolean; onConfirm: () => void; onCancel: () => void;
+}) {
+  const valid = isValidPaymentLabel(label);
+  return (
+    <div className="p-3 border-b border-border bg-slate-500/5 space-y-2">
+      <div className="flex items-center justify-between">
+        <span className="text-sm font-bold">Other · {formatCurrency(total, currency)}</span>
+        <button onClick={onCancel} className="h-7 w-7 rounded-lg flex items-center justify-center hover:bg-accent"><X className="h-4 w-4" /></button>
+      </div>
+      <input
+        type="text" autoFocus value={label} placeholder="How they paid, e.g. Bank deposit" maxLength={PAYMENT_LABEL_MAX}
+        onChange={(e) => onLabelChange(e.target.value)}
+        className="w-full bg-background border border-border rounded-xl py-2.5 px-3 text-base font-semibold focus:ring-2 focus:ring-slate-500/40 focus:outline-none"
+      />
+      <input
+        type="text" value={reference} placeholder="Reference (optional)" maxLength={OTHER_REF_MAX}
+        onChange={(e) => onReferenceChange(e.target.value)}
+        onKeyDown={(e) => { if (e.key === 'Enter' && valid && !busy) onConfirm(); }}
+        className="w-full bg-background border border-border rounded-xl py-2 px-3 text-sm focus:ring-2 focus:ring-slate-500/40 focus:outline-none"
+      />
+      <button
+        type="button" disabled={busy || !valid} onClick={onConfirm}
+        className="w-full min-h-11 rounded-xl bg-slate-700 text-white font-bold flex items-center justify-center gap-2 disabled:opacity-40 hover:bg-slate-800 transition-colors"
+      >
+        {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <CheckCircle2 className="h-5 w-5" />}
+        Confirm Payment
       </button>
     </div>
   );

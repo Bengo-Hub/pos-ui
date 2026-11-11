@@ -38,7 +38,11 @@ import { ApprovalDialog, type ApprovalResult } from '@/components/pos/approval-d
 import { useHotelRooms } from '@/hooks/useHotel';
 import { hotelApi, type Room } from '@/lib/api/hotel';
 import { useRedeemToOrder } from '@/hooks/useLoyalty';
-import { canRedeemLoyaltyFor, loyaltyPointsToRedeem, payheroSublabel, type LoyaltyRedeemInfo } from '@/lib/pos/terminal-actions';
+import {
+  canRedeemLoyaltyFor, loyaltyPointsToRedeem, payheroSublabel, isValidManualCode, isValidPaymentLabel,
+  normalizeManualCode, manualCodePayToLine, MANUAL_CODE_TENDERS, OTHER_REF_MAX, PAYMENT_LABEL_MAX,
+  type LoyaltyRedeemInfo, type ManualCodeMethod,
+} from '@/lib/pos/terminal-actions';
 import { useSubscription } from '@/hooks/use-subscription';
 
 export interface POSPaymentModalProps {
@@ -58,9 +62,9 @@ export interface POSPaymentModalProps {
   /** Attached customer's live loyalty account + program terms — shows "Redeem Points" when its
    *  points can fully cover THIS modal's `total` (a split-line amount or the whole order). */
   loyaltyAccount?: LoyaltyRedeemInfo | null;
-  /** Called on a successful payment. `method` is the tender used (cash | mpesa_manual | mpesa |
-   *  card | card_manual | wallet | on_account | room_charge) so a split portion can record how it
-   *  was paid. */
+  /** Called on a successful payment. `method` is the tender used (cash | mpesa_manual |
+   *  mtn_momo_manual | airtel_money_manual | other_manual | mpesa | card | card_manual | wallet |
+   *  on_account | room_charge) so a split portion can record how it was paid. */
   onPaymentConfirmed: (method?: string) => void;
 }
 
@@ -68,6 +72,7 @@ type ModalStep =
   | 'select'
   | 'cash'
   | 'manual'
+  | 'other'
   | 'card_pdq'
   | 'c2b'
   | 'treasury'
@@ -101,6 +106,10 @@ export function POSPaymentModal({
   const [step, setStep] = useState<ModalStep>('select');
   const [cashTendered, setCashTendered] = useState('');
   const [manualRef, setManualRef] = useState('');
+  // Which code tender the 'manual' step captures (M-Pesa, MTN MoMo or Airtel Money).
+  const [manualMethod, setManualMethod] = useState<ManualCodeMethod>('mpesa_manual');
+  // The Other tender's label (how the customer paid). Its optional reference reuses manualRef.
+  const [otherLabel, setOtherLabel] = useState('');
   const [cardRef, setCardRef] = useState('');
   const [intentId, setIntentId] = useState('');
   const [initiateUrl, setInitiateUrl] = useState('');
@@ -166,6 +175,8 @@ export function POSPaymentModal({
       setStep('select');
       setCashTendered('');
       setManualRef('');
+      setManualMethod('mpesa_manual');
+      setOtherLabel('');
       setCardRef('');
       setIntentId('');
       setInitiateUrl('');
@@ -181,8 +192,8 @@ export function POSPaymentModal({
 
   // Queue an offline payment via the shared queueOfflinePaymentRecord (see [[offline-payment.ts]]).
   const queueOfflinePayment = useCallback(
-    (method: string, externalRef?: string, amountTendered?: number) =>
-      queueOfflinePaymentRecord({ orderId, tenderId, method, amount: roundedTotal, currency, tenantSlug, tenantId: pageTenantId, externalRef, amountTendered }),
+    (method: string, externalRef?: string, amountTendered?: number, paymentLabel?: string) =>
+      queueOfflinePaymentRecord({ orderId, tenderId, method, amount: roundedTotal, currency, tenantSlug, tenantId: pageTenantId, externalRef, amountTendered, paymentLabel }),
     [orderId, tenderId, roundedTotal, currency, tenantSlug, pageTenantId],
   );
 
@@ -233,14 +244,16 @@ export function POSPaymentModal({
   // 'mpesa_manual' (NOT the old bare 'manual', which every method breakdown rendered as an
   // unexplained "manual" bucket — pos-api still accepts the legacy string from queued offline
   // payments and canonicalizes it).
-  const handleManualConfirm = useCallback(async () => {
-    const code = manualRef.trim();
-    methodRef.current = 'mpesa_manual';
-    if (!code) return;
+  // MTN MoMo Code and Airtel Money Code work the same way, recorded as mtn_momo_manual and
+  // airtel_money_manual; their codes must match the pos-api format before Confirm is enabled.
+  // The Other tender also comes through here with a label and an optional reference.
+  const settleManualTender = useCallback(async (method: string, code: string | undefined, paymentLabel?: string) => {
+    methodRef.current = method;
+    const network = method === 'other_manual' ? 'payment' : `${MANUAL_CODE_TENDERS[method as ManualCodeMethod]?.network ?? 'M-Pesa'} code`;
 
     if (!isOnline) {
       try {
-        await queueOfflinePayment('mpesa_manual', code);
+        await queueOfflinePayment(method, code, undefined, paymentLabel);
         setStep('offline_queued');
         onPaymentConfirmed(methodRef.current);
       } catch {
@@ -251,27 +264,44 @@ export function POSPaymentModal({
     }
 
     createIntent.mutate(
-      { orderId, tenderMethod: 'mpesa_manual', amount: roundedTotal, externalRef: code, tenderId },
+      { orderId, tenderMethod: method, amount: roundedTotal, externalRef: code, tenderId, paymentLabel },
       {
         onSuccess: () => { setStep('confirmed'); onPaymentConfirmed(methodRef.current); },
         onError: async (err: any) => {
-          // The cashier already sighted the M-Pesa code — a NETWORK failure queues the
-          // capture (verified on sync) instead of stranding the sale.
+          // The cashier already sighted the code, so a NETWORK failure queues the
+          // capture (checked on sync) instead of stranding the sale.
           const { isNetworkShapedError } = await import('@/lib/connectivity');
           if (isNetworkShapedError(err)) {
             try {
-              await queueOfflinePayment('mpesa_manual', code);
+              await queueOfflinePayment(method, code, undefined, paymentLabel);
               setStep('offline_queued');
               onPaymentConfirmed(methodRef.current);
               return;
             } catch { /* fall through to the error state */ }
           }
-          setErrorMsg(err?.message ?? 'Could not verify M-Pesa code. Please check and try again.');
+          setErrorMsg(err?.message ?? `Could not record the ${network}. Please check and try again.`);
           setStep('failed');
         },
       }
     );
-  }, [manualRef, roundedTotal, orderId, tenderId, tenantSlug, isOnline, createIntent, onPaymentConfirmed, queueOfflinePayment]);
+  }, [roundedTotal, orderId, tenderId, isOnline, createIntent, onPaymentConfirmed, queueOfflinePayment]);
+
+  const handleManualConfirm = useCallback(async () => {
+    if (!isValidManualCode(manualMethod, manualRef)) return;
+    const code = manualMethod === 'mpesa_manual' ? manualRef.trim() : normalizeManualCode(manualRef);
+    await settleManualTender(manualMethod, code);
+  }, [manualRef, manualMethod, settleManualTender]);
+
+  const handleOtherConfirm = useCallback(async () => {
+    if (!isValidPaymentLabel(otherLabel)) return;
+    await settleManualTender('other_manual', manualRef.trim() || undefined, otherLabel.trim());
+  }, [otherLabel, manualRef, settleManualTender]);
+
+  const openManualStep = useCallback((method: ManualCodeMethod) => {
+    setManualMethod(method);
+    setManualRef('');
+    setStep('manual');
+  }, []);
 
   // Card / PDQ: the standalone card terminal already approved the swipe, so it settles immediately
   // like cash (treasury records it as card_manual). Optional approval/reference code is captured.
@@ -481,7 +511,8 @@ export function POSPaymentModal({
             <p className="text-white/70 text-xs font-semibold uppercase tracking-widest mb-1">
               {step === 'select' ? 'Settle Bill' :
                step === 'cash' ? 'Cash Payment' :
-               step === 'manual' ? 'M-Pesa Reference' :
+               step === 'manual' ? MANUAL_CODE_TENDERS[manualMethod].title :
+               step === 'other' ? 'Other Payment' :
                step === 'card_pdq' ? 'Card / PDQ' :
                step === 'room_select' || step === 'room_confirm' ? 'Room Charge' :
                step === 'confirmed' ? 'Payment Successful' :
@@ -523,7 +554,37 @@ export function POSPaymentModal({
                       sub="Enter ref code"
                       disabled={false}
                       loading={false}
-                      onClick={() => setStep('manual')}
+                      onClick={() => openManualStep('mpesa_manual')}
+                    />
+                    <PayBadge
+                      icon={<Smartphone className="h-4 w-4" />}
+                      color="text-yellow-700"
+                      bg="bg-yellow-400/15"
+                      label="MTN MoMo Code"
+                      sub="Enter MTN code"
+                      disabled={false}
+                      loading={false}
+                      onClick={() => openManualStep('mtn_momo_manual')}
+                    />
+                    <PayBadge
+                      icon={<Smartphone className="h-4 w-4" />}
+                      color="text-red-600"
+                      bg="bg-red-500/10"
+                      label="Airtel Money Code"
+                      sub="Enter Airtel code"
+                      disabled={false}
+                      loading={false}
+                      onClick={() => openManualStep('airtel_money_manual')}
+                    />
+                    <PayBadge
+                      icon={<Banknote className="h-4 w-4" />}
+                      color="text-slate-600"
+                      bg="bg-slate-500/10"
+                      label="Other"
+                      sub="Name how they paid"
+                      disabled={false}
+                      loading={false}
+                      onClick={() => { setOtherLabel(''); setManualRef(''); setStep('other'); }}
                     />
                     <PayBadge
                       icon={<CardMark className="h-8 w-8" />}
@@ -675,7 +736,7 @@ export function POSPaymentModal({
                 {!isOnline && (
                   <div className="flex items-center gap-2 rounded-xl bg-amber-500/10 border border-amber-400/20 px-4 py-3 text-xs text-amber-700 dark:text-amber-400 font-medium">
                     <WifiOff className="h-4 w-4 shrink-0" />
-                    Offline — cash &amp; M-Pesa code entry available. Online gateways will appear when reconnected.
+                    Offline. Cash, card and code payments still work. Online payments come back when you reconnect.
                   </div>
                 )}
               </div>
@@ -742,38 +803,104 @@ export function POSPaymentModal({
             )}
 
             {/* ── M-Pesa reference (offline code entry) ─────────────────── */}
-            {step === 'manual' && (
+            {step === 'manual' && (() => {
+              const copy = MANUAL_CODE_TENDERS[manualMethod];
+              const payTo = manualCodePayToLine(manualMethod, posSettings);
+              const codeValid = isValidManualCode(manualMethod, manualRef);
+              const showFormatHint = manualMethod !== 'mpesa_manual' && manualRef.trim() !== '' && !codeValid;
+              return (
               <div className="p-5 space-y-4">
                 <p className="text-sm text-muted-foreground">
-                  Enter the M-Pesa transaction code from the customer&apos;s SMS (paybill or till number payment).
+                  {manualMethod === 'mpesa_manual'
+                    ? <>Enter the M-Pesa transaction code from the customer&apos;s SMS (paybill or till number payment).</>
+                    : <>Enter the {copy.network} transaction ID from the customer&apos;s SMS.</>}
                 </p>
+                {payTo && (
+                  <p className="rounded-xl bg-muted px-4 py-2.5 text-sm font-semibold text-foreground">{payTo}</p>
+                )}
                 {!isOnline && (
                   <div className="flex items-center gap-2 rounded-xl bg-amber-500/10 px-4 py-3 text-xs text-amber-700 dark:text-amber-400 font-medium">
                     <WifiOff className="h-4 w-4 shrink-0" />
-                    Offline — code saved locally and verified when connection is restored.
+                    Offline. The code is saved here and sent when you reconnect.
                   </div>
                 )}
                 <label className="block">
-                  <span className="text-sm font-medium text-foreground">M-Pesa Code</span>
+                  <span className="text-sm font-medium text-foreground">{copy.title}</span>
                   <input
                     type="text"
-                    placeholder="e.g. QB234ABCDE"
+                    placeholder={copy.placeholder}
                     value={manualRef}
                     onChange={(e) => setManualRef(e.target.value.toUpperCase())}
+                    onKeyDown={(e) => { if (e.key === 'Enter' && codeValid && !createIntent.isPending) void handleManualConfirm(); }}
                     className="mt-1 w-full bg-background border border-border rounded-xl py-3 px-4 text-xl font-bold tracking-widest uppercase focus:ring-2 focus:ring-primary/40 focus:outline-none"
                     autoFocus
-                    maxLength={20}
+                    maxLength={copy.maxLength}
                   />
                 </label>
+                {showFormatHint && (
+                  <p className="text-xs text-amber-600">Use 6 to 30 letters or digits. Dots and dashes are fine.</p>
+                )}
                 <button
                   onClick={() => handleManualConfirm()}
-                  disabled={!manualRef.trim() || createIntent.isPending}
+                  disabled={!codeValid || createIntent.isPending}
                   className="w-full min-h-12 rounded-xl bg-primary text-primary-foreground font-bold flex items-center justify-center gap-2 disabled:opacity-40 hover:bg-primary/90 transition-colors"
                 >
                   {createIntent.isPending
                     ? <Loader2 className="h-5 w-5 animate-spin" />
                     : <CheckCircle2 className="h-5 w-5" />}
-                  {isOnline ? 'Confirm M-Pesa' : 'Record & Verify Later'}
+                  {isOnline ? `Confirm ${copy.network}` : 'Record & Verify Later'}
+                </button>
+                <button onClick={() => setStep('select')} className="w-full py-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
+                  ← Back
+                </button>
+              </div>
+              );
+            })()}
+
+            {/* ── Other (named by the cashier, optional reference) ─────── */}
+            {step === 'other' && (
+              <div className="p-5 space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  Say how the customer paid. Add a reference if there is one.
+                </p>
+                {!isOnline && (
+                  <div className="flex items-center gap-2 rounded-xl bg-amber-500/10 px-4 py-3 text-xs text-amber-700 dark:text-amber-400 font-medium">
+                    <WifiOff className="h-4 w-4 shrink-0" />
+                    Offline. The payment is saved here and sent when you reconnect.
+                  </div>
+                )}
+                <label className="block">
+                  <span className="text-sm font-medium text-foreground">How they paid</span>
+                  <input
+                    type="text"
+                    placeholder="e.g. Bank deposit"
+                    value={otherLabel}
+                    onChange={(e) => setOtherLabel(e.target.value)}
+                    className="mt-1 w-full bg-background border border-border rounded-xl py-3 px-4 text-lg font-semibold focus:ring-2 focus:ring-primary/40 focus:outline-none"
+                    autoFocus
+                    maxLength={PAYMENT_LABEL_MAX}
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-sm font-medium text-foreground">Reference (optional)</span>
+                  <input
+                    type="text"
+                    value={manualRef}
+                    onChange={(e) => setManualRef(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter' && isValidPaymentLabel(otherLabel) && !createIntent.isPending) void handleOtherConfirm(); }}
+                    className="mt-1 w-full bg-background border border-border rounded-xl py-2.5 px-4 text-base focus:ring-2 focus:ring-primary/40 focus:outline-none"
+                    maxLength={OTHER_REF_MAX}
+                  />
+                </label>
+                <button
+                  onClick={() => handleOtherConfirm()}
+                  disabled={!isValidPaymentLabel(otherLabel) || createIntent.isPending}
+                  className="w-full min-h-12 rounded-xl bg-primary text-primary-foreground font-bold flex items-center justify-center gap-2 disabled:opacity-40 hover:bg-primary/90 transition-colors"
+                >
+                  {createIntent.isPending
+                    ? <Loader2 className="h-5 w-5 animate-spin" />
+                    : <CheckCircle2 className="h-5 w-5" />}
+                  {isOnline ? 'Confirm Payment' : 'Save & Sync Later'}
                 </button>
                 <button onClick={() => setStep('select')} className="w-full py-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
                   ← Back

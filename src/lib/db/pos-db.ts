@@ -138,6 +138,7 @@ export interface OfflineOrder extends SyncState {
     tender_method: string;
     amount: number;
     external_ref?: string;
+    payment_label?: string;
   };
 }
 
@@ -159,6 +160,8 @@ export interface OfflinePayment extends SyncState {
   // offline cash-with-change sale's receipt still shows "Tendered"/"Change" (see pos-api's
   // cashPaymentData). Undefined for every other tender.
   amount_tendered?: number;
+  // How the customer paid, for the "other_manual" tender. Undefined for every other tender.
+  payment_label?: string;
   // Who took the payment, replayed as offlineCollectedBy so the cash counts in their shift
   // (pos-api honours it only for an offline order credited to that same person).
   collected_by_user_id?: string;

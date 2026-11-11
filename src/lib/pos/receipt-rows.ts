@@ -177,6 +177,9 @@ export function buildReceiptRows(receipt: ReceiptData): ReceiptRow[] {
     if (pm.mpesa_account_reference) rows.push({ kind: 'payment-method', label: 'Account No.', value: pm.mpesa_account_reference });
     if (pm.mpesa_till) rows.push({ kind: 'payment-method', label: 'M-PESA Till', value: pm.mpesa_till });
     if (pm.mpesa_pochi) rows.push({ kind: 'payment-method', label: 'M-PESA Pochi', value: pm.mpesa_pochi });
+    // Same labels as pos-api's printed receipt.
+    if (pm.airtel_money_number) rows.push({ kind: 'payment-method', label: 'Airtel Money', value: pm.airtel_money_number });
+    if (pm.mtn_momo_number) rows.push({ kind: 'payment-method', label: 'MTN Mobile Money', value: pm.mtn_momo_number });
     if (pm.bank_account_number) rows.push({ kind: 'payment-method', label: pm.bank_name || 'Bank', value: pm.bank_account_number });
     if (pm.bank_account_name) rows.push({ kind: 'payment-account-name', text: pm.bank_account_name });
   }
