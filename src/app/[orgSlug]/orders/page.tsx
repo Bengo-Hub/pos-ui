@@ -15,6 +15,7 @@ import { P, usePermissions } from '@/hooks/usePermissions';
 import { orderSubtypeBadge } from '@/lib/pos/order-subtype-label';
 import { useOwnScope } from '@/lib/rbac/scope';
 import { cn, formatCurrency } from '@/lib/utils';
+import { formatTime as formatTimeInUserZone } from '@/lib/user-timezone';
 import { useAuthStore } from '@/store/auth';
 import { useTenantId } from '@/hooks/useTenantId';
 import { TrackingIframeModal } from '@bengo-hub/shared-ui-lib';
@@ -124,8 +125,7 @@ export default function OrdersPage() {
   const filtered = orders;
 
   const formatTime = (dateStr: string) => {
-    if (!dateStr) return '';
-    return new Date(dateStr).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+    return formatTimeInUserZone(dateStr);
   };
 
   const isDeliveryOrder = (order: any) =>

@@ -1,4 +1,5 @@
 import { revokeServerSession as sharedRevokeServerSession } from '@bengo-hub/shared-ui-lib/auth';
+import { applyUserTimeZone } from '@/lib/user-timezone';
 
 const SSO_BASE_URL = process.env.NEXT_PUBLIC_SSO_URL || 'https://sso.codevertexafrica.com';
 const SSO_CLIENT_ID = process.env.NEXT_PUBLIC_SSO_CLIENT_ID || 'pos-ui';
@@ -167,6 +168,8 @@ export async function fetchProfile(accessToken: string): Promise<{
     throw err;
   }
   const data = await response.json();
+  // Screens show times in the user's zone (profile.timezone), then the tenant's.
+  applyUserTimeZone(data, data.tenant);
   const slug = data.tenant_slug ?? data.tenant?.slug ?? '';
   const roles: string[] = data.roles ?? [];
   return {

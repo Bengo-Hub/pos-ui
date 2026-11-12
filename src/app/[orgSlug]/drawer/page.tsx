@@ -6,6 +6,7 @@ import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { usePermissions, P } from '@/hooks/usePermissions';
 import { useAuthStore } from '@/store/auth';
 import { formatCurrency } from '@/lib/utils';
+import { formatDateTime } from '@/lib/user-timezone';
 import {
   Banknote,
   DollarSign,
@@ -65,8 +66,8 @@ export default function DrawerPage() {
 
   const formatDate = (d: string) => {
     if (!d) return '-';
-    return new Date(d).toLocaleString('en-US', {
-      month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+    return formatDateTime(d, undefined, {
+      locale: 'en-US', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
     });
   };
 

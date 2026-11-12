@@ -4,11 +4,12 @@
 // platform's <page>-columns.tsx convention.
 
 import { cn, formatCurrency } from '@/lib/utils';
+import { formatDate as formatInUserZone } from '@/lib/user-timezone';
 import type { DataTableColumn } from '@bengo-hub/shared-ui-lib/data-table';
 import type { CommissionRecord } from '@/hooks/useCommissions';
 
 function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+  return formatInUserZone(iso, undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
 export function buildCommissionsColumns(currency: string): DataTableColumn<CommissionRecord>[] {

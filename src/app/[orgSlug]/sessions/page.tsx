@@ -7,6 +7,7 @@ import { useShiftReport } from '@/hooks/useReports';
 import { useEffectiveOutletID } from '@/hooks/usePOS';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { cn, formatCurrency } from '@/lib/utils';
+import { formatDateTime } from '@/lib/user-timezone';
 import { Calendar, Clock, DollarSign, Loader2, ShoppingCart } from 'lucide-react';
 import { useState } from 'react';
 
@@ -29,7 +30,7 @@ function periodRange(p: Period) {
 }
 
 function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  return formatDateTime(iso, undefined, { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
 function SessionsContent() {

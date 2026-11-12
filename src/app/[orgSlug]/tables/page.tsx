@@ -11,6 +11,7 @@ import { POSPaymentModal } from '@/components/pos/payment-modal';
 import { ReceiptPreview } from '@/components/pos/receipt-preview';
 import { Badge, Button } from '@/components/ui/base';
 import { cn } from '@/lib/utils';
+import { formatTime as formatTimeInUserZone } from '@/lib/user-timezone';
 import { useTables, useSections, useUpdateTableStatus, useReleaseTable, useMergeTables, useUnmergeTables, useOrders, useCategories } from '@/hooks/usePOS';
 import { useKDSStations } from '@/hooks/useKDS';
 import { usePermissions, P } from '@/hooks/usePermissions';
@@ -560,8 +561,7 @@ function MyBillsTab({ orgSlug }: { orgSlug: string }) {
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   const formatTime = (dateStr: string) => {
-    if (!dateStr) return '';
-    return new Date(dateStr).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+    return formatTimeInUserZone(dateStr);
   };
 
   return (

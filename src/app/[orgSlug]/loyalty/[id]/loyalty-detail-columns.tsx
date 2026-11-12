@@ -4,6 +4,7 @@
 // out of page.tsx to mirror the platform's <page>-columns.tsx convention.
 
 import { cn } from '@/lib/utils';
+import { formatDateTime } from '@/lib/user-timezone';
 import type { DataTableColumn } from '@bengo-hub/shared-ui-lib/data-table';
 import type { LoyaltyTransaction, Referral } from '@/hooks/useLoyalty';
 
@@ -14,7 +15,7 @@ function txColor(type: string) {
 }
 
 function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  return formatDateTime(iso, undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
 export function buildLoyaltyTransactionColumns(): DataTableColumn<LoyaltyTransaction>[] {
