@@ -31,6 +31,7 @@ export function DownloadReceiptButton({ orderId, orderNumber, label = 'Download 
     if (!tenantId || !orderId) return;
     setLoading(true);
     try {
+      // A download is always the original; only Print copy marks a receipt COPY (KRA).
       const blob = await apiClient.getBlob(`/api/v1/${tenantId}/pos/orders/${orderId}/receipt`, { format: 'pdf' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');

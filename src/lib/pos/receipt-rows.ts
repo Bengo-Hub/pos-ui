@@ -25,6 +25,8 @@ export interface ReceiptPaymentRow { kind: 'payment'; label: string; amount: num
 export interface ReceiptChangeRow { kind: 'change'; amount: number }
 export interface ReceiptEtimsRow {
   kind: 'etims';
+  /** KRA receipt label: NS, NC, CS or CC (see kraReceiptLabel). */
+  receiptLabel: string;
   invoiceNumber: string;
   /** Data: URI of the server-rendered QR — NEVER the raw verification link (that's not an image). */
   qrUrl?: string;
@@ -44,6 +46,29 @@ export interface ReceiptFooterRow { kind: 'footer'; text: string }
 export interface ReceiptProviderRow { kind: 'provider'; lead: string; contact: string }
 /** Code 128 of the order number (retail receipts) — src is a data: URI from pos-api. */
 export interface ReceiptBarcodeRow { kind: 'barcode'; src: string; text: string }
+/** The KRA COPY marking printed on a reprint (see RECEIPT_COPY_BANNER). */
+export interface ReceiptCopyBannerRow { kind: 'copy-banner'; text: string }
+
+/** Printed at the top and the bottom of a reprinted receipt, mirroring pos-api printing.CopyBanner.
+ *  The top one is rendered by each layout above its header (receiptCopyBanner); the bottom one is
+ *  the last row of buildReceiptRows. */
+export const RECEIPT_COPY_BANNER = '*** COPY ***';
+
+/** The diagonal watermark word on an A4 copy, mirroring pos-api printing.CopyWatermark. */
+export const RECEIPT_COPY_WATERMARK = 'COPY';
+
+/** The COPY banner text when this receipt is a reprint, else null. */
+export function receiptCopyBanner(receipt: ReceiptData): string | null {
+  return receipt.is_copy ? RECEIPT_COPY_BANNER : null;
+}
+
+/** KRA receipt label (OSCU spec 4.3): receipt type N (normal) or C (copy), then transaction type
+ *  S (sale) or C (credit note, a refund). Mirrors pos-api printing.KRAReceiptLabel. */
+export function kraReceiptLabel(receipt: ReceiptData): 'NS' | 'NC' | 'CS' | 'CC' {
+  const receiptType = receipt.is_copy ? 'C' : 'N';
+  const txType = receipt.is_return ? 'C' : 'S';
+  return `${receiptType}${txType}` as 'NS' | 'NC' | 'CS' | 'CC';
+}
 
 export type ReceiptRow =
   | ReceiptLineRow
@@ -61,7 +86,8 @@ export type ReceiptRow =
   | ReceiptCustomerRow
   | ReceiptFooterRow
   | ReceiptProviderRow
-  | ReceiptBarcodeRow;
+  | ReceiptBarcodeRow
+  | ReceiptCopyBannerRow;
 
 /** Static fallback for the platform-owner advertisement, mirroring pos-api's DefaultProviderFooter. */
 const PROVIDER_FOOTER_FALLBACK = {
@@ -197,6 +223,7 @@ export function buildReceiptRows(receipt: ReceiptData): ReceiptRow[] {
     rows.push({ kind: 'divider' });
     rows.push({
       kind: 'etims',
+      receiptLabel: kraReceiptLabel(receipt),
       invoiceNumber: receipt.etims_invoice_number ?? '',
       // The QR is ALWAYS the server-rendered image (etims_qr_png) — the verification LINK
       // (etims_qr_code_url) is never a valid <img src> and must not be used as one.
@@ -223,6 +250,12 @@ export function buildReceiptRows(receipt: ReceiptData): ReceiptRow[] {
       lead: receipt.provider_footer_lead || PROVIDER_FOOTER_FALLBACK.lead,
       contact: receipt.provider_footer_contact || PROVIDER_FOOTER_FALLBACK.contact,
     });
+  }
+
+  // KRA copy marking: a reprint ends with the COPY banner too (the top one sits above the header).
+  const copyBanner = receiptCopyBanner(receipt);
+  if (copyBanner) {
+    rows.push({ kind: 'copy-banner', text: copyBanner });
   }
 
   return rows;

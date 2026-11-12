@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Printer, Loader2 } from 'lucide-react';
+import { Printer, Loader2, Copy } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/base';
 import { apiClient } from '@/lib/api/client';
@@ -22,6 +22,9 @@ interface PrintReceiptButtonProps {
   size?: 'default' | 'sm' | 'lg' | 'icon';
   className?: string;
   disabled?: boolean;
+  /** "Print copy": open the preview and print a copy marked COPY straight away (logged on pos-api
+   *  via POST .../receipt/reprint). */
+  customerCopy?: boolean;
 }
 
 /**
@@ -30,16 +33,23 @@ interface PrintReceiptButtonProps {
  *
  * Reusable across the order list, order detail, and tables/bill views so cashiers, managers, tenant
  * admins and waiters can (re)print a receipt or paid-bill at any time — not just immediately after payment.
+ *
+ * Print and download always give the original receipt. A copy for a customer is marked COPY (KRA)
+ * only through the Print copy button (customerCopy). A bill printed before payment is not a fiscal
+ * receipt and is never marked.
  */
 export function PrintReceiptButton({
   orderId,
-  label = 'Print Receipt',
+  label,
   outletName,
   variant = 'outline',
   size = 'sm',
   className,
   disabled,
+  customerCopy,
 }: PrintReceiptButtonProps) {
+  const buttonLabel = label ?? (customerCopy ? 'Print copy' : 'Print Receipt');
+  const Icon = customerCopy ? Copy : Printer;
   const user = useAuthStore((s) => s.user);
   const tenantId = useTenantId() ?? '';
   const { tenant } = useTenantBranding();
@@ -78,8 +88,8 @@ export function PrintReceiptButton({
         onClick={handleClick}
         disabled={disabled || loading || !orderId}
       >
-        {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Printer className="h-4 w-4" />}
-        {size !== 'icon' && <span className="ml-2">{label}</span>}
+        {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Icon className="h-4 w-4" />}
+        {size !== 'icon' && <span className="ml-2">{buttonLabel}</span>}
       </Button>
 
       <ReceiptPreview
@@ -94,6 +104,8 @@ export function PrintReceiptButton({
         printerProfile={resolveBillProfile((posSettings as { printer_profiles?: Parameters<typeof resolveBillProfile>[0] })?.printer_profiles)}
         tenantId={tenantId}
         orderId={orderId}
+        reprint
+        customerCopyOnOpen={customerCopy}
       />
     </>
   );

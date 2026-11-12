@@ -2,15 +2,16 @@
 
 import '@/styles/receipt.css';
 import { useEffect, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { Button } from '@/components/ui/base';
-import { Printer, Download, X, Sparkles } from 'lucide-react';
+import { Printer, Download, X, Sparkles, Copy } from 'lucide-react';
 import { toast } from 'sonner';
 import { ReceiptPrint } from './receipt-print';
 import { printHtmlToPrinter, printProfileHtml, fetchReceiptEscposHex } from '@/lib/pos/printer-discovery';
 import { enqueuePrintJob, waitForPrintJobs } from '@/lib/pos/print-jobs';
 import { hasRealPrinter } from '@/lib/pos/printer-stations';
-import { buildReceiptRows } from '@/lib/pos/receipt-rows';
-import { buildReceiptDocument, printReceiptDocument } from '@/lib/pos/receipt-html';
+import { buildReceiptRows, receiptCopyBanner } from '@/lib/pos/receipt-rows';
+import { asReceiptCopy, buildReceiptDocument, printReceiptDocument, registerReceiptReprint } from '@/lib/pos/receipt-html';
 import { paperForFormat, resolveReceiptFormat } from '@/lib/pos/receipt-format';
 import { resolveReceiptDisplayName, resolveReceiptOutletLine } from '@/lib/pos/receipt-branding';
 import { apiClient } from '@/lib/api/client';
@@ -136,6 +137,10 @@ export interface ReceiptData {
   is_return?: boolean;
   /** The sale this return reverses (only set when is_return). */
   original_order_number?: string;
+  /** A copy printed with the Print copy button (pos-api layouts.Receipt.IsCopy): KRA requires it
+   *  marked COPY, so every renderer prints the COPY banner (A4 a diagonal watermark) and the KRA
+   *  receipt label reads CS or CC. The fiscal fields stay the original's. */
+  is_copy?: boolean;
 }
 
 interface ReceiptPreviewProps {
@@ -152,14 +157,31 @@ interface ReceiptPreviewProps {
   tenantId?: string;
   orderId?: string;
   /** Silently print once on open (never a browser dialog). Callers pass
-   *  autoPrintsCustomerCopy(settings): outlet auto_print_order AND the bill printer's own toggle. */
+   *  autoPrintsCustomerCopy(settings): outlet auto_print_order AND the bill printer's own toggle.
+   *  This automatic print after a sale is the ORIGINAL receipt and is never counted as a reprint. */
   autoPrint?: boolean;
+  /** The preview shows an order printed before (order list or detail). Kept for callers; printing
+   *  no longer depends on it, since only Print copy marks a receipt COPY. */
+  reprint?: boolean;
+  /** Run the Print copy action once as soon as the preview opens (order detail button). */
+  customerCopyOnOpen?: boolean;
 }
 
 export function ReceiptPreview({
-  receipt, open, onClose, outletName, tenantName, printerName, printerProfile, tenantId, orderId, autoPrint,
+  receipt: receiptProp, open, onClose, outletName, tenantName, printerName, printerProfile, tenantId, orderId, autoPrint,
+  customerCopyOnOpen,
 }: ReceiptPreviewProps) {
   const [printing, setPrinting] = useState(false);
+  // KRA copy marking. copyMarked is set only while the Print copy button prints, so the hidden print
+  // root and the on-screen card render the COPY banner for that print and the original otherwise;
+  // originalPrintedRef records that the original already went out (the automatic print, or a
+  // manual one).
+  const [copyMarked, setCopyMarked] = useState(false);
+  const originalPrintedRef = useRef(false);
+  const receipt = receiptProp ? asReceiptCopy(receiptProp, copyMarked) : null;
+  // Only an order receipt or a refund receipt is a fiscal document a copy must mark; layaway deposit
+  // and instalment slips are not.
+  const copyEligible = Boolean(receipt && (orderId || receipt.is_return));
   // Set once a Print attempt on THIS open enqueued/attempted a real printer job and it did not
   // confirm printing (bad printer name/IP, offline agent, stalled claim). Save PDF checks this so
   // it can open the browser print window instead of just downloading a file nobody's going to see
@@ -172,7 +194,11 @@ export function ReceiptPreview({
   const autoFiredRef = useRef(false);
 
   useEffect(() => {
-    if (!open) setLastPrintFailed(false);
+    if (!open) {
+      setLastPrintFailed(false);
+      setCopyMarked(false);
+      originalPrintedRef.current = false;
+    }
   }, [open]);
 
   const realProfile = hasRealPrinter(printerProfile) ? printerProfile : undefined;
@@ -192,17 +218,31 @@ export function ReceiptPreview({
   // printer is configured. The preview stays on screen either way (manual Print still available).
   useEffect(() => {
     if (!open) { autoFiredRef.current = false; return; }
-    if (!autoPrint || autoFiredRef.current || !receipt) return;
+    if (!autoPrint || autoFiredRef.current || !receiptProp) return;
     autoFiredRef.current = true;
     if (!realProfile) {
       toast.info('Auto-print skipped — no receipt printer configured (Settings → Receipt).');
       return;
     }
     void printToProfile(true).then((ok) => {
+      // The automatic print after a sale is the original; any later print is a COPY.
+      if (ok) originalPrintedRef.current = true;
       if (!ok) toast.error('Receipt did not print — check the printer connection (QZ Tray / print agent).');
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, autoPrint, receipt]);
+  }, [open, autoPrint, receiptProp]);
+
+  // "Print copy" requested from outside (order detail): run it once per open, after the
+  // hidden print root has rendered. The handler is defined below the early return, so it is
+  // reached through a ref the render keeps current.
+  const runCustomerCopyRef = useRef<(() => void) | null>(null);
+  const customerCopyFiredRef = useRef(false);
+  useEffect(() => {
+    if (!open) { customerCopyFiredRef.current = false; return; }
+    if (!customerCopyOnOpen || customerCopyFiredRef.current || !receiptProp) return;
+    customerCopyFiredRef.current = true;
+    runCustomerCopyRef.current?.();
+  }, [open, customerCopyOnOpen, receiptProp]);
 
   if (!receipt || !open) return null;
 
@@ -276,11 +316,38 @@ export function ReceiptPreview({
     ));
   };
 
-  const handlePrint = () => {
-    setPrinting(true);
-    openReceiptPrintWindow();
-    setTimeout(() => setPrinting(false), 1000);
+  // Decides whether this print or download is a COPY. Only the "Print copy" button makes one (owner
+  // decision 2026-11-12): ordinary Print and Download always give the original, so nothing depends
+  // on counting prints. A copy of an order receipt is still logged on pos-api first
+  // (registerReceiptReprint, the audit trail); the hidden print root is re-rendered synchronously
+  // (flushSync) so the browser print taken right after carries the banner, and an ordinary print
+  // after it goes back to the original.
+  const markOutput = async (copy: boolean): Promise<boolean> => {
+    originalPrintedRef.current = true;
+    if (!copy || !copyEligible) {
+      if (copyMarked) flushSync(() => setCopyMarked(false));
+      return false;
+    }
+    if (tenantId && orderId && !receipt.is_return) await registerReceiptReprint(tenantId, orderId);
+    flushSync(() => setCopyMarked(true));
+    return true;
   };
+
+  const printWith = async (customerCopy: boolean) => {
+    setPrinting(true);
+    try {
+      await markOutput(customerCopy);
+      openReceiptPrintWindow();
+    } finally {
+      setTimeout(() => setPrinting(false), 1000);
+    }
+  };
+
+  const handlePrint = () => { void printWith(false); };
+
+  // "Print copy": the only way to a receipt marked COPY; logged on pos-api.
+  const handleCustomerCopy = () => { void printWith(true); };
+  runCustomerCopyRef.current = handleCustomerCopy;
 
   // Real PDF: when online, download the server-rendered application/pdf (same layouts
   // registry as the printed receipt — fpdf output, not a print-to-PDF approximation).
@@ -289,7 +356,9 @@ export function ReceiptPreview({
   // and open the browser print window directly instead. A downloaded file nobody can get to
   // paper is not "plan B" during an outage; the browser print dialog (with its own Save-as-PDF
   // destination as a bonus) is the solid fallback "like it used to" work.
-  const handleDownloadPDF = () => {
+  const handleDownloadPDF = async () => {
+    // A download is always the original; Print copy is the copy action.
+    const isCopy = await markOutput(false);
     if (lastPrintFailed) {
       toast.info('Printer didn’t confirm the last print — opening browser print instead of a download.');
       openBrowserReceiptWindow();
@@ -297,7 +366,7 @@ export function ReceiptPreview({
     }
     if (tenantId && orderId && (typeof navigator === 'undefined' || navigator.onLine)) {
       void apiClient
-        .getBlob(`/api/v1/${tenantId}/pos/orders/${orderId}/receipt`, { format: 'pdf' })
+        .getBlob(`/api/v1/${tenantId}/pos/orders/${orderId}/receipt`, isCopy ? { format: 'pdf', copy: '1' } : { format: 'pdf' })
         .then((blob) => {
           const url = URL.createObjectURL(blob);
           const a = document.createElement('a');
@@ -365,6 +434,11 @@ export function ReceiptPreview({
 
           {/* Receipt content */}
           <div className="px-4 py-3 font-mono text-xs overflow-y-auto max-h-[60vh]">
+            {receiptCopyBanner(receipt) && (
+              <p className="mb-2 border-2 border-foreground py-0.5 text-center text-sm font-bold tracking-widest">
+                {receiptCopyBanner(receipt)}
+              </p>
+            )}
             {logoUrl && receipt.show_logo !== false && (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={logoUrl} alt="logo" className="mx-auto mb-2 max-h-16 object-contain grayscale" />
@@ -472,6 +546,7 @@ export function ReceiptPreview({
                   return (
                     <div key={i} className="text-center text-muted-foreground text-[10px] leading-tight">
                       <p className="font-semibold text-foreground">KRA TIMS Details</p>
+                      <p>Receipt Type: {row.receiptLabel}</p>
                       {row.scuId && <p>SCU ID: {row.scuId}</p>}
                       {(row.cuInvNo || row.invoiceNumber) && <p>CU Inv No: {row.cuInvNo || row.invoiceNumber}</p>}
                       {row.qrUrl && (
@@ -544,6 +619,12 @@ export function ReceiptPreview({
                     </div>
                   );
                 }
+                case 'copy-banner':
+                  return (
+                    <p key={i} className="mt-2 border-2 border-foreground py-0.5 text-center text-sm font-bold tracking-widest">
+                      {row.text}
+                    </p>
+                  );
                 default:
                   return null;
               }
@@ -564,12 +645,26 @@ export function ReceiptPreview({
             <Button
               variant="outline"
               className="flex-1"
-              onClick={handleDownloadPDF}
+              onClick={() => { void handleDownloadPDF(); }}
             >
               <Download className="h-4 w-4 mr-2" />
               Save PDF
             </Button>
           </div>
+          {/* Print copy: the only way to a receipt marked COPY (KRA); logged on pos-api. */}
+          {copyEligible && (
+            <div className="px-4 pb-4 -mt-2">
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={handleCustomerCopy}
+                disabled={printing}
+              >
+                <Copy className="h-4 w-4 mr-2" />
+                Print copy
+              </Button>
+            </div>
+          )}
         </div>
       </div>
     </>

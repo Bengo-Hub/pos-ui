@@ -109,6 +109,10 @@ export default function OrderDetailPage() {
           {order.status !== 'cancelled' && (
             <PrintReceiptButton orderId={id} label={order.status === 'completed' ? 'Print Receipt' : 'Print Bill'} />
           )}
+          {/* Print copy of a settled sale: printed marked COPY (KRA) and logged. */}
+          {['completed', 'refunded'].includes(order.status) && (
+            <PrintReceiptButton orderId={id} customerCopy />
+          )}
           {order.status !== 'cancelled' && (
             <ReprintStationTicketsButton
               orderNumber={order.order_number}

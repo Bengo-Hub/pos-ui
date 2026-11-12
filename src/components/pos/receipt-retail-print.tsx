@@ -14,7 +14,7 @@
 
 import type { CSSProperties } from 'react';
 import type { ReceiptData } from './receipt-preview';
-import { buildReceiptRows, vatSummaryRows } from '@/lib/pos/receipt-rows';
+import { buildReceiptRows, receiptCopyBanner, RECEIPT_COPY_WATERMARK, vatSummaryRows } from '@/lib/pos/receipt-rows';
 import { resolveReceiptDisplayName } from '@/lib/pos/receipt-branding';
 
 interface RetailReceiptPrintProps {
@@ -47,6 +47,20 @@ const cellBorder = '2px solid #000';
 const th: CSSProperties = { border: cellBorder, padding: '3px 7px', fontWeight: 700, textAlign: 'left', fontSize: 13 };
 const td: CSSProperties = { border: cellBorder, padding: '3px 7px', fontSize: 13, fontWeight: 500 };
 const trowStyle: CSSProperties = { display: 'flex', justifyContent: 'space-between', padding: '1px 2px', fontSize: 13 };
+// The diagonal COPY watermark on a reprinted A4 receipt (pos-api a4_html .copy-wm).
+const copyWatermarkStyle: CSSProperties = {
+  position: 'fixed',
+  top: '50%',
+  left: '50%',
+  transform: 'translate(-50%, -50%) rotate(-35deg)',
+  fontSize: 190,
+  fontWeight: 700,
+  letterSpacing: 16,
+  color: 'rgba(0, 0, 0, 0.13)',
+  whiteSpace: 'nowrap',
+  pointerEvents: 'none',
+  zIndex: 0,
+};
 
 export function RetailReceiptPrint({ receipt, tenantName, outletName, logoUrl }: RetailReceiptPrintProps) {
   const currency = receipt.currency || 'KES';
@@ -74,8 +88,9 @@ export function RetailReceiptPrint({ receipt, tenantName, outletName, logoUrl }:
     receipt.is_return && receipt.original_order_number
       ? `Return against Order #${receipt.original_order_number}`
       : '';
+  const copyBanner = receiptCopyBanner(receipt);
 
-  const trow = (label: string, value: string, bold = false, key?: string) => (
+  const trow =(label: string, value: string, bold = false, key?: string) => (
     <div key={key ?? label} style={{ ...trowStyle, fontWeight: bold ? 700 : 500 }}>
       <span>{label}</span>
       <span>{value}</span>
@@ -84,6 +99,16 @@ export function RetailReceiptPrint({ receipt, tenantName, outletName, logoUrl }:
 
   return (
     <div style={{ fontFamily: RETAIL_FONT_STACK, color: '#000', background: '#fff', fontSize: 13, fontWeight: 500, maxWidth: '186mm', margin: '0 auto' }}>
+      {/* KRA copy marking on a reprint: a large diagonal COPY watermark (position fixed repeats it
+          on every printed page) and the COPY banner above the header. Mirrors pos-api a4_html. */}
+      {copyBanner && (
+        <>
+          <div style={copyWatermarkStyle}>{RECEIPT_COPY_WATERMARK}</div>
+          <div style={{ textAlign: 'center', fontWeight: 700, fontSize: 18, letterSpacing: 3, border: cellBorder, padding: '3px 0', marginBottom: 6 }}>
+            {copyBanner}
+          </div>
+        </>
+      )}
       {/* Boxed business header */}
       <div style={{ border: cellBorder, padding: '5px 10px', textAlign: 'center' }}>
         {logoUrl && receipt.show_logo !== false && (
@@ -201,6 +226,7 @@ export function RetailReceiptPrint({ receipt, tenantName, outletName, logoUrl }:
             return (
               <div key={i} style={{ textAlign: 'center', marginTop: 10 }}>
                 <div style={{ fontWeight: 700, fontSize: 14 }}>KRA TIMS Details</div>
+                <div style={{ fontSize: 12 }}><b>Receipt Type:</b> {row.receiptLabel}</div>
                 {row.scuId && <div style={{ fontSize: 12 }}><b>SCU ID:</b> {row.scuId}</div>}
                 <div style={{ fontSize: 12 }}><b>CU_Inv No.:</b> {row.cuInvNo || row.invoiceNumber}</div>
                 {row.qrUrl && (

@@ -10,6 +10,35 @@ import { createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { ReceiptPrint } from '@/components/pos/receipt-print';
 import type { ReceiptData } from '@/components/pos/receipt-preview';
+import { apiClient } from '@/lib/api/client';
+
+/**
+ * Logs a copy of an order's receipt on pos-api (POST .../receipt/reprint raises reprint_count and
+ * writes the receipt.reprint audit entry). Called only by the "Print copy" action, which then asks
+ * pos-api for the receipt with ?copy=1 so the JSON, HTML, PDF and ESC/POS bytes are marked COPY.
+ * Ordinary prints and downloads never call it and are always the original.
+ *
+ * Returns false for a bill printed before payment (pos-api neither counts nor marks it). When the
+ * call itself fails the print is still marked COPY on the client: a reprint must never pass as the
+ * original.
+ */
+export async function registerReceiptReprint(tenantId: string, orderId: string): Promise<boolean> {
+  try {
+    const res = await apiClient.post<{ reprint_count?: number; is_duplicate?: boolean }>(
+      `/api/v1/${tenantId}/pos/orders/${orderId}/receipt/reprint`,
+      {},
+      { suppressErrorToast: true },
+    );
+    return Boolean(res?.is_duplicate);
+  } catch {
+    return true;
+  }
+}
+
+/** The receipt as a COPY when `isCopy`, else unchanged (the flag the renderers read). */
+export function asReceiptCopy(receipt: ReceiptData, isCopy: boolean): ReceiptData {
+  return isCopy && !receipt.is_copy ? { ...receipt, is_copy: true } : receipt;
+}
 
 // Thermal-receipt styles for the dedicated print window (mirrors src/styles/receipt.css, which
 // covers the in-app hidden #receipt-print-root instead).

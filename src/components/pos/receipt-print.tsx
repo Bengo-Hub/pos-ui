@@ -3,9 +3,21 @@
 import '@/styles/receipt.css';
 import type { ReceiptData } from './receipt-preview';
 import { RetailReceiptPrint } from './receipt-retail-print';
-import { buildReceiptRows } from '@/lib/pos/receipt-rows';
+import { buildReceiptRows, receiptCopyBanner } from '@/lib/pos/receipt-rows';
 import { resolveReceiptFormat } from '@/lib/pos/receipt-format';
 import { resolveReceiptDisplayName, resolveReceiptOutletLine } from '@/lib/pos/receipt-branding';
+
+/** The boxed "*** COPY ***" stamp, inline-styled so it survives every print path (print window,
+ *  QZ/print-agent HTML) without depending on a stylesheet. Mirrors pos-api thermal_html .copy. */
+const COPY_BANNER_STYLE = {
+  textAlign: 'center',
+  fontWeight: 700,
+  fontSize: 16,
+  letterSpacing: 2,
+  border: '2px solid #000',
+  padding: '2px 0',
+  margin: '3px 0',
+} as const;
 
 interface ReceiptPrintProps {
   receipt: ReceiptData;
@@ -136,8 +148,13 @@ export function ReceiptPrint({
     </>
   );
 
+  // KRA copy marking: a reprint prints the COPY banner above the header (the bottom one is the
+  // last row of buildReceiptRows).
+  const copyBanner = receiptCopyBanner(receipt);
+
   return (
     <div className={rootClass}>
+      {copyBanner && <p style={COPY_BANNER_STYLE}>{copyBanner}</p>}
       {isGrid ? <div className="grid-box">{headerBlock}</div> : headerBlock}
 
       {isGrid ? (
@@ -267,6 +284,10 @@ export function ReceiptPrint({
               <div key={i}>
                 <p className="receipt-center receipt-bold" style={{ fontSize: 10, marginBottom: 3 }}>KRA TIMS Details</p>
                 <div className="receipt-row">
+                  <span className="receipt-row-name">Receipt Type:</span>
+                  <span className="receipt-row-value">{row.receiptLabel}</span>
+                </div>
+                <div className="receipt-row">
                   <span className="receipt-row-name">SCU ID:</span>
                   <span className="receipt-row-value">{row.scuId}</span>
                 </div>
@@ -332,6 +353,8 @@ export function ReceiptPrint({
                 <hr className="receipt-divider" style={{ marginTop: 4 }} />
               </div>
             );
+          case 'copy-banner':
+            return <p key={i} style={COPY_BANNER_STYLE}>{row.text}</p>;
           default:
             return null;
         }
