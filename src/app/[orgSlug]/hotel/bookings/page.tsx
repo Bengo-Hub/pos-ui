@@ -250,7 +250,7 @@ function BookingsPageInner() {
   async function handleCreate() {
     if (!form.lead_guest_name.trim()) { toast.error('Guest name is required'); return; }
     try {
-      await createMut.mutateAsync({
+      const created = await createMut.mutateAsync({
         lead_guest_name: form.lead_guest_name,
         email: form.email,
         phone: form.phone,
@@ -269,6 +269,16 @@ function BookingsPageInner() {
         },
       });
       toast.success('Booking created');
+      // pos-api crm_link: tell the desk when the lead guest is not linked to the CRM as expected.
+      // Editing the booking later links an unlinked lead guest.
+      if (created?.crm_link && created.crm_link.status !== 'linked') {
+        toast.warning(
+          created.crm_link.status === 'mismatch' && created.crm_link.message
+            ? created.crm_link.message
+            : 'The lead guest is not linked to the CRM yet. Saving an edit to the booking links them.',
+          { duration: 12_000 },
+        );
+      }
       setShowForm(false);
       setForm(emptyForm());
     } catch (e) { toast.error(await apiErrorMessage(e, 'Failed to create booking')); }

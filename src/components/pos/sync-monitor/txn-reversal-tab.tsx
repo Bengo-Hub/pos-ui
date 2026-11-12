@@ -15,9 +15,15 @@ import { reversalsApi, type Reversal, type ReversalStep } from '@/lib/api/revers
 import { usePlatformTenants } from '@/hooks/use-platform-tenants';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 
+// '' lets pos-api refund the way the sale was paid (payments.OriginalRefundChannel).
 const REFUND_CHANNELS = [
+  { value: '', label: 'Same as the sale' },
   { value: 'cash', label: 'Cash' },
   { value: 'mpesa', label: 'M-PESA' },
+  { value: 'mtn_momo_manual', label: 'MTN MoMo' },
+  { value: 'airtel_money_manual', label: 'Airtel Money' },
+  { value: 'card_manual', label: 'Card' },
+  { value: 'other_manual', label: 'Other' },
   { value: 'bank', label: 'Bank' },
   { value: 'store_credit', label: 'Store credit' },
   { value: 'offset_invoice', label: 'Offset invoice (credit sale)' },
@@ -112,7 +118,7 @@ export function TxnReversalTab({ tenantID }: { tenantID: string }) {
   const [selectedLines, setSelectedLines] = useState<Record<string, { checked: boolean; qty: number }>>({});
   const [scope, setScope] = useState<'full' | 'partial'>('partial');
   const [reason, setReason] = useState('');
-  const [refundChannel, setRefundChannel] = useState('cash');
+  const [refundChannel, setRefundChannel] = useState('');
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [result, setResult] = useState<Reversal | null>(null);
 
@@ -183,7 +189,7 @@ export function TxnReversalTab({ tenantID }: { tenantID: string }) {
           ? chosenLines.map((l) => ({ line_id: l.id, quantity: selectedLines[l.id]?.qty ?? l.quantity }))
           : undefined,
         reason: reason.trim(),
-        refund_channel: refundChannel,
+        refund_channel: refundChannel || undefined,
         idempotency_key: `ui-${selectedOrder.id}-${scope}-${Date.now()}`,
       }),
     onSuccess: (rev) => {

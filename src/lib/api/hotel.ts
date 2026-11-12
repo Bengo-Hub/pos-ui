@@ -65,7 +65,15 @@ export interface CheckInInput {
   /** Required when the outlet's booking policy is payment_timing=pay_upfront (immediate desk tenders only). */
   payment_method?: string;
   payment_reference?: string;
+  /** How the guest paid, required when payment_method is other_manual. */
+  payment_label?: string;
   payment_amount?: number;
+}
+
+/** How a check-in or booking was linked to the CRM (pos-api crmLinkNotice). */
+export interface CRMLinkNotice {
+  status: 'linked' | 'unlinked' | 'mismatch';
+  message?: string;
 }
 
 /** Editable subset for PATCH .../guest — see pos-api's editGuestInput/UpdateGuest doc comment:
@@ -92,6 +100,9 @@ export interface CheckInResult {
   guest: RoomGuest;
   payment_timing: 'settle_at_checkout' | 'pay_upfront' | 'per_day_split';
   payment_recorded: boolean;
+  /** Why a pay-upfront payment was not recorded, when it was not. */
+  payment_message?: string;
+  crm_link?: CRMLinkNotice;
 }
 
 export type PaymentTiming = 'settle_at_checkout' | 'pay_upfront' | 'per_day_split';
@@ -244,6 +255,8 @@ export interface FolioPayment {
   currency: string;
   method: string;
   reference?: string;
+  /** How the guest paid, for other_manual. */
+  label?: string;
   status: 'completed' | 'pending' | 'failed';
   created_at: string;
 }
@@ -269,8 +282,12 @@ export interface FolioSummary {
 
 export interface SettleFolioInput {
   amount: number;
-  method: string; // cash | card_manual | pdq | mpesa | mpesa_stk | card | wallet
+  // cash | card_manual | pdq | mpesa | mtn_momo_manual | airtel_money_manual | other_manual | mpesa_stk | card | wallet
+  method: string;
+  /** Transaction code: required for mpesa, mtn_momo_manual and airtel_money_manual (checked like the till). */
   reference?: string;
+  /** How the guest paid; required for other_manual. */
+  label?: string;
   checkout?: boolean;
 }
 
@@ -673,7 +690,7 @@ export const hotelApi = {
     apiClient.get<RoomBooking & { edges?: { guests?: RoomGuest[] } }>(`${hotelBase(tenantSlug)}/bookings/${id}`),
 
   createBooking: (tenantSlug: string, body: CreateRoomBookingInput) =>
-    apiClient.post<RoomBooking>(`${hotelBase(tenantSlug)}/bookings`, body),
+    apiClient.post<RoomBooking & { crm_link?: CRMLinkNotice }>(`${hotelBase(tenantSlug)}/bookings`, body),
 
   updateBooking: (tenantSlug: string, id: string, body: UpdateRoomBookingInput) =>
     apiClient.patch<BookingUpdateResult>(`${hotelBase(tenantSlug)}/bookings/${id}`, body),

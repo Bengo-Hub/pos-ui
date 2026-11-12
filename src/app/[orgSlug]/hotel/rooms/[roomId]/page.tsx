@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { useHotelRoom, useRoomFolio, useCheckIn, useCheckOut, useLateCheckout, usePostFolioCharge, useBookingPolicy, useUpdateRoomStatus } from '@/hooks/useHotel';
+import { useHotelRoom, useRoomFolio, useCheckIn, useCheckOut, useLateCheckout, usePostFolioCharge, useBookingPolicy, useUpdateRoomStatus, useUpdateGuest } from '@/hooks/useHotel';
+import type { CRMLinkNotice } from '@/lib/api/hotel';
+import { hotelTenderError } from '@/lib/pos/hotel-tenders';
 import { Card, CardContent } from '@/components/ui/base';
 import { cn, formatCurrency } from '@/lib/utils';
 import {
@@ -30,7 +32,7 @@ import { CheckoutPanel } from '@/components/pos/hotel/checkout-panel';
 import { DamageReportModal } from '@/components/pos/hotel/damage-report-modal';
 import { EditGuestModal } from '@/components/pos/hotel/edit-guest-modal';
 import { LostFoundModal } from '@/components/pos/hotel/lost-found-modal';
-import { HotelTenderPicker } from '@/components/pos/hotel/payment-method-picker';
+import { HotelTenderFields, HotelTenderPicker } from '@/components/pos/hotel/payment-method-picker';
 
 // Folio charge types a front-desk agent can post manually from this form. Mirrors the
 // subset of pos-api's RoomFolioItem.charge_type enum that isn't already posted by a
@@ -82,6 +84,7 @@ function RoomDetailPageInner() {
   const [showEditGuest, setShowEditGuest] = useState(false);
   const [checkInPaymentMethod, setCheckInPaymentMethod] = useState('');
   const [checkInPaymentReference, setCheckInPaymentReference] = useState('');
+  const [checkInPaymentLabel, setCheckInPaymentLabel] = useState('');
 
   function setField(key: keyof typeof checkInForm, value: string) {
     setCheckInForm((f) => ({ ...f, [key]: value }));
@@ -192,6 +195,31 @@ function RoomDetailPageInner() {
 
   const checkIn  = useCheckIn(roomId);
   const checkOut = useCheckOut(roomId);
+  // "Add to CRM": an empty guest edit links a guest the CRM did not link at check-in.
+  const linkGuest = useUpdateGuest(roomId);
+
+  // Alerts the desk when the guest is not linked to the CRM as expected (pos-api crm_link). A
+  // mismatch means the picked contact was not used and the guest is already on their own
+  // contact, so only the warning shows; Add to CRM is offered only for an unlinked guest.
+  function alertCRMLink(link?: CRMLinkNotice) {
+    if (!link || link.status === 'linked') return;
+    if (link.status === 'mismatch') {
+      toast.warning(link.message || 'The CRM contact picked does not match this guest.', { duration: 12_000 });
+      return;
+    }
+    toast.warning(link.message || 'The guest is not linked to the CRM.', {
+      duration: 12_000,
+      action: {
+        label: 'Add to CRM',
+        onClick: () => linkGuest.mutate({}, {
+          onSuccess: (g: any) => (g?.crm_contact_id
+            ? toast.success('Guest added to the CRM.')
+            : toast.warning('The CRM could not link the guest yet. Try again later.')),
+          onError: async (e) => toast.error(await apiErrorMessage(e, 'Could not add the guest to the CRM')),
+        }),
+      },
+    });
+  }
   const lateCheckout = useLateCheckout(roomId);
   const [showLate, setShowLate] = useState(false);
   const [lateForm, setLateForm] = useState({ surcharge_amount: 0, notes: '' });
@@ -250,6 +278,10 @@ function RoomDetailPageInner() {
       toast.error('This property requires payment at check-in — select a payment method');
       return;
     }
+    if (requiresUpfrontPayment) {
+      const tenderError = hotelTenderError(checkInPaymentMethod, checkInPaymentReference, checkInPaymentLabel);
+      if (tenderError) { toast.error(tenderError); return; }
+    }
 
     // Nights is always the authoritative value here — setNights/setArrival/setDeparture keep it
     // in sync with whichever field the staff actually edited, using calendar-day arithmetic (see
@@ -278,17 +310,24 @@ function RoomDetailPageInner() {
         expected_departure_at: f.expected_departure_at ? new Date(f.expected_departure_at).toISOString() : undefined,
         source: 'staff',
         ...(requiresUpfrontPayment
-          ? { payment_method: checkInPaymentMethod, payment_reference: checkInPaymentReference.trim() || undefined }
+          ? {
+              payment_method: checkInPaymentMethod,
+              payment_reference: checkInPaymentReference.trim() || undefined,
+              payment_label: checkInPaymentMethod === 'other_manual' ? checkInPaymentLabel.trim() : undefined,
+            }
           : {}),
       });
       if (res.payment_timing === 'pay_upfront' && !res.payment_recorded) {
-        toast.warning('Guest checked in, but the payment could not be recorded — collect it via Checkout & Settle Bill.');
+        // payment_message says why, e.g. the code was taken by another payment in the meantime.
+        toast.warning(res.payment_message || 'Guest checked in, but the payment could not be recorded — collect it via Checkout & Settle Bill.');
       } else {
         toast.success('Guest checked in');
       }
+      alertCRMLink(res.crm_link);
       setShowCheckIn(false);
       setCheckInPaymentMethod('');
       setCheckInPaymentReference('');
+      setCheckInPaymentLabel('');
       // Redirect straight to checkout so the desk can see/settle the bill (room charge already posted).
       setShowCheckout(true);
     } catch (e) {
@@ -417,16 +456,17 @@ function RoomDetailPageInner() {
                     <span className="text-sm font-bold text-primary tabular-nums">~{formatCurrency(estimatedCheckInTotal, currency)}</span>
                   )}
                 </div>
-                <HotelTenderPicker value={checkInPaymentMethod} onChange={setCheckInPaymentMethod} />
-                <label className="block">
-                  <span className="text-xs font-medium text-muted-foreground">Reference (optional — M-Pesa code / card approval)</span>
-                  <input
-                    value={checkInPaymentReference}
-                    onChange={(e) => setCheckInPaymentReference(e.target.value.toUpperCase())}
-                    placeholder="Code / approval"
-                    className="mt-1 w-full px-3 py-2 rounded-lg border border-input bg-background text-sm uppercase focus:outline-none focus:ring-2 focus:ring-ring"
-                  />
-                </label>
+                <HotelTenderPicker
+                  value={checkInPaymentMethod}
+                  onChange={(m) => { setCheckInPaymentMethod(m); setCheckInPaymentReference(''); setCheckInPaymentLabel(''); }}
+                />
+                <HotelTenderFields
+                  method={checkInPaymentMethod}
+                  reference={checkInPaymentReference}
+                  onReference={setCheckInPaymentReference}
+                  label={checkInPaymentLabel}
+                  onLabel={setCheckInPaymentLabel}
+                />
               </div>
             )}
 

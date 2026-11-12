@@ -14,7 +14,8 @@ import { cn } from '@/lib/utils';
 import { useFolioSummary, useSettleFolio } from '@/hooks/useHotel';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { toast } from 'sonner';
-import { HotelTenderPicker } from './payment-method-picker';
+import { HotelTenderFields, HotelTenderPicker } from './payment-method-picker';
+import { hotelTenderError } from '@/lib/pos/hotel-tenders';
 
 interface CheckoutPanelProps {
   roomId: string;
@@ -36,6 +37,7 @@ export function CheckoutPanel({ roomId, open, onClose, onCheckedOut, defaultChec
   const [method, setMethod] = useState('cash');
   const [amount, setAmount] = useState('');
   const [reference, setReference] = useState('');
+  const [label, setLabel] = useState('');
   const [checkoutOnSettle, setCheckoutOnSettle] = useState(defaultCheckoutOnSettle);
 
   const balance = summary?.balance ?? 0;
@@ -52,11 +54,18 @@ export function CheckoutPanel({ roomId, open, onClose, onCheckedOut, defaultChec
   const handleSettle = () => {
     const amt = parseFloat(amount) || 0;
     if (amt <= 0) { toast.error('Enter a payment amount.'); return; }
+    const tenderError = hotelTenderError(method, reference, label);
+    if (tenderError) { toast.error(tenderError); return; }
     settle.mutate(
-      { amount: amt, method, reference: reference.trim() || undefined, checkout: checkoutOnSettle },
+      {
+        amount: amt, method, reference: reference.trim() || undefined,
+        label: method === 'other_manual' ? label.trim() : undefined,
+        checkout: checkoutOnSettle,
+      },
       {
         onSuccess: (res) => {
           setReference('');
+          setLabel('');
           if (res.checked_out) {
             toast.success('Bill settled — guest checked out.');
             onCheckedOut?.();
@@ -129,7 +138,7 @@ export function CheckoutPanel({ roomId, open, onClose, onCheckedOut, defaultChec
                 <div className="space-y-1">
                   {summary.payments.map((p) => (
                     <div key={p.id} className="flex items-center justify-between text-xs rounded-lg bg-accent/30 px-3 py-1.5">
-                      <span className="capitalize font-medium">{p.method.replace(/_/g, ' ')}{p.reference ? ` · ${p.reference}` : ''}</span>
+                      <span className="capitalize font-medium">{p.method.replace(/_/g, ' ')}{p.label ? ` (${p.label})` : ''}{p.reference ? ` · ${p.reference}` : ''}</span>
                       <span className="flex items-center gap-2">
                         <span className="tabular-nums font-semibold">{fmt(p.amount)}</span>
                         <span className={cn('text-[9px] px-1.5 py-0.5 rounded-full font-bold',
@@ -147,19 +156,13 @@ export function CheckoutPanel({ roomId, open, onClose, onCheckedOut, defaultChec
             {balance > 0.009 && (
               <div className="rounded-xl border border-border p-4 space-y-3">
                 <p className="text-sm font-bold">Take Payment</p>
-                <HotelTenderPicker value={method} onChange={setMethod} />
-                <div className="grid grid-cols-2 gap-2">
-                  <label className="block">
-                    <span className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Amount</span>
-                    <input type="number" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)}
-                      className="mt-0.5 w-full bg-background border border-border rounded-lg py-2 px-3 text-base font-bold tabular-nums focus:ring-2 focus:ring-ring focus:outline-none" />
-                  </label>
-                  <label className="block">
-                    <span className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Ref (optional)</span>
-                    <input type="text" value={reference} onChange={(e) => setReference(e.target.value.toUpperCase())} placeholder="Code / approval"
-                      className="mt-0.5 w-full bg-background border border-border rounded-lg py-2 px-3 text-sm uppercase focus:ring-2 focus:ring-ring focus:outline-none" />
-                  </label>
-                </div>
+                <HotelTenderPicker value={method} onChange={(m) => { setMethod(m); setReference(''); setLabel(''); }} />
+                <label className="block">
+                  <span className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Amount</span>
+                  <input type="number" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)}
+                    className="mt-0.5 w-full bg-background border border-border rounded-lg py-2 px-3 text-base font-bold tabular-nums focus:ring-2 focus:ring-ring focus:outline-none" />
+                </label>
+                <HotelTenderFields method={method} reference={reference} onReference={setReference} label={label} onLabel={setLabel} />
                 <label className="flex items-center gap-2 text-xs font-medium">
                   <input type="checkbox" checked={checkoutOnSettle} onChange={(e) => setCheckoutOnSettle(e.target.checked)} className="accent-primary" />
                   Check guest out when the balance clears

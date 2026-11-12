@@ -13,7 +13,7 @@ import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { usePermissions, P } from '@/hooks/usePermissions';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
-import { allowedRefundChannels, defaultRefundChannel, refundChannelAdvisory, REFUND_CHANNELS, restockByPolicy } from '@/lib/returns-policy';
+import { allowedRefundChannels, defaultRefundChannel, refundChannelAdvisory, REFUND_CHANNELS, restockByPolicy, ROOM_FOLIO_HINT } from '@/lib/returns-policy';
 import { ExchangeLinesPicker, exchangeTotal, type ExchangeLine } from '@/components/pos/returns/exchange-lines-picker';
 import { SplitPaymentModal } from '@/components/pos/split-payment-modal';
 import { CustomerDetailsModal } from '@/components/pos/customers/customer-details-modal';
@@ -42,6 +42,8 @@ interface ReturnDetail {
   reason_code?: string;
   refund_amount: number;
   refund_channel?: string;
+  // Set by pos-api while the sale's room stay is open: the refund is credited to the room bill.
+  room_stay_open?: boolean;
   requested_by: string;
   approved_by?: string;
   treasury_refund_ref?: string;
@@ -192,21 +194,35 @@ export default function ReturnDetailPage() {
   const cfg = STATUS_CONFIG[ret.status] ?? { label: ret.status, className: 'bg-muted text-muted-foreground border-border' };
   const isPending = ret.status === 'pending';
   const isApproved = ret.status === 'approved';
-  const showChannelPicker = ret.return_type !== 'exchange';
   const isExchange = ret.return_type === 'exchange';
+  // Exchanges show the picker too: it is how a leftover (cheaper replacement) goes back.
+  const showChannelPicker = true;
   // Reason/on-account policy (mirrors pos-api returns_policy.go; the server enforces it).
   const onAccount = !!ret.metadata?.on_account_sale;
   const restrictOnAccount = posSettings?.restrict_credit_sale_refund_to_offset ?? true;
-  const channelOptions = allowedRefundChannels(ret.reason_code, onAccount, restrictOnAccount);
+  // The server stores the sale's original method on a new refund return, so the channel already
+  // on the return is offered even where the outlet no longer lists that network.
+  // A return with no channel stored (created before the original-method default, or an exchange)
+  // offers "Same as the sale": nothing is sent and the server refunds the sale's original way.
+  const sameAsSale = !ret.refund_channel && !onAccount && ret.return_type !== 'store_credit';
+  const channelOptions = [
+    ...(sameAsSale ? [{ value: '', label: 'Same as the sale', hint: 'Refund the way the customer paid for the sale.' }] : []),
+    ...allowedRefundChannels(ret.reason_code, onAccount, restrictOnAccount, {
+      settings: posSettings as any,
+      original: ret.refund_channel ?? null,
+    }).filter((c) => !isExchange || c.value !== 'store_credit'),
+  ];
   const channelAdvisory = refundChannelAdvisory(ret.reason_code, onAccount, restrictOnAccount);
-  const policyDefault = defaultRefundChannel(ret.return_type, onAccount);
+  const policyDefault = sameAsSale ? '' : defaultRefundChannel(ret.return_type, onAccount, ret.refund_channel ?? null);
   const validChannel = (v: string) => (channelOptions.some((c) => c.value === v) ? v : policyDefault);
-  // Effective channel: local override → existing channel on the return → policy default —
-  // always snapped back into the allowed set.
+  // Effective channel: local pick → existing channel on the return → policy default, always
+  // snapped back into the allowed set. Only a local pick is sent, so the server's own default
+  // applies otherwise.
   const effectiveChannel = validChannel(refundChannel || ret.refund_channel || policyDefault);
   const effectiveCompleteChannel = validChannel(completeChannel || ret.refund_channel || policyDefault);
   const restock = restockOverride ?? restockByPolicy(ret.reason_code, posSettings?.return_no_restock_reasons);
-  const channelLabel = (v: string) => REFUND_CHANNELS.find((c) => c.value === v)?.label ?? v.replace('_', ' ');
+  const channelLabel = (v: string) =>
+    v === '' ? 'the sale’s original method' : REFUND_CHANNELS.find((c) => c.value === v)?.label ?? v.replace('_', ' ');
   // Stage RBAC: managers approve/reject; a cashier/manager at the till completes an approved return.
   const canApprove = canManageOrders;
   const canComplete = canAny([P.ORDERS_CHANGE_OWN, P.ORDERS_CHANGE, P.ORDERS_MANAGE]);
@@ -345,6 +361,9 @@ export default function ReturnDetailPage() {
                   <span>{channelOptions.find((c) => c.value === effectiveChannel)?.hint}</span>
                 </p>
               )}
+              {ret.room_stay_open && (
+                <p className="text-[11px] text-sky-700 bg-sky-50 border border-sky-200 rounded-lg px-3 py-2 mt-2">{ROOM_FOLIO_HINT}</p>
+              )}
               {channelAdvisory && (
                 <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-2">{channelAdvisory}</p>
               )}
@@ -373,7 +392,7 @@ export default function ReturnDetailPage() {
               Reject
             </button>
             <button
-              onClick={() => approve.mutate({ action: 'approve', notes, ...(showChannelPicker ? { refund_channel: effectiveChannel } : {}) }, {
+              onClick={() => approve.mutate({ action: 'approve', notes, ...(refundChannel && effectiveChannel ? { refund_channel: effectiveChannel } : {}) }, {
                 onSuccess: () => toast.success('Return approved — ready to complete'),
                 onError: async (e) => toast.error(await apiErrorMessage(e, 'Failed to approve return')),
               })}
@@ -423,7 +442,7 @@ export default function ReturnDetailPage() {
           )}
           {showChannelPicker && (
             <div>
-              <label className="text-xs font-semibold text-muted-foreground">Confirm Refund Method</label>
+              <label className="text-xs font-semibold text-muted-foreground">{isExchange ? 'Leftover Refund Method (if the replacement is cheaper)' : 'Confirm Refund Method'}</label>
               <select
                 value={effectiveCompleteChannel}
                 onChange={(e) => setCompleteChannel(e.target.value)}
@@ -436,6 +455,9 @@ export default function ReturnDetailPage() {
                   <Info className="h-3.5 w-3.5 shrink-0 mt-0.5" />
                   <span>{channelOptions.find((c) => c.value === effectiveCompleteChannel)?.hint}</span>
                 </p>
+              )}
+              {ret.room_stay_open && (
+                <p className="text-[11px] text-sky-700 bg-sky-50 border border-sky-200 rounded-lg px-3 py-2 mt-2">{ROOM_FOLIO_HINT}</p>
               )}
               {channelAdvisory && (
                 <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-2">{channelAdvisory}</p>
@@ -473,7 +495,7 @@ export default function ReturnDetailPage() {
               {
                 notes: completeNotes,
                 restock,
-                ...(showChannelPicker ? { refund_channel: effectiveCompleteChannel } : {}),
+                ...(completeChannel && effectiveCompleteChannel ? { refund_channel: effectiveCompleteChannel } : {}),
                 ...(isExchange
                   ? {
                       exchange_lines: exchangeLines.map((l) => ({

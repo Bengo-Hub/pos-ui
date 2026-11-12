@@ -23,6 +23,17 @@ export interface RefundChannelOption {
 export const REFUND_CHANNELS: RefundChannelOption[] = [
   { value: 'cash', label: 'Cash', hint: 'Hand the money back to the customer in cash.' },
   { value: 'mpesa', label: 'M-Pesa', hint: 'Send the money back to the customer via M-Pesa.' },
+  // Offered only when the sale was paid that way (see ORIGINAL_ONLY_CHANNELS).
+  { value: 'mpesa_manual', label: 'M-Pesa (Code)', hint: 'Send the money back by M-Pesa from the till or paybill the customer paid into.' },
+  {
+    value: 'room_folio',
+    label: 'Room folio',
+    hint: 'Take the amount off the guest’s room bill. While the stay is open the server always credits the folio; after checkout it refunds by the method chosen here.',
+  },
+  { value: 'mtn_momo_manual', label: 'MTN MoMo', hint: 'Send the money back to the customer’s MTN MoMo number.' },
+  { value: 'airtel_money_manual', label: 'Airtel Money', hint: 'Send the money back to the customer’s Airtel Money number.' },
+  { value: 'card_manual', label: 'Card', hint: 'Refund the money to the card the customer paid with, on the card machine.' },
+  { value: 'other_manual', label: 'Other', hint: 'Give the money back the same other way the customer paid (for example a voucher).' },
   { value: 'bank', label: 'Bank', hint: 'Send the money back to the customer’s bank account.' },
   { value: 'cheque', label: 'Cheque', hint: 'Give the money back by writing the customer a cheque.' },
   {
@@ -39,9 +50,109 @@ export const REFUND_CHANNELS: RefundChannelOption[] = [
 
 export const STORE_CREDIT_BLOCKED_REASONS = new Set(['defective', 'damaged', 'expired', 'wrong_item']);
 
+/**
+ * The refund channel that sends money back the way it came in (mirrors pos-api
+ * payments.RefundChannelForMethod). Treasury first uses the tenant's account that defaults to the
+ * channel's method, else books M-Pesa, MTN and Airtel refunds against the mobile money float, bank
+ * and cheque against the bank, and cash, Other and card against cash. A room-charged sale is
+ * credited to the open stay's folio.
+ */
+export function refundChannelForMethod(method?: string | null): string {
+  const m = (method ?? '').trim().toLowerCase();
+  switch (m) {
+    case 'mpesa_manual': case 'manual':
+      return 'mpesa_manual';
+    case 'mpesa': case 'mpesa_stk': case 'mpesa_c2b':
+      return 'mpesa';
+    case 'room_charge':
+      return 'room_folio';
+    case 'mtn_momo_manual': case 'airtel_money_manual': case 'other_manual':
+      return m;
+    case 'card_manual': case 'pdq': case 'card_terminal': case 'card':
+      return 'card_manual';
+    case 'bank_transfer': case 'bank':
+      return 'bank';
+    case 'cheque':
+      return 'cheque';
+    default:
+      return 'cash';
+  }
+}
+
+const NON_MONEY_TENDERS = new Set(['on_account', 'customer_credit', 'exchange_credit', 'complimentary', 'loyalty_points', 'loyalty']);
+// room_charge is not skipped: a room-charged sale refunds to the room folio (pos-api RefundChannelRoomFolio).
+
+export interface PaymentForRefund {
+  status?: string;
+  amount?: number;
+  tender_type?: string;
+  payment_data?: { method?: string } | null;
+}
+
+/**
+ * The sale's original refund channel: the completed money tender that carried the most (mirrors
+ * pos-api payments.OriginalRefundChannel). null when the sale has no completed money payment.
+ */
+export function originalRefundChannel(payments?: PaymentForRefund[] | null): string | null {
+  const totals = new Map<string, number>();
+  for (const p of payments ?? []) {
+    if (p.status !== 'completed') continue;
+    const method = ((p.payment_data?.method || p.tender_type) ?? '').trim().toLowerCase();
+    if (!method || NON_MONEY_TENDERS.has(method)) continue;
+    const ch = refundChannelForMethod(method);
+    totals.set(ch, (totals.get(ch) ?? 0) + (Number(p.amount) || 0));
+  }
+  let best: string | null = null;
+  let bestAmt = 0;
+  for (const [ch, amt] of totals) {
+    if (amt > bestAmt + 0.005) { best = ch; bestAmt = amt; }
+  }
+  return best;
+}
+
+export interface RefundChannelContext {
+  /** The outlet's payment settings: MTN/Airtel refunds show only where the outlet has that number. */
+  settings?: { mtn_momo_number?: string | null; airtel_money_number?: string | null } | null;
+  /** The sale's original channel, always offered so a refund can go back the way it was paid. */
+  original?: string | null;
+}
+
+/**
+ * Shown on the return screens for a room-charged sale: while the stay is open the server credits
+ * the refund to the room bill whatever method is picked (up to what the bill still owes; the rest
+ * goes by the picked method).
+ */
+export const ROOM_FOLIO_HINT = 'Credited to the guest’s room bill while the stay is open. Any amount the bill no longer owes is refunded by the method picked here.';
+
+/** Channels that only make sense when the sale was paid that way. */
+const ORIGINAL_ONLY_CHANNELS = new Set(['mpesa_manual', 'room_folio']);
+
+/**
+ * The refund_channel to send: the cashier's pick when there is one, else the sale's original
+ * method once it is known, else nothing so the server applies its own default.
+ */
+export function refundChannelToSend(picked: string, original?: string | null): string | undefined {
+  return picked || original || undefined;
+}
+
+function networkOffered(value: string, ctx?: RefundChannelContext): boolean {
+  if (ORIGINAL_ONLY_CHANNELS.has(value)) return ctx?.original === value;
+  if (!ctx) return true;
+  if (value !== 'mtn_momo_manual' && value !== 'airtel_money_manual') return true;
+  if (ctx.original === value) return true;
+  const n = value === 'mtn_momo_manual' ? ctx.settings?.mtn_momo_number : ctx.settings?.airtel_money_number;
+  return typeof n === 'string' && n.trim() !== '';
+}
+
 /** Channels the server will accept for this (reason, on-account) combination. */
-export function allowedRefundChannels(reasonCode?: string, onAccount?: boolean, restrictOnAccount = true): RefundChannelOption[] {
+export function allowedRefundChannels(
+  reasonCode?: string,
+  onAccount?: boolean,
+  restrictOnAccount = true,
+  ctx?: RefundChannelContext,
+): RefundChannelOption[] {
   return REFUND_CHANNELS.filter((ch) => {
+    if (!networkOffered(ch.value, ctx)) return false;
     // An on-account (unpaid credit) sale can ONLY be settled by offsetting the balance — never
     // store credit, which would stack a new credit on top of the still-open debt instead of
     // reducing it (see returns_policy.go validateRefundChannel; matches the server 1:1 so the
@@ -69,11 +180,14 @@ export function refundChannelAdvisory(reasonCode?: string, onAccount?: boolean, 
   return null;
 }
 
-/** Default channel per the server's defaulting (returns_policy.go defaultRefundChannel). */
-export function defaultRefundChannel(returnType: string, onAccount?: boolean): string {
+/**
+ * Default channel per the server's defaulting: offset for an on-account sale, store credit for a
+ * store-credit return, otherwise the sale's original method when known (cash when not).
+ */
+export function defaultRefundChannel(returnType: string, onAccount?: boolean, original?: string | null): string {
   if (onAccount) return 'offset_invoice';
   if (returnType === 'store_credit') return 'store_credit';
-  return 'cash';
+  return original || 'cash';
 }
 
 // Restock policy (mirrors pos-api returns/restock_policy.go): goods returned for these reasons

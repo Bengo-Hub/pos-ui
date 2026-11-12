@@ -11,7 +11,7 @@ import { apiClient } from '@/lib/api/client';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { useEffectiveOnline } from '@/lib/connectivity';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
-import { allowedRefundChannels, defaultRefundChannel, refundChannelAdvisory, restockByPolicy, RETURN_REASON_OPTIONS } from '@/lib/returns-policy';
+import { allowedRefundChannels, defaultRefundChannel, originalRefundChannel, refundChannelAdvisory, refundChannelToSend, restockByPolicy, RETURN_REASON_OPTIONS, ROOM_FOLIO_HINT } from '@/lib/returns-policy';
 import { cn, formatCurrency } from '@/lib/utils';
 import { orderDisplayDate } from '@/components/pos/sales/sales-shared';
 import { useAuthStore } from '@/store/auth';
@@ -146,7 +146,7 @@ export function InitiateReturnModal({
   const [reasonNotes, setReasonNotes] = useState('');
   const reasonLabel = RETURN_REASON_OPTIONS.find((r) => r.value === reasonCode)?.label ?? reasonCode;
   const reason = reasonNotes.trim() ? `${reasonLabel}: ${reasonNotes.trim()}` : reasonLabel;
-  const [refundChannel, setRefundChannel] = useState('cash');
+  const [refundChannel, setRefundChannel] = useState('');
   const [returnDate, setReturnDate] = useState(() => new Date().toISOString().slice(0, 10));
   // Exchange top-up: amount to collect from the customer when the replacement is pricier than the
   // returned goods. Recorded in the return reason so the cashier/accounting has a trail.
@@ -248,15 +248,30 @@ export function InitiateReturnModal({
   const onAccount = ((orderPayments as any)?.data ?? []).some(
     (p: any) => p.tender_type === 'on_account' && p.status === 'completed',
   );
-  const channelOptions = allowedRefundChannels(reasonCode || undefined, onAccount, restrictOnAccount);
+  // Refunds go back the way the sale was paid (pos-api payments.OriginalRefundChannel).
+  const originalChannel = originalRefundChannel((orderPayments as any)?.data);
+  const channelOptions = allowedRefundChannels(reasonCode || undefined, onAccount, restrictOnAccount, {
+    settings: posSettings as any,
+    original: originalChannel,
+  }).filter((c) => returnType !== 'exchange' || c.value !== 'store_credit');
   const channelAdvisory = refundChannelAdvisory(reasonCode || undefined, onAccount, restrictOnAccount);
-  // Keep the selection valid when the reason/on-account context narrows the options.
+  // refundChannel holds only the cashier's own pick ('' until they choose). Until then the picker
+  // shows the server's default (the sale's original method once its payments load), so a late
+  // payments response never overwrites a pick.
+  const defaultChannel = defaultRefundChannel(returnType, onAccount, originalChannel);
+  const shownChannel = refundChannel || defaultChannel;
+  // Drop a pick the reason/on-account context no longer allows, falling back to the default.
   useEffect(() => {
-    if (returnType !== 'exchange' && !channelOptions.some((c) => c.value === refundChannel)) {
-      setRefundChannel(defaultRefundChannel(returnType, onAccount));
-    }
+    if (refundChannel && !channelOptions.some((c) => c.value === refundChannel)) setRefundChannel('');
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reasonCode, onAccount, returnType, restrictOnAccount]);
+  }, [reasonCode, onAccount, returnType, restrictOnAccount, originalChannel]);
+  useEffect(() => { setRefundChannel(''); }, [selectedOrder?.id]);
+  // Sent only when it is the cashier's pick or the known original method; otherwise the server
+  // applies its own default (original method, store credit or offset). An exchange sends only a
+  // pick: its leftover defaults to the original method at completion.
+  const channelToSend = returnType === 'exchange' || onAccount
+    ? (refundChannel || undefined)
+    : refundChannelToSend(refundChannel, originalChannel);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -283,7 +298,7 @@ export function InitiateReturnModal({
     // The API still stores a distinct "store_credit" return_type for reporting — derive it from
     // the Refund Method choice rather than a separate Return Type button (see the RETURN_TYPES
     // comment above for why the two were merged).
-    const effectiveReturnType = returnType === 'refund' && refundChannel === 'store_credit' ? 'store_credit' : returnType;
+    const effectiveReturnType = returnType === 'refund' && shownChannel === 'store_credit' ? 'store_credit' : returnType;
     mutate(
       {
         orderId: selectedOrder.id,
@@ -291,8 +306,9 @@ export function InitiateReturnModal({
           return_type: effectiveReturnType,
           reason: reasonWithTopUp,
           ...(reasonCode ? { reason_code: reasonCode } : {}),
-          // Exchanges settle in-kind (no cash refund channel); refunds/store-credit carry the channel.
-          ...(returnType === 'exchange' ? {} : { refund_channel: refundChannel }),
+          // The cashier's pick or the known original method; nothing otherwise, so the server's
+          // default applies (see channelToSend). An exchange's channel is for its leftover only.
+          ...(channelToSend ? { refund_channel: channelToSend } : {}),
           ...(returnDate ? { return_date: returnDate } : {}),
           lines: returnLines,
         },
@@ -468,11 +484,14 @@ export function InitiateReturnModal({
             </div>
           </div>
 
-          {/* Refund method / channel — for refund & store-credit returns. Options are
-              narrowed by the reason + on-account policy (server enforces the same). */}
-          {returnType !== 'exchange' && (
+          {/* Refund method / channel. Options are narrowed by the reason + on-account policy
+              (server enforces the same). For an exchange it is how a leftover (a cheaper
+              replacement) goes back, so a cashier who hands back notes can record cash. */}
+          {(
             <div>
-              <label className="text-xs font-semibold text-muted-foreground">Refund Method</label>
+              <label className="text-xs font-semibold text-muted-foreground">
+                {returnType === 'exchange' ? 'Leftover Refund Method' : 'Refund Method'}
+              </label>
               <div className="flex flex-wrap gap-2 mt-1">
                 {channelOptions.map((ch) => (
                   <button
@@ -482,7 +501,7 @@ export function InitiateReturnModal({
                     title={ch.hint}
                     className={cn(
                       'px-3 py-2 rounded-xl text-xs font-semibold border transition-colors',
-                      refundChannel === ch.value
+                      shownChannel === ch.value
                         ? 'bg-primary text-primary-foreground border-primary'
                         : 'border-border text-muted-foreground hover:text-foreground'
                     )}
@@ -491,9 +510,14 @@ export function InitiateReturnModal({
                   </button>
                 ))}
               </div>
-              {channelOptions.find((c) => c.value === refundChannel)?.hint && (
+              {originalChannel === 'room_folio' && (
+                <p className="text-[11px] text-sky-700 bg-sky-50 border border-sky-200 rounded-lg px-3 py-2 mt-2">
+                  {ROOM_FOLIO_HINT}
+                </p>
+              )}
+              {channelOptions.find((c) => c.value === shownChannel)?.hint && (
                 <p className="text-[11px] text-muted-foreground mt-1.5">
-                  {channelOptions.find((c) => c.value === refundChannel)?.hint}
+                  {channelOptions.find((c) => c.value === shownChannel)?.hint}
                 </p>
               )}
               {channelAdvisory && (
