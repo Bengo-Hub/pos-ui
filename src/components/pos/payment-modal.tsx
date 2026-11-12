@@ -40,7 +40,7 @@ import { hotelApi, type Room } from '@/lib/api/hotel';
 import { useRedeemToOrder } from '@/hooks/useLoyalty';
 import {
   canRedeemLoyaltyFor, loyaltyPointsToRedeem, payheroSublabel, isValidManualCode, isValidPaymentLabel,
-  normalizeManualCode, manualCodePayToLine, MANUAL_CODE_TENDERS, OTHER_REF_MAX, PAYMENT_LABEL_MAX,
+  normalizeManualCode, manualCodePayToLine, outletOffersNetwork, MANUAL_CODE_TENDERS, OTHER_REF_MAX, PAYMENT_LABEL_MAX,
   type LoyaltyRedeemInfo, type ManualCodeMethod,
 } from '@/lib/pos/terminal-actions';
 import { useSubscription } from '@/hooks/use-subscription';
@@ -556,26 +556,31 @@ export function POSPaymentModal({
                       loading={false}
                       onClick={() => openManualStep('mpesa_manual')}
                     />
-                    <PayBadge
-                      icon={<Smartphone className="h-4 w-4" />}
-                      color="text-yellow-700"
-                      bg="bg-yellow-400/15"
-                      label="MTN MoMo Code"
-                      sub="Enter MTN code"
-                      disabled={false}
-                      loading={false}
-                      onClick={() => openManualStep('mtn_momo_manual')}
-                    />
-                    <PayBadge
-                      icon={<Smartphone className="h-4 w-4" />}
-                      color="text-red-600"
-                      bg="bg-red-500/10"
-                      label="Airtel Money Code"
-                      sub="Enter Airtel code"
-                      disabled={false}
-                      loading={false}
-                      onClick={() => openManualStep('airtel_money_manual')}
-                    />
+                    {/* Only where the outlet has that network's number set (owner, 2026-11-12). */}
+                    {outletOffersNetwork('mtn_momo_manual', posSettings) && (
+                      <PayBadge
+                        icon={<Smartphone className="h-4 w-4" />}
+                        color="text-yellow-700"
+                        bg="bg-yellow-400/15"
+                        label="MTN MoMo Code"
+                        sub="Enter MTN code"
+                        disabled={false}
+                        loading={false}
+                        onClick={() => openManualStep('mtn_momo_manual')}
+                      />
+                    )}
+                    {outletOffersNetwork('airtel_money_manual', posSettings) && (
+                      <PayBadge
+                        icon={<Smartphone className="h-4 w-4" />}
+                        color="text-red-600"
+                        bg="bg-red-500/10"
+                        label="Airtel Money Code"
+                        sub="Enter Airtel code"
+                        disabled={false}
+                        loading={false}
+                        onClick={() => openManualStep('airtel_money_manual')}
+                      />
+                    )}
                     <PayBadge
                       icon={<Banknote className="h-4 w-4" />}
                       color="text-slate-600"

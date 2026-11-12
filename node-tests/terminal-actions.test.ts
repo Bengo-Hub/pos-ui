@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   paymentActionsFor, tenderMethodFor, isImmediateTender, isValidManualCode, isValidPaymentLabel,
-  manualCodePayToLine,
+  manualCodePayToLine, withOutletNetworks, outletOffersNetwork,
 } from '../src/lib/pos/terminal-actions.ts';
 
 const keys = (g: Parameters<typeof paymentActionsFor>[1], opts: Parameters<typeof paymentActionsFor>[2] = {}) =>
@@ -75,4 +75,22 @@ test('capture step shows the outlet MTN or Airtel number when set', () => {
   assert.equal(manualCodePayToLine('airtel_money_manual', { airtel_money_number: '0752000000' }), 'Customer pays Airtel 0752000000');
   assert.equal(manualCodePayToLine('mtn_momo_manual', {}), null);
   assert.equal(manualCodePayToLine('mpesa_manual', { mtn_momo_number: '0772000000' }), null);
+});
+
+test('MTN and Airtel codes show only where the outlet has that number', () => {
+  const all = paymentActionsFor('retail', {}, {});
+  const keys = (s: Record<string, string | null | undefined> | null | undefined) =>
+    withOutletNetworks(all, s).map((a) => a.key);
+  // Kenya-only outlet (no numbers) and settings not loaded yet: M-Pesa Code only.
+  for (const s of [{}, null, undefined, { mtn_momo_number: '  ', airtel_money_number: '' }]) {
+    const k = keys(s);
+    assert.ok(k.includes('mpesa_code'));
+    assert.ok(!k.includes('mtn_momo_code'));
+    assert.ok(!k.includes('airtel_money_code'));
+  }
+  assert.ok(keys({ mtn_momo_number: '0772000000' }).includes('mtn_momo_code'));
+  assert.ok(!keys({ mtn_momo_number: '0772000000' }).includes('airtel_money_code'));
+  assert.ok(keys({ airtel_money_number: '0752000000' }).includes('airtel_money_code'));
+  assert.equal(outletOffersNetwork('mtn_momo_manual', { mtn_momo_number: '0772000000' }), true);
+  assert.equal(outletOffersNetwork('airtel_money_manual', { mtn_momo_number: '0772000000' }), false);
 });

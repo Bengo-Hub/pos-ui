@@ -218,6 +218,31 @@ export interface GatewayFlags {
 }
 
 /**
+ * MTN MoMo and Airtel Money codes are offered only where the outlet has that network's number in
+ * its payment settings (owner decision 2026-11-12); M-Pesa Code always shows. Settings that have
+ * not loaded yet hide them too, so a Kenya-only till never flashes networks it does not take.
+ */
+export function outletOffersNetwork(
+  method: 'mtn_momo_manual' | 'airtel_money_manual',
+  settings?: { mtn_momo_number?: string | null; airtel_money_number?: string | null } | null,
+): boolean {
+  const n = method === 'mtn_momo_manual' ? settings?.mtn_momo_number : settings?.airtel_money_number;
+  return typeof n === 'string' && n.trim() !== '';
+}
+
+/** Drops the MTN/Airtel code tenders the outlet does not offer. */
+export function withOutletNetworks<T extends { key: TenderKey }>(
+  actions: T[],
+  settings?: { mtn_momo_number?: string | null; airtel_money_number?: string | null } | null,
+): T[] {
+  return actions.filter((a) => {
+    if (a.key === 'mtn_momo_code') return outletOffersNetwork('mtn_momo_manual', settings);
+    if (a.key === 'airtel_money_code') return outletOffersNetwork('airtel_money_manual', settings);
+    return true;
+  });
+}
+
+/**
  * Ordered tender list for a profile. Cash + Card(PDQ) + Multiple Pay + M-Pesa + Credit are the retail
  * core; hospitality adds Room charge; delivery-capable outlets get COD. Gateway-gated tenders are
  * filtered out when the tenant hasn't enabled that gateway (and when offline).

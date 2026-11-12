@@ -39,7 +39,7 @@ import type { TerminalProfile } from '@/lib/use-case-config';
 import {
   paymentActionsFor, tenderMethodFor, allowedMethodsFor, isImmediateTender, customerCreditAction,
   hasRedeemableLoyalty, canRedeemLoyaltyFor, loyaltyPointsToRedeem, loyaltyRedeemAction,
-  isValidManualCode, isValidPaymentLabel, normalizeManualCode, manualCodePayToLine, MANUAL_CODE_TENDERS,
+  isValidManualCode, isValidPaymentLabel, normalizeManualCode, manualCodePayToLine, MANUAL_CODE_TENDERS, withOutletNetworks,
   OTHER_REF_MAX, PAYMENT_LABEL_MAX,
   type TenderKey, type TenderTone, type LoyaltyRedeemInfo, type ManualCodeMethod,
 } from '@/lib/pos/terminal-actions';
@@ -231,8 +231,10 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
   const canRedeemLoyalty = hasCustomer && isOnline && hasRedeemableLoyalty(loyaltyAccount);
   const redeemToOrder = useRedeemToOrder(loyaltyAccount?.accountId ?? '');
   const actions = useMemo(() => {
-    const base = paymentActionsFor(profile, gateways, { isHospitality: canChargeRoom, isOnline, allowCOD })
-      .filter((a) => a.key !== 'on_account' || canCreditSale);
+    const base = withOutletNetworks(
+      paymentActionsFor(profile, gateways, { isHospitality: canChargeRoom, isOnline, allowCOD }),
+      posSettings,
+    ).filter((a) => a.key !== 'on_account' || canCreditSale);
     const extras = [];
     if (hasCustomerCredit) extras.push(customerCreditAction(customerCreditAvailable, currency));
     if (canRedeemLoyalty && loyaltyAccount) extras.push(loyaltyRedeemAction(loyaltyAccount, currency));
@@ -240,7 +242,7 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
     const splitIdx = base.findIndex((a) => a.key === 'split');
     if (splitIdx === -1) return [...base, ...extras];
     return [...base.slice(0, splitIdx), ...extras, ...base.slice(splitIdx)];
-  }, [profile, gateways, canChargeRoom, isOnline, allowCOD, canCreditSale, hasCustomerCredit, customerCreditAvailable, canRedeemLoyalty, loyaltyAccount, currency]);
+  }, [profile, gateways, canChargeRoom, isOnline, allowCOD, canCreditSale, hasCustomerCredit, customerCreditAvailable, canRedeemLoyalty, loyaltyAccount, currency, posSettings]);
   // Back-office profiles (retail/services) get Draft + Quotation; hospitality/QSR do not.
   // Quotation is additionally manager-gated (canPrivileged).
   const isBackOffice = profile === 'retail' || profile === 'services';
