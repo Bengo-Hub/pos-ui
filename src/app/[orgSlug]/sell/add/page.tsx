@@ -300,7 +300,7 @@ export default function AddSalePage() {
   } = useReceiptAfterSale(tenantId, authUser?.fullName || authUser?.email);
   // Shared-terminal auto-logout after a completed sale (auto_logout_after_sale policy) — mirrors
   // terminal-context's identically-named memo/callback verbatim. Add Sale is a real, nav-exposed
-  // sale-completion surface for retail/pharmacy/services outlets (see nav-config.ts's "Add Sale"
+  // sale-completion surface for retail/services outlets (see nav-config.ts's "Add Sale"
   // entry, only hidden for hospitality/quick_service), so it must honor the same policy the main
   // terminal's handleReceiptClose does — closeReceipt alone (wired below before this fix) never
   // checked the setting at all, so a cashier ringing up sales here was never logged out even with
@@ -848,7 +848,7 @@ export default function AddSalePage() {
     prevHappyHourDiscountRef.current = happyHourDiscount;
   }, [lines.length, happyHourDiscount, happyHour.promoName]);
 
-  const { roundOff, total } = applyRoundOff(subtotal + tax - discount - happyHourDiscount + shippingAmount);
+  const { roundOff, total } = applyRoundOff(subtotal + tax - discount - happyHourDiscount + shippingAmount, { mode: posSettings?.round_off, step: posSettings?.round_off_step });
 
   // Per-line request shape — shared by buildPayload (the whole cart) and the edit_inplace
   // addendum save (just the added/increased lines), so both send identical tax/price-guardrail
@@ -1400,7 +1400,7 @@ export default function AddSalePage() {
                       )}
                       <td className="px-3 py-3 text-right">
                         {/* Pricing policy (2026-07-18): cashiers may edit the price too when the
-                            outlet allows selling above base (retail/pharmacy up-sell default) —
+                            outlet allows selling above base (retail up-sell default) —
                             a below-preset entry triggers the manager ApprovalDialog at save via
                             the server's 422 approval_required (price.override). */}
                         <InlinePriceCell

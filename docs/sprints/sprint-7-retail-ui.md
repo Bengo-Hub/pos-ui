@@ -115,7 +115,7 @@ Not implemented:
 
 | Use Case | Business Types |
 |----------|---------------|
-| Barcode scan → add to cart | Supermarket, hardware, pharmacy |
+| Barcode scan → add to cart | Supermarket, hardware |
 | Weight entry from scale | Produce, deli, bulk goods |
 | Serial number capture | Electronics, phones, tools |
 | Layaway plan creation | Hardware, furniture, electronics |

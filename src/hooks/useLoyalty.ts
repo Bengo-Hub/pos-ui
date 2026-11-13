@@ -79,7 +79,7 @@ function normalizeProgram(p: LoyaltyProgram): LoyaltyProgram {
 }
 
 // `enabled` lets callers skip the fetch when the outlet's use-case can never satisfy pos-api's
-// RequireUseCase("retail","services","pharmacy") gate on /loyalty/* (hospitality/quick_service
+// RequireUseCase("retail","services") gate on /loyalty/* (hospitality/quick_service
 // outlets are deliberately excluded — loyalty is a retail/services concept there) — calling it
 // anyway is a guaranteed, silently-swallowed 403 on every terminal load for those outlets.
 export function useLoyaltyPrograms(enabled = true) {

@@ -106,9 +106,9 @@ export interface MenuItem {
    *  columns (cost stays masked behind an eye toggle). */
   costPrice?: number;
   category: string;
-  brandName?: string;       // ItemBrand name (retail/pharmacy) — for the Brands tab
+  brandName?: string;       // ItemBrand name (retail) — for the Brands tab
   brandCode?: string;
-  manufacturer?: string;    // shown as subtext on retail/pharmacy item cards
+  manufacturer?: string;    // shown as subtext on retail item cards
   model?: string;
   hasVariants?: boolean;    // when true, tapping opens the variant picker before adding
   variants?: ItemVariant[];
@@ -118,7 +118,7 @@ export interface MenuItem {
   requiresAgeVerification?: boolean;
   trackSerialNumber?: boolean;
   modifierGroups?: ModifierGroup[];
-  /** On-hand stock for the StockBadge / out-of-stock override (retail/pharmacy). Only present
+  /** On-hand stock for the StockBadge / out-of-stock override (retail). Only present
    *  when the backend catalog list projects stock_quantity — see integrator note. */
   stockQuantity?: number;
   /** Stock unit abbreviation (ml/kg/pc/...) — gates whether the cart qty input accepts a
@@ -204,7 +204,7 @@ export interface TerminalContextValue {
   searchQuery: string;
   displayMode: DisplayMode;
   setDisplayMode: (m: DisplayMode) => void;
-  // Browse by Category or Brand (Brands apply to retail/pharmacy only — gated by cfg.showBrandGrid).
+  // Browse by Category or Brand (Brands apply to retail only — gated by cfg.showBrandGrid).
   pickerMode: 'category' | 'brand';
   setPickerMode: (m: 'category' | 'brand') => void;
   activeBrand: string;
@@ -505,11 +505,11 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
   const loyaltyUseCaseOk = cfg.profile === 'retail' || cfg.profile === 'services';
   const { hasFeature } = useSubscription();
   const scanInputRef = useRef<HTMLInputElement>(null);
-  // Retail/pharmacy: focus the scan field on load for fast keyboard-first checkout.
+  // Retail: focus the scan field on load for fast keyboard-first checkout.
   useEffect(() => {
     if (cfg.barcodeFirst) scanInputRef.current?.focus();
   }, [cfg.barcodeFirst]);
-  // Read the configured scale device once (retail/pharmacy weighed-goods checkout).
+  // Read the configured scale device once (retail weighed-goods checkout).
   useEffect(() => {
     if (cfg.showScale && typeof window !== 'undefined') {
       setScaleDeviceId(localStorage.getItem('pos_scale_device_id') ?? '');
@@ -542,9 +542,9 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
   // Bumped by clearCart to remount the LoyaltyPanel (whose picker selection is component-local),
   // resetting the attached customer back to the Walk-in default after every completed sale.
   const [customerResetSeq, setCustomerResetSeq] = useState(0);
-  // Retail/pharmacy hardware scale (gated on cfg.showScale + a configured pos_scale_device_id).
+  // Retail hardware scale (gated on cfg.showScale + a configured pos_scale_device_id).
   const [scaleDeviceId, setScaleDeviceId] = useState('');
-  // Out-of-stock add interception → manager PIN override (retail/pharmacy, gated on cfg.managerOverride).
+  // Out-of-stock add interception → manager PIN override (retail, gated on cfg.managerOverride).
   const [pendingOverride, setPendingOverride] = useState<MenuItem | null>(null);
   // Item ids approved for oversell this order — checked (alongside inCartQty > 0, so a removed-
   // then-re-added item still re-prompts) by handleItemTap/incrementCartLine/setLineQuantity to
@@ -567,7 +567,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
   const { data: kdsStationsData } = useKDSStations(kdsUseCaseOk);
   // Active loyalty program — used to tell the cashier how many points the customer just earned,
   // and (paired with loyaltyAccountData above) to gate/settle the "Redeem Points" tender. Loyalty
-  // is deliberately a retail/services/pharmacy concept (see loyaltyUseCaseOk above) — hospitality/
+  // is deliberately a retail/services concept (see loyaltyUseCaseOk above) — hospitality/
   // quick_service outlets settle per table/bill, not customer loyalty balances.
   const { data: loyaltyPrograms } = useLoyaltyPrograms(loyaltyUseCaseOk && hasFeature('loyalty_program'));
   const loyaltyRedeemInfo: LoyaltyRedeemInfo | null = loyaltyAccountData?.account && loyaltyPrograms?.[0]
@@ -692,7 +692,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
 
   // Course management (hospitality only)
   const isHospitality = ['hospitality', 'quick_service', 'hotel'].includes((outlet?.use_case ?? '').toLowerCase());
-  // Retail/pharmacy/services tills book plain counter sales as 'retail' (displayed "Walk-in") —
+  // Retail/services tills book plain counter sales as 'retail' (displayed "Walk-in") —
   // never the server's 'dine_in' default, which is a hospitality/quick-service concept.
   // A job-workflow services outlet (printing, garage, laundry, tailoring) books every sale as a
   // job order: it opens with production-board tickets and is paid at collection.
@@ -1026,7 +1026,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
     return Array.from(byName.values());
   }, [serverCategories, menuItems]);
 
-  // Brand list (retail/pharmacy) derived from the items actually present, so only brands with
+  // Brand list (retail) derived from the items actually present, so only brands with
   // sellable items show. The "All" tab is owned by the nav, like categories.
   const brands = useMemo(() => {
     const names = Array.from(new Set(menuItems.map((i) => i.brandName).filter(Boolean) as string[])).sort();
@@ -1277,7 +1277,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
         setBarcodeBuffer('');
         return;
       }
-      // Retail/pharmacy keyboard-first checkout: Enter (no pending scan) finalizes → payment.
+      // Retail keyboard-first checkout: Enter (no pending scan) finalizes → payment.
       if (e.key === 'Enter' && cfg.keyboardCheckout) {
         e.preventDefault();
         placeOrderRef.current();
@@ -1535,10 +1535,12 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
     }
     prevHappyHourDiscountRef.current = happyHourDiscount;
   }, [cart.length, happyHourDiscount, happyHour.promoName]);
-  // Whole-number payable (QA req 5): ceiling round-off applied ONCE at the order level —
-  // the same math pos-api's finalizeTotals runs, so till total == stored total.
+  // Round-off applied ONCE at the order level per the tenant's central tax setting (default: up to
+  // a whole shilling, QA req 5), the same math pos-api's finalizeTotals runs, so till total ==
+  // stored total.
   const { roundOff, total } = applyRoundOff(
-    subtotal + tax + orderTax + chargesTotal - loyaltyDiscount - manualDiscount - happyHourDiscount
+    subtotal + tax + orderTax + chargesTotal - loyaltyDiscount - manualDiscount - happyHourDiscount,
+    { mode: posSettings?.round_off, step: posSettings?.round_off_step },
   );
   const cartItemCount = cart.reduce((s, c) => s + c.quantity, 0);
 

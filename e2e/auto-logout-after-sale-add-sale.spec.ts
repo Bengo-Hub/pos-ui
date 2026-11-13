@@ -10,7 +10,7 @@ import { pinLogin, DEMO_OUTLETS, DEMO_PINS } from './docs-capture/lib/pin-login'
  * surfaced as `terminal-context.autoLogoutAfterSale`) was only ever WIRED into the main POS
  * Terminal's `handleReceiptClose` (via OrderPlacedDialog for dine-in / the terminal's own
  * handleReceiptClose for retail-QSR). Add Sale — a real, nav-exposed, cashier-reachable
- * sale-completion surface for retail/pharmacy/services outlets (nav-config.ts's "Add Sale"
+ * sale-completion surface for retail/services outlets (nav-config.ts's "Add Sale"
  * entry is only hidden for hospitality/quick_service, and the default "cashier" role grants
  * pos.orders.add, which is all that surface requires) — called `useReceiptAfterSale`'s
  * `closeReceipt` DIRECTLY on the receipt dialog's onClose, which never consulted the setting at

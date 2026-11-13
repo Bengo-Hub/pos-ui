@@ -108,7 +108,7 @@ export function useModuleAccess() {
 
   // Use case resolution: drill-down outlet > home outlet store > JWT claims > null (unresolved)
   // IMPORTANT: never fall back to a hardcoded use case — that causes wrong modules to appear
-  // while the outlet context is still loading (e.g. Kitchen & Bar showing on pharmacy outlets).
+  // while the outlet context is still loading (e.g. Kitchen & Bar showing on retail outlets).
   const rawUseCase: string | null =
     drillOutlet?.useCase ??
     outlet?.use_case ??

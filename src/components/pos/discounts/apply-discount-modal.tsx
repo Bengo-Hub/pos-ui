@@ -96,7 +96,7 @@ function definedDiscountAmount(d: Discount, subtotal: number): number | null {
  * Add Sale + any future sale surface). Three ways to discount, per the platform decision:
  *  - PREDEFINED: the tenant's active discount catalog (pos-api Promotion SoT), filtered by
  *    the active outlet's use case — hospitality outlets see their Happy Hour discounts;
- *    retail/pharmacy/services see code/auto standard discounts. Selecting one applies its
+ *    retail/services see code/auto standard discounts. Selecting one applies its
  *    computed value with the discount's name as the audited reason.
  *  - NEW STANDARD DISCOUNT: opens the shared DiscountFormModal (the same form the
  *    Sell → Discounts page uses) so a permitted user can define a reusable discount on the

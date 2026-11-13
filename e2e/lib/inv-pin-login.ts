@@ -27,7 +27,6 @@ export const DEMO_OUTLETS = {
   hospitality: /Demo Grand Hotel/i,
   retail: /Demo City Supermarket/i,
   quickService: /Demo Express Kiosk/i,
-  pharmacy: /Demo Health Pharmacy/i,
   services: /Demo Beauty & Wellness/i,
   warehouse: /Demo Central Warehouse/i,
   manufacturing: /Demo Production Facility/i,

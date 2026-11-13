@@ -148,7 +148,7 @@ test.describe('POS offline sync (live)', () => {
     await page.getByTestId('pos-product-card').first().click();
 
     // Quick-service/hospitality outlets require an order type before placing. Pick Takeaway
-    // (→ pay flow, not dine-in send-to-kitchen). Retail/pharmacy don't show this selector.
+    // (→ pay flow, not dine-in send-to-kitchen). Retail outlets don't show this selector.
     const takeaway = page.getByRole('button', { name: /^Takeaway$/i });
     if (await takeaway.isVisible().catch(() => false)) {
       await takeaway.click();

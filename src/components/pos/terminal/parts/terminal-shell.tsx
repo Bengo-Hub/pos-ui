@@ -79,7 +79,7 @@ export function TerminalShell() {
   // REQ-006: management roles see a Cost column on the cart (pos-api only serializes
   // cost_price to pos.catalog.view_cost holders). Values are MASKED by default — the
   // header eye reveals/hides the whole column (customers can see the screen).
-  // Cost/margin is a retail/pharmacy insight only (cfg.showCostMargin) — hospitality/QSR/
+  // Cost/margin is a retail insight only (cfg.showCostMargin) — hospitality/QSR/
   // services terminals never show the columns, whatever the role.
   // An outlet that hides profit and margin from cashiers (Settings > Cashier policy) hides cost too.
   const hideProfit = useHideProfit();
@@ -103,7 +103,7 @@ export function TerminalShell() {
   const showDiscountCol = canApplyDiscount && cfg.showCostMargin;
   // Explicit column tracks (shared by header + rows) so the cart never cramps: the product
   // name flexes, the numeric columns get fixed, comfortably-spaced widths. Cost + Margin
-  // only exist for management roles; Discount only for managers on retail/pharmacy.
+  // only exist for management roles; Discount only for managers on retail.
   // The In-Stock column (4rem) sits right after Product for EVERY role/use-case — it shows the
   // expected stock balance after the sale and turns red as stock runs out (see StockCell).
   const cartGridCols = canViewCost
@@ -233,7 +233,7 @@ export function TerminalShell() {
         {/* Delivery orders: area, address and notes; the fee comes from logistics. */}
         {cfg.showOrderType && t.orderSubtype === 'delivery' && !t.isAddToBill && <DeliveryPanel />}
 
-        {/* Hardware scale (retail/pharmacy) */}
+        {/* Hardware scale (retail) */}
         {cfg.showScale && t.scaleDeviceId && (
           <ScaleDisplay
             tenantSlug={pageTenantId}
@@ -724,7 +724,7 @@ export function TerminalShell() {
             {renderSearchInput(false)}
           </div>
           <div className="shrink-0 px-3 py-2.5 flex items-center gap-2 border-b border-border">
-            {/* Category | Brands switch — Brands apply to retail/pharmacy only (cfg.showBrandGrid). */}
+            {/* Category | Brands switch — Brands apply to retail only (cfg.showBrandGrid). */}
             {cfg.showBrandGrid && (
               <div className="flex gap-0.5 shrink-0 border border-border rounded-lg p-0.5 bg-card">
                 {(['category', 'brand'] as const).map((m) => (

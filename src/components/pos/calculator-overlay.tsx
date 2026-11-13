@@ -5,7 +5,7 @@ import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 /**
- * On-screen calculator for the retail/pharmacy terminal (cfg.showCalculator). Lets a cashier
+ * On-screen calculator for the retail terminal (cfg.showCalculator). Lets a cashier
  * compute change / quantities without leaving the till. Pure UI — no business logic, no eval().
  */
 export function CalculatorOverlay({ onClose }: { onClose: () => void }) {

@@ -10,7 +10,7 @@
  * unchanged; only the structure (monolith → shell + provider + per-use-case views) and the GoDigital
  * layout changed.
  *
- *   normalizeUseCase(outlet.use_case) → retail | pharmacy | services | quick_service | hospitality
+ *   normalizeUseCase(outlet.use_case) → retail | services | quick_service | hospitality
  */
 
 import { normalizeUseCase } from '@/lib/use-case-config';

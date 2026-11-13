@@ -48,8 +48,8 @@ const COMMON_TABS_TAIL: TabDef[] = [
   { id: 'voids', label: 'Voids', icon: Ban },
 ];
 // KDS Station is a kitchen concept — hospitality/quick_service only. Every other use case
-// (retail/services/pharmacy) gets the register-oriented reports instead (all powered by the
-// existing register-details endpoint — no KDS language on a duka/pharmacy screen).
+// (retail/services) gets the register-oriented reports instead (all powered by the
+// existing register-details endpoint — no KDS language on a duka screen).
 const KDS_TAB: TabDef = { id: 'kds', label: 'KDS Station', icon: ChefHat };
 const REGISTER_TABS: TabDef[] = [
   { id: 'register', label: 'Register', icon: Monitor },
@@ -418,7 +418,7 @@ export default function AnalyticsReportPage() {
           <StatCards items={mixStats} />
           <div className={cn('grid grid-cols-1 gap-4', isKitchen && 'lg:grid-cols-2')}>
             <MixBarChart title="Revenue by Category" icon={Tag} rows={mix.data?.byCategory ?? []} loading={mix.isLoading} currency={currency} />
-            {/* KDS-station chart/column/filter are kitchen concepts — hidden for retail/services/pharmacy. */}
+            {/* KDS-station chart/column/filter are kitchen concepts — hidden for retail/services. */}
             {isKitchen && (
               <MixBarChart title="Revenue by KDS Station" icon={ChefHat} rows={mix.data?.byStation ?? []} loading={mix.isLoading} currency={currency} />
             )}

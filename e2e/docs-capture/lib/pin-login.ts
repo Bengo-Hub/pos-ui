@@ -15,7 +15,6 @@ export const DEMO_OUTLETS = {
   hospitality: /Demo Grand Hotel/i,
   retail: /Demo City Supermarket/i,
   quickService: /Demo Express Kiosk/i,
-  pharmacy: /Demo Health Pharmacy/i,
   services: /Demo Beauty & Wellness/i,
 } as const;
 

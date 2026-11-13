@@ -47,7 +47,7 @@ const base = (tenantId: string) => `/api/v1/${tenantId}`;
 
 export const rbacApi = {
   // useCase (outlet.use_case) scopes the result to roles/permissions relevant to that outlet
-  // type — a hospitality outlet doesn't need to see pharmacy/retail/services-exclusive roles
+  // type — a hospitality outlet doesn't need to see retail/services-exclusive roles
   // and vice versa. Omit to get everything (used by e.g. platform-owner tooling).
   listRoles: (tenantId: string, useCase?: string) =>
     apiClient

@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * Inline cart-line edit cells (retail/pharmacy terminal + reusable in back-office sale forms).
+ * Inline cart-line edit cells (retail terminal + reusable in back-office sale forms).
  *
  * Pricing policy (BOI retail requirement; 2026-07-18 revision):
  *  - admin/manager (`canDiscount`): edit price/margin/discount/line-total freely — below or

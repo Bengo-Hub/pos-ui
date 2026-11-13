@@ -17,7 +17,7 @@ import { ModalFrame } from './sales-shared';
  * line items, discounts, tax, or payments — those stay immutable once completed.
  *
  * Reuses the platform's ONE centralized customer search-or-create widget (CustomerSearch —
- * the same component the terminal, Add Sale, pharmacy checkout, returns, and layaway all use)
+ * the same component the terminal, Add Sale, returns, and layaway all use)
  * rather than a bespoke input, so "search existing or add missing" behaves identically here.
  */
 export function EditSaleInfoModal({ order, onClose }: { order: any; onClose: () => void }) {

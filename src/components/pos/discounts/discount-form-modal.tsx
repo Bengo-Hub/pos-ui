@@ -98,7 +98,7 @@ export function DiscountFormModal({
   const categoryScopeAvailable = (categories?.length ?? 0) > 0 && !isBogo;
 
   // Use-case scoping: Happy Hour (time-window scheduling) and meal period are hospitality-only
-  // concepts — hide them for retail/pharmacy/quick_service/services so those tenants only ever
+  // concepts — hide them for retail/quick_service/services so those tenants only ever
   // see the fields that mean something to them (Code + Automatic already cover their "applies
   // without a customer entering anything" need). An existing happy_hour-kind discount edited from
   // a non-hospitality context still shows its own kind (never silently hidden mid-edit).

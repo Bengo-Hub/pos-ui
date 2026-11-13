@@ -189,7 +189,7 @@ export function ShiftPlannerPanel() {
   const user = useAuthStore((s) => s.user);
   const tenantId = useTenantId() ?? '';
   // Scope the planner to the CURRENT outlet so staff/roles from other outlets & use cases don't
-  // mix (e.g. a Pharmacist/Therapist appearing on a hospitality outlet's roster). When an HQ admin
+  // mix (e.g. a Stylist/Therapist appearing on a hospitality outlet's roster). When an HQ admin
   // has drilled into an outlet, use that; otherwise the operator's home outlet.
   const drillOutletId = useOutletFilterStore((s) => s.selectedOutlet?.id);
   const homeOutletId = useAuthStore((s) => s.selectedOutletId || s.outlet?.id);

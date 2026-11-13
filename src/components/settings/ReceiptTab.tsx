@@ -75,7 +75,7 @@ export function ReceiptTab() {
   const { can } = usePermissions();
   const { hasModule } = useModuleAccess();
   // Per-station KOT printers only make sense where there's a kitchen display; the waiter copy only
-  // where there's table service. Retail/pharmacy print just the customer bill.
+  // where there's table service. Retail outlets print just the customer bill.
   const showKitchenStations = hasModule('kds');
   const showWaiterStation = hasModule('tables');
   const { tenant } = useTenantBranding();

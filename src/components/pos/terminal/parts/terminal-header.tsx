@@ -114,7 +114,7 @@ export function TerminalHeader() {
         </div>
       )}
 
-      {/* Hardware scale — retail/pharmacy only, when a scale device is configured */}
+      {/* Hardware scale — retail only, when a scale device is configured */}
       {cfg.showScale && t.scaleDeviceId && (
         <div className="px-4 pb-3 shrink-0">
           <ScaleDisplay

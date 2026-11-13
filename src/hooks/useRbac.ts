@@ -10,7 +10,7 @@ const ROLE_PERMS_KEY = 'pos-rbac-role-permissions';
 
 /**
  * useRbacRoles/useRbacPermissions scope results to the CURRENT outlet's use case by default
- * (a hospitality outlet shouldn't see pharmacy/retail/services-exclusive roles & permissions,
+ * (a hospitality outlet shouldn't see retail/services-exclusive roles & permissions,
  * and vice versa — common/cross-cutting ones always show). Pass `useCase: null` explicitly to
  * fetch the unscoped full catalogue (e.g. platform-owner tooling).
  */

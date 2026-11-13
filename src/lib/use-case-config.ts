@@ -15,7 +15,7 @@ export interface TerminalConfig {
   profile: TerminalProfile;
   /** Default catalog display mode for this use case. */
   defaultDisplayMode: DisplayMode;
-  /** Auto-focus the scan/search field on load (retail/pharmacy fast checkout). */
+  /** Auto-focus the scan/search field on load (retail fast checkout). */
   barcodeFirst: boolean;
   /** Show the Retail/Wholesale pricing-profile selector. */
   showPricingProfile: boolean;
@@ -27,19 +27,19 @@ export interface TerminalConfig {
   showOrderType: boolean;
   /** Per-item course assignment + Fire Courses (sit-down hospitality). */
   showCourses: boolean;
-  /** Show the on-screen calculator overlay (retail/pharmacy). */
+  /** Show the on-screen calculator overlay (retail). */
   showCalculator: boolean;
   /** Keyboard-first checkout: Enter pays when the cart has items and no field is focused. */
   keyboardCheckout: boolean;
   /** Show the brand grid filter (retail). */
   showBrandGrid: boolean;
-  /** Show per-item stock level badges (retail/pharmacy — requires backend stock_quantity projection). */
+  /** Show per-item stock level badges (retail — requires backend stock_quantity projection). */
   showStockBadge: boolean;
-  /** Wire the hardware ScaleDisplay (retail/pharmacy weighed goods, gated on pos_scale_device_id). */
+  /** Wire the hardware ScaleDisplay (retail weighed goods, gated on pos_scale_device_id). */
   showScale: boolean;
-  /** Intercept out-of-stock adds with a manager PIN override modal (retail/pharmacy). */
+  /** Intercept out-of-stock adds with a manager PIN override modal (retail). */
   managerOverride: boolean;
-  /** Show the cart Cost + Margin columns (retail/pharmacy back-office insight only — never on
+  /** Show the cart Cost + Margin columns (retail back-office insight only — never on
    *  hospitality/QSR/services terminals). Still permission-gated on top of this flag
    *  (pos.catalog.view_cost / pos.orders.manage), so only managers/admins ever see it. */
   showCostMargin: boolean;
@@ -47,7 +47,7 @@ export interface TerminalConfig {
   terminalTitle: string;
   /** Multi-cart Sale tabs (Sale 1/2/3 · +New · Clear All) — busy retail tills serving several
    *  customers in parallel (e.g. slow M-Pesa payers parked on their own tab). Retail only; the
-   *  other verticals settle differently (hospitality via tables/bills, QSR/pharmacy/services
+   *  other verticals settle differently (hospitality via tables/bills, QSR/services
    *  single-cart) so a tab strip would only add noise. */
   multiCart: boolean;
 }
@@ -140,7 +140,7 @@ export interface DiscountConfig {
  *  pattern so DiscountFormModal scopes its fields per use case instead of always rendering
  *  hospitality-only concepts (Happy Hour scheduling, meal period) for every vertical.
  *  quick_service counts as food service here too (meal periods/time-windowed deals are just as
- *  applicable to a QSR counter as a sit-down restaurant) — only retail/pharmacy/services hide them. */
+ *  applicable to a QSR counter as a sit-down restaurant) — only retail/services hide them. */
 export function discountConfigFor(useCase?: string | null): DiscountConfig {
   const profile = normalizeUseCase(useCase);
   const isFoodService = profile === 'hospitality' || profile === 'quick_service';

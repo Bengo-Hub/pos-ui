@@ -23,8 +23,8 @@ function EODDetailContent() {
   const currency = (posSettings as any)?.currency ?? 'KES';
   // "How much did bar vs kitchen do today" — grouped by KDS station, same as the kitchen/bar
   // displays, so a manager closing the day can see each station's contribution at a glance.
-  // KDS stations are a kitchen concept — the query is skipped entirely for retail/services/
-  // pharmacy outlets (the section also self-hides on empty data).
+  // KDS stations are a kitchen concept — the query is skipped entirely for retail/services
+  // outlets (the section also self-hides on empty data).
   const { isHospitality, isQuickService, isResolved } = useModuleAccess();
   const stationBreakdown = useSalesByKDSStation(date, date, outletId, !isResolved || isHospitality || isQuickService);
 

@@ -86,20 +86,35 @@ export function round2(n: number): number {
 }
 
 export interface RoundOffResult {
-  /** Amount added to reach the next whole number (0 <= roundOff < 1). */
+  /** Amount added to reach the rounded payable (negative when "nearest" rounds down). */
   roundOff: number;
-  /** ceil(raw) — the whole-number payable. */
+  /** The payable after rounding. */
   total: number;
 }
 
+/** How the payable is rounded: the tenant's central tax setting (treasury round_off, round_off_step). */
+export interface RoundOffPolicy {
+  mode?: string | null;
+  step?: number | null;
+}
+
 /**
- * applyRoundOff rounds an order's raw payable UP to the next whole number (QA: POS totals
- * have no decimal points), returning the added `roundOff` so receipts/orders can show it as
- * an explicit component: total = raw + roundOff. Mirrors pos-api orders.finalizeTotals —
- * the server recomputes the same math, so till total == stored total.
+ * applyRoundOff rounds an order's raw payable per the tenant's round-off setting from the
+ * central tax settings (pos-api settings round_off and round_off_step): "none" keeps the cents,
+ * "nearest" or "up" go to the step (1, 5 or 10 shillings). Without a setting it rounds up to the
+ * next whole shilling (QA: POS totals have no decimal points). Returns the added `roundOff` so
+ * receipts and orders show it: total = raw + roundOff. Mirrors pos-api orders.finalizeTotals,
+ * so till total == stored total.
  */
-export function applyRoundOff(rawTotal: number): RoundOffResult {
+export function applyRoundOff(rawTotal: number, policy?: RoundOffPolicy | null): RoundOffResult {
   const raw = round2(Math.max(0, rawTotal));
-  const total = Math.ceil(raw);
+  const mode = policy?.mode === 'none' || policy?.mode === 'nearest' || policy?.mode === 'up' ? policy.mode : 'up';
+  const step = policy?.step && policy.step > 0 ? policy.step : 1;
+  if (mode === 'none') return { roundOff: 0, total: raw };
+  // Work in cents so 4140.8 / 5 does not pick up floating point noise.
+  const cents = Math.round(raw * 100);
+  const stepCents = Math.round(step * 100);
+  const units = mode === 'nearest' ? Math.round(cents / stepCents) : Math.ceil(cents / stepCents);
+  const total = round2((units * stepCents) / 100);
   return { roundOff: round2(total - raw), total };
 }

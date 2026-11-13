@@ -20,7 +20,6 @@ export interface CatalogItem {
   duration_minutes?: number;
   tax_status?: string;
   requires_age_verification?: boolean;
-  requires_prescription?: boolean;
   is_controlled_substance?: boolean;
   minimum_age?: number;
   is_returnable?: boolean;

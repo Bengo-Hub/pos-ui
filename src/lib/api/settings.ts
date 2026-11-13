@@ -109,7 +109,7 @@ export interface POSSettings {
    *  the page shows a single input at a time); the inactive field is saved at its no-limit
    *  sentinel (100% / 0). Server enforcement is unaffected — it still checks both with OR. */
   discount_limit_type?: 'percent' | 'amount';
-  // Pricing policy — cashier price-edit rules (retail/pharmacy up-sell model):
+  // Pricing policy — cashier price-edit rules (retail up-sell model):
   /** Cashiers may RAISE a line price above the catalog/base price without approval (default true). */
   allow_price_above_base: boolean;
   /** Selling below base (markdown / price-lowering discount) requires a manager price.override step-up (default true). */
@@ -139,6 +139,10 @@ export interface POSSettings {
   /** A paired Local Print Agent polled the server recently: the till should rely on server-side
    *  background print jobs (queue) and skip its own client-side auto-printing. */
   print_agent_online?: boolean;
+  /** Till round-off from the central tax settings (treasury), read-only here: none, nearest or up. */
+  round_off?: string;
+  /** Shillings the payable rounds to (1, 5 or 10). */
+  round_off_step?: number;
   // Cashier / terminal policy — RESOLVED values (outlet override → per-use-case default).
   /** How far a cashier/waiter (view_own principal) can see sales: 'own' (My Sales) | 'outlet' (all outlet sales). */
   cashier_sales_visibility: 'own' | 'outlet';

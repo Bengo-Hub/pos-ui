@@ -1,7 +1,7 @@
 /**
  * Order source/subtype badge labels, use-case aware.
  *
- * Retail / pharmacy / services never do table service, so their orders read:
+ * Retail / services never do table service, so their orders read:
  *   - "Walk-in"  — a counter sale rung at the terminal or Add Sale (subtype 'retail',
  *                  plus legacy rows stored with the old 'dine_in' default)
  *   - "Online"   — orders synced from the online store / widget

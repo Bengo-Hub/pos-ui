@@ -26,7 +26,7 @@ export async function reloadAndWaitForActiveDiscounts(page: Page) {
 
 /** The terminal's product-search input — placeholder text varies by use-case profile
  *  (searchPlaceholderFor: "Search menu items…" for hospitality/quick_service, "Search
- *  services…" for services, "Product name / SKU / Scan barcode" for retail/pharmacy). Excludes
+ *  services…" for services, "Product name / SKU / Scan barcode" for retail). Excludes
  *  the unrelated header search ("Search orders, tables…") which renders earlier in the DOM and
  *  would otherwise win a bare `:first()` match. */
 export function productSearchInput(page: Page) {

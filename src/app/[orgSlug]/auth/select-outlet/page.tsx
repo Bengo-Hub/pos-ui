@@ -102,7 +102,7 @@ function SelectOutletContent() {
           return;
         }
 
-        // Non-HQ users (cashier, waiter, kitchen, bar, pharmacist, etc.) are locked
+        // Non-HQ users (cashier, waiter, kitchen, bar, etc.) are locked
         // to their assigned outlet. Auto-select the last-used outlet or the first one
         // without showing the picker UI.
         if (!isHQUser) {

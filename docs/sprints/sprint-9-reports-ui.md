@@ -115,8 +115,8 @@ src/hooks/
 | Daily revenue trend | All business types |
 | End-of-day reconciliation | All business types |
 | Cash drawer reconciliation | Retail, restaurant, hotel |
-| Top-selling items | Retail, restaurant, pharmacy |
+| Top-selling items | Retail, restaurant |
 | Staff commission report | Salon, service businesses |
 | Hourly traffic heatmap | Restaurant, bar, retail |
 | Tax collection summary | All (VAT/KRA compliance) |
-| Stock consumption | Restaurant, pharmacy, retail |
+| Stock consumption | Restaurant, retail |

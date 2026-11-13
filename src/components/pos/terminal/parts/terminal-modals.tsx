@@ -257,7 +257,7 @@ export function TerminalModals() {
         autoLogout={t.autoLogoutAfterSale}
       />
 
-      {/* Manager override — out-of-stock add interception (retail/pharmacy). A caller who already
+      {/* Manager override — out-of-stock add interception (retail). A caller who already
           holds pos.catalog.oos_override_self (admin/manager by default — mirrors
           pos.orders.void_self) IS the approver, so a quick Yes/No confirm replaces the PIN/scan/
           code flow entirely; everyone else still gets the full 3-mode dialog (scan · PIN ·

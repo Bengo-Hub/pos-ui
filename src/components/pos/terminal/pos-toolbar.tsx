@@ -24,7 +24,7 @@ export interface PosToolbarProps {
   profile: TerminalProfile;
   /** Show the Register Details (Z-report) action — roles that handle the cash drawer. */
   canRegister?: boolean;
-  /** Show the calculator action (retail/pharmacy). */
+  /** Show the calculator action (retail). */
   showCalculator?: boolean;
   onCalculator: () => void;
   onParkedSales: () => void;
