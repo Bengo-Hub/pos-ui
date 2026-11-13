@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   paymentActionsFor, tenderMethodFor, isImmediateTender, isValidManualCode, isValidPaymentLabel,
-  manualCodePayToLine, withOutletNetworks, outletOffersNetwork,
+  manualCodePayToLine, withOutletNetworks, outletOffersNetwork, roomChargeIntent, newRoomChargeAttemptKey,
 } from '../src/lib/pos/terminal-actions.ts';
 
 const keys = (g: Parameters<typeof paymentActionsFor>[1], opts: Parameters<typeof paymentActionsFor>[2] = {}) =>
@@ -93,4 +93,21 @@ test('MTN and Airtel codes show only where the outlet has that number', () => {
   assert.ok(keys({ airtel_money_number: '0752000000' }).includes('airtel_money_code'));
   assert.equal(outletOffersNetwork('mtn_momo_manual', { mtn_momo_number: '0772000000' }), true);
   assert.equal(outletOffersNetwork('airtel_money_manual', { mtn_momo_number: '0772000000' }), false);
+});
+
+test('Charge to Room goes through the payment intent with the room, so pos-api completes the order', () => {
+  assert.equal(tenderMethodFor('room'), 'room_charge');
+  assert.deepEqual(roomChargeIntent('order-1', 'room-7', 1160, 'tender-0'), {
+    orderId: 'order-1', tenderMethod: 'room_charge', amount: 1160, tenderId: 'tender-0', roomId: 'room-7',
+    idempotencyKey: undefined,
+  });
+  assert.equal(roomChargeIntent('order-1', 'room-7', 500).tenderMethod, tenderMethodFor('room'));
+});
+
+test('a Charge to Room retry reuses its key; another room or another attempt gets a new one', () => {
+  const attempt = newRoomChargeAttemptKey();
+  const first = roomChargeIntent('order-1', 'room-7', 600, undefined, attempt).idempotencyKey;
+  assert.equal(roomChargeIntent('order-1', 'room-7', 600, undefined, attempt).idempotencyKey, first);
+  assert.notEqual(roomChargeIntent('order-1', 'room-8', 400, undefined, attempt).idempotencyKey, first);
+  assert.notEqual(roomChargeIntent('order-1', 'room-7', 600, undefined, newRoomChargeAttemptKey()).idempotencyKey, first);
 });

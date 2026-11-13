@@ -6,7 +6,7 @@
  * inline capture (cash tendered / card approval ref) or hands off to the treasury gateway flow.
  *
  * `paymentActionsFor()` is the single source of truth for WHICH tenders appear, gated by:
- *   - the terminal profile (retail · pharmacy · hospitality · quick_service · services)
+ *   - the terminal profile (retail · hospitality · quick_service · services)
  *   - the tenant's enabled gateways (from usePOSGateways → treasury)
  *   - hospitality (room charge only shows for hotel/restaurant/bar/cafe outlets)
  */
@@ -276,6 +276,25 @@ export function paymentActionsFor(
     if (!a.requiresGateway) return true;
     return Boolean(g[a.requiresGateway]);
   });
+}
+
+/** The payment-intent request that charges a sale to a guest's room. pos-api writes the folio
+ *  line with the payment in one transaction, idempotent per order, and completes the order, so
+ *  the till treats it like any settled tender. It needs the network: a room charge is never
+ *  queued offline. `attemptKey` identifies one Charge to Room screen; the idempotency key adds
+ *  the room, so a retry of the same charge returns the first result while a bill split across two
+ *  rooms (or two portions opened separately) posts each charge. */
+export function roomChargeIntent(orderId: string, roomId: string, amount: number, tenderId?: string, attemptKey?: string) {
+  return {
+    orderId, tenderMethod: 'room_charge', amount, tenderId, roomId,
+    idempotencyKey: attemptKey ? `${attemptKey}:${roomId}` : undefined,
+  };
+}
+
+/** A fresh key for one Charge to Room screen (see roomChargeIntent). */
+export function newRoomChargeAttemptKey(): string {
+  const c = (globalThis as { crypto?: { randomUUID?: () => string } }).crypto;
+  return c?.randomUUID ? c.randomUUID() : `rc-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
 /** Maps an inline TenderKey onto the tender_method string pos-api expects. */

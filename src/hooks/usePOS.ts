@@ -1519,7 +1519,7 @@ export function useNotifyOrderPayment() {
   });
 }
 
-// 'retail' = a plain walk-in counter sale (retail/pharmacy/services terminals) — the server
+// 'retail' = a plain walk-in counter sale (retail/services terminals) — the server
 // enum's non-hospitality subtype; dine_in/takeaway/… are hospitality/quick-service concepts.
 // 'service_job' = a services job order (printing, garage, laundry) that goes through the production
 // board and is paid at collection.
@@ -2206,6 +2206,8 @@ export function useCreatePaymentIntent() {
       approvalCode,
       amountTendered,
       paymentLabel,
+      roomId,
+      idempotencyKey,
     }: {
       orderId: string;
       tenderMethod: string;
@@ -2228,6 +2230,11 @@ export function useCreatePaymentIntent() {
       amountTendered?: number;
       // How the customer paid, for the "other_manual" tender (2 to 40 characters).
       paymentLabel?: string;
+      // The occupied room a "room_charge" tender charges. pos-api posts the folio line with the
+      // payment and completes the order (see roomChargeIntent in lib/pos/terminal-actions).
+      roomId?: string;
+      // One Charge to Room confirmation: a retry with the same key returns the first result.
+      idempotencyKey?: string;
     }) =>
       apiClient.post<PaymentIntentResult>(`${basePath(tenantID)}/orders/${orderId}/payments/intent`, {
         tenderMethod,
@@ -2243,6 +2250,8 @@ export function useCreatePaymentIntent() {
         approvalCode,
         amountTendered,
         paymentLabel,
+        roomId,
+        idempotencyKey,
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['pos-orders'] });

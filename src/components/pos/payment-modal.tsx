@@ -23,7 +23,6 @@ import {
   Zap,
 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useMutation } from '@tanstack/react-query';
 import { useCreatePaymentIntent } from '@/hooks/usePOS';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { formatCurrency } from '@/lib/utils';
@@ -36,11 +35,11 @@ import { CreditSaleDetailsModal, type CreditSaleDetails } from '@/components/pos
 import { ComplimentarySaleModal } from '@/components/pos/complimentary-sale-modal';
 import { ApprovalDialog, type ApprovalResult } from '@/components/pos/approval-dialog';
 import { useHotelRooms } from '@/hooks/useHotel';
-import { hotelApi, type Room } from '@/lib/api/hotel';
+import type { Room } from '@/lib/api/hotel';
 import { useRedeemToOrder } from '@/hooks/useLoyalty';
 import {
   canRedeemLoyaltyFor, loyaltyPointsToRedeem, payheroSublabel, isValidManualCode, isValidPaymentLabel,
-  normalizeManualCode, manualCodePayToLine, outletOffersNetwork, MANUAL_CODE_TENDERS, OTHER_REF_MAX, PAYMENT_LABEL_MAX,
+  normalizeManualCode, manualCodePayToLine, outletOffersNetwork, roomChargeIntent, newRoomChargeAttemptKey, MANUAL_CODE_TENDERS, OTHER_REF_MAX, PAYMENT_LABEL_MAX,
   type LoyaltyRedeemInfo, type ManualCodeMethod,
 } from '@/lib/pos/terminal-actions';
 import { useSubscription } from '@/hooks/use-subscription';
@@ -148,19 +147,14 @@ export function POSPaymentModal({
 
   // The tenant the page names; pos-api paths use its UUID, never the signed-in user's slug.
   const pageTenantId = useTenantId() ?? '';
-  const postRoomCharge = useMutation({
-    mutationFn: ({ roomId }: { roomId: string }) =>
-      hotelApi.postFolioCharge(pageTenantId, roomId, {
-        description: `Restaurant bill ${orderNumber}`,
-        amount: roundedTotal,
-        charge_type: 'restaurant',
-      }),
-  });
 
   // The tender method of the most recent payment, reported back to the splitter via
   // onPaymentConfirmed(method) so each split portion records how it was paid. A ref (not state)
   // so the async treasury/SSE confirmation path reads the latest value without re-renders.
   const methodRef = useRef<string>('');
+  // One Charge to Room attempt per opening of this modal: a retry after an error reuses it, so a
+  // charge whose response was lost is not posted twice; the next portion of a split gets a new one.
+  const roomAttemptRef = useRef<string>(newRoomChargeAttemptKey());
 
   // M-Pesa C2B (customer paid the till directly): the shared C2BPaymentMatcher owns the active
   // query/timeout/claim flow — this just reacts to its onClaimed callback.
@@ -183,6 +177,7 @@ export function POSPaymentModal({
       setErrorMsg('');
       setSelectedRoom(null);
       setRoomSearch('');
+      roomAttemptRef.current = newRoomChargeAttemptKey();
       setCreditDetailsOpen(false);
       setComplimentaryReasonOpen(false);
       setComplimentaryApprovalOpen(false);
@@ -442,20 +437,28 @@ export function POSPaymentModal({
     );
   }, [orderId, roundedTotal, tenderId, createIntent, onPaymentConfirmed, pendingComplimentaryReason]);
 
+  // Charge to Room: one payment-intent call. pos-api posts the folio line with the payment in one
+  // transaction and completes the order, so the sale shows as completed like any settled tender
+  // (it used to post the folio line only and leave the order open). Needs the network.
   const handleRoomCharge = useCallback(() => {
     methodRef.current = 'room_charge';
     if (!selectedRoom) return;
-    postRoomCharge.mutate(
-      { roomId: selectedRoom.id },
+    if (!isOnline) {
+      setErrorMsg('Charging a room needs a connection. Try again once you are back online.');
+      setStep('failed');
+      return;
+    }
+    createIntent.mutate(
+      roomChargeIntent(orderId, selectedRoom.id, roundedTotal, tenderId, roomAttemptRef.current),
       {
         onSuccess: () => { setStep('confirmed'); onPaymentConfirmed(methodRef.current); },
         onError: (err: any) => {
-          setErrorMsg(err?.message ?? 'Failed to post charge to room. Please try again.');
+          setErrorMsg((err as { normalizedMessage?: string })?.normalizedMessage ?? err?.message ?? 'Failed to charge the room. Please try again.');
           setStep('failed');
         },
       }
     );
-  }, [selectedRoom, postRoomCharge, onPaymentConfirmed]);
+  }, [selectedRoom, isOnline, createIntent, orderId, roundedTotal, tenderId, onPaymentConfirmed]);
 
   const change = (parseFloat(cashTendered) || 0) - roundedTotal;
 
@@ -1045,10 +1048,10 @@ export function POSPaymentModal({
                 </p>
                 <button
                   onClick={handleRoomCharge}
-                  disabled={postRoomCharge.isPending}
+                  disabled={createIntent.isPending}
                   className="w-full min-h-12 rounded-xl bg-indigo-600 text-white font-bold flex items-center justify-center gap-2 disabled:opacity-40 hover:bg-indigo-700 transition-colors"
                 >
-                  {postRoomCharge.isPending
+                  {createIntent.isPending
                     ? <Loader2 className="h-5 w-5 animate-spin" />
                     : <Building2 className="h-5 w-5" />}
                   Post to Room {selectedRoom.room_number}

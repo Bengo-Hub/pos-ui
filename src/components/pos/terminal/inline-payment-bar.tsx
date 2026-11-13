@@ -5,7 +5,7 @@
  * (no separate "select a method" modal). Immediate tenders (Cash, Card/PDQ, Credit) capture inline;
  * online gateway tenders (M-Pesa STK Push, Paystack card, Wallet) hand off to the treasury pay flow;
  * M-Pesa C2B (customer paid the till directly) reconciles via the inline match panel; Room charge
- * posts to a guest folio.
+ * settles the sale to a guest folio (pos-api posts the folio line and completes the order).
  *
  * The bar owns the full settle flow but never creates the order itself — the page provides
  * `createOrderAsync()` (which runs all order validation + creation) so the bar can settle against a
@@ -21,7 +21,6 @@ import {
   Building2, Truck, Wallet, SplitSquareHorizontal, X, CheckCircle2,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useMutation } from '@tanstack/react-query';
 import { useCreatePaymentIntent } from '@/hooks/usePOS';
 import { formatCurrency } from '@/lib/utils';
 import { useEffectiveOnline } from '@/lib/connectivity';
@@ -34,13 +33,12 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { useSubscription } from '@/hooks/use-subscription';
 import { useHotelRooms } from '@/hooks/useHotel';
 import { useTenantId } from '@/hooks/useTenantId';
-import { hotelApi } from '@/lib/api/hotel';
 import type { TerminalProfile } from '@/lib/use-case-config';
 import {
   paymentActionsFor, tenderMethodFor, allowedMethodsFor, isImmediateTender, customerCreditAction,
   hasRedeemableLoyalty, canRedeemLoyaltyFor, loyaltyPointsToRedeem, loyaltyRedeemAction,
   isValidManualCode, isValidPaymentLabel, normalizeManualCode, manualCodePayToLine, MANUAL_CODE_TENDERS, withOutletNetworks,
-  OTHER_REF_MAX, PAYMENT_LABEL_MAX,
+  OTHER_REF_MAX, PAYMENT_LABEL_MAX, roomChargeIntent, newRoomChargeAttemptKey,
   type TenderKey, type TenderTone, type LoyaltyRedeemInfo, type ManualCodeMethod,
 } from '@/lib/pos/terminal-actions';
 import { toast } from 'sonner';
@@ -579,8 +577,9 @@ export function InlinePaymentBar(props: InlinePaymentBarProps) {
         <RoomCapture
           amount={roundedTotal}
           currency={currency}
-          orderNumber={order.orderNumber}
-          tenantSlug={tenantSlug}
+          orderId={order.orderId}
+          tenderId={tenderId}
+          isOnline={isOnline}
           search={roomSearch}
           onSearch={setRoomSearch}
           onCancel={reset}
@@ -994,17 +993,30 @@ function OtherTenderCapture({ total, currency, label, onLabelChange, reference, 
 }
 
 // ── Inline room-charge picker (hospitality) ─────────────────────────────────────
-function RoomCapture({ amount, currency, orderNumber, tenantSlug, search, onSearch, onCancel, onCharged }: {
-  amount: number; currency: string; orderNumber: string; tenantSlug: string; search: string; onSearch: (v: string) => void; onCancel: () => void; onCharged: () => void;
+// Charge to Room is one payment-intent call: pos-api posts the folio line with the payment in one
+// transaction and completes the order, so onCharged finishes the sale like any settled tender
+// (the old folio-only post left the order open). It needs the network; it is never queued.
+function RoomCapture({ amount, currency, orderId, tenderId, isOnline, search, onSearch, onCancel, onCharged }: {
+  amount: number; currency: string; orderId: string; tenderId?: string; isOnline: boolean; search: string; onSearch: (v: string) => void; onCancel: () => void; onCharged: () => void;
 }) {
   const { data: rooms = [], isLoading } = useHotelRooms('occupied');
-  const pageTenantId = useTenantId() ?? '';
-  const post = useMutation({
-    mutationFn: (roomId: string) =>
-      hotelApi.postFolioCharge(pageTenantId, roomId, { description: `Bill ${orderNumber}`, amount, charge_type: 'restaurant' }),
-    onSuccess: onCharged,
-    onError: async (e: any) => toast.error(await apiErrorMessage(e, 'Failed to post charge to room.')),
-  });
+  const charge = useCreatePaymentIntent();
+  // One attempt per open picker: a retry after an error reuses it, so a lost response never
+  // posts the charge twice (pos-api keys the charge on it plus the room).
+  const attemptKey = useRef<string>(newRoomChargeAttemptKey());
+  const post = {
+    isPending: charge.isPending,
+    mutate: (roomId: string) => {
+      if (!isOnline) {
+        toast.error('Charging a room needs a connection. Try again once you are back online.');
+        return;
+      }
+      charge.mutate(roomChargeIntent(orderId, roomId, amount, tenderId, attemptKey.current), {
+        onSuccess: onCharged,
+        onError: async (e: any) => toast.error(await apiErrorMessage(e, 'Failed to charge the room.')),
+      });
+    },
+  };
   const filtered = rooms.filter((r: any) =>
     !search || r.room_number?.toLowerCase().includes(search.toLowerCase()) ||
     (r.edges?.guests?.[0]?.guest_name ?? '').toLowerCase().includes(search.toLowerCase()));
