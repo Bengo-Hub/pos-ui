@@ -8,6 +8,7 @@ import { P } from '@/lib/rbac/permissions';
 import { useChannels, useCreateChannel, useTriggerChannelSync } from '@/hooks/useChannels';
 import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api/error-message';
+import { getActiveTimeZone } from '@/lib/user-timezone';
 
 const CHANNEL_TYPES = [
   { value: 'uber_eats', label: 'Uber Eats' },
@@ -25,7 +26,7 @@ function relTime(iso?: string | null) {
   if (m < 60) return `${m}m ago`;
   const h = Math.floor(m / 60);
   if (h < 24) return `${h}h ago`;
-  return new Date(iso).toLocaleDateString();
+  return new Date(iso).toLocaleDateString(undefined, { timeZone: getActiveTimeZone() });
 }
 
 /**

@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader } from '@/components/ui/base';
 import { KindIcon } from '@/components/ui/kind-icon';
 import type { ExceptionAgg } from '@/lib/api/audit';
 import { actionMeta, actorLabel } from './actions';
+import { getActiveTimeZone } from '@/lib/user-timezone';
 
 interface Props {
   rows: ExceptionAgg[];
@@ -80,7 +81,7 @@ export function ExceptionsCard({ rows, loading, from, onPickActor, onPickClient 
                               <button key={`${d.client_id ?? d.label}-${d.ip ?? ''}`}
                                 onClick={() => onPickClient(d.client_id, d.client_id ? undefined : d.ip)}
                                 className="flex items-center gap-1.5 text-xs text-left hover:underline"
-                                title={`Last sign-in ${new Date(d.last_at).toLocaleString()} · show this device's activity`}>
+                                title={`Last sign-in ${new Date(d.last_at).toLocaleString(undefined, { timeZone: getActiveTimeZone() })} · show this device's activity`}>
                                 <KindIcon kind={d.device_kind} className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                                 <span className="truncate max-w-56">{d.label}</span>
                                 <span className="text-muted-foreground">×{d.sign_ins}{d.ip ? ` · ${d.ip}` : ''}</span>

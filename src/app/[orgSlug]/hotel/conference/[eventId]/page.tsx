@@ -24,6 +24,7 @@ import { FeatureGate } from '@bengo-hub/shared-ui-lib/subscription';
 import { FeatureLocked } from '@/components/auth/feature-locked';
 import { DataTable } from '@bengo-hub/shared-ui-lib/data-table';
 import { buildReconciliationColumns } from '../reconciliation-columns';
+import { getActiveTimeZone } from '@/lib/user-timezone';
 
 const MEAL_PERIODS = [
   { v: 'breakfast', l: 'Breakfast' },
@@ -183,8 +184,8 @@ function EventDetailPageInner() {
             { label: 'Conference Days', value: String(event.conference_days) },
             { label: 'Setup', value: event.setup_style || '—' },
             { label: 'Contact', value: event.contact_email || event.contact_phone || '—' },
-            { label: 'Start', value: new Date(event.start_at).toLocaleString() },
-            { label: 'End', value: new Date(event.end_at).toLocaleString() },
+            { label: 'Start', value: new Date(event.start_at).toLocaleString(undefined, { timeZone: getActiveTimeZone() }) },
+            { label: 'End', value: new Date(event.end_at).toLocaleString(undefined, { timeZone: getActiveTimeZone() }) },
             { label: 'Total', value: formatCurrency(event.total_amount || 0, currency), highlight: true },
           ].map(({ label, value, highlight }) => (
             <div key={label}>

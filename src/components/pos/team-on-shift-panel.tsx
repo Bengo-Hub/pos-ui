@@ -17,6 +17,7 @@ import { useShiftReport } from '@/hooks/useReports';
 import { useEffectiveOutletID } from '@/hooks/usePOS';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { formatCurrency } from '@/lib/utils';
+import { getActiveTimeZone } from '@/lib/user-timezone';
 
 function ymdLocal(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -92,7 +93,7 @@ export function TeamOnShiftPanel() {
                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                   <Clock className="h-3.5 w-3.5 shrink-0" />
                   <span>
-                    Since {new Date(r.opened_at).toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' })}
+                    Since {new Date(r.opened_at).toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit', timeZone: getActiveTimeZone() })}
                     {' · '}
                     <span key={refreshTick}>{elapsedSince(r.opened_at)}</span>
                   </span>
@@ -134,9 +135,9 @@ export function TeamOnShiftPanel() {
               >
                 <span className="font-medium truncate">{r.cashier_name || 'Unknown staff'}</span>
                 <span className="text-xs text-muted-foreground shrink-0">
-                  {new Date(r.opened_at).toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' })}
+                  {new Date(r.opened_at).toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit', timeZone: getActiveTimeZone() })}
                   {' – '}
-                  {r.closed_at ? new Date(r.closed_at).toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' }) : ''}
+                  {r.closed_at ? new Date(r.closed_at).toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit', timeZone: getActiveTimeZone() }) : ''}
                 </span>
                 <span className="text-xs font-semibold shrink-0">{formatCurrency(r.total_revenue, currency)}</span>
               </Link>

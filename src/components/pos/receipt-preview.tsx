@@ -18,6 +18,7 @@ import { apiClient } from '@/lib/api/client';
 import type { PrinterProfile } from '@/lib/api/settings';
 import { useTenantBranding } from '@/providers/tenant-branding-provider';
 import { formatCurrency as formatCurrencyShared } from '@/lib/utils';
+import { getActiveTimeZone } from '@/lib/user-timezone';
 
 export interface ReceiptLine {
   sku: string;
@@ -392,6 +393,7 @@ export function ReceiptPreview({
       day: 'numeric',
       hour: '2-digit',
       minute: '2-digit',
+      timeZone: getActiveTimeZone(),
     });
 
   return (

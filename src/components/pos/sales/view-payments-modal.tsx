@@ -10,6 +10,7 @@ import {
   useOrderPayments, useUpdateOrderPayment, useVoidOrderPayment, useNotifyOrderPayment,
 } from '@/hooks/usePOS';
 import { ModalFrame, money, prettyMethod } from './sales-shared';
+import { getActiveTimeZone } from '@/lib/user-timezone';
 
 /**
  * ViewPaymentsModal — the detailed payments view for a sale: Date / Reference / Method /
@@ -52,7 +53,7 @@ export function ViewPaymentsModal({ order, onClose }: { order: any; onClose: () 
 
   const printPayments = () => {
     const rows = payments.map((p) =>
-      `<tr><td>${p.occurred_at ? new Date(p.occurred_at).toLocaleDateString('en-KE') : '—'}</td>` +
+      `<tr><td>${p.occurred_at ? new Date(p.occurred_at).toLocaleDateString('en-KE', { timeZone: getActiveTimeZone() }) : '—'}</td>` +
       `<td>${p.external_reference || String(p.id ?? '').slice(0, 10)}</td>` +
       `<td>${prettyMethod(p.tender_type || '')}</td><td>${p.note || ''}</td>` +
       `<td style="text-align:right">${money(p.amount, order.currency)}</td><td>${p.status}</td></tr>`).join('');
@@ -92,7 +93,7 @@ export function ViewPaymentsModal({ order, onClose }: { order: any; onClose: () 
               <tbody className="divide-y divide-border">
                 {payments.map((p: any, i: number) => (
                   <tr key={p.id ?? i} className="border border-border/50">
-                    <td className="py-2 pr-3">{p.occurred_at ? new Date(p.occurred_at).toLocaleDateString('en-KE') : '—'}</td>
+                    <td className="py-2 pr-3">{p.occurred_at ? new Date(p.occurred_at).toLocaleDateString('en-KE', { timeZone: getActiveTimeZone() }) : '—'}</td>
                     <td className="py-2 pr-3 text-xs font-mono">{p.external_reference || String(p.id ?? '').slice(0, 10)}</td>
                     <td className="py-2 pr-3 text-xs">{p.tender_name || prettyMethod(p.tender_type || '')}</td>
                     <td className="py-2 pr-3 text-xs max-w-[160px] truncate" title={p.note}>{p.note || '—'}</td>

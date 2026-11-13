@@ -20,6 +20,7 @@ import { DateRangePicker, rangeBound, type DateRange } from '@/components/ui/dat
 import { money, isBackdatedOrder, orderDisplayDate } from '@/components/pos/sales/sales-shared';
 import { cashierNameOf, OrderLinesPanel, skippedSummary } from '@/components/pos/sales/sales-table-shared';
 import { toast } from 'sonner';
+import { getActiveTimeZone } from '@/lib/user-timezone';
 
 interface DraftsFilterState {
   customer: string;
@@ -180,7 +181,7 @@ export function DraftsListView({ orgSlug }: { orgSlug: string }) {
           {orderDisplayDate(o)}
           {isBackdatedOrder(o) && (
             <span className="block text-[10px] text-amber-600"
-              title={`Backdated sale — actually entered ${new Date(o.created_at).toLocaleString('en-KE')}`}>
+              title={`Backdated sale — actually entered ${new Date(o.created_at).toLocaleString('en-KE', { timeZone: getActiveTimeZone() })}`}>
               backdated
             </span>
           )}

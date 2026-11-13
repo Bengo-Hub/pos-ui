@@ -17,6 +17,7 @@ import { DataTable } from '@bengo-hub/shared-ui-lib/data-table';
 import { buildOrderLineColumns } from './order-line-columns';
 import { OrderOriginCard } from './order-origin-card';
 import { asTrail, deviceLabel } from '@/lib/client-trail';
+import { getActiveTimeZone } from '@/lib/user-timezone';
 
 export default function OrderDetailPage() {
   const params = useParams();
@@ -86,7 +87,7 @@ export default function OrderDetailPage() {
               {orderDisplayDate(order)}
               {isBackdatedOrder(order) && (
                 <span className="ml-1.5 text-xs text-amber-600">
-                  (backdated — entered {new Date(order.created_at).toLocaleString()})
+                  (backdated — entered {new Date(order.created_at).toLocaleString(undefined, { timeZone: getActiveTimeZone() })})
                 </span>
               )}
             </span>
@@ -199,7 +200,7 @@ export default function OrderDetailPage() {
                     <div className="min-w-0">
                       <p className="capitalize font-medium truncate">{method.replace(/_/g, ' ') || '—'}</p>
                       <p className="text-xs text-muted-foreground">
-                        {at ? new Date(at).toLocaleString() : '—'}
+                        {at ? new Date(at).toLocaleString(undefined, { timeZone: getActiveTimeZone() }) : '—'}
                       </p>
                       {via && <p className="text-xs text-muted-foreground truncate">via {via}</p>}
                     </div>

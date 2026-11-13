@@ -11,6 +11,7 @@ import { Clock, DollarSign, Loader2, ShoppingCart, ChevronRight } from 'lucide-r
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useState } from 'react';
+import { getActiveTimeZone } from '@/lib/user-timezone';
 
 function fmt(d: Date) { return d.toISOString().slice(0, 10); }
 function periodRange(p: 'today' | 'week' | 'month') {
@@ -65,9 +66,9 @@ function ShiftsReportContent() {
                       <div className="flex items-center gap-2">
                         <Clock className="h-4 w-4 text-muted-foreground shrink-0" />
                         <span className="text-sm font-medium truncate">
-                          {new Date(s.opened_at).toLocaleDateString('en-KE', { weekday: 'short', day: 'numeric', month: 'short' })}
+                          {new Date(s.opened_at).toLocaleDateString('en-KE', { weekday: 'short', day: 'numeric', month: 'short', timeZone: getActiveTimeZone() })}
                           {' '}
-                          {new Date(s.opened_at).toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' })}
+                          {new Date(s.opened_at).toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit', timeZone: getActiveTimeZone() })}
                         </span>
                       </div>
                       {s.cashier_name && <p className="text-xs text-muted-foreground pl-6">{s.cashier_name}</p>}

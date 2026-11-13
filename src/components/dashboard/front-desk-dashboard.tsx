@@ -14,6 +14,7 @@ import { useModuleAccess } from '@/hooks/use-module-access';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useJobSummary, useOutletServiceProfile } from '@/hooks/useServiceJobs';
 import { KPICard, QuickAction, RecentOrdersCard, fmtNum, useTenantID } from './widgets';
+import { getActiveTimeZone } from '@/lib/user-timezone';
 
 interface DeskAction {
   icon: React.ElementType;
@@ -64,7 +65,7 @@ function DeskHeader({ title, subtitle }: { title: string; subtitle?: string }) {
     <div>
       <h1 className="text-xl font-bold font-display">{title}</h1>
       <p className="text-sm text-muted-foreground mt-0.5">
-        {subtitle ?? new Date().toLocaleDateString('en-KE', { weekday: 'long', day: 'numeric', month: 'long' })}
+        {subtitle ?? new Date().toLocaleDateString('en-KE', { weekday: 'long', day: 'numeric', month: 'long', timeZone: getActiveTimeZone() })}
       </p>
     </div>
   );

@@ -9,6 +9,7 @@ import { KindIcon } from '@/components/ui/kind-icon';
 import type { AuditLogEntry } from '@/lib/api/audit';
 import { browserLabel, deviceLabel, shortClientId } from '@/lib/client-trail';
 import { actionMeta, actorLabel } from './actions';
+import { getActiveTimeZone } from '@/lib/user-timezone';
 
 function JsonBlock({ title, value }: { title: string; value?: Record<string, unknown> }) {
   if (!value || Object.keys(value).length === 0) return null;
@@ -71,7 +72,7 @@ export function AuditTrailCard({ rows, total, loading, onPickClient }: Props) {
                         <td className="pl-3 text-muted-foreground">
                           {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                         </td>
-                        <td className="px-3 py-3 whitespace-nowrap text-xs text-muted-foreground">{new Date(e.created_at).toLocaleString()}</td>
+                        <td className="px-3 py-3 whitespace-nowrap text-xs text-muted-foreground">{new Date(e.created_at).toLocaleString(undefined, { timeZone: getActiveTimeZone() })}</td>
                         <td className="px-3 py-3 whitespace-nowrap text-xs font-medium">{actorLabel(e.actor_user_id, e.actor_name)}</td>
                         <td className="px-3 py-3"><span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${meta.cls}`}>{meta.label}</span></td>
                         <td className="px-3 py-3 text-xs whitespace-nowrap">

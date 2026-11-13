@@ -18,6 +18,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Banknote, Loader2, Pencil, RotateCcw, Undo2, X } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
+import { getActiveTimeZone } from '@/lib/user-timezone';
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -168,7 +169,7 @@ export function SellDetailsModal({ orderId, orgSlug, onClose }: { orderId: strin
                 <p><b>Date:</b> {orderDisplayDate(order)}
                   {isBackdatedOrder(order) && (
                     <span className="block text-xs text-amber-600">
-                      Backdated — entered {new Date((order as any).created_at).toLocaleString('en-KE')}
+                      Backdated — entered {new Date((order as any).created_at).toLocaleString('en-KE', { timeZone: getActiveTimeZone() })}
                     </span>
                   )}
                 </p>
@@ -254,7 +255,7 @@ export function SellDetailsModal({ orderId, orgSlug, onClose }: { orderId: strin
                       ) : payments.map((p: any, i: number) => (
                         <tr key={p.id ?? i}>
                           <td className="px-3 py-2 text-muted-foreground">{i + 1}</td>
-                          <td className="px-3 py-2">{p.occurred_at ? new Date(p.occurred_at).toLocaleDateString('en-KE') : '—'}</td>
+                          <td className="px-3 py-2">{p.occurred_at ? new Date(p.occurred_at).toLocaleDateString('en-KE', { timeZone: getActiveTimeZone() }) : '—'}</td>
                           <td className="px-3 py-2">{p.external_reference || (p.id ? String(p.id).slice(0, 10) : '—')}</td>
                           <td className="px-3 py-2 text-right tabular-nums">{money(p.amount)}</td>
                           <td className="px-3 py-2">{prettyPaymentMethod(p.payment_data?.method || p.payment_data?.mode || '', p.payment_data?.payment_label)}</td>
@@ -301,7 +302,7 @@ export function SellDetailsModal({ orderId, orgSlug, onClose }: { orderId: strin
                               {r.return_number}
                             </Link>
                           </td>
-                          <td className="px-3 py-2 text-xs">{new Date(r.created_at).toLocaleString('en-KE')}</td>
+                          <td className="px-3 py-2 text-xs">{new Date(r.created_at).toLocaleString('en-KE', { timeZone: getActiveTimeZone() })}</td>
                           <td className="px-3 py-2 capitalize text-xs">{r.return_type.replace('_', ' ')}</td>
                           <td className="px-3 py-2">
                             <span className={`rounded-full px-2 py-0.5 text-xs font-semibold capitalize ${RETURN_STATUS_BADGE[r.status] ?? 'bg-muted text-muted-foreground'}`}>
@@ -339,7 +340,7 @@ export function SellDetailsModal({ orderId, orgSlug, onClose }: { orderId: strin
                     <tbody className="divide-y divide-border">
                       {activities.map((a, i) => (
                         <tr key={i}>
-                          <td className="px-3 py-2 text-xs whitespace-nowrap">{a.date ? new Date(a.date).toLocaleString('en-KE') : '—'}</td>
+                          <td className="px-3 py-2 text-xs whitespace-nowrap">{a.date ? new Date(a.date).toLocaleString('en-KE', { timeZone: getActiveTimeZone() }) : '—'}</td>
                           <td className="px-3 py-2 text-xs font-medium">{a.action}</td>
                           <td className="px-3 py-2 text-xs text-muted-foreground">{a.note}</td>
                         </tr>

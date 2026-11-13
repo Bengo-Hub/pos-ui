@@ -12,6 +12,7 @@ import {
 } from '@/lib/api/service-jobs';
 import { resolveMediaUrl } from '@/lib/screensaver';
 import { cn } from '@/lib/utils';
+import { getActiveTimeZone } from '@/lib/user-timezone';
 
 const PROOF_LABELS: Record<ProofStatus, string> = {
   none: 'Not sent',
@@ -74,7 +75,7 @@ export function JobStageControl({
           <span className={cn('inline-flex items-center gap-1 rounded-full px-2 py-0.5', overdue ? 'bg-destructive/15 text-destructive font-semibold' : 'bg-muted text-muted-foreground')}>
             <CalendarClock className="h-3 w-3" />
             {overdue ? 'Overdue ' : 'Due '}
-            {new Date(job.due_at).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
+            {new Date(job.due_at).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short', timeZone: getActiveTimeZone() })}
           </span>
         )}
         {profile?.proof_label && (

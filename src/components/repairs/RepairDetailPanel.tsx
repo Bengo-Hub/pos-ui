@@ -22,6 +22,7 @@ import { RepairPartsPicker } from './RepairPartsPicker';
 import { RepairStatusBadge } from './RepairStatusBadge';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { formatCurrency } from '@/lib/utils';
+import { getActiveTimeZone } from '@/lib/user-timezone';
 
 interface RepairDetailPanelProps {
   jobID: string;
@@ -283,7 +284,7 @@ export function RepairDetailPanel({ jobID }: RepairDetailPanelProps) {
             {events.map((ev) => (
               <div key={ev.id} className="flex gap-2 text-xs">
                 <span className="text-muted-foreground shrink-0 w-32">
-                  {new Date(ev.created_at).toLocaleString()}
+                  {new Date(ev.created_at).toLocaleString(undefined, { timeZone: getActiveTimeZone() })}
                 </span>
                 <span className="flex-1">{ev.notes || ev.event_type}</span>
               </div>

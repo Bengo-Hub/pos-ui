@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { ScreensaverSlideshow } from '@/components/pos/screensaver-slideshow';
 import { buildScreensaverMedia } from '@/lib/screensaver';
+import { getActiveTimeZone } from '@/lib/user-timezone';
 
 interface ScreensaverProps {
   active: boolean;
@@ -28,9 +29,10 @@ function LiveClock() {
 
   if (!now) return null;
 
-  const timeMain = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  const secs = now.toLocaleTimeString([], { second: '2-digit' }).split(':').pop() ?? '00';
-  const date = now.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+  const timeZone = getActiveTimeZone();
+  const timeMain = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', timeZone });
+  const secs = now.toLocaleTimeString([], { second: '2-digit', timeZone }).split(':').pop() ?? '00';
+  const date = now.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric', timeZone });
 
   return (
     <div className="text-center select-none">

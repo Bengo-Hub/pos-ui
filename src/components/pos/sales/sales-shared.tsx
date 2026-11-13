@@ -3,6 +3,7 @@
 import { X } from 'lucide-react';
 import { Badge } from '@/components/ui/base';
 import { PAYMENT_METHOD_LABELS, getPaymentMethodLabel } from '@bengo-hub/shared-ui-lib';
+import { getActiveTimeZone } from '@/lib/user-timezone';
 
 /** Shared helpers/constants for the All-Sales / POS-Sales surfaces (list, filters, modals).
  *  `currency` defaults to KES for callers that haven't threaded the tenant's real currency
@@ -25,7 +26,9 @@ export const isBackdatedOrder = (o: any): boolean => !!o?.business_date;
 export const orderDisplayDate = (o: any, includeTime = true): string => {
   if (o?.business_date) return new Date(o.business_date).toLocaleDateString('en-KE');
   if (!o?.created_at) return '—';
-  return includeTime ? new Date(o.created_at).toLocaleString('en-KE') : new Date(o.created_at).toLocaleDateString('en-KE');
+  return includeTime
+    ? new Date(o.created_at).toLocaleString('en-KE', { timeZone: getActiveTimeZone() })
+    : new Date(o.created_at).toLocaleDateString('en-KE', { timeZone: getActiveTimeZone() });
 };
 
 // Re-exported from shared-ui-lib — was previously a local dict (kept mtn_momo/airtel_money out

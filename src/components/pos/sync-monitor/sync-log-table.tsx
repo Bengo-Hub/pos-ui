@@ -5,6 +5,7 @@ import { ArrowDownToLine, ArrowUpFromLine, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { SyncLogEntry } from '@/lib/db/pos-db';
 import { clearSyncLog } from '@/lib/db/kv-cache';
+import { getActiveTimeZone } from '@/lib/user-timezone';
 
 const ENTITY_LABELS: Record<string, string> = {
   order: 'Sale',
@@ -80,7 +81,7 @@ export function SyncLogTable({ entries }: { entries: SyncLogEntry[] }) {
               {filtered.map((e) => (
                 <tr key={e.id} className="border-t border-border/60 align-top">
                   <td className="px-4 py-2 whitespace-nowrap text-muted-foreground tabular-nums">
-                    {new Date(e.ts).toLocaleTimeString()}
+                    {new Date(e.ts).toLocaleTimeString(undefined, { timeZone: getActiveTimeZone() })}
                   </td>
                   <td className="px-4 py-2 whitespace-nowrap">
                     <span className="inline-flex items-center gap-1.5 text-xs font-semibold">

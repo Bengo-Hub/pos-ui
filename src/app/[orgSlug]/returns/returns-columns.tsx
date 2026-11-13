@@ -6,6 +6,7 @@
 import { cn } from '@/lib/utils';
 import { returnLineLocations } from '@/components/pos/returns/restock-status-card';
 import type { DataTableColumn } from '@bengo-hub/shared-ui-lib/data-table';
+import { getActiveTimeZone } from '@/lib/user-timezone';
 
 export interface ReturnItem {
   id: string;
@@ -150,7 +151,7 @@ export function buildReturnsColumns(cb: ReturnsColumnCallbacks): DataTableColumn
       header: 'Date',
       sortable: true,
       accessor: (ret) => ret.created_at,
-      render: (ret) => <span className="text-muted-foreground text-xs">{new Date(ret.created_at).toLocaleDateString()}</span>,
+      render: (ret) => <span className="text-muted-foreground text-xs">{new Date(ret.created_at).toLocaleDateString(undefined, { timeZone: getActiveTimeZone() })}</span>,
     },
   ];
 }

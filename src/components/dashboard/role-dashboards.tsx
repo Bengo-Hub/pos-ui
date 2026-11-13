@@ -22,6 +22,7 @@ import {
 import Link from 'next/link';
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { getActiveTimeZone } from '@/lib/user-timezone';
 
 function greeting(): string {
   const h = new Date().getHours();
@@ -58,7 +59,7 @@ export function AdminDashboard({ orgSlug }: { orgSlug: string }) {
         <div>
           <h1 className="text-xl font-bold text-foreground font-display">Today&apos;s Overview</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            {new Date().toLocaleDateString('en-KE', { weekday: 'long', day: 'numeric', month: 'long' })}
+            {new Date().toLocaleDateString('en-KE', { weekday: 'long', day: 'numeric', month: 'long', timeZone: getActiveTimeZone() })}
           </p>
         </div>
         <div className="flex items-center gap-2 w-full sm:w-auto min-w-0">
@@ -280,7 +281,7 @@ function HotelReceptionDashboard({ orgSlug }: { orgSlug: string }) {
       <div>
         <h1 className="text-xl font-bold font-display">Reception</h1>
         <p className="text-sm text-muted-foreground mt-0.5">
-          {new Date().toLocaleDateString('en-KE', { weekday: 'long', day: 'numeric', month: 'long' })}
+          {new Date().toLocaleDateString('en-KE', { weekday: 'long', day: 'numeric', month: 'long', timeZone: getActiveTimeZone() })}
         </p>
       </div>
       <div className="grid grid-cols-3 gap-4">
@@ -351,7 +352,7 @@ export function HospitalityDashboard({ orgSlug }: { orgSlug: string }) {
         <div>
           <h1 className="text-xl font-bold text-foreground font-display">Hospitality Overview</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            {new Date().toLocaleDateString('en-KE', { weekday: 'long', day: 'numeric', month: 'long' })}
+            {new Date().toLocaleDateString('en-KE', { weekday: 'long', day: 'numeric', month: 'long', timeZone: getActiveTimeZone() })}
           </p>
         </div>
         <div className="flex items-center gap-2 w-full sm:w-auto min-w-0">
@@ -469,7 +470,7 @@ export function RetailDashboard({ orgSlug }: { orgSlug: string }) {
         <div>
           <h1 className="text-xl font-bold text-foreground font-display">Retail Overview</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            {new Date().toLocaleDateString('en-KE', { weekday: 'long', day: 'numeric', month: 'long' })}
+            {new Date().toLocaleDateString('en-KE', { weekday: 'long', day: 'numeric', month: 'long', timeZone: getActiveTimeZone() })}
           </p>
         </div>
         <div className="flex items-center gap-2 w-full sm:w-auto min-w-0">
@@ -522,7 +523,7 @@ export function QuickServiceDashboard({ orgSlug }: { orgSlug: string }) {
         <div>
           <h1 className="text-xl font-bold text-foreground font-display">Quick Service Overview</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            {new Date().toLocaleDateString('en-KE', { weekday: 'long', day: 'numeric', month: 'long' })}
+            {new Date().toLocaleDateString('en-KE', { weekday: 'long', day: 'numeric', month: 'long', timeZone: getActiveTimeZone() })}
           </p>
         </div>
         <div className="flex items-center gap-2 w-full sm:w-auto min-w-0">
@@ -574,7 +575,7 @@ export function ServicesDashboard({ orgSlug }: { orgSlug: string }) {
         <div>
           <h1 className="text-xl font-bold text-foreground font-display">Services Overview</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            {new Date().toLocaleDateString('en-KE', { weekday: 'long', day: 'numeric', month: 'long' })}
+            {new Date().toLocaleDateString('en-KE', { weekday: 'long', day: 'numeric', month: 'long', timeZone: getActiveTimeZone() })}
           </p>
         </div>
         <div className="flex items-center gap-2 w-full sm:w-auto min-w-0">

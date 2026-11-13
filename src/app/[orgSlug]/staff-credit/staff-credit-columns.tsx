@@ -5,6 +5,7 @@
 
 import { cn } from '@/lib/utils';
 import type { DataTableColumn } from '@bengo-hub/shared-ui-lib/data-table';
+import { getActiveTimeZone } from '@/lib/user-timezone';
 
 export interface StaffCreditLink {
   id: string;
@@ -81,7 +82,7 @@ export function buildStaffCreditColumns(money: (v: number) => string): DataTable
       header: 'Date',
       sortable: true,
       accessor: (r) => r.created_at,
-      render: (r) => <span className="text-muted-foreground text-xs">{new Date(r.created_at).toLocaleDateString()}</span>,
+      render: (r) => <span className="text-muted-foreground text-xs">{new Date(r.created_at).toLocaleDateString(undefined, { timeZone: getActiveTimeZone() })}</span>,
     },
   ];
 }

@@ -12,6 +12,7 @@ import {
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api/error-message';
+import { getActiveTimeZone } from '@/lib/user-timezone';
 
 const EVENT_TYPES = [
   'order.created', 'order.completed', 'order.cancelled',
@@ -34,7 +35,7 @@ function DeliveryRow({ d }: { d: WebhookDelivery }) {
       <td className="px-4 py-2.5 text-muted-foreground">{d.http_status ?? '—'}</td>
       <td className="px-4 py-2.5 text-muted-foreground">{d.attempt}</td>
       <td className="px-4 py-2.5 text-xs text-muted-foreground">
-        {d.delivered_at ? new Date(d.delivered_at).toLocaleString() : new Date(d.created_at).toLocaleString()}
+        {d.delivered_at ? new Date(d.delivered_at).toLocaleString(undefined, { timeZone: getActiveTimeZone() }) : new Date(d.created_at).toLocaleString(undefined, { timeZone: getActiveTimeZone() })}
       </td>
       {d.error_message && <td className="max-w-xs truncate px-4 py-2.5 text-xs text-destructive">{d.error_message}</td>}
     </tr>

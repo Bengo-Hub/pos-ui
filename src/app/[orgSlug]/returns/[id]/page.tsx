@@ -23,6 +23,7 @@ import { autoPrintsCustomerCopy, resolveBillProfile } from '@/lib/pos/printer-st
 import { DataTable } from '@bengo-hub/shared-ui-lib/data-table';
 import { buildReturnLineColumns, returnLineLocations, type ReturnLine } from './return-lines-columns';
 import { RestockStatusCard } from '@/components/pos/returns/restock-status-card';
+import { getActiveTimeZone } from '@/lib/user-timezone';
 
 interface ReturnDetail {
   id: string;
@@ -247,7 +248,7 @@ export default function ReturnDetailPage() {
           <div className="min-w-0">
             <h1 className="text-lg sm:text-xl font-bold truncate">Return {ret.return_number}</h1>
             <p className="text-xs text-muted-foreground">
-              {new Date(ret.created_at).toLocaleString()}
+              {new Date(ret.created_at).toLocaleString(undefined, { timeZone: getActiveTimeZone() })}
               {ret.outlet_name ? ` · ${ret.outlet_name}` : ''}
             </p>
           </div>

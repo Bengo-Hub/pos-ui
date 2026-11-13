@@ -8,6 +8,7 @@ import { apiClient } from '@/lib/api/client';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { cn } from '@/lib/utils';
 import { useTenantId } from '@/hooks/useTenantId';
+import { getActiveTimeZone } from '@/lib/user-timezone';
 
 // Restock tracking written by pos-api into the return's metadata when inventory-api reports
 // back on inventory.return.restocked (see pos-api internal/modules/returns/restock.go).
@@ -161,7 +162,7 @@ export function RestockStatusCard({
           This return was completed before stock confirmation existed. Use Restock now if the items are not yet back in stock.
         </p>
       )}
-      {updatedAt && <p className="text-[11px] text-muted-foreground">Updated {new Date(updatedAt).toLocaleString()}</p>}
+      {updatedAt && <p className="text-[11px] text-muted-foreground">Updated {new Date(updatedAt).toLocaleString(undefined, { timeZone: getActiveTimeZone() })}</p>}
 
       {canRetry && !SETTLED.has(status) && (
         <button

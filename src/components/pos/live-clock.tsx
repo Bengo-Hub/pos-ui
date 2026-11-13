@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { getActiveTimeZone } from '@/lib/user-timezone';
 
 export function LiveClock() {
   const [time, setTime] = useState('');
@@ -8,8 +9,9 @@ export function LiveClock() {
   useEffect(() => {
     const tick = () => {
       const d = new Date();
-      setTime(d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
-      setDate(d.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' }));
+      const timeZone = getActiveTimeZone();
+      setTime(d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', timeZone }));
+      setDate(d.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short', timeZone }));
     };
     tick();
     const id = setInterval(tick, 1000);

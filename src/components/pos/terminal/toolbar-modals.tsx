@@ -21,6 +21,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { PrintReceiptButton } from '@/components/pos/print-receipt-button';
 import { isBackdatedOrder, orderDisplayDate } from '@/components/pos/sales/sales-shared';
 import { toast } from 'sonner';
+import { getActiveTimeZone } from '@/lib/user-timezone';
 
 function ModalShell({ title, icon: Icon, onClose, children, wide, size }: {
   title: string; icon: React.ElementType; onClose: () => void; children: React.ReactNode; wide?: boolean;
@@ -90,7 +91,7 @@ export function RegisterDetailsModal({ open, onClose }: { open: boolean; onClose
   if (!open) return null;
 
   const rangeLabel = shift?.opened_at
-    ? `${new Date(shift.opened_at).toLocaleString('en-KE')} — ${new Date().toLocaleString('en-KE')}`
+    ? `${new Date(shift.opened_at).toLocaleString('en-KE', { timeZone: getActiveTimeZone() })} — ${new Date().toLocaleString('en-KE', { timeZone: getActiveTimeZone() })}`
     : `${from} — ${to}`;
 
   return (

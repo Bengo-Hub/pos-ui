@@ -19,6 +19,7 @@ import { CheckCircle2, Loader2, PackageSearch, Trash2, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api/error-message';
+import { getActiveTimeZone } from '@/lib/user-timezone';
 
 const STATUS_OPTIONS = ['all', 'stored', 'claimed', 'disposed', 'donated'];
 
@@ -224,7 +225,7 @@ function LostFoundPage() {
               <div className="flex items-start justify-between gap-2">
                 <div>
                   <p className="font-bold text-foreground">{item.room_id ? (roomLabel.get(item.room_id) ?? 'Room') : 'Common area'}</p>
-                  <p className="text-xs text-muted-foreground">{new Date(item.found_at).toLocaleString()}</p>
+                  <p className="text-xs text-muted-foreground">{new Date(item.found_at).toLocaleString(undefined, { timeZone: getActiveTimeZone() })}</p>
                 </div>
                 <span className={cn('text-xs px-2 py-0.5 rounded-full font-medium capitalize', STATUS_COLORS[item.status])}>{item.status}</span>
               </div>
@@ -252,7 +253,7 @@ function LostFoundPage() {
 
               {item.status === 'claimed' && (
                 <p className="mt-3 text-xs text-muted-foreground rounded-lg bg-muted/50 px-3 py-2">
-                  Claimed by {item.claimed_by_name}{item.claimed_at ? ` on ${new Date(item.claimed_at).toLocaleDateString()}` : ''}
+                  Claimed by {item.claimed_by_name}{item.claimed_at ? ` on ${new Date(item.claimed_at).toLocaleDateString(undefined, { timeZone: getActiveTimeZone() })}` : ''}
                   {item.claimed_notes ? ` — ${item.claimed_notes}` : ''}
                 </p>
               )}

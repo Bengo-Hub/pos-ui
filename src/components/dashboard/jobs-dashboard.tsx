@@ -7,6 +7,7 @@ import { DashboardRangeFilter, useDashboardRange } from './range-filter';
 import { KPICard, QuickActionGrid, QuickActionTile, RecentOrdersCard, fmt, fmtNum, useDashboardSummary } from './widgets';
 import { useJobSummary, useOutletServiceProfile } from '@/hooks/useServiceJobs';
 import { cn } from '@/lib/utils';
+import { getActiveTimeZone } from '@/lib/user-timezone';
 
 /**
  * Admin/manager dashboard for a job-workflow services outlet (printing, garage, laundry,
@@ -29,7 +30,7 @@ export function JobsDashboard({ orgSlug }: { orgSlug: string }) {
         <div>
           <h1 className="font-display text-xl font-bold text-foreground">{profile?.label ?? 'Services'} Overview</h1>
           <p className="mt-0.5 text-sm text-muted-foreground">
-            {new Date().toLocaleDateString('en-KE', { weekday: 'long', day: 'numeric', month: 'long' })}
+            {new Date().toLocaleDateString('en-KE', { weekday: 'long', day: 'numeric', month: 'long', timeZone: getActiveTimeZone() })}
           </p>
         </div>
         <div className="flex w-full min-w-0 items-center gap-2 sm:w-auto">

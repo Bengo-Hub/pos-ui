@@ -19,6 +19,7 @@ import { CheckCircle2, Loader2, ShieldAlert, X, XCircle } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api/error-message';
+import { getActiveTimeZone } from '@/lib/user-timezone';
 
 const STATUS_OPTIONS = ['all', 'pending', 'approved', 'rejected'];
 
@@ -147,7 +148,7 @@ function DamageReportsPage() {
               <div className="flex items-start justify-between gap-2">
                 <div>
                   <p className="font-bold text-foreground">{roomLabel.get(report.room_id) ?? 'Room'}</p>
-                  <p className="text-xs text-muted-foreground">{new Date(report.created_at).toLocaleString()}</p>
+                  <p className="text-xs text-muted-foreground">{new Date(report.created_at).toLocaleString(undefined, { timeZone: getActiveTimeZone() })}</p>
                 </div>
                 <span className={cn('text-xs px-2 py-0.5 rounded-full font-medium capitalize', STATUS_COLORS[report.status])}>{report.status}</span>
               </div>

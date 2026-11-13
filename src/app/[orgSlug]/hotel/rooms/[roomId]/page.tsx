@@ -33,6 +33,7 @@ import { DamageReportModal } from '@/components/pos/hotel/damage-report-modal';
 import { EditGuestModal } from '@/components/pos/hotel/edit-guest-modal';
 import { LostFoundModal } from '@/components/pos/hotel/lost-found-modal';
 import { HotelTenderFields, HotelTenderPicker } from '@/components/pos/hotel/payment-method-picker';
+import { getActiveTimeZone } from '@/lib/user-timezone';
 
 // Folio charge types a front-desk agent can post manually from this form. Mirrors the
 // subset of pos-api's RoomFolioItem.charge_type enum that isn't already posted by a
@@ -650,7 +651,7 @@ function RoomDetailPageInner() {
                     <p className="text-xs text-muted-foreground">{lastGuest.phone}</p>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Checked out {lastGuest.checked_out_at ? new Date(lastGuest.checked_out_at).toLocaleString() : '—'}
+                    Checked out {lastGuest.checked_out_at ? new Date(lastGuest.checked_out_at).toLocaleString(undefined, { timeZone: getActiveTimeZone() }) : '—'}
                   </p>
                 </div>
               </CardContent>

@@ -6,6 +6,7 @@ import { useOrders } from '@/hooks/usePOS';
 import { usePermissions, P } from '@/hooks/usePermissions';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { formatCurrency } from '@/lib/utils';
+import { getActiveTimeZone } from '@/lib/user-timezone';
 
 // ParkedSalesModal lists suspended (draft) sales for this tenant so the cashier can resume one and
 // take payment. Parking persists the cart as a draft order; resuming opens its payment modal.
@@ -65,7 +66,7 @@ export function ParkedSalesModal({ onClose, onResume }: { onClose: () => void; o
                   <div className="min-w-0">
                     <p className="font-semibold text-sm font-mono truncate">{o.order_number}</p>
                     <p className="text-xs text-muted-foreground">
-                      {o.created_at ? new Date(o.created_at).toLocaleTimeString() : ''}
+                      {o.created_at ? new Date(o.created_at).toLocaleTimeString(undefined, { timeZone: getActiveTimeZone() }) : ''}
                       {lineCount ? ` · ${lineCount} item${lineCount === 1 ? '' : 's'}` : ''}
                     </p>
                   </div>

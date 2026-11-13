@@ -26,6 +26,7 @@ import { localAgentPrinters } from '@/lib/pos/print-jobs';
 import { PrintAgentCard } from './PrintAgentCard';
 import { Toggle, inputClass, labelClass } from './shared';
 import { toast } from 'sonner';
+import { getActiveTimeZone } from '@/lib/user-timezone';
 
 // Full supported paper range — thermal roll widths through cut-sheet sizes.
 const PAPER_OPTIONS: { value: string; label: string }[] = [
@@ -193,7 +194,7 @@ export function ReceiptTab() {
     const p = getProfile(card.id);
     const html = `<div style="font-family:'Courier New',monospace;text-align:center">
       <h3>Test Print</h3><p>${card.label}</p><p>${paperOf(p)}</p>
-      <p>${new Date().toLocaleString()}</p></div>`;
+      <p>${new Date().toLocaleString(undefined, { timeZone: getActiveTimeZone() })}</p></div>`;
 
     // Every REAL printer (network IP, USB, OS, Bluetooth) tests the SAME way live printing works:
     // server-built ESC/POS bytes dispatched silently via the Local Print Agent (network by ip:port,

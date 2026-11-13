@@ -10,10 +10,11 @@ import { ReportDocumentButton } from '@/components/reports/report-document-butto
 import { ArrowLeft, Clock, DollarSign, Loader2, ShoppingCart, TrendingDown } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
+import { getActiveTimeZone } from '@/lib/user-timezone';
 
 function fmt(iso?: string) {
   if (!iso) return '—';
-  return new Date(iso).toLocaleString('en-KE', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  return new Date(iso).toLocaleString('en-KE', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: getActiveTimeZone() });
 }
 
 function KPI({ label, value, icon: Icon, color }: { label: string; value: string; icon: any; color: string }) {

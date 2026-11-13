@@ -28,6 +28,7 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api/error-message';
+import { getActiveTimeZone } from '@/lib/user-timezone';
 
 const STATUS_COLORS: Record<AppointmentStatus, string> = {
   scheduled:   'bg-muted text-muted-foreground',
@@ -153,13 +154,13 @@ function AppointmentDetailPage() {
         <div className="grid grid-cols-2 gap-3 text-sm">
           <div className="flex items-center gap-2 text-muted-foreground">
             <Calendar className="h-4 w-4 shrink-0" />
-            <span>{startTime ? new Date(startTime).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }) : '—'}</span>
+            <span>{startTime ? new Date(startTime).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', timeZone: getActiveTimeZone() }) : '—'}</span>
           </div>
           <div className="flex items-center gap-2 text-muted-foreground">
             <Clock className="h-4 w-4 shrink-0" />
             <span>
-              {startTime ? new Date(startTime).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }) : '—'}
-              {endTime ? ` – ${new Date(endTime).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}` : ''}
+              {startTime ? new Date(startTime).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', timeZone: getActiveTimeZone() }) : '—'}
+              {endTime ? ` – ${new Date(endTime).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', timeZone: getActiveTimeZone() })}` : ''}
             </span>
           </div>
           {(appt as any).service_sku && (

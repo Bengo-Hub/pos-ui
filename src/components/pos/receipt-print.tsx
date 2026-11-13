@@ -6,6 +6,7 @@ import { RetailReceiptPrint } from './receipt-retail-print';
 import { buildReceiptRows, receiptCopyBanner } from '@/lib/pos/receipt-rows';
 import { resolveReceiptFormat } from '@/lib/pos/receipt-format';
 import { resolveReceiptDisplayName, resolveReceiptOutletLine } from '@/lib/pos/receipt-branding';
+import { getActiveTimeZone } from '@/lib/user-timezone';
 
 /** The boxed "*** COPY ***" stamp, inline-styled so it survives every print path (print window,
  *  QZ/print-agent HTML) without depending on a stylesheet. Mirrors pos-api thermal_html .copy. */
@@ -103,6 +104,7 @@ export function ReceiptPrint({
       year: 'numeric',
       hour: '2-digit',
       minute: '2-digit',
+      timeZone: getActiveTimeZone(),
     });
 
   const headerBlock = (

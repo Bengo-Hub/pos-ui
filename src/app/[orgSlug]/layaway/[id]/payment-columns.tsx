@@ -6,6 +6,7 @@
 import { formatCurrency } from '@/lib/utils';
 import type { DataTableColumn } from '@bengo-hub/shared-ui-lib/data-table';
 import type { LayawayPayment } from '@/hooks/useLayaway';
+import { getActiveTimeZone } from '@/lib/user-timezone';
 
 export function buildLayawayPaymentColumns(currency: string): DataTableColumn<LayawayPayment>[] {
   return [
@@ -35,7 +36,7 @@ export function buildLayawayPaymentColumns(currency: string): DataTableColumn<La
       header: 'Date',
       sortable: true,
       accessor: (p) => p.created_at,
-      render: (p) => <span className="text-muted-foreground">{new Date(p.created_at).toLocaleString()}</span>,
+      render: (p) => <span className="text-muted-foreground">{new Date(p.created_at).toLocaleString(undefined, { timeZone: getActiveTimeZone() })}</span>,
     },
   ];
 }

@@ -10,6 +10,7 @@ import { fetchOverageStatus, setOverageEnabled, type OverageStatus } from '@/lib
 import { Badge, Card, CardContent, CardHeader } from '@/components/ui/base';
 import { Button } from '@/components/ui/button';
 import { formatCurrency } from '@/lib/utils';
+import { getActiveTimeZone } from '@/lib/user-timezone';
 
 /**
  * SubscriptionTab is a READ-ONLY view of the outlet's POS subscription licence.
@@ -52,7 +53,7 @@ export function SubscriptionTab() {
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Clock className="h-4 w-4" />
                   <span>
-                    {isExpired ? 'Expired' : 'Renews'} on {new Date(info.currentPeriodEnd).toLocaleDateString()}
+                    {isExpired ? 'Expired' : 'Renews'} on {new Date(info.currentPeriodEnd).toLocaleDateString(undefined, { timeZone: getActiveTimeZone() })}
                     {!isExpired && daysUntilExpiry != null && daysUntilExpiry < 30 && (
                       <span className="ml-2 text-amber-500 font-medium">({daysUntilExpiry} days left)</span>
                     )}

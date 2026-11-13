@@ -13,6 +13,7 @@ import { cn } from '@/lib/utils';
 import { browserLabel, deviceLabel, kindLabel, shortClientId, type DeviceClient } from '@/lib/client-trail';
 import { DEVICE_NAME_MAX, getDeviceName, setDeviceName } from '@/lib/device-identity';
 import { useDeviceIdentity } from '@/hooks/use-device-identity';
+import { getActiveTimeZone } from '@/lib/user-timezone';
 
 interface POSDevice {
   id: string;
@@ -33,7 +34,7 @@ function relativeTime(isoString?: string | null): string {
   if (mins < 60) return `${mins} min ago`;
   const hrs = Math.floor(mins / 60);
   if (hrs < 24) return `${hrs}h ago`;
-  return new Date(isoString).toLocaleDateString();
+  return new Date(isoString).toLocaleDateString(undefined, { timeZone: getActiveTimeZone() });
 }
 
 const statusVariant = (s: string) =>
@@ -101,7 +102,7 @@ function ClientRow({ c, isThis }: { c: DeviceClient; isThis: boolean }) {
         </p>
         <p className="text-[11px] text-muted-foreground">
           Last sign-in {relativeTime(c.last_seen_at)}{c.last_user_name ? ` by ${c.last_user_name}` : ''}
-          {c.first_seen_at ? ` · first seen ${new Date(c.first_seen_at).toLocaleDateString()}` : ''}
+          {c.first_seen_at ? ` · first seen ${new Date(c.first_seen_at).toLocaleDateString(undefined, { timeZone: getActiveTimeZone() })}` : ''}
         </p>
       </div>
     </li>

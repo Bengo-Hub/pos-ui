@@ -38,6 +38,7 @@ import {
 import { useAuthStore } from '@/store/auth';
 import { cn } from '@/lib/utils';
 import { apiErrorMessage } from '@/lib/api/error-message';
+import { toUserZone } from '@/lib/zoned-date';
 
 // ─── Status config ────────────────────────────────────────────────────────────
 
@@ -319,8 +320,8 @@ function ReservationCard({
   onCheckIn: (id: string) => void;
   onCancel: (id: string) => void;
 }) {
-  const time = format(parseISO(res.scheduled_at), 'HH:mm');
-  const end = format(new Date(parseISO(res.scheduled_at).getTime() + res.duration_minutes * 60_000), 'HH:mm');
+  const time = format(toUserZone(parseISO(res.scheduled_at)), 'HH:mm');
+  const end = format(toUserZone(new Date(parseISO(res.scheduled_at).getTime() + res.duration_minutes * 60_000)), 'HH:mm');
 
   return (
     <div className={cn(

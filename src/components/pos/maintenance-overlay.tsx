@@ -4,6 +4,7 @@ import { useAuthStore } from '@/store/auth';
 import { useMaintenanceStore } from '@/store/maintenance';
 import { LogIn, Mail, ShieldAlert } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
+import { getActiveTimeZone } from '@/lib/user-timezone';
 
 /**
  * Full-screen, non-dismissable block shown the instant any request comes back
@@ -27,7 +28,7 @@ export function MaintenanceOverlay() {
   if (!active || !tenantId || tenantId !== currentTenantId) return null;
 
   const endsAtLabel = endsAt
-    ? new Date(endsAt).toLocaleString('en-KE', { dateStyle: 'medium', timeStyle: 'short' })
+    ? new Date(endsAt).toLocaleString('en-KE', { dateStyle: 'medium', timeStyle: 'short', timeZone: getActiveTimeZone() })
     : null;
 
   return (

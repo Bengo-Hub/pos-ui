@@ -29,6 +29,7 @@ import { TeamOnShiftPanel } from '@/components/pos/team-on-shift-panel';
 import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import type { ShiftHistoryRow } from '@/lib/api/shifts';
+import { getActiveTimeZone } from '@/lib/user-timezone';
 
 type Tab = 'current' | 'team' | 'history' | 'planner' | 'leave' | 'rotations';
 
@@ -131,12 +132,12 @@ function HistoryTable({ rows, currency = 'KES' }: { rows: ShiftHistoryRow[]; cur
                 <div className="flex items-center gap-2 flex-wrap">
                   <p className="text-sm font-semibold">
                     {new Date(row.opened_at).toLocaleDateString('en-KE', {
-                      weekday: 'short', day: 'numeric', month: 'short',
+                      weekday: 'short', day: 'numeric', month: 'short', timeZone: getActiveTimeZone(),
                     })}
                   </p>
                   <span className="text-xs text-muted-foreground">
-                    {new Date(row.opened_at).toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' })}
-                    {row.closed_at && ` → ${new Date(row.closed_at).toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' })}`}
+                    {new Date(row.opened_at).toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit', timeZone: getActiveTimeZone() })}
+                    {row.closed_at && ` → ${new Date(row.closed_at).toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit', timeZone: getActiveTimeZone() })}`}
                   </span>
                   <span className="text-xs text-muted-foreground">
                     · {formatDuration(row.opened_at, row.closed_at ?? undefined)}
@@ -357,7 +358,7 @@ function ShiftsPage() {
                         Started:{' '}
                         <span className="font-medium text-foreground">
                           {new Date(session.opened_at).toLocaleTimeString('en-KE', {
-                            hour: '2-digit', minute: '2-digit',
+                            hour: '2-digit', minute: '2-digit', timeZone: getActiveTimeZone(),
                           })}
                         </span>
                       </p>

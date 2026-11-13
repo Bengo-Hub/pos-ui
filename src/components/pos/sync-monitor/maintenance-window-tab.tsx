@@ -8,6 +8,7 @@ import { apiErrorMessage } from '@/lib/api/error-message';
 import { maintenanceWindowApi } from '@/lib/api/maintenance-window';
 import { usePlatformTenants } from '@/hooks/use-platform-tenants';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { getActiveTimeZone } from '@/lib/user-timezone';
 
 /** Converts a datetime-local input value (local time, no timezone) to an RFC3339 UTC string. */
 function localInputToRFC3339(value: string): string {
@@ -108,7 +109,7 @@ export function MaintenanceWindowTab() {
                 <div>
                   <p className="font-semibold text-destructive">Currently under maintenance</p>
                   {current.reason && <p className="text-muted-foreground mt-0.5">{current.reason}</p>}
-                  {current.ends_at && <p className="text-muted-foreground mt-0.5">Resumes at {new Date(current.ends_at).toLocaleString()}</p>}
+                  {current.ends_at && <p className="text-muted-foreground mt-0.5">Resumes at {new Date(current.ends_at).toLocaleString(undefined, { timeZone: getActiveTimeZone() })}</p>}
                   {current.activated_by && <p className="text-muted-foreground mt-0.5">Scheduled by {current.activated_by}</p>}
                 </div>
               </div>
@@ -120,7 +121,7 @@ export function MaintenanceWindowTab() {
               </button>
             </div>
           ) : current?.ends_at ? (
-            <p className="text-sm text-muted-foreground">No active window (last one ended {new Date(current.ends_at).toLocaleString()}).</p>
+            <p className="text-sm text-muted-foreground">No active window (last one ended {new Date(current.ends_at).toLocaleString(undefined, { timeZone: getActiveTimeZone() })}).</p>
           ) : (
             <p className="text-sm text-muted-foreground">No maintenance window scheduled for this tenant.</p>
           )}

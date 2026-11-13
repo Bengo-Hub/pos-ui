@@ -3,6 +3,7 @@
 import { WifiOff } from 'lucide-react';
 import { KindIcon } from '@/components/ui/kind-icon';
 import { asTrail, browserLabel, deviceLabel, shortClientId, type ClientTrail, type OfflineOrigin } from '@/lib/client-trail';
+import { getActiveTimeZone } from '@/lib/user-timezone';
 
 function TrailLine({ title, trail }: { title: string; trail: ClientTrail }) {
   return (
@@ -37,14 +38,14 @@ export function OrderOriginCard({ metadata }: { metadata?: Record<string, unknow
       {offline && (
         <div className="rounded-xl bg-purple-500/10 text-purple-700 dark:text-purple-300 p-3 text-xs space-y-1">
           <p className="flex items-center gap-1.5 font-semibold"><WifiOff className="h-3.5 w-3.5" /> Rung up offline</p>
-          {offline.offline_created_at && <p>Rung up {new Date(offline.offline_created_at).toLocaleString()} (device clock)</p>}
+          {offline.offline_created_at && <p>Rung up {new Date(offline.offline_created_at).toLocaleString(undefined, { timeZone: getActiveTimeZone() })} (device clock)</p>}
           {offline.rung_up_by_name && (
             <p>
               By {offline.rung_up_by_name}
               {offline.rung_up_by_verified === false && ' (not verified, credited to the syncing login)'}
             </p>
           )}
-          {offline.synced_at && <p>Synced {new Date(offline.synced_at).toLocaleString()}</p>}
+          {offline.synced_at && <p>Synced {new Date(offline.synced_at).toLocaleString(undefined, { timeZone: getActiveTimeZone() })}</p>}
         </div>
       )}
       {rungUpOn && <TrailLine title="Rung up on" trail={rungUpOn} />}

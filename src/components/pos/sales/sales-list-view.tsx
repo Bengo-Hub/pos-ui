@@ -32,6 +32,7 @@ import { money, payStatusBadge, prettyMethod, PAYMENT_STATUSES, SOURCES, isBackd
 import { cashierNameOf, OrderLinesPanel, SalesSummaryFooter, BulkVoidReasonDialog, skippedSummary } from './sales-table-shared';
 import { ReportExportButtons } from '@/components/reports/report-document-button';
 import { toast } from 'sonner';
+import { getActiveTimeZone } from '@/lib/user-timezone';
 
 // Statuses pos-api's bulk-void refuses (voidSkipReason): already voided, or finalized
 // (completed/paid/closed — ledger + KRA eTIMS state; reverse via a return/refund instead).
@@ -276,7 +277,7 @@ export function SalesListView({ orgSlug, fixedSource, title, subtitle }: {
           {orderDisplayDate(o)}
           {isBackdatedOrder(o) && (
             <span className="block text-[10px] text-amber-600"
-              title={`Backdated sale — actually entered ${new Date(o.created_at).toLocaleString('en-KE')}`}>
+              title={`Backdated sale — actually entered ${new Date(o.created_at).toLocaleString('en-KE', { timeZone: getActiveTimeZone() })}`}>
               backdated
             </span>
           )}

@@ -7,6 +7,7 @@ import { useOrders } from '@/hooks/usePOS';
 import { useClaimHeldItem, type HeldItem } from '@/hooks/useHeldItems';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
 import { formatCurrency } from '@/lib/utils';
+import { getActiveTimeZone } from '@/lib/user-timezone';
 
 /**
  * ClaimHeldItemDialog merges a set-aside (parked) item into an ACTIVE order: the waiter picks any
@@ -114,7 +115,7 @@ export function ClaimHeldItemDialog({
                 <div className="min-w-0">
                   <p className="text-sm font-semibold truncate">{o.order_number}</p>
                   <p className="text-[11px] text-muted-foreground truncate">
-                    {o.table_reference || 'No table'} · {new Date(o.created_at).toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' })}
+                    {o.table_reference || 'No table'} · {new Date(o.created_at).toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit', timeZone: getActiveTimeZone() })}
                   </p>
                 </div>
                 <span className="shrink-0 text-sm font-bold tabular-nums">

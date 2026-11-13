@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils';
 import type { DataTableColumn } from '@bengo-hub/shared-ui-lib/data-table';
 import type { Discount } from '@/lib/api/discounts';
 import { describeDiscount, describeScope } from '@/components/pos/discounts/discount-form-modal';
+import { getActiveTimeZone } from '@/lib/user-timezone';
 
 export const KIND_META: Record<string, { label: string; icon: typeof Ticket; cls: string }> = {
   code: { label: 'Promo Code', icon: Ticket, cls: 'bg-blue-500/10 text-blue-600' },
@@ -20,15 +21,15 @@ const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 export function scheduleText(d: Discount): string {
   if (d.promo_kind === 'happy_hour') {
     if (d.start_at && !d.days_of_week?.length) {
-      const from = new Date(d.start_at).toLocaleString('en-KE');
-      const to = d.end_at ? new Date(d.end_at).toLocaleString('en-KE') : '—';
+      const from = new Date(d.start_at).toLocaleString('en-KE', { timeZone: getActiveTimeZone() });
+      const to = d.end_at ? new Date(d.end_at).toLocaleString('en-KE', { timeZone: getActiveTimeZone() }) : '—';
       return `${from} → ${to}`;
     }
     const days = (d.days_of_week ?? []).map((v) => DAY_LABELS[v]).join(', ') || 'Daily';
     return `${days} · ${d.window_start || '—'}–${d.window_end || '—'}`;
   }
-  const from = d.start_at ? new Date(d.start_at).toLocaleDateString('en-KE') : null;
-  const to = d.end_at ? new Date(d.end_at).toLocaleDateString('en-KE') : null;
+  const from = d.start_at ? new Date(d.start_at).toLocaleDateString('en-KE', { timeZone: getActiveTimeZone() }) : null;
+  const to = d.end_at ? new Date(d.end_at).toLocaleDateString('en-KE', { timeZone: getActiveTimeZone() }) : null;
   if (from && to) return `${from} → ${to}`;
   if (to) return `until ${to}`;
   return 'Always';

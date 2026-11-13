@@ -13,6 +13,7 @@ import {
 } from '@/lib/api/online-orders';
 import { useOnlineOrderActions } from '@/hooks/useOnlineOrders';
 import { usePermissions, P } from '@/hooks/usePermissions';
+import { getActiveTimeZone } from '@/lib/user-timezone';
 
 /** Words the queue uses, which differ between a kitchen and a shop floor. */
 export interface QueueVocabulary {
@@ -204,7 +205,7 @@ export function OnlineOrderCard({ order, currency, vocab, onHandover, onVerify, 
           </span>
           <p className="mt-2 text-xs text-muted-foreground">
             <Clock className="mr-1 inline h-3 w-3" />
-            {new Date(order.created_at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
+            {new Date(order.created_at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', timeZone: getActiveTimeZone() })}
           </p>
         </div>
       </div>

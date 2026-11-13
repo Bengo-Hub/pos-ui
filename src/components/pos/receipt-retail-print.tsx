@@ -16,6 +16,7 @@ import type { CSSProperties } from 'react';
 import type { ReceiptData } from './receipt-preview';
 import { buildReceiptRows, receiptCopyBanner, RECEIPT_COPY_WATERMARK, vatSummaryRows } from '@/lib/pos/receipt-rows';
 import { resolveReceiptDisplayName } from '@/lib/pos/receipt-branding';
+import { getActiveTimeZone } from '@/lib/user-timezone';
 
 interface RetailReceiptPrintProps {
   receipt: ReceiptData;
@@ -34,9 +35,10 @@ const amt = (v: number) =>
   v.toLocaleString('en-KE', Number.isInteger(v) ? { maximumFractionDigits: 0 } : { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const ddmmyyyy = (iso: string, withTime = false) => {
   const d = new Date(iso);
-  const date = d.toLocaleDateString('en-GB').replace(/\//g, '-');
+  // Only a timestamp (withTime) moves to the user's zone; a bare payment_date stays as stored.
+  const date = d.toLocaleDateString('en-GB', withTime ? { timeZone: getActiveTimeZone() } : undefined).replace(/\//g, '-');
   if (!withTime) return date;
-  return `${date} ${d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`;
+  return `${date} ${d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: getActiveTimeZone() })}`;
 };
 
 // Typography mirrors pos-api generateRetailReceiptHTML: Helvetica Neue sans stack, >=13px,

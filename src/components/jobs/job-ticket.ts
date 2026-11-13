@@ -2,6 +2,7 @@ import { buildReceiptDocument, printReceiptDocument } from '@/lib/pos/receipt-ht
 import { resolveMediaUrl } from '@/lib/screensaver';
 import { formatCurrency } from '@/lib/utils';
 import { jobHeaderOf, stageLabel, type ServiceProfile } from '@/lib/api/service-jobs';
+import { getActiveTimeZone } from '@/lib/user-timezone';
 
 /** The order fields the job ticket reads (a POSOrder from GET /pos/orders/{id}). */
 export interface JobTicketOrder {
@@ -28,7 +29,7 @@ const esc = (s: unknown) =>
   String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] as string);
 
 const fmtDate = (iso?: string) =>
-  iso ? new Date(iso).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : '';
+  iso ? new Date(iso).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short', timeZone: getActiveTimeZone() }) : '';
 
 /**
  * The job ticket reception hands the customer (and pins to the job): what was ordered from the

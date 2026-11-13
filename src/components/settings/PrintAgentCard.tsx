@@ -13,6 +13,7 @@ import {
   createPrintAgentPairing, listPrintAgents, localAgentStatus, pairLocalAgent,
   type PrintAgentInfo,
 } from '@/lib/pos/print-jobs';
+import { getActiveTimeZone } from '@/lib/user-timezone';
 
 const POS_API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'https://posapi.codevertexafrica.com';
 
@@ -149,7 +150,7 @@ export function PrintAgentCard({ canEdit }: { canEdit: boolean }) {
             {agents.map((a) => (
               <div key={a.id} className="flex items-center justify-between text-xs">
                 <span className="truncate">{a.name}{a.version ? ` · v${a.version}` : ''}</span>
-                {pill(a.online, 'online', a.last_seen_at ? `last seen ${new Date(a.last_seen_at).toLocaleString()}` : 'never connected')}
+                {pill(a.online, 'online', a.last_seen_at ? `last seen ${new Date(a.last_seen_at).toLocaleString(undefined, { timeZone: getActiveTimeZone() })}` : 'never connected')}
               </div>
             ))}
           </div>

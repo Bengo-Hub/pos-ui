@@ -47,6 +47,7 @@ import { Check, Loader2, Minus, Plus, ShoppingCart, Tag, Trash2, Truck, User, Us
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
+import { getActiveTimeZone } from '@/lib/user-timezone';
 
 // Premium: staff credit funded from salary (ERP payroll deduction). Shown + upgrade-gated below top tier.
 const STAFF_CREDIT_FEATURE = 'staff_fund_from_salary';
@@ -1178,7 +1179,7 @@ export default function AddSalePage() {
           {editInplace ? 'Add, remove or reduce items — nothing is reversed until you save, and only for what actually changed' : resume ? 'Draft prefilled — collect payment to complete it' : creditSale ? 'Sell on account — posts to customer AR' : 'Back-office sale entry'}
         </span>
         <span className="ml-auto text-xs text-muted-foreground">
-          Sale date: <b className="text-foreground">{new Date().toLocaleString('en-KE')}</b> · Invoice No. auto-generated
+          Sale date: <b className="text-foreground">{new Date().toLocaleString('en-KE', { timeZone: getActiveTimeZone() })}</b> · Invoice No. auto-generated
         </span>
       </div>
 
