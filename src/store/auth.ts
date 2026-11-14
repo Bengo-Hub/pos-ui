@@ -437,7 +437,7 @@ export const useAuthStore = create<AuthState>()(
         try {
           const { cacheStaffProfile, getCachedStaffProfile } = await import('@/lib/db/pos-db');
           const { pinHashAfterPermissionRefresh } = await import('@/lib/offline/staff-profile-merge');
-          const existing = await getCachedStaffProfile(current.id);
+          const existing = await getCachedStaffProfile(current.tenant_id, current.id);
           await cacheStaffProfile({
             user_id: current.id,
             staff_id: existing?.staff_id,

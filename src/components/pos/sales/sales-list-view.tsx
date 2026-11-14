@@ -86,7 +86,8 @@ export function SalesListView({ orgSlug, fixedSource, title, subtitle }: {
   const [search, setSearch] = useState(searchParams.get('invoice') ?? '');
   const [filterState, setFilterState] = useState<SalesFilterState>({
     // The page's Outlets filter PRESELECTS the globally selected outlet (top-nav switcher).
-    outletId: globalOutlet, customer: '', paymentStatus: '', paymentMethod: '',
+    // ?payment_status=owed (the dashboard's Sales due card) opens the list already filtered.
+    outletId: globalOutlet, customer: '', paymentStatus: searchParams.get('payment_status') ?? '', paymentMethod: '',
     shippingStatus: '', userId: '', source: '', subscriptions: false,
     range: { from: '', to: '' }, minTotal: '', maxTotal: '', itemSku: '', itemLabel: '',
   });

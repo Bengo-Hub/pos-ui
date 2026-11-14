@@ -15,7 +15,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import {
   ArrowRight, BarChart3, BedDouble, Calendar, ChefHat,
-  ClipboardList, Clock, Cpu, Grid3x3, Package,
+  ClipboardList, Clock, Cpu, Grid3x3, HandCoins, Package,
   Percent, Plus, Presentation, RefreshCw, ShieldAlert, ShoppingBag,
   Sparkles, TrendingUp, Users, Wallet, Wine,
 } from 'lucide-react';
@@ -46,6 +46,22 @@ export function DashboardCharts({ range, currency }: { range: DashboardRange; cu
   );
 }
 
+/** Money customers still owe on POS sales (the summary's sales_due, every open sale up to the
+ *  period end). Opens All Sales, which has no URL filter for payment status yet. */
+function SalesDueCard({ s, orgSlug, loading }: { s: any; orgSlug: string; loading?: boolean }) {
+  const count = s.sales_due_count ?? 0;
+  return (
+    <KPICard
+      label="Sales due"
+      value={fmt(s.sales_due ?? 0, s.currency)}
+      sub={`${fmtNum(count)} ${count === 1 ? 'sale' : 'sales'}`}
+      icon={HandCoins}
+      loading={loading}
+      href={`/${orgSlug}/sell/all-sales?payment_status=owed`}
+    />
+  );
+}
+
 export function AdminDashboard({ orgSlug }: { orgSlug: string }) {
   const { range, preset, setPreset, custom, setCustom } = useDashboardRange();
   const { data: summary, isLoading, refetch, isFetching } = useDashboardSummary(range);
@@ -69,10 +85,11 @@ export function AdminDashboard({ orgSlug }: { orgSlug: string }) {
           </button>
         </div>
       </div>
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         <KPICard label="Revenue" value={fmt(s.total_revenue ?? 0, s.currency)} sub={range.compareLabel} icon={TrendingUp} trend={s.revenue_growth} loading={isLoading} />
         <KPICard label="Orders" value={fmtNum(s.total_orders ?? 0)} sub={periodSub} icon={ClipboardList} trend={s.orders_growth} loading={isLoading} />
         <GrossProfitCard s={s} loading={isLoading} />
+        <SalesDueCard s={s} orgSlug={orgSlug} loading={isLoading} />
         <KPICard label="Active Staff" value={fmtNum(s.active_staff ?? 0)} sub="on shift" icon={Users} loading={isLoading} href={`/${orgSlug}/shifts?tab=team`} />
       </div>
       <div className="space-y-3">
@@ -389,9 +406,10 @@ export function HospitalityDashboard({ orgSlug }: { orgSlug: string }) {
 
       {/* F&B / retail KPIs — only for an outlet that actually rings sales through the till */}
       {sellsItems && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
           <KPICard label="F&amp;B / Other Sales" value={fmt(s.total_revenue ?? 0, s.currency)} sub={periodSub} icon={Wine} trend={s.revenue_growth} loading={summaryLoading} />
           <KPICard label="Orders" value={fmtNum(s.total_orders ?? 0)} sub={periodSub} icon={ClipboardList} trend={s.orders_growth} loading={summaryLoading} />
+          <SalesDueCard s={s} orgSlug={orgSlug} loading={summaryLoading} />
           <KPICard label="Ancillary (Folio Extras)" value={fmt(o.ancillary_revenue ?? 0, s.currency)} sub="minibar, laundry, damages…" icon={Package} loading={occLoading} />
           <KPICard label="Active Staff" value={fmtNum(s.active_staff ?? 0)} sub="on shift" icon={Users} loading={summaryLoading} href={`/${orgSlug}/shifts?tab=team`} />
         </div>
@@ -480,10 +498,11 @@ export function RetailDashboard({ orgSlug }: { orgSlug: string }) {
           </button>
         </div>
       </div>
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         <KPICard label="Revenue" value={fmt(s.total_revenue ?? 0, s.currency)} sub={range.compareLabel} icon={TrendingUp} trend={s.revenue_growth} loading={isLoading} />
         <KPICard label="Transactions" value={fmtNum(s.total_orders ?? 0)} sub={periodSub} icon={ClipboardList} trend={s.orders_growth} loading={isLoading} />
         <GrossProfitCard s={s} loading={isLoading} />
+        <SalesDueCard s={s} orgSlug={orgSlug} loading={isLoading} />
         <KPICard label="Items Sold" value={fmtNum(s.items_sold ?? 0)} sub={`units ${periodSub}`} icon={Package} loading={isLoading} />
       </div>
       <div className="space-y-3">

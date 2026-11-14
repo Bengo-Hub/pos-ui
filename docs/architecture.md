@@ -94,6 +94,8 @@ reload, and cleared on sign-out or when another account signs in. Staff without 
 never restore one. Analytics, hotel reports and the dashboard KPI card read the same scope and
 send it as `outlet_id` (the dashboard query key carries it, so switching outlet refetches).
 
+The admin, retail and hospitality dashboards show a "Sales due" card (`sales_due`, `sales_due_count` from the summary: what is still owed now on every sale up to the period end) that opens All Sales; the All Sales page has no URL parameter for payment status yet, so the due filter is picked there. The analytics Register tab shows the same figure next to Credit Sales with a 0 to 30, 31 to 60, 61 to 90 and over 90 days split by sale date (`sales_due_ageing` on register-details).
+
 pos-api resolves `?outlet_id=` with one rule, `outletmw.RequestOutletScope`, used by the
 All-Sales list, summary and export and by every analytics, register, KDS, hotel and PDF report:
 `all` is every outlet for HQ-level callers only, a named outlet counts only when the caller may

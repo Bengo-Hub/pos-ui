@@ -291,6 +291,30 @@ export function roomChargeIntent(orderId: string, roomId: string, amount: number
   };
 }
 
+/** The Edit Sale increase settlement that adds the extra to the guest's folio (pos-api saleedit). */
+export const ROOM_CHARGE_SETTLEMENT = 'room_charge';
+
+/** Whether Edit Sale may offer Charge to Room for an increase: only when the sale was charged to
+ *  a room whose stay is still open. Reads `room_stay_open` (and `room_number` for the label) from
+ *  the sale detail, GET /orders/{id}. Returns null when the option must stay hidden. */
+export function roomChargeEditOffer(order: unknown): { roomNumber?: string } | null {
+  const o = order as { room_stay_open?: unknown; room_number?: unknown } | null | undefined;
+  if (!o || o.room_stay_open !== true) return null;
+  return { roomNumber: typeof o.room_number === 'string' && o.room_number ? o.room_number : undefined };
+}
+
+// The hotel queries that show a stay's folio or balance (hooks/useHotel.ts). Keys are
+// [name, tenant, roomId]; the room list has no room id.
+const ROOM_FOLIO_KEYS = new Set(['room-folio', 'folio-summary', 'hotel-room']);
+
+/** Whether a react-query key belongs to a folio view a room charge changes. With a roomId only
+ *  that room's folio matches; without one every room's folio does. The room list always matches. */
+export function isRoomFolioQueryKey(key: readonly unknown[], roomId?: string): boolean {
+  if (key[0] === 'hotel-rooms') return true;
+  if (!ROOM_FOLIO_KEYS.has(key[0] as string)) return false;
+  return !roomId || key[2] === roomId;
+}
+
 /** A fresh key for one Charge to Room screen (see roomChargeIntent). */
 export function newRoomChargeAttemptKey(): string {
   const c = (globalThis as { crypto?: { randomUUID?: () => string } }).crypto;

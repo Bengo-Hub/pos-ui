@@ -6,6 +6,7 @@ import assert from 'node:assert/strict';
 import {
   paymentActionsFor, tenderMethodFor, isImmediateTender, isValidManualCode, isValidPaymentLabel,
   manualCodePayToLine, withOutletNetworks, outletOffersNetwork, roomChargeIntent, newRoomChargeAttemptKey,
+  roomChargeEditOffer, isRoomFolioQueryKey, ROOM_CHARGE_SETTLEMENT,
 } from '../src/lib/pos/terminal-actions.ts';
 
 const keys = (g: Parameters<typeof paymentActionsFor>[1], opts: Parameters<typeof paymentActionsFor>[2] = {}) =>
@@ -110,4 +111,30 @@ test('a Charge to Room retry reuses its key; another room or another attempt get
   assert.equal(roomChargeIntent('order-1', 'room-7', 600, undefined, attempt).idempotencyKey, first);
   assert.notEqual(roomChargeIntent('order-1', 'room-8', 400, undefined, attempt).idempotencyKey, first);
   assert.notEqual(roomChargeIntent('order-1', 'room-7', 600, undefined, newRoomChargeAttemptKey()).idempotencyKey, first);
+});
+
+test('Edit Sale offers Charge to Room only for a room-charged sale whose stay is open', () => {
+  assert.equal(ROOM_CHARGE_SETTLEMENT, 'room_charge');
+  assert.deepEqual(roomChargeEditOffer({ room_stay_open: true, room_number: '101' }), { roomNumber: '101' });
+  assert.deepEqual(roomChargeEditOffer({ room_stay_open: true }), { roomNumber: undefined });
+  assert.equal(roomChargeEditOffer({ room_stay_open: false, room_number: '101' }), null);
+  assert.equal(roomChargeEditOffer({ room_number: '101' }), null);
+  assert.equal(roomChargeEditOffer({ room_stay_open: 'true' }), null);
+  assert.equal(roomChargeEditOffer(undefined), null);
+});
+
+test('a room charge refreshes that room folio views and the room list, nothing else', () => {
+  assert.ok(isRoomFolioQueryKey(['room-folio', 't1', 'room-7'], 'room-7'));
+  assert.ok(isRoomFolioQueryKey(['folio-summary', 't1', 'room-7'], 'room-7'));
+  assert.ok(isRoomFolioQueryKey(['hotel-room', 't1', 'room-7'], 'room-7'));
+  assert.ok(isRoomFolioQueryKey(['hotel-rooms', 't1', 'occupied'], 'room-7'));
+  assert.ok(!isRoomFolioQueryKey(['room-folio', 't1', 'room-8'], 'room-7'));
+  assert.ok(!isRoomFolioQueryKey(['pos-orders', 't1'], 'room-7'));
+  assert.ok(!isRoomFolioQueryKey(['housekeeping', 't1', {}], 'room-7'));
+});
+
+test('a sale edit with no room named refreshes every room folio view', () => {
+  assert.ok(isRoomFolioQueryKey(['room-folio', 't1', 'room-8']));
+  assert.ok(isRoomFolioQueryKey(['folio-summary', 't1', 'room-9']));
+  assert.ok(!isRoomFolioQueryKey(['room-guest', 't1', 'room-8']));
 });

@@ -533,6 +533,11 @@ export interface RegisterDetails {
   refund_by_method: PaymentMethodRow[];
   total_payment: number;
   credit_sales: number;
+  /** Still owed now on every committed sale up to `to` (not only this range's sales). */
+  sales_due?: number;
+  sales_due_count?: number;
+  /** sales_due split by sale age in days as of `to`. */
+  sales_due_ageing?: { '0_30': number; '31_60': number; '61_90': number; '90_plus': number };
   total_expense: number;
   order_tax: number;
   shipping_total: number;

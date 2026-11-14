@@ -37,6 +37,7 @@ import { computePairAutoAdd, describeAutoApplyAnnouncement } from '@/lib/pos/aut
 import { applyRoundOff, computeCartTax } from '@/lib/pos/cart-tax';
 import { isFractionalUnit, parseQuantityInput } from '@/lib/pos/units';
 import { isLineActive, remainingLineQty } from '@/lib/pos/order-lines';
+import { roomChargeEditOffer, ROOM_CHARGE_SETTLEMENT } from '@/lib/pos/terminal-actions';
 import { autoPrintsCustomerCopy, resolveBillProfile } from '@/lib/pos/printer-stations';
 import { useReceiptAfterSale } from '@/hooks/use-receipt-after-sale';
 import { cn, formatCurrency } from '@/lib/utils';
@@ -397,6 +398,10 @@ export default function AddSalePage() {
   const [editInplace, setEditInplace] = useState<{ id: string; number: string } | null>(null);
   const editSale = useEditSale();
   const [editInplaceSaving, setEditInplaceSaving] = useState(false);
+  // M-5: a sale charged to a room whose stay is still open may add an increase to the guest's
+  // folio instead of collecting it now. Hidden for any other sale.
+  const roomEditOffer = useMemo(() => roomChargeEditOffer(editInplaceQ.data), [editInplaceQ.data]);
+  const [chargeIncreaseToRoom, setChargeIncreaseToRoom] = useState(true);
   useEffect(() => {
     const o: any = editInplaceQ.data;
     if (!o || !editInplaceId || (editInplace && editInplace.id === editInplaceId)) return;
@@ -449,6 +454,7 @@ export default function AddSalePage() {
     }));
 
     setEditInplaceSaving(true);
+    const toRoom = !!roomEditOffer && chargeIncreaseToRoom;
     try {
       // customer is already shown/editable on this page via CustomerSearch above — send it so
       // an increase (which always posts as AR) has a real customer to attach to when the order
@@ -459,6 +465,7 @@ export default function AddSalePage() {
         orderId: editInplace.id, reason: 'Edited from Sales list', lines: editLines,
         customerName: realCustomer ? customer?.name : undefined,
         customerIdentifier: realCustomer ? customer?.phone : undefined,
+        increaseSettlement: toRoom ? ROOM_CHARGE_SETTLEMENT : undefined,
       });
       if (result.price_only_lines_skipped?.length) {
         toast.warning("A price change on an unchanged quantity isn't saved by Edit Sale — remove the line and re-add it at the new price instead.");
@@ -483,7 +490,15 @@ export default function AddSalePage() {
         router.replace(editInplaceReturnTo);
       }
     } catch (e) {
-      toast.error(await apiErrorMessage(e, 'Failed to save the edit.'));
+      // 409: the guest checked out since this page loaded, so the folio is closed. Show the
+      // server's message, fall back to collecting now and reload the sale so the option hides.
+      if (toRoom && (e as { response?: { status?: number } })?.response?.status === 409) {
+        toast.error(await apiErrorMessage(e, 'The guest has checked out, so the extra cannot go to the room. Collect it now instead.'));
+        setChargeIncreaseToRoom(false);
+        void editInplaceQ.refetch();
+      } else {
+        toast.error(await apiErrorMessage(e, 'Failed to save the edit.'));
+      }
     } finally {
       setEditInplaceSaving(false);
     }
@@ -1599,6 +1614,20 @@ export default function AddSalePage() {
                 </button>
               )}
             </label>
+          )}
+
+          {editInplace && roomEditOffer && (
+            <fieldset className="space-y-1 rounded-xl border border-border px-3 py-2 text-sm" data-testid="edit-increase-settlement">
+              <legend className="px-1 text-xs text-muted-foreground">If this edit adds to the bill</legend>
+              <label className="flex items-center gap-2">
+                <input type="radio" name="edit-increase-settlement" checked={chargeIncreaseToRoom} onChange={() => setChargeIncreaseToRoom(true)} />
+                <span>Charge to room{roomEditOffer.roomNumber ? ` ${roomEditOffer.roomNumber}` : ''}</span>
+              </label>
+              <label className="flex items-center gap-2">
+                <input type="radio" name="edit-increase-settlement" checked={!chargeIncreaseToRoom} onChange={() => setChargeIncreaseToRoom(false)} />
+                <span>Collect now</span>
+              </label>
+            </fieldset>
           )}
 
           <div className="space-y-2">

@@ -1,7 +1,8 @@
 'use client';
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { useTenantId } from '@/hooks/useTenantId';
+import { isRoomFolioQueryKey } from '@/lib/pos/terminal-actions';
 import {
   hotelApi,
   type CreateRoomInput,
@@ -21,6 +22,12 @@ import {
 
 function useTenantSlug() {
   return useTenantId() ?? '';
+}
+
+/** Refetches the folio views a till room charge changed, so an open folio screen shows the new
+ *  line without a reload. Pass the room when known; without it every room's folio refreshes. */
+export function invalidateRoomFolio(qc: QueryClient, roomId?: string) {
+  void qc.invalidateQueries({ predicate: (q) => isRoomFolioQueryKey(q.queryKey, roomId) });
 }
 
 // ─── Rooms ──────────────────────────────────────────────────────────────────

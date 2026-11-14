@@ -355,9 +355,19 @@ export default function AnalyticsReportPage() {
             { label: 'Total Sales', value: fmt(register.data?.total_sales ?? 0) },
             { label: 'Payments Received', value: fmt(register.data?.total_payment ?? 0) },
             { label: 'Credit Sales', value: fmt(register.data?.credit_sales ?? 0) },
+            { label: `Sales due (${(register.data?.sales_due_count ?? 0).toLocaleString()} sales)`, value: fmt(register.data?.sales_due ?? 0) },
             { label: 'Refunds', value: fmt(register.data?.total_refund ?? 0) },
             { label: 'Orders', value: (register.data?.order_count ?? 0).toLocaleString() },
           ]} />
+          {/* Still owed now on every sale up to the end of the range, aged by sale date. */}
+          <Section title="Sales due by age" icon={Clock} loading={register.isLoading} error={register.error}
+            head={['Sale age', 'Amount due']}
+            rows={[
+              ['0 to 30 days', fmt(register.data?.sales_due_ageing?.['0_30'] ?? 0)],
+              ['31 to 60 days', fmt(register.data?.sales_due_ageing?.['31_60'] ?? 0)],
+              ['61 to 90 days', fmt(register.data?.sales_due_ageing?.['61_90'] ?? 0)],
+              ['Over 90 days', fmt(register.data?.sales_due_ageing?.['90_plus'] ?? 0)],
+            ]} />
           <Section title="Register Performance" icon={Monitor} loading={register.isLoading} error={register.error}
            
             head={['Payment Method', 'Amount Collected']}

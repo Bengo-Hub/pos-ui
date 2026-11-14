@@ -6,6 +6,8 @@ import { useAuthStore } from '@/store/auth';
 import { useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api/client';
 import { reportAuthSyncBlocked, reportAuthSyncCleared } from '@/lib/sync/auth-sync-state';
+import { isTerminalReplayStatus } from '@/lib/sync/replay-status';
+import { toast } from 'sonner';
 import {
   getPendingSyncOrders,
   markOrderSynced,
@@ -131,22 +133,14 @@ function idem(key: string) {
 }
 
 /**
- * A 4xx (except 408/429/401/403) is a terminal validation error — replaying won't help;
- * dead-letter it. 401/403 are deliberately NOT terminal: an expired terminal JWT (or the
- * offline-PIN-login placeholder token) is retryable — it resolves the instant a human
- * re-authenticates, unlike a real validation rejection. Dead-lettering a legitimately-completed
- * sale on the first 401 after a long outage would silently drop real revenue; this must back
- * off and retry instead (see nextRetryState in pos-db.ts), same as a network/5xx failure.
+ * Whether a failed replay is permanent (isTerminalReplayStatus: a 4xx validation error, except
+ * 401/403/408/409/429). 401/403 also flag the auth-blocked banner and keep retrying, since an
+ * expired terminal JWT clears the moment a human signs in again.
  */
 function isTerminal(err: any): boolean {
   const s = err?.response?.status;
-  if (s === 401 || s === 403) {
-    reportAuthSyncBlocked();
-    return false;
-  }
-  // 409 means the same Idempotency-Key is still being processed (or was left mid-request and is
-  // reclaimed by pos-api after two minutes); retrying later replays the stored result.
-  return typeof s === 'number' && s >= 400 && s < 500 && s !== 408 && s !== 409 && s !== 429;
+  if (s === 401 || s === 403) reportAuthSyncBlocked();
+  return isTerminalReplayStatus(s);
 }
 
 function errMsg(err: any): string {
@@ -310,8 +304,14 @@ async function syncPayments(tenantID: string): Promise<number> {
       await markPaymentSynced(payment.id!);
       logPush('payment', `${payment.tender_method} ${payment.amount.toFixed(2)}`);
     } catch (err: any) {
-      await markPaymentSyncFailed(payment.id!, errMsg(err), isTerminal(err));
+      const terminal = isTerminal(err);
+      await markPaymentSyncFailed(payment.id!, errMsg(err), terminal);
       logPush('payment', `${payment.tender_method} ${payment.amount.toFixed(2)}`, err);
+      // A rejected payment is never retried on its own; tell the cashier now, not only through
+      // the sync status pill, so the money can be collected again or the entry fixed.
+      if (terminal) {
+        toast.error(`A queued ${payment.tender_method} payment of ${payment.amount.toFixed(2)} was rejected: ${errMsg(err)}. Review it under sync status.`);
+      }
     }
   }
   return attempted;

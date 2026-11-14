@@ -1,4 +1,5 @@
 import Dexie, { type Table } from 'dexie';
+import { nextRetryState, isRetryReady, type SyncState } from '@/lib/sync/replay-status';
 
 // ── Catalog ────────────────────────────────────────────────────────────────────
 
@@ -47,49 +48,8 @@ export interface OfflineCatalogItem {
 }
 
 // ── Sync state (shared by every outbound queue) ──────────────────────────────────
-//
-// Each queued mutation moves through: pending → (in-flight) → synced | retryable | dead.
-// We don't persist an explicit "in-flight" flag (the drain is single-threaded per tab);
-// instead retryable rows carry next_attempt_at (exponential backoff) and terminal rows
-// are marked dead_letter so they stop auto-retrying and surface for manual review.
-export interface SyncState {
-  synced: boolean;
-  sync_error?: string;
-  attempts?: number;
-  next_attempt_at?: string; // ISO; do not retry before this time
-  dead_letter?: boolean; // terminal failure — stop auto-retrying, needs manual review
-}
-
-/** Max auto-retries before a row is dead-lettered. */
-export const MAX_SYNC_ATTEMPTS = 8;
-
-/**
- * Compute the next sync-state after a failed attempt. Terminal (4xx validation) failures
- * dead-letter immediately — replaying won't change the outcome. Retryable (network/5xx)
- * failures back off exponentially with jitter, dead-lettering after MAX_SYNC_ATTEMPTS.
- */
-export function nextRetryState(
-  current: { attempts?: number },
-  error: string,
-  opts: { terminal?: boolean; now?: number } = {},
-): Pick<SyncState, 'attempts' | 'next_attempt_at' | 'dead_letter' | 'sync_error'> {
-  const attempts = (current.attempts ?? 0) + 1;
-  const now = opts.now ?? Date.now();
-  if (opts.terminal || attempts >= MAX_SYNC_ATTEMPTS) {
-    return { attempts, sync_error: error, dead_letter: true, next_attempt_at: undefined };
-  }
-  // 2^n seconds capped at 5 min, +/- 20% jitter so reconnecting terminals don't sync in lockstep.
-  const baseMs = Math.min(2 ** attempts * 1000, 5 * 60_000);
-  const jitter = baseMs * (0.8 + ((attempts * 37) % 40) / 100); // deterministic pseudo-jitter
-  return { attempts, sync_error: error, next_attempt_at: new Date(now + jitter).toISOString() };
-}
-
-/** True when a queued row is eligible to (re)try right now. */
-export function isRetryReady(row: SyncState, now = Date.now()): boolean {
-  if (row.synced || row.dead_letter) return false;
-  if (!row.next_attempt_at) return true;
-  return new Date(row.next_attempt_at).getTime() <= now;
-}
+// The retry rules live in lib/sync/replay-status.ts (pure, node-tested) and are re-exported here.
+export { nextRetryState, isRetryReady, MAX_SYNC_ATTEMPTS, type SyncState } from '@/lib/sync/replay-status';
 
 // ── Orders ─────────────────────────────────────────────────────────────────────
 
@@ -318,7 +278,8 @@ class POSDatabase extends Dexie {
   offlineReturns!: Table<OfflineReturn, number>;
   drawerSessions!: Table<OfflineDrawerSession, number>;
   drawerCloses!: Table<OfflineDrawerClose, number>;
-  staffProfiles!: Table<CachedStaffProfile, string>;
+  // Keyed [tenant_id+user_id] since v7 (see the v7 upgrade); the v1-v6 staffProfiles table is dropped.
+  staffProfilesV2!: Table<CachedStaffProfile, [string, string]>;
   etimsQueue!: Table<OfflineETIMSSubmission, number>;
   snapshots!: Table<CachedSnapshot, string>;
   kvCache!: Table<KVCacheRow, string>;
@@ -392,6 +353,14 @@ class POSDatabase extends Dexie {
       snapshots:      'key, tenant_id',
       kvCache:        'key, tenant_id, cached_at',
       syncLog:        '++id, ts, direction, entity, status',
+    });
+    // v7: staff profiles are keyed by tenant AND user. Keyed by user alone, one person signed in
+    // to two tenants on the same device overwrote their other tenant's cached profile and PIN.
+    // Dexie cannot change a primary key in place, so the cache moves to a new table and the old
+    // one is dropped; it is only a cache and refills on the next online PIN screen.
+    this.version(7).stores({
+      staffProfiles:   null,
+      staffProfilesV2: '[tenant_id+user_id], tenant_id, user_id',
     });
   }
 }
@@ -712,15 +681,16 @@ export async function retryDeadLetter(kind: DeadLetterItem['kind'], id: number):
 // ── Staff profile helpers ──────────────────────────────────────────────────────
 
 export async function cacheStaffProfile(profile: CachedStaffProfile): Promise<void> {
-  await posDB.staffProfiles.put(profile);
+  await posDB.staffProfilesV2.put(profile);
 }
 
 export async function getCachedStaffProfiles(tenantId: string): Promise<CachedStaffProfile[]> {
-  return posDB.staffProfiles.where('tenant_id').equals(tenantId).toArray();
+  return posDB.staffProfilesV2.where('tenant_id').equals(tenantId).toArray();
 }
 
-export async function getCachedStaffProfile(userId: string): Promise<CachedStaffProfile | undefined> {
-  return posDB.staffProfiles.get(userId);
+/** One person's cached profile in one tenant (the same person may be staff in several). */
+export async function getCachedStaffProfile(tenantId: string, userId: string): Promise<CachedStaffProfile | undefined> {
+  return posDB.staffProfilesV2.get([tenantId, userId]);
 }
 
 // ── Snapshot helpers (cold-start) ────────────────────────────────────────────────

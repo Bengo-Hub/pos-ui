@@ -20,6 +20,7 @@ import {
 } from '@/lib/db/pos-db';
 import { useEffectiveOnline } from '@/lib/connectivity';
 import { deviceSnapshot } from '@/lib/device-identity';
+import { invalidateRoomFolio } from '@/hooks/useHotel';
 import { v4 as uuidv4 } from 'uuid';
 
 // Get tenant ID from auth store
@@ -2005,6 +2006,10 @@ export function useEditSale() {
       qc.invalidateQueries({ queryKey: ['pos-order-returns', tenantID, variables.orderId] });
       qc.invalidateQueries({ queryKey: ['pos-orders-summary'] });
       invalidateCatalogCaches(qc); // a reduction/increase/removal changes stock too
+      // An edit of a room-charged sale changes the folio: an increase charged to the room adds a
+      // line and a decrease credits it. The request names no room, so every folio view is marked
+      // stale (only mounted ones refetch; nothing is cached for a tenant without hotel views).
+      invalidateRoomFolio(qc);
     },
   });
 }
@@ -2253,8 +2258,10 @@ export function useCreatePaymentIntent() {
         roomId,
         idempotencyKey,
       }),
-    onSuccess: () => {
+    onSuccess: (_result, variables) => {
       qc.invalidateQueries({ queryKey: ['pos-orders'] });
+      // A room charge added a folio line; an open folio screen for that room shows it now.
+      if (variables.roomId) invalidateRoomFolio(qc, variables.roomId);
     },
   });
 }

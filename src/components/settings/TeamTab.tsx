@@ -199,8 +199,15 @@ export function TeamTab() {
         pin: addForm.pin || undefined,
         mpesa_phone: addForm.mpesa_phone.trim() || undefined,
       };
-      await create.mutateAsync(input);
-      toast.success('Team member added');
+      const created = await create.mutateAsync(input);
+      // pos-api answers 202 { status: 'invited', message } when the email already has an account
+      // in another business: an invitation went out and the member appears once they accept.
+      const invited = created as unknown as { status?: string; message?: string } | undefined;
+      if (invited?.status === 'invited') {
+        toast.success(invited.message || 'Invitation sent. They join once they accept.');
+      } else {
+        toast.success('Team member added');
+      }
       setShowAdd(false);
       setAddForm({ name: '', email: '', role: 'cashier', employment_type: 'full_time', pin: '', mpesa_phone: '' });
     } catch (err) {

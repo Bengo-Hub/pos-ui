@@ -76,6 +76,9 @@ export const PAYMENT_METHOD_OPTIONS: { value: string; label: string }[] = [
 
 export const PAYMENT_STATUSES = [
   { value: '', label: 'All' }, { value: 'paid', label: 'Paid' },
+  // Owed: every completed sale with money still owed (due, partial and overdue together); the
+  // dashboard's Sales due card opens All-Sales with this filter.
+  { value: 'owed', label: 'Owed' },
   { value: 'due', label: 'Due' }, { value: 'partial', label: 'Partial' },
   { value: 'overdue', label: 'Overdue' }, { value: 'refunded', label: 'Refunded' },
   { value: 'voided', label: 'Voided' }, { value: 'cancelled', label: 'Cancelled' },
