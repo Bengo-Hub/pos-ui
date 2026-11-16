@@ -61,7 +61,7 @@ export function MaintenanceOverlay() {
             Back to login
           </button>
           <a
-            href="mailto:info@codevertexafrica.com?subject=POS%20maintenance%20support"
+            href="mailto:support@codevertexafrica.com?subject=POS%20maintenance%20support"
             className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-border bg-background px-4 py-3 text-sm font-semibold text-foreground transition-colors hover:bg-muted"
           >
             <Mail className="h-4 w-4" />
