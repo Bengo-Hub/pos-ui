@@ -106,10 +106,15 @@ export function useSubscription() {
     initialData: () => (storedInfo && typeof storedInfo === 'object' ? storedInfo : undefined),
     initialDataUpdatedAt: 0,
     staleTime: FIVE_MINUTES,
-    refetchInterval: FIVE_MINUTES,
+    // While the lookup is failing, try again every 20s so the page recovers on its own as soon
+    // as the service answers (a fixed key, a restarted pod) instead of waiting five minutes.
+    refetchInterval: (q) => (q.state.status === 'error' ? 20_000 : FIVE_MINUTES),
+    refetchIntervalInBackground: true,
     refetchOnWindowFocus: false,
-    retry: 3,
-    retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 30_000),
+    // One quick retry, then the provider fails open (status 'unknown'), so a screen never sits
+    // on a skeleton for long.
+    retry: 1,
+    retryDelay: 1500,
   });
 
   // Last known info from the offline store, used until the first lookup lands or when it fails.

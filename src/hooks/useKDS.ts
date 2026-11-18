@@ -7,6 +7,7 @@ import { keepPreviousData, useQuery, useMutation, useQueryClient } from '@tansta
 import type { KDSChannel } from '@/lib/kds/board';
 import { useEffectiveOutletID } from '@/hooks/usePOS';
 import { useKDSSocketOpen } from '@/lib/kds/kds-live';
+import { usePOSSettings } from '@/hooks/usePOSSettings';
 
 function useTenantID() {
   return useTenantId() ?? '';
@@ -128,13 +129,19 @@ export interface UpdateKDSStationInput {
 // outlet) — calling it anyway is a guaranteed 403, and every failed attempt independently fires the
 // app's subscription-403 toast, not just the first. Stations are NOT plan-gated (only the live
 // display routes need the "kds" feature), so never pass hasFeature('kds') here.
+// pos-api serves /kds/stations only to hospitality, quick_service and services outlets with KDS
+// switched on (RequireUseCase + RequireKDSEnabled); anywhere else it answers 403. Not plan-gated.
+const KDS_USE_CASES = new Set(['hospitality', 'quick_service', 'services']);
+
 export function useKDSStations(enabled = true) {
   const tenantID = useTenantID();
+  const { data: settings, isSuccess: settingsReady } = usePOSSettings();
+  const outletCanRoute = settingsReady && KDS_USE_CASES.has(settings?.use_case ?? '') && settings?.enable_kds !== false;
   return useQuery({
     queryKey: ['kds-stations', tenantID],
     queryFn: () =>
       apiClient.get<KDSStationsResponse>(`${basePath(tenantID)}/stations`),
-    enabled: !!tenantID && enabled,
+    enabled: !!tenantID && enabled && outletCanRoute,
     staleTime: 60_000,
   });
 }
