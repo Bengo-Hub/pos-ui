@@ -27,7 +27,11 @@ interface CatalogItem {
 
 export function SubscriptionEntitlementsProvider({ children }: { children: ReactNode }) {
   const sub = useSubscription();
-  const isExempt = sub.isPlatformOwner || sub.isDemo || sub.isServiceCharge || sub.isSubExempt;
+  // Fail open: when the plan cannot be looked up and nothing is cached (status 'unknown'), a
+  // paying tenant must never see "Upgrade Required" for a feature it owns. The plan check
+  // applies again as soon as a lookup succeeds; pos-api still enforces gates server-side.
+  const lookupFailed = sub.status === 'unknown';
+  const isExempt = sub.isPlatformOwner || sub.isDemo || sub.isServiceCharge || sub.isSubExempt || lookupFailed;
   const tenantSlug = useAuthStore((s) => (s.user?.tenant_slug as string | undefined) ?? '');
   const offlineCatalog = useSubscriptionStore((s) => s.catalog);
   const setCatalog = useSubscriptionStore((s) => s.setCatalog);
