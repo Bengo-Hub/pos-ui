@@ -72,7 +72,9 @@ export function useSubscription() {
 
   // The /api/subscription proxy authenticates with the server's service key, so the lookup needs
   // a signed-in profile, not a browser token (cookie sessions may not have mirrored one yet).
-  const authed = status === 'authenticated' && !!user;
+  // A known profile is enough: the auth status can sit on 'loading'/'syncing' while a cookie
+  // session renews in the background, and waiting on it kept the KDS gate on skeletons.
+  const authed = !!user && status !== 'error';
   // No tenant, platform owner or sub_exempt: no lookup, treated as an enterprise plan.
   const skipLookup = authed && (!tenantId || isPlatformOwner || isSubExempt);
 
@@ -171,7 +173,8 @@ export function useSubscription() {
     isExpired: subStatus === 'expired' || subStatus === 'cancelled',
     needsSubscription: subStatus === 'none' && !isExempt,
     // True only when there is no value at all (no cache, no data yet).
-    isLoading: info === undefined,
+    // An exempt viewer (platform owner, demo, service-charge, sub_exempt) is never waiting.
+    isLoading: info === undefined && !isExempt,
     isPlatformOwner,
     isServiceCharge,
     isDemo,

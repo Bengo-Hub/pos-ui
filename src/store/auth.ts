@@ -428,6 +428,9 @@ export const useAuthStore = create<AuthState>()(
 
       logout: async () => {
         const { user, session } = get();
+        // An SSO sign-in must also end the SSO browser session (bb_session), or the next Login
+        // signs straight back in. A PIN terminal session only ends locally.
+        const endSso = !get().isTerminalSession;
         // The URL path is the source of truth for the org the user is working
         // in — the token's tenant_slug can differ (e.g. a platform owner whose
         // token was minted for codevertex while working inside another tenant).
@@ -457,9 +460,12 @@ export const useAuthStore = create<AuthState>()(
           // POS_SELECTED_OUTLET_KEY is retained so pin-login auto-selects the last outlet —
           // safe now that it's slug-scoped: another tenant's slug never resolves this value.
           try { sessionStorage.clear(); } catch { /* no-op */ }
-          // Always redirect to PIN login so staff re-authenticate locally.
-          // No need to invalidate SSO sessions — pos-api HMAC and SSO tokens are both short-lived.
-          window.location.href = orgSlug ? `/${orgSlug}/pin-login` : '/';
+          // Land on PIN login so staff re-authenticate locally. An SSO session goes there through
+          // the SSO logout, which clears bb_session first.
+          const landing = orgSlug ? `/${orgSlug}/pin-login` : '/';
+          window.location.href = endSso
+            ? buildLogoutUrl(new URL(landing, window.location.origin).toString())
+            : landing;
         }
       },
 
