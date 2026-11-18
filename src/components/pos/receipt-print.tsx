@@ -3,12 +3,12 @@
 import '@/styles/receipt.css';
 import type { ReceiptData } from './receipt-preview';
 import { RetailReceiptPrint } from './receipt-retail-print';
-import { buildReceiptRows, receiptCopyBanner } from '@/lib/pos/receipt-rows';
+import { buildReceiptRows, receiptCopyBanner, RECEIPT_COPY_WATERMARK, RECEIPT_COPY_WATERMARK_COLOR } from '@/lib/pos/receipt-rows';
 import { resolveReceiptFormat } from '@/lib/pos/receipt-format';
 import { resolveReceiptDisplayName, resolveReceiptOutletLine } from '@/lib/pos/receipt-branding';
 import { getActiveTimeZone } from '@/lib/user-timezone';
 
-/** The boxed "*** COPY ***" stamp, inline-styled so it survives every print path (print window,
+/** The boxed "RECEIPT COPY" title, inline-styled so it survives every print path (print window,
  *  QZ/print-agent HTML) without depending on a stylesheet. Mirrors pos-api thermal_html .copy. */
 const COPY_BANNER_STYLE = {
   textAlign: 'center',
@@ -18,6 +18,28 @@ const COPY_BANNER_STYLE = {
   border: '2px solid #000',
   padding: '2px 0',
   margin: '3px 0',
+} as const;
+
+/** The COPY mark repeated down the roll behind a copy (pos-api thermal_html .copy-roll), clipped
+ *  to the receipt's own height. Inline-styled for the same reason as the title. */
+const COPY_ROLL_STYLE = {
+  position: 'absolute',
+  inset: 0,
+  overflow: 'hidden',
+  pointerEvents: 'none',
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+} as const;
+const COPY_ROLL_WORD_STYLE = {
+  display: 'block',
+  flexShrink: 0,
+  transform: 'rotate(-43deg)',
+  font: '700 26mm Helvetica, Arial, sans-serif',
+  lineHeight: 1,
+  margin: '24mm 0',
+  whiteSpace: 'nowrap',
+  color: RECEIPT_COPY_WATERMARK_COLOR,
 } as const;
 
 interface ReceiptPrintProps {
@@ -155,7 +177,14 @@ export function ReceiptPrint({
   const copyBanner = receiptCopyBanner(receipt);
 
   return (
-    <div className={rootClass}>
+    <div className={rootClass} style={copyBanner ? { position: 'relative' } : undefined}>
+      {copyBanner && (
+        <div style={COPY_ROLL_STYLE} aria-hidden="true">
+          {Array.from({ length: 20 }, (_, i) => (
+            <span key={i} style={COPY_ROLL_WORD_STYLE}>{RECEIPT_COPY_WATERMARK}</span>
+          ))}
+        </div>
+      )}
       {copyBanner && <p style={COPY_BANNER_STYLE}>{copyBanner}</p>}
       {isGrid ? <div className="grid-box">{headerBlock}</div> : headerBlock}
 

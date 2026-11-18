@@ -7,7 +7,7 @@ import { apiClient } from '@/lib/api/client';
 import { useAuthStore } from '@/store/auth';
 import { useTenantId } from '@/hooks/useTenantId';
 import { useMemo, useState } from 'react';
-import { ArrowLeft, CheckCircle2, Info, Loader2, PackageCheck, RotateCcw, ShieldCheck, XCircle } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Info, Loader2, PackageCheck, Printer, RotateCcw, ShieldCheck, XCircle } from 'lucide-react';
 import { cn, formatCurrency } from '@/lib/utils';
 import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api/error-message';
@@ -175,6 +175,8 @@ export default function ReturnDetailPage() {
     receiptData, receiptOpen, receiptOrderId,
     showReceiptForOrder, showReceiptFromEndpoint, closeReceipt,
   } = useReceiptAfterSale(tenantId, authUser?.fullName || authUser?.email);
+  // True while the refund receipt is reopened from the completed panel (a view, never auto-printed).
+  const [receiptReview, setReceiptReview] = useState(false);
 
   if (isLoading) {
     return (
@@ -583,10 +585,26 @@ export default function ReturnDetailPage() {
       {ret.status === 'completed' && (
         <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 flex items-center gap-3">
           <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0" />
-          <p className="text-sm text-emerald-800">
+          <p className="text-sm text-emerald-800 flex-1">
             Completed. The refund was settled
             {ret.metadata?.restock_decision === 'write_off' ? ' and the items were written off (not restocked).' : ' and the items were sent back to stock.'}
           </p>
+          {/* The refund receipt can be opened again at any time; its Print copy button prints the
+              KRA-marked REFUND RECEIPT COPY a customer asks for. An exchange's receipt is the
+              replacement order's, reprinted from that order. */}
+          {!isExchange && (
+            <button
+              type="button"
+              onClick={() => {
+                setReceiptReview(true);
+                void showReceiptFromEndpoint(`/api/v1/${tenantId}/pos/returns/${returnId}/receipt`);
+              }}
+              className="shrink-0 inline-flex items-center gap-1.5 rounded-xl border border-emerald-300 bg-white px-3 py-1.5 text-xs font-semibold text-emerald-800 hover:bg-emerald-100"
+            >
+              <Printer className="h-3.5 w-3.5" />
+              Refund receipt
+            </button>
+          )}
         </div>
       )}
       {ret.status === 'rejected' && (
@@ -633,11 +651,13 @@ export default function ReturnDetailPage() {
       <ReceiptPreview
         receipt={receiptData}
         open={receiptOpen}
-        onClose={closeReceipt}
+        onClose={() => { setReceiptReview(false); closeReceipt(); }}
         printerProfile={resolveBillProfile((posSettings as any)?.printer_profiles)}
         tenantId={tenantId}
         orderId={receiptOrderId}
-        autoPrint={autoPrintsCustomerCopy(posSettings as any) && !(posSettings as any)?.print_agent_online}
+        pdfEndpoint={receiptOrderId ? undefined : `/api/v1/${tenantId}/pos/returns/${returnId}/receipt`}
+        // Only the print right after completion is automatic; opening the receipt later is a view.
+        autoPrint={!receiptReview && autoPrintsCustomerCopy(posSettings as any) && !(posSettings as any)?.print_agent_online}
       />
     </div>
   );

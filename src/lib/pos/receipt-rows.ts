@@ -46,20 +46,26 @@ export interface ReceiptFooterRow { kind: 'footer'; text: string }
 export interface ReceiptProviderRow { kind: 'provider'; lead: string; contact: string }
 /** Code 128 of the order number (retail receipts) — src is a data: URI from pos-api. */
 export interface ReceiptBarcodeRow { kind: 'barcode'; src: string; text: string }
-/** The KRA COPY marking printed on a reprint (see RECEIPT_COPY_BANNER). */
+/** The KRA COPY marking printed on a copy (see receiptCopyTitle). */
 export interface ReceiptCopyBannerRow { kind: 'copy-banner'; text: string }
 
-/** Printed at the top and the bottom of a reprinted receipt, mirroring pos-api printing.CopyBanner.
- *  The top one is rendered by each layout above its header (receiptCopyBanner); the bottom one is
- *  the last row of buildReceiptRows. */
-export const RECEIPT_COPY_BANNER = '*** COPY ***';
+/** The boxed title printed at the top and the bottom of a copy, mirroring pos-api
+ *  printing.CopyBanner: it names the document (KRA review 2026-11-18). The top one is rendered by
+ *  each layout above its header (receiptCopyBanner); the bottom one is the last row of
+ *  buildReceiptRows. */
+export function receiptCopyTitle(isReturn: boolean): string {
+  return isReturn ? 'REFUND RECEIPT COPY' : 'RECEIPT COPY';
+}
 
-/** The diagonal watermark word on an A4 copy, mirroring pos-api printing.CopyWatermark. */
+/** The diagonal watermark word on a copy, mirroring pos-api printing.CopyWatermark. */
 export const RECEIPT_COPY_WATERMARK = 'COPY';
 
-/** The COPY banner text when this receipt is a reprint, else null. */
+/** Watermark ink, mirroring pos-api printing.CopyWatermarkGrey and CopyWatermarkAlpha. */
+export const RECEIPT_COPY_WATERMARK_COLOR = 'rgba(51, 51, 51, 0.15)';
+
+/** The COPY title when this receipt is a copy, else null. */
 export function receiptCopyBanner(receipt: ReceiptData): string | null {
-  return receipt.is_copy ? RECEIPT_COPY_BANNER : null;
+  return receipt.is_copy ? receiptCopyTitle(Boolean(receipt.is_return)) : null;
 }
 
 /** KRA receipt label (OSCU spec 4.3): receipt type N (normal) or C (copy), then transaction type

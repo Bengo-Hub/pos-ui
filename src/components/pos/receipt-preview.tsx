@@ -166,11 +166,14 @@ interface ReceiptPreviewProps {
   reprint?: boolean;
   /** Run the Print copy action once as soon as the preview opens (order detail button). */
   customerCopyOnOpen?: boolean;
+  /** Server PDF route for a receipt with no order of its own (a refund receipt:
+   *  /api/v1/{tenant}/pos/returns/{id}/receipt). Defaults to the order's receipt route. */
+  pdfEndpoint?: string;
 }
 
 export function ReceiptPreview({
   receipt: receiptProp, open, onClose, outletName, tenantName, printerName, printerProfile, tenantId, orderId, autoPrint,
-  customerCopyOnOpen,
+  customerCopyOnOpen, pdfEndpoint,
 }: ReceiptPreviewProps) {
   const [printing, setPrinting] = useState(false);
   // KRA copy marking. copyMarked is set only while the Print copy button prints, so the hidden print
@@ -365,14 +368,16 @@ export function ReceiptPreview({
       openBrowserReceiptWindow();
       return;
     }
-    if (tenantId && orderId && (typeof navigator === 'undefined' || navigator.onLine)) {
+    // A document with no order of its own (a refund receipt) names its server PDF route instead.
+    const pdfUrl = pdfEndpoint || (tenantId && orderId ? `/api/v1/${tenantId}/pos/orders/${orderId}/receipt` : '');
+    if (pdfUrl && (typeof navigator === 'undefined' || navigator.onLine)) {
       void apiClient
-        .getBlob(`/api/v1/${tenantId}/pos/orders/${orderId}/receipt`, isCopy ? { format: 'pdf', copy: '1' } : { format: 'pdf' })
+        .getBlob(pdfUrl, isCopy ? { format: 'pdf', copy: '1' } : { format: 'pdf' })
         .then((blob) => {
           const url = URL.createObjectURL(blob);
           const a = document.createElement('a');
           a.href = url;
-          a.download = `receipt-${receipt.order_number}.pdf`;
+          a.download = `receipt-${receipt.receipt_number || receipt.order_number}.pdf`;
           document.body.appendChild(a);
           a.click();
           a.remove();

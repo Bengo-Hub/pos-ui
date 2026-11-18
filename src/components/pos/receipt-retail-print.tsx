@@ -14,7 +14,7 @@
 
 import type { CSSProperties } from 'react';
 import type { ReceiptData } from './receipt-preview';
-import { buildReceiptRows, receiptCopyBanner, RECEIPT_COPY_WATERMARK, vatSummaryRows } from '@/lib/pos/receipt-rows';
+import { buildReceiptRows, receiptCopyBanner, RECEIPT_COPY_WATERMARK, RECEIPT_COPY_WATERMARK_COLOR, vatSummaryRows } from '@/lib/pos/receipt-rows';
 import { resolveReceiptDisplayName } from '@/lib/pos/receipt-branding';
 import { getActiveTimeZone } from '@/lib/user-timezone';
 
@@ -49,16 +49,18 @@ const cellBorder = '2px solid #000';
 const th: CSSProperties = { border: cellBorder, padding: '3px 7px', fontWeight: 700, textAlign: 'left', fontSize: 13 };
 const td: CSSProperties = { border: cellBorder, padding: '3px 7px', fontSize: 13, fontWeight: 500 };
 const trowStyle: CSSProperties = { display: 'flex', justifyContent: 'space-between', padding: '1px 2px', fontSize: 13 };
-// The diagonal COPY watermark on a reprinted A4 receipt (pos-api a4_html .copy-wm).
+// The diagonal COPY watermark on an A4 copy (pos-api a4_html .copy-wm): along the page diagonal
+// and about three quarters of it, dark grey at 15% opacity.
 const copyWatermarkStyle: CSSProperties = {
   position: 'fixed',
   top: '50%',
   left: '50%',
-  transform: 'translate(-50%, -50%) rotate(-35deg)',
-  fontSize: 190,
+  transform: 'translate(-50%, -50%) rotate(-54.7deg)',
+  fontFamily: 'Helvetica, Arial, sans-serif',
+  fontSize: '95mm',
   fontWeight: 700,
-  letterSpacing: 16,
-  color: 'rgba(0, 0, 0, 0.13)',
+  lineHeight: 1,
+  color: RECEIPT_COPY_WATERMARK_COLOR,
   whiteSpace: 'nowrap',
   pointerEvents: 'none',
   zIndex: 0,
