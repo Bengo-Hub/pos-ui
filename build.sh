@@ -106,7 +106,10 @@ if [[ ${DEPLOY} == "true" ]]; then
   # Ensure namespace exists
   kubectl get ns "$NAMESPACE" >/dev/null 2>&1 || kubectl create ns "$NAMESPACE"
   # Ensure registry pull secret exists (for image pull in cluster)
-  if [[ -n ${REGISTRY_USERNAME:-} && -n ${REGISTRY_PASSWORD:-} ]]; then
+  # registry-credentials is sealed in devops-k8s (registry-credentials.yml writes it); create it
+  # here only in a namespace that has no SealedSecret for it yet.
+  if [[ -n ${REGISTRY_USERNAME:-} && -n ${REGISTRY_PASSWORD:-} ]] \
+    && [[ -z "$(kubectl -n "$NAMESPACE" get secret registry-credentials -o jsonpath='{.metadata.ownerReferences[?(@.kind=="SealedSecret")].name}' 2>/dev/null)" ]]; then
     kubectl -n "$NAMESPACE" create secret docker-registry registry-credentials \
       --docker-server="$REGISTRY_SERVER" \
       --docker-username="$REGISTRY_USERNAME" \
