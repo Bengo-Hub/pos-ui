@@ -51,8 +51,11 @@ import {
   Utensils,
   Wifi,
 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useAuthStore } from '@/store/auth';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useKDSWebSocket } from '@/hooks/use-kds-ws';
+import { useKDSSocketOpen } from '@/lib/kds/kds-live';
 import { usePermissions, P } from '@/hooks/usePermissions';
 import type { KDSStationType } from '@/hooks/useKDS';
 
@@ -396,13 +399,50 @@ function StationTab({
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
+/** sessionStorage-backed state per tenant, so a remount keeps the station and channel. */
+function useSessionState<T>(key: string, initial: T): [T, (v: T) => void] {
+  const [value, setValue] = useState<T>(() => {
+    if (typeof window === 'undefined') return initial;
+    try {
+      const raw = window.sessionStorage.getItem(key);
+      return raw != null ? (JSON.parse(raw) as T) : initial;
+    } catch {
+      return initial;
+    }
+  });
+  const set = useCallback((v: T) => {
+    setValue(v);
+    try { window.sessionStorage.setItem(key, JSON.stringify(v)); } catch { /* storage unavailable */ }
+  }, [key]);
+  return [value, set];
+}
+
+function KDSBoardSkeleton() {
+  return (
+    <div className="min-h-screen bg-background p-6 space-y-4">
+      <Skeleton className="h-7 w-48" />
+      <div className="flex gap-2">
+        {[0, 1, 2].map((i) => <Skeleton key={i} className="h-12 w-36 rounded-xl" />)}
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        {[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-48 rounded-2xl" />)}
+      </div>
+    </div>
+  );
+}
+
 function KDSPage() {
-  const [channel, setChannel] = useState<ChannelFilter>('all');
-  const [selectedStation, setSelectedStation] = useState<string | null>(null);
-  const [confirmClear, setConfirmClear] = useState(false);
   const user = useAuthStore((s) => s.user);
+  const tenantKey = (user?.tenant_id as string | undefined) ?? 'default';
+  const [channel, setChannel] = useSessionState<ChannelFilter>(`pos-kds-channel:${tenantKey}`, 'all');
+  const [selectedStation, setSelectedStation] = useSessionState<string | null>(`pos-kds-station:${tenantKey}`, null);
+  const [confirmClear, setConfirmClear] = useState(false);
   const { can } = usePermissions();
   const clearBoard = useClearBoard();
+  const socketOpen = useKDSSocketOpen();
+
+  // Live ticket pushes; the REST poll in useKDSTickets is the fallback.
+  useKDSWebSocket();
 
   const { data: stationsData, isLoading: stationsLoading } = useKDSStations();
   const { data: ticketsData, isLoading: ticketsLoading } = useKDSTickets();
@@ -444,9 +484,17 @@ function KDSPage() {
               <p className="text-muted-foreground text-xs mt-0.5">Kitchen · Bar · All stations</p>
             </div>
             {/* Live badge */}
-            <span className="flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+            <span
+              className={cn(
+                'flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full border',
+                socketOpen
+                  ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                  : 'bg-muted text-muted-foreground border-border',
+              )}
+              title={socketOpen ? 'Live updates connected' : 'Refreshing every few seconds'}
+            >
               <Wifi className="h-3 w-3" />
-              Live
+              {socketOpen ? 'Live' : 'Polling'}
             </span>
             {/* Manager: bulk-clear the board (serve all active tickets) — for printer-only kitchens
                 with no device to bump tickets one by one, or to clear a cluttered board. */}
@@ -554,7 +602,11 @@ export default function KDSPageGated() {
   return (
     <ModuleGate moduleKey="kds" fallback={<ModuleUnavailablePage moduleKey="kds" />}>
       {/* The live display is a plan feature; station routing/configuration is not (see pos-api router). */}
-      <FeatureGate feature="kds" fallback={<FeatureLocked feature="kds" label="Kitchen Display" />}>
+      <FeatureGate
+        feature="kds"
+        fallback={<FeatureLocked feature="kds" label="Kitchen Display" />}
+        loadingFallback={<KDSBoardSkeleton />}
+      >
         <KDSPage />
       </FeatureGate>
     </ModuleGate>

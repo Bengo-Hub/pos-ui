@@ -1,7 +1,7 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { posSettingsApi, type POSSettings, type UpdatePOSModulesInput, type UpdatePOSSettingsInput } from '@/lib/api/settings';
+import { posSettingsApi, type POSSettings, type SessionTimeoutsInput, type UpdatePOSModulesInput, type UpdatePOSSettingsInput } from '@/lib/api/settings';
 
 export type { POSSettings } from '@/lib/api/settings';
 import { useTenantId } from '@/hooks/useTenantId';
@@ -71,6 +71,21 @@ export function useUpdateShiftSettings() {
       toast.success('Shift settings saved');
     },
     onError: async (e) => toast.error(await apiErrorMessage(e, 'Failed to save shift settings')),
+  });
+}
+
+export function useUpdateSessionTimeouts() {
+  const tenantID = useTenantID();
+  const outletID = useEffectiveOutletID() || undefined;
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: SessionTimeoutsInput) => posSettingsApi.patchSessionTimeouts(tenantID, input),
+    onSuccess: (data) => {
+      writeSettingsCaches(qc, tenantID, outletID, data);
+      toast.success('Session timeouts saved');
+    },
+    onError: async (e) => toast.error(await apiErrorMessage(e, 'Failed to save session timeouts')),
   });
 }
 

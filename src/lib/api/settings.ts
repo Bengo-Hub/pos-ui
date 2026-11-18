@@ -163,7 +163,23 @@ export interface POSSettings {
    *  this outlet, on every table, report and the terminal. Plain boolean, default false (shown);
    *  boi-enterprises has it on. pos-api strips the figures too (HideProfitForCashier). */
   hide_profit_margin_for_cashier: boolean;
+  /** Default signed-in idle timeout in seconds (0 = none configured). */
+  screensaver_timeout_seconds?: number;
+  /** Role code (lowercase) to idle timeout seconds; 0 = never sign out. Platform defaults merged
+   *  with outlet overrides server-side. */
+  idle_timeout_by_role?: Record<string, number>;
+  /** Seconds the "Still there?" countdown runs before signing out (default 30). */
+  idle_countdown_seconds?: number;
   updated_at: string;
+}
+
+/** PATCH /pos/settings/session-timeouts body. */
+export interface SessionTimeoutsInput {
+  idle_timeout_by_role?: Record<string, number>;
+  /** 0 clears, else 30..86400. */
+  idle_timeout_default_seconds?: number;
+  /** 5..300. */
+  idle_countdown_seconds?: number;
 }
 
 export interface UpdatePOSSettingsInput {
@@ -262,6 +278,9 @@ export const posSettingsApi = {
 
   patchShifts: (tenantID: string, body: { shift_auto_end_enabled?: boolean; shift_max_hours?: number }) =>
     apiClient.patch<POSSettings>(`${settingsBase(tenantID)}/shifts`, body),
+
+  patchSessionTimeouts: (tenantID: string, body: SessionTimeoutsInput) =>
+    apiClient.patch<POSSettings>(`${settingsBase(tenantID)}/session-timeouts`, body),
 
   patchTables: (tenantID: string, body: { table_max_occupation_minutes?: number }) =>
     apiClient.patch<POSSettings>(`${settingsBase(tenantID)}/tables`, body),

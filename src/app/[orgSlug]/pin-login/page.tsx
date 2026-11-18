@@ -177,11 +177,12 @@ export default function PINLoginPage() {
 
   const handleIdle   = useCallback(() => setScreensaverActive(true),  []);
   const handleActive = useCallback(() => setScreensaverActive(false), []);
-  useIdleTimer(handleIdle, handleActive, timeoutMs === 0 ? undefined : timeoutMs);
+  // 0 = Never: the hook arms no timer at all.
+  useIdleTimer(handleIdle, handleActive, timeoutMs);
 
   const handleTimeoutChange = (ms: number) => {
     setTimeoutMsState(ms);
-    setScreensaverTimeoutMs(ms === 0 ? 9_999_999_999 : ms);
+    setScreensaverTimeoutMs(ms);
     setHasLocalTimeout(true);
     setShowSettings(false);
   };

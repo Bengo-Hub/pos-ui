@@ -2,11 +2,9 @@
 
 import { useEffect, useRef } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { toast } from 'sonner';
 import {
   onlineOrdersApi, isAcceptedForLater, isAwaitingAcceptance, isOnlineOrder, type CollectPayload, type PickupOrder,
 } from '@/lib/api/online-orders';
-import { playKDSTone } from '@/lib/kds-sounds';
 import { useTenantId } from '@/hooks/useTenantId';
 
 function useTenantID() {
@@ -20,7 +18,7 @@ export const onlineOrderKeys = {
   riders: (tenantID: string) => ['online-order-riders', tenantID] as const,
 };
 
-/** Refresh cadence of the live queue. A new online order also rings (see useNewOnlineOrderAlert). */
+/** Refresh cadence of the live queue. A new online order also rings (see NewOrderAlertProvider). */
 const QUEUE_REFRESH_MS = 10_000;
 
 /** usePickupOrders — online click-and-collect + POS takeaway orders for the active outlet. */
@@ -125,21 +123,23 @@ export function useOnlineOrderActions() {
 }
 
 /**
- * useNewOnlineOrderAlert rings the KDS tone and shows a toast when a new ONLINE order lands in the
- * queue, the way a delivery-platform tablet does, so a busy counter notices it without watching the
- * screen. Orders present on first load never ring.
+ * useNewOnlineOrders watches the live queue and calls onNew with ONLINE orders that were not there
+ * before. Orders present on first load never count as new. Returns whether any order is still
+ * waiting to be accepted (the alert keeps ringing for those, like a delivery tablet).
+ *
+ * The one source of new-online-order detection: the app-level NewOrderAlertProvider uses it, so
+ * the online-orders page and every other screen share the same alert.
  */
-export function useNewOnlineOrderAlert(orders: PickupOrder[], ready: boolean) {
+export function useNewOnlineOrders(
+  orders: PickupOrder[],
+  ready: boolean,
+  onNew: (fresh: PickupOrder[]) => void,
+): { waiting: boolean } {
   const seen = useRef<Set<string> | null>(null);
+  const onNewRef = useRef(onNew);
+  onNewRef.current = onNew;
 
-  // Keep ringing every 30 seconds while any order is waiting to be accepted, like a delivery
-  // tablet, so an order is never left unanswered because nobody looked at the screen.
-  const waiting = orders.some((o) => isAwaitingAcceptance(o) && !isAcceptedForLater(o));
-  useEffect(() => {
-    if (!ready || !waiting) return;
-    const timer = setInterval(() => playKDSTone(), 30_000);
-    return () => clearInterval(timer);
-  }, [ready, waiting]);
+  const waiting = ready && orders.some((o) => isAwaitingAcceptance(o) && !isAcceptedForLater(o));
 
   useEffect(() => {
     if (!ready) return;
@@ -150,14 +150,8 @@ export function useNewOnlineOrderAlert(orders: PickupOrder[], ready: boolean) {
     }
     const fresh = online.filter((o) => !seen.current!.has(o.id));
     fresh.forEach((o) => seen.current!.add(o.id));
-    if (fresh.length === 0) return;
-    playKDSTone();
-    const first = fresh[0];
-    toast.info(
-      fresh.length === 1
-        ? `New online order ${first.order_number}${first.customer_name ? ` from ${first.customer_name}` : ''}`
-        : `${fresh.length} new online orders`,
-      { duration: 8000 },
-    );
+    if (fresh.length > 0) onNewRef.current(fresh);
   }, [orders, ready]);
+
+  return { waiting };
 }

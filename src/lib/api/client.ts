@@ -33,11 +33,22 @@ class ApiClient {
         this.instance.interceptors.response.use(this.handleResponse, this.handleError);
     }
 
-    private handleRequest = (config: InternalAxiosRequestConfig) => {
+    /** Resolves once the session start-up has a token (or settles without one). See lib/auth/auth-ready. */
+    private authReadyWaiter: (() => Promise<void>) | null = null;
+
+    /** Hold requests made before the cookie session refresh finishes, so a reload does not 401. */
+    public setAuthReadyWaiter(waiter: (() => Promise<void>) | null) {
+        this.authReadyWaiter = waiter;
+    }
+
+    private handleRequest = async (config: InternalAxiosRequestConfig) => {
         // A write whose path has an empty tenant segment means the page tenant is not resolved
         // yet; fail clearly instead of posting to /api/v1//...
         if ((config.method ?? 'get').toLowerCase() !== 'get' && /\/api\/v1\/\//.test(config.url ?? '')) {
             throw new Error('Organisation not loaded yet');
+        }
+        if (!this.accessToken && this.authReadyWaiter) {
+            await this.authReadyWaiter();
         }
         if (this.accessToken) {
             config.headers.Authorization = `Bearer ${this.accessToken}`;

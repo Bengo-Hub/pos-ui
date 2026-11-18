@@ -97,7 +97,7 @@ const ALL_TABS: { id: Tab; label: string; icon: React.ElementType; group: Settin
   { id: 'card_terminal',    label: 'Card Terminal',      icon: CreditCard,  group: 'Sales & Payments', requirePermission: CONFIG_PERMS, description: 'PDQ / card-terminal mode, approval ref, and integrated terminal' },
   // Use-Case Modules (surfaced per outlet use case)
   { id: 'modules',          label: 'Modules',            icon: Layers,      group: 'Use-Case Modules', requirePermission: CONFIG_PERMS, description: 'Use case and feature toggles' },
-  { id: 'shifts',           label: 'Shifts',             icon: Clock,       group: 'Use-Case Modules', requirePermission: CONFIG_PERMS, description: 'Float rules and shift visibility' },
+  { id: 'shifts',           label: 'Shifts',             icon: Clock,       group: 'Use-Case Modules', requirePermission: CONFIG_PERMS, description: 'Float rules, shift visibility and session timeouts' },
   // Kitchen/bar stations for food outlets; the same stations are the production board's for a
   // services job outlet (label adapted below).
   { id: 'kds_stations',     label: 'KDS Stations',       icon: ChefHat,     group: 'Use-Case Modules', requireModule: ['kds', 'production'], requirePermission: CONFIG_PERMS, description: 'Kitchen and bar display screens' },

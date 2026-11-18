@@ -5,6 +5,7 @@ import { Sidebar } from '@/components/sidebar';
 import { AuthProvider } from '@/providers/auth-provider';
 import { TenantBrandingProvider } from '@/providers/tenant-branding-provider';
 import { SubscriptionEntitlementsProvider } from '@/providers/subscription-entitlements-provider';
+import { NewOrderAlertProvider } from '@/providers/new-order-alert-provider';
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import { ReactNode, useState } from 'react';
 import { useEffectiveOnline } from '@/lib/connectivity';
@@ -32,6 +33,10 @@ import { useAuthStore } from '@/store/auth';
 import { useTenantId } from '@/hooks/useTenantId';
 import { apiClient } from '@/lib/api/client';
 import { resolveActiveOutlet } from '@/lib/auth/outlet-resolver';
+import { installAuthReadyGate } from '@/lib/auth/auth-ready';
+
+// Hold API calls until the cookie session refresh lands, so a reload sends no bare requests.
+installAuthReadyGate();
 
 /**
  * Client-side belt-and-suspenders for the tenant manifest link. The authoritative
@@ -216,6 +221,9 @@ function PlatformDrillInConfinement() {
   return null;
 }
 
+// Stable reference: an inline arrow restarted OfflineBar's 4s pending-count poll on every render.
+const getPendingSyncCount = async () => (await getSyncStatusCounts()).pending;
+
 /** Paths that bypass the full app shell (no header/sidebar/footer). */
 const KIOSK_PATHS = ['/pin-login'];
 
@@ -275,9 +283,12 @@ export function OrgShell({ children }: { children: ReactNode }) {
           <PWARegistration />
           <PwaSplashScreen />
 
-          {/* Branded idle lock for active PIN/terminal sessions — wakes to the PIN pad so the
-              next staff member must re-authenticate. No-ops for SSO sessions and the kiosk route. */}
+          {/* Idle sign-out for PIN/terminal sessions: a "Still there?" countdown, then back to the
+              PIN pad. No-ops for SSO sessions and the kiosk route. */}
           <TerminalIdleScreensaver />
+
+          {/* New-order modal + tone for KDS and online-orders staff, on every screen. */}
+          {!kiosk && <NewOrderAlertProvider />}
 
           {kiosk ? (
             // Fullscreen kiosk layout — no nav chrome
@@ -300,7 +311,7 @@ export function OrgShell({ children }: { children: ReactNode }) {
                     backdrop) however high its own z-index. */}
                 <OfflineBar
                   registerSW
-                  getPendingCount={async () => (await getSyncStatusCounts()).pending}
+                  getPendingCount={getPendingSyncCount}
                   onSyncNow={triggerSyncNow}
                   availableOffline={['Sell', 'Cash & manual payments', 'Open/close drawer']}
                   disabledOffline={['Card / M-Pesa STK', 'Live reports']}

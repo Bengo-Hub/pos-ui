@@ -27,7 +27,7 @@ interface CatalogItem {
 
 export function SubscriptionEntitlementsProvider({ children }: { children: ReactNode }) {
   const sub = useSubscription();
-  const isExempt = sub.isPlatformOwner || sub.isDemo || sub.isServiceCharge;
+  const isExempt = sub.isPlatformOwner || sub.isDemo || sub.isServiceCharge || sub.isSubExempt;
   const tenantSlug = useAuthStore((s) => (s.user?.tenant_slug as string | undefined) ?? '');
   const offlineCatalog = useSubscriptionStore((s) => s.catalog);
   const setCatalog = useSubscriptionStore((s) => s.setCatalog);

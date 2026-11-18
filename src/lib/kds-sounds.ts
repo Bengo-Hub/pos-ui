@@ -94,6 +94,26 @@ function ctx(): AudioContext | null {
   return audioCtx;
 }
 
+/** True once the browser lets this tab play sound (the context is running). */
+export function isKDSAudioUnlocked(): boolean {
+  return audioCtx?.state === 'running';
+}
+
+/**
+ * Unlocks audio. Call from a user gesture (tap, key press): browsers keep the context
+ * suspended until one happens. Resolves to whether sound can now play.
+ */
+export async function unlockKDSAudio(): Promise<boolean> {
+  const ac = ctx();
+  if (!ac) return false;
+  try {
+    if (ac.state !== 'running') await ac.resume();
+  } catch {
+    /* still locked */
+  }
+  return ac.state === 'running';
+}
+
 /** Play a tone by id (defaults to the user's saved preference). Safe no-op when audio is unavailable. */
 export function playKDSTone(id: KDSToneId = getKDSTone()): void {
   const ac = ctx();

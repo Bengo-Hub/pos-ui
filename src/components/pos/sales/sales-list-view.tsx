@@ -89,7 +89,9 @@ export function SalesListView({ orgSlug, fixedSource, title, subtitle }: {
     // ?payment_status=owed (the dashboard's Sales due card) opens the list already filtered.
     outletId: globalOutlet, customer: '', paymentStatus: searchParams.get('payment_status') ?? '', paymentMethod: '',
     shippingStatus: '', userId: '', source: '', subscriptions: false,
-    range: { from: '', to: '' }, minTotal: '', maxTotal: '', itemSku: '', itemLabel: '',
+    // ?from=&to= (yyyy-MM-dd) carry the dashboard period across with the Sales due card.
+    range: { from: searchParams.get('from') ?? '', to: searchParams.get('to') ?? '' },
+    minTotal: '', maxTotal: '', itemSku: '', itemLabel: '',
   });
 
   // Follow the global switcher: changing the drilled-in outlet re-scopes this page too. Adjusted

@@ -3,8 +3,10 @@
 import { apiClient } from '@/lib/api/client';
 import type { JobHeader } from '@/lib/api/service-jobs';
 import { useTenantId } from '@/hooks/useTenantId';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import type { KDSChannel } from '@/lib/kds/board';
+import { useEffectiveOutletID } from '@/hooks/usePOS';
+import { useKDSSocketOpen } from '@/lib/kds/kds-live';
 
 function useTenantID() {
   return useTenantId() ?? '';
@@ -224,8 +226,12 @@ export interface KDSTicketsFilter {
 
 export function useKDSTickets(filter?: KDSTicketsFilter) {
   const tenantID = useTenantID();
+  // The list is outlet-scoped (X-Outlet-ID), so the key must carry the outlet.
+  const outletID = useEffectiveOutletID();
+  // Pushes from the shared KDS socket invalidate this query; poll slowly while it is open.
+  const socketOpen = useKDSSocketOpen();
   return useQuery({
-    queryKey: ['kds-tickets', tenantID, filter],
+    queryKey: ['kds-tickets', tenantID, outletID, filter],
     queryFn: () =>
       apiClient.get<{ data: KDSTicket[] }>(`${basePath(tenantID)}/tickets`, {
         ...(filter?.stationId ? { station_id: filter.stationId } : {}),
@@ -234,7 +240,8 @@ export function useKDSTickets(filter?: KDSTicketsFilter) {
       }),
     enabled: !!tenantID,
     staleTime: 5_000,
-    refetchInterval: 5_000,
+    refetchInterval: socketOpen ? 30_000 : 5_000,
+    placeholderData: keepPreviousData,
   });
 }
 

@@ -533,7 +533,7 @@ export interface RegisterDetails {
   refund_by_method: PaymentMethodRow[];
   total_payment: number;
   credit_sales: number;
-  /** Still owed now on every committed sale up to `to` (not only this range's sales). */
+  /** Still owed now on completed sales made between `from` and `to`. */
   sales_due?: number;
   sales_due_count?: number;
   /** sales_due split by sale age in days as of `to`. */

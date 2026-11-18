@@ -8,6 +8,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { useModuleAccess } from '@/hooks/use-module-access';
 import { P } from '@/lib/rbac/permissions';
 import { Toggle } from './shared';
+import { SessionTimeoutsCard } from './SessionTimeoutsCard';
 
 export function ShiftsSettingsTab() {
   const { data: settings, isLoading } = usePOSSettings();
@@ -112,6 +113,8 @@ export function ShiftsSettingsTab() {
           </div>
         </CardContent>
       </Card>
+
+      <SessionTimeoutsCard />
     </div>
   );
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { useParams } from 'next/navigation';
 import { Bike, History as HistoryIcon, Loader2, Package, QrCode } from 'lucide-react';
 import { ModuleGate } from '@/components/auth/module-gate';
@@ -9,7 +9,7 @@ import {
   dispatchStatus, hasLeftOutlet, isAwaitingAcceptance, isOrderPaid, isOrderReady, isOnlineOrder, type PickupOrder,
 } from '@/lib/api/online-orders';
 import {
-  useDeliveryDispatch, useNewOnlineOrderAlert, usePickupHistory, usePickupOrders,
+  useDeliveryDispatch, usePickupHistory, usePickupOrders,
 } from '@/hooks/useOnlineOrders';
 import { AssignRiderDialog } from '@/components/online-orders/assign-rider-dialog';
 import { MenuQRCard } from '@/components/online-orders/menu-qr-card';
@@ -96,14 +96,11 @@ function OnlineOrdersPage() {
   const { data: posSettings } = usePOSSettings();
   const currency = (posSettings as any)?.currency ?? 'KES';
 
-  const { data: pickupOrders = [], isLoading: pickupLoading, isSuccess: pickupLoaded } = usePickupOrders();
-  const { data: deliveryOrders = [], isLoading: deliveryLoading, isSuccess: deliveryLoaded } = useDeliveryDispatch();
+  const { data: pickupOrders = [], isLoading: pickupLoading } = usePickupOrders();
+  const { data: deliveryOrders = [], isLoading: deliveryLoading } = useDeliveryDispatch();
   const [tab, setTab] = useState<Tab>('pickup');
   const { data: historyOrders = [], isLoading: historyLoading } = usePickupHistory(undefined, tab === 'history');
-
-  // Ring for every new online order, whichever tab is open.
-  const allLive = useMemo(() => [...pickupOrders, ...deliveryOrders], [pickupOrders, deliveryOrders]);
-  useNewOnlineOrderAlert(allLive, pickupLoaded && deliveryLoaded);
+  // New-order ringing is app-wide (NewOrderAlertProvider in org-shell), on the same queue queries.
 
   const [handover, setHandover] = useState<PickupOrder | null>(null);
   const [verify, setVerify] = useState<PickupOrder | null>(null);

@@ -46,18 +46,25 @@ export function DashboardCharts({ range, currency }: { range: DashboardRange; cu
   );
 }
 
-/** Money customers still owe on POS sales (the summary's sales_due, every open sale up to the
- *  period end). Opens All Sales, which has no URL filter for payment status yet. */
+/** Money customers still owe on POS sales made in the selected period and outlet (the summary's
+ *  sales_due). The sub line adds what is owed on all unpaid sales when that is larger. Opens All
+ *  Sales filtered to owed sales in the same period. */
 function SalesDueCard({ s, orgSlug, loading }: { s: any; orgSlug: string; loading?: boolean }) {
   const count = s.sales_due_count ?? 0;
+  const allOpen = s.sales_due_all_open ?? 0;
+  const day = (v?: string) => (typeof v === 'string' ? v.slice(0, 10) : '');
+  const qs = new URLSearchParams({ payment_status: 'owed' });
+  if (day(s.from)) qs.set('from', day(s.from));
+  if (day(s.to)) qs.set('to', day(s.to));
+  const countText = `${fmtNum(count)} ${count === 1 ? 'sale' : 'sales'}`;
   return (
     <KPICard
       label="Sales due"
       value={fmt(s.sales_due ?? 0, s.currency)}
-      sub={`${fmtNum(count)} ${count === 1 ? 'sale' : 'sales'}`}
+      sub={allOpen > (s.sales_due ?? 0) ? `${countText} · ${fmt(allOpen, s.currency)} owed in total` : countText}
       icon={HandCoins}
       loading={loading}
-      href={`/${orgSlug}/sell/all-sales?payment_status=owed`}
+      href={`/${orgSlug}/sell/all-sales?${qs.toString()}`}
     />
   );
 }
