@@ -94,7 +94,9 @@ reload, and cleared on sign-out or when another account signs in. Staff without 
 never restore one. Analytics, hotel reports and the dashboard KPI card read the same scope and
 send it as `outlet_id` (the dashboard query key carries it, so switching outlet refetches).
 
-The admin, retail and hospitality dashboards show a "Sales due" card (`sales_due`, `sales_due_count` from the summary: what is still owed now on every sale up to the period end) that opens All Sales; the All Sales page has no URL parameter for payment status yet, so the due filter is picked there. The analytics Register tab shows the same figure next to Credit Sales with a 0 to 30, 31 to 60, 61 to 90 and over 90 days split by sale date (`sales_due_ageing` on register-details).
+The admin, retail and hospitality dashboards show a "Sales due" card (`sales_due`, `sales_due_count` from the summary: what is still owed now on sales made in the selected period and outlet, like the other cards; the sub line adds `sales_due_all_open`, the total owed on every unpaid sale, when it is larger). The card opens All Sales with `?payment_status=owed&from=&to=` for the same period. The analytics Register tab shows the period's figure next to Credit Sales with a 0 to 30, 31 to 60, 61 to 90 and over 90 days split by sale date (`sales_due_ageing` on register-details).
+
+The KDS board and every plan gate read the subscription through one shared query (`hooks/use-subscription.ts`). A failed lookup fails open (`status: 'unknown'`) and is retried every 20 s, so a subscription-api or key problem never locks a paying tenant out or leaves a screen on skeletons. Idle sign-out follows the per-role values in `/pos/settings` (`idle_timeout_by_role`, set in Settings > Shifts > Session timeouts) and asks "Still there?" with a countdown before signing out. New KDS tickets and online orders raise an app-wide alert with the tenant's tone until someone acknowledges it.
 
 pos-api resolves `?outlet_id=` with one rule, `outletmw.RequestOutletScope`, used by the
 All-Sales list, summary and export and by every analytics, register, KDS, hotel and PDF report:
