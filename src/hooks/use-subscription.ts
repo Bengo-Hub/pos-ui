@@ -70,7 +70,9 @@ export function useSubscription() {
   const isSubExempt = decodeSubExempt(session?.accessToken);
   const isExempt = isPlatformOwner || isDemo || isServiceCharge || isSubExempt;
 
-  const authed = status === 'authenticated' && !!session?.accessToken && !!user;
+  // The /api/subscription proxy authenticates with the server's service key, so the lookup needs
+  // a signed-in profile, not a browser token (cookie sessions may not have mirrored one yet).
+  const authed = status === 'authenticated' && !!user;
   // No tenant, platform owner or sub_exempt: no lookup, treated as an enterprise plan.
   const skipLookup = authed && (!tenantId || isPlatformOwner || isSubExempt);
 
@@ -137,7 +139,11 @@ export function useSubscription() {
   else if (cachedInfo) info = cachedInfo;
   // No cache and the lookup failed: 'unknown' is deliberately NOT 'none', so the tenant is
   // never locked out while the subscription service is unreachable.
-  else if (query.isError) info = { status: 'unknown', planCode: '', planName: '', features: [], limits: {} };
+  // The same when signed in but the lookup cannot run: a gate never waits on a query that will
+  // not start.
+  else if (query.isError || (authed && !query.isFetching && query.fetchStatus === 'idle' && query.isPending)) {
+    info = { status: 'unknown', planCode: '', planName: '', features: [], limits: {} };
+  }
 
   const subStatus = info?.status ?? null;
 
