@@ -17,6 +17,11 @@ ARG NEXT_PUBLIC_API_URL=https://posapi.codevertexafrica.com
 ARG NEXT_PUBLIC_NOTIFICATIONS_URL=https://notifications.codevertexafrica.com
 ARG NEXT_PUBLIC_TREASURY_API_URL=https://booksapi.codevertexafrica.com
 ARG NEXT_PUBLIC_TREASURY_UI_URL=https://books.codevertexafrica.com
+# Back-office sso sign-in keeps tokens out of browser storage on *.codevertexafrica.com (sso cookie
+# session, fleet plan G11); PIN terminal sessions keep their stored token for offline use, and a
+# tenant's custom domain keeps stored tokens. "false" goes back to stored tokens.
+ARG NEXT_PUBLIC_COOKIE_SESSION=true
+ENV NEXT_PUBLIC_COOKIE_SESSION=$NEXT_PUBLIC_COOKIE_SESSION
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_NOTIFICATIONS_URL=$NEXT_PUBLIC_NOTIFICATIONS_URL
 ENV NEXT_PUBLIC_TREASURY_API_URL=$NEXT_PUBLIC_TREASURY_API_URL

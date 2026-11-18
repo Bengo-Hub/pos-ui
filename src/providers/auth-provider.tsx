@@ -6,6 +6,8 @@ import { useMe } from '@/hooks/useMe';
 import { apiClient } from '@/lib/api/client';
 import { parseLimitInfo, subscriptionErrorMessage } from '@/lib/api/error-handler';
 import { AUTH_STORAGE_KEY } from '@/lib/auth/token-refresh';
+import { cookieMode } from '@/lib/auth/session-mode';
+import { useEffectiveOnline } from '@/lib/connectivity';
 import { useAuthStore } from '@/store/auth';
 import { useLimitModal } from '@/store/limit-modal';
 import { watchSessionAcrossTabs } from '@bengo-hub/shared-ui-lib/auth';
@@ -66,6 +68,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }),
     [],
   );
+
+  // Cookie session: an sso tab that reloaded offline runs from cache with no token. Once back
+  // online, get one through the sso cookie and refetch what failed meanwhile. A refused cookie
+  // signs the tab out (cookie-session onChange), and the SSO redirect below takes over.
+  const isOnline = useEffectiveOnline();
+  useEffect(() => {
+    if (!isOnline || status !== 'authenticated' || session || isTerminalSession || !cookieMode()) return;
+    void import('@/lib/auth/token-refresh')
+      .then(({ refreshAccessToken }) => refreshAccessToken())
+      .then((token) => {
+        if (token) void queryClient.invalidateQueries();
+      });
+  }, [isOnline, status, session, isTerminalSession, queryClient]);
 
   // Register 401 handler. Terminal sessions redirect to pin-login instead of SSO.
   useEffect(() => {

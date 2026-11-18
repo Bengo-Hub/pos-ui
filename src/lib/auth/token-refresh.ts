@@ -8,6 +8,7 @@
 import { createSessionRefresher } from '@bengo-hub/shared-ui-lib/auth';
 import { useAuthStore } from '@/store/auth';
 import { refreshTokens } from '@/lib/auth/api';
+import { cookieMode } from '@/lib/auth/session-mode';
 
 /** The persisted store key; also names the cross-tab refresh lock and the storage watcher. */
 export const AUTH_STORAGE_KEY = 'pos-auth-storage';
@@ -26,6 +27,13 @@ const refreshSession = createSessionRefresher({
  * rejected when it is known.
  */
 export async function refreshAccessToken(failedToken?: string | null): Promise<string | null> {
+  // An sso sign-in refreshes through auth-api's HttpOnly cookie (lib/auth/cookie-session.ts). A
+  // PIN terminal session keeps the stored path below; it has no refresh token, as before.
+  if (cookieMode() && !useAuthStore.getState().isTerminalSession) {
+    const { getCookieSession } = await import('@/lib/auth/cookie-session');
+    const renewed = await getCookieSession().refresh(failedToken);
+    return 'token' in renewed ? renewed.token : null;
+  }
   const outcome = await refreshSession(failedToken);
   return 'token' in outcome ? outcome.token : null;
 }

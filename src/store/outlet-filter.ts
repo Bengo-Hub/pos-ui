@@ -3,6 +3,7 @@ import { useAuthStore } from '@/store/auth';
 import { apiClient } from '@/lib/api/client';
 import { canAccessAllOutlets, tokenOutletLimit } from '@/lib/auth/outlet-access';
 import { getStoredDrillDown, setStoredDrillDown } from '@/lib/auth/outlet-storage';
+import { cookieMode } from '@/lib/auth/session-mode';
 
 export interface OutletOption {
   id: string;
@@ -86,6 +87,9 @@ export function useListOutletId(): string {
 // view. Only admins/managers keep one; for anyone else the stored value is ignored and cleared.
 function restoreDrillDown() {
   const { user, session } = useAuthStore.getState();
+  // Cookie session: an sso tab loads with no token until the first refresh; wait for it (the
+  // subscription below runs this again) instead of taking it for a sign-out.
+  if (cookieMode() && user && !session) return;
   const limit = tokenOutletLimit(session?.accessToken);
   if (!session || !user || (limit.length === 0 && !canAccessAllOutlets(user))) {
     setStoredDrillDown(null);
@@ -106,15 +110,21 @@ if (typeof window !== 'undefined') {
   restoreDrillDown();
   useAuthStore.subscribe((s, prev) => {
     const userChanged = (s.user as { id?: string } | null)?.id !== (prev.user as { id?: string } | null)?.id;
-    if (!s.session || userChanged) {
+    // With the cookie session the token is in memory only (absent after a reload until the first
+    // refresh, or while offline), so signing out means no profile, not no token.
+    const signedOut = cookieMode() ? !s.user : !s.session;
+    if (signedOut || userChanged) {
       if (useOutletFilterStore.getState().selectedOutlet || useOutletFilterStore.getState().allOutlets) {
         useOutletFilterStore.setState({ selectedOutlet: null, allOutlets: false });
       }
-      if (!s.session) {
+      if (signedOut) {
         setStoredDrillDown(null);
       } else {
         restoreDrillDown();
       }
+    } else if (cookieMode() && s.session && !prev.session) {
+      // The first token after a reload: restore the drill-down restoreDrillDown() waited for.
+      restoreDrillDown();
     }
   });
 }

@@ -61,6 +61,15 @@ export function useSyncOfflineOrders() {
     if (!tenantID || syncingRef.current || !isEffectivelyOnline() || isBackgroundSyncPaused()) return;
     syncingRef.current = true;
     try {
+      // Cookie session: an sso tab that reloaded offline runs from cache with no token. Get one
+      // first; with none yet (still unreachable), the queue waits for the next pass.
+      const { cookieMode } = await import('@/lib/auth/session-mode');
+      if (cookieMode() && !apiClient.getAccessToken()) {
+        const { refreshAccessToken } = await import('@/lib/auth/token-refresh');
+        const token = await refreshAccessToken();
+        if (!token) return;
+        apiClient.setAccessToken(token);
+      }
       // Optimistic clear — re-set by isTerminal() below if this pass still hits a 401/403.
       // A fresh pass re-evaluates from scratch rather than latching on a stale block forever.
       reportAuthSyncCleared();
