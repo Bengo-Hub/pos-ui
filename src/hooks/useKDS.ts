@@ -3,7 +3,7 @@
 import { apiClient } from '@/lib/api/client';
 import type { JobHeader } from '@/lib/api/service-jobs';
 import { useTenantId } from '@/hooks/useTenantId';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import type { KDSChannel } from '@/lib/kds/board';
 
 function useTenantID() {
@@ -226,7 +226,8 @@ export interface KDSTicketsFilter {
   date?: string;
   /** 0..23 drills the day view down to one hour. */
   hour?: number | null;
-  /** Poll interval; false stops polling (a past day never changes). Default 5s. */
+  /** Poll interval; false stops polling (a past day never changes). Default 5s; the KDS board
+   *  passes the outlet's kds_refresh_seconds (60..300) and gets live changes over the socket. */
   refetchMs?: number | false;
 }
 
@@ -262,6 +263,8 @@ export function useKDSTickets(filter?: KDSTicketsFilter) {
     enabled: !!tenantID,
     staleTime: 5_000,
     refetchInterval: refetchMs,
+    // Reload in place: the cards stay while a refetch, an hour or a date change loads.
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -318,6 +321,7 @@ export function useKDSDaySummary(filter: {
     enabled: !!tenantID && enabled,
     staleTime: 10_000,
     refetchInterval: refetchMs,
+    placeholderData: keepPreviousData,
   });
 }
 

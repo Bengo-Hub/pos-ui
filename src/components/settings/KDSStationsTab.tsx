@@ -528,6 +528,27 @@ function BoardViewSetting({ canEdit }: { canEdit: boolean }) {
         </div>
         <div className="flex items-center justify-between gap-4">
           <div>
+            <p className="text-sm font-medium">Reload every</p>
+            <p className="text-xs text-muted-foreground">
+              New and changed tickets appear at once; this full reload is the fallback when the connection drops.
+            </p>
+          </div>
+          <select
+            value={settings?.kds_refresh_seconds ?? 60}
+            disabled={!canEdit || update.isPending}
+            onChange={(e) => update.mutate({ kds_refresh_seconds: Number(e.target.value) })}
+            className={`${inputClass} w-32`}
+            aria-label="Board reload interval"
+          >
+            {[60, 90, 120, 180, 240, 300].map((s) => (
+              <option key={s} value={s}>
+                {s < 120 ? `${s} seconds` : `${s / 60} minutes`}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="flex items-center justify-between gap-4">
+          <div>
             <p className="text-sm font-medium">Keep served orders on the day view</p>
             <p className="text-xs text-muted-foreground">Off hides them from the cards; the hourly tally still counts them.</p>
           </div>

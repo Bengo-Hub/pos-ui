@@ -168,6 +168,8 @@ export interface POSSettings {
   kds_default_view?: 'day' | 'live';
   /** Keep served and voided tickets on the day view for the shift tally (default true). */
   kds_keep_served?: boolean;
+  /** How often each board screen reloads, 60..300 seconds (default 60). */
+  kds_refresh_seconds?: number;
   updated_at: string;
 }
 
@@ -237,6 +239,7 @@ export interface UpdatePOSSettingsInput {
   hide_profit_margin_for_cashier?: boolean;
   kds_default_view?: 'day' | 'live';
   kds_keep_served?: boolean;
+  kds_refresh_seconds?: number;
 }
 
 export interface UpdatePOSModulesInput {

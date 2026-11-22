@@ -5,7 +5,7 @@ import type { SubscriptionInfo } from "@/lib/auth/subscription";
 import { fetchSubscriptionInfo } from "@/lib/auth/subscription";
 import { useSubscriptionStore } from "@/store/subscription";
 import { isFeatureUnlocked, type SubscriptionEntitlements } from "@bengo-hub/shared-ui-lib/subscription";
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 
 /**
  * Reads the sub_exempt claim straight out of the access token (no signature verification —
@@ -13,6 +13,101 @@ import { useEffect, useRef } from "react";
  * carries this field, so this is the only reliable source client-side. Returns false on any
  * malformed/missing token.
  */
+// ─── One lookup for the whole app ────────────────────────────────────────────
+// useSubscription runs in dozens of components at once. Each used to own its lookup, its 60s
+// timer and its focus listener, and re-checking meant resetting subscriptionInfo to undefined.
+// So every re-check fired one /api/subscription request per mounted component (a flood) and
+// flipped isLoading to true, which made every FeatureGate render nothing: the whole page went
+// blank for a moment every minute and on every tab focus. Now there is one in-flight lookup
+// at a time, background re-checks are spaced out, and a re-check keeps the current answer on
+// screen until the new one arrives.
+
+const MIN_RECHECK_MS = 30_000;
+const MAX_FAILURE_RETRIES = 4;
+let inflight: Promise<void> | null = null;
+let lastLookupAt = 0;
+let failureRetries = 0;
+let retryTimer: ReturnType<typeof setTimeout> | null = null;
+
+interface LookupContext {
+  tenantId: string;
+  slug: string;
+  token: string;
+}
+
+/** Fail open on a failed lookup: keep the current answer, else the cached one, else 'unknown'. */
+function applyLookupFailure(ctx: LookupContext) {
+  const { subscriptionInfo, setSubscriptionInfo } = useAuthStore.getState();
+  if (!subscriptionInfo) {
+    const cached = useSubscriptionStore.getState();
+    if (cached.hydrated && cached.status) {
+      setSubscriptionInfo({
+        status: String(cached.status).toLowerCase(),
+        planCode: (cached.plan as string) ?? '',
+        planName: '',
+        tierOrder: (cached.tierOrder as number) ?? undefined,
+        features: cached.features ?? [],
+        limits: cached.limits ?? {},
+      } as any);
+    } else {
+      // 'unknown' is deliberately NOT 'none': a transient failure never locks the tenant out.
+      setSubscriptionInfo({ status: 'unknown', planCode: '', planName: '', features: [], limits: {} } as any);
+    }
+  }
+  if (failureRetries < MAX_FAILURE_RETRIES && !retryTimer) {
+    failureRetries += 1;
+    retryTimer = setTimeout(() => {
+      retryTimer = null;
+      void lookupSubscription(ctx, true);
+    }, 8000);
+  }
+}
+
+/**
+ * Loads the tenant's subscription once for every caller. A forced call (first load, a retry,
+ * an entitlements_changed push) still joins an in-flight lookup; an unforced background
+ * re-check is skipped when the last one finished under MIN_RECHECK_MS ago.
+ */
+export function lookupSubscription(ctx: LookupContext, force = false): Promise<void> {
+  if (inflight) return inflight;
+  if (!force && Date.now() - lastLookupAt < MIN_RECHECK_MS) return Promise.resolve();
+  inflight = fetchSubscriptionInfo(ctx.tenantId, ctx.slug, ctx.token)
+    .then((info) => {
+      if (info === null) {
+        applyLookupFailure(ctx);
+        return;
+      }
+      failureRetries = 0;
+      useAuthStore.getState().setSubscriptionInfo(info as any);
+      useSubscriptionStore.getState().setFromRaw(
+        {
+          plan: info.planCode || null, status: info.status || null,
+          tierOrder: (info as any).tierOrder ?? null,
+          expiresAt: (info as any).currentPeriodEnd ?? (info as any).trialEndsAt ?? null,
+          features: info.features, limits: info.limits,
+        },
+        ctx.slug,
+      );
+    })
+    .catch(() => applyLookupFailure(ctx))
+    .finally(() => {
+      lastLookupAt = Date.now();
+      inflight = null;
+    });
+  return inflight;
+}
+
+/** Re-check entitlements in the background (keeps the current answer on screen). */
+export function refreshSubscriptionNow() {
+  const { user, session } = useAuthStore.getState();
+  const tenantId = user?.tenant_id as string | undefined;
+  if (!tenantId || !session?.accessToken) return;
+  void lookupSubscription(
+    { tenantId, slug: (user?.tenant_slug as string | undefined) ?? '', token: session.accessToken },
+    true,
+  );
+}
+
 function decodeSubExempt(token: string | null | undefined): boolean {
   if (!token) return false;
   try {
@@ -35,8 +130,6 @@ export function useSubscription() {
   const setSubscriptionInfo = useAuthStore((s) => s.setSubscriptionInfo);
 
   const subStore = useSubscriptionStore();
-  // Bounded retry counter for a FAILED subscription lookup (see the fetch effect). Reset per auth.
-  const lookupRetries = useRef(0);
 
   const tenantSlug = user?.tenant_slug as string | undefined;
   // Platform-owner-ness comes ONLY from the server-derived claim, never from the tenant slug —
@@ -86,48 +179,8 @@ export function useSubscription() {
     // a genuinely-active tenant (e.g. while subscription-api is mid-redeploy). Instead FAIL
     // OPEN: keep the last-known-good cached entitlements (so active tenants stay in), else a
     // non-blocking 'unknown' status; and retry a few times so it self-heals when the API returns.
-    const handleLookupFailure = () => {
-      const cached = useSubscriptionStore.getState();
-      if (cached.hydrated && cached.status) {
-        setSubscriptionInfo({
-          status: String(cached.status).toLowerCase(),
-          planCode: (cached.plan as string) ?? '',
-          planName: '',
-          tierOrder: (cached.tierOrder as number) ?? undefined,
-          features: cached.features ?? [],
-          limits: cached.limits ?? {},
-        } as any);
-      } else {
-        // No cache yet: 'unknown' is deliberately NOT 'none', so needsSubscription stays false
-        // and the tenant is never locked out on a transient lookup failure.
-        setSubscriptionInfo({ status: 'unknown', planCode: '', planName: '', features: [], limits: {} } as any);
-      }
-      if (lookupRetries.current < 4) {
-        lookupRetries.current += 1;
-        // Re-arm the effect (subscriptionInfo → undefined) after a short delay to re-fetch.
-        setTimeout(() => setSubscriptionInfo(undefined as any), 8000);
-      }
-    };
-
-    fetchSubscriptionInfo(tenantId, slug, session.accessToken)
-      .then((info) => {
-        if (info === null) {
-          handleLookupFailure();
-          return;
-        }
-        lookupRetries.current = 0;
-        setSubscriptionInfo(info as any);
-        useSubscriptionStore.getState().setFromRaw(
-          {
-            plan: info.planCode || null, status: info.status || null,
-            tierOrder: (info as any).tierOrder ?? null,
-            expiresAt: (info as any).currentPeriodEnd ?? (info as any).trialEndsAt ?? null,
-            features: info.features, limits: info.limits,
-          },
-          slug,
-        );
-      })
-      .catch(() => handleLookupFailure());
+    // The first load for every mounted caller is one shared lookup (see lookupSubscription).
+    void lookupSubscription({ tenantId, slug, token: session.accessToken }, true);
   }, [status, session?.accessToken, user, subscriptionInfo, setSubscriptionInfo, tenantSlug, isPlatformOwner, isSubExempt]);
 
   // Defense-in-depth freshness, independent of the real-time WS push (use-notification-stream's
@@ -135,19 +188,27 @@ export function useSubscription() {
   // the fallback for when that socket is reconnecting or unavailable): re-check at most once a
   // minute, and whenever the tab regains focus/visibility, so a stale add-on/plan state never
   // survives longer than a beat once the terminal or back-office tab is actually looked at again.
+  // Re-checks run in the background: the current answer stays on screen and every mounted
+  // caller shares one request at most every MIN_RECHECK_MS (lookupSubscription).
+  const canRecheck = status === 'authenticated' && !!session?.accessToken && !!user?.tenant_id && !isPlatformOwner && !isSubExempt;
   useEffect(() => {
-    if (status !== 'authenticated' || !session?.accessToken || !user) return;
-    const rearm = () => setSubscriptionInfo(undefined as any);
-    const interval = setInterval(rearm, 60_000);
-    const onVisible = () => { if (document.visibilityState === 'visible') rearm(); };
+    if (!canRecheck) return;
+    const recheck = () => {
+      const s = useAuthStore.getState();
+      const tid = s.user?.tenant_id as string | undefined;
+      if (!tid || !s.session?.accessToken) return;
+      void lookupSubscription({ tenantId: tid, slug: (s.user?.tenant_slug as string | undefined) ?? '', token: s.session.accessToken });
+    };
+    const interval = setInterval(recheck, 60_000);
+    const onVisible = () => { if (document.visibilityState === 'visible') recheck(); };
     document.addEventListener('visibilitychange', onVisible);
-    window.addEventListener('focus', rearm);
+    window.addEventListener('focus', recheck);
     return () => {
       clearInterval(interval);
       document.removeEventListener('visibilitychange', onVisible);
-      window.removeEventListener('focus', rearm);
+      window.removeEventListener('focus', recheck);
     };
-  }, [status, session?.accessToken, user, setSubscriptionInfo]);
+  }, [canRecheck]);
 
   const info = subscriptionInfo as SubscriptionInfo | null | undefined;
   const subStatus = info?.status ?? null;

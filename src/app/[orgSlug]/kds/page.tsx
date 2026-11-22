@@ -22,6 +22,9 @@ import {
 } from '@/hooks/useKDS';
 import type { KDSTicket, KDSStation, KDSDaySummary, KDSHourBucket } from '@/hooks/useKDS';
 import { usePOSSettings } from '@/hooks/usePOSSettings';
+import { useKDSWebSocket } from '@/hooks/use-kds-ws';
+import { useTenantId } from '@/hooks/useTenantId';
+import { useEffectiveOutletID } from '@/hooks/usePOS';
 import {
   activeStations,
   buildBoard,
@@ -568,8 +571,16 @@ function KDSPage() {
   const isToday = date === '';
 
   const { data: stationsData, isLoading: stationsLoading } = useKDSStations();
+  // Reload cadence from the outlet setting (60..300s, default 60). New and changed tickets arrive
+  // at once over the KDS socket; the timer is the fallback when the socket is down.
+  const refreshMs = Math.min(300, Math.max(60, settings?.kds_refresh_seconds ?? 60)) * 1000;
+  const tenantId = useTenantId() ?? '';
+  const outletId = useEffectiveOutletID() || undefined;
+  useKDSWebSocket({ tenantID: tenantId, outletID: outletId });
   const { data: ticketsData, isLoading: ticketsLoading } = useKDSTickets(
-    isDay ? { view: 'day', date: date || undefined, hour, refetchMs: isToday ? 5_000 : false } : undefined,
+    isDay
+      ? { view: 'day', date: date || undefined, hour, refetchMs: isToday ? refreshMs : false }
+      : { refetchMs: refreshMs },
   );
 
   const stations: KDSStation[] = stationsData?.data ?? [];
@@ -605,7 +616,7 @@ function KDSPage() {
     date: date || undefined,
     hour,
     stationId: currentStationId,
-    refetchMs: isToday ? 15_000 : false,
+    refetchMs: isToday ? refreshMs : false,
     enabled: isDay,
   });
   // Tenant-local today from the server (pods run in UTC); remembered so a past date keeps the cap.

@@ -41,10 +41,15 @@ export function useKDSWebSocket({ tenantID, outletID, onMessage }: UseKDSWebSock
   const attemptRef = useRef(0);
   const unmountedRef = useRef(false);
 
+  // A burst of updates (a big order touches several stations) refetches once. The refetch keeps
+  // the cards on screen (useKDSTickets keeps previous data), so nothing flashes.
+  const refetchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const invalidateTickets = useCallback(() => {
-    qc.invalidateQueries({ queryKey: ['kds', 'tickets'] });
-    qc.invalidateQueries({ queryKey: ['kds', 'kitchen'] });
-    qc.invalidateQueries({ queryKey: ['kds', 'bar'] });
+    if (refetchTimer.current) clearTimeout(refetchTimer.current);
+    refetchTimer.current = setTimeout(() => {
+      qc.invalidateQueries({ queryKey: ['kds-tickets'] });
+      qc.invalidateQueries({ queryKey: ['kds-day-summary'] });
+    }, 750);
   }, [qc]);
 
   const connect = useCallback(() => {
@@ -84,25 +89,9 @@ export function useKDSWebSocket({ tenantID, outletID, onMessage }: UseKDSWebSock
         return;
       }
 
-      if (msg.type === 'ticket_created' || msg.type === 'ticket_updated') {
-        // Optimistically update the ticket in the relevant query caches
-        qc.setQueriesData<{ data: KDSTicket[]; total: number }>(
-          { queryKey: ['kds', 'tickets'] },
-          (old) => {
-            if (!old) return old;
-            if (msg.type === 'ticket_created') {
-              return { data: [msg.payload, ...old.data], total: old.total + 1 };
-            }
-            // ticket_updated — patch the matching entry
-            return {
-              ...old,
-              data: old.data.map((t) =>
-                t.id === msg.payload.ticket_id ? { ...t, ...msg.payload } : t
-              ),
-            };
-          }
-        );
-      }
+      // Any ticket change reloads the board in place from the one REST list, so every count,
+      // chip and the day tally stay computed from the same rows.
+      if (msg.type !== 'ping' && msg.type !== 'pong') invalidateTickets();
 
       onMessage?.(msg);
     };
@@ -119,7 +108,7 @@ export function useKDSWebSocket({ tenantID, outletID, onMessage }: UseKDSWebSock
       attemptRef.current += 1;
       reconnectTimer.current = setTimeout(connect, delay);
     };
-  }, [tenantID, outletID, invalidateTickets, onMessage, qc]);
+  }, [tenantID, outletID, invalidateTickets, onMessage]);
 
   useEffect(() => {
     unmountedRef.current = false;
@@ -128,6 +117,7 @@ export function useKDSWebSocket({ tenantID, outletID, onMessage }: UseKDSWebSock
       unmountedRef.current = true;
       if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
       if (pingTimer.current) clearInterval(pingTimer.current);
+      if (refetchTimer.current) clearTimeout(refetchTimer.current);
       wsRef.current?.close(1000, 'component unmounted');
     };
   }, [connect]);

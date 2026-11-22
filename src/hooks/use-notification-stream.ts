@@ -4,7 +4,7 @@ import { useEffect, useRef, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { playNotificationChime } from '@/lib/sounds';
 import { apiClient } from '@/lib/api/client';
-import { useAuthStore } from '@/store/auth';
+import { refreshSubscriptionNow } from '@/hooks/use-subscription';
 
 // Stream against the API host (matches REST/SSE), not the UI host.
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://posapi.codevertexafrica.com';
@@ -125,10 +125,9 @@ export function useNotificationStream({ tenantID, userID, onMessage }: UseNotifi
       }
 
       if (msg.type === 'entitlements_changed') {
-        // Re-arm useSubscription's fetch effect (guarded by "already have a value, skip" — see
-        // hooks/use-subscription.ts — so flipping this back to undefined is what makes it
-        // actually re-fetch) instead of trusting anything from the push payload itself.
-        useAuthStore.getState().setSubscriptionInfo(undefined as any);
+        // Re-check entitlements from the source (never trust the push payload), in the
+        // background so gated screens stay on screen while it loads.
+        refreshSubscriptionNow();
       }
 
       onMessage?.(msg);
