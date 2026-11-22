@@ -220,21 +220,104 @@ export interface KDSTicketsFilter {
   /** Recency window in hours (server default 24). 0 shows every active ticket: a services
    *  production board holds multi-day jobs that must not drop off after a day. */
   sinceHours?: number;
+  /** Day view: every ticket of the tenant-local day (served and voided too). */
+  view?: 'day';
+  /** YYYY-MM-DD in the tenant zone; empty means today. Day view only. */
+  date?: string;
+  /** 0..23 drills the day view down to one hour. */
+  hour?: number | null;
+  /** Poll interval; false stops polling (a past day never changes). Default 5s. */
+  refetchMs?: number | false;
 }
+
+export interface KDSTicketsResponse {
+  data: KDSTicket[];
+  total?: number;
+  /** Day view: more tickets than one page; the hourly summary still counts them all. */
+  truncated?: boolean;
+  date?: string;
+  timezone?: string;
+}
+
+/** Shared by every ticket mutation so the board and the day summary refresh together. */
+const invalidateBoard = (qc: ReturnType<typeof useQueryClient>) => {
+  qc.invalidateQueries({ queryKey: ['kds-tickets'] });
+  qc.invalidateQueries({ queryKey: ['kds-day-summary'] });
+};
 
 export function useKDSTickets(filter?: KDSTicketsFilter) {
   const tenantID = useTenantID();
+  const { refetchMs = 5_000, ...params } = filter ?? {};
   return useQuery({
-    queryKey: ['kds-tickets', tenantID, filter],
+    queryKey: ['kds-tickets', tenantID, params],
     queryFn: () =>
-      apiClient.get<{ data: KDSTicket[] }>(`${basePath(tenantID)}/tickets`, {
-        ...(filter?.stationId ? { station_id: filter.stationId } : {}),
-        ...(filter?.status ? { status: filter.status } : {}),
-        ...(filter?.sinceHours != null ? { since_hours: String(filter.sinceHours) } : {}),
+      apiClient.get<KDSTicketsResponse>(`${basePath(tenantID)}/tickets`, {
+        ...(params.stationId ? { station_id: params.stationId } : {}),
+        ...(params.status ? { status: params.status } : {}),
+        ...(params.sinceHours != null ? { since_hours: String(params.sinceHours) } : {}),
+        ...(params.view ? { view: params.view } : {}),
+        ...(params.date ? { date: params.date } : {}),
+        ...(params.hour != null ? { hour: String(params.hour) } : {}),
       }),
     enabled: !!tenantID,
     staleTime: 5_000,
-    refetchInterval: 5_000,
+    refetchInterval: refetchMs,
+  });
+}
+
+// ─── Day summary ──────────────────────────────────────────────────────────────
+// pos-api aggregates the day in SQL (kds.BuildDaySummary): all 24 hours plus the item tally of the
+// selected window, so counts never depend on how many ticket cards were loaded.
+
+export interface KDSHourBucket {
+  hour: number;
+  start: string;
+  tickets: number;
+  active: number;
+  served: number;
+  voided: number;
+  items: number;
+  served_items: number;
+}
+
+export interface KDSItemTally {
+  name: string;
+  total: number;
+  active: number;
+  served: number;
+  voided: number;
+}
+
+export interface KDSDaySummary {
+  date: string;
+  timezone: string;
+  hour?: number;
+  hours: KDSHourBucket[];
+  items: KDSItemTally[];
+  totals: KDSHourBucket;
+}
+
+export function useKDSDaySummary(filter: {
+  date?: string;
+  hour?: number | null;
+  stationId?: string | null;
+  refetchMs?: number | false;
+  /** False skips the request (the live view has no use for it). */
+  enabled?: boolean;
+}) {
+  const tenantID = useTenantID();
+  const { refetchMs = 15_000, enabled = true, ...params } = filter;
+  return useQuery({
+    queryKey: ['kds-day-summary', tenantID, params],
+    queryFn: () =>
+      apiClient.get<KDSDaySummary>(`${basePath(tenantID)}/tickets/day-summary`, {
+        ...(params.date ? { date: params.date } : {}),
+        ...(params.hour != null ? { hour: String(params.hour) } : {}),
+        ...(params.stationId ? { station_id: params.stationId } : {}),
+      }),
+    enabled: !!tenantID && enabled,
+    staleTime: 10_000,
+    refetchInterval: refetchMs,
   });
 }
 
@@ -247,7 +330,7 @@ function useTicketTransition(action: 'start' | 'ready' | 'serve') {
   return useMutation({
     mutationFn: (ticketId: string) =>
       apiClient.post(`${basePath(tenantID)}/tickets/${ticketId}/${action}`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['kds-tickets'] }),
+    onSuccess: () => invalidateBoard(qc),
   });
 }
 
@@ -273,6 +356,6 @@ export function useClearBoard() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: () => apiClient.post<{ cleared: number }>(`${basePath(tenantID)}/tickets/clear`, {}),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['kds-tickets'] }),
+    onSuccess: () => invalidateBoard(qc),
   });
 }

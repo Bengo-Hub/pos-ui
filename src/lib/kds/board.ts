@@ -144,17 +144,44 @@ export interface BoardView<T extends BoardTicket> {
   stationCounts: Record<string, number>;
 }
 
+/** Served or voided: done at the pass. The day view keeps these, crossed out, for the shift tally. */
+export function isClosedTicket(t: BoardTicket): boolean {
+  return t.status === 'served' || t.status === 'voided';
+}
+
+/**
+ * Day view order: work still to do first (rail order), then finished tickets, most recently
+ * finished first, so the newest X-ed out card sits right under the live rail.
+ */
+export function sortDayTickets<T extends BoardTicket & { completed_at?: string }>(tickets: T[]): T[] {
+  const live = sortTickets(tickets.filter((t) => !isClosedTicket(t)));
+  const done = tickets
+    .filter(isClosedTicket)
+    .sort((a, b) => new Date(b.completed_at ?? b.received_at).getTime() - new Date(a.completed_at ?? a.received_at).getTime());
+  return [...live, ...done];
+}
+
+export interface BoardOptions {
+  /** 'live' (default) shows active tickets only; 'day' also keeps served and voided ones. */
+  mode?: 'live' | 'day';
+  /** Day view only: false hides finished cards (outlet setting kds_keep_served). Default true. */
+  keepClosed?: boolean;
+}
+
 /**
  * Everything the board renders for one station and channel, from one ticket list.
  * stationId null means no station is selected (no stations configured): the board then covers
- * every ticket.
+ * every ticket. Station tab counts are always the active tickets, the work still waiting there.
  */
-export function buildBoard<T extends BoardTicket>(
+export function buildBoard<T extends BoardTicket & { completed_at?: string }>(
   allTickets: T[],
   stationId: string | null,
   channel: ChannelFilter,
+  opts: BoardOptions = {},
 ): BoardView<T> {
+  const day = opts.mode === 'day';
   const active = allTickets.filter(isActiveTicket);
+  const pool = day && opts.keepClosed !== false ? allTickets.filter((t) => isActiveTicket(t) || isClosedTicket(t)) : active;
   const inChannel = (t: T) => channel === 'all' || ticketChannel(t) === channel;
 
   const stationCounts: Record<string, number> = {};
@@ -162,7 +189,7 @@ export function buildBoard<T extends BoardTicket>(
     if (inChannel(t)) stationCounts[t.station_id] = (stationCounts[t.station_id] ?? 0) + 1;
   }
 
-  const atStation = stationId ? active.filter((t) => t.station_id === stationId) : active;
+  const atStation = stationId ? pool.filter((t) => t.station_id === stationId) : pool;
   const perChannel = new Map<KDSChannel, number>();
   for (const t of atStation) {
     const c = ticketChannel(t);
@@ -174,5 +201,6 @@ export function buildBoard<T extends BoardTicket>(
     if (count > 0 || channel === c.key) chips.push({ key: c.key, label: c.label, count });
   }
 
-  return { tickets: sortTickets(atStation.filter(inChannel)), chips, stationCounts };
+  const shown = atStation.filter(inChannel);
+  return { tickets: day ? sortDayTickets(shown) : sortTickets(shown), chips, stationCounts };
 }

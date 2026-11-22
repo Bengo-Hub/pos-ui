@@ -92,3 +92,22 @@ test('only active stations, in sort order', () => {
   ]);
   assert.deepEqual(st.map((s) => s.id), ['a', 'b']);
 });
+
+test('day view keeps served and voided tickets after the live rail, newest finished first', () => {
+  const live = ticket('bar', 'dine_in');
+  const servedOld = { ...ticket('bar', 'dine_in'), status: 'served', completed_at: '2026-11-22T06:00:00Z' };
+  const servedNew = { ...ticket('bar', 'takeaway'), status: 'served', completed_at: '2026-11-22T07:00:00Z' };
+  const voided = { ...ticket('bar', 'dine_in'), status: 'voided', completed_at: '2026-11-22T05:00:00Z' };
+  const all = [servedOld, voided, live, servedNew];
+
+  const day = buildBoard(all, 'bar', 'all', { mode: 'day' });
+  assert.deepEqual(day.tickets.map((t) => t.id), [live.id, servedNew.id, servedOld.id, voided.id]);
+  assert.equal(day.chips[0].count, 4, 'chips count every card shown');
+  assert.equal(day.stationCounts.bar, 1, 'station tabs count work still waiting');
+
+  const hidden = buildBoard(all, 'bar', 'all', { mode: 'day', keepClosed: false });
+  assert.deepEqual(hidden.tickets.map((t) => t.id), [live.id]);
+
+  const liveOnly = buildBoard(all, 'bar', 'all');
+  assert.deepEqual(liveOnly.tickets.map((t) => t.id), [live.id]);
+});

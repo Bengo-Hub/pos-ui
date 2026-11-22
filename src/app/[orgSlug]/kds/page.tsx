@@ -6,24 +6,28 @@ import { FeatureGate } from '@bengo-hub/shared-ui-lib/subscription';
 import { FeatureLocked } from '@/components/auth/feature-locked';
 
 import { Badge } from '@/components/ui/base';
-import { cn, formatElapsed } from '@/lib/utils';
+import { cn, elapsedMinutes, formatElapsedClock } from '@/lib/utils';
 import { useNow } from '@/hooks/useNow';
 import { playKDSTone } from '@/lib/kds-sounds';
+import { formatTime } from '@/lib/user-timezone';
 import {
   useKDSStations,
   useKDSTickets,
+  useKDSDaySummary,
   useStartTicket,
   useReadyTicket,
   useServeTicket,
   useCallWaiter,
   useClearBoard,
 } from '@/hooks/useKDS';
-import type { KDSTicket, KDSStation } from '@/hooks/useKDS';
+import type { KDSTicket, KDSStation, KDSDaySummary, KDSHourBucket } from '@/hooks/useKDS';
+import { usePOSSettings } from '@/hooks/usePOSSettings';
 import {
   activeStations,
   buildBoard,
   channelLabel,
   isActiveTicket,
+  isClosedTicket,
   ticketChannel,
   type ChannelChip,
   type ChannelFilter,
@@ -35,12 +39,15 @@ import {
   BedDouble,
   Beer,
   Bike,
+  CalendarDays,
   CheckCircle,
   ChefHat,
+  ChevronDown,
   Circle,
   Clock,
   Globe,
   Layers,
+  ListChecks,
   Loader2,
   MonitorPlay,
   PhoneCall,
@@ -50,17 +57,14 @@ import {
   Trash2,
   Utensils,
   Wifi,
+  X,
 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useAuthStore } from '@/store/auth';
 import { usePermissions, P } from '@/hooks/usePermissions';
 import type { KDSStationType } from '@/hooks/useKDS';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-
-function elapsedMinutes(receivedAt: string, now: number = Date.now()): number {
-  return Math.max(0, Math.floor((now - new Date(receivedAt).getTime()) / 60_000));
-}
 
 function timerClasses(minutes: number): string {
   if (minutes > 15) return 'text-red-400 animate-pulse font-bold';
@@ -70,7 +74,8 @@ function timerClasses(minutes: number): string {
 }
 
 function cardBorderClass(minutes: number, status: string): string {
-  if (status === 'ready')       return 'border-emerald-500/70 bg-emerald-500/5 shadow-emerald-500/10';
+  if (status === 'served' || status === 'voided') return 'border-border/40 bg-muted/30 shadow-none';
+  if (status === 'ready')      return 'border-emerald-500/70 bg-emerald-500/5 shadow-emerald-500/10';
   if (status === 'in_progress') return 'border-amber-400/70 bg-amber-400/5 shadow-amber-400/10';
   if (minutes > 15)             return 'border-red-500/50 bg-red-500/5 shadow-red-500/10';
   if (minutes > 10)             return 'border-yellow-500/50 bg-yellow-500/5';
@@ -168,19 +173,28 @@ function TicketCard({ ticket }: { ticket: KDSTicket }) {
   const canChange  = can(P.KDS_CHANGE);
 
   const now         = useNow(1000); // live-ticking clock so the age timer counts up in real time
-  const mins        = elapsedMinutes(ticket.received_at, now);
-  const elapsedLabel = formatElapsed(now - new Date(ticket.received_at).getTime());
+  const isClosed    = isClosedTicket(ticket);
+  // A finished ticket's clock stops at the moment it left the pass (its prep time).
+  const clockEnd    = isClosed && ticket.completed_at ? ticket.completed_at : now;
+  const mins        = elapsedMinutes(ticket.received_at, clockEnd);
+  const elapsedLabel = formatElapsedClock(ticket.received_at, clockEnd);
   const isPending   = ticket.status === 'pending';
   const isInProgress = ticket.status === 'in_progress';
   const isReady     = ticket.status === 'ready';
 
   return (
     <div className={cn(
-      'flex flex-col rounded-2xl border-2 overflow-hidden transition-all shadow-lg',
+      'relative flex flex-col rounded-2xl border-2 overflow-hidden transition-all shadow-lg',
       cardBorderClass(mins, ticket.status)
     )}>
+      {/* Served or voided: crossed out but still readable, so the shift can be tallied. */}
+      {isClosed && (
+        <div aria-hidden className="pointer-events-none absolute inset-0 flex items-center justify-center">
+          <X className={cn('h-full w-full opacity-15', ticket.status === 'voided' ? 'text-red-500' : 'text-foreground')} strokeWidth={1.25} />
+        </div>
+      )}
       {/* Card header */}
-      <div className="px-4 pt-4 pb-3 space-y-2">
+      <div className={cn('px-4 pt-4 pb-3 space-y-2', isClosed && 'opacity-70')}>
         <div className="flex items-start justify-between gap-2">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-xl font-bold text-foreground font-display tracking-tight">
@@ -198,12 +212,23 @@ function TicketCard({ ticket }: { ticket: KDSTicket }) {
           </p>
         )}
 
-        {/* Timer */}
-        <div className={cn('flex items-center gap-1.5 text-xs', timerClasses(mins))}>
-          <Clock className="h-3.5 w-3.5" />
-          <span>{elapsedLabel} ago</span>
-          {mins > 10 && <span className="text-[10px] opacity-80">— overdue</span>}
-        </div>
+        {/* Timer: live age while in the kitchen, the frozen prep time once finished. */}
+        {isClosed ? (
+          <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground font-medium">
+            <Clock className="h-3.5 w-3.5" />
+            <span className="font-mono tabular-nums">{elapsedLabel}</span>
+            <span className="text-[10px]">
+              {ticket.status === 'voided' ? 'voided' : 'served'}
+              {ticket.completed_at ? ` at ${formatTime(ticket.completed_at)}` : ''}
+            </span>
+          </div>
+        ) : (
+          <div className={cn('flex items-center gap-1.5 text-xs', timerClasses(mins))}>
+            <Clock className="h-3.5 w-3.5" />
+            <span className="font-mono tabular-nums">{elapsedLabel}</span>
+            {mins > 10 && <span className="text-[10px] opacity-80">overdue</span>}
+          </div>
+        )}
       </div>
 
       {/* Divider */}
@@ -216,10 +241,10 @@ function TicketCard({ ticket }: { ticket: KDSTicket }) {
       )}
 
       {/* Item list */}
-      <ul className="flex-1 px-4 py-3 space-y-2">
+      <ul className={cn('flex-1 px-4 py-3 space-y-2', isClosed && 'line-through decoration-2 decoration-foreground/40 opacity-70')}>
         {ticket.items.map((item, idx) => (
           <li key={item.line_id ?? idx} className="flex items-start gap-2">
-            <ItemDot />
+            <ItemDot status={isClosed && ticket.status === 'served' ? 'done' : undefined} />
             <span className="font-bold text-foreground text-sm leading-none pt-0.5 shrink-0">
               {item.quantity ?? item.qty ?? 1}×
             </span>
@@ -237,7 +262,7 @@ function TicketCard({ ticket }: { ticket: KDSTicket }) {
 
       {/* Action footer — only for staff who can transition tickets (KDS_CHANGE).
           Read-only viewers (waiters) see the board without prep controls. */}
-      {canChange && (
+      {canChange && !isClosed && (
         <div className="px-4 pb-4 pt-2 flex gap-2">
           {isPending && (
             <ActionButton
@@ -324,6 +349,133 @@ function ChannelFilterBar({
   );
 }
 
+// ─── Day view: hourly strip and item tally ────────────────────────────────────
+// Counts come from pos-api's SQL day summary, so they cover the whole day even when the card list
+// is paged. All 24 hours always show; quiet hours are muted.
+
+const fmtQty = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(2));
+
+function HourStrip({
+  summary,
+  hour,
+  onChange,
+}: {
+  summary?: KDSDaySummary;
+  hour: number | null;
+  onChange: (h: number | null) => void;
+}) {
+  const hours: KDSHourBucket[] =
+    summary?.hours ??
+    Array.from({ length: 24 }, (_, h) => ({ hour: h, start: '', tickets: 0, active: 0, served: 0, voided: 0, items: 0, served_items: 0 }));
+  return (
+    <div className="flex items-stretch gap-1.5 overflow-x-auto scrollbar-none pb-0.5" role="tablist" aria-label="Hour of day">
+      <button
+        role="tab"
+        aria-selected={hour === null}
+        onClick={() => onChange(null)}
+        className={cn(
+          'shrink-0 rounded-xl border px-3 py-1.5 text-xs font-semibold min-h-12 touch-manipulation',
+          hour === null ? 'bg-primary text-primary-foreground border-primary' : 'bg-card text-muted-foreground border-border hover:text-foreground',
+        )}
+      >
+        All hours
+        <span className="block text-[10px] font-bold opacity-80">{summary?.totals.tickets ?? 0} tickets</span>
+      </button>
+      {hours.map((b) => {
+        const selected = hour === b.hour;
+        const quiet = b.tickets === 0;
+        return (
+          <button
+            key={b.hour}
+            role="tab"
+            aria-selected={selected}
+            onClick={() => onChange(selected ? null : b.hour)}
+            title={`${String(b.hour).padStart(2, '0')}:00 to ${String(b.hour).padStart(2, '0')}:59: ${b.tickets} tickets, ${fmtQty(b.items)} items, ${b.active} still open`}
+            className={cn(
+              'shrink-0 w-14 rounded-xl border px-1.5 py-1.5 text-center min-h-12 touch-manipulation transition-colors',
+              selected
+                ? 'bg-primary text-primary-foreground border-primary'
+                : quiet
+                  ? 'bg-card/40 text-muted-foreground/50 border-border/50'
+                  : 'bg-card text-foreground border-border hover:border-primary/60',
+            )}
+          >
+            <span className="block font-mono text-[11px] font-bold tabular-nums">{String(b.hour).padStart(2, '0')}:00</span>
+            <span className="block text-[10px] tabular-nums">{b.tickets}</span>
+            {b.active > 0 && !selected && <span className="mx-auto mt-0.5 block h-1 w-1 rounded-full bg-amber-400" aria-label="open tickets" />}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function ItemTallyPanel({ summary, hour, stationName }: { summary?: KDSDaySummary; hour: number | null; stationName?: string }) {
+  const [open, setOpen] = useState(false);
+  const items = summary?.items ?? [];
+  const sum = items.reduce(
+    (a, i) => ({ served: a.served + i.served, active: a.active + i.active, voided: a.voided + i.voided, total: a.total + i.total }),
+    { served: 0, active: 0, voided: 0, total: 0 },
+  );
+  const scope = hour === null ? 'the whole day' : `${String(hour).padStart(2, '0')}:00 to ${String(hour).padStart(2, '0')}:59`;
+  return (
+    <div className="rounded-xl border border-border bg-card">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm font-semibold min-h-11 touch-manipulation"
+      >
+        <ListChecks className="h-4 w-4 text-primary" />
+        Item tally
+        <span className="text-xs font-normal text-muted-foreground truncate">
+          {fmtQty(sum.served)} served · {fmtQty(sum.active)} open · {fmtQty(sum.voided)} voided, {scope}
+          {stationName ? `, ${stationName}` : ''}
+        </span>
+        <ChevronDown className={cn('ml-auto h-4 w-4 shrink-0 transition-transform', open && 'rotate-180')} />
+      </button>
+      {open && (
+        <div className="max-h-80 overflow-auto border-t border-border">
+          {items.length === 0 ? (
+            <p className="px-4 py-6 text-center text-sm text-muted-foreground">No items in this window.</p>
+          ) : (
+            <table className="w-full text-sm">
+              <thead className="sticky top-0 bg-card text-xs text-muted-foreground">
+                <tr>
+                  <th className="px-4 py-2 text-left font-semibold">Item</th>
+                  <th className="px-2 py-2 text-right font-semibold">Served</th>
+                  <th className="px-2 py-2 text-right font-semibold">Open</th>
+                  <th className="px-2 py-2 text-right font-semibold">Voided</th>
+                  <th className="px-4 py-2 text-right font-semibold">Total</th>
+                </tr>
+              </thead>
+              <tbody className="tabular-nums">
+                {items.map((i) => (
+                  <tr key={i.name} className="border-t border-border/50">
+                    <td className="px-4 py-1.5">{i.name}</td>
+                    <td className="px-2 py-1.5 text-right font-semibold">{fmtQty(i.served)}</td>
+                    <td className="px-2 py-1.5 text-right text-amber-500">{i.active ? fmtQty(i.active) : ''}</td>
+                    <td className="px-2 py-1.5 text-right text-red-500">{i.voided ? fmtQty(i.voided) : ''}</td>
+                    <td className="px-4 py-1.5 text-right">{fmtQty(i.total)}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot className="border-t-2 border-border font-bold tabular-nums">
+                <tr>
+                  <td className="px-4 py-2">Total</td>
+                  <td className="px-2 py-2 text-right">{fmtQty(sum.served)}</td>
+                  <td className="px-2 py-2 text-right">{fmtQty(sum.active)}</td>
+                  <td className="px-2 py-2 text-right">{fmtQty(sum.voided)}</td>
+                  <td className="px-4 py-2 text-right">{fmtQty(sum.total)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Station type helpers ─────────────────────────────────────────────────────
 
 const STATION_TYPE_CONFIG: Record<KDSStationType, { icon: React.ReactNode; label: string; color: string }> = {
@@ -403,9 +555,22 @@ function KDSPage() {
   const user = useAuthStore((s) => s.user);
   const { can } = usePermissions();
   const clearBoard = useClearBoard();
+  const { data: settings } = usePOSSettings();
+
+  // View: the outlet's default (day unless an admin chose live), switchable on the board.
+  const [viewChoice, setViewChoice] = useState<'day' | 'live' | null>(null);
+  const view = viewChoice ?? settings?.kds_default_view ?? 'day';
+  const isDay = view === 'day';
+  const keepClosed = settings?.kds_keep_served ?? true;
+  // Day view window: '' is today in the tenant zone (pos-api resolves it); hour null = all hours.
+  const [date, setDate] = useState('');
+  const [hour, setHour] = useState<number | null>(null);
+  const isToday = date === '';
 
   const { data: stationsData, isLoading: stationsLoading } = useKDSStations();
-  const { data: ticketsData, isLoading: ticketsLoading } = useKDSTickets();
+  const { data: ticketsData, isLoading: ticketsLoading } = useKDSTickets(
+    isDay ? { view: 'day', date: date || undefined, hour, refetchMs: isToday ? 5_000 : false } : undefined,
+  );
 
   const stations: KDSStation[] = stationsData?.data ?? [];
   const allTickets: KDSTicket[] = ticketsData?.data ?? [];
@@ -429,8 +594,26 @@ function KDSPage() {
   const currentStation = liveStations.find((s) => s.id === currentStationId);
 
   // Every chip, tab count and card comes from this one pass over the ticket list.
-  const board = useMemo(() => buildBoard(allTickets, currentStationId, channel), [allTickets, currentStationId, channel]);
+  const board = useMemo(
+    () => buildBoard(allTickets, currentStationId, channel, { mode: view, keepClosed }),
+    [allTickets, currentStationId, channel, view, keepClosed],
+  );
   const activeTotal = board.chips[0]?.count ?? 0;
+
+  // Hourly buckets and the item tally for the station being viewed (pos-api SQL summary).
+  const { data: daySummary } = useKDSDaySummary({
+    date: date || undefined,
+    hour,
+    stationId: currentStationId,
+    refetchMs: isToday ? 15_000 : false,
+    enabled: isDay,
+  });
+  // Tenant-local today from the server (pods run in UTC); remembered so a past date keeps the cap.
+  const [todayDate, setTodayDate] = useState<string | undefined>(undefined);
+  const serverToday = isToday ? daySummary?.date : undefined;
+  useEffect(() => {
+    if (serverToday) setTodayDate(serverToday);
+  }, [serverToday]);
 
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col">
@@ -443,11 +626,13 @@ function KDSPage() {
               <h1 className="text-xl font-bold text-foreground font-display">Display Board</h1>
               <p className="text-muted-foreground text-xs mt-0.5">Kitchen · Bar · All stations</p>
             </div>
-            {/* Live badge */}
-            <span className="flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-              <Wifi className="h-3 w-3" />
-              Live
-            </span>
+            {/* Live badge: polling only while the board shows today. */}
+            {(!isDay || isToday) && (
+              <span className="flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                <Wifi className="h-3 w-3" />
+                Live
+              </span>
+            )}
             {/* Manager: bulk-clear the board (serve all active tickets) — for printer-only kitchens
                 with no device to bump tickets one by one, or to clear a cluttered board. */}
             {can(P.ORDERS_MANAGE) && allTickets.some(isActiveTicket) && (
@@ -459,6 +644,51 @@ function KDSPage() {
               >
                 <Trash2 className="h-3 w-3" />
                 Clear board
+              </button>
+            )}
+          </div>
+
+          {/* View switch and, in the day view, the day being shown. */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex rounded-xl border border-border bg-card p-0.5" role="tablist" aria-label="Board view">
+              {([['day', 'Day'], ['live', 'Live only']] as const).map(([id, label]) => (
+                <button
+                  key={id}
+                  role="tab"
+                  aria-selected={view === id}
+                  onClick={() => setViewChoice(id)}
+                  className={cn(
+                    'px-3 py-1.5 rounded-lg text-xs font-semibold min-h-9 touch-manipulation',
+                    view === id ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground',
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            {isDay && (
+              <label className="flex items-center gap-1.5 rounded-xl border border-border bg-card px-2.5 min-h-10 text-xs">
+                <CalendarDays className="h-3.5 w-3.5 text-muted-foreground" />
+                <span className="sr-only">Day</span>
+                <input
+                  type="date"
+                  value={date || todayDate || ''}
+                  max={todayDate}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setDate(!v || v === todayDate ? '' : v);
+                    setHour(null);
+                  }}
+                  className="bg-transparent py-1.5 font-mono text-xs outline-none"
+                />
+              </label>
+            )}
+            {isDay && !isToday && (
+              <button
+                onClick={() => { setDate(''); setHour(null); }}
+                className="text-xs font-semibold px-2.5 py-1.5 rounded-xl border border-border text-muted-foreground hover:text-foreground min-h-10"
+              >
+                Today
               </button>
             )}
           </div>
@@ -477,6 +707,14 @@ function KDSPage() {
               />
             ))}
           </div>
+        )}
+
+        {/* Day view: every hour of the day (tap one to drill down) and the item tally. */}
+        {isDay && liveStations.length > 0 && (
+          <>
+            <HourStrip summary={daySummary} hour={hour} onChange={setHour} />
+            <ItemTallyPanel summary={daySummary} hour={hour} stationName={currentStation?.name} />
+          </>
         )}
 
         {/* Order type for the station being viewed. */}
@@ -506,8 +744,15 @@ function KDSPage() {
                 <h2 className="text-sm font-bold text-foreground/70 uppercase tracking-wider">{currentStation.name}</h2>
                 <span className="text-xs text-muted-foreground ml-auto">
                   {board.tickets.length} of {activeTotal} ticket{activeTotal !== 1 ? 's' : ''}
+                  {isDay && ` · ${board.tickets.filter(isClosedTicket).length} done`}
                 </span>
               </div>
+            )}
+            {isDay && ticketsData?.truncated && (
+              <p className="mb-4 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-600 dark:text-amber-300">
+                This day has more tickets than one screen holds; showing the earliest. Tap an hour to see all of it. The
+                tally above counts every ticket.
+              </p>
             )}
             {board.tickets.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-64 text-center gap-4">
@@ -515,7 +760,9 @@ function KDSPage() {
                   <ChefHat className="h-10 w-10 text-muted-foreground/30" />
                 </div>
                 <p className="text-muted-foreground font-medium">
-                  {channel === 'all' ? 'No active tickets' : `No ${channelLabel(channel).toLowerCase()} tickets`}
+                  {isDay
+                    ? hour === null ? 'No tickets this day' : `No tickets between ${String(hour).padStart(2, '0')}:00 and ${String(hour).padStart(2, '0')}:59`
+                    : channel === 'all' ? 'No active tickets' : `No ${channelLabel(channel).toLowerCase()} tickets`}
                 </p>
               </div>
             ) : (
@@ -533,7 +780,7 @@ function KDSPage() {
         open={confirmClear}
         onOpenChange={setConfirmClear}
         title="Clear the board?"
-        description="This marks ALL active tickets as served and removes them from every station. Use this when the kitchen has no device to bump tickets, or to clear stale ones. This cannot be undone."
+        description="This marks ALL active tickets as served at every station. The live view drops them; the day view keeps them, crossed out, in the tally. Use this when the kitchen has no device to bump tickets, or to clear stale ones. This cannot be undone."
         confirmLabel="Clear board"
         onConfirm={async () => {
           try {

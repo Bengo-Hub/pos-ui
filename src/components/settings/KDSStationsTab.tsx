@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { AlertTriangle, Bell, Check, ChefHat, Loader2, Pencil, Play, Plus, Trash2, X } from 'lucide-react';
+import { usePOSSettings, useUpdatePOSSettings } from '@/hooks/usePOSSettings';
+import { AlertTriangle, Bell, CalendarClock, Check, ChefHat, Loader2, Pencil, Play, Plus, Trash2, X } from 'lucide-react';
 import { Button, Card, CardContent } from '@/components/ui/base';
 import { KDS_TONES, getKDSTone, setKDSTone, playKDSTone, type KDSToneId } from '@/lib/kds-sounds';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
@@ -253,6 +254,7 @@ export function KDSStationsTab() {
   return (
     <div className="space-y-4">
       <WaiterToneSetting />
+      <BoardViewSetting canEdit={canEdit} />
 
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">
@@ -482,6 +484,64 @@ export function KDSStationsTab() {
 
 // WaiterToneSetting lets each station pick (and test-play) the tone that rings when the KDS
 // "Call Waiter" action fires. The choice is stored per-device in localStorage.
+/** Outlet-level board behaviour (pos-api service settings, stored in outlet metadata). */
+function BoardViewSetting({ canEdit }: { canEdit: boolean }) {
+  const { data: settings } = usePOSSettings();
+  const update = useUpdatePOSSettings();
+  const view = settings?.kds_default_view ?? 'day';
+  const keepServed = settings?.kds_keep_served ?? true;
+  const views: { id: 'day' | 'live'; label: string; hint: string }[] = [
+    { id: 'day', label: 'Day view', hint: 'All of today by hour, served tickets crossed out' },
+    { id: 'live', label: 'Live only', hint: 'Only tickets still being prepared' },
+  ];
+  return (
+    <Card>
+      <CardContent className="pt-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <CalendarClock className="h-4 w-4 text-primary" />
+          <p className="text-sm font-semibold">Board View</p>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          The view the display board opens on at this outlet. The day view keeps served orders on screen,
+          crossed out, with an hourly count of every item, so baristas and chefs can tally the shift against
+          the system before closing. Staff can still switch views on the board.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {views.map((v) => (
+            <button
+              key={v.id}
+              type="button"
+              disabled={!canEdit || update.isPending}
+              title={v.hint}
+              onClick={() => update.mutate({ kds_default_view: v.id })}
+              className={
+                'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm border transition-colors disabled:opacity-60 ' +
+                (view === v.id
+                  ? 'bg-primary text-primary-foreground border-primary'
+                  : 'bg-muted text-muted-foreground border-border hover:bg-muted/80')
+              }
+            >
+              {view === v.id && <Check className="h-3.5 w-3.5" />}
+              {v.label}
+            </button>
+          ))}
+        </div>
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <p className="text-sm font-medium">Keep served orders on the day view</p>
+            <p className="text-xs text-muted-foreground">Off hides them from the cards; the hourly tally still counts them.</p>
+          </div>
+          <Toggle
+            checked={keepServed}
+            disabled={!canEdit || update.isPending}
+            onChange={(v) => update.mutate({ kds_keep_served: v })}
+          />
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 function WaiterToneSetting() {
   const [tone, setTone] = useState<KDSToneId>(() => getKDSTone());
 

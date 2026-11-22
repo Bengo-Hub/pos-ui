@@ -163,6 +163,11 @@ export interface POSSettings {
    *  this outlet, on every table, report and the terminal. Plain boolean, default false (shown);
    *  boi-enterprises has it on. pos-api strips the figures too (HideProfitForCashier). */
   hide_profit_margin_for_cashier: boolean;
+  /** KDS board view it opens on: "day" (default, served tickets kept and crossed out, hourly
+   *  tally) or "live" (active tickets only). Outlet metadata kds_default_view. */
+  kds_default_view?: 'day' | 'live';
+  /** Keep served and voided tickets on the day view for the shift tally (default true). */
+  kds_keep_served?: boolean;
   updated_at: string;
 }
 
@@ -230,6 +235,8 @@ export interface UpdatePOSSettingsInput {
   hide_draft_delete_for_cashier?: boolean;
   hide_draft_resume_for_cashier?: boolean;
   hide_profit_margin_for_cashier?: boolean;
+  kds_default_view?: 'day' | 'live';
+  kds_keep_served?: boolean;
 }
 
 export interface UpdatePOSModulesInput {
