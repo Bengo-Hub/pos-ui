@@ -2,34 +2,30 @@
 
 import { useState } from 'react';
 import { AlertTriangle } from 'lucide-react';
-
-const VOID_REASONS = [
-  'Customer complaint',
-  'Duplicate order',
-  'System error',
-  'Manager override',
-  'Other',
-] as const;
+import { useVoidReasons, type VoidReason } from '@/hooks/usePOS';
 
 interface VoidOrderModalProps {
   orderId: string;
   orderNumber: string;
   open: boolean;
   onClose: () => void;
-  onConfirm: (reason: string) => Promise<void>;
+  /** reason is the label shown on reports; reasonCode is the outlet void reason code, which
+   *  decides on the server whether prepared items are consumed as wastage. */
+  onConfirm: (reason: string, reasonCode?: string) => Promise<void>;
 }
 
 export function VoidOrderModal({ orderId: _orderId, orderNumber, open, onClose, onConfirm }: VoidOrderModalProps) {
-  const [reason, setReason] = useState('');
+  const { data: reasons } = useVoidReasons();
+  const [selected, setSelected] = useState<VoidReason | null>(null);
   const [loading, setLoading] = useState(false);
 
   if (!open) return null;
 
   async function handleConfirm() {
-    if (!reason) return;
+    if (!selected) return;
     setLoading(true);
     try {
-      await onConfirm(reason);
+      await onConfirm(selected.label, selected.code);
       onClose();
     } finally {
       setLoading(false);
@@ -58,11 +54,11 @@ export function VoidOrderModal({ orderId: _orderId, orderNumber, open, onClose, 
           </p>
 
           <div className="space-y-2 mb-5">
-            {VOID_REASONS.map((r) => (
+            {(reasons ?? []).map((r) => (
               <label
-                key={r}
+                key={r.code}
                 className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border cursor-pointer transition-colors ${
-                  reason === r
+                  selected?.code === r.code
                     ? 'border-destructive bg-destructive/5 text-destructive'
                     : 'border-border hover:bg-accent'
                 }`}
@@ -70,12 +66,17 @@ export function VoidOrderModal({ orderId: _orderId, orderNumber, open, onClose, 
                 <input
                   type="radio"
                   name="void-reason"
-                  value={r}
-                  checked={reason === r}
-                  onChange={() => setReason(r)}
+                  value={r.code}
+                  checked={selected?.code === r.code}
+                  onChange={() => setSelected(r)}
                   className="accent-destructive"
                 />
-                <span className="text-sm font-medium">{r}</span>
+                <span className="text-sm font-medium flex-1">{r.label}</span>
+                {r.record_wastage && (
+                  <span className="text-[10px] font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400">
+                    Records wastage
+                  </span>
+                )}
               </label>
             ))}
           </div>
@@ -92,7 +93,7 @@ export function VoidOrderModal({ orderId: _orderId, orderNumber, open, onClose, 
             <button
               type="button"
               onClick={handleConfirm}
-              disabled={!reason || loading}
+              disabled={!selected || loading}
               className="flex-1 py-2.5 rounded-xl bg-destructive text-destructive-foreground text-sm font-semibold hover:bg-destructive/90 transition-colors disabled:opacity-40"
             >
               {loading ? 'Voiding…' : 'Void Order'}

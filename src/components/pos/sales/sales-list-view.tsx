@@ -28,7 +28,7 @@ import { ViewPaymentsModal } from './view-payments-modal';
 import { EditOrderLinesModal } from './edit-order-lines-modal';
 import { MoveOrderDateModal } from './move-order-date-modal';
 import { EditSaleInfoModal } from './edit-sale-info-modal';
-import { money, payStatusBadge, prettyMethod, PAYMENT_STATUSES, SOURCES, isBackdatedOrder, orderDisplayDate } from './sales-shared';
+import { money, payStatusBadge, prettyMethod, PAYMENT_STATUSES, SOURCES, isBackdatedOrder, orderDisplayDate, SaleAge } from './sales-shared';
 import { cashierNameOf, OrderLinesPanel, SalesSummaryFooter, BulkVoidReasonDialog, skippedSummary } from './sales-table-shared';
 import { ReportExportButtons } from '@/components/reports/report-document-button';
 import { toast } from 'sonner';
@@ -284,6 +284,7 @@ export function SalesListView({ orgSlug, fixedSource, title, subtitle }: {
               backdated
             </span>
           )}
+          <SaleAge order={o} />
         </span>
       ),
     },

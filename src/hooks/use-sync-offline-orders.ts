@@ -29,6 +29,9 @@ import {
   markDrawerCloseSyncFailed,
   resolveServerOrderId,
   resolveServerDrawerId,
+  getPendingSyncLineAdds,
+  markLinesAddSynced,
+  markLinesAddSyncFailed,
 } from '@/lib/db/pos-db';
 
 /**
@@ -80,6 +83,7 @@ export function useSyncOfflineOrders() {
       const synced =
         (await syncDrawerSessions(tenantID)) +
         (await syncOrders(tenantID)) +
+        (await syncLineAdds(tenantID)) +
         (await syncPayments(tenantID)) +
         (await syncVoids(tenantID)) +
         (await syncReturns(tenantID)) +
@@ -240,6 +244,23 @@ async function syncOrders(tenantID: string): Promise<number> {
           order_subtype: order.order_subtype,
           customer_name: order.customer_name,
           customer_phone: order.customer_phone,
+          // Same fields the online path sends, so a synced dine-in order keeps its table,
+          // covers, discount and charges (absent on rows queued by older builds).
+          device_id: order.device_id,
+          table_id: order.table_id,
+          covers_count: order.covers_count,
+          served_by_user_id: order.served_by_user_id,
+          age_verified: order.age_verified,
+          discount_amount: order.discount_amount,
+          discount_reason: order.discount_reason,
+          promotion_id: order.promotion_id,
+          order_tax_amount: order.order_tax_amount,
+          charges: order.charges,
+          approval_token: order.approval_token,
+          approval_code: order.approval_code,
+          metadata: order.metadata,
+          source: order.source,
+          business_date: order.business_date,
         },
         idem(order.local_id),
       );
@@ -326,6 +347,32 @@ async function syncPayments(tenantID: string): Promise<number> {
   return attempted;
 }
 
+// ── Add-to-bill sync ───────────────────────────────────────────────────────────
+
+/** Replays items added to a bill while offline. Runs after syncOrders so a bill created offline
+ *  has its server id first; the batch key and per-line client_line_id make the add exactly-once.
+ *  Retries use the shared backoff/dead-letter rules (nextRetryState). */
+async function syncLineAdds(tenantID: string): Promise<number> {
+  let attempted = 0;
+  for (const a of await getPendingSyncLineAdds()) {
+    let orderId = a.server_order_id;
+    if (!orderId && a.local_order_id) orderId = await resolveServerOrderId(a.local_order_id);
+    if (!orderId) continue;
+    const tid = recordTenant(a, 'lines_add', tenantID);
+    if (!tid) continue;
+    attempted++;
+    try {
+      await apiClient.post(`/api/v1/${tid}/pos/orders/${orderId}/lines`, { lines: a.lines }, idem(a.local_id));
+      await markLinesAddSynced(a.id!);
+      logPush('lines_add', `Added ${a.lines.length} item(s) to bill`);
+    } catch (err: any) {
+      await markLinesAddSyncFailed(a.id!, errMsg(err), isTerminal(err));
+      logPush('lines_add', `Added ${a.lines.length} item(s) to bill`, err);
+    }
+  }
+  return attempted;
+}
+
 // ── Void sync ──────────────────────────────────────────────────────────────────
 
 async function syncVoids(tenantID: string): Promise<number> {
@@ -347,7 +394,7 @@ async function syncVoids(tenantID: string): Promise<number> {
       } else {
         await apiClient.patch(
           `/api/v1/${tid}/pos/orders/${orderId}/void`,
-          { reason: v.reason, approval_token: v.approval_token },
+          { reason: v.reason, reason_code: v.reason_code, approval_token: v.approval_token },
           idem(v.local_id),
         );
       }

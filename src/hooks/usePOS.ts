@@ -908,6 +908,86 @@ export function useUpdateTableStatus() {
   });
 }
 
+export interface VoidReason {
+  code: string;
+  label: string;
+  /** The server consumes the bill's items from stock as wastage when this reason is used. */
+  record_wastage: boolean;
+}
+
+/** Shown only until the outlet's own list loads (first use while offline). pos-api's
+ *  outletpolicy.DefaultVoidReasons is the source; keep these codes identical. */
+const FALLBACK_VOID_REASONS: VoidReason[] = [
+  { code: 'duplicate', label: 'Duplicate order', record_wastage: false },
+  { code: 'entered_in_error', label: 'Entered in error', record_wastage: false },
+  { code: 'customer_cancelled', label: 'Customer cancelled before preparation', record_wastage: false },
+  { code: 'prepared_refused', label: 'Prepared, then refused or returned', record_wastage: true },
+];
+
+/** The outlet's void reasons (outlet settings metadata void_reasons, else pos-api defaults). */
+export function useVoidReasons() {
+  const tenantID = useTenantID();
+  const outletID = useEffectiveOutletID();
+  return useQuery({
+    queryKey: ['pos-void-reasons', tenantID, outletID],
+    queryFn: async () => {
+      const res = await apiClient.get<{ data: VoidReason[] }>(`${basePath(tenantID)}/void-reasons`, {
+        params: outletID ? { outlet_id: outletID } : undefined,
+      });
+      return res.data?.length ? res.data : FALLBACK_VOID_REASONS;
+    },
+    enabled: !!tenantID,
+    staleTime: 300_000,
+    placeholderData: FALLBACK_VOID_REASONS,
+  });
+}
+
+/** Bills rung up offline and not yet on the server (IndexedDB), so the Tables and Bills screens
+ *  still show them and the waiter adds to them instead of ringing a second bill. Re-read every
+ *  10s (a local IndexedDB read, no network). */
+export function useQueuedOfflineOrders() {
+  const tenantID = useTenantID();
+  return useQuery({
+    queryKey: ['pos-offline-queued-orders', tenantID],
+    queryFn: async () => {
+      const { getQueuedOfflineOrders } = await import('@/lib/db/pos-db');
+      return getQueuedOfflineOrders(tenantID);
+    },
+    enabled: !!tenantID,
+    networkMode: 'always',
+    refetchInterval: 10_000,
+  });
+}
+
+/** Provisional label for an offline bill until the server numbers it on sync. */
+export function offlineOrderLabel(localId: string) {
+  return `Offline ${localId.slice(0, 6).toUpperCase()}`;
+}
+
+/** Overlay queued offline dine-in bills onto the server table list: a table with no live server
+ *  bill but a queued one shows as occupied with that bill (order_id = local id, offline: true). */
+export function overlayOfflineTables<T extends { id: string; status?: string; order_id?: string }>(
+  tables: T[],
+  queued: Array<{ local_id: string; table_id?: string; total_amount: number; covers_count?: number }>,
+): Array<T & { offline_pending?: boolean }> {
+  if (!queued.length) return tables;
+  const byTable = new Map<string, (typeof queued)[number]>();
+  for (const q of queued) if (q.table_id && !byTable.has(q.table_id)) byTable.set(q.table_id, q);
+  return tables.map((t) => {
+    const q = byTable.get(t.id);
+    if (!q || t.order_id) return t;
+    return {
+      ...t,
+      status: 'occupied',
+      order_id: q.local_id,
+      order_number: offlineOrderLabel(q.local_id),
+      order_total: q.total_amount,
+      covers: q.covers_count ?? 1,
+      offline_pending: true,
+    };
+  });
+}
+
 export function useAssignTable() {
   const tenantID = useTenantID();
   const qc = useQueryClient();
@@ -1527,6 +1607,10 @@ export function useNotifyOrderPayment() {
 export type OrderSubtype = 'dine_in' | 'takeaway' | 'room_service' | 'delivery' | 'bar_tab' | 'retail' | 'service_job';
 
 interface CreateOrderInput {
+  /** The sale attempt's stable key (client_reference + Idempotency-Key). The terminal keeps one per
+   *  cart until the sale is accepted, so a retry, a double tap or a reload re-sends the SAME key and
+   *  the server returns the order it already made instead of a second one. Minted here when absent. */
+  clientReference?: string;
   outletId: string;
   deviceId?: string;
   currency?: string;
@@ -1592,7 +1676,7 @@ export function useCreateOrder() {
     // IndexedDB local_id; online it is sent as client_reference + Idempotency-Key so the
     // backend dedups a replayed (or lost-response) submission into a single order.
     mutationFn: async (data: CreateOrderInput) => {
-      const localId = uuidv4();
+      const localId = data.clientReference || uuidv4();
       const queueOffline = async () => {
         const lines: OfflineOrderLine[] = data.lines.map((l) => ({
           catalog_item_id: l.catalog_item_id,
@@ -1616,6 +1700,23 @@ export function useCreateOrder() {
           order_subtype: data.orderSubtype,
           customer_name: data.customerName,
           customer_phone: data.customerPhone,
+          // Everything the online path sends, so the synced order keeps its table, covers,
+          // discount and charges (pos-api seats the table itself on create).
+          device_id: data.deviceId,
+          table_id: data.tableId,
+          covers_count: data.coversCount,
+          served_by_user_id: data.servedByUserId,
+          age_verified: data.ageVerified,
+          discount_amount: data.discountAmount,
+          discount_reason: data.discountReason,
+          promotion_id: data.promotionId,
+          order_tax_amount: data.orderTaxAmount,
+          charges: data.charges,
+          approval_token: data.approvalToken,
+          approval_code: data.approvalCode,
+          metadata: data.metadata,
+          source: data.source,
+          business_date: data.businessDate,
           local_id: localId,
           tenant_id: tenantID,
           tenant_slug: tenantSlug,
@@ -1673,7 +1774,10 @@ export function useCreateOrder() {
         // reads as "online") queues the sale instead of erroring at the till. Same localId
         // ⇒ if the server actually processed the lost request, the replay dedups via
         // client_reference/Idempotency-Key. Business 4xx/500 still throws.
-        const { isNetworkShapedError } = await import('@/lib/connectivity');
+        const { isNetworkShapedError, isIdempotencyInFlight } = await import('@/lib/connectivity');
+        // 409 in_flight: the first send under this key is still being processed. Queue it under
+        // the same key; the drain's backoff replays it and gets the finished order back.
+        if (isIdempotencyInFlight(err)) return queueOffline();
         if (!isNetworkShapedError(err)) throw err;
         toast.info('Network unreachable — sale saved offline and will sync automatically.');
         return queueOffline();
@@ -1706,7 +1810,7 @@ export function useVoidOrder() {
   const isOnline = useEffectiveOnline();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ orderId, reason, approvalToken, voidCode }: { orderId: string; reason: string; approvalToken?: string; voidCode?: string }) => {
+    mutationFn: async ({ orderId, reason, approvalToken, voidCode, reasonCode }: { orderId: string; reason: string; approvalToken?: string; voidCode?: string; reasonCode?: string }) => {
       const localId = uuidv4();
       const queueOffline = async () => {
         // If voiding an offline (not-yet-synced) order, key by local_order_id so the void
@@ -1718,6 +1822,7 @@ export function useVoidOrder() {
           server_order_id: localOrder ? undefined : orderId,
           local_order_id: localOrder ? orderId : undefined,
           reason,
+          reason_code: reasonCode,
           approval_token: approvalToken,
           tenant_id: tenantID,
           tenant_slug: tenantSlug,
@@ -1738,7 +1843,7 @@ export function useVoidOrder() {
       try {
         return await apiClient.patch(
           `${basePath(tenantID)}/orders/${orderId}/void`,
-          { reason, approval_token: approvalToken, void_code: voidCode },
+          { reason, reason_code: reasonCode, approval_token: approvalToken, void_code: voidCode },
           idemHeaders(localId),
         );
       } catch (err) {
@@ -2033,9 +2138,59 @@ export function useGenerateComplimentaryCode() {
 export function useAddOrderLines() {
   const tenantID = useTenantID();
   const qc = useQueryClient();
+  const isOnline = useEffectiveOnline();
   return useMutation({
-    mutationFn: ({ orderId, lines }: { orderId: string; lines: CreateOrderInput['lines'] }) =>
-      apiClient.post(`${basePath(tenantID)}/orders/${orderId}/lines`, { lines }),
+    // Exactly-once add-to-bill. One key per batch (callers may pass the cart's attempt key so a
+    // retry re-sends the same one); every line carries metadata.client_line_id = key:index, so
+    // pos-api skips lines already on the bill. A network-shaped failure queues the batch (or
+    // appends it to a bill that is itself still queued offline) instead of pushing the waiter to
+    // ring up a second bill.
+    mutationFn: async ({ orderId, lines, clientReference }: { orderId: string; lines: CreateOrderInput['lines']; clientReference?: string }) => {
+      const key = clientReference || uuidv4();
+      const stamped = lines.map((l, i) => ({ ...l, metadata: { ...(l.metadata ?? {}), client_line_id: `${key}:${i}` } }));
+      const { getOfflineOrderByLocalId, appendLinesToOfflineOrder, saveDraftLinesAdd } = await import('@/lib/db/pos-db');
+      const queueOffline = async () => {
+        const local = await getOfflineOrderByLocalId(orderId);
+        const offlineLines = stamped.map((l) => ({
+          catalog_item_id: l.catalog_item_id,
+          sku: l.sku,
+          name: l.name,
+          category: l.category,
+          quantity: l.quantity,
+          unit_price: l.unit_price,
+          total_price: l.total_price,
+          tax_code_id: l.tax_code_id,
+          price_includes_tax: l.price_includes_tax,
+          tax_rate: l.tax_rate,
+          course_number: l.course_number,
+          metadata: l.metadata,
+        }));
+        if (local && (await appendLinesToOfflineOrder(orderId, offlineLines))) {
+          return { id: orderId, offline: true };
+        }
+        await saveDraftLinesAdd({
+          local_id: key,
+          tenant_id: tenantID,
+          server_order_id: local ? local.server_order_id : orderId,
+          local_order_id: local ? orderId : undefined,
+          lines: offlineLines,
+          created_at: new Date().toISOString(),
+          synced: false,
+        });
+        return { id: orderId, offline: true };
+      };
+      if (!isOnline || (await getOfflineOrderByLocalId(orderId))) return queueOffline();
+      try {
+        const res = await apiClient.post(`${basePath(tenantID)}/orders/${orderId}/lines`, { lines: stamped }, idemHeaders(key));
+        return { ...(res as object), offline: false };
+      } catch (err) {
+        const { isNetworkShapedError, isIdempotencyInFlight } = await import('@/lib/connectivity');
+        if (!isNetworkShapedError(err) && !isIdempotencyInFlight(err)) throw err;
+        toast.info('Network unreachable — items saved offline and will be added to the bill automatically.');
+        return queueOffline();
+      }
+    },
+    networkMode: 'always',
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['pos-orders'] });
       qc.invalidateQueries({ queryKey: ['pos-tables'] });

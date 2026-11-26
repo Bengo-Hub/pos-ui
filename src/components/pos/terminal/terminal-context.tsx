@@ -15,6 +15,7 @@
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
+import { v4 as uuidv4 } from 'uuid';
 import { createSearchRunner, useDebouncedCallback, useLatestRef } from '@bengo-hub/shared-ui-lib/search';
 
 import { COURSES, type CourseValue } from '@/components/pos/course-selector';
@@ -53,6 +54,7 @@ import type { ServiceProfile } from '@/lib/api/service-jobs';
 import { useSaleSessions, type SaleSessionControls } from '@/hooks/useSaleSessions';
 import { apiClient } from '@/lib/api/client';
 import { apiErrorMessage } from '@/lib/api/error-message';
+import { tableConflictFrom } from '@/lib/connectivity';
 import { computePairAutoAdd, describeAutoApplyAnnouncement } from '@/lib/pos/auto-apply-discounts';
 import { applyRoundOff, computeCartTax } from '@/lib/pos/cart-tax';
 import { bogoFreeUnitsForSku, computeHappyHour, type HHLine, type HappyHourResult } from '@/lib/pos/happy-hour';
@@ -814,6 +816,15 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
   // call with the manager's token/code and resolves it once an order is actually produced.
   const pendingCreateOrderResolveRef = useRef<((order: CreatedOrder | null) => void) | null>(null);
   const addOrderLines = useAddOrderLines();
+  // One key per sale attempt (client_reference + Idempotency-Key), kept until the cart is cleared
+  // and saved in the sale-session snapshot, so a retry, a second tap or a reload mid-request
+  // re-sends the SAME key and pos-api returns the bill it already made instead of a duplicate
+  // (urban-loft 003390/003392). Rotated after a definite refusal so a corrected resend is new.
+  const saleAttemptKeyRef = useRef('');
+  const saleAttemptKey = () => {
+    if (!saleAttemptKeyRef.current) saleAttemptKeyRef.current = uuidv4();
+    return saleAttemptKeyRef.current;
+  };
 
   // ─── Multi-cart Sale sessions (retail only) ───────────────────────────────
   // Several customers rung up in parallel (a slow M-Pesa payer parked on their own tab). One active
@@ -833,6 +844,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
       deliveryInfo,
       pricingProfile,
       ageVerified: ageVerifiedRef.current,
+      attemptKey: saleAttemptKeyRef.current || undefined,
     }),
     [cart, manualDiscount, discountReason, discountPromotionId, orderTax, charges, loyaltyState, orderSubtype, deliveryInfo, pricingProfile],
   );
@@ -849,6 +861,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
     setDeliveryInfo(s.deliveryInfo ?? emptyDeliveryInfo());
     if (s.pricingProfile) setPricingProfile(s.pricingProfile);
     ageVerifiedRef.current = s.ageVerified ?? false;
+    saleAttemptKeyRef.current = s.attemptKey ?? '';
     // Remount the customer/loyalty panel so its chip reflects THIS tab's attached customer.
     setCustomerResetSeq((n) => n + 1);
   }, []);
@@ -1382,6 +1395,8 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
   };
 
   const clearCart = () => {
+    // A cleared cart is a new sale: the next send mints a fresh attempt key.
+    saleAttemptKeyRef.current = '';
     setCart([]);
     ageVerifiedRef.current = false;
     setManualDiscountState(0);
@@ -1700,7 +1715,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
       // Snapshot the just-added lines BEFORE clearCart() — they are the delta chit's content.
       const addedLines = [...cart];
       addOrderLines.mutate(
-        { orderId: billOrderId, lines: orderLines },
+        { orderId: billOrderId, lines: orderLines, clientReference: saleAttemptKey() },
         {
           onSuccess: () => {
             // Delta kitchen/bar chit for ONLY the added items. When a Local Print Agent is
@@ -1714,7 +1729,11 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
             setOrderPlacedNumber('');
             setOrderPlacedOpen(true);
           },
-          onError: async (e) => toast.error(await apiErrorMessage(e, 'Failed to add items to bill. Please try again.')),
+          onError: async (e) => {
+            // A definite refusal: the corrected resend is a new batch.
+            saleAttemptKeyRef.current = '';
+            toast.error(await apiErrorMessage(e, 'Failed to add items to bill. Please try again.'));
+          },
         }
       );
       return;
@@ -1740,8 +1759,9 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
     const courses = [...new Set(cart.map((i) => (i.courseNumber ?? 0) as CourseValue).filter((c) => c > 0))].sort() as CourseValue[];
     // place() is retryable with a manager approval_token when the discount exceeds
     // the outlet's limit (backend returns 422).
-    const place = (approval?: { approvalToken?: string; code?: string }) => createOrder.mutate(
+    const place = (approval?: { approvalToken?: string; code?: string }, separateBill = false) => createOrder.mutate(
       {
+        clientReference: saleAttemptKey(),
         outletId: orderOutletID,
         orderSubtype: orderSubtype ?? defaultOrderSubtype,
         tableId: tableId || undefined,
@@ -1759,11 +1779,13 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
         businessDate: saleDate || undefined,
         // Delivery orders carry the dropoff details so pos-api can build a logistics delivery task
         // when a rider is dispatched. Address/notes come from the customer capture step.
-        metadata: buildOrderMetadata(),
+        metadata: separateBill ? { ...(buildOrderMetadata() ?? {}), separate_bill: true } : buildOrderMetadata(),
         lines: orderLines,
       },
       {
         onSuccess: (data: any) => {
+          // The bill exists now (or is queued): any later send from this cart is a new attempt.
+          saleAttemptKeyRef.current = '';
           const orderId = data.id || data.order_id || '';
           setCurrentOrderId(orderId);
           setCurrentOrderNumber(data.order_number || '');
@@ -1787,8 +1809,10 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
             }));
           }
 
-          // Mark table occupied when a dine-in order is created with a table
-          if (tableId && orderId) {
+          // pos-api seats the order at its table on create (also for a synced offline order), so
+          // only older servers need this call; it is idempotent there. Never for an offline
+          // order: its local id is not a server order and would leave the table showing no bill.
+          if (tableId && orderId && !data.offline) {
             assignTable.mutate({ tableId, orderId });
           }
 
@@ -1813,6 +1837,31 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
             setPendingApprovalAction(data.action || 'order.discount_override');
             return;
           }
+          // The table already has an open bill: offer to add to it (the default) or, when the
+          // outlet allows it, open a separate bill. Nothing was created, so the key is kept.
+          const conflict = tableConflictFrom(err);
+          if (conflict) {
+            const addToExisting = () => {
+              const qs = new URLSearchParams({
+                table_id: tableId,
+                table_name: tableName,
+                order_id: conflict.existingOrderId,
+                covers: String(coversParam),
+                mode: 'add_to_bill',
+              });
+              router.push(`/${orgSlug}/order?${qs.toString()}`);
+              toast.info(`Now adding to bill #${conflict.existingOrderNumber}. Press Send again to add these items.`);
+            };
+            toast.warning(`${tableName || 'This table'} already has an open bill #${conflict.existingOrderNumber}.`, {
+              duration: 20_000,
+              action: { label: 'Add to that bill', onClick: addToExisting },
+              cancel: conflict.guardMode === 'warn'
+                ? { label: 'Separate bill', onClick: () => place(approval, true) }
+                : undefined,
+            });
+            return;
+          }
+          saleAttemptKeyRef.current = '';
           toast.error(await apiErrorMessage(err, 'Failed to create order. Please try again.'));
         },
       }
@@ -2044,6 +2093,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
     const courses = [...new Set(cart.map((i) => (i.courseNumber ?? 0) as CourseValue).filter((c) => c > 0))].sort() as CourseValue[];
     try {
       const data: any = await createOrder.mutateAsync({
+        clientReference: saleAttemptKey(),
         outletId: orderOutletID,
         orderSubtype: orderSubtype ?? defaultOrderSubtype,
         tableId: tableId || undefined,
@@ -2058,6 +2108,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
         metadata: buildOrderMetadata(),
         lines: orderLines,
       });
+      saleAttemptKeyRef.current = '';
       const orderId = data.id || data.order_id || '';
       const orderNumber = data.order_number || '';
       setCurrentOrderId(orderId);
@@ -2076,7 +2127,8 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
           totalPrice: (item.price + (item.modifierTotal ?? 0)) * item.quantity,
         })));
       }
-      if (tableId && orderId) assignTable.mutate({ tableId, orderId });
+      // Server seats on create; skip for an offline order (local id, see handlePlaceOrder).
+      if (tableId && orderId && !data.offline) assignTable.mutate({ tableId, orderId });
       return { orderId, orderNumber };
     } catch (e: any) {
       const status = e?.response?.status;
@@ -2087,6 +2139,8 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
           setPendingApprovalAction(errData.action || 'price.override');
         });
       }
+      // Any other refusal created nothing: the corrected resend gets a fresh key.
+      saleAttemptKeyRef.current = '';
       toast.error(await apiErrorMessage(e, 'Failed to create order. Please try again.'));
       return null;
     }

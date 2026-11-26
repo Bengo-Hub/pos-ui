@@ -4,6 +4,8 @@ import { X } from 'lucide-react';
 import { Badge } from '@/components/ui/base';
 import { PAYMENT_METHOD_LABELS, getPaymentMethodLabel } from '@bengo-hub/shared-ui-lib';
 import { getActiveTimeZone } from '@/lib/user-timezone';
+import { useNow } from '@/hooks/useNow';
+import { formatElapsedClock } from '@/lib/time/elapsed';
 
 /** Shared helpers/constants for the All-Sales / POS-Sales surfaces (list, filters, modals).
  *  `currency` defaults to KES for callers that haven't threaded the tenant's real currency
@@ -18,6 +20,25 @@ export const money = (n: number, currency = 'KES') =>
 // so this list/modal never disagrees with the date-range filter or exported reports for the
 // same order — see move-order-date-modal.tsx's identical `business_date ?? created_at` read.
 export const isBackdatedOrder = (o: any): boolean => !!o?.business_date;
+
+/** Sale statuses still in progress (pos-api orders.Status*): their age keeps counting. */
+const UNFINISHED_SALE_STATUSES = new Set(['draft', 'open', 'pending_payment', 'awaiting_acceptance']);
+
+/** How long an unfinished sale has been open, on the shared YYYY:MM:DD:HH:mm:ss clock. Finished
+ *  sales show nothing: there is no close time to stop the clock at. */
+export function SaleAge({ order }: { order: { status?: string; created_at?: string } }) {
+  if (!order?.created_at || !UNFINISHED_SALE_STATUSES.has(order.status ?? '')) return null;
+  return <LiveSaleAge since={order.created_at} />;
+}
+
+function LiveSaleAge({ since }: { since: string }) {
+  const now = useNow(1000);
+  return (
+    <span className="block font-mono text-[10px] tabular-nums text-amber-600" title="Time since this sale was opened">
+      {formatElapsedClock(since, now)}
+    </span>
+  );
+}
 
 /** The order's displayed "Date": the effective/reported day (business_date) when backdated —
  *  shown DATE ONLY since a backdate carries no real ring-up time — else the full created_at

@@ -60,15 +60,26 @@ function setOpen(v: boolean) {
   openListeners.forEach((l) => l());
 }
 
+// A burst of updates (a big order touches several stations) refetches once. The refetch keeps
+// the cards on screen (useKDSTickets keeps previous data), so nothing flashes. The day view's
+// hourly tally reloads with the tickets so both stay computed from the same rows.
+let refetchTimer: ReturnType<typeof setTimeout> | null = null;
 function invalidateTickets() {
-  queryClient?.invalidateQueries({ queryKey: ['kds-tickets'] });
+  if (refetchTimer) clearTimeout(refetchTimer);
+  refetchTimer = setTimeout(() => {
+    refetchTimer = null;
+    queryClient?.invalidateQueries({ queryKey: ['kds-tickets'] });
+    queryClient?.invalidateQueries({ queryKey: ['kds-day-summary'] });
+  }, 750);
 }
 
 function clearTimers() {
   if (reconnectTimer) clearTimeout(reconnectTimer);
   if (pingTimer) clearInterval(pingTimer);
+  if (refetchTimer) clearTimeout(refetchTimer);
   reconnectTimer = null;
   pingTimer = null;
+  refetchTimer = null;
 }
 
 function connect() {

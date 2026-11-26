@@ -49,9 +49,10 @@ export function TerminalModals() {
 
   // Manager-PIN step-up state for voiding an order when the cashier is not a manager.
   const [pendingVoidReason, setPendingVoidReason] = useState<string | null>(null);
+  const [pendingVoidReasonCode, setPendingVoidReasonCode] = useState<string | undefined>(undefined);
 
-  async function finalizeVoid(reason: string, approval?: { approvalToken?: string; voidCode?: string }) {
-    await t.voidOrderMutateAsync({ orderId: t.currentOrderId, reason, approvalToken: approval?.approvalToken, voidCode: approval?.voidCode });
+  async function finalizeVoid(reason: string, reasonCode?: string, approval?: { approvalToken?: string; voidCode?: string }) {
+    await t.voidOrderMutateAsync({ orderId: t.currentOrderId, reason, reasonCode, approvalToken: approval?.approvalToken, voidCode: approval?.voidCode });
     toast.success(`Order #${t.currentOrderNumber} voided`);
     t.setCurrentOrderId('');
     t.setCurrentOrderNumber('');
@@ -144,13 +145,14 @@ export function TerminalModals() {
         orderId={t.currentOrderId}
         orderNumber={t.currentOrderNumber}
         onClose={() => t.setVoidOpen(false)}
-        onConfirm={async (reason) => {
+        onConfirm={async (reason, reasonCode) => {
           if (t.can('pos.orders.void_self')) {
-            await finalizeVoid(reason);
+            await finalizeVoid(reason, reasonCode);
           } else {
             // Cashier: require a manager PIN step-up before voiding.
             t.setVoidOpen(false);
             setPendingVoidReason(reason);
+            setPendingVoidReasonCode(reasonCode);
           }
         }}
       />
@@ -216,8 +218,10 @@ export function TerminalModals() {
         onClose={() => setPendingVoidReason(null)}
         onApproved={async (approval) => {
           const reason = pendingVoidReason ?? '';
+          const code = pendingVoidReasonCode;
           setPendingVoidReason(null);
-          await finalizeVoid(reason, approval);
+          setPendingVoidReasonCode(undefined);
+          await finalizeVoid(reason, code, approval);
         }}
       />
 

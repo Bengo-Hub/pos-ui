@@ -9,8 +9,10 @@ import { VoidOrderModal } from '@/components/pos/void-order-modal';
 import { VoidApprovalDialog, type VoidApproval } from '@/components/pos/void-approval-dialog';
 
 // Bill states that can still be voided. Paid/closed bills go through Returns/Refunds instead;
-// already cancelled/voided bills are terminal.
-const VOIDABLE_STATUSES = ['open', 'pending', 'draft', 'sent', 'in_progress', 'parked', 'unpaid', 'partial'];
+// already cancelled/voided bills are terminal. pending_payment is what a bill becomes once the
+// kitchen marks every ticket served, and pos-api accepts a void there (voidSkipReason), so a
+// served duplicate (urban-loft 003392) must stay voidable here too.
+const VOIDABLE_STATUSES = ['open', 'pending', 'pending_payment', 'draft', 'sent', 'in_progress', 'parked', 'unpaid', 'partial'];
 
 interface VoidBillButtonProps {
   orderId: string;
@@ -35,14 +37,15 @@ export function VoidBillButton({ orderId, orderNumber, status, onVoided, classNa
 
   const [reasonOpen, setReasonOpen] = useState(false);
   const [pendingReason, setPendingReason] = useState<string | null>(null);
+  const [pendingReasonCode, setPendingReasonCode] = useState<string | undefined>(undefined);
 
   // Gate on permission AND a voidable status.
   if (!can(P.ORDERS_VOID)) return null;
   if (!VOIDABLE_STATUSES.includes((status || '').toLowerCase())) return null;
 
-  async function finalizeVoid(reason: string, approval?: VoidApproval) {
+  async function finalizeVoid(reason: string, reasonCode?: string, approval?: VoidApproval) {
     try {
-      await voidOrder.mutateAsync({ orderId, reason, approvalToken: approval?.approvalToken, voidCode: approval?.voidCode });
+      await voidOrder.mutateAsync({ orderId, reason, reasonCode, approvalToken: approval?.approvalToken, voidCode: approval?.voidCode });
       toast.success(`Bill #${orderNumber} voided`);
       onVoided?.();
     } catch {
@@ -69,13 +72,14 @@ export function VoidBillButton({ orderId, orderNumber, status, onVoided, classNa
         orderId={orderId}
         orderNumber={orderNumber}
         onClose={() => setReasonOpen(false)}
-        onConfirm={async (reason) => {
+        onConfirm={async (reason, reasonCode) => {
           if (can(P.ORDERS_VOID_SELF)) {
-            await finalizeVoid(reason);
+            await finalizeVoid(reason, reasonCode);
           } else {
             // Cashier / non-manager: require manager approval (scan card, PIN, or a shared code).
             setReasonOpen(false);
             setPendingReason(reason);
+            setPendingReasonCode(reasonCode);
           }
         }}
       />
@@ -86,8 +90,10 @@ export function VoidBillButton({ orderId, orderNumber, status, onVoided, classNa
         onClose={() => setPendingReason(null)}
         onApproved={async (approval) => {
           const reason = pendingReason ?? '';
+          const code = pendingReasonCode;
           setPendingReason(null);
-          await finalizeVoid(reason, approval);
+          setPendingReasonCode(undefined);
+          await finalizeVoid(reason, code, approval);
         }}
       />
     </>

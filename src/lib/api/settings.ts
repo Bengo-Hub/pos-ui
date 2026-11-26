@@ -170,6 +170,13 @@ export interface POSSettings {
   idle_timeout_by_role?: Record<string, number>;
   /** Seconds the "Still there?" countdown runs before signing out (default 30). */
   idle_countdown_seconds?: number;
+  /** KDS board view it opens on: "day" (default, served tickets kept and crossed out, hourly
+   *  tally) or "live" (active tickets only). Outlet metadata kds_default_view. */
+  kds_default_view?: 'day' | 'live';
+  /** Keep served and voided tickets on the day view for the shift tally (default true). */
+  kds_keep_served?: boolean;
+  /** How often each board screen reloads, 60..300 seconds (default 60). */
+  kds_refresh_seconds?: number;
   updated_at: string;
 }
 
@@ -246,6 +253,9 @@ export interface UpdatePOSSettingsInput {
   hide_draft_delete_for_cashier?: boolean;
   hide_draft_resume_for_cashier?: boolean;
   hide_profit_margin_for_cashier?: boolean;
+  kds_default_view?: 'day' | 'live';
+  kds_keep_served?: boolean;
+  kds_refresh_seconds?: number;
 }
 
 export interface UpdatePOSModulesInput {

@@ -139,6 +139,14 @@
     - `ready` → **Served** (primary) → `served`
 - Empty state: "All caught up" with check icon
 
+**Day view (default since 2026-11-22, outlet setting `kds_default_view`):**
+
+- Header switch: Day or Live only. Day shows a date picker (today in the tenant zone, past days read only) and a Today button.
+- Hour strip: All hours (selected by default) plus every hour 00:00 to 23:00 with its ticket count; quiet hours are muted, an amber dot marks hours with open tickets. Tapping an hour narrows the cards and the tally to it; tapping it again returns to all hours.
+- Item tally (collapsible): served, open, voided and total per item for the station being viewed, from pos-api's day summary, so the barista or chef can match the system count at shift close.
+- Served and voided cards stay after the live rail, newest first, with an X across them, struck-through items, no action buttons, and the prep time frozen at when they left the pass. The outlet can hide them with `kds_keep_served`; the tally still counts them.
+- Elapsed time on every card reads `YYYY:MM:DD:HH:mm:ss` (shared helper `lib/time/elapsed.ts`, also used by table occupancy and open sales on the sales list).
+
 ---
 
 ### Bar Display (`/[orgSlug]/bar`)

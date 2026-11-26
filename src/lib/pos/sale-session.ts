@@ -42,6 +42,8 @@ export interface SaleSessionSnapshot {
   deliveryInfo: DeliveryInfo;
   pricingProfile: string;
   ageVerified: boolean;
+  /** The in-flight sale attempt's idempotency key, so a reload mid-send re-sends the same key. */
+  attemptKey?: string;
 }
 
 /** One open Sale tab. */

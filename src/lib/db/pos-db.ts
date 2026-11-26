@@ -91,6 +91,25 @@ export interface OfflineOrder extends SyncState {
   order_subtype?: string;
   customer_name?: string;
   customer_phone?: string;
+  // Everything else the till sent on the online path. Before 2026-11-26 an offline dine-in order
+  // synced without its table, covers, discount or charges, so it never showed on the table and
+  // the waiter re-rang it (urban-loft 003390/003392). None of these are indexed, so no Dexie
+  // version bump is needed; older queued rows simply lack them.
+  device_id?: string;
+  table_id?: string;
+  covers_count?: number;
+  served_by_user_id?: string;
+  age_verified?: boolean;
+  discount_amount?: number;
+  discount_reason?: string;
+  promotion_id?: string;
+  order_tax_amount?: number;
+  charges?: Record<string, number>;
+  approval_token?: string;
+  approval_code?: string;
+  metadata?: Record<string, unknown>;
+  source?: string;
+  business_date?: string;
   server_order_id?: string; // filled after successful sync
   // Cash payment info — stored together so sync worker can record payment after creating order
   pending_payment?: {
@@ -140,9 +159,26 @@ export interface OfflineVoid extends SyncState {
   local_order_id?: string; // order created offline, not yet synced
   line_id?: string; // when set, this is a single line void; otherwise a whole-order void
   reason: string;
+  reason_code?: string; // outlet void reason code (decides wastage server-side)
   approval_token?: string;
   tenant_id: string;
   tenant_slug: string;
+  created_at: string;
+}
+
+// ── Add-to-bill line batches ─────────────────────────────────────────────────────
+
+/** Items added to an EXISTING server bill while the network was down. The batch replays under
+ *  its local_id (Idempotency-Key) and each line carries metadata.client_line_id, so pos-api adds
+ *  it exactly once. A bill that is itself still queued offline gets the lines appended to its
+ *  queued order instead (appendLinesToOfflineOrder), so it never needs this queue. */
+export interface OfflineOrderLinesAdd extends SyncState {
+  id?: number;
+  local_id: string;
+  tenant_id: string;
+  server_order_id?: string;
+  local_order_id?: string;
+  lines: Array<OfflineOrderLine & { course_number?: number; metadata?: Record<string, unknown> }>;
   created_at: string;
 }
 
@@ -275,6 +311,7 @@ class POSDatabase extends Dexie {
   offlineOrders!: Table<OfflineOrder, number>;
   offlinePayments!: Table<OfflinePayment, number>;
   offlineVoids!: Table<OfflineVoid, number>;
+  offlineLineAdds!: Table<OfflineOrderLinesAdd, number>;
   offlineReturns!: Table<OfflineReturn, number>;
   drawerSessions!: Table<OfflineDrawerSession, number>;
   drawerCloses!: Table<OfflineDrawerClose, number>;
@@ -361,6 +398,10 @@ class POSDatabase extends Dexie {
     this.version(7).stores({
       staffProfiles:   null,
       staffProfilesV2: '[tenant_id+user_id], tenant_id, user_id',
+    });
+    // v8: add-to-bill batches queued offline (OfflineOrderLinesAdd). New table only; no upgrade.
+    this.version(8).stores({
+      offlineLineAdds: '++id, local_id, local_order_id, server_order_id, tenant_id',
     });
   }
 }
@@ -518,6 +559,49 @@ export async function markVoidSyncFailed(id: number, error: string, terminal = f
   if (row) await posDB.offlineVoids.update(id, nextRetryState(row, error, { terminal }));
 }
 
+// ── Add-to-bill helpers ──────────────────────────────────────────────────────────
+
+/** Append items to a bill that is itself still queued offline. Returns false when the order has
+ *  already synced (or is unknown), in which case the caller queues an OfflineOrderLinesAdd. */
+export async function appendLinesToOfflineOrder(localOrderId: string, lines: OfflineOrderLine[]): Promise<boolean> {
+  let appended = false;
+  await posDB.transaction('rw', posDB.offlineOrders, async () => {
+    const o = await posDB.offlineOrders.where('local_id').equals(localOrderId).first();
+    if (!o || o.synced || o.server_order_id) return;
+    const added = lines.reduce((s, l) => s + l.total_price, 0);
+    await posDB.offlineOrders.update(o.id!, {
+      lines: [...o.lines, ...lines],
+      subtotal: o.subtotal + added,
+      total_amount: o.total_amount + added,
+    });
+    appended = true;
+  });
+  return appended;
+}
+
+export async function saveDraftLinesAdd(a: Omit<OfflineOrderLinesAdd, 'id'>): Promise<number> {
+  return posDB.offlineLineAdds.add(a);
+}
+
+export async function getPendingSyncLineAdds(): Promise<OfflineOrderLinesAdd[]> {
+  return pendingReady(await posDB.offlineLineAdds.toArray());
+}
+
+export async function markLinesAddSynced(id: number): Promise<void> {
+  await posDB.offlineLineAdds.update(id, { synced: true, sync_error: undefined, dead_letter: false });
+}
+
+export async function markLinesAddSyncFailed(id: number, error: string, terminal = false): Promise<void> {
+  const row = await posDB.offlineLineAdds.get(id);
+  if (row) await posDB.offlineLineAdds.update(id, nextRetryState(row, error, { terminal }));
+}
+
+/** Offline-created bills not yet on the server, for the Tables and Bills screens (newest first). */
+export async function getQueuedOfflineOrders(tenantId: string): Promise<OfflineOrder[]> {
+  const rows = await posDB.offlineOrders.where('tenant_id').equals(tenantId).toArray();
+  return rows.filter((o) => !o.synced && !o.server_order_id).sort((a, b) => b.created_at.localeCompare(a.created_at));
+}
+
 // ── Return helpers ───────────────────────────────────────────────────────────────
 
 export async function saveDraftReturn(r: Omit<OfflineReturn, 'id'>): Promise<number> {
@@ -590,15 +674,16 @@ export interface SyncStatusCounts {
 }
 
 export async function getSyncStatusCounts(): Promise<SyncStatusCounts> {
-  const [orders, payments, voids, returns, sessions, closes] = await Promise.all([
+  const [orders, payments, voids, returns, sessions, closes, lineAdds] = await Promise.all([
     posDB.offlineOrders.toArray(),
     posDB.offlinePayments.toArray(),
     posDB.offlineVoids.toArray(),
     posDB.offlineReturns.toArray(),
     posDB.drawerSessions.toArray(),
     posDB.drawerCloses.toArray(),
+    posDB.offlineLineAdds.toArray(),
   ]);
-  const all: SyncState[] = [...orders, ...payments, ...voids, ...returns, ...sessions, ...closes];
+  const all: SyncState[] = [...orders, ...payments, ...voids, ...returns, ...sessions, ...closes, ...lineAdds];
   return {
     pending: all.filter((r) => !r.synced && !r.dead_letter).length,
     deadLetter: all.filter((r) => r.dead_letter).length,
@@ -616,6 +701,7 @@ export interface QueueBreakdownRow {
 export async function getSyncQueueBreakdown(): Promise<QueueBreakdownRow[]> {
   const queues: Array<[string, SyncState[]]> = [
     ['Sales', await posDB.offlineOrders.toArray()],
+    ['Added to bill', await posDB.offlineLineAdds.toArray()],
     ['Payments', await posDB.offlinePayments.toArray()],
     ['Voids', await posDB.offlineVoids.toArray()],
     ['Returns', await posDB.offlineReturns.toArray()],
@@ -631,7 +717,7 @@ export async function getSyncQueueBreakdown(): Promise<QueueBreakdownRow[]> {
 }
 
 export interface DeadLetterItem {
-  kind: 'order' | 'payment' | 'void' | 'return' | 'drawer_open' | 'drawer_close';
+  kind: 'order' | 'lines_add' | 'payment' | 'void' | 'return' | 'drawer_open' | 'drawer_close';
   id: number | string;
   summary: string;
   error?: string;
@@ -641,17 +727,20 @@ export interface DeadLetterItem {
 
 /** Collect all dead-lettered items across queues for the manual-review surface. */
 export async function getDeadLetterItems(): Promise<DeadLetterItem[]> {
-  const [orders, payments, voids, returns, sessions, closes] = await Promise.all([
+  const [orders, payments, voids, returns, sessions, closes, lineAdds] = await Promise.all([
     posDB.offlineOrders.toArray(),
     posDB.offlinePayments.toArray(),
     posDB.offlineVoids.toArray(),
     posDB.offlineReturns.toArray(),
     posDB.drawerSessions.toArray(),
     posDB.drawerCloses.toArray(),
+    posDB.offlineLineAdds.toArray(),
   ]);
   const out: DeadLetterItem[] = [];
   orders.filter((o) => o.dead_letter).forEach((o) =>
     out.push({ kind: 'order', id: o.id!, summary: `Sale ${o.currency} ${o.total_amount.toFixed(2)}`, error: o.sync_error, attempts: o.attempts, created_at: o.created_at }));
+  lineAdds.filter((a) => a.dead_letter).forEach((a) =>
+    out.push({ kind: 'lines_add', id: a.id!, summary: `Added to bill: ${a.lines.length} item(s)`, error: a.sync_error, attempts: a.attempts, created_at: a.created_at }));
   payments.filter((p) => p.dead_letter).forEach((p) =>
     out.push({ kind: 'payment', id: p.id!, summary: `${p.tender_method} ${p.amount.toFixed(2)}`, error: p.sync_error, attempts: p.attempts, created_at: p.created_at }));
   voids.filter((v) => v.dead_letter).forEach((v) =>
@@ -670,6 +759,7 @@ export async function retryDeadLetter(kind: DeadLetterItem['kind'], id: number):
   const reset = { dead_letter: false, attempts: 0, next_attempt_at: undefined, sync_error: undefined };
   switch (kind) {
     case 'order': await posDB.offlineOrders.update(id, reset); break;
+    case 'lines_add': await posDB.offlineLineAdds.update(id, reset); break;
     case 'payment': await posDB.offlinePayments.update(id, reset); break;
     case 'void': await posDB.offlineVoids.update(id, reset); break;
     case 'return': await posDB.offlineReturns.update(id, reset); break;

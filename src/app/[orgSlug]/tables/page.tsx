@@ -10,9 +10,10 @@ import { PrintReceiptButton } from '@/components/pos/print-receipt-button';
 import { POSPaymentModal } from '@/components/pos/payment-modal';
 import { ReceiptPreview } from '@/components/pos/receipt-preview';
 import { Badge, Button } from '@/components/ui/base';
-import { cn } from '@/lib/utils';
+import { cn, elapsedMinutes, formatElapsedClock } from '@/lib/utils';
+import { useNow } from '@/hooks/useNow';
 import { formatTime as formatTimeInUserZone } from '@/lib/user-timezone';
-import { useTables, useSections, useUpdateTableStatus, useReleaseTable, useMergeTables, useUnmergeTables, useOrders, useCategories } from '@/hooks/usePOS';
+import { useTables, useSections, useUpdateTableStatus, useReleaseTable, useMergeTables, useUnmergeTables, useOrders, useCategories, useQueuedOfflineOrders, overlayOfflineTables } from '@/hooks/usePOS';
 import { useKDSStations } from '@/hooks/useKDS';
 import { usePermissions, P } from '@/hooks/usePermissions';
 import { useOwnScope } from '@/lib/rbac/scope';
@@ -58,13 +59,15 @@ function tableAgingClass(elapsedMinutes: number, maxMinutes: number): string {
   return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400';
 }
 
-function tableElapsedMinutes(occupiedSince: string): number {
-  return Math.floor((Date.now() - new Date(occupiedSince).getTime()) / 60_000);
-}
-
-function formatElapsed(minutes: number): string {
-  if (minutes < 60) return `${minutes}m`;
-  return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
+/** How long the table has been occupied, on the shared YYYY:MM:DD:HH:mm:ss clock, ticking live. */
+function TableAgeBadge({ since, maxMinutes }: { since: string; maxMinutes: number }) {
+  const now = useNow(1000);
+  const agingCls = tableAgingClass(elapsedMinutes(since, now), maxMinutes);
+  return (
+    <span className={cn('inline-flex items-center gap-0.5 text-[10px] font-semibold font-mono tabular-nums px-1.5 py-0.5 rounded-full mt-0.5', agingCls || 'bg-muted text-muted-foreground')}>
+      <Clock className="h-2.5 w-2.5" />{formatElapsedClock(since, now)}
+    </span>
+  );
 }
 
 function fmtFor(currency: string) {
@@ -144,16 +147,13 @@ function TableCard({
             <p className="text-[11px] font-semibold text-primary leading-tight">
               {table.order_number} · {fmt(table.order_total ?? 0)}
             </p>
+            {table.offline_pending && (
+              <p className="text-[10px] font-medium text-amber-600 dark:text-amber-400 leading-tight">Pending sync</p>
+            )}
             {/* Aging badge */}
-            {table.occupied_since && (() => {
-              const elapsed = tableElapsedMinutes(table.occupied_since);
-              const agingCls = tableAgingClass(elapsed, maxOccupationMinutes);
-              return (
-                <span className={cn('inline-flex items-center gap-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full mt-0.5', agingCls || 'bg-muted text-muted-foreground')}>
-                  <Clock className="h-2.5 w-2.5" />{formatElapsed(elapsed)}
-                </span>
-              );
-            })()}
+            {table.occupied_since && (
+              <TableAgeBadge since={table.occupied_since} maxMinutes={maxOccupationMinutes} />
+            )}
           </div>
         )}
 
@@ -916,7 +916,12 @@ function TablesPage() {
   const releaseTable = useReleaseTable();
   const mergeTables = useMergeTables();
 
-  const allTables: any[] = tablesData?.data ?? [];
+  // Bills rung up offline and still queued show on their table, so the waiter adds to them.
+  const { data: queuedOffline } = useQueuedOfflineOrders();
+  const allTables: any[] = useMemo(
+    () => overlayOfflineTables(tablesData?.data ?? [], queuedOffline ?? []),
+    [tablesData, queuedOffline],
+  );
   const sections: any[] = sectionsData?.data ?? [];
 
   // Filtered tables (AND of section + status)

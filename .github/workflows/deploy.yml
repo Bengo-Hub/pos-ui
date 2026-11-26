@@ -2,7 +2,7 @@ name: Build and Deploy POS UI
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ master ]
   workflow_dispatch:
 
 # Deployment secrets are stored in devops-k8s repo and synced here on demand.
