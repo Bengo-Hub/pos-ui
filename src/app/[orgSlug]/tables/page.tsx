@@ -13,7 +13,7 @@ import { Badge, Button } from '@/components/ui/base';
 import { cn, elapsedMinutes, formatElapsedClock } from '@/lib/utils';
 import { useNow } from '@/hooks/useNow';
 import { formatTime as formatTimeInUserZone } from '@/lib/user-timezone';
-import { useTables, useSections, useUpdateTableStatus, useReleaseTable, useMergeTables, useUnmergeTables, useOrders, useCategories } from '@/hooks/usePOS';
+import { useTables, useSections, useUpdateTableStatus, useReleaseTable, useMergeTables, useUnmergeTables, useOrders, useCategories, useQueuedOfflineOrders, overlayOfflineTables } from '@/hooks/usePOS';
 import { useKDSStations } from '@/hooks/useKDS';
 import { usePermissions, P } from '@/hooks/usePermissions';
 import { useOwnScope } from '@/lib/rbac/scope';
@@ -147,6 +147,9 @@ function TableCard({
             <p className="text-[11px] font-semibold text-primary leading-tight">
               {table.order_number} · {fmt(table.order_total ?? 0)}
             </p>
+            {table.offline_pending && (
+              <p className="text-[10px] font-medium text-amber-600 dark:text-amber-400 leading-tight">Pending sync</p>
+            )}
             {/* Aging badge */}
             {table.occupied_since && (
               <TableAgeBadge since={table.occupied_since} maxMinutes={maxOccupationMinutes} />
@@ -913,7 +916,12 @@ function TablesPage() {
   const releaseTable = useReleaseTable();
   const mergeTables = useMergeTables();
 
-  const allTables: any[] = tablesData?.data ?? [];
+  // Bills rung up offline and still queued show on their table, so the waiter adds to them.
+  const { data: queuedOffline } = useQueuedOfflineOrders();
+  const allTables: any[] = useMemo(
+    () => overlayOfflineTables(tablesData?.data ?? [], queuedOffline ?? []),
+    [tablesData, queuedOffline],
+  );
   const sections: any[] = sectionsData?.data ?? [];
 
   // Filtered tables (AND of section + status)

@@ -161,3 +161,35 @@ if (typeof window !== 'undefined') {
     useConnectivityStore.setState({ browserOnline: false, effectiveOnline: false });
   });
 }
+
+function errorBody(error: unknown): { status?: number; data?: Record<string, unknown> } {
+  if (!error || typeof error !== 'object') return {};
+  const e = error as { status?: number; data?: unknown; response?: { status?: number; data?: unknown } };
+  const data = (e.response?.data ?? e.data) as Record<string, unknown> | undefined;
+  return { status: e.response?.status ?? e.status, data: data && typeof data === 'object' ? data : undefined };
+}
+
+/** pos-api's Idempotency-Key middleware answers 409 with idempotency_state "in_flight" while the
+ *  first request under the same key is still running. The sale is being created, so the caller
+ *  hands it to the offline queue (same key) instead of erroring; the queue's backoff replays it. */
+export function isIdempotencyInFlight(error: unknown): boolean {
+  const { status, data } = errorBody(error);
+  return status === 409 && data?.idempotency_state === 'in_flight';
+}
+
+export interface TableConflict {
+  existingOrderId: string;
+  existingOrderNumber: string;
+  guardMode: 'warn' | 'block';
+}
+
+/** The table already has an open bill (pos-api 409 table_has_open_order). */
+export function tableConflictFrom(error: unknown): TableConflict | null {
+  const { status, data } = errorBody(error);
+  if (status !== 409 || data?.code !== 'table_has_open_order') return null;
+  return {
+    existingOrderId: String(data.existing_order_id ?? ''),
+    existingOrderNumber: String(data.existing_order_number ?? ''),
+    guardMode: data.guard_mode === 'block' ? 'block' : 'warn',
+  };
+}
