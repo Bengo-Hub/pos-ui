@@ -37,6 +37,9 @@ const SERVICE_URLS: Partial<Record<ServiceKey, string>> = {
   auth: process.env.NEXT_PUBLIC_AUTH_UI_URL ?? 'https://accounts.codevertexafrica.com',
   projects: process.env.NEXT_PUBLIC_PROJECTS_UI_URL ?? 'https://projects.codevertexafrica.com',
   afya: process.env.NEXT_PUBLIC_HOSPITAL_UI_URL ?? 'https://afya.codevertexafrica.com',
+  ticketing: process.env.NEXT_PUBLIC_TICKETING_UI_URL ?? 'https://ticketing.codevertexafrica.com',
+  library: process.env.NEXT_PUBLIC_LIBRARY_UI_URL ?? 'https://library.codevertexafrica.com',
+  truload: process.env.NEXT_PUBLIC_TRULOAD_UI_URL ?? 'https://truload.codevertexafrica.com',
 };
 
 const USE_CASE_LABELS: Record<string, string> = {
