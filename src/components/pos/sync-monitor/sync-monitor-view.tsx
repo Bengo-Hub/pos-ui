@@ -14,14 +14,15 @@ import {
   isBackgroundSyncPaused, setBackgroundSyncPaused, getLastCacheRefreshAt,
 } from '@/lib/sync/sync-control';
 import {
-  getSyncQueueBreakdown, getDeadLetterItems, retryDeadLetter,
-  type QueueBreakdownRow, type DeadLetterItem,
+  getSyncQueueBreakdown, getDeadLetterItems, retryDeadLetter, getRecentlySyncedOfflineOrders,
+  type QueueBreakdownRow, type DeadLetterItem, type OfflineOrder,
 } from '@/lib/db/pos-db';
 import { listKVRows, getSyncLog } from '@/lib/db/kv-cache';
 import type { KVCacheRow, SyncLogEntry } from '@/lib/db/pos-db';
 import { useEffectiveOutletID } from '@/hooks/usePOS';
 import { isPlatformOwner as checkPlatformOwner } from '@/lib/auth/permissions';
 import { SyncLogTable } from './sync-log-table';
+import { SyncedOfflineBills } from './synced-offline-bills';
 import { PriceReconcileTab } from './price-reconcile-tab';
 import { TxnReversalTab } from './txn-reversal-tab';
 import { MaintenanceWindowTab } from './maintenance-window-tab';
@@ -70,21 +71,24 @@ export function SyncMonitorView() {
   const [deadLetters, setDeadLetters] = useState<DeadLetterItem[]>([]);
   const [datasets, setDatasets] = useState<KVCacheRow[]>([]);
   const [log, setLog] = useState<SyncLogEntry[]>([]);
+  const [syncedBills, setSyncedBills] = useState<OfflineOrder[]>([]);
   const [paused, setPaused] = useState(false);
   const [lastRefresh, setLastRefresh] = useState<number | null>(null);
   const [tab, setTab] = useState<SyncMonitorTab>('overview');
 
   const load = useCallback(async () => {
-    const [q, d, ds, l] = await Promise.all([
+    const [q, d, ds, l, sb] = await Promise.all([
       getSyncQueueBreakdown(),
       getDeadLetterItems(),
       tenantID ? listKVRows(tenantID) : Promise.resolve([]),
       getSyncLog(120),
+      tenantID ? getRecentlySyncedOfflineOrders(tenantID, 20) : Promise.resolve([] as OfflineOrder[]),
     ]);
     setQueues(q);
     setDeadLetters(d);
     setDatasets(ds);
     setLog(l);
+    setSyncedBills(sb);
     setPaused(isBackgroundSyncPaused());
     setLastRefresh(getLastCacheRefreshAt());
   }, [tenantID]);
@@ -329,6 +333,9 @@ export function SyncMonitorView() {
           )}
         </section>
       </div>
+
+      {/* ── Offline chit label -> server number ── */}
+      <SyncedOfflineBills orders={syncedBills} />
 
       {/* ── Activity log ── */}
       <SyncLogTable entries={log} />

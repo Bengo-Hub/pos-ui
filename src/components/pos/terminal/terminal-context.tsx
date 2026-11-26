@@ -40,6 +40,7 @@ import {
     useAssignTable,
     useCategories,
     useCreateOrder,
+    offlineOrderLabel,
     useEffectiveOutletID,
     useFullCatalog,
     usePricingTiers,
@@ -1717,12 +1718,26 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
       addOrderLines.mutate(
         { orderId: billOrderId, lines: orderLines, clientReference: saleAttemptKey() },
         {
-          onSuccess: () => {
+          onSuccess: (res: any) => {
             // Delta kitchen/bar chit for ONLY the added items. When a Local Print Agent is
             // online the SERVER queue prints it (enqueueStationTicketsForLines); this client
             // silent path covers agent-less outlets so stations never miss an add-to-bill —
             // the gap behind the "chef re-fired the whole bill" incident.
-            printStationTicketsForLines(addedLines, 'ADDITIONAL ITEMS', billOrderId.slice(0, 8));
+            if (res?.offline) {
+              // The bill may itself still be queued on this device, in which case billOrderId is
+              // its local id: label it the same "Offline XXXXXX" way as its first chit.
+              void import('@/lib/db/pos-db')
+                .then(({ getOfflineOrderByLocalId }) => getOfflineOrderByLocalId(billOrderId))
+                .catch(() => undefined)
+                .then((local) => {
+                  const label = local
+                    ? (local.server_order_number ? local.server_order_number : offlineOrderLabel(billOrderId))
+                    : billOrderId.slice(0, 8);
+                  printStationTicketsForLines(addedLines, 'ADDITIONAL ITEMS', label);
+                });
+            } else {
+              printStationTicketsForLines(addedLines, 'ADDITIONAL ITEMS', billOrderId.slice(0, 8));
+            }
             clearCart();
             setCartOpen(false);
             setOrderPlacedId(billOrderId);
@@ -2129,7 +2144,7 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
       }
       // Server seats on create; skip for an offline order (local id, see handlePlaceOrder).
       if (tableId && orderId && !data.offline) assignTable.mutate({ tableId, orderId });
-      return { orderId, orderNumber };
+      return { orderId, orderNumber, offline: !!data.offline };
     } catch (e: any) {
       const status = e?.response?.status;
       const errData = e?.response?.data ?? {};
@@ -2162,7 +2177,10 @@ export function TerminalProvider({ children }: { children: React.ReactNode }) {
       // printer setup. The customer bill is NOT printed here — OrderPlacedDialog owns the bill
       // (server-rendered receipt) so it never prints twice. Shared silent path with add-to-bill's
       // delta chit; skips entirely when a Local Print Agent is online (server queue owns it).
-      printStationTicketsForLines(cart, undefined, ord.orderNumber || ord.orderId.slice(0, 8));
+      // An offline bill has no server number yet: label the chit "Offline XXXXXX" so the kitchen
+      // knows it is provisional, and the Sync Monitor maps that label to the real number later.
+      printStationTicketsForLines(cart, undefined,
+        ord.orderNumber || (ord.offline ? offlineOrderLabel(ord.orderId) : ord.orderId.slice(0, 8)));
       clearCart();
       setCartOpen(false);
       setOrderPlacedId(ord.orderId);

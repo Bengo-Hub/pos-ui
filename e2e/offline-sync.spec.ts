@@ -50,8 +50,8 @@ async function getAuth(page: Page): Promise<{ token: string; tenantId: string; o
   });
 }
 
-// ── PIN login, selecting the Retail outlet (inline-pay flow) before entering the PIN ──
-async function pinLogin(page: Page) {
+// ── PIN login, selecting the outlet (Quick Service by default) before entering the PIN ──
+async function pinLogin(page: Page, outletName: RegExp = /Quick Service/i) {
   page.on('response', async (res) => {
     if (res.url().includes('/auth/pin')) {
       // Status only — never log the response body (it carries the access token).
@@ -62,7 +62,7 @@ async function pinLogin(page: Page) {
 
   // Quick Service outlet: pay-mode inline checkout (not hospitality send-to-kitchen) and the
   // richest demo catalog, so the product grid actually populates.
-  const outlet = page.getByRole('button', { name: /Quick Service/i }).first();
+  const outlet = page.getByRole('button', { name: outletName }).first();
   // The redesigned pin-login renders BOTH the mobile stack and the desktop 3-zone layout in
   // the DOM (one is display-hidden), so every pin-key testid resolves twice — always target
   // the visible instance to satisfy strict mode.
@@ -93,6 +93,58 @@ async function pinLogin(page: Page) {
     const err = await page.getByText(/Incorrect PIN|Too many/i).first().textContent().catch(() => null);
     throw new Error(`PIN login did not navigate (still on ${page.url()}). Error shown: ${err ?? 'none'}`);
   }
+}
+
+/** Reload, retrying a navigation the service worker aborts while it claims the page. */
+async function reloadWithRetry(page: Page) {
+  for (let i = 0; i < 3; i++) {
+    const ok = await page.reload({ waitUntil: 'domcontentloaded' }).then(() => true).catch(() => false);
+    if (ok) break;
+    await page.waitForTimeout(2500);
+  }
+}
+
+/** Wait for the next-pwa service worker to install and control the page, so later offline
+ *  reloads of routes visited online are served from its cache. */
+async function waitForServiceWorker(page: Page) {
+  const swActive = await page.evaluate(async () => {
+    if (!('serviceWorker' in navigator)) return false;
+    const ready = navigator.serviceWorker.ready.then(() => true);
+    const timeout = new Promise<boolean>((r) => setTimeout(() => r(false), 90000));
+    return Promise.race([ready, timeout]);
+  });
+  expect(swActive, 'a service worker must be active for offline cold-start').toBe(true);
+  await page.waitForFunction(() => !!navigator.serviceWorker.controller, null, { timeout: 30_000 }).catch(() => {});
+  await page.waitForTimeout(2000);
+}
+
+/** The newest offline order row whose local_id was not in `before`. */
+async function newOfflineOrder(page: Page, before: any[]): Promise<any | undefined> {
+  const known = new Set(before.map((o) => o.local_id));
+  const rows = await idbGetAll(page, 'offlineOrders');
+  return rows.filter((o) => !known.has(o.local_id)).pop();
+}
+
+/** API client authenticated as the terminal, retrying through the IP rate limiter. */
+async function terminalApi(auth: { token: string; tenantId: string }, outletId: string) {
+  const api = await pwRequest.newContext({
+    baseURL: API,
+    extraHTTPHeaders: {
+      Authorization: `Bearer ${auth.token}`,
+      'X-Tenant-ID': auth.tenantId,
+      'X-Tenant-Slug': ORG,
+      'X-Outlet-ID': outletId,
+    },
+  });
+  const withRetry = async (fn: () => Promise<any>) => {
+    for (let i = 0; i < 6; i++) {
+      const res = await fn();
+      if (res.status() !== 429) return res;
+      await new Promise((r) => setTimeout(r, 12_000)); // rate-limit window cooldown
+    }
+    return fn();
+  };
+  return { api, withRetry };
 }
 
 test.describe('POS offline sync (live)', () => {
@@ -127,11 +179,7 @@ test.describe('POS offline sync (live)', () => {
     // reload isn't aborted mid-claim. Then reload so the now-active SW caches this navigation.
     await page.waitForFunction(() => !!navigator.serviceWorker.controller, null, { timeout: 30_000 }).catch(() => {});
     await page.waitForTimeout(2000);
-    for (let i = 0; i < 3; i++) {
-      const ok = await page.reload({ waitUntil: 'domcontentloaded' }).then(() => true).catch(() => false);
-      if (ok) break;
-      await page.waitForTimeout(2500);
-    }
+    await reloadWithRetry(page);
     await expect(page.getByTestId('pos-product-card').first()).toBeVisible({ timeout: 30_000 });
     await page.waitForTimeout(1000);
 
@@ -312,5 +360,182 @@ test.describe('POS offline sync (live)', () => {
 
     await api.dispose();
     console.log('OFFLINE-SYNC OK — server order:', serverOrderId, 'client_ref:', newOrder.local_id);
+  });
+
+  // A dine-in bill rung up offline must hold its table across an offline reload, accept more
+  // items while still queued, and reach the server as ONE order carrying the table and every
+  // line exactly once. Before the 2026-11-26 fix such a bill synced without its table and the
+  // waiter re-rang it, so this guards both the table carry-over and the no-duplicate replay.
+  //
+  // Env: E2E_DINE_IN_OUTLET names a table-service outlet (default "Restaurant").
+  test('dine-in offline → reload → pending table bill → add item → reconnect → one order', async ({ page, context }) => {
+    test.setTimeout(300_000);
+    const outletName = new RegExp(process.env.E2E_DINE_IN_OUTLET || 'Restaurant', 'i');
+    const logs: string[] = [];
+    page.on('console', (m) => logs.push(`[${m.type()}] ${m.text()}`));
+
+    // 1) Online login on a table-service outlet, warm the terminal and the Tables page so both
+    // routes and the tables dataset are cached for the offline part.
+    await pinLogin(page, outletName);
+    await page.goto(`/${ORG}/order`, { waitUntil: 'domcontentloaded' });
+    await expect(page.getByTestId('pos-product-card').first()).toBeVisible({ timeout: 30_000 });
+    await waitForServiceWorker(page);
+    await reloadWithRetry(page);
+    await expect(page.getByTestId('pos-product-card').first()).toBeVisible({ timeout: 30_000 });
+
+    const auth = await getAuth(page);
+    expect(auth.token, 'should have a terminal access token').not.toEqual('');
+    expect(auth.tenantId).not.toEqual('');
+    expect(auth.outletId, 'a table-service outlet must be selected').not.toEqual('');
+
+    // Pick a free table from the live list (no hard-coded table ids).
+    const { api, withRetry } = await terminalApi(auth, auth.outletId);
+    const tablesRes = await withRetry(() => api.get(`/api/v1/${auth.tenantId}/pos/tables`));
+    expect(tablesRes.ok(), `GET tables should be 200 (got ${tablesRes.status()})`).toBeTruthy();
+    const tablesBody = await tablesRes.json();
+    const tables: any[] = tablesBody.data ?? tablesBody ?? [];
+    const table = tables.find((t) => t.status === 'available' && !t.order_id);
+    expect(table, 'the outlet needs at least one available table').toBeTruthy();
+
+    await page.goto(`/${ORG}/tables`, { waitUntil: 'domcontentloaded' });
+    await expect(page.getByText(table.name, { exact: true }).first()).toBeVisible({ timeout: 30_000 });
+    await reloadWithRetry(page);
+
+    // Open the terminal on that table while still online (the waiter seats the guests), so this
+    // exact URL is in the service worker cache for the offline reload below.
+    const orderUrl = `/${ORG}/order?table_id=${table.id}&table_name=${encodeURIComponent(table.name)}&covers=2`;
+    await page.goto(orderUrl, { waitUntil: 'domcontentloaded' });
+    await expect(page.getByTestId('pos-product-card').first()).toBeVisible({ timeout: 30_000 });
+    await reloadWithRetry(page);
+    await expect(page.getByTestId('pos-product-card').first()).toBeVisible({ timeout: 30_000 });
+    await page.waitForTimeout(1000);
+
+    const ordersBefore = await idbGetAll(page, 'offlineOrders');
+
+    // 2) Go OFFLINE and send a dine-in order to the kitchen.
+    await context.setOffline(true);
+    await expect(page.getByText(/Offline/i).first()).toBeVisible({ timeout: 10_000 });
+
+    await page.getByTestId('pos-product-card').first().click();
+    const dineIn = page.getByRole('button', { name: /^Dine-In$/i });
+    if (await dineIn.isVisible().catch(() => false)) await dineIn.click();
+
+    const placeOrder = page.getByRole('button', { name: /Place Order|Send to Kitchen/i }).first();
+    if (!(await placeOrder.isVisible().catch(() => false))) {
+      await page.locator('button:has-text("Cart"), button:has-text("View order"), [aria-label*="cart" i]').first().click().catch(() => {});
+    }
+    await expect(placeOrder).toBeVisible({ timeout: 10_000 });
+    await placeOrder.click();
+
+    await expect
+      .poll(async () => !!(await newOfflineOrder(page, ordersBefore)), { timeout: 10_000, message: 'offline dine-in order should be queued' })
+      .toBe(true);
+    const queued = await newOfflineOrder(page, ordersBefore);
+    expect(queued.synced, 'queued order should be unsynced').toBeFalsy();
+    expect(queued.table_id, 'the queued order must carry its table').toBe(table.id);
+    const firstLineCount = (queued.lines ?? []).length;
+    expect(firstLineCount).toBeGreaterThan(0);
+
+    // 3) Cold start on the Tables page while still offline: the table shows the queued bill.
+    await page.goto(`/${ORG}/tables`, { waitUntil: 'domcontentloaded' });
+    await reloadWithRetry(page);
+    await expect(page.getByText(/Offline/i).first()).toBeVisible({ timeout: 10_000 });
+    const pending = page.getByText('Pending sync', { exact: true });
+    await expect(pending.first(), 'the table should show the queued offline bill').toBeVisible({ timeout: 30_000 });
+    const tableCard = page
+      .locator('div.rounded-2xl')
+      .filter({ has: page.getByText(table.name, { exact: true }) })
+      .filter({ has: pending })
+      .first();
+    await expect(tableCard).toBeVisible();
+
+    // 4) Add one item to that bill, still offline. The bill is queued, so the lines append to the
+    // queued order itself rather than a separate add-lines batch.
+    await tableCard.getByRole('button', { name: /Add to bill/i }).click();
+    await expect(page.getByTestId('pos-product-card').first()).toBeVisible({ timeout: 30_000 });
+    const cards = page.getByTestId('pos-product-card');
+    await ((await cards.count()) > 1 ? cards.nth(1) : cards.first()).click();
+    const addToBill = page.getByRole('button', { name: /Add to Bill/i }).last();
+    if (!(await addToBill.isVisible().catch(() => false))) {
+      await page.locator('button:has-text("Cart"), button:has-text("View order"), [aria-label*="cart" i]').first().click().catch(() => {});
+    }
+    await expect(addToBill).toBeVisible({ timeout: 10_000 });
+    await addToBill.click();
+
+    await expect
+      .poll(
+        async () => ((await idbGetAll(page, 'offlineOrders')).find((o) => o.local_id === queued.local_id)?.lines ?? []).length,
+        { timeout: 10_000, message: 'the added item should append to the queued order' },
+      )
+      .toBe(firstLineCount + 1);
+    const grown = (await idbGetAll(page, 'offlineOrders')).find((o) => o.local_id === queued.local_id);
+    const addedSku: string = grown.lines[grown.lines.length - 1].sku;
+    const expectedAddedSkuCount = grown.lines.filter((l: any) => l.sku === addedSku).length;
+    const pendingAdds = (await idbGetAll(page, 'offlineLineAdds')).filter((b) => b.local_order_id === queued.local_id && !b.synced);
+    expect(pendingAdds.length, 'no separate add-lines batch for a still-queued bill').toBe(0);
+
+    // 5) Reconnect and let the worker drain the queue.
+    await context.setOffline(false);
+    await page.evaluate(() => window.dispatchEvent(new Event('online')));
+    await page.waitForTimeout(2500);
+    await page.evaluate(() => window.dispatchEvent(new Event('pos:sync-now')));
+
+    await expect
+      .poll(
+        async () => {
+          const row = (await idbGetAll(page, 'offlineOrders')).find((o) => o.local_id === queued.local_id);
+          return !!(row?.synced && row?.server_order_id);
+        },
+        { timeout: 180_000, intervals: [3000], message: 'the dine-in order should sync' },
+      )
+      .toBe(true)
+      .catch(async (e) => {
+        console.log('SYNC CONSOLE:\n' + logs.slice(-30).join('\n'));
+        throw e;
+      });
+    const synced = (await idbGetAll(page, 'offlineOrders')).find((o) => o.local_id === queued.local_id);
+    const serverOrderId = synced.server_order_id as string;
+    // The sync records the server number so the "Offline XXXXXX" chit maps to the real bill.
+    expect(synced.server_order_number, 'the synced row should keep the server order number').toBeTruthy();
+
+    // 6) Exactly ONE server order for this client_reference, seated at the table, with the added
+    // line present once.
+    const listRes = await withRetry(() =>
+      api.get(`/api/v1/${auth.tenantId}/pos/orders?order_subtype=dine_in&limit=100`),
+    );
+    expect(listRes.ok(), `GET orders should be 200 (got ${listRes.status()})`).toBeTruthy();
+    const listBody = await listRes.json();
+    const listed: any[] = listBody.data ?? listBody.items ?? [];
+    const matches = listed.filter((o) => o.client_reference === queued.local_id);
+    expect(matches.length, 'exactly one server order for the client_reference').toBe(1);
+    expect(matches[0].id).toBe(serverOrderId);
+
+    const getOrder = await withRetry(() => api.get(`/api/v1/${auth.tenantId}/pos/orders/${serverOrderId}`));
+    expect(getOrder.ok(), `GET order ${serverOrderId} should be 200 (got ${getOrder.status()})`).toBeTruthy();
+    const orderRaw = await getOrder.json();
+    const order = orderRaw.data ?? orderRaw;
+    expect(order.metadata?.table_id, 'the server order should keep its table').toBe(table.id);
+    const serverLines: any[] = order.edges?.lines ?? order.lines ?? [];
+    expect(serverLines.length, 'every queued line once, no duplicates').toBe(firstLineCount + 1);
+    expect(serverLines.filter((l) => l.sku === addedSku).length, 'the added line is present once').toBe(expectedAddedSkuCount);
+
+    fs.mkdirSync('test-results', { recursive: true });
+    fs.writeFileSync(
+      path.join('test-results', 'offline-dine-in-created.json'),
+      JSON.stringify(
+        {
+          tenantId: auth.tenantId,
+          serverOrderId,
+          clientReference: queued.local_id,
+          orderNumber: order.order_number,
+          tableId: table.id,
+        },
+        null,
+        2,
+      ),
+    );
+
+    await api.dispose();
+    console.log('OFFLINE DINE-IN OK: server order', serverOrderId, 'table', table.name);
   });
 });

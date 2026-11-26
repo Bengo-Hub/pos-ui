@@ -50,6 +50,8 @@ const NIL_TENDER = '00000000-0000-0000-0000-000000000000';
 export interface CreatedOrder {
   orderId: string;
   orderNumber: string;
+  /** Queued on this device while offline: orderId is the local id and there is no server number yet. */
+  offline?: boolean;
 }
 
 export interface InlinePaymentBarProps {

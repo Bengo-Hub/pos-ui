@@ -111,6 +111,11 @@ export interface OfflineOrder extends SyncState {
   source?: string;
   business_date?: string;
   server_order_id?: string; // filled after successful sync
+  // The server's order number and when the row synced, so staff holding a chit printed as
+  // "Offline XXXXXX" can find the real bill afterwards (Sync Monitor). Not indexed, so no Dexie
+  // version bump; rows synced by older builds lack them.
+  server_order_number?: string;
+  synced_at?: string;
   // Cash payment info — stored together so sync worker can record payment after creating order
   pending_payment?: {
     tender_id: string;
@@ -509,10 +514,27 @@ export async function resolveServerOrderId(localId: string): Promise<string | un
   return o?.server_order_id;
 }
 
-export async function markOrderSynced(localId: string, serverOrderId: string): Promise<void> {
+export async function markOrderSynced(localId: string, serverOrderId: string, serverOrderNumber?: string): Promise<void> {
   await posDB.offlineOrders
     .where('local_id').equals(localId)
-    .modify({ synced: true, server_order_id: serverOrderId, sync_error: undefined, dead_letter: false });
+    .modify({
+      synced: true,
+      server_order_id: serverOrderId,
+      server_order_number: serverOrderNumber || undefined,
+      synced_at: new Date().toISOString(),
+      sync_error: undefined,
+      dead_letter: false,
+    });
+}
+
+/** The most recently synced offline bills for a tenant (newest first, at most `limit`), so the
+ *  Sync Monitor can map each provisional "Offline XXXXXX" chit to its server number. */
+export async function getRecentlySyncedOfflineOrders(tenantId: string, limit = 20): Promise<OfflineOrder[]> {
+  const rows = await posDB.offlineOrders.where('tenant_id').equals(tenantId).toArray();
+  return rows
+    .filter((o) => o.synced && !!o.server_order_id)
+    .sort((a, b) => (b.synced_at ?? b.created_at).localeCompare(a.synced_at ?? a.created_at))
+    .slice(0, limit);
 }
 
 export async function markOrderSyncFailed(localId: string, error: string, terminal = false): Promise<void> {

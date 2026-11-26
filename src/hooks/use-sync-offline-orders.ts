@@ -7,6 +7,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api/client';
 import { reportAuthSyncBlocked, reportAuthSyncCleared } from '@/lib/sync/auth-sync-state';
 import { isTerminalReplayStatus } from '@/lib/sync/replay-status';
+import { offlineOrderLabel } from '@/hooks/usePOS';
 import { toast } from 'sonner';
 import {
   getPendingSyncOrders,
@@ -265,8 +266,14 @@ async function syncOrders(tenantID: string): Promise<number> {
         idem(order.local_id),
       );
       const serverOrderId: string = res?.id ?? res?.order_id ?? '';
-      await markOrderSynced(order.local_id, serverOrderId);
+      const serverOrderNumber: string = res?.order_number ? String(res.order_number) : '';
+      await markOrderSynced(order.local_id, serverOrderId, serverOrderNumber);
       logPush('order', `Sale ${order.currency} ${order.total_amount.toFixed(2)}`);
+      // The chit for this bill was printed with a provisional label; record the mapping so staff
+      // can match the paper ticket to the real bill.
+      if (serverOrderNumber) {
+        logPush('order', `${offlineOrderLabel(order.local_id)} is now #${serverOrderNumber}`);
+      }
 
       // Record a payment bundled with the order at creation time (if any).
       if (serverOrderId && order.pending_payment) {
