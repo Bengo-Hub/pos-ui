@@ -9,7 +9,8 @@ import { useAuthStore } from '@/store/auth';
 const SUBSCRIPTIONS_UI_URL =
   process.env.NEXT_PUBLIC_SUBSCRIPTIONS_UI_URL || 'https://pricing.codevertexafrica.com';
 
-const UPGRADE_URL = `${SUBSCRIPTIONS_UI_URL}/plans?service=pos`;
+// Upgrades open the subscriptions billing page (owner, 28 November 2026).
+const UPGRADE_URL = `${SUBSCRIPTIONS_UI_URL}/billing?service=pos`;
 const BILLING_URL = `${SUBSCRIPTIONS_UI_URL}/billing`;
 
 export function SubscriptionBanner() {
